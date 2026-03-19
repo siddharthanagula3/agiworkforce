@@ -71,7 +71,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.2".to_string(),
+            model: "gpt-5.4".to_string(),
             temperature: Some(0.3),
             max_tokens: Some(2000),
             stream: false,
@@ -97,7 +97,7 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-5.2");
+        assert_eq!(adapted["model"], "gpt-5.4");
         assert_eq!(adapted["input"], "Explain quantum computing");
         assert_eq!(adapted["instructions"], "You are a helpful assistant.");
         assert_eq!(adapted["reasoning"]["effort"], "medium");
@@ -272,7 +272,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5-nano".to_string(),
+            model: "gpt-5.4-nano".to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -484,7 +484,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.2".to_string(),
+            model: "gpt-5.4".to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -656,7 +656,7 @@ mod tests {
         let api_response = json!({
             "id": "resp_123",
             "status": "completed",
-            "model": "gpt-5.2",
+            "model": "gpt-5.4",
             "output": [
                 {
                     "type": "function_call",
@@ -701,7 +701,7 @@ mod tests {
         let api_response = json!({
             "id": "resp_456",
             "status": "in_progress",
-            "model": "gpt-5.2-codex",
+            "model": "gpt-5.4-codex",
             "output": [
                 {
                     "type": "local_shell_call",
@@ -940,7 +940,7 @@ mod tests {
                     },
                 ]),
             }],
-            model: "gpt-5.2".to_string(), // GPT-5 uses Responses API
+            model: "gpt-5.4".to_string(), // GPT-5.4 uses Responses API
             temperature: None,
             max_tokens: Some(200),
             stream: false,
@@ -969,7 +969,7 @@ mod tests {
         );
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-5.2");
+        assert_eq!(adapted["model"], "gpt-5.4");
         assert_eq!(
             adapted["instructions"],
             "You are a helpful vision assistant"

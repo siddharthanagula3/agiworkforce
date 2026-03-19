@@ -1,7 +1,5 @@
 //! SQLite-backed session storage for conversation persistence.
 //!
-//! Phase 6 of the CLI implementation plan.
-//!
 //! Creates `~/.agiworkforce/sessions.db` with WAL mode.
 //!
 //! Schema:

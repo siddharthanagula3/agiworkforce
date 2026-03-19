@@ -13,6 +13,7 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, isTauri, listen } from '../../lib/tauri-mock';
+import { toast } from 'sonner';
 import { storageFallback } from '../../utils/localStorage';
 import type { ContextItem } from '@agiworkforce/types';
 import type { ToolLabelEntry } from '../../components/UnifiedAgenticChat/ToolLabel';
@@ -1118,6 +1119,7 @@ export async function initializeToolEventListener(): Promise<void> {
             success: status !== 'error',
             error: payload.error,
             durationMs: payload.duration_ms,
+            resultPreview: payload.result_preview,
           }),
         );
 
@@ -1171,6 +1173,34 @@ export async function initializeToolEventListener(): Promise<void> {
       if (pendingId) {
         useChatStore.getState().removePendingMessage(pendingId);
       }
+    });
+
+    // --- compaction:auto-triggered ---
+    await listen<{
+      conversation_id: number;
+      current_tokens: number;
+      max_tokens: number;
+      percentage: number;
+    }>('compaction:auto-triggered', () => {
+      toast.loading('Compacting conversation to keep chatting...', {
+        id: 'auto-compaction',
+        duration: 30_000,
+      });
+    });
+
+    // --- compaction:completed ---
+    await listen<{
+      conversation_id: number;
+      messages_compacted: number;
+      tokens_before: number;
+      tokens_after: number;
+      savings_percent: number;
+    }>('compaction:completed', (event) => {
+      const { messages_compacted, savings_percent } = event.payload;
+      toast.success(
+        `Compacted ${messages_compacted} messages (${savings_percent.toFixed(0)}% saved)`,
+        { id: 'auto-compaction', duration: 4_000 },
+      );
     });
 
     // All listeners registered successfully — mark as initialized

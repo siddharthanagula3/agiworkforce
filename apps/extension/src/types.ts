@@ -1,9 +1,3 @@
-/**
- * Extension types for AGI Workforce browser extension
- * Provides type-safe communication between popup, background, content scripts
- */
-
-// Connection status types
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 export type NativeMessageType =
   | 'CAPTURE_SCREENSHOT'
@@ -31,22 +25,17 @@ export type NativeMessageType =
   | 'queue_message'
   | 'CHAT_MESSAGE'
   | 'open_side_panel'
-  // Cookie operations
   | 'GET_COOKIES'
   | 'SET_COOKIE'
   | 'CLEAR_COOKIES'
-  // Tab management
   | 'GET_ALL_TABS'
   | 'CREATE_TAB'
   | 'CLOSE_TAB'
   | 'SWITCH_TAB'
-  // Accessibility
   | 'GET_ACCESSIBILITY_TREE'
-  // Recording
   | 'START_RECORDING'
   | 'STOP_RECORDING'
   | 'GET_RECORDED_ACTIONS'
-  // Element interactions (handled by content script)
   | 'SELECT_OPTION'
   | 'CHECK'
   | 'UNCHECK'
@@ -56,37 +45,26 @@ export type NativeMessageType =
   | 'SCROLL'
   | 'DRAG_DROP'
   | 'CLICK_AT_COORDINATES'
-  // Internal content-script alias for GET_ACCESSIBILITY_TREE
   | 'BUILD_ACCESSIBILITY_TREE'
-  // Side panel → background: notify that the bridge URL was updated in storage
   | 'BRIDGE_URL_CHANGED'
-  // WebMCP tool discovery and invocation
   | 'WEBMCP_DISCOVER_TOOLS'
   | 'WEBMCP_CALL_TOOL'
   | 'WEBMCP_TOOLS_CHANGED'
-  // NLWeb detection result
   | 'NLWEB_DETECTED'
-  // Console log reading
   | 'GET_CONSOLE_LOGS'
   | 'CLEAR_CONSOLE_LOGS'
-  // Saved shortcuts (workflow recording)
   | 'SAVE_SHORTCUT'
   | 'LIST_SHORTCUTS'
   | 'DELETE_SHORTCUT'
   | 'REPLAY_SHORTCUT'
-  // Tab group management
   | 'ADD_TAB_TO_GROUP'
   | 'REMOVE_TAB_FROM_GROUP'
-  // Scheduled tasks
   | 'CREATE_SCHEDULED_TASK'
   | 'LIST_SCHEDULED_TASKS'
   | 'UPDATE_SCHEDULED_TASK'
   | 'DELETE_SCHEDULED_TASK';
 
-/**
- * Internal-only messages that travel between extension contexts (background ↔ side panel).
- * These are NOT sent to the native host.
- */
+/** Internal-only messages between extension contexts — NOT sent to native host. */
 export type InternalMessageType = 'CHAT_CHUNK';
 
 export type InternalMessage = ChatChunkMessage;
@@ -98,7 +76,6 @@ export interface BaseMessage {
   tabId?: number;
 }
 
-// Screenshot request/response
 export interface CaptureScreenshotMessage extends BaseMessage {
   type: 'CAPTURE_SCREENSHOT';
   format?: 'png' | 'jpeg' | 'webp';
@@ -112,7 +89,6 @@ export interface CaptureScreenshotResponse {
   timestamp?: number;
 }
 
-// Click action
 export interface ClickMessage extends BaseMessage {
   type: 'CLICK';
   selector: string;
@@ -133,7 +109,6 @@ export interface ClickResponse {
   error?: string;
 }
 
-// Double click action
 export interface DoubleClickMessage extends BaseMessage {
   type: 'DOUBLE_CLICK';
   selector: string;
@@ -147,7 +122,6 @@ export interface DoubleClickResponse {
   error?: string;
 }
 
-// Right click action
 export interface RightClickMessage extends BaseMessage {
   type: 'RIGHT_CLICK';
   selector: string;
@@ -161,7 +135,6 @@ export interface RightClickResponse {
   error?: string;
 }
 
-// Type action
 export interface TypeMessage extends BaseMessage {
   type: 'TYPE';
   selector: string;
@@ -178,7 +151,6 @@ export interface TypeResponse {
   error?: string;
 }
 
-// Get text content
 export interface GetTextMessage extends BaseMessage {
   type: 'GET_TEXT';
   selector: string;
@@ -190,7 +162,6 @@ export interface GetTextResponse {
   error?: string;
 }
 
-// Get element attribute
 export interface GetAttributeMessage extends BaseMessage {
   type: 'GET_ATTRIBUTE';
   selector: string;
@@ -203,7 +174,6 @@ export interface GetAttributeResponse {
   error?: string;
 }
 
-// Set element attribute
 export interface SetAttributeMessage extends BaseMessage {
   type: 'SET_ATTRIBUTE';
   selector: string;
@@ -216,7 +186,6 @@ export interface SetAttributeResponse {
   error?: string;
 }
 
-// Wait for selector
 export interface WaitForSelectorMessage extends BaseMessage {
   type: 'WAIT_FOR_SELECTOR';
   selector: string;
@@ -232,7 +201,6 @@ export interface WaitForSelectorResponse {
   error?: string;
 }
 
-// Execute script
 export interface ExecuteScriptMessage extends BaseMessage {
   type: 'EXECUTE_SCRIPT';
   script: string;
@@ -245,7 +213,6 @@ export interface ExecuteScriptResponse {
   error?: string;
 }
 
-// Get page info
 export interface GetPageInfoMessage extends BaseMessage {
   type: 'GET_PAGE_INFO';
 }
@@ -259,7 +226,6 @@ export interface GetPageInfoResponse {
   error?: string;
 }
 
-// Form detection
 export interface FormInfo {
   id?: string;
   name?: string;
@@ -286,7 +252,6 @@ export interface GetFormsResponse {
   error?: string;
 }
 
-// Fill form
 export interface FillFormMessage extends BaseMessage {
   type: 'FILL_FORM';
   formSelector?: string;
@@ -302,7 +267,6 @@ export interface FillFormResponse {
   error?: string;
 }
 
-// Submit form
 export interface SubmitFormMessage extends BaseMessage {
   type: 'SUBMIT_FORM';
   formSelector?: string;
@@ -313,7 +277,6 @@ export interface SubmitFormResponse {
   error?: string;
 }
 
-// High-level job application autofill (platform-aware)
 export interface JobApplicationFiles {
   resumeDataUrl?: string;
   resumeFileName?: string;
@@ -378,7 +341,6 @@ export interface AutoFillJobApplicationResponse {
   error?: string;
 }
 
-// Connection status
 export interface ConnectionStatusMessage extends BaseMessage {
   type: 'GET_CONNECTION_STATUS';
 }
@@ -390,14 +352,12 @@ export interface ConnectionStatusResponse {
   error?: string;
 }
 
-// Status change notification
 export interface ConnectionStatusChangedMessage extends BaseMessage {
   type: 'CONNECTION_STATUS_CHANGED';
   connected: boolean;
   status: ConnectionStatus;
 }
 
-// Tab ready check
 export interface TabReadyMessage extends BaseMessage {
   type: 'TAB_READY';
 }
@@ -446,7 +406,6 @@ export interface RunPageActionsResponse {
   error?: string;
 }
 
-// Context-menu DOM capture
 export interface CaptureElementMessage extends BaseMessage {
   type: 'CAPTURE_ELEMENT';
 }
@@ -500,8 +459,6 @@ export interface OpenSidePanelMessage extends BaseMessage {
   type: 'open_side_panel';
 }
 
-// ─── Cookie messages ─────────────────────────────────────────────────────────
-
 export interface GetCookiesMessage extends BaseMessage {
   type: 'GET_COOKIES';
   url: string;
@@ -543,8 +500,6 @@ export interface ClearCookiesResponse {
   cleared?: number;
   error?: string;
 }
-
-// ─── Tab management messages ──────────────────────────────────────────────────
 
 export interface GetAllTabsMessage extends BaseMessage {
   type: 'GET_ALL_TABS';
@@ -598,8 +553,6 @@ export interface SwitchTabResponse {
   error?: string;
 }
 
-// ─── Accessibility tree ───────────────────────────────────────────────────────
-
 export interface GetAccessibilityTreeMessage extends BaseMessage {
   type: 'GET_ACCESSIBILITY_TREE';
 }
@@ -613,8 +566,6 @@ export interface GetAccessibilityTreeResponse {
   data?: unknown;
   error?: string;
 }
-
-// ─── Recording messages ───────────────────────────────────────────────────────
 
 export interface StartRecordingMessage extends BaseMessage {
   type: 'START_RECORDING';
@@ -634,8 +585,6 @@ export interface RecordingResponse {
   actions?: RecordedAction[];
   error?: string;
 }
-
-// ─── Element interaction messages (forwarded to content script) ───────────────
 
 export interface SelectOptionMessage extends BaseMessage {
   type: 'SELECT_OPTION';
@@ -696,8 +645,6 @@ export interface BridgeUrlChangedMessage extends BaseMessage {
   url?: string;
 }
 
-// ─── WebMCP messages ──────────────────────────────────────────────────────────
-
 export interface WebMCPToolInfo {
   name: string;
   description: string;
@@ -741,8 +688,6 @@ export interface NLWebDetectedMessage extends BaseMessage {
   url?: string;
 }
 
-// ─── Tab group management ────────────────────────────────────────────────────
-
 export interface AddTabToGroupMessage extends BaseMessage {
   type: 'ADD_TAB_TO_GROUP';
 }
@@ -756,8 +701,6 @@ export interface TabGroupResponse {
   grouped?: boolean;
   error?: string;
 }
-
-// ─── Console log reading ────────────────────────────────────────────────────
 
 export interface ConsoleLogEntry {
   level: 'log' | 'warn' | 'error' | 'info' | 'debug';
@@ -783,8 +726,6 @@ export interface ClearConsoleLogsResponse {
   success: boolean;
   error?: string;
 }
-
-// ─── Saved shortcuts (workflow recording) ───────────────────────────────────
 
 export interface SavedShortcut {
   id: string;
@@ -820,8 +761,6 @@ export interface ShortcutResponse {
   shortcuts?: SavedShortcut[];
   error?: string;
 }
-
-// ─── Scheduled tasks ────────────────────────────────────────────────────────
 
 export type ScheduleType = 'hourly' | 'daily' | 'weekly' | 'monthly';
 
@@ -870,7 +809,6 @@ export interface ScheduledTaskResponse {
   error?: string;
 }
 
-// Union types for all messages
 export type ExtensionMessage =
   | CaptureScreenshotMessage
   | ClickMessage
@@ -897,23 +835,18 @@ export type ExtensionMessage =
   | QueueMessageMessage
   | ChatMessageMessage
   | OpenSidePanelMessage
-  // Cookie operations
   | GetCookiesMessage
   | SetCookieMessage
   | ClearCookiesMessage
-  // Tab management
   | GetAllTabsMessage
   | CreateTabMessage
   | CloseTabMessage
   | SwitchTabMessage
-  // Accessibility
   | GetAccessibilityTreeMessage
   | BuildAccessibilityTreeMessage
-  // Recording
   | StartRecordingMessage
   | StopRecordingMessage
   | GetRecordedActionsMessage
-  // Element interactions
   | SelectOptionMessage
   | CheckMessage
   | UncheckMessage
@@ -924,24 +857,18 @@ export type ExtensionMessage =
   | DragDropMessage
   | ClickAtCoordinatesMessage
   | BridgeUrlChangedMessage
-  // WebMCP
   | WebMCPDiscoverToolsMessage
   | WebMCPCallToolMessage
   | WebMCPToolsChangedMessage
-  // NLWeb
   | NLWebDetectedMessage
-  // Tab group management
   | AddTabToGroupMessage
   | RemoveTabFromGroupMessage
-  // Console logs
   | GetConsoleLogsMessage
   | ClearConsoleLogsMessage
-  // Saved shortcuts
   | SaveShortcutMessage
   | ListShortcutsMessage
   | DeleteShortcutMessage
   | ReplayShortcutMessage
-  // Scheduled tasks
   | CreateScheduledTaskMessage
   | ListScheduledTasksMessage
   | UpdateScheduledTaskMessage
@@ -968,40 +895,29 @@ export type ExtensionResponse =
   | ElementInfoResponse
   | AutoFillJobApplicationResponse
   | ChatMessageResponse
-  // Cookie responses
   | GetCookiesResponse
   | SetCookieResponse
   | ClearCookiesResponse
-  // Tab management responses
   | GetAllTabsResponse
   | CreateTabResponse
   | CloseTabResponse
   | SwitchTabResponse
-  // Accessibility
   | GetAccessibilityTreeResponse
-  // Recording
   | RecordingResponse
-  // WebMCP
   | WebMCPDiscoverToolsResponse
   | WebMCPCallToolResponse
-  // Tab group management
   | TabGroupResponse
-  // Console logs
   | GetConsoleLogsResponse
   | ClearConsoleLogsResponse
-  // Saved shortcuts
   | ShortcutResponse
-  // Scheduled tasks
   | ScheduledTaskResponse;
 
-// Popup state
 export interface PopupState {
   sessionStartTime: number;
   actionCount: number;
   isConnected: boolean;
 }
 
-// Extension configuration
 export interface ExtensionConfig {
   desktopAppPort: number;
   desktopAppUrl: string;
@@ -1011,14 +927,12 @@ export interface ExtensionConfig {
   requestTimeoutMs: number;
 }
 
-// Rate limiting state
 export interface RateLimitState {
   count: number;
   resetTime: number;
   lastScreenshot: number;
 }
 
-// Automation state
 export interface AutomationState {
   isControlled: boolean;
   highlightedElement: Element | null;
@@ -1027,44 +941,9 @@ export interface AutomationState {
   connectionStatus: ConnectionStatus;
 }
 
-// Recorded action for replay
 export interface RecordedAction {
   type: NativeMessageType;
   selector?: string;
   data?: Record<string, unknown>;
   timestamp: number;
-}
-
-// Safe type for chrome runtime
-export interface ChromeExtensionAPI {
-  runtime: {
-    id: string;
-    onMessage: {
-      addListener: (
-        callback: (
-          message: unknown,
-          sender: chrome.runtime.MessageSender,
-          sendResponse: (response?: ExtensionResponse) => void,
-        ) => boolean | void,
-      ) => void;
-    };
-    sendMessage: (message: ExtensionMessage) => Promise<ExtensionResponse>;
-  };
-  tabs: {
-    query: (query: chrome.tabs.QueryInfo) => Promise<chrome.tabs.Tab[]>;
-    get: (tabId: number) => Promise<chrome.tabs.Tab>;
-    executeScript: (tabId: number, details: Record<string, unknown>) => Promise<unknown[]>;
-  };
-  storage: {
-    local: {
-      get: (keys?: string | string[] | null) => Promise<Record<string, unknown>>;
-      set: (items: Record<string, unknown>) => Promise<void>;
-      clear: () => Promise<void>;
-    };
-    onChanged: {
-      addListener: (
-        callback: (changes: Record<string, chrome.storage.StorageChange>, area: string) => void,
-      ) => void;
-    };
-  };
 }

@@ -1442,7 +1442,7 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: "gpt-5-nano".to_string(),
+                        model: "gpt-5.4-nano".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -1476,7 +1476,7 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: "gpt-5-nano".to_string(),
+                        model: "gpt-5.4-nano".to_string(),
                         reason: "strategy-cost",
                     },
                 ],
@@ -1485,7 +1485,7 @@ impl LLMRouter {
                 RouteCandidate {
                     strategy: None,
                     provider: Provider::OpenAI,
-                    model: "gpt-5-nano".to_string(),
+                    model: "gpt-5.4-nano".to_string(),
                     reason: "strategy-latency",
                 },
                 RouteCandidate {
@@ -1640,13 +1640,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::ManagedCloud,
-                                model: "gpt-5-nano".to_string(), // Managed Cloud fallback
+                                model: "gpt-5.4-nano".to_string(), // Managed Cloud fallback
                                 reason: "auto-economy-fast-cloud",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5-nano".to_string(), // Fast budget: 2,667 Elo/$
+                                model: "gpt-5.4-nano".to_string(), // Fast budget: 2,667 Elo/$
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
@@ -1851,7 +1851,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5-pro".to_string(), // Best all-around quality
+                                model: "gpt-5.4-pro".to_string(), // Best all-around quality
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
@@ -1949,7 +1949,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5-pro".to_string(), // High creativity
+                                model: "gpt-5.4-pro".to_string(), // High creativity
                                 reason: "auto-premium-creative",
                             },
                             RouteCandidate {
@@ -1983,9 +1983,9 @@ impl LLMRouter {
     fn default_model(&self, provider: Provider, task: TaskCategory) -> String {
         match provider {
             Provider::OpenAI => match task {
-                TaskCategory::Simple => "gpt-5-nano".to_string(),
+                TaskCategory::Simple => "gpt-5.4-nano".to_string(),
                 TaskCategory::Complex => "gpt-5".to_string(),
-                TaskCategory::Creative => "gpt-5-nano".to_string(),
+                TaskCategory::Creative => "gpt-5.4-nano".to_string(),
             },
             Provider::Anthropic => match task {
                 TaskCategory::Simple => "claude-haiku-4-5".to_string(),
@@ -2036,7 +2036,7 @@ impl LLMRouter {
                 TaskCategory::Creative => "mistral-large-3".to_string(),
             },
             Provider::ManagedCloud => match task {
-                TaskCategory::Simple => "gpt-5-nano".to_string(),
+                TaskCategory::Simple => "gpt-5.4-nano".to_string(),
                 TaskCategory::Complex => "gpt-5".to_string(),
                 TaskCategory::Creative => "gpt-5".to_string(),
             },
@@ -2126,7 +2126,7 @@ impl LLMRouter {
             RoutingStrategy::AutoEconomy => {
                 // Cost-optimized: simple queries use cheap models, complex use capable
                 if token_count < 1000 {
-                    "gpt-5-nano".to_string() // $0.05/$0.40 per 1M - cheapest OpenAI
+                    "gpt-5.4-nano".to_string() // $0.20/$1.25 per 1M - cheapest OpenAI
                 } else if token_count < 8000 {
                     "deepseek-chat".to_string() // $0.28/$0.42 per 1M - best value for medium context
                 } else {
@@ -2136,7 +2136,7 @@ impl LLMRouter {
             RoutingStrategy::AutoBalanced => {
                 // Balance: cheap for simple, quality for complex
                 if token_count < 500 {
-                    "gpt-5-nano".to_string() // $0.05/$0.40 per 1M - fast and cheap
+                    "gpt-5.4-nano".to_string() // $0.20/$1.25 per 1M - fast and cheap
                 } else if token_count < 4000 {
                     "claude-sonnet-4-6".to_string() // $3/$15 per 1M - excellent quality
                 } else {

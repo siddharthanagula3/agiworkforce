@@ -401,8 +401,7 @@ const MessageBubbleComponent = function MessageBubble({
             className={cn(
               'prose dark:prose-invert max-w-none',
               'message-text', // 15 px / 1.6 lh (defined in globals.css .message-text)
-              'break-words overflow-wrap-anywhere',
-              isUser && 'text-right',
+              'break-words overflow-wrap-anywhere text-left',
             )}
           >
             {message.isStreaming && !cleanedContent.trim() ? (

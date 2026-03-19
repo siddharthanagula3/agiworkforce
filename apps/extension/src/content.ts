@@ -1,8 +1,3 @@
-/**
- * Content script for AGI Workforce extension
- * Runs in the context of web pages and handles DOM interactions
- */
-
 import type {
   ExtensionMessage,
   ExtensionResponse,
@@ -40,7 +35,6 @@ const MAX_CONTEXT_HTML_CHARS = 100_000;
 const MAX_CONSOLE_BUFFER = 200;
 const MAX_CONSOLE_ENTRY_CHARS = 1000;
 
-/** Circular buffer for captured console logs */
 const consoleLogBuffer: ConsoleLogEntry[] = [];
 
 interface ActionExecutionResult {
@@ -50,7 +44,6 @@ interface ActionExecutionResult {
   [key: string]: unknown;
 }
 
-// Content script state
 const automationState: AutomationState = {
   isControlled: false,
   highlightedElement: null,
@@ -60,43 +53,25 @@ const automationState: AutomationState = {
 };
 let lastPointerTarget: Element | null = null;
 
-/**
- * Initialize content script
- */
 function initialize(): void {
-  logger.info('Content script initializing on', window.location.href);
-
-  // Add automation indicator to page
   addAutomationIndicator();
-
-  // Inject floating overlay button via shadow DOM
   injectFloatingOverlay();
 
-  // Set up message listener
   chrome.runtime.onMessage.addListener(handleMessage);
   document.addEventListener('mousemove', (event) => {
     const target = event.target;
     lastPointerTarget = target instanceof Element ? target : null;
   });
 
-  // Check connection status
   void checkConnectionStatus();
   // notifyTabReady() sends TAB_READY which triggers syncTabContextWithDesktop() in background.ts,
   // so there is no need to call syncPageContext() separately here.
   void notifyTabReady();
 
-  // Patch console to capture logs
   patchConsole();
-
-  // WebMCP: discover tools and watch for changes
   initWebMCP();
-
-  logger.info('Content script initialized');
 }
 
-/**
- * Handle messages from background script
- */
 function handleMessage(
   message: unknown,
   _sender: chrome.runtime.MessageSender,
@@ -109,7 +84,6 @@ function handleMessage(
     return false;
   }
 
-  // Handle async response
   handleMessageAsync(msg)
     .then((response) => {
       sendResponse(response);
@@ -125,9 +99,6 @@ function handleMessage(
   return true;
 }
 
-/**
- * Async message handler
- */
 async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionResponse> {
   const messageType = message.type;
   logger.debug('Processing message', { type: messageType });
@@ -265,7 +236,6 @@ async function notifyTabReady(): Promise<void> {
 function buildCurrentPageContext(): Record<string, unknown> {
   const selectedText = window.getSelection()?.toString() || '';
 
-  // Extract structured page metadata (JSON-LD, Open Graph, Twitter Card, etc.)
   let metadata: PageMetadata | undefined;
   try {
     metadata = extractPageMetadata();
@@ -616,9 +586,6 @@ function handleGetElementInfo(): ExtensionResponse {
   return { success: true, element: payload } as ExtensionResponse;
 }
 
-/**
- * Click element handler
- */
 async function handleClick(message: ClickMessage): Promise<ClickResponse> {
   try {
     const { selector, options = {} } = message;
@@ -655,9 +622,6 @@ async function handleClick(message: ClickMessage): Promise<ClickResponse> {
   }
 }
 
-/**
- * Double click element handler
- */
 async function handleDoubleClick(message: DoubleClickMessage): Promise<ExtensionResponse> {
   try {
     const { selector, options = {} } = message;
@@ -689,9 +653,6 @@ async function handleDoubleClick(message: DoubleClickMessage): Promise<Extension
   }
 }
 
-/**
- * Right click element handler
- */
 async function handleRightClick(message: RightClickMessage): Promise<ExtensionResponse> {
   try {
     const { selector, options = {} } = message;
@@ -724,9 +685,6 @@ async function handleRightClick(message: RightClickMessage): Promise<ExtensionRe
   }
 }
 
-/**
- * Type text into element handler
- */
 async function handleType(message: TypeMessage): Promise<ExtensionResponse> {
   try {
     const { selector, text, options = {} } = message;
@@ -740,18 +698,15 @@ async function handleType(message: TypeMessage): Promise<ExtensionResponse> {
       return { success: false, error: 'Element not found' };
     }
 
-    // Focus element
     if ('focus' in element && typeof element.focus === 'function') {
       (element as HTMLElement).focus();
     }
 
-    // Clear if requested
     if (options.clear && element instanceof HTMLInputElement) {
       element.value = '';
       element.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    // Type text character by character with delay
     for (const char of text) {
       const keyEvent = new KeyboardEvent('keydown', {
         key: char,
@@ -789,9 +744,6 @@ async function handleType(message: TypeMessage): Promise<ExtensionResponse> {
   }
 }
 
-/**
- * Get text content handler
- */
 async function handleGetText(message: GetTextMessage): Promise<ExtensionResponse> {
   try {
     const { selector } = message;
@@ -809,9 +761,6 @@ async function handleGetText(message: GetTextMessage): Promise<ExtensionResponse
   }
 }
 
-/**
- * Get element attribute handler
- */
 async function handleGetAttribute(message: GetAttributeMessage): Promise<ExtensionResponse> {
   try {
     const { selector, attribute } = message;
@@ -896,9 +845,6 @@ function isAttributeAllowed(attribute: string, element: Element): boolean {
   return SAFE_ATTRIBUTES.has(lowerAttr);
 }
 
-/**
- * Set element attribute handler
- */
 async function handleSetAttribute(message: SetAttributeMessage): Promise<ExtensionResponse> {
   try {
     const { selector, attribute, value } = message;
@@ -924,9 +870,6 @@ async function handleSetAttribute(message: SetAttributeMessage): Promise<Extensi
   }
 }
 
-/**
- * Wait for selector handler
- */
 async function handleWaitForSelector(message: WaitForSelectorMessage): Promise<ExtensionResponse> {
   try {
     const { selector, timeout = 5000, options = {} } = message;
@@ -985,15 +928,10 @@ const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown>
   },
 };
 
-/**
- * Execute script handler.
- * SECURITY: Only allowlisted operations are supported. Arbitrary script execution is blocked.
- */
 async function handleExecuteScript(message: ExecuteScriptMessage): Promise<ExtensionResponse> {
   try {
     const { script, args = [] } = message;
 
-    // Look up the operation in the allowlist
     const operation = ALLOWED_SCRIPT_OPERATIONS[script];
     if (!operation) {
       return {
@@ -1002,10 +940,7 @@ async function handleExecuteScript(message: ExecuteScriptMessage): Promise<Exten
       };
     }
 
-    // Execute the allowlisted operation
     const result = operation(...args);
-
-    // Handle async results
     const finalResult = result instanceof Promise ? await result : result;
 
     return { success: true, result: finalResult };
@@ -1014,9 +949,6 @@ async function handleExecuteScript(message: ExecuteScriptMessage): Promise<Exten
   }
 }
 
-/**
- * Get page information handler
- */
 function handleGetPageInfo(): GetPageInfoResponse {
   try {
     const selection = window.getSelection();
@@ -1037,9 +969,6 @@ function handleGetPageInfo(): GetPageInfoResponse {
   }
 }
 
-/**
- * Get forms on page handler
- */
 function handleGetForms(): GetFormsResponse {
   try {
     const forms = formUtils.getForms();
@@ -1073,9 +1002,6 @@ function handleGetForms(): GetFormsResponse {
   }
 }
 
-/**
- * Fill form handler
- */
 async function handleFillForm(message: FillFormMessage): Promise<ExtensionResponse> {
   try {
     const { formSelector, data, options = {} } = message;
@@ -1125,9 +1051,6 @@ async function handleAutoFillJobApplication(
   }
 }
 
-/**
- * Submit form handler
- */
 async function handleSubmitForm(message: SubmitFormMessage): Promise<ExtensionResponse> {
   try {
     const { formSelector } = message;
@@ -1143,8 +1066,6 @@ async function handleSubmitForm(message: SubmitFormMessage): Promise<ExtensionRe
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
-
-// ─── Element interaction handlers ────────────────────────────────────────────
 
 async function handleSelectOption(
   message: import('./types').SelectOptionMessage,
@@ -1338,8 +1259,6 @@ async function handleClickAtCoordinates(
   }
 }
 
-// ─── Accessibility tree ───────────────────────────────────────────────────────
-
 function buildAccessibilityNode(element: Element, depth: number = 0): Record<string, unknown> {
   const rect = element.getBoundingClientRect();
   const role = element.getAttribute('role') || element.tagName.toLowerCase();
@@ -1384,8 +1303,6 @@ function handleBuildAccessibilityTree(): ExtensionResponse {
   }
 }
 
-// ─── Recording helpers ────────────────────────────────────────────────────────
-
 /**
  * A recorded user action with a human-friendly shape.
  * Stored separately from the legacy RecordedAction interface in types.ts so
@@ -1399,10 +1316,8 @@ interface UserRecordedAction {
   timestamp: number;
 }
 
-/** Recorded user actions accumulated during a recording session. */
 const _userRecordedActions: UserRecordedAction[] = [];
 
-/** References to the listener functions added during recording (for cleanup). */
 let _recordingClickListener: ((e: MouseEvent) => void) | null = null;
 let _recordingInputListener: ((e: Event) => void) | null = null;
 let _recordingScrollListener: (() => void) | null = null;
@@ -1425,13 +1340,11 @@ function buildCssSelector(el: Element): string {
   if (name && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) {
     return `${el.tagName.toLowerCase()}[name="${CSS.escape(name)}"]`;
   }
-  // Tag + first class
   const base = el.tagName.toLowerCase();
   const firstClass = el.classList[0] ? `.${CSS.escape(el.classList[0])}` : '';
   return `${base}${firstClass}`;
 }
 
-/** Inject a pulsing red dot indicator while recording is active. */
 function showRecordingIndicator(): void {
   if (_recordingIndicatorHost) return;
   if (!document.body) return;
@@ -1472,7 +1385,6 @@ function showRecordingIndicator(): void {
   _recordingIndicatorHost = host;
 }
 
-/** Remove the recording indicator. */
 function hideRecordingIndicator(): void {
   if (_recordingIndicatorHost && _recordingIndicatorHost.parentNode) {
     _recordingIndicatorHost.parentNode.removeChild(_recordingIndicatorHost);
@@ -1480,7 +1392,6 @@ function hideRecordingIndicator(): void {
   _recordingIndicatorHost = null;
 }
 
-/** Attach DOM event listeners that capture user interactions. */
 function attachRecordingListeners(): void {
   _recordingClickListener = (e: MouseEvent) => {
     if (!automationState.isRecording) return;
@@ -1541,7 +1452,6 @@ function attachRecordingListeners(): void {
   window.addEventListener('popstate', _recordingNavListener);
 }
 
-/** Remove DOM event listeners attached during recording. */
 function detachRecordingListeners(): void {
   if (_recordingClickListener) {
     document.removeEventListener('click', _recordingClickListener, { capture: true });
@@ -1561,19 +1471,13 @@ function detachRecordingListeners(): void {
   }
 }
 
-// ─── Recording handlers ───────────────────────────────────────────────────────
-
 function handleStartRecording(): ExtensionResponse {
-  // Reset and start fresh
   automationState.isRecording = true;
   automationState.recordedActions = [];
   _userRecordedActions.length = 0;
 
-  // Attach DOM listeners so we actually capture user interactions
   detachRecordingListeners(); // defensive cleanup in case of double-start
   attachRecordingListeners();
-
-  // Show recording indicator
   showRecordingIndicator();
 
   return { success: true, recording: true } as ExtensionResponse;
@@ -1581,20 +1485,14 @@ function handleStartRecording(): ExtensionResponse {
 
 function handleStopRecording(): ExtensionResponse {
   automationState.isRecording = false;
-
-  // Detach DOM listeners
   detachRecordingListeners();
-
-  // Remove recording indicator
   hideRecordingIndicator();
 
-  // Save recorded actions to chrome.storage.local
   const actions = [..._userRecordedActions];
   chrome.storage.local.set({ agi_recorded_actions: actions }).catch(() => {
     // Storage errors are non-fatal
   });
 
-  // Forward to background/desktop app so the session can replay or inspect the recording
   chrome.runtime
     .sendMessage({
       type: 'STOP_RECORDING',
@@ -1611,9 +1509,6 @@ function handleGetRecordedActions(): ExtensionResponse {
   return { success: true, actions: _userRecordedActions } as ExtensionResponse;
 }
 
-/**
- * Check connection status with background script
- */
 async function checkConnectionStatus(): Promise<void> {
   try {
     const response = await chrome.runtime.sendMessage({
@@ -1630,18 +1525,11 @@ async function checkConnectionStatus(): Promise<void> {
   }
 }
 
-/**
- * Add automation indicator to page
- */
-// Shadow host for the automation indicator — kept in module scope so
-// updateIndicatorStatus() can reach the inner element without touching the page DOM.
+// Shadow host kept in module scope so updateIndicatorStatus() can reach the inner element.
+
 let _indicatorShadow: ShadowRoot | null = null;
 
-/**
- * Add automation indicator to page using a shadow DOM container.
- * Monkey-patch console methods to capture logs into a circular buffer.
- * Only captures logs from the page — our own logger uses a different path.
- */
+/** Monkey-patch console to capture page logs. Our own logger is excluded via prefix check. */
 function patchConsole(): void {
   const levels: Array<'log' | 'warn' | 'error' | 'info' | 'debug'> = [
     'log',
@@ -1654,14 +1542,11 @@ function patchConsole(): void {
   for (const level of levels) {
     const original = console[level];
     console[level] = (...args: unknown[]) => {
-      // Call original first
       original.apply(console, args);
 
-      // Skip our own extension logs to avoid polluting the page's console buffer
       const firstArg = args[0];
       if (typeof firstArg === 'string' && firstArg.startsWith('[AGI Workforce]')) return;
 
-      // Capture into buffer
       const message = args
         .map((a) => {
           if (typeof a === 'string') return a;
@@ -1680,7 +1565,6 @@ function patchConsole(): void {
         timestamp: Date.now(),
       });
 
-      // Keep buffer bounded
       while (consoleLogBuffer.length > MAX_CONSOLE_BUFFER) {
         consoleLogBuffer.shift();
       }
@@ -1688,19 +1572,14 @@ function patchConsole(): void {
   }
 }
 
-/**
- * Shadow DOM prevents page CSS/JS from hiding, restyling, or detecting it via
- * the predictable #agi-workforce-indicator selector.
- */
+/** Shadow DOM prevents page CSS/JS from hiding or detecting the indicator. */
 function addAutomationIndicator(): void {
   if (!document.body) return;
 
-  // Use a data attribute for deduplication — avoids a predictable element ID.
   if (document.querySelector('[data-agi-workforce-indicator]')) return;
 
   const host = document.createElement('div');
   host.setAttribute('data-agi-workforce-indicator', 'true');
-  // Host sits in the stacking context at max z-index but has no visible styles itself.
   host.style.cssText =
     'position:fixed;bottom:72px;right:20px;z-index:2147483647;pointer-events:none;';
 
@@ -1733,8 +1612,6 @@ function addAutomationIndicator(): void {
   indicator.textContent = '⚙';
   indicator.title = 'AGI Workforce Extension';
 
-  // Use console.log instead of alert() so we never block the browser event loop
-  // or freeze the automation pipeline.
   indicator.addEventListener('click', () => {
     const isConnected = automationState.connectionStatus === 'connected';
     console.log(
@@ -1747,9 +1624,6 @@ function addAutomationIndicator(): void {
   document.body?.appendChild(host);
 }
 
-/**
- * Update automation indicator status color via the shadow DOM inner element.
- */
 function updateIndicatorStatus(): void {
   if (!_indicatorShadow) return;
   const indicator = _indicatorShadow.querySelector<HTMLElement>('.agi-indicator');
@@ -1761,15 +1635,9 @@ function updateIndicatorStatus(): void {
   }
 }
 
-/**
- * Inject a floating overlay button for quick access to AGI Workforce.
- * Uses shadow DOM to prevent page style interference.
- */
 function injectFloatingOverlay(): void {
-  // Only inject on regular http/https pages — skip chrome://, chrome-extension://, about:, etc.
+  // Only inject on regular http/https pages
   if (!/^https?:/.test(location.protocol)) return;
-
-  // Use a data attribute for deduplication so the ID is not predictable by page scripts.
   if (document.querySelector('[data-agi-workforce-overlay]')) return;
 
   const host = document.createElement('div');
@@ -1826,17 +1694,8 @@ function injectFloatingOverlay(): void {
   document.body?.appendChild(host);
 }
 
-/**
- * Validate message structure
- */
-// ─── WebMCP integration ───────────────────────────────────────────────────────
-
-/**
- * Initialize WebMCP tool discovery on the current page.
- * Discovers tools and watches for changes, reporting back to the background script.
- */
 function initWebMCP(): void {
-  // Delay discovery slightly to let page scripts register their tools
+  // Delay to let page scripts register their tools first
   setTimeout(() => {
     const discovery = discoverAllTools();
     if (discovery.tools.length > 0) {
@@ -1844,7 +1703,6 @@ function initWebMCP(): void {
         tools: discovery.tools.map((t) => t.name),
         url: discovery.url,
       });
-      // Notify background about discovered tools
       chrome.runtime
         .sendMessage({
           type: 'WEBMCP_TOOLS_CHANGED',
@@ -1857,7 +1715,6 @@ function initWebMCP(): void {
         });
     }
 
-    // Watch for dynamic tool changes
     watchForToolChanges((tools) => {
       chrome.runtime
         .sendMessage({
@@ -1879,7 +1736,6 @@ function initWebMCP(): void {
             schemaTypes: nlwebResult.schemaTypes,
             url: nlwebResult.url,
           });
-          // Notify background about NLWeb availability
           chrome.runtime
             .sendMessage({
               type: 'NLWEB_DETECTED',
@@ -1940,7 +1796,6 @@ const VALID_MESSAGE_TYPES = new Set([
   'CONNECTION_STATUS_CHANGED',
   'TAB_READY',
   'SYNC_PAGE_CONTEXT',
-  'open_side_panel',
   // Element interaction messages forwarded from background
   'SELECT_OPTION',
   'CHECK',
@@ -1961,6 +1816,9 @@ const VALID_MESSAGE_TYPES = new Set([
   // WebMCP
   'WEBMCP_DISCOVER_TOOLS',
   'WEBMCP_CALL_TOOL',
+  // Console log reading (forwarded from background)
+  'GET_CONSOLE_LOGS',
+  'CLEAR_CONSOLE_LOGS',
 ]);
 
 function isValidMessage(message: unknown): message is ExtensionMessage {
@@ -1973,7 +1831,6 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
   return typeof msg['type'] === 'string' && VALID_MESSAGE_TYPES.has(msg['type']);
 }
 
-// Initialize on script load
 initialize();
 
 // Export for testing

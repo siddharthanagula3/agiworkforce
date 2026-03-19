@@ -28,6 +28,7 @@ import { cn } from '../../lib/utils';
 import type { ToolLabelEntry } from '@agiworkforce/types';
 import React, { useState, useCallback } from 'react';
 import { invoke } from '../../lib/tauri-mock';
+import { useToolStore } from '../../stores/chat/toolStore';
 
 export type { ToolLabelEntry };
 
@@ -85,6 +86,9 @@ const ICON_MAP: Record<string, React.ElementType> = {
 };
 
 const DIFF_EDIT_NAMES = new Set(['Edit', 'MultiEdit', 'ApplyPatch', 'Write']);
+const TERMINAL_NAMES = new Set(['Bash', 'Run command', 'Run code']);
+const READ_FILE_NAMES = new Set(['Read', 'Read file']);
+const SCREENSHOT_NAMES = new Set(['Take screenshot', 'ImageGen', 'Create image']);
 const MAX_DIFF_LINES_INITIAL = 20;
 
 function formatDuration(ms: number): string {
@@ -175,25 +179,100 @@ function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
   );
 }
 
+/** Terminal output block — monospace pre with dark bg, max-height + scroll. */
+function TerminalOutputView({ output }: { output: string }) {
+  const trimmed = output.trim();
+  if (!trimmed) return null;
+  return (
+    <div className="mt-1.5 rounded-sm border border-white/10 overflow-hidden">
+      <div className="overflow-x-auto max-h-[200px] overflow-y-auto">
+        <pre className="font-mono text-[11px] leading-relaxed p-2 text-emerald-300/90 bg-black/60 select-text whitespace-pre-wrap break-words">
+          {trimmed}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+/** File content preview — first 10 lines of result_preview text. */
+function FilePreviewView({ content }: { content: string }) {
+  const lines = content.split('\n');
+  const preview = lines.slice(0, 10).join('\n');
+  const truncated = lines.length > 10;
+  return (
+    <div className="mt-1.5 rounded-sm border border-white/10 overflow-hidden">
+      <div className="overflow-x-auto max-h-[200px] overflow-y-auto">
+        <pre className="font-mono text-[11px] leading-relaxed p-2 text-slate-300/80 bg-black/40 select-text whitespace-pre-wrap break-words">
+          {preview}
+          {truncated && <span className="text-muted-foreground/50">{'\n'}…</span>}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+/** Screenshot thumbnail — renders a base64 image in a small contained box. */
+function ScreenshotView({ imageBase64 }: { imageBase64: string }) {
+  return (
+    <div className="mt-1.5 rounded-sm border border-white/10 overflow-hidden inline-block max-w-full">
+      <img
+        src={`data:image/png;base64,${imageBase64}`}
+        alt="Screenshot"
+        className="max-h-[200px] max-w-full object-contain block"
+      />
+    </div>
+  );
+}
+
 export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
   const Icon = ICON_MAP[entry.displayName] ?? Wrench;
   const isRunning = entry.status === 'running';
   const isError = entry.status === 'error';
   const errorTitle = isError && entry.error ? entry.error : undefined;
 
-  const [diffExpanded, setDiffExpanded] = useState(false);
+  const [outputExpanded, setOutputExpanded] = useState(false);
 
-  // Determine if this entry has a diff to show
+  // Pull live stream output for running tools (terminal output buffer)
+  const activeStream = useToolStore((s) => s.activeToolStreams.get(entry.id));
+  // Pull screenshots matching this tool id
+  const screenshot = useToolStore((s) =>
+    s.screenshots.find((sc) => sc.id === entry.id || sc.action === entry.id),
+  );
+
+  // Classify tool type
   const isEditTool = DIFF_EDIT_NAMES.has(entry.displayName);
-  // resultPreview is the optional diff string stored on the entry from ToolEventCompleted
+  const isTerminalTool = TERMINAL_NAMES.has(entry.displayName);
+  const isReadTool = READ_FILE_NAMES.has(entry.displayName);
+  const isScreenshotTool = SCREENSHOT_NAMES.has(entry.displayName);
+
+  const resultPreview = entry.resultPreview;
+  const checkpointId = entry.checkpointId;
+
+  // Terminal: use live stream buffer while running, resultPreview when done
+  const terminalOutput: string | undefined = isTerminalTool
+    ? isRunning
+      ? activeStream?.outputBuffer || undefined
+      : resultPreview || undefined
+    : undefined;
+
+  // Diff: Edit/Write tools show diff from resultPreview
   const diffContent: string | undefined =
-    isEditTool && !isRunning && (entry as ToolLabelEntry & { resultPreview?: string }).resultPreview
-      ? (entry as ToolLabelEntry & { resultPreview?: string }).resultPreview
+    isEditTool && !isRunning && resultPreview ? resultPreview : undefined;
+
+  // File preview: Read tools show first lines of resultPreview (skip if it looks like a diff)
+  const filePreviewContent: string | undefined =
+    isReadTool && !isRunning && resultPreview && !resultPreview.startsWith('---')
+      ? resultPreview
       : undefined;
 
-  const hasDiff = Boolean(diffContent);
-  const checkpointId: string | undefined = (entry as ToolLabelEntry & { checkpointId?: string })
-    .checkpointId;
+  // Screenshot: from store or resultPreview for screenshot tools
+  const screenshotBase64: string | undefined = isScreenshotTool
+    ? (screenshot?.imageBase64 ?? resultPreview ?? undefined)
+    : undefined;
+
+  const hasOutput = Boolean(
+    terminalOutput || diffContent || filePreviewContent || screenshotBase64,
+  );
 
   return (
     <motion.div
@@ -239,15 +318,15 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
           </span>
         )}
 
-        {/* Diff toggle */}
-        {hasDiff && (
+        {/* Output toggle — shown when there is any expandable content */}
+        {hasOutput && (
           <button
             type="button"
-            onClick={() => setDiffExpanded((prev) => !prev)}
+            onClick={() => setOutputExpanded((prev) => !prev)}
             className="ml-1 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={diffExpanded ? 'Collapse diff' : 'Expand diff'}
+            aria-label={outputExpanded ? 'Collapse output' : 'Expand output'}
           >
-            {diffExpanded ? (
+            {outputExpanded ? (
               <ChevronDown className="w-3 h-3" />
             ) : (
               <ChevronRight className="w-3 h-3" />
@@ -256,10 +335,13 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
         )}
       </div>
 
-      {/* Inline diff view */}
-      {hasDiff && diffExpanded && diffContent && (
+      {/* Inline output section — shown when expanded */}
+      {hasOutput && outputExpanded && (
         <div className="pl-8">
-          <DiffView diff={diffContent} checkpointId={checkpointId} />
+          {terminalOutput && <TerminalOutputView output={terminalOutput} />}
+          {diffContent && <DiffView diff={diffContent} checkpointId={checkpointId} />}
+          {filePreviewContent && !diffContent && <FilePreviewView content={filePreviewContent} />}
+          {screenshotBase64 && <ScreenshotView imageBase64={screenshotBase64} />}
         </div>
       )}
     </motion.div>

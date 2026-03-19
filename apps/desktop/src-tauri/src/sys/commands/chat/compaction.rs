@@ -111,6 +111,7 @@ pub(super) async fn compact_context(
             _ => 10,
         },
         min_messages: 10,
+        ..CompactionConfig::default()
     };
 
     let compactor = ContextCompactor::new(config);

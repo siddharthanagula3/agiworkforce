@@ -13,6 +13,17 @@ pub struct CompactionConfig {
     pub keep_recent: usize,
 
     pub min_messages: usize,
+
+    /// Whether automatic compaction is enabled (default: true).
+    pub auto_compact_enabled: bool,
+
+    /// Fraction of the model's context window at which auto-compaction triggers
+    /// (default: 0.95 — i.e. 95% capacity).
+    pub auto_compact_threshold: f32,
+
+    /// Minimum seconds between consecutive auto-compactions for the same
+    /// conversation (default: 120).
+    pub auto_compact_cooldown_secs: u64,
 }
 
 impl Default for CompactionConfig {
@@ -22,8 +33,43 @@ impl Default for CompactionConfig {
             target_tokens: 50_000,
             keep_recent: 10,
             min_messages: 20,
+            auto_compact_enabled: true,
+            auto_compact_threshold: 0.95,
+            auto_compact_cooldown_secs: 120,
         }
     }
+}
+
+/// Determine whether automatic compaction should trigger now.
+///
+/// Returns `true` when all of the following hold:
+/// - `config.auto_compact_enabled` is `true`
+/// - `current_tokens` exceeds `max_tokens * config.auto_compact_threshold`
+/// - at least `config.auto_compact_cooldown_secs` have elapsed since the last
+///   compaction (or no previous compaction has occurred).
+pub fn should_auto_compact(
+    current_tokens: usize,
+    max_tokens: usize,
+    config: &CompactionConfig,
+    last_compact_time: Option<std::time::Instant>,
+) -> bool {
+    if !config.auto_compact_enabled {
+        return false;
+    }
+
+    let threshold = (max_tokens as f64 * config.auto_compact_threshold as f64) as usize;
+    if current_tokens < threshold {
+        return false;
+    }
+
+    if let Some(last) = last_compact_time {
+        let elapsed = last.elapsed().as_secs();
+        if elapsed < config.auto_compact_cooldown_secs {
+            return false;
+        }
+    }
+
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

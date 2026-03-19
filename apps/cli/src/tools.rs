@@ -41,14 +41,6 @@ const MAX_LINE_LENGTH: usize = 2_000;
 /// Command execution timeout.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Commands that require explicit user confirmation.
-#[allow(dead_code)]
-const DANGEROUS_COMMANDS: &[&str] = &[
-    "rm", "sudo", "chmod", "chown", "kill", "killall", "pkill",
-    "mkfs", "dd", "fdisk", "mount", "umount", "reboot", "shutdown",
-    "systemctl", "launchctl", "mv", "rmdir",
-];
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------

@@ -86,6 +86,8 @@ interface SidebarProps {
   onOpenCollaboration?: () => void;
   onToggleMediaLab?: () => void;
   canAccessMediaLab?: boolean;
+  onToggleArtifacts?: () => void;
+  artifactPanelOpen?: boolean;
 }
 
 type TemporalGroup = 'today' | 'yesterday' | 'thisWeek' | 'last7Days' | 'last30Days' | 'older';
@@ -356,6 +358,8 @@ export function Sidebar({
   onOpenCollaboration,
   onToggleMediaLab,
   canAccessMediaLab,
+  onToggleArtifacts,
+  artifactPanelOpen = false,
 }: SidebarProps) {
   // Platform-aware modifier key: ⌘ on Mac, Ctrl on Windows/Linux
   const modKeySymbol =
@@ -984,6 +988,22 @@ export function Sidebar({
                 <Users className="w-3.5 h-3.5" />
               </span>
               Agent Swarm
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onToggleArtifacts?.()}
+              className={cn(
+                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                artifactPanelOpen
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted-foreground hover:bg-surface-hover',
+              )}
+            >
+              <span className="w-5 h-5 flex items-center justify-center rounded bg-orange-400/20 text-orange-400">
+                <FileText className="w-3.5 h-3.5" />
+              </span>
+              Artifacts
             </button>
 
             {canAccessMediaLab && (

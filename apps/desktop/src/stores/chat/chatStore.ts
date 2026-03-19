@@ -53,6 +53,33 @@ export type {
 } from './types';
 
 /**
+ * Backend Conversation type from Tauri/SQLite
+ * Maps to the Rust Conversation struct in data/db/models.rs
+ */
+interface BackendConversation {
+  id: number;
+  user_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Converts a backend conversation from the Rust/SQLite layer to the frontend ConversationSummary.
+ * Also registers the id mapping so messages can be loaded later.
+ */
+function convertBackendConversation(conv: BackendConversation): ConversationSummary {
+  const uuid = dbIdToUuid(conv.id);
+  return {
+    id: uuid,
+    title: conv.title,
+    pinned: false,
+    lastMessage: '',
+    updatedAt: new Date(conv.updated_at),
+  };
+}
+
+/**
  * Backend Message type from Tauri/SQLite
  * Maps to the Rust Message struct in data/db/models.rs
  */
@@ -277,6 +304,7 @@ export interface ChatState {
   ensureActiveConversation: () => void;
   createConversation: (title?: string, options?: { incognito?: boolean }) => string;
   selectConversation: (id: string) => void;
+  loadConversations: (userId: string) => Promise<void>;
   loadConversationMessages: (id: string, userId: string) => Promise<void>;
   setConversationMessages: (id: string, messages: EnhancedMessage[]) => void;
   renameConversation: (id: string, title: string) => void;
@@ -542,6 +570,40 @@ export const useChatStore = create<ChatState>()(
               'chat/selectConversation',
             ),
 
+          loadConversations: async (userId: string) => {
+            if (!userId) {
+              console.warn('[ChatStore] loadConversations called without userId');
+              return;
+            }
+
+            try {
+              const backendConversations = await invoke<BackendConversation[]>(
+                'chat_get_conversations',
+                { userId },
+              );
+
+              const converted = backendConversations.map(convertBackendConversation);
+
+              set(
+                (state) => {
+                  // Merge with any local-only (unsaved) conversations that have no db mapping
+                  const localOnly = state.conversations.filter(
+                    (c) => !converted.some((bc) => bc.id === c.id),
+                  );
+                  state.conversations = [...converted, ...localOnly];
+                  // Set first conversation active if none is currently selected
+                  if (!state.activeConversationId && converted.length > 0) {
+                    state.activeConversationId = converted[0]!.id;
+                  }
+                },
+                undefined,
+                'chat/loadConversations/success',
+              );
+            } catch (error) {
+              console.error('[ChatStore] Failed to load conversations:', error);
+            }
+          },
+
           loadConversationMessages: async (id: string, userId: string) => {
             // Get the database ID from the UUID mapping
             const dbId = uuidToDbId(id);
@@ -645,7 +707,8 @@ export const useChatStore = create<ChatState>()(
             return convo?.customInstructions;
           },
 
-          deleteConversation: (id: string) =>
+          deleteConversation: (id: string) => {
+            // Optimistically remove from local state immediately
             set(
               (state) => {
                 // Prune tool timeline entries for messages in this conversation
@@ -665,7 +728,23 @@ export const useChatStore = create<ChatState>()(
               },
               undefined,
               'chat/deleteConversation',
-            ),
+            );
+
+            // Persist deletion to the backend if a database record exists for this conversation
+            const dbId = uuidToDbId(id);
+            if (dbId !== undefined) {
+              // Resolve userId lazily to avoid circular imports at module load time
+              import('../auth')
+                .then(({ useUnifiedAuthStore }) => {
+                  const userId = useUnifiedAuthStore.getState().user?.id ?? '';
+                  if (!userId) return;
+                  return invoke('chat_delete_conversation', { id: dbId, userId });
+                })
+                .catch((error) => {
+                  console.error('[ChatStore] Failed to delete conversation from backend:', error);
+                });
+            }
+          },
 
           togglePinnedConversation: (id: string) =>
             set(
