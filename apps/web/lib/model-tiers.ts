@@ -11,10 +11,10 @@ import 'server-only';
  *
  * - free:       No cloud model access
  * - hobby:      Latest economy models (< $5/1M output, agentic, tool calling)
- * - pro:        Economy + Pro-tier models ($5–20/1M)
- * - max/enterprise: All models including flagships
+ * - pro:        Latest mid-tier models ($5–20/1M output)
+ * - max/enterprise: Latest flagship models (> $20/1M output or highest capability)
  *
- * Policy: only the latest generation per provider is listed.
+ * Policy: only the latest generation per provider per tier.
  * Superseded models are removed when a newer generation ships.
  * Last updated: March 2026
  */
@@ -22,39 +22,47 @@ import 'server-only';
 /** Minimum tier(s) required to access a given model. */
 export const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterprise')[]> = {
   // =========================================================================
-  // MAX / ENTERPRISE ONLY — Flagship models (latest generation only)
+  // MAX / ENTERPRISE ONLY — Latest flagship models
   // =========================================================================
-  // Anthropic — Opus 4.6 (latest, Nov 2025)
+  // Anthropic — Claude Opus 4.6 (Nov 2025, latest Opus)
   'claude-opus-4.6': ['max', 'enterprise'],
   'claude-opus-4-6-20251101': ['max', 'enterprise'],
-  // OpenAI — GPT-5.4 Pro (latest flagship, March 2026, $180/1M output)
+  // OpenAI — GPT-5.4 / GPT-5.4 Pro (March 2026, flagship)
+  'gpt-5.4': ['max', 'enterprise'],
   'gpt-5.4-pro': ['max', 'enterprise'],
-  // Google — Gemini Ultra (Vertex AI only)
-  'gemini-3-ultra': ['max', 'enterprise'],
-  // OpenAI — o3/o3-pro reasoning models
+  // OpenAI — o3 / o3-pro (latest reasoning flagships)
   o3: ['max', 'enterprise'],
   'o3-pro': ['max', 'enterprise'],
-  // xAI — Grok 4 flagship
+  // Google — Gemini 3.1 Pro (March 2026, latest Pro)
+  'gemini-3.1-pro-preview': ['max', 'enterprise'],
+  // xAI — Grok 4.20 (March 2026, latest stable flagship)
+  'grok-4.20-multi-agent-beta-0309': ['max', 'enterprise'],
   'grok-4': ['max', 'enterprise'],
-  // DeepSeek — R1 reasoning flagship
-  'deepseek-r1': ['max', 'enterprise'],
+  // Mistral — Mistral Large 3 (Dec 2025, 675B params)
+  'mistral-large-2512': ['max', 'enterprise'],
+  // Perplexity — Sonar Reasoning Pro + Deep Research (most powerful)
+  'sonar-reasoning-pro': ['max', 'enterprise'],
+  'sonar-deep-research': ['max', 'enterprise'],
 
   // =========================================================================
-  // PRO AND ABOVE — Mid-tier quality / cost balance (latest generation only)
+  // PRO AND ABOVE — Latest mid-tier models ($5–20/1M output)
   // =========================================================================
-  // OpenAI — GPT-5.4 (latest, March 2026, ~$15/1M output)
-  'gpt-5.4': ['pro', 'max', 'enterprise'],
-  // Anthropic — Claude Sonnet 4.6 (latest, Oct 2025, $15/1M output)
+  // OpenAI — GPT-5.4 Mini (March 2026, ~$4.50/1M output)
+  'gpt-5.4-mini': ['pro', 'max', 'enterprise'],
+  // OpenAI — o4-mini (latest reasoning mid-tier, ~$4–5/1M output)
+  'o4-mini': ['pro', 'max', 'enterprise'],
+  // Anthropic — Claude Sonnet 4.6 (Oct 2025, $15/1M output)
   'claude-sonnet-4.6': ['pro', 'max', 'enterprise'],
   'claude-sonnet-4-6-20251029': ['pro', 'max', 'enterprise'],
-  // Google — Gemini 3.1 Pro Preview (latest, March 2026, ~$12–18/1M output)
-  'gemini-3.1-pro-preview': ['pro', 'max', 'enterprise'],
-  // Qwen — Qwen 3.5 Plus (latest mid-tier, Feb 2026, $2.40/1M output)
+  // Mistral — Mistral Medium 3 (latest mid-tier, $2.00/1M output)
+  'mistral-medium-3': ['pro', 'max', 'enterprise'],
+  // Qwen — Qwen 3.5 Plus (Feb 2026, $2.40/1M output)
   'qwen3.5-plus': ['pro', 'max', 'enterprise'],
-  // Perplexity — Sonar Pro / Reasoning / Deep Research
+  // DeepSeek — Reasoner / V3.2 thinking mode ($1.10/1M output)
+  'deepseek-reasoner': ['pro', 'max', 'enterprise'],
+  // Perplexity — Sonar Pro + Sonar Reasoning
   'sonar-pro': ['pro', 'max', 'enterprise'],
   'sonar-reasoning': ['pro', 'max', 'enterprise'],
-  'sonar-deep-research': ['pro', 'max', 'enterprise'],
 };
 
 /**
@@ -66,23 +74,24 @@ export const MODEL_TIER_REQUIREMENTS: Record<string, ('pro' | 'max' | 'enterpris
  *   3. Output cost < $5 per 1M tokens
  */
 export const ECONOMY_MODELS = new Set<string>([
-  // Google — Gemini 3.1 Flash Lite (latest, March 2026, $1.50/1M output, 1M context)
+  // Google — Gemini 3.1 Flash Lite (March 2026, $1.50/1M output, 1M context)
   'gemini-3.1-flash-lite',
+  'gemini-3.1-flash-lite-preview',
 
-  // Anthropic — Claude Haiku 4.5 (latest Haiku, Oct 2025, $5.00/1M output, 200K context)
+  // Anthropic — Claude Haiku 4.5 (Oct 2025, $5.00/1M output, 200K context)
   'claude-haiku-4.5',
   'claude-haiku-4-5-20251001',
 
-  // OpenAI — GPT-5.4 Mini (latest mini, March 2026, ~$1.20/1M output)
-  'gpt-5.4-mini',
+  // OpenAI — GPT-5.4 Nano (March 2026, $1.25/1M output, latest nano)
+  'gpt-5.4-nano',
 
   // xAI — Grok 4.1 Fast (latest fast, $0.50/1M output, 2M context)
   'grok-4.1-fast-non-reasoning',
 
-  // Qwen / Alibaba — Qwen 3.5 Flash (latest economy, Feb 2026, $0.40/1M output, 1M context)
+  // Qwen / Alibaba — Qwen 3.5 Flash (Feb 2026, $0.40/1M output, 1M context)
   'qwen3.5-flash',
 
-  // DeepSeek — V3.2 (latest, Dec 2025, $0.42/1M output, 128K context)
+  // DeepSeek — V3.2 chat (Dec 2025, $0.028/1M output, 128K context)
   'deepseek-chat',
 
   // Moonshot / Kimi — K2.5 series (latest, $3.00/1M output, 256K context)
