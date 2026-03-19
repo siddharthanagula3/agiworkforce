@@ -88,8 +88,14 @@ pub struct SessionSummary {
     pub id: String,
     pub title: String,
     pub model: String,
+    /// Working directory when session was created. Used by --search display.
+    #[allow(dead_code)]
     pub cwd: String,
+    /// Git branch at session creation time. Used by session display and fork.
+    #[allow(dead_code)]
     pub git_branch: String,
+    /// Epoch millis when the session was first created.
+    #[allow(dead_code)]
     pub created_at: i64,
     pub updated_at: i64,
     pub total_tokens: i64,
@@ -200,6 +206,8 @@ pub fn load_session(conn: &Connection, session_id: &str) -> Result<Vec<Message>>
 }
 
 /// Delete a session and its messages/tool_calls via CASCADE.
+/// Used by archive_session and will be wired into /session delete REPL command.
+#[allow(dead_code)]
 pub fn delete_session(conn: &Connection, session_id: &str) -> Result<()> {
     let n = conn
         .execute("DELETE FROM sessions WHERE id = ?1", params![session_id])
@@ -229,13 +237,24 @@ pub fn rename_session(conn: &Connection, session_id: &str, new_title: &str) -> R
 ///
 /// Currently implemented as a delete. A future version may set an `archived`
 /// flag instead, but for now the simplest approach is full removal.
+/// Will be wired into /session archive REPL command.
+#[allow(dead_code)]
 pub fn archive_session(conn: &Connection, session_id: &str) -> Result<()> {
     delete_session(conn, session_id)
 }
 
+/// Escape LIKE wildcard characters so user input is matched literally.
+fn escape_like_pattern(input: &str) -> String {
+    input
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// Full-text search across session titles and message content.
 pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSummary>> {
-    let pattern = format!("%{}%", query);
+    let escaped_query = escape_like_pattern(query);
+    let pattern = format!("%{}%", escaped_query);
     let mut stmt = conn
         .prepare(
             "SELECT DISTINCT s.id, s.title, s.model, s.cwd, s.git_branch,
@@ -243,9 +262,9 @@ pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSumm
                     COUNT(m2.id) AS message_count
              FROM sessions s
              LEFT JOIN messages m  ON m.session_id  = s.id
-                 AND (m.content_json LIKE ?1 OR m.role LIKE ?1)
+                 AND (m.content_json LIKE ?1 ESCAPE '\\' OR m.role LIKE ?1 ESCAPE '\\')
              LEFT JOIN messages m2 ON m2.session_id = s.id
-             WHERE s.title LIKE ?1 OR m.id IS NOT NULL
+             WHERE s.title LIKE ?1 ESCAPE '\\' OR m.id IS NOT NULL
              GROUP BY s.id
              ORDER BY s.updated_at DESC
              LIMIT 50",
@@ -260,6 +279,130 @@ pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSumm
         .context("Failed to collect search results")
 }
 
+/// Search across session messages and return matching snippets with context.
+/// Returns (session_summary, matching_snippets) pairs.
+#[allow(dead_code)]
+pub fn search_session_messages(
+    conn: &Connection,
+    query: &str,
+    max_results: usize,
+) -> Result<Vec<(SessionSummary, Vec<String>)>> {
+    let sessions = search_sessions(conn, query)?;
+    let query_lower = query.to_lowercase();
+    let mut results = Vec::new();
+
+    for session in sessions.into_iter().take(max_results) {
+        let messages = load_session(conn, &session.id)?;
+        let mut snippets = Vec::new();
+
+        for msg in &messages {
+            let text = msg.text_content();
+            let text_lower = text.to_lowercase();
+            if text_lower.contains(&query_lower) {
+                if let Some(pos) = text_lower.find(&query_lower) {
+                    let start = pos.saturating_sub(60);
+                    let end = (pos + query.len() + 60).min(text.len());
+                    let snippet = text[start..end].replace('\n', " ");
+                    let prefix = if start > 0 { "..." } else { "" };
+                    let suffix = if end < text.len() { "..." } else { "" };
+                    snippets.push(format!(
+                        "[{}] {}{}{}",
+                        msg.role, prefix, snippet, suffix
+                    ));
+                    if snippets.len() >= 3 {
+                        break;
+                    }
+                }
+            }
+        }
+
+        results.push((session, snippets));
+    }
+
+    Ok(results)
+}
+
+// ---------------------------------------------------------------------------
+// Session forking
+// ---------------------------------------------------------------------------
+
+/// Fork an existing session: creates a new session with a copy of all messages
+/// from the source session. The new session gets a new UUID and title prefix.
+/// Returns the new session ID.
+/// Called from main.rs when --fork-session is passed, and from /fork REPL command.
+#[allow(dead_code)]
+pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
+    // Verify source exists and load its metadata
+    let source: SessionSummary = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT s.id, s.title, s.model, s.cwd, s.git_branch,
+                        s.created_at, s.updated_at, s.total_tokens,
+                        COUNT(m.id) AS message_count
+                 FROM sessions s
+                 LEFT JOIN messages m ON m.session_id = s.id
+                 WHERE s.id = ?1
+                 GROUP BY s.id",
+            )
+            .context("Failed to prepare fork query")?;
+        stmt.query_row(params![source_id], row_to_summary)
+            .context(format!("Session '{}' not found", source_id))?
+    };
+
+    // Generate new ID
+    let new_id = format!("{:x}", now_ms() as u64);
+    let fork_title = format!("(fork) {}", source.title);
+
+    // Create the new session
+    save_session(
+        conn,
+        &new_id,
+        &fork_title,
+        &source.model,
+        &source.cwd,
+        &source.git_branch,
+    )?;
+
+    // Copy all messages from source to the new session
+    let mut stmt = conn
+        .prepare(
+            "SELECT role, content_json, tokens FROM messages
+             WHERE session_id = ?1
+             ORDER BY id ASC",
+        )
+        .context("Failed to prepare message copy query")?;
+
+    let rows = stmt
+        .query_map(params![source_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })
+        .context("Failed to read source messages")?;
+
+    let now = now_ms();
+    for row in rows {
+        let (role, content_json, tokens) = row.context("Failed to read message row")?;
+        conn.execute(
+            "INSERT INTO messages (session_id, role, content_json, tokens, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![new_id, role, content_json, tokens, now],
+        )
+        .context("Failed to copy message")?;
+    }
+
+    // Update the token count on the new session
+    conn.execute(
+        "UPDATE sessions SET total_tokens = ?1 WHERE id = ?2",
+        params![source.total_tokens, new_id],
+    )
+    .context("Failed to update forked session tokens")?;
+
+    Ok(new_id)
+}
+
 // ---------------------------------------------------------------------------
 // Tool call recording
 // ---------------------------------------------------------------------------
@@ -267,6 +410,8 @@ pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSumm
 /// Record a tool call associated with a message row.
 ///
 /// `message_id` is the value returned by [`save_message`].
+/// Will be wired into the agent loop for tool call persistence and analytics.
+#[allow(dead_code)]
 pub fn record_tool_call(
     conn: &Connection,
     message_id: i64,
@@ -462,6 +607,8 @@ pub fn format_session_list(sessions: &[SessionSummary]) -> String {
 }
 
 /// Very lightweight timestamp formatter (no chrono dependency needed).
+/// Used by enhanced session display (--search with context).
+#[allow(dead_code)]
 fn format_timestamp(ms: i64) -> String {
     let secs = ms / 1_000;
     let days = secs / 86_400;

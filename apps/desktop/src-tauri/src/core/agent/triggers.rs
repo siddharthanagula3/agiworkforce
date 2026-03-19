@@ -26,6 +26,7 @@ use cron::Schedule;
 use notify::{Event as NotifyEvent, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
@@ -154,6 +155,85 @@ const WEBHOOK_PORT: u16 = 18923;
 /// Maximum execution time for a single trigger execution (seconds).
 const TRIGGER_EXECUTION_TIMEOUT_SECS: u64 = 300;
 
+/// Minimum allowed interval between cron trigger firings (seconds).
+/// Cron expressions that would fire more often than every 5 minutes are rejected.
+const MIN_CRON_INTERVAL_SECS: i64 = 300;
+
+/// Sensitive directories that must never be watched by file-watcher triggers.
+const DENIED_WATCH_PATHS: &[&str] = &[
+    ".ssh",
+    ".gnupg",
+    ".aws",
+    ".config/gcloud",
+    ".azure",
+    ".kube",
+    ".docker",
+    ".npmrc",
+    ".pypirc",
+];
+
+// ---------------------------------------------------------------------------
+// Security helpers
+// ---------------------------------------------------------------------------
+
+/// Constant-time byte comparison to prevent timing side-channel attacks on
+/// webhook authentication tokens.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut result = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        result |= x ^ y;
+    }
+    result == 0
+}
+
+/// Check that a path does not reside inside any sensitive directory under the
+/// user's home folder (e.g. `.ssh`, `.gnupg`, `.aws`).
+fn is_watch_path_allowed(path: &Path) -> bool {
+    let canonical = match std::fs::canonicalize(path) {
+        Ok(p) => p,
+        Err(_) => return false, // can't resolve → deny
+    };
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => return true, // no home dir, can't check
+    };
+    for denied in DENIED_WATCH_PATHS {
+        let denied_path = home.join(denied);
+        // Try to canonicalize denied path too (it may not exist)
+        let denied_canonical = std::fs::canonicalize(&denied_path).unwrap_or(denied_path);
+        if canonical.starts_with(&denied_canonical) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Validate that a cron expression does not fire more often than every
+/// `MIN_CRON_INTERVAL_SECS` seconds.  Returns `Ok(())` if acceptable, or an
+/// error string describing why the expression was rejected.
+fn validate_cron_interval(cron_expr: &str) -> Result<(), String> {
+    let schedule = Schedule::from_str(cron_expr)
+        .map_err(|e| format!("Invalid cron expression '{}': {}", cron_expr, e))?;
+
+    let now = Utc::now();
+    let upcoming: Vec<_> = schedule.after(&now).take(10).collect();
+
+    for window in upcoming.windows(2) {
+        let gap = window[1].signed_duration_since(window[0]).num_seconds();
+        if gap < MIN_CRON_INTERVAL_SECS {
+            return Err(format!(
+                "Cron expression '{}' would fire every {}s — minimum allowed interval is {}s (5 minutes)",
+                cron_expr, gap, MIN_CRON_INTERVAL_SECS
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------
@@ -189,6 +269,9 @@ impl TriggerRegistry {
                 Schedule::from_str(expression).map_err(|e| {
                     anyhow::anyhow!("Invalid cron expression '{}': {}", expression, e)
                 })?;
+                // Reject cron intervals shorter than 5 minutes to prevent abuse.
+                validate_cron_interval(expression)
+                    .map_err(|e| anyhow::anyhow!("{}", e))?;
             }
             TriggerConfig::Webhook { path, .. } => {
                 if path.is_empty() || !path.starts_with('/') {
@@ -199,10 +282,17 @@ impl TriggerRegistry {
                 }
             }
             TriggerConfig::FileWatcher { watch_path, .. } => {
-                let p = std::path::Path::new(watch_path);
+                let p = Path::new(watch_path);
                 if !p.exists() {
                     return Err(anyhow::anyhow!(
                         "Watch path does not exist: '{}'",
+                        watch_path
+                    ));
+                }
+                // Block watchers on sensitive directories (e.g. .ssh, .gnupg, .aws).
+                if !is_watch_path_allowed(p) {
+                    return Err(anyhow::anyhow!(
+                        "Watch path '{}' is inside a sensitive directory and cannot be watched",
                         watch_path
                     ));
                 }
@@ -588,6 +678,15 @@ impl TriggerRegistry {
             _ => return Err(anyhow::anyhow!("Trigger {} is not a FileWatcher", trigger.id)),
         };
 
+        // Re-check the denylist at watcher start time (defense-in-depth).
+        let watch_path_ref = Path::new(&watch_path);
+        if !is_watch_path_allowed(watch_path_ref) {
+            return Err(anyhow::anyhow!(
+                "Watch path '{}' is inside a sensitive directory and cannot be watched",
+                watch_path
+            ));
+        }
+
         let trigger_id = trigger.id.clone();
         let triggers = Arc::clone(&self.triggers);
         let executions = Arc::clone(&self.executions);
@@ -908,13 +1007,16 @@ async fn webhook_server(
                             };
 
                             // Check auth token if configured.
+                            // Uses constant-time comparison to prevent timing
+                            // side-channel attacks on the bearer token.
                             if let TriggerConfig::Webhook {
                                 auth_token: Some(ref expected),
                                 ..
                             } = trigger.config
                             {
                                 let bearer = format!("Bearer {}", expected);
-                                if auth_header.as_deref() != Some(bearer.as_str()) {
+                                let provided = auth_header.as_deref().unwrap_or_default();
+                                if !constant_time_eq(provided.as_bytes(), bearer.as_bytes()) {
                                     let response = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n";
                                     let _ = stream.write_all(response.as_bytes()).await;
                                     tracing::warn!(
@@ -1045,11 +1147,28 @@ pub async fn register_trigger(
         trigger.updated_at = now;
     }
 
-    let registry = state.0.read().await;
-    registry
-        .register(trigger.clone())
-        .await
-        .map_err(|e| e.to_string())?;
+    // Use a single write lock for register + watcher start to avoid TOCTOU races.
+    {
+        let mut registry = state.0.write().await;
+        registry
+            .register(trigger.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // For FileWatcher triggers, dynamically start the watcher immediately
+        // instead of waiting for the next full engine restart.
+        if trigger.trigger_type == TriggerType::FileWatcher && trigger.enabled {
+            if !registry.file_watchers.contains_key(&trigger.id) {
+                if let Err(e) = registry.start_file_watcher(&trigger).await {
+                    tracing::warn!(
+                        "[TriggerRegistry] Failed to start file watcher on dynamic registration for {}: {}",
+                        trigger.id,
+                        e
+                    );
+                }
+            }
+        }
+    }
 
     Ok(trigger)
 }
@@ -1060,11 +1179,14 @@ pub async fn unregister_trigger(
     trigger_id: String,
     state: tauri::State<'_, TriggerRegistryState>,
 ) -> Result<(), String> {
-    let registry = state.0.read().await;
+    let mut registry = state.0.write().await;
     registry
         .unregister(&trigger_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    // Stop and remove the file watcher if one exists (prevents resource leak).
+    registry.file_watchers.remove(&trigger_id);
+    Ok(())
 }
 
 /// List all registered triggers.
@@ -1155,7 +1277,7 @@ mod tests {
         let trigger = make_test_trigger(
             TriggerType::Cron,
             TriggerConfig::Cron {
-                expression: "0 * * * * *".to_string(),
+                expression: "0 */5 * * * *".to_string(),
                 timezone: None,
             },
         );
@@ -1173,7 +1295,7 @@ mod tests {
         let trigger = make_test_trigger(
             TriggerType::Cron,
             TriggerConfig::Cron {
-                expression: "0 * * * * *".to_string(),
+                expression: "0 */5 * * * *".to_string(),
                 timezone: None,
             },
         );
@@ -1309,5 +1431,121 @@ mod tests {
 
         // Should register without error since temp_dir exists.
         registry.register(trigger).await.unwrap();
+    }
+
+    // ------------------------------------------------------------------
+    // Security: constant-time token comparison
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_constant_time_eq_matching() {
+        assert!(constant_time_eq(b"secret123", b"secret123"));
+        assert!(constant_time_eq(b"", b""));
+    }
+
+    #[test]
+    fn test_constant_time_eq_mismatch() {
+        assert!(!constant_time_eq(b"secret123", b"secret124"));
+        assert!(!constant_time_eq(b"short", b"longer_string"));
+        assert!(!constant_time_eq(b"abc", b""));
+    }
+
+    // ------------------------------------------------------------------
+    // Security: file watcher path denylist
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_watch_path_allowed_for_normal_dirs() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        assert!(is_watch_path_allowed(temp_dir.path()));
+    }
+
+    #[test]
+    fn test_watch_path_denied_for_ssh() {
+        let home = dirs::home_dir().unwrap_or_default();
+        assert!(!is_watch_path_allowed(&home.join(".ssh")));
+        assert!(!is_watch_path_allowed(&home.join(".ssh/keys")));
+    }
+
+    #[test]
+    fn test_watch_path_denied_for_aws() {
+        let home = dirs::home_dir().unwrap_or_default();
+        assert!(!is_watch_path_allowed(&home.join(".aws")));
+        assert!(!is_watch_path_allowed(&home.join(".aws/credentials")));
+    }
+
+    #[test]
+    fn test_watch_path_denied_for_gnupg() {
+        let home = dirs::home_dir().unwrap_or_default();
+        assert!(!is_watch_path_allowed(&home.join(".gnupg")));
+    }
+
+    #[tokio::test]
+    async fn test_sensitive_watch_path_rejected_on_register() {
+        let registry = TriggerRegistry::new();
+        let home = dirs::home_dir().unwrap_or_default();
+        let ssh_path = home.join(".ssh");
+
+        // Only test if the directory actually exists on this machine.
+        if ssh_path.exists() {
+            let trigger = make_test_trigger(
+                TriggerType::FileWatcher,
+                TriggerConfig::FileWatcher {
+                    watch_path: ssh_path.to_str().unwrap().to_string(),
+                    glob: None,
+                    debounce_ms: None,
+                },
+            );
+
+            let result = registry.register(trigger).await;
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("sensitive directory"));
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Security: cron minimum interval
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_cron_interval_every_5_min_ok() {
+        // "0 */5 * * * *" = every 5 minutes — should be accepted.
+        assert!(validate_cron_interval("0 */5 * * * *").is_ok());
+    }
+
+    #[test]
+    fn test_cron_interval_hourly_ok() {
+        // "0 0 * * * *" = every hour — should be accepted.
+        assert!(validate_cron_interval("0 0 * * * *").is_ok());
+    }
+
+    #[test]
+    fn test_cron_interval_every_second_rejected() {
+        // "* * * * * *" = every second — must be rejected.
+        assert!(validate_cron_interval("* * * * * *").is_err());
+    }
+
+    #[test]
+    fn test_cron_interval_every_minute_rejected() {
+        // "0 * * * * *" = every minute — must be rejected.
+        let result = validate_cron_interval("0 * * * * *");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("minimum allowed interval"));
+    }
+
+    #[tokio::test]
+    async fn test_too_frequent_cron_rejected_on_register() {
+        let registry = TriggerRegistry::new();
+        let trigger = make_test_trigger(
+            TriggerType::Cron,
+            TriggerConfig::Cron {
+                expression: "0 * * * * *".to_string(), // every minute — too frequent
+                timezone: None,
+            },
+        );
+
+        let result = registry.register(trigger).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("minimum allowed interval"));
     }
 }
