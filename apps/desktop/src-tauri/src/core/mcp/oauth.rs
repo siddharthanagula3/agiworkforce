@@ -705,6 +705,108 @@ fn build_oauth_client(config: &McpOAuthConfig) -> McpResult<BasicClient> {
     Ok(client)
 }
 
+// ── OAuth CIMD — Client-Initiated Metadata Discovery (spec 2025-11-25) ───────
+
+/// Client metadata sent during the OAuth CIMD handshake.
+///
+/// When the MCP client initiates an OAuth flow, it can supply this metadata
+/// to the authorization server so the server can validate the client and
+/// adjust the set of granted scopes accordingly. This follows the pattern
+/// described in RFC 7591 (Dynamic Client Registration) as adopted by the
+/// MCP spec 2025-11-25 update.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthClientMetadata {
+    /// Human-readable name of the client application shown in consent screens.
+    pub client_name: String,
+
+    /// Allowed redirect URIs registered with the authorization server.
+    /// At least one entry is required for the Authorization Code flow.
+    pub redirect_uris: Vec<String>,
+
+    /// Client type: `"public"` (no secret) or `"confidential"` (has secret).
+    /// Defaults to `"public"` for desktop applications per OAuth 2.1.
+    #[serde(default = "default_client_type")]
+    pub client_type: String,
+
+    /// Grant types the client intends to use (e.g. `"authorization_code"`,
+    /// `"refresh_token"`). When omitted, the server uses its defaults.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grant_types: Vec<String>,
+
+    /// OAuth 2.0 scopes the client will request. The authorization server
+    /// may restrict this list based on its own policy.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scope: Vec<String>,
+
+    /// URI for the client's homepage, displayed on the consent screen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_uri: Option<String>,
+
+    /// URI for the client's logo, displayed on the consent screen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logo_uri: Option<String>,
+
+    /// Email address of the responsible party for the client.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contacts: Option<Vec<String>>,
+
+    /// Additional capability flags or metadata the server may use to
+    /// tailor the authorization response (open-ended extension point).
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub capabilities: std::collections::HashMap<String, serde_json::Value>,
+}
+
+fn default_client_type() -> String {
+    "public".to_string()
+}
+
+impl OAuthClientMetadata {
+    /// Build the standard AGI Workforce desktop client metadata.
+    ///
+    /// Uses the default deep-link redirect URI and advertises the
+    /// `authorization_code` + `refresh_token` grant types.
+    pub fn agi_workforce_desktop() -> Self {
+        Self {
+            client_name: "AGI Workforce Desktop".to_string(),
+            redirect_uris: vec![DEFAULT_REDIRECT_URI.to_string()],
+            client_type: "public".to_string(),
+            grant_types: vec![
+                "authorization_code".to_string(),
+                "refresh_token".to_string(),
+            ],
+            scope: Vec::new(),
+            client_uri: Some("https://agiworkforce.ai".to_string()),
+            logo_uri: None,
+            contacts: None,
+            capabilities: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Validate that the metadata is internally consistent.
+    ///
+    /// Returns `Err` with a human-readable message if:
+    /// - `redirect_uris` is empty (required by OAuth 2.1 for public clients)
+    /// - `client_name` is empty
+    pub fn validate(&self) -> Result<(), String> {
+        if self.client_name.trim().is_empty() {
+            return Err("client_name must not be empty".to_string());
+        }
+        if self.redirect_uris.is_empty() {
+            return Err(
+                "redirect_uris must contain at least one URI for the Authorization Code flow"
+                    .to_string(),
+            );
+        }
+        for uri in &self.redirect_uris {
+            if uri.trim().is_empty() {
+                return Err("redirect_uris must not contain empty strings".to_string());
+            }
+        }
+        Ok(())
+    }
+}
+
 // ── Authentication method enum ───────────────────────────────────────────────
 
 /// Authentication method for an MCP server connection.
@@ -973,5 +1075,99 @@ mod tests {
             db_key_token_type("github"),
             "mcp_oauth_v2_github_token_type"
         );
+    }
+
+    // ── OAuthClientMetadata (CIMD) tests ─────────────────────────────────────
+
+    #[test]
+    fn test_oauth_client_metadata_agi_workforce_desktop() {
+        let meta = OAuthClientMetadata::agi_workforce_desktop();
+        assert_eq!(meta.client_name, "AGI Workforce Desktop");
+        assert_eq!(meta.client_type, "public");
+        assert_eq!(meta.redirect_uris, vec![DEFAULT_REDIRECT_URI]);
+        assert!(meta.grant_types.contains(&"authorization_code".to_string()));
+        assert!(meta.grant_types.contains(&"refresh_token".to_string()));
+        assert!(meta.validate().is_ok());
+    }
+
+    #[test]
+    fn test_oauth_client_metadata_serde_roundtrip() {
+        let meta = OAuthClientMetadata::agi_workforce_desktop();
+        let json = serde_json::to_string(&meta).unwrap();
+
+        // camelCase serialization
+        assert!(json.contains("clientName"), "should serialize as camelCase");
+        assert!(json.contains("redirectUris"), "should serialize as camelCase");
+        assert!(json.contains("clientType"), "should serialize as camelCase");
+
+        let deserialized: OAuthClientMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.client_name, meta.client_name);
+        assert_eq!(deserialized.redirect_uris, meta.redirect_uris);
+        assert_eq!(deserialized.client_type, meta.client_type);
+    }
+
+    #[test]
+    fn test_oauth_client_metadata_optional_fields_omitted() {
+        let meta = OAuthClientMetadata {
+            client_name: "Test App".to_string(),
+            redirect_uris: vec!["https://localhost/cb".to_string()],
+            client_type: "public".to_string(),
+            grant_types: vec![],
+            scope: vec![],
+            client_uri: None,
+            logo_uri: None,
+            contacts: None,
+            capabilities: std::collections::HashMap::new(),
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        assert!(!json.contains("clientUri"), "clientUri should be absent when None");
+        assert!(!json.contains("logoUri"), "logoUri should be absent when None");
+        assert!(!json.contains("contacts"), "contacts should be absent when None");
+        assert!(!json.contains("grantTypes"), "grantTypes should be absent when empty");
+        assert!(!json.contains("capabilities"), "capabilities should be absent when empty");
+    }
+
+    #[test]
+    fn test_oauth_client_metadata_validate_empty_name() {
+        let meta = OAuthClientMetadata {
+            client_name: "   ".to_string(),
+            redirect_uris: vec!["https://localhost/cb".to_string()],
+            client_type: "public".to_string(),
+            grant_types: vec![],
+            scope: vec![],
+            client_uri: None,
+            logo_uri: None,
+            contacts: None,
+            capabilities: std::collections::HashMap::new(),
+        };
+        let result = meta.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("client_name"));
+    }
+
+    #[test]
+    fn test_oauth_client_metadata_validate_empty_redirect_uris() {
+        let meta = OAuthClientMetadata {
+            client_name: "Test App".to_string(),
+            redirect_uris: vec![],
+            client_type: "public".to_string(),
+            grant_types: vec![],
+            scope: vec![],
+            client_uri: None,
+            logo_uri: None,
+            contacts: None,
+            capabilities: std::collections::HashMap::new(),
+        };
+        let result = meta.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("redirect_uris"));
+    }
+
+    #[test]
+    fn test_oauth_client_metadata_default_client_type() {
+        // Test that the default client_type serde helper works
+        let json = r#"{"clientName":"Test","redirectUris":["https://localhost/cb"]}"#;
+        let meta: OAuthClientMetadata = serde_json::from_str(json).unwrap();
+        assert_eq!(meta.client_type, "public", "default client_type should be 'public'");
     }
 }

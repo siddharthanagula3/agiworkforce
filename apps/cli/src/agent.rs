@@ -330,6 +330,10 @@ pub struct AgentSession {
     pub plan_mode: bool,
     /// Skip all tool confirmation prompts.
     pub skip_permissions: bool,
+    /// Auto-approve safe tools (reads, searches) — skip confirmation for them.
+    pub auto_approve_safe: bool,
+    /// Quiet mode: suppress tool execution details, only show final output.
+    pub quiet: bool,
     /// Fast mode: use a cheaper/faster model for responses.
     #[allow(dead_code)]
     pub fast_mode: bool,
@@ -428,6 +432,8 @@ impl AgentSession {
             max_turns: None,
             plan_mode: false,
             skip_permissions: false,
+            auto_approve_safe: false,
+            quiet: false,
             fast_mode: false,
             original_model: None,
             checkpoints: Vec::new(),
@@ -479,6 +485,30 @@ impl AgentSession {
             sys_context.clone(),
             self.skip_permissions,
         ));
+    }
+
+    /// Generate an A2A AgentCard representing this session's capabilities.
+    ///
+    /// The card advertises the current model, available tool names, and
+    /// a default endpoint. Callers can override the endpoint before
+    /// publishing the card.
+    #[allow(dead_code)]
+    pub fn a2a_card(&self) -> crate::a2a::AgentCard {
+        let tool_names: Vec<String> = build_tool_definitions()
+            .iter()
+            .map(|t| t.name.clone())
+            .collect();
+
+        crate::a2a::AgentCard {
+            agent_id: crate::a2a::generate_agent_id(),
+            name: format!("agiworkforce-{}", std::process::id()),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            capabilities: tool_names,
+            supported_models: vec![self.model.clone()],
+            endpoint: "http://127.0.0.1:7892".to_string(),
+            auth_required: false,
+            metadata: std::collections::HashMap::new(),
+        }
     }
 
     /// Switch the model mid-session (keeps conversation history).
@@ -952,20 +982,27 @@ Files modified:
                 } else if tc.name.starts_with("mcp_") {
                     execute_mcp_tool(&mut self.mcp_manager, &tc.name, tc.arguments.clone()).await?
                 } else {
-                    tools::execute_tool(&legacy, !self.skip_permissions).await?
+                    let opts = tools::ToolExecOptions {
+                        require_confirmation: !self.skip_permissions,
+                        auto_approve_safe: self.auto_approve_safe,
+                        quiet: self.quiet,
+                    };
+                    tools::execute_tool_with_opts(&legacy, &opts).await?
                 };
 
-                let status = if tool_result.success {
-                    "success".green().to_string()
-                } else {
-                    "failed".red().to_string()
-                };
-                eprintln!(
-                    "  {} {} [{}]",
-                    "->".dimmed(),
-                    tc.name.bold(),
-                    status
-                );
+                if !self.quiet {
+                    let status = if tool_result.success {
+                        "success".green().to_string()
+                    } else {
+                        "failed".red().to_string()
+                    };
+                    eprintln!(
+                        "  {} {} [{}]",
+                        "->".dimmed(),
+                        tc.name.bold(),
+                        status
+                    );
+                }
 
                 hooks::run_hooks(
                     &hcfg,

@@ -29,6 +29,8 @@ pub async fn run_repl(
     fallback_model: Option<String>,
     session_name: Option<String>,
     team_mode: bool,
+    auto_approve_safe: bool,
+    quiet: bool,
 ) -> Result<()> {
     let provider_name = crate::models::detect_provider(model);
     output::print_banner(model, &format!("{:?}", provider_name).to_lowercase());
@@ -36,6 +38,8 @@ pub async fn run_repl(
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
+    session.auto_approve_safe = auto_approve_safe;
+    session.quiet = quiet;
     session.fallback_model = fallback_model;
     session.session_name = session_name;
 
@@ -147,6 +151,19 @@ pub async fn run_repl(
                         SlashResult::Logout => {
                             handle_logout();
                         }
+                        SlashResult::Voice(lang) => {
+                            eprintln!(
+                                "{}",
+                                "Entering voice mode. Press SPACE to talk, ESC to exit."
+                                    .cyan()
+                                    .bold()
+                            );
+                            if let Err(e) =
+                                crate::voice::run_voice_mode(&mut session, config, &lang).await
+                            {
+                                output::print_error(&format!("Voice mode error: {:#}", e));
+                            }
+                        }
                         SlashResult::Btw(question) => {
                             // Side query: send to LLM without affecting main history
                             let spinner = output::create_spinner("Side query...");
@@ -174,6 +191,23 @@ pub async fn run_repl(
                                 }
                                 Err(e) => {
                                     output::print_error(&format!("Side query failed: {:#}", e));
+                                }
+                            }
+                        }
+                        SlashResult::A2a(subcmd, subarg) => {
+                            match crate::a2a::handle_a2a_command(
+                                &subcmd,
+                                &subarg,
+                                config,
+                                &session.model,
+                            )
+                            .await
+                            {
+                                Ok(output) => {
+                                    eprintln!("{}", output);
+                                }
+                                Err(e) => {
+                                    output::print_error(&format!("A2A error: {:#}", e));
                                 }
                             }
                         }
@@ -297,6 +331,10 @@ enum SlashResult {
     Logout,
     /// Side query — carries the question text for async execution.
     Btw(String),
+    /// Enter voice mode with the given language code.
+    Voice(String),
+    /// A2A command — carries (subcommand, args) for async execution.
+    A2a(String, String),
 }
 
 fn handle_slash_command(
@@ -461,11 +499,36 @@ fn handle_slash_command(
         "/config" => {
             handle_config(arg, config);
         }
+        "/voice" | "/v" => {
+            let lang = if arg.is_empty() { "en" } else { arg };
+            if !crate::voice::is_valid_language(lang) {
+                let langs = crate::voice::supported_languages();
+                let codes: Vec<&str> = langs.iter().map(|(c, _)| *c).collect();
+                output::print_warn(&format!(
+                    "Unsupported language '{}'. Supported: {}",
+                    lang,
+                    codes.join(", ")
+                ));
+            } else {
+                return SlashResult::Voice(lang.to_string());
+            }
+        }
         "/login" => {
             return SlashResult::Login;
         }
         "/logout" => {
             return SlashResult::Logout;
+        }
+        "/a2a" => {
+            // Sub-dispatch A2A commands: /a2a discover, /a2a delegate, /a2a serve, etc.
+            let a2a_parts: Vec<&str> = arg.splitn(2, ' ').collect();
+            let subcmd = a2a_parts.first().copied().unwrap_or_default();
+            let subarg = a2a_parts.get(1).copied().unwrap_or_default();
+            if subcmd.is_empty() {
+                output::print_warn("Usage: /a2a <discover|delegate|serve|register|card> [args]");
+            } else {
+                return SlashResult::A2a(subcmd.to_string(), subarg.to_string());
+            }
         }
         "/help" | "/h" | "/?" => {
             print_help();
@@ -485,6 +548,7 @@ fn print_help() {
     eprintln!("  {}    Toggle fast mode (cheaper model)", "/fast [on|off]".bold());
     eprintln!("  {} Manual context compaction", "/compact [focus]".bold());
     eprintln!("  {}  Side query (not added to history)", "/btw <question>".bold());
+    eprintln!("  {}  Voice input (push-to-talk with Whisper STT)", "/voice [lang]".bold());
     eprintln!("  {}           Rewind to previous checkpoint", "/rewind".bold());
     eprintln!("  {}   Fork conversation at current point", "/branch [name]".bold());
     eprintln!("  {}             Show uncommitted git changes", "/diff".bold());
@@ -527,6 +591,13 @@ fn print_help() {
     eprintln!("  {}            Clear conversation context", "/clear".bold());
     eprintln!("  {}             Show this help", "/help".bold());
     eprintln!("  {}             Exit", "/exit".bold());
+    eprintln!();
+    eprintln!("{}", "Agent-to-Agent (A2A):".cyan().bold());
+    eprintln!("  {}     List known peer agents", "/a2a discover".bold());
+    eprintln!("  {} Delegate task", "/a2a delegate <agent> <task>".bold());
+    eprintln!("  {} Start A2A server", "/a2a serve [port]".bold());
+    eprintln!("  {} Add peer agent", "/a2a register <url>".bold());
+    eprintln!("  {}         Show this agent's card", "/a2a card".bold());
     eprintln!();
     eprintln!("{}", "Shortcuts:".cyan().bold());
     eprintln!("  {}           Run shell command (output added to context)", "! <command>".bold());
