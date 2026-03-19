@@ -918,6 +918,11 @@ pub fn run() {
                 }
             }
 
+            // Event triggers (cron, webhook, file-watcher)
+            app.manage(crate::core::agent::triggers::TriggerRegistryState::new(
+                crate::core::agent::triggers::TriggerRegistry::new(),
+            ));
+
             if let Err(err) = build_system_tray(app) {
                 tracing::error!("[tray] initialization failed: {err:?}");
             }
@@ -1365,6 +1370,8 @@ pub fn run() {
             crate::sys::account::account_store_access_token,
             crate::sys::account::account_store_refresh_token,
             crate::sys::account::account_clear_tokens,
+            crate::sys::account::account_list_devices,
+            crate::sys::account::account_disconnect_device,
 
             crate::sys::commands::create_team,
             crate::sys::commands::get_team,
@@ -2505,6 +2512,14 @@ pub fn run() {
             crate::sys::commands::window_maximize,
             crate::sys::commands::window_open_floating,
             crate::sys::commands::window_unmaximize,
+
+            // Event Triggers (cron, webhook, file-watcher automation)
+            crate::core::agent::triggers::register_trigger,
+            crate::core::agent::triggers::unregister_trigger,
+            crate::core::agent::triggers::list_triggers,
+            crate::core::agent::triggers::toggle_trigger,
+            crate::core::agent::triggers::update_trigger,
+            crate::core::agent::triggers::get_trigger_executions,
         ])
         .manage(crate::sys::commands::swarm::SwarmState::new()) // Initialize SwarmState
         .run(tauri::generate_context!())

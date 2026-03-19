@@ -1,36 +1,34 @@
-mod agent;
-mod auth;
 #[allow(dead_code)]
+mod a2a;
+mod agent;
+mod agents;
+mod auth;
 mod compaction;
 mod config;
 mod context;
 mod conversations;
+mod daemon;
 mod errors;
-#[allow(dead_code)]
 mod hooks;
 mod markdown;
-#[allow(dead_code)]
 mod mcp;
 mod memory;
 mod models;
 mod output;
 mod permissions;
-#[allow(dead_code)]
 mod provider;
 mod repl;
 mod safety;
-#[allow(dead_code)]
 mod sessions;
-#[allow(dead_code)]
 mod skills;
-#[allow(dead_code)]
 mod subagent;
-#[allow(dead_code)]
 mod teams;
 mod tools;
+mod voice;
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser, ValueEnum};
+use colored::Colorize;
 use std::io::{self, IsTerminal, Read};
 
 /// AGI Workforce CLI — multi-model AI agent in your terminal
@@ -155,11 +153,16 @@ struct Cli {
     #[arg(long)]
     dangerously_skip_permissions: bool,
 
+    /// Auto-approve safe tool calls (reads, searches, listings).
+    /// Unknown tools still prompt; dangerous tools always prompt.
+    #[arg(short = 'y', long)]
+    yes: bool,
+
     /// Append text to the system prompt
     #[arg(long, value_name = "TEXT")]
     append_system_prompt: Option<String>,
 
-    /// Fork the session when resuming (don't modify original)
+    /// Fork a session: create a new branch from --session/--resume ID
     #[arg(long)]
     fork_session: bool,
 
@@ -183,6 +186,16 @@ struct Cli {
     /// Effort level preset: low (fast/cheap), medium (default), high (thorough), max (exhaustive)
     #[arg(long, value_name = "LEVEL", value_enum)]
     effort: Option<EffortLevel>,
+
+    /// Voice mode language hint (ISO 639-1 code, default: en).
+    /// Used with /voice command for Whisper STT transcription.
+    #[arg(long = "voice-lang", value_name = "LANG", default_value = "en")]
+    voice_lang: String,
+
+    /// Run in daemon mode: execute triggers from ~/.agiworkforce/triggers.json
+    /// (cron schedules, webhooks, file watchers).
+    #[arg(long)]
+    daemon: bool,
 }
 
 /// Effort level presets that bundle max_turns + max_tokens + temperature.
@@ -285,7 +298,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // --search: search saved sessions by keyword and exit
+    // --search: search saved sessions by keyword with message context
     if let Some(ref query) = cli.search {
         let conn = crate::sessions::open_db()?;
         let results = crate::sessions::search_sessions(&conn, query)?;
@@ -303,8 +316,57 @@ async fn main() -> Result<()> {
                 })
                 .collect();
             println!("{}", serde_json::to_string_pretty(&json_results)?);
+        } else if results.is_empty() {
+            println!("No sessions matching \"{}\".", query);
         } else {
-            println!("{}", crate::sessions::format_session_list(&results));
+            println!(
+                "{} session(s) matching \"{}\":\n",
+                results.len().to_string().bold(),
+                query.cyan()
+            );
+            for s in &results {
+                let title = if s.title.is_empty() { "(untitled)" } else { &s.title };
+                let short_id = &s.id[..s.id.len().min(8)];
+                println!(
+                    "  {} {}  {} msgs  {}",
+                    short_id.dimmed(),
+                    title.bold(),
+                    s.message_count,
+                    s.model.dimmed(),
+                );
+                // Show matching message snippets
+                if let Ok(messages) = crate::sessions::load_session(&conn, &s.id) {
+                    let query_lower = query.to_lowercase();
+                    let mut shown = 0;
+                    for msg in &messages {
+                        let text = msg.text_content();
+                        let text_lower = text.to_lowercase();
+                        if text_lower.contains(&query_lower) {
+                            // Find the match position and show surrounding context
+                            if let Some(pos) = text_lower.find(&query_lower) {
+                                let start = pos.saturating_sub(40);
+                                let end = (pos + query.len() + 40).min(text.len());
+                                let snippet = &text[start..end];
+                                let prefix = if start > 0 { "..." } else { "" };
+                                let suffix = if end < text.len() { "..." } else { "" };
+                                println!(
+                                    "    {} {}{}{}",
+                                    format!("[{}]", msg.role).dimmed(),
+                                    prefix.dimmed(),
+                                    snippet.replace('\n', " "),
+                                    suffix.dimmed(),
+                                );
+                                shown += 1;
+                                if shown >= 2 {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                println!();
+            }
+            println!("{}", "Resume with: agiworkforce --resume <ID>".dimmed());
         }
         return Ok(());
     }
@@ -328,6 +390,11 @@ async fn main() -> Result<()> {
             println!("Tokens:     {}", stats.total_tokens);
         }
         return Ok(());
+    }
+
+    // --daemon: run in daemon mode (cron + webhook + file-watcher triggers)
+    if cli.daemon {
+        return daemon::run_daemon(&app_config).await;
     }
 
     // --init: create CLAUDE.md in current directory
@@ -457,6 +524,8 @@ async fn main() -> Result<()> {
             effective_system_prompt.as_deref(),
             effective_max_turns,
             cli.dangerously_skip_permissions,
+            cli.yes,
+            cli.quiet,
         )
         .await;
     }
@@ -475,11 +544,19 @@ async fn main() -> Result<()> {
 
     // --session / --resume / --continue: load a saved session for REPL
     let session_id = cli.session.as_ref().or(cli.resume.as_ref());
+    let fork_session = cli.fork_session;
     let resume_messages = if let Some(session_id) = session_id {
         let conn = crate::sessions::open_db()?;
         let messages = crate::sessions::load_session(&conn, session_id)?;
         if messages.is_empty() {
             eprintln!("Warning: session '{}' has no messages.", session_id);
+        } else if fork_session {
+            eprintln!(
+                "{} Forked session '{}' ({} messages). Changes will not modify the original.",
+                "fork:".cyan().bold(),
+                session_id,
+                messages.len()
+            );
         } else {
             eprintln!("Resuming session '{}' ({} messages).", session_id, messages.len());
         }
@@ -524,6 +601,8 @@ async fn main() -> Result<()> {
         cli.fallback_model,
         cli.name,
         team_mode,
+        cli.yes,
+        cli.quiet,
     )
     .await
 }
@@ -597,10 +676,14 @@ async fn run_oneshot(
     custom_system_prompt: Option<&str>,
     max_turns: Option<usize>,
     skip_permissions: bool,
+    auto_approve_safe: bool,
+    quiet: bool,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
+    session.auto_approve_safe = auto_approve_safe;
+    session.quiet = quiet;
 
     if json_output {
         // Non-streaming JSON mode: collect full response

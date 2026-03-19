@@ -81,6 +81,16 @@ pub enum HookEvent {
     Notification,
     /// Fires when the user stops the agentic loop (Ctrl-C or loop detection).
     Stop,
+    /// Fires when a cron trigger fires in daemon mode.
+    CronTriggered,
+    /// Fires when a webhook trigger is received in daemon mode.
+    WebhookReceived,
+    /// Fires when a watched file changes in daemon mode.
+    FileChanged,
+    /// Fires when the daemon process starts.
+    DaemonStarted,
+    /// Fires when the daemon process stops.
+    DaemonStopped,
 }
 
 impl std::fmt::Display for HookEvent {
@@ -102,6 +112,11 @@ impl std::fmt::Display for HookEvent {
             Self::SubagentCompleted => write!(f, "SubagentCompleted"),
             Self::Notification => write!(f, "Notification"),
             Self::Stop => write!(f, "Stop"),
+            Self::CronTriggered => write!(f, "CronTriggered"),
+            Self::WebhookReceived => write!(f, "WebhookReceived"),
+            Self::FileChanged => write!(f, "FileChanged"),
+            Self::DaemonStarted => write!(f, "DaemonStarted"),
+            Self::DaemonStopped => write!(f, "DaemonStopped"),
         }
     }
 }
@@ -111,6 +126,106 @@ impl std::fmt::Display for HookEvent {
 pub struct HooksConfig {
     #[serde(default)]
     pub hooks: HashMap<String, Vec<Hook>>, // event name -> hooks
+}
+
+// ---------------------------------------------------------------------------
+// Trigger configuration types (for daemon mode)
+// ---------------------------------------------------------------------------
+
+/// Type of event trigger for daemon mode.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TriggerType {
+    Cron,
+    Webhook,
+    FileWatcher,
+}
+
+/// A single trigger definition loaded from triggers.json.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriggerConfig {
+    /// Unique identifier for this trigger.
+    pub id: String,
+
+    /// The type of trigger (cron, webhook, or file_watcher).
+    #[serde(rename = "type")]
+    pub trigger_type: TriggerType,
+
+    /// Prompt to send to the agent when this trigger fires.
+    #[serde(default)]
+    pub prompt: Option<String>,
+
+    /// Model to use for agent execution (e.g. "auto-balanced", "claude-opus-4-6").
+    #[serde(default)]
+    pub model: Option<String>,
+
+    /// Whether this trigger is enabled (default: true).
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+
+    /// Cron expression (for cron triggers only, e.g. "0 9 * * *").
+    #[serde(default)]
+    pub cron: Option<String>,
+
+    /// HTTP path suffix for webhook triggers (e.g. "/deploy").
+    #[serde(default)]
+    pub webhook_path: Option<String>,
+
+    /// Directory path to watch (for file_watcher triggers).
+    #[serde(default)]
+    pub watch_path: Option<String>,
+
+    /// Glob pattern to filter watched files (for file_watcher triggers).
+    #[serde(default)]
+    pub watch_glob: Option<String>,
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
+/// Top-level triggers configuration loaded from triggers.json.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TriggersConfig {
+    #[serde(default)]
+    pub triggers: Vec<TriggerConfig>,
+
+    /// Port for the webhook HTTP server (default: 7891).
+    #[serde(default = "default_webhook_port")]
+    pub webhook_port: u16,
+
+    /// Bearer token for webhook authentication. If unset, webhooks are unauthenticated.
+    #[serde(default)]
+    pub webhook_token: Option<String>,
+
+    /// Maximum number of concurrent trigger executions (default: 4).
+    #[serde(default = "default_max_parallel")]
+    pub max_parallel: usize,
+}
+
+fn default_webhook_port() -> u16 {
+    7891
+}
+
+fn default_max_parallel() -> usize {
+    4
+}
+
+/// Load triggers configuration from ~/.agiworkforce/triggers.json.
+pub fn load_triggers() -> Result<Option<TriggersConfig>> {
+    let path = crate::config::CliConfig::config_dir()?.join("triggers.json");
+
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    let contents =
+        std::fs::read_to_string(&path).context("Failed to read triggers.json")?;
+
+    let config: TriggersConfig =
+        serde_json::from_str(&contents).context("Failed to parse triggers.json")?;
+
+    Ok(Some(config))
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +271,9 @@ pub struct HookInput {
 }
 
 /// Result from running a single hook.
+/// Fields are populated by run_hooks and consumed by aggregate_results for control flow.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct HookResult {
     pub hook_command: String,
     pub success: bool,
@@ -176,7 +293,9 @@ pub struct HookResult {
 // ---------------------------------------------------------------------------
 
 /// Aggregate outcome across multiple hook results.
+/// Will be wired into the agent loop to block/stop actions based on hook output.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum HookAggregateOutcome {
     /// All hooks passed — proceed normally.
     Continue,
@@ -189,6 +308,7 @@ pub enum HookAggregateOutcome {
 /// Aggregate a slice of hook results into a single outcome.
 ///
 /// Priority: Blocked > Stop > Continue.
+#[allow(dead_code)]
 pub fn aggregate_results(results: &[HookResult]) -> HookAggregateOutcome {
     let mut blocked_reasons: Vec<String> = Vec::new();
     let mut any_stop = false;
