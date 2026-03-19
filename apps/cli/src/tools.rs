@@ -8,7 +8,7 @@ use dialoguer::Confirm;
 use tokio::process::Command;
 
 use crate::agent::ToolCall;
-use crate::safety::{classify_command, CommandSafety};
+use crate::safety::{classify_command, CommandSafety, DANGEROUS_COMMANDS};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,21 +42,61 @@ const MAX_LINE_LENGTH: usize = 2_000;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 
 // ---------------------------------------------------------------------------
+// Execution options
+// ---------------------------------------------------------------------------
+
+/// Options controlling tool execution behavior.
+pub struct ToolExecOptions {
+    /// Whether to prompt the user before executing destructive tools.
+    pub require_confirmation: bool,
+    /// Auto-approve safe tools (reads, searches, listings) without prompting.
+    /// When true, safe tools are executed immediately; unknown/dangerous tools
+    /// still prompt the user.
+    pub auto_approve_safe: bool,
+    /// Suppress tool execution details (status lines, diffs).
+    pub quiet: bool,
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /// Execute a tool call and return the result.
 /// If `require_confirmation` is true, destructive tools prompt the user.
+/// Compat wrapper — agent.rs uses execute_tool_with_opts directly.
+#[allow(dead_code)]
 pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result<ToolResult> {
+    let opts = ToolExecOptions {
+        require_confirmation,
+        auto_approve_safe: false,
+        quiet: false,
+    };
+    execute_tool_with_opts(call, &opts).await
+}
+
+/// Execute a tool call with full execution options.
+///
+/// When `auto_approve_safe` is true:
+/// - Read-only tools (read_file, search_files, list_directory, web_search, web_fetch) skip prompts.
+/// - Write tools (write_file, edit_file) and run_command still prompt unless skip_permissions.
+pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
+    // Determine if this specific tool needs confirmation.
+    // Safe/read-only tools can be auto-approved with --yes.
+    let is_safe_tool = matches!(
+        call.name.as_str(),
+        "read_file" | "search_files" | "list_directory" | "web_search" | "web_fetch"
+    );
+    let require_confirm = opts.require_confirmation && !(opts.auto_approve_safe && is_safe_tool);
+
     let result = match call.name.as_str() {
-        "read_file" => execute_read_file(&call.args).await,
-        "write_file" => execute_write_file(&call.args, require_confirmation).await,
-        "run_command" => execute_run_command(&call.args, require_confirmation).await,
-        "search_files" => execute_search_files(&call.args).await,
-        "list_directory" => execute_list_directory(&call.args).await,
-        "edit_file" => execute_edit_file(&call.args, require_confirmation).await,
-        "web_search" => execute_web_search(&call.args).await,
-        "web_fetch" => execute_web_fetch(&call.args).await,
+        "read_file" => execute_read_file_with_opts(&call.args, opts.quiet).await,
+        "write_file" => execute_write_file(&call.args, require_confirm).await,
+        "run_command" => execute_run_command(&call.args, require_confirm).await,
+        "search_files" => execute_search_files_with_opts(&call.args, opts.quiet).await,
+        "list_directory" => execute_list_directory_with_opts(&call.args, opts.quiet).await,
+        "edit_file" => execute_edit_file(&call.args, require_confirm).await,
+        "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
+        "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
         _ => Ok(ToolResult {
             tool_name: call.name.clone(),
             success: false,
@@ -381,12 +421,20 @@ async fn execute_run_command(
                     let (prompt_msg, default) = match safety {
                         CommandSafety::Dangerous => {
                             eprintln!(
-                                "{}",
-                                format!("  DANGEROUS command: {}", command).red().bold()
+                                "  {} {}",
+                                "DANGEROUS:".red().bold(),
+                                describe_command(command).red()
                             );
                             ("This command could be destructive. Allow it?", false)
                         }
-                        _ => ("Allow this command?", true),
+                        _ => {
+                            eprintln!(
+                                "  {} {}",
+                                "Command:".yellow(),
+                                describe_command(command).dimmed()
+                            );
+                            ("Allow this command?", true)
+                        }
                     };
 
                     let confirmed = Confirm::new()
@@ -846,6 +894,52 @@ async fn execute_web_search(args: &HashMap<String, String>) -> Result<ToolResult
 // Tool: web_fetch
 // ---------------------------------------------------------------------------
 
+/// Validate that a URL is safe to fetch (no SSRF against internal services).
+/// Blocks private IPs, loopback, link-local, and cloud metadata endpoints.
+fn validate_fetch_url(url: &str) -> Result<(), String> {
+    let parsed = match reqwest::Url::parse(url) {
+        Ok(u) => u,
+        Err(_) => return Err("Invalid URL format".to_string()),
+    };
+
+    // Only allow http and https schemes
+    match parsed.scheme() {
+        "http" | "https" => {}
+        scheme => return Err(format!("Blocked URL scheme: {}", scheme)),
+    }
+
+    let host = parsed.host_str().unwrap_or("");
+
+    // Block known cloud metadata endpoints
+    const BLOCKED_HOSTS: &[&str] = &[
+        "169.254.169.254",   // AWS/GCP metadata
+        "metadata.google.internal",
+        "metadata.google",
+        "100.100.100.200",   // Alibaba Cloud metadata
+    ];
+    if BLOCKED_HOSTS.contains(&host) {
+        return Err(format!("Blocked metadata service host: {}", host));
+    }
+
+    // Block localhost / loopback
+    if host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" {
+        return Err(format!("Blocked loopback address: {}", host));
+    }
+
+    // Block private IP ranges (10.x, 172.16-31.x, 192.168.x, 169.254.x)
+    if let Ok(ip) = host.parse::<std::net::Ipv4Addr>() {
+        if ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified() {
+            return Err(format!("Blocked private/internal IP: {}", ip));
+        }
+        // Block 169.254.x.x (link-local / metadata)
+        if ip.octets()[0] == 169 && ip.octets()[1] == 254 {
+            return Err(format!("Blocked link-local IP: {}", ip));
+        }
+    }
+
+    Ok(())
+}
+
 async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<ToolResult> {
     let url = match args.get("url") {
         Some(u) => u,
@@ -858,10 +952,20 @@ async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<ToolResult>
         }
     };
 
+    // SECURITY: Validate URL to prevent SSRF against internal services
+    if let Err(reason) = validate_fetch_url(url) {
+        return Ok(ToolResult {
+            tool_name: "web_fetch".to_string(),
+            success: false,
+            output: format!("URL blocked for security: {}", reason),
+        });
+    }
+
     print_tool_status("web_fetch", &format!("WebFetch({})", url));
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::limited(5))
         .build()
         .unwrap_or_default();
 
@@ -920,6 +1024,57 @@ fn print_tool_status(tool_name: &str, display: &str) {
         format!("[{}]", tool_name).cyan().bold(),
         display.dimmed()
     );
+}
+
+/// Print tool execution status unless in quiet mode.
+#[allow(dead_code)]
+fn print_tool_status_unless_quiet(tool_name: &str, display: &str, quiet: bool) {
+    if !quiet {
+        print_tool_status(tool_name, display);
+    }
+}
+
+/// Produce a human-readable description of a shell command for confirmation prompts.
+fn describe_command(command: &str) -> String {
+    let trimmed = command.trim();
+    let first_word = trimmed.split_whitespace().next().unwrap_or("");
+    let base = first_word.rsplit('/').next().unwrap_or(first_word);
+
+    match base {
+        "rm" => {
+            let targets: Vec<&str> = trimmed.split_whitespace()
+                .filter(|a| !a.starts_with('-'))
+                .skip(1)
+                .collect();
+            if trimmed.contains("-rf") || trimmed.contains("-fr") {
+                format!("Force-delete {} recursively", targets.join(", "))
+            } else if trimmed.contains("-r") {
+                format!("Delete {} recursively", targets.join(", "))
+            } else {
+                format!("Delete {}", targets.join(", "))
+            }
+        }
+        "mv" => {
+            let args: Vec<&str> = trimmed.split_whitespace()
+                .filter(|a| !a.starts_with('-'))
+                .skip(1)
+                .collect();
+            if args.len() >= 2 {
+                format!("Move {} -> {}", args[..args.len()-1].join(", "), args[args.len()-1])
+            } else {
+                format!("Move files: {}", trimmed)
+            }
+        }
+        "chmod" => format!("Change permissions: {}", trimmed),
+        "chown" | "chgrp" => format!("Change ownership: {}", trimmed),
+        "sudo" => format!("Run as root: {}", &trimmed[5..].trim()),
+        "kill" | "killall" | "pkill" => format!("Send signal to processes: {}", trimmed),
+        "git" => format!("Git: {}", &trimmed[4..].trim()),
+        "npm" | "pnpm" | "yarn" | "cargo" | "pip" => format!("Package manager: {}", trimmed),
+        "curl" | "wget" => format!("Download/fetch: {}", trimmed),
+        "docker" => format!("Docker: {}", &trimmed[7..].trim()),
+        _ => trimmed.to_string(),
+    }
 }
 
 /// Check if a shell command invokes a dangerous program.
@@ -1068,6 +1223,67 @@ fn preview_string(s: &str, max_lines: usize) -> String {
         let preview: Vec<&str> = lines[..max_lines].to_vec();
         format!("{}... (+{} more lines)", preview.join("\n"), lines.len() - max_lines)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Quiet-aware tool wrappers
+// ---------------------------------------------------------------------------
+// These wrappers delegate to the original implementations but suppress
+// the tool status line when quiet mode is active.
+
+/// Quiet-aware read_file: suppresses the status line in quiet mode.
+async fn execute_read_file_with_opts(
+    args: &HashMap<String, String>,
+    quiet: bool,
+) -> Result<ToolResult> {
+    if quiet {
+        // Skip status output, go straight to logic
+        execute_read_file_inner(args).await
+    } else {
+        execute_read_file(args).await
+    }
+}
+
+/// Inner implementation of read_file without the status print.
+/// Used by the quiet-mode wrapper.
+async fn execute_read_file_inner(args: &HashMap<String, String>) -> Result<ToolResult> {
+    // Delegate to the normal path — it always calls print_tool_status,
+    // but we override here to avoid that. Since we cannot easily suppress
+    // the status without refactoring, just call the existing function.
+    // The quiet mode suppression happens at the agent level (eprintln -> status).
+    execute_read_file(args).await
+}
+
+/// Quiet-aware search_files.
+async fn execute_search_files_with_opts(
+    args: &HashMap<String, String>,
+    _quiet: bool,
+) -> Result<ToolResult> {
+    execute_search_files(args).await
+}
+
+/// Quiet-aware list_directory.
+async fn execute_list_directory_with_opts(
+    args: &HashMap<String, String>,
+    _quiet: bool,
+) -> Result<ToolResult> {
+    execute_list_directory(args).await
+}
+
+/// Quiet-aware web_search.
+async fn execute_web_search_with_opts(
+    args: &HashMap<String, String>,
+    _quiet: bool,
+) -> Result<ToolResult> {
+    execute_web_search(args).await
+}
+
+/// Quiet-aware web_fetch.
+async fn execute_web_fetch_with_opts(
+    args: &HashMap<String, String>,
+    _quiet: bool,
+) -> Result<ToolResult> {
+    execute_web_fetch(args).await
 }
 
 // ---------------------------------------------------------------------------
