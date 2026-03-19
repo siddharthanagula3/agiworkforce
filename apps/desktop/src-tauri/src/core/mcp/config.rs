@@ -1,4 +1,5 @@
 use super::transport::TransportConfig;
+use crate::core::mcp::McpResult;
 use crate::data::db::encryption::open_encrypted_connection;
 use crate::sys::security::machine_key::{derive_key, KeyPurpose};
 use serde::{Deserialize, Serialize};
@@ -1037,7 +1038,10 @@ async fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(Str
 ///
 /// Returns a detailed [`ConfigDecryptionError`] on failure so callers can
 /// log actionable diagnostics instead of silently returning garbage data.
-fn decrypt_oauth_token(encrypted: &str) -> Result<String, ConfigDecryptionError> {
+///
+/// Visible to the sibling `oauth` module which uses the same decryption logic
+/// for loading persisted token sets.
+pub(super) fn decrypt_oauth_token(encrypted: &str) -> Result<String, ConfigDecryptionError> {
     use crate::sys::security::machine_key::{derive_key, KeyPurpose};
     use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
     use base64::{engine::general_purpose, Engine as _};
@@ -1166,6 +1170,158 @@ pub fn encrypt_mcp_credential(plaintext: &str) -> Option<String> {
     combined.extend_from_slice(&ciphertext);
 
     Some(general_purpose::STANDARD.encode(combined))
+}
+
+// ── MCP Bundle support (spec 2025-11-25) ─────────────────────────────────────
+
+/// Magic string embedded in every `.mcpb` bundle file to detect the format.
+const BUNDLE_MAGIC: &str = "mcpb/1";
+
+/// MCP Bundle — packages multiple server configurations into a single portable file.
+///
+/// Bundles (`.mcpb`) allow sharing a curated set of MCP server configurations
+/// with a team or publishing them to a marketplace. They are JSON documents
+/// containing a `magic` field for format detection, plus the server list and
+/// arbitrary metadata.
+///
+/// # File format (`.mcpb`)
+/// ```json
+/// {
+///   "magic": "mcpb/1",
+///   "name": "My Workspace Bundle",
+///   "version": "1.0.0",
+///   "description": "Filesystem + GitHub for the backend team",
+///   "servers": { ... },
+///   "metadata": { ... }
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpBundle {
+    /// Format discriminator — must be `"mcpb/1"` for the current bundle version.
+    #[serde(default = "bundle_magic_default")]
+    pub magic: String,
+
+    /// Human-readable bundle name displayed in the UI.
+    pub name: String,
+
+    /// Semantic version string (e.g. `"1.2.0"`).
+    pub version: String,
+
+    /// Optional description shown when browsing bundles.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// The server configurations packaged in this bundle.
+    ///
+    /// Stored as a flat map (server-name → config) matching the layout of
+    /// [`McpServersConfig::mcp_servers`] so bundles can be merged directly.
+    pub servers: HashMap<String, McpServerConfig>,
+
+    /// Arbitrary key-value metadata (author, homepage, tags, etc.).
+    #[serde(default)]
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+fn bundle_magic_default() -> String {
+    BUNDLE_MAGIC.to_string()
+}
+
+impl McpBundle {
+    /// Validate that the bundle is internally consistent.
+    ///
+    /// Returns `Err` if:
+    /// - The `magic` field does not match `"mcpb/1"` (wrong format or version)
+    /// - `name` or `version` is empty
+    fn validate(&self) -> McpResult<()> {
+        if self.magic != BUNDLE_MAGIC {
+            return Err(crate::core::mcp::McpError::InvalidConfig(format!(
+                "Unsupported bundle format '{}', expected '{}'",
+                self.magic, BUNDLE_MAGIC
+            )));
+        }
+        if self.name.trim().is_empty() {
+            return Err(crate::core::mcp::McpError::InvalidConfig(
+                "Bundle name must not be empty".to_string(),
+            ));
+        }
+        if self.version.trim().is_empty() {
+            return Err(crate::core::mcp::McpError::InvalidConfig(
+                "Bundle version must not be empty".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Load an [`McpBundle`] from a `.mcpb` file on disk.
+///
+/// Reads the file, parses the JSON, and validates the bundle magic before
+/// returning. Returns an error if the file is missing, malformed, or the
+/// bundle format version does not match.
+pub fn load_bundle(path: &std::path::Path) -> McpResult<McpBundle> {
+    let content = std::fs::read_to_string(path).map_err(|e| {
+        crate::core::mcp::McpError::InvalidConfig(format!(
+            "Failed to read bundle file '{}': {}",
+            path.display(),
+            e
+        ))
+    })?;
+
+    let bundle: McpBundle = serde_json::from_str(&content).map_err(|e| {
+        crate::core::mcp::McpError::InvalidConfig(format!(
+            "Failed to parse bundle file '{}': {}",
+            path.display(),
+            e
+        ))
+    })?;
+
+    bundle.validate()?;
+
+    tracing::info!(
+        "[MCP Bundle] Loaded bundle '{}' v{} with {} server(s) from '{}'",
+        bundle.name,
+        bundle.version,
+        bundle.servers.len(),
+        path.display()
+    );
+
+    Ok(bundle)
+}
+
+/// Install an [`McpBundle`] into an existing [`McpServersConfig`].
+///
+/// Merges the bundle's server configurations into `config`. Existing entries
+/// with the same name are overwritten so the bundle acts as a canonical
+/// source of truth for the servers it declares.
+///
+/// This function is purely in-memory; callers are responsible for persisting
+/// the updated config via [`McpServersConfig::save_to_file`].
+pub fn install_bundle(bundle: &McpBundle, config: &mut McpServersConfig) -> McpResult<()> {
+    bundle.validate()?;
+
+    let mut installed = 0usize;
+    for (server_name, server_config) in &bundle.servers {
+        let prev = config
+            .mcp_servers
+            .insert(server_name.clone(), server_config.clone());
+        if prev.is_some() {
+            tracing::debug!(
+                "[MCP Bundle] Overwrote existing server config '{}' from bundle '{}'",
+                server_name,
+                bundle.name
+            );
+        }
+        installed += 1;
+    }
+
+    tracing::info!(
+        "[MCP Bundle] Installed {} server(s) from bundle '{}' v{}",
+        installed,
+        bundle.name,
+        bundle.version
+    );
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1384,5 +1540,177 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ── McpBundle tests ──────────────────────────────────────────────────────
+
+    fn sample_bundle() -> McpBundle {
+        let mut servers = HashMap::new();
+        servers.insert(
+            "filesystem".to_string(),
+            McpServerConfig {
+                command: "npx".to_string(),
+                args: vec![
+                    "-y".to_string(),
+                    "@modelcontextprotocol/server-filesystem".to_string(),
+                    ".".to_string(),
+                ],
+                env: HashMap::new(),
+                enabled: true,
+                transport: None,
+            },
+        );
+        McpBundle {
+            magic: "mcpb/1".to_string(),
+            name: "Test Bundle".to_string(),
+            version: "1.0.0".to_string(),
+            description: Some("A test bundle".to_string()),
+            servers,
+            metadata: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn test_bundle_serde_roundtrip() {
+        let bundle = sample_bundle();
+        let json = serde_json::to_string(&bundle).unwrap();
+        assert!(json.contains("mcpb/1"));
+        assert!(json.contains("Test Bundle"));
+        assert!(json.contains("filesystem"));
+
+        let deserialized: McpBundle = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, bundle.name);
+        assert_eq!(deserialized.version, bundle.version);
+        assert_eq!(deserialized.servers.len(), 1);
+    }
+
+    #[test]
+    fn test_bundle_validate_ok() {
+        let bundle = sample_bundle();
+        assert!(bundle.validate().is_ok());
+    }
+
+    #[test]
+    fn test_bundle_validate_wrong_magic() {
+        let mut bundle = sample_bundle();
+        bundle.magic = "mcpb/99".to_string();
+        let result = bundle.validate();
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("Unsupported bundle format"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_bundle_validate_empty_name() {
+        let mut bundle = sample_bundle();
+        bundle.name = "  ".to_string();
+        let result = bundle.validate();
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("name"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_bundle_validate_empty_version() {
+        let mut bundle = sample_bundle();
+        bundle.version = String::new();
+        let result = bundle.validate();
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("version"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_install_bundle_merges_servers() {
+        let bundle = sample_bundle();
+        let mut config = McpServersConfig {
+            mcp_servers: HashMap::new(),
+        };
+
+        install_bundle(&bundle, &mut config).unwrap();
+        assert_eq!(config.mcp_servers.len(), 1);
+        assert!(config.mcp_servers.contains_key("filesystem"));
+    }
+
+    #[test]
+    fn test_install_bundle_overwrites_existing() {
+        let bundle = sample_bundle();
+        let mut config = McpServersConfig {
+            mcp_servers: {
+                let mut m = HashMap::new();
+                // Pre-existing entry with different command
+                m.insert(
+                    "filesystem".to_string(),
+                    McpServerConfig {
+                        command: "old-npx".to_string(),
+                        args: vec![],
+                        env: HashMap::new(),
+                        enabled: false,
+                        transport: None,
+                    },
+                );
+                m
+            },
+        };
+
+        install_bundle(&bundle, &mut config).unwrap();
+        let fs = config.mcp_servers.get("filesystem").unwrap();
+        // Should now have the bundle's version
+        assert_eq!(fs.command, "npx", "existing entry should be overwritten");
+        assert!(fs.enabled, "enabled should match bundle server config");
+    }
+
+    #[test]
+    fn test_load_bundle_from_tempfile() {
+        let bundle = sample_bundle();
+        let json = serde_json::to_string(&bundle).unwrap();
+
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_bundle_load.mcpb");
+        std::fs::write(&path, &json).unwrap();
+
+        let loaded = load_bundle(&path).unwrap();
+        assert_eq!(loaded.name, "Test Bundle");
+        assert_eq!(loaded.version, "1.0.0");
+        assert_eq!(loaded.servers.len(), 1);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_load_bundle_missing_file() {
+        let result = load_bundle(std::path::Path::new("/nonexistent/path/bundle.mcpb"));
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("Failed to read bundle file"),
+            "got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_load_bundle_invalid_json() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("test_bundle_invalid.mcpb");
+        std::fs::write(&path, "{ not valid json }").unwrap();
+
+        let result = load_bundle(&path);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("Failed to parse bundle file"),
+            "got: {}",
+            msg
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_bundle_magic_default() {
+        // JSON without "magic" field should deserialise to the default value
+        let json = r#"{"name":"No-Magic Bundle","version":"0.1.0","servers":{}}"#;
+        let bundle: McpBundle = serde_json::from_str(json).unwrap();
+        assert_eq!(bundle.magic, "mcpb/1");
     }
 }

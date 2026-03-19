@@ -13,6 +13,7 @@ pub mod extensions;
 pub mod health;
 pub mod logs;
 pub mod manager;
+pub mod oauth;
 pub mod protocol;
 pub mod registry;
 pub mod server;
@@ -24,7 +25,10 @@ pub mod transport;
 mod tests;
 
 pub use client::{McpClient, McpTool};
-pub use config::{ConfigDecryptionError, McpServerConfig, McpServersConfig};
+pub use config::{
+    install_bundle, load_bundle, ConfigDecryptionError, McpBundle, McpServerConfig,
+    McpServersConfig,
+};
 pub use error::{McpError, McpResult};
 pub use events::{emit_mcp_event, McpEvent};
 pub use extensions::{
@@ -33,9 +37,14 @@ pub use extensions::{
 };
 pub use health::{HealthStatus, McpHealthMonitor, ServerHealth};
 pub use manager::{ManagedServer, McpServerManager, ServerStatus};
-pub use protocol::{McpToolDefinition, ToolCallResult, ToolContent};
+pub use oauth::{McpAuthMethod, McpOAuthConfig, McpOAuthManager, McpOAuthToken, OAuthClientMetadata};
+pub use protocol::{
+    McpTask, McpTaskProgress, McpTaskStatus, McpToolDefinition, ServerCapabilitiesV2,
+    TaskCreateParams, TaskIdParams, TaskListParams, TaskListResult, ToolCallResult, ToolContent,
+    METHOD_TASKS_CANCEL, METHOD_TASKS_CREATE, METHOD_TASKS_GET, METHOD_TASKS_LIST,
+};
 pub use registry::McpToolRegistry;
-pub use session::McpSession;
+pub use session::{ElicitationRequest, ElicitationResponse, McpSession};
 pub use tool_executor::{McpToolExecutor, ToolExecutionResult, ToolStats};
 pub use transport::{
     HttpSseConfig, HttpSseTransport, McpTransport, StdioTransport, Transport, TransportConfig,

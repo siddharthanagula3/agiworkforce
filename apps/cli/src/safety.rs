@@ -51,7 +51,7 @@ const SAFE_PREFIXES: &[&str] = &[
 // ---------------------------------------------------------------------------
 
 /// Standalone commands that are dangerous (destructive, privileged).
-const DANGEROUS_COMMANDS: &[&str] = &[
+pub(crate) const DANGEROUS_COMMANDS: &[&str] = &[
     "sudo", "chown", "chgrp", "kill", "killall", "pkill", "mkfs", "dd", "fdisk",
     "mount", "umount", "reboot", "shutdown", "rmdir", "eval", "exec", "mv",
     // Firewall / system services / kernel modules
