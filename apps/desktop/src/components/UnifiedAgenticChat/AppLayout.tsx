@@ -352,10 +352,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           >
             <ArtifactPanel
               conversationId={activeConversationDbId}
-              onClose={() => {
-                closeArtifactPanel();
-                setIsArtifactPanelOpen(false);
-              }}
+              onClose={() => setIsArtifactPanelOpen(false)}
             />
           </Suspense>
         </div>
