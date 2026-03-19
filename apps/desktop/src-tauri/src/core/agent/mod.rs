@@ -22,6 +22,7 @@ pub mod prompt_engineer;
 pub mod rag_system;
 pub mod runtime;
 pub mod timeout_manager;
+pub mod triggers;
 pub mod undo_manager;
 pub mod vision;
 
@@ -47,6 +48,10 @@ pub use form_undo::{FormSubmission, FormUndoManager, FormUndoResult};
 pub use planner::TaskPlanner;
 pub use runtime::AgentRuntime;
 pub use timeout_manager::{TimeoutConfig, TimeoutResponse, TimeoutTracker, TimeoutWarning};
+pub use triggers::{
+    RegisteredTrigger, TriggerAction, TriggerConfig, TriggerExecution, TriggerRegistry,
+    TriggerRegistryState, TriggerType,
+};
 pub use undo_manager::UndoManager;
 pub use vision::VisionAutomation;
 

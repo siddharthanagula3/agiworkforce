@@ -89,3 +89,21 @@ export * from './research';
 
 // Council types (CouncilQuery, CouncilResponse, ModelVote)
 export * from './council';
+
+// Audit event types (AuditEvent, AuditAction, AuditSeverity, helpers)
+export * from './audit';
+
+// Event trigger types (cron, webhook, Slack, GitHub, Linear, file watcher)
+export * from './event-triggers';
+
+// MCP Apps types (interactive tool UIs in chat)
+export * from './mcp-apps';
+
+// A2A protocol types (agent-to-agent communication)
+export * from './a2a';
+
+// Cross-device orchestration types (desktop↔mobile threads)
+export * from './cross-device';
+
+// Workspace analytics types (enterprise usage tracking)
+export * from './workspace-analytics';
