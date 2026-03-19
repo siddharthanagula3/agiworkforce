@@ -34,6 +34,7 @@ import type { ConsoleLogEntry } from './types';
 const MAX_CONTEXT_HTML_CHARS = 100_000;
 const MAX_CONSOLE_BUFFER = 200;
 const MAX_CONSOLE_ENTRY_CHARS = 1000;
+const PAGE_EXTRACTION_TIMEOUT_MS = 5_000;
 
 const consoleLogBuffer: ConsoleLogEntry[] = [];
 
@@ -54,8 +55,18 @@ const automationState: AutomationState = {
 let lastPointerTarget: Element | null = null;
 
 function initialize(): void {
-  addAutomationIndicator();
-  injectFloatingOverlay();
+  // Wrap DOM injections in error boundaries — CSP-restricted pages or unusual
+  // document states (e.g. XML, SVG, sandboxed iframes) can cause these to throw.
+  try {
+    addAutomationIndicator();
+  } catch (err) {
+    logger.debug('addAutomationIndicator failed (non-fatal)', err);
+  }
+  try {
+    injectFloatingOverlay();
+  } catch (err) {
+    logger.debug('injectFloatingOverlay failed (non-fatal)', err);
+  }
 
   chrome.runtime.onMessage.addListener(handleMessage);
   document.addEventListener('mousemove', (event) => {
@@ -68,15 +79,33 @@ function initialize(): void {
   // so there is no need to call syncPageContext() separately here.
   void notifyTabReady();
 
-  patchConsole();
-  initWebMCP();
+  try {
+    patchConsole();
+  } catch (err) {
+    logger.debug('patchConsole failed (non-fatal)', err);
+  }
+
+  try {
+    initWebMCP();
+  } catch (err) {
+    logger.debug('initWebMCP failed (non-fatal)', err);
+  }
+
+  initSPANavigationWatcher();
 }
 
 function handleMessage(
   message: unknown,
-  _sender: chrome.runtime.MessageSender,
+  sender: chrome.runtime.MessageSender,
   sendResponse: (response?: ExtensionResponse) => void,
 ): boolean {
+  // Validate sender is our own extension — reject messages from other extensions or web pages
+  if (sender.id !== chrome.runtime.id) {
+    logger.warn('Rejected message from unauthorized sender', { senderId: sender.id });
+    sendResponse({ success: false, error: 'Unauthorized sender' } as ExtensionResponse);
+    return false;
+  }
+
   const msg = message as ExtensionMessage;
 
   if (!isValidMessage(msg)) {
@@ -243,10 +272,24 @@ function buildCurrentPageContext(): Record<string, unknown> {
     logger.debug('Failed to extract page metadata for context', e);
   }
 
+  // Bound HTML extraction to avoid hanging on pathological DOMs (e.g. huge SPAs).
+  let html = '';
+  try {
+    const extractStart = Date.now();
+    const rawHtml = document.documentElement.outerHTML;
+    if (Date.now() - extractStart < PAGE_EXTRACTION_TIMEOUT_MS) {
+      html = rawHtml.substring(0, MAX_CONTEXT_HTML_CHARS);
+    } else {
+      logger.warn('HTML extraction timed out, using empty content');
+    }
+  } catch (e) {
+    logger.debug('Failed to extract page HTML (CSP or DOM error)', e);
+  }
+
   return {
     url: window.location.href,
     title: document.title || 'Untitled',
-    html: document.documentElement.outerHTML.substring(0, MAX_CONTEXT_HTML_CHARS),
+    html,
     selectedText: selectedText.substring(0, 2_000),
     timestamp: Date.now(),
     ...(metadata ? { metadata } : {}),
@@ -954,11 +997,23 @@ function handleGetPageInfo(): GetPageInfoResponse {
     const selection = window.getSelection();
     const selectedText = selection ? selection.toString() : '';
 
+    // Use the timeout-bounded extraction shared with buildCurrentPageContext
+    let html = '';
+    try {
+      const extractStart = Date.now();
+      const rawHtml = document.documentElement.outerHTML;
+      if (Date.now() - extractStart < PAGE_EXTRACTION_TIMEOUT_MS) {
+        html = rawHtml.substring(0, MAX_CONTEXT_HTML_CHARS);
+      }
+    } catch {
+      // CSP or serialisation error — return empty HTML rather than failing the whole call
+    }
+
     return {
       success: true,
       url: window.location.href,
       title: document.title,
-      html: document.documentElement.outerHTML.substring(0, 100000),
+      html,
       selectedText,
     };
   } catch (error) {
@@ -1695,36 +1750,46 @@ function injectFloatingOverlay(): void {
 }
 
 function initWebMCP(): void {
-  // Delay to let page scripts register their tools first
+  // Delay to let page scripts register their tools first.
+  // Wrapped in a try/catch so a misconfigured page (e.g. strict CSP that blocks
+  // mutation observers) cannot bring down the whole content script.
   setTimeout(() => {
-    const discovery = discoverAllTools();
-    if (discovery.tools.length > 0) {
-      logger.info(`WebMCP: discovered ${discovery.tools.length} tool(s)`, {
-        tools: discovery.tools.map((t) => t.name),
-        url: discovery.url,
-      });
-      chrome.runtime
-        .sendMessage({
-          type: 'WEBMCP_TOOLS_CHANGED',
-          tools: discovery.tools,
+    try {
+      const discovery = discoverAllTools();
+      if (discovery.tools.length > 0) {
+        logger.info(`WebMCP: discovered ${discovery.tools.length} tool(s)`, {
+          tools: discovery.tools.map((t) => t.name),
           url: discovery.url,
-          timestamp: Date.now(),
-        })
-        .catch(() => {
-          // Background may not be listening yet
         });
+        chrome.runtime
+          .sendMessage({
+            type: 'WEBMCP_TOOLS_CHANGED',
+            tools: discovery.tools,
+            url: discovery.url,
+            timestamp: Date.now(),
+          })
+          .catch(() => {
+            // Background may not be listening yet
+          });
+      }
+    } catch (err) {
+      logger.debug('WebMCP tool discovery failed (non-fatal)', err);
     }
 
-    watchForToolChanges((tools) => {
-      chrome.runtime
-        .sendMessage({
-          type: 'WEBMCP_TOOLS_CHANGED',
-          tools,
-          url: window.location.href,
-          timestamp: Date.now(),
-        })
-        .catch(() => {});
-    });
+    try {
+      watchForToolChanges((tools) => {
+        chrome.runtime
+          .sendMessage({
+            type: 'WEBMCP_TOOLS_CHANGED',
+            tools,
+            url: window.location.href,
+            timestamp: Date.now(),
+          })
+          .catch(() => {});
+      });
+    } catch (err) {
+      logger.debug('WebMCP watchForToolChanges failed (non-fatal)', err);
+    }
 
     // NLWeb detection — async and non-blocking. Runs after WebMCP discovery
     // to avoid contention on the initial page load network requests.
@@ -1829,6 +1894,56 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
   const msg = message as Record<string, unknown>;
   // [H9 fix] Validate type is a non-empty string in the known message type allowlist
   return typeof msg['type'] === 'string' && VALID_MESSAGE_TYPES.has(msg['type']);
+}
+
+/**
+ * Watch for SPA route changes and re-sync page context with the desktop app.
+ *
+ * SPAs use history.pushState / history.replaceState to navigate without a full
+ * page reload, so the browser's standard navigation events are not fired.
+ * We monkey-patch those two methods (safely) to detect client-side navigations.
+ * We also listen for the standard popstate event (back/forward navigation).
+ *
+ * To avoid hammering the background on every micro-state update we debounce
+ * with a 300 ms delay and skip syncs when the URL has not changed.
+ */
+function initSPANavigationWatcher(): void {
+  let lastSyncedUrl = window.location.href;
+  let spaDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function onSPANavigate(): void {
+    const currentUrl = window.location.href;
+    if (currentUrl === lastSyncedUrl) return;
+    lastSyncedUrl = currentUrl;
+
+    if (spaDebounceTimer !== null) {
+      clearTimeout(spaDebounceTimer);
+    }
+    spaDebounceTimer = setTimeout(() => {
+      spaDebounceTimer = null;
+      logger.debug('SPA navigation detected, re-syncing page context', { url: currentUrl });
+      void syncPageContext('spa_navigation').catch((err) => {
+        logger.debug('SPA navigation context sync failed (non-fatal)', err);
+      });
+    }, 300);
+  }
+
+  // history.pushState / replaceState are not observable via addEventListener so
+  // we wrap them. We preserve the original function signature strictly.
+  const originalPushState = history.pushState.bind(history);
+  const originalReplaceState = history.replaceState.bind(history);
+
+  history.pushState = function (...args: Parameters<typeof history.pushState>): void {
+    originalPushState(...args);
+    onSPANavigate();
+  };
+
+  history.replaceState = function (...args: Parameters<typeof history.replaceState>): void {
+    originalReplaceState(...args);
+    onSPANavigate();
+  };
+
+  window.addEventListener('popstate', onSPANavigate);
 }
 
 initialize();

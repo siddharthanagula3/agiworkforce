@@ -101,6 +101,24 @@ export interface UseGitReturn {
   stash: (message?: string) => Promise<void>;
   /** Pop stash */
   stashPop: () => Promise<void>;
+  /** Initialize a new git repository */
+  init: (path: string) => Promise<string>;
+  /** Clone a remote repository */
+  clone: (url: string, destination: string) => Promise<string>;
+  /** Fetch from remote */
+  fetch: (remote?: string) => Promise<void>;
+  /** Merge a branch into current */
+  merge: (branchName: string) => Promise<void>;
+  /** Delete a branch */
+  deleteBranch: (branchName: string, force?: boolean) => Promise<void>;
+  /** Get current branch name */
+  currentBranch: () => Promise<string>;
+  /** Get default branch name */
+  defaultBranch: () => Promise<string>;
+  /** List remote repositories */
+  listRemotes: () => Promise<[string, string][]>;
+  /** Add a remote repository */
+  addRemote: (name: string, url: string) => Promise<void>;
 }
 
 /**
@@ -187,11 +205,12 @@ export function useGit(initialPath?: string): UseGitReturn {
       setError(null);
 
       try {
-        // Use git reset to unstage all files (git reset doesn't support per-file unstaging directly)
+        // Use git reset HEAD -- <files> to unstage only the specified files
         await invoke('git_reset', {
           path: repoPath,
           commit: 'HEAD',
           mode: 'mixed',
+          files,
         });
         toast.success(`Unstaged ${files.length} file${files.length !== 1 ? 's' : ''}`);
         await refreshStatus();
@@ -256,11 +275,10 @@ export function useGit(initialPath?: string): UseGitReturn {
       setError(null);
 
       try {
-        // Use git reset --hard to discard all changes (resets entire working tree)
-        await invoke('git_reset', {
+        // Use git checkout -- <files> to discard only the specified files
+        await invoke('git_checkout_files', {
           path: repoPath,
-          commit: 'HEAD',
-          mode: 'hard',
+          files,
         });
         toast.success(`Discarded changes in ${files.length} file${files.length !== 1 ? 's' : ''}`);
         await refreshStatus();
@@ -523,6 +541,180 @@ export function useGit(initialPath?: string): UseGitReturn {
     }
   }, [repoPath, refreshStatus, handleError]);
 
+  const init = useCallback(
+    async (path: string): Promise<string> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await invoke<string>('git_init', { path });
+        toast.success('Repository initialized');
+        return result;
+      } catch (err) {
+        handleError(err, 'init');
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [handleError],
+  );
+
+  const clone = useCallback(
+    async (url: string, destination: string): Promise<string> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await invoke<string>('git_clone', { url, destination });
+        toast.success('Repository cloned');
+        return result;
+      } catch (err) {
+        handleError(err, 'clone');
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [handleError],
+  );
+
+  const fetch = useCallback(
+    async (remote?: string) => {
+      if (!repoPath) {
+        throw new Error('No repository path set');
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        await invoke('git_fetch', {
+          path: repoPath,
+          remote: remote ?? null,
+        });
+        toast.success('Fetched successfully');
+        await refreshStatus();
+      } catch (err) {
+        handleError(err, 'fetch');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [repoPath, refreshStatus, handleError],
+  );
+
+  const merge = useCallback(
+    async (branchName: string) => {
+      if (!repoPath) {
+        throw new Error('No repository path set');
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        await invoke('git_merge', {
+          path: repoPath,
+          branchName,
+        });
+        toast.success(`Merged branch '${branchName}'`);
+        await refreshStatus();
+      } catch (err) {
+        handleError(err, 'merge');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [repoPath, refreshStatus, handleError],
+  );
+
+  const deleteBranch = useCallback(
+    async (branchName: string, force?: boolean) => {
+      if (!repoPath) {
+        throw new Error('No repository path set');
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        await invoke('git_delete_branch', {
+          path: repoPath,
+          branchName,
+          force: force ?? false,
+        });
+        toast.success(`Deleted branch '${branchName}'`);
+        await refreshStatus();
+      } catch (err) {
+        handleError(err, 'delete branch');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [repoPath, refreshStatus, handleError],
+  );
+
+  const currentBranch = useCallback(async (): Promise<string> => {
+    if (!repoPath) {
+      throw new Error('No repository path set');
+    }
+
+    try {
+      return await invoke<string>('git_current_branch', { path: repoPath });
+    } catch (err) {
+      handleError(err, 'current branch');
+      throw err;
+    }
+  }, [repoPath, handleError]);
+
+  const defaultBranch = useCallback(async (): Promise<string> => {
+    if (!repoPath) {
+      throw new Error('No repository path set');
+    }
+
+    try {
+      return await invoke<string>('git_default_branch', { path: repoPath });
+    } catch (err) {
+      handleError(err, 'default branch');
+      throw err;
+    }
+  }, [repoPath, handleError]);
+
+  const listRemotes = useCallback(async (): Promise<[string, string][]> => {
+    if (!repoPath) {
+      throw new Error('No repository path set');
+    }
+
+    try {
+      return await invoke<[string, string][]>('git_list_remotes', { path: repoPath });
+    } catch (err) {
+      handleError(err, 'list remotes');
+      throw err;
+    }
+  }, [repoPath, handleError]);
+
+  const addRemote = useCallback(
+    async (name: string, url: string) => {
+      if (!repoPath) {
+        throw new Error('No repository path set');
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        await invoke('git_add_remote', { path: repoPath, name, url });
+        toast.success(`Added remote '${name}'`);
+      } catch (err) {
+        handleError(err, 'add remote');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [repoPath, handleError],
+  );
+
   return {
     status,
     loading,
@@ -545,5 +737,14 @@ export function useGit(initialPath?: string): UseGitReturn {
     getLog,
     stash,
     stashPop,
+    init,
+    clone,
+    fetch,
+    merge,
+    deleteBranch,
+    currentBranch,
+    defaultBranch,
+    listRemotes,
+    addRemote,
   };
 }

@@ -11,6 +11,8 @@
  * - POST /push-token: 30/min - token updates are infrequent
  * - POST /pairing-code: 10/min - strict to prevent enumeration
  * - GET /: 30/min - list operation
+ * - GET /agent-status: 60/min - read-only polling for agent dashboard
+ * - POST /feedback: 10/min - prevents feedback spam
  * - DELETE /:deviceId: 10/min - destructive operation
  */
 
@@ -39,6 +41,7 @@ function isValidUUID(id: string | undefined): boolean {
 router.use(authenticateToken);
 
 const SIGNALING_HTTP_URL = process.env['SIGNALING_HTTP_URL'] ?? 'http://localhost:4000';
+const SIGNALING_INTERNAL_SECRET = process.env['SIGNALING_INTERNAL_SECRET'];
 
 // =============================================================================
 // DATABASE TYPES
@@ -94,6 +97,14 @@ const pairingCodeResponseSchema = z.object({
   qrData: z.string(),
 });
 
+// SECURITY: .strict() rejects unexpected fields
+const feedbackSchema = z
+  .object({
+    type: z.enum(['bug', 'feature', 'general']),
+    message: z.string().min(1).max(5000),
+  })
+  .strict();
+
 // =============================================================================
 // ROUTES
 // =============================================================================
@@ -115,6 +126,21 @@ router.post(
     }
 
     const deviceId = clientId ?? randomUUID();
+
+    // SECURITY: Verify ownership before upsert to prevent device registration hijack.
+    // Without this check, an attacker who knows another user's device ID could
+    // overwrite their registration by supplying it as clientId.
+    if (clientId) {
+      const { data: existing } = await supabase
+        .from('mobile_devices')
+        .select('user_id')
+        .eq('id', clientId)
+        .single();
+
+      if (existing && existing.user_id !== user.userId) {
+        throw new AppError('Device registered to another user', 403);
+      }
+    }
 
     const { error } = await supabase.from('mobile_devices').upsert(
       {
@@ -213,6 +239,9 @@ router.post(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(SIGNALING_INTERNAL_SECRET
+            ? { Authorization: `Bearer ${SIGNALING_INTERNAL_SECRET}` }
+            : {}),
         },
         body: JSON.stringify({
           ttlSeconds,
@@ -293,6 +322,59 @@ router.get('/', createRateLimiter('device-list'), async (req: Request, res: Resp
 
   res.json({ devices: result });
 });
+
+/**
+ * Get status of running agents for the authenticated user
+ * GET /mobile/agent-status
+ *
+ * Returns a stub response — actual agent status is delivered from the
+ * desktop app to the mobile client via WebSocket in real-time.
+ *
+ * SECURITY: Rate limited to 60/min for read-only polling
+ */
+router.get(
+  '/agent-status',
+  createRateLimiter('mobile-agent-status'),
+  async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    // Stub: real agent status flows through WebSocket from the desktop app
+    res.json({ agents: [], pendingApprovals: 0 });
+  },
+);
+
+/**
+ * Submit user feedback (bug report, feature request, or general)
+ * POST /mobile/feedback
+ *
+ * SECURITY: Rate limited to 10/min to prevent feedback spam
+ */
+router.post(
+  '/feedback',
+  createRateLimiter('mobile-feedback'),
+  async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const { type, message } = feedbackSchema.parse(req.body);
+
+    logger.info(
+      {
+        userId: user.userId,
+        feedbackType: type,
+        messageLength: message.length,
+      },
+      'Mobile feedback received',
+    );
+
+    res.json({ success: true });
+  },
+);
 
 /**
  * Delete a mobile device

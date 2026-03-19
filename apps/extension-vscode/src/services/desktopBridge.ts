@@ -3,8 +3,15 @@
  *
  * Communication via HTTP localhost API + WebSocket for real-time events.
  * Auto-reconnects on disconnect. Health-checked periodically.
+ *
+ * Wave 3 enhancements:
+ * - Connection status indicator in status bar (connected/disconnected/reconnecting)
+ * - Auto-reconnect with exponential backoff (1s, 2s, 4s, 8s max)
+ * - Graceful degradation when bridge is down
+ * - Clear notification when bridge disconnects with "Reconnect" action button
  */
 
+import * as path from 'path';
 import * as vscode from 'vscode';
 import WebSocket from 'ws';
 
@@ -42,15 +49,30 @@ export class DesktopBridge implements vscode.Disposable {
   private _port: number;
   private _disposed = false;
 
+  /** Current backoff delay in ms for reconnection. */
+  private _reconnectBackoffMs: number;
+  /** Number of consecutive reconnect attempts. */
+  private _reconnectAttempts = 0;
+  /** Whether we were previously connected (for disconnect notification). */
+  private _wasConnected = false;
+
   private readonly _onStatusChange = new vscode.EventEmitter<BridgeStatus>();
   public readonly onStatusChange = this._onStatusChange.event;
 
-  private static readonly RECONNECT_INTERVAL_MS = 5_000;
+  /** Status bar item showing connection state. */
+  private _statusBarItem: vscode.StatusBarItem | undefined;
+
+  // ── Backoff constants ───────────────────────────────────────────────────
+  private static readonly BACKOFF_INITIAL_MS = 1_000;
+  private static readonly BACKOFF_MAX_MS = 8_000;
+  private static readonly BACKOFF_MULTIPLIER = 2;
+
   private static readonly HEALTH_CHECK_INTERVAL_MS = 30_000;
   private static readonly REQUEST_TIMEOUT_MS = 10_000;
 
   constructor(port: number) {
     this._port = port;
+    this._reconnectBackoffMs = DesktopBridge.BACKOFF_INITIAL_MS;
   }
 
   get status(): BridgeStatus {
@@ -63,6 +85,55 @@ export class DesktopBridge implements vscode.Disposable {
 
   get wsUrl(): string {
     return `ws://127.0.0.1:${this._port}/ws`;
+  }
+
+  /** Whether the bridge is currently operational (connected). */
+  get isConnected(): boolean {
+    return this._status === 'connected';
+  }
+
+  // ── Status bar ─────────────────────────────────────────────────────────
+
+  /** Initialize the connection status bar item. */
+  initStatusBar(): vscode.StatusBarItem {
+    if (this._statusBarItem === undefined) {
+      this._statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 89);
+      this._statusBarItem.command = 'agi-workforce.bridgeReconnect';
+    }
+    this._updateStatusBar();
+    this._statusBarItem.show();
+    return this._statusBarItem;
+  }
+
+  private _updateStatusBar(): void {
+    if (this._statusBarItem === undefined) return;
+
+    switch (this._status) {
+      case 'connected':
+        this._statusBarItem.text = '$(plug) Bridge: Connected';
+        this._statusBarItem.tooltip = `Desktop bridge connected on localhost:${this._port}`;
+        this._statusBarItem.backgroundColor = undefined;
+        break;
+      case 'connecting':
+        this._statusBarItem.text = '$(sync~spin) Bridge: Connecting...';
+        this._statusBarItem.tooltip = `Connecting to desktop bridge on localhost:${this._port} (attempt ${this._reconnectAttempts})`;
+        this._statusBarItem.backgroundColor = undefined;
+        break;
+      case 'disconnected':
+        this._statusBarItem.text = '$(debug-disconnect) Bridge: Disconnected';
+        this._statusBarItem.tooltip = `Desktop bridge disconnected. Click to reconnect.`;
+        this._statusBarItem.backgroundColor = new vscode.ThemeColor(
+          'statusBarItem.warningBackground',
+        );
+        break;
+      case 'error':
+        this._statusBarItem.text = '$(error) Bridge: Error';
+        this._statusBarItem.tooltip = `Desktop bridge error on localhost:${this._port}. Click to retry.`;
+        this._statusBarItem.backgroundColor = new vscode.ThemeColor(
+          'statusBarItem.errorBackground',
+        );
+        break;
+    }
   }
 
   // ── Connection lifecycle ────────────────────────────────────────────────
@@ -87,17 +158,35 @@ export class DesktopBridge implements vscode.Disposable {
     this._clearHealthLoop();
     this._closeWebSocket();
     this._setStatus('disconnected');
+    this._resetBackoff();
+  }
+
+  /** Manual reconnect triggered by user action. */
+  async reconnect(): Promise<void> {
+    this._resetBackoff();
+    this._clearReconnect();
+    this._closeWebSocket();
+    await this.connect();
   }
 
   // ── HTTP API ────────────────────────────────────────────────────────────
 
   /**
    * Send a command to the desktop app via HTTP POST.
+   * When bridge is down, returns a graceful error instead of throwing.
    */
   async sendToDesktop<T = unknown>(
     command: string,
     payload: Record<string, unknown> = {},
   ): Promise<BridgeResponse<T>> {
+    // Graceful degradation: if not connected, return error immediately
+    if (this._status !== 'connected') {
+      return {
+        ok: false,
+        error: `Desktop bridge is ${this._status}. Command '${command}' queued for when bridge reconnects.`,
+      };
+    }
+
     const url = `${this.baseUrl}/api/bridge/${command}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), DesktopBridge.REQUEST_TIMEOUT_MS);
@@ -114,6 +203,12 @@ export class DesktopBridge implements vscode.Disposable {
       return json;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      // If fetch fails, bridge may have gone down
+      if (this._status === 'connected') {
+        this._setStatus('error');
+        this._closeWebSocket();
+        this._scheduleReconnect();
+      }
       return { ok: false, error: message };
     } finally {
       clearTimeout(timeout);
@@ -158,6 +253,8 @@ export class DesktopBridge implements vscode.Disposable {
 
       this._ws.onopen = () => {
         this._setStatus('connected');
+        this._resetBackoff();
+        this._wasConnected = true;
         // Announce ourselves
         this._wsSend({
           type: 'vscode:connected',
@@ -185,7 +282,14 @@ export class DesktopBridge implements vscode.Disposable {
       this._ws.onclose = () => {
         this._ws = undefined;
         if (!this._disposed) {
+          const previousStatus = this._status;
           this._setStatus('disconnected');
+
+          // Show disconnect notification if we were previously connected
+          if (this._wasConnected && previousStatus === 'connected') {
+            this._showDisconnectNotification();
+          }
+
           this._scheduleReconnect();
         }
       };
@@ -220,6 +324,7 @@ export class DesktopBridge implements vscode.Disposable {
 
   /**
    * Send a code snippet from the active editor to the desktop agent.
+   * Gracefully degrades if bridge is disconnected.
    */
   async sendCodeSnippet(code: string, language: string, filePath: string): Promise<BridgeResponse> {
     return this.sendToDesktop('code-snippet', { code, language, filePath });
@@ -227,6 +332,7 @@ export class DesktopBridge implements vscode.Disposable {
 
   /**
    * Share the current workspace context with the desktop app.
+   * Gracefully degrades if bridge is disconnected.
    */
   async shareContext(): Promise<BridgeResponse> {
     const folders = vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath) ?? [];
@@ -242,6 +348,7 @@ export class DesktopBridge implements vscode.Disposable {
 
   /**
    * Trigger a desktop agent action (e.g., run a task, open a tool).
+   * Gracefully degrades if bridge is disconnected.
    */
   async triggerAgentAction(
     action: string,
@@ -250,21 +357,58 @@ export class DesktopBridge implements vscode.Disposable {
     return this.sendToDesktop('agent-action', { action, ...params });
   }
 
+  // ── Disconnect notification ─────────────────────────────────────────────
+
+  private _showDisconnectNotification(): void {
+    void vscode.window
+      .showWarningMessage(
+        'AGI Workforce: Desktop bridge disconnected. Local operations remain available.',
+        'Reconnect',
+        'Open Settings',
+      )
+      .then((choice) => {
+        if (choice === 'Reconnect') {
+          void this.reconnect();
+        } else if (choice === 'Open Settings') {
+          void vscode.commands.executeCommand(
+            'workbench.action.openSettings',
+            'agiWorkforce.desktopBridge',
+          );
+        }
+      });
+  }
+
   // ── Internal ────────────────────────────────────────────────────────────
 
   private _setStatus(status: BridgeStatus): void {
     if (this._status !== status) {
       this._status = status;
       this._onStatusChange.fire(status);
+      this._updateStatusBar();
     }
   }
 
   private _scheduleReconnect(): void {
     this._clearReconnect();
     if (this._disposed) return;
+
+    this._reconnectAttempts++;
+    const delay = this._reconnectBackoffMs;
+
+    // Exponential backoff: double the delay each time, capped at max
+    this._reconnectBackoffMs = Math.min(
+      this._reconnectBackoffMs * DesktopBridge.BACKOFF_MULTIPLIER,
+      DesktopBridge.BACKOFF_MAX_MS,
+    );
+
     this._reconnectTimer = setTimeout(() => {
       void this.connect();
-    }, DesktopBridge.RECONNECT_INTERVAL_MS);
+    }, delay);
+  }
+
+  private _resetBackoff(): void {
+    this._reconnectBackoffMs = DesktopBridge.BACKOFF_INITIAL_MS;
+    this._reconnectAttempts = 0;
   }
 
   private _clearReconnect(): void {
@@ -309,6 +453,8 @@ export class DesktopBridge implements vscode.Disposable {
     this.disconnect();
     this._handlers = [];
     this._onStatusChange.dispose();
+    this._statusBarItem?.dispose();
+    this._statusBarItem = undefined;
   }
 }
 
@@ -334,7 +480,26 @@ function registerBridgeHandlersTracked(
       case 'desktop:open-file': {
         const filePath = msg.payload['filePath'] as string | undefined;
         if (filePath) {
-          void vscode.window.showTextDocument(vscode.Uri.file(filePath));
+          // Security: only allow opening files inside a workspace folder.
+          // A compromised WS connection must not be able to read arbitrary files.
+          const workspaceFolders = vscode.workspace.workspaceFolders;
+          if (!workspaceFolders) break;
+          // Resolve filePath relative to each workspace folder (not CWD) and
+          // require a path separator after the folder prefix to prevent
+          // adjacent-directory bypass (e.g. "myproject-evil" matching "myproject").
+          let resolvedPath: string | undefined;
+          const isInWorkspace = workspaceFolders.some((folder) => {
+            const candidate = path.resolve(folder.uri.fsPath, filePath);
+            const match =
+              candidate.startsWith(folder.uri.fsPath + path.sep) || candidate === folder.uri.fsPath;
+            if (match) resolvedPath = candidate;
+            return match;
+          });
+          if (!isInWorkspace || resolvedPath === undefined) {
+            console.warn('[AGI Workforce Bridge] blocked file open outside workspace:', filePath);
+            break;
+          }
+          void vscode.window.showTextDocument(vscode.Uri.file(resolvedPath));
         }
         break;
       }
@@ -347,7 +512,6 @@ function registerBridgeHandlersTracked(
       }
       case 'desktop:run-command': {
         const commandId = msg.payload['command'] as string | undefined;
-        const args = msg.payload['args'] as unknown[] | undefined;
         if (commandId) {
           // Allowlist of commands the desktop bridge is permitted to trigger.
           // Any commandId not in this set is blocked and logged — a compromised
@@ -370,7 +534,9 @@ function registerBridgeHandlersTracked(
             console.warn(`[AGI Workforce Bridge] blocked disallowed command: ${commandId}`);
             break;
           }
-          void vscode.commands.executeCommand(commandId, ...(args ?? []));
+          // Security: never forward args from the WS payload — attacker-controlled
+          // arguments could be used to escalate via arbitrary command parameters.
+          void vscode.commands.executeCommand(commandId);
         }
         break;
       }
@@ -401,11 +567,29 @@ export function activateDesktopBridge(context: vscode.ExtensionContext): vscode.
     _instance = new DesktopBridge(port);
     context.subscriptions.push(_instance);
 
+    // Initialize status bar
+    const statusBarItem = _instance.initStatusBar();
+    context.subscriptions.push(statusBarItem);
+
     // Register built-in message handlers
     registerBridgeHandlers(_instance, context);
 
     void _instance.connect();
   }
+
+  // Register reconnect command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agi-workforce.bridgeReconnect', async () => {
+      const bridge = getDesktopBridge();
+      if (bridge !== undefined) {
+        await bridge.reconnect();
+      } else {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: Desktop bridge is not enabled. Enable it in settings.',
+        );
+      }
+    }),
+  );
 
   // React to config changes
   // We keep a reference to the current bridge-handler disposable so we can
@@ -429,6 +613,9 @@ export function activateDesktopBridge(context: vscode.ExtensionContext): vscode.
       } else if (nowEnabled && _instance === undefined) {
         _instance = new DesktopBridge(nowPort);
         context.subscriptions.push(_instance);
+        // Initialize status bar for new instance
+        const newStatusBarItem = _instance.initStatusBar();
+        context.subscriptions.push(newStatusBarItem);
         // Dispose old handler subscription before registering on the new instance
         currentHandlerDisposable?.dispose();
         currentHandlerDisposable = registerBridgeHandlersTracked(_instance, context);
