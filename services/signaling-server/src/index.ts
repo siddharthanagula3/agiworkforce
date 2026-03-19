@@ -8,6 +8,7 @@
  * - Connection limits: Per-IP connection limits prevent resource exhaustion
  * - Security headers: OWASP-compliant headers on all HTTP responses
  * - Admin authentication: API key validation for admin/metrics endpoints
+ * - Pairing authentication: SIGNALING_INTERNAL_SECRET required for POST /pairings (constant-time comparison)
  * - DDoS protection: Automatic blacklisting of repeat offenders
  *
  * Rate limit rationale (OWASP compliant):
@@ -42,7 +43,7 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import { createServer, type Server } from 'http';
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import { supabase } from './db.js';
@@ -90,6 +91,10 @@ import {
   PAIRING_CODE_PATTERN,
   MAX_METADATA_SIZE_BYTES,
   MAX_METADATA_KEYS,
+  SESSION_LONG_TTL_MS,
+  STALE_SESSION_HEARTBEAT_THRESHOLD_MS,
+  MAX_PENDING_APPROVALS_PER_SESSION,
+  PENDING_APPROVAL_TTL_MS,
 } from './constants.js';
 
 // =============================================================================
@@ -111,6 +116,18 @@ interface Session {
   expiresAt: number;
   participants: Partial<Record<Role, Participant>>;
   metadata: Record<string, unknown> | null;
+  /** Timestamp of the last heartbeat from any participant. Used for stale-session cleanup. */
+  lastHeartbeatAt: number;
+}
+
+/**
+ * A queued approval that was sent while the mobile client was disconnected.
+ * Stored per-session and delivered when the mobile client reconnects.
+ */
+interface PendingApproval {
+  id: string;
+  payload: Record<string, unknown>;
+  queuedAt: number;
 }
 
 interface ConnectedClient {
@@ -124,6 +141,22 @@ interface ConnectedClient {
 
 let isShuttingDown = false;
 let isReady = false;
+
+// SECURITY: Internal secret for authenticating pairing creation requests
+const SIGNALING_SECRET = process.env['SIGNALING_INTERNAL_SECRET'];
+
+/**
+ * Constant-time string comparison to prevent timing attacks on secret validation.
+ * Returns false if either input is empty/undefined.
+ */
+function constantTimeCompare(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  // HMAC normalizes lengths — both digests are always 32 bytes
+  const key = Buffer.alloc(32);
+  const ha = createHmac('sha256', key).update(a).digest();
+  const hb = createHmac('sha256', key).update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
 
 const DEFAULT_TTL_SECONDS = Number(
   process.env['SIGNALING_PAIRING_TTL'] ?? DEFAULT_PAIRING_TTL_SECONDS,
@@ -298,6 +331,13 @@ const wss = new WebSocketServer({ server, path: wsPath });
 // Sessions are persisted in DB, but socket routing is in-memory
 const activeSessions = new Map<string, Session>();
 const clients = new WeakMap<WebSocket, ConnectedClient>();
+
+/**
+ * Pending approvals per session code.
+ * When the mobile client disconnects while an approval is queued from desktop,
+ * the approval is stored here and delivered when mobile reconnects.
+ */
+const pendingApprovals = new Map<string, PendingApproval[]>();
 
 // Pending session rehydrations to prevent race conditions
 const pendingRehydrations = new Map<
@@ -529,7 +569,16 @@ app.post('/admin/blacklist', adminLimiter, adminAuthMiddleware, (req, res) => {
 // =============================================================================
 
 // SECURITY: Rate limited to 10/min to prevent enumeration attacks
+// SECURITY: Requires Bearer token matching SIGNALING_INTERNAL_SECRET
 app.post('/pairings', pairingCreateLimiter, async (req, res) => {
+  // SECURITY: Authenticate pairing creation with internal secret
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace('Bearer ', '');
+
+  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   const correlationId = (req as Request & { correlationId?: string }).correlationId;
   const parseResult = pairingRequestSchema.safeParse(req.body ?? {});
 
@@ -800,6 +849,14 @@ wss.on('connection', (socket, request) => {
 
     if (heartbeatMessageSchema.safeParse(data).success) {
       metrics.recordMessage('heartbeat');
+      // Update session-level heartbeat for stale-session cleanup
+      const heartbeatClient = clients.get(socket);
+      if (heartbeatClient) {
+        const heartbeatSession = activeSessions.get(heartbeatClient.code);
+        if (heartbeatSession) {
+          heartbeatSession.lastHeartbeatAt = Date.now();
+        }
+      }
       socket.send(JSON.stringify({ type: 'heartbeat_ack', timestamp: Date.now() }));
       return;
     }
@@ -852,20 +909,48 @@ wss.on('connection', (socket, request) => {
 const cleanupInterval = setInterval(() => {
   const now = Date.now();
   let expiredCount = 0;
+  let staleCount = 0;
 
   for (const session of activeSessions.values()) {
+    // 1. Expired session cleanup (TTL elapsed)
     if (session.expiresAt <= now) {
       disconnectParticipants(session, 'session_expired');
       activeSessions.delete(session.code);
+      pendingApprovals.delete(session.code);
       expiredCount++;
+      continue;
+    }
+
+    // 2. Stale session cleanup: no heartbeat for >5 minutes AND no connected participants
+    const hasParticipants =
+      Boolean(session.participants.desktop) || Boolean(session.participants.mobile);
+    const heartbeatAge = now - session.lastHeartbeatAt;
+    if (!hasParticipants && heartbeatAge > STALE_SESSION_HEARTBEAT_THRESHOLD_MS) {
+      logger.info(
+        { code: session.code, heartbeatAge },
+        'Removing stale session (no heartbeat, no participants)',
+      );
+      activeSessions.delete(session.code);
+      pendingApprovals.delete(session.code);
+      staleCount++;
+    }
+  }
+
+  // 3. Expire old pending approvals to prevent memory leaks
+  for (const [code, approvals] of pendingApprovals.entries()) {
+    const filtered = approvals.filter((a) => now - a.queuedAt < PENDING_APPROVAL_TTL_MS);
+    if (filtered.length === 0) {
+      pendingApprovals.delete(code);
+    } else if (filtered.length < approvals.length) {
+      pendingApprovals.set(code, filtered);
     }
   }
 
   // SECURITY: Cleanup auth failure entries to prevent memory leaks
   cleanupAuthFailures();
 
-  if (expiredCount > 0) {
-    logger.info({ expiredCount }, 'Cleaned up expired sessions');
+  if (expiredCount > 0 || staleCount > 0) {
+    logger.info({ expiredCount, staleCount }, 'Cleaned up expired/stale sessions');
   }
 }, SESSION_CLEANUP_INTERVAL_MS);
 
@@ -964,6 +1049,7 @@ server.listen(port, host, () => {
       publicWsUrl,
       security: {
         adminEndpoints: isAdminEnabled() ? 'enabled' : 'disabled',
+        pairingAuth: SIGNALING_SECRET ? 'enabled' : 'DISABLED_NO_SECRET',
         httpRateLimiting: 'enabled',
         wsRateLimiting: 'enabled',
         securityHeaders: 'enabled',
@@ -1058,6 +1144,7 @@ async function handleRegister(
           expiresAt: dbSession.expires_at,
           participants: {},
           metadata: dbSession.metadata,
+          lastHeartbeatAt: Date.now(),
         };
         activeSessions.set(message.code, rehydratedSession);
         return rehydratedSession;
@@ -1124,6 +1211,9 @@ async function handleRegister(
     'Client registered to session',
   );
 
+  // Update session heartbeat on registration (reconnect counts as activity)
+  session.lastHeartbeatAt = Date.now();
+
   socket.send(
     JSON.stringify({
       type: 'registered',
@@ -1136,6 +1226,16 @@ async function handleRegister(
 
   const peer = getPeer(session, message.role);
   if (peer) {
+    // Both peers connected — extend session TTL to long-lived (24h)
+    const longExpiry = Date.now() + SESSION_LONG_TTL_MS;
+    if (session.expiresAt < longExpiry) {
+      session.expiresAt = longExpiry;
+      logger.info(
+        { code: message.code, newExpiresAt: longExpiry },
+        'Session TTL extended to 24h (both peers connected)',
+      );
+    }
+
     notifyParticipant(participant, {
       type: 'peer_ready',
       role: peer.role,
@@ -1145,6 +1245,20 @@ async function handleRegister(
       type: 'peer_ready',
       role: participant.role,
       metadata: participant.metadata ?? null,
+    });
+  }
+
+  // Reconnect handling: deliver queued approvals to mobile on reconnect
+  if (message.role === 'mobile') {
+    deliverPendingApprovals(session.code, participant);
+  }
+
+  // Reconnect handling: request state sync from desktop when mobile reconnects
+  if (message.role === 'mobile' && peer) {
+    notifyParticipant(peer, {
+      type: 'sync_request',
+      reason: 'mobile_reconnected',
+      timestamp: Date.now(),
     });
   }
 }
@@ -1165,6 +1279,21 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
   }
 
   const peer = getPeer(session, client.role);
+
+  // Approval delivery resilience: if desktop sends a control signal with an
+  // approval action while mobile is disconnected, queue it for delivery on reconnect.
+  if (!peer && message.kind === 'control' && client.role === 'desktop') {
+    const controlPayload = message.payload as
+      | { action?: string; data?: Record<string, unknown> }
+      | undefined;
+    if (controlPayload?.action === 'approval_request') {
+      queuePendingApproval(client.code, controlPayload);
+      socket.send(JSON.stringify({ type: 'approval_queued', code: client.code }));
+      logger.info({ correlationId, code: client.code }, 'Approval queued for disconnected mobile');
+      return;
+    }
+  }
+
   if (!peer) {
     socket.send(JSON.stringify({ type: 'error', error: 'peer_not_connected' }));
     return;
@@ -1260,6 +1389,65 @@ function disconnectParticipants(
       logger.warn({ error, role }, 'Failed to close socket');
     }
   }
+}
+
+/**
+ * Queue a pending approval for delivery when the mobile client reconnects.
+ * Bounded by MAX_PENDING_APPROVALS_PER_SESSION to prevent memory exhaustion.
+ */
+function queuePendingApproval(code: string, payload: Record<string, unknown>): void {
+  let queue = pendingApprovals.get(code);
+  if (!queue) {
+    queue = [];
+    pendingApprovals.set(code, queue);
+  }
+
+  // Evict oldest if at capacity
+  if (queue.length >= MAX_PENDING_APPROVALS_PER_SESSION) {
+    queue.shift();
+  }
+
+  queue.push({
+    id: `approval_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    payload,
+    queuedAt: Date.now(),
+  });
+}
+
+/**
+ * Deliver any pending approvals to a mobile participant that just reconnected.
+ * Removes delivered approvals from the queue.
+ */
+function deliverPendingApprovals(code: string, mobileParticipant: Participant): void {
+  const queue = pendingApprovals.get(code);
+  if (!queue || queue.length === 0) {
+    return;
+  }
+
+  const now = Date.now();
+  const validApprovals = queue.filter((a) => now - a.queuedAt < PENDING_APPROVAL_TTL_MS);
+
+  if (validApprovals.length === 0) {
+    pendingApprovals.delete(code);
+    return;
+  }
+
+  logger.info(
+    { code, count: validApprovals.length },
+    'Delivering pending approvals to reconnected mobile',
+  );
+
+  for (const approval of validApprovals) {
+    notifyParticipant(mobileParticipant, {
+      type: 'signal',
+      from: 'desktop',
+      kind: 'control',
+      payload: approval.payload,
+    });
+  }
+
+  // Clear the queue after delivery
+  pendingApprovals.delete(code);
 }
 
 function buildQrPayload(code: string): string {

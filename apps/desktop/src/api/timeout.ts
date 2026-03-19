@@ -4,12 +4,16 @@
  * Provides interfaces for managing extended task timeouts and warnings.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/tauri-mock';
 
+/**
+ * TimeoutConfig fields use snake_case to match the Rust struct
+ * (no `#[serde(rename_all = "camelCase")]` on the Rust side).
+ */
 export interface TimeoutConfig {
-  maxDurationSecs: number;
-  enableWarnings: boolean;
-  enableCheckpointOnTimeout: boolean;
+  max_duration_secs: number;
+  enable_warnings: boolean;
+  enable_checkpoint_on_timeout: boolean;
 }
 
 export interface TimeoutWarning {
