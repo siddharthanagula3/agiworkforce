@@ -34,7 +34,7 @@ impl ToolExecutor {
 
             let llm_state = app.state::<LLMState>();
 
-            let model_str = model.unwrap_or("gpt-5-nano");
+            let model_str = model.unwrap_or("gpt-5.4-nano");
             let preferences = Some(RouterPreferences {
                 provider: None,
                 model: Some(model_str.to_string()),

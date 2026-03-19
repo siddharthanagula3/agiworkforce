@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import './globals.css';
 import Providers from './providers';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
+import { SkipLinks } from '@/components/accessibility/SkipLinks';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -167,6 +168,7 @@ export default async function RootLayout({
         />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <SkipLinks />
         <Providers>{children}</Providers>
         {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}
         {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} nonce={nonce} />}

@@ -334,26 +334,10 @@ const ChatComposerNewComponent = ({
     if (!message.trim() && attachments.length === 0) return;
     if (isLoading || disabled) return;
 
-    const toolPrefixes: Record<string, string> = {
-      image: '[Generate Image] ',
-      video: '[Generate Video] ',
-      document: '[Create Document] ',
-      search: '[Web Search] ',
-    };
-    const prefix = selectedTools.map((t) => toolPrefixes[t] || '').join('');
-    const thinkingPrefix = thinkingEnabled ? '[Extended Thinking] ' : '';
-    const researchPrefix =
-      researchEnabled && !selectedTools.includes('search') ? '[Research Mode] ' : '';
-
-    onSend(
-      thinkingPrefix + researchPrefix + prefix + message,
-      attachments.length > 0 ? attachments : undefined,
-      selectedSkill?.id,
-      {
-        agentMode,
-        folderId: selectedFolderId,
-      },
-    );
+    onSend(message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id, {
+      agentMode,
+      folderId: selectedFolderId,
+    });
 
     setMessage('');
     clearAttachments();
@@ -370,14 +354,11 @@ const ChatComposerNewComponent = ({
   }, [
     message,
     attachments,
-    selectedTools,
     selectedSkill,
     isLoading,
     disabled,
     agentMode,
     selectedFolderId,
-    thinkingEnabled,
-    researchEnabled,
     onSend,
     clearAttachments,
     clearSuggestion,

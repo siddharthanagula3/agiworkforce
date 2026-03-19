@@ -2263,6 +2263,65 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // Conversation search tools (like Claude's conversation_search / recent_chats)
+        self.register_tool(Tool {
+            id: "conversation_search".to_string(),
+            name: "Search Past Conversations".to_string(),
+            description: "Search past conversations for relevant context, information, or previous work. Returns matching messages ranked by relevance with conversation titles and timestamps.".to_string(),
+            capabilities: vec![ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "query".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Search query to find in past conversations".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "limit".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum number of results to return".to_string(),
+                    default: Some(serde_json::json!(5)),
+                },
+                ToolParameter {
+                    name: "conversation_id".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Restrict search to a specific conversation by ID".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 15,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "recent_chats".to_string(),
+            name: "Get Recent Conversations".to_string(),
+            description: "Get a list of recent conversations with titles, timestamps, and message counts. Useful for finding previous work or resuming earlier discussions.".to_string(),
+            capabilities: vec![ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "limit".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Number of recent conversations to return".to_string(),
+                    default: Some(serde_json::json!(10)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
         // Scheduler tools for reminders and recurring tasks
         self.register_tool(Tool {
             id: "schedule_reminder".to_string(),

@@ -3,12 +3,14 @@
 //! Provides Tauri commands for creating, managing, and rendering artifacts.
 
 use crate::core::artifacts::{
-    create_shared_store, Artifact, ArtifactFilter, ArtifactMetadata, ArtifactRenderer,
-    ArtifactStatus, ArtifactStoreStats, ArtifactSummary, ArtifactType, ArtifactVersion,
-    CreateArtifactRequest, RenderedArtifact, SharedArtifactStore, UpdateArtifactRequest,
-    VersionDiff,
+    create_shared_store, create_shared_store_with_db, Artifact, ArtifactFilter, ArtifactMetadata,
+    ArtifactRenderer, ArtifactStatus, ArtifactStoreStats, ArtifactSummary, ArtifactType,
+    ArtifactVersion, CreateArtifactRequest, RenderedArtifact, SharedArtifactStore,
+    UpdateArtifactRequest, VersionDiff,
 };
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
 use tauri::State;
 use tracing::debug;
 
@@ -18,6 +20,18 @@ pub struct ArtifactState(pub SharedArtifactStore);
 impl ArtifactState {
     pub fn new() -> Self {
         Self(create_shared_store(50))
+    }
+
+    /// Create artifact state with database persistence
+    pub fn with_db(conn: Arc<Mutex<Connection>>) -> Self {
+        let store = create_shared_store_with_db(50, conn);
+        // Load any persisted artifacts into memory cache
+        if let Err(e) = store.load_from_db() {
+            tracing::warn!("Failed to load artifacts from DB on startup: {}", e);
+        } else {
+            tracing::info!("Artifact store initialized with DB persistence");
+        }
+        Self(store)
     }
 }
 
@@ -494,4 +508,39 @@ pub async fn artifact_clear_all(
 ) -> Result<ArtifactResponse<()>, String> {
     state.0.clear();
     Ok(ArtifactResponse::ok(()))
+}
+
+/// List persisted artifacts from the database.
+/// Unlike `artifact_list` which queries in-memory cache, this queries SQLite directly.
+#[tauri::command]
+pub async fn artifact_list_persisted(
+    state: State<'_, ArtifactState>,
+    conversation_id: Option<String>,
+    limit: Option<u32>,
+) -> Result<ArtifactResponse<Vec<ArtifactSummary>>, String> {
+    // Parse and validate conversation_id up front
+    let parsed_cid = match conversation_id {
+        Some(ref s) => Some(
+            s.parse::<i64>()
+                .map_err(|_| format!("Invalid conversation_id: {}", s))?,
+        ),
+        None => None,
+    };
+
+    // Load from DB if a conversation is requested and might not be in cache
+    if let Some(ref cid) = conversation_id {
+        if let Err(e) = state.0.load_conversation_from_db(cid) {
+            debug!("Could not load conversation {} from DB: {}", cid, e);
+        }
+    }
+
+    // After loading, use the in-memory filter to return results
+    let filter = ArtifactFilter {
+        conversation_id: parsed_cid,
+        limit: limit.map(|l| l as usize),
+        ..Default::default()
+    };
+
+    let summaries = state.0.list(filter);
+    Ok(ArtifactResponse::ok(summaries))
 }

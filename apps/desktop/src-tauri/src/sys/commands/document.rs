@@ -4,8 +4,8 @@ use tauri::State;
 
 use crate::features::document::{
     DocumentContent, DocumentManager, DocumentMetadata, ExcelDocumentConfig, ExcelDocumentCreator,
-    ExcelSheet, PdfContent, PdfDocumentConfig, PdfDocumentCreator, SearchResult, WordContent,
-    WordDocumentConfig, WordDocumentCreator,
+    ExcelSheet, PdfContent, PdfDocumentConfig, PdfDocumentCreator, PresentationConfig,
+    PresentationCreator, SearchResult, WordContent, WordDocumentConfig, WordDocumentCreator,
 };
 use crate::sys::error::{Error, Result};
 
@@ -151,6 +151,30 @@ pub async fn document_create_pdf_simple(
     let resolved_path = resolve_output_path(&output_path)?;
     let creator = PdfDocumentCreator::new();
     creator.create_simple(&resolved_path, title, author, paragraphs)?;
+    Ok(resolved_path)
+}
+
+#[tauri::command]
+pub async fn document_create_powerpoint(
+    output_path: String,
+    config: PresentationConfig,
+) -> Result<String> {
+    let resolved_path = resolve_output_path(&output_path)?;
+    let creator = PresentationCreator::new();
+    creator.create(&config, &resolved_path)?;
+    Ok(resolved_path)
+}
+
+#[tauri::command]
+pub async fn document_create_powerpoint_simple(
+    output_path: String,
+    title: String,
+    author: String,
+    slides: Vec<(String, Vec<String>)>,
+) -> Result<String> {
+    let resolved_path = resolve_output_path(&output_path)?;
+    let creator = PresentationCreator::new();
+    creator.create_simple(&title, &author, slides, &resolved_path)?;
     Ok(resolved_path)
 }
 

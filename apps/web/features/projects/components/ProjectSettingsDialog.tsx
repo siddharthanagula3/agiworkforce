@@ -25,7 +25,7 @@ import { Label } from '@shared/ui/label';
 import { Textarea } from '@shared/ui/textarea';
 import { Save, Trash2, Upload, FileText, X as XIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Project } from '@features/chat/stores/chat-preferences-store';
+import type { Project } from '@features/projects/stores/project-store';
 
 // ---------------------------------------------------------------------------
 // Color options

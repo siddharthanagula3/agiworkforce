@@ -15,6 +15,7 @@ import {
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 const featureItems = [
   {
@@ -66,7 +67,9 @@ export function Header() {
   const [isFeaturesOpen, setIsFeaturesOpen] = useState(false);
   const [isMobileFeaturesOpen, setIsMobileFeaturesOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [focusedItemIndex, setFocusedItemIndex] = useState<number>(-1);
   const featuresTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuItemRefs = useRef<(HTMLAnchorElement | null)[]>([]);
 
   const handleFeaturesMouseEnter = useCallback(() => {
     if (featuresTimeoutRef.current) {
@@ -81,6 +84,56 @@ export function Header() {
       setIsFeaturesOpen(false);
     }, 150);
   }, []);
+
+  const closeFeaturesDropdown = useCallback(() => {
+    setIsFeaturesOpen(false);
+    setFocusedItemIndex(-1);
+  }, []);
+
+  const handleTriggerKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setIsFeaturesOpen(true);
+        setFocusedItemIndex(0);
+        // Focus the first item after state update
+        requestAnimationFrame(() => {
+          menuItemRefs.current[0]?.focus();
+        });
+      } else if (e.key === 'Escape') {
+        closeFeaturesDropdown();
+      }
+    },
+    [closeFeaturesDropdown],
+  );
+
+  const handleMenuItemKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLAnchorElement>, index: number) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = Math.min(index + 1, featureItems.length - 1);
+        setFocusedItemIndex(next);
+        menuItemRefs.current[next]?.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (index === 0) {
+          // Return focus to trigger button
+          closeFeaturesDropdown();
+          (featuresRef.current?.querySelector('button') as HTMLButtonElement | null)?.focus();
+        } else {
+          const prev = index - 1;
+          setFocusedItemIndex(prev);
+          menuItemRefs.current[prev]?.focus();
+        }
+      } else if (e.key === 'Escape') {
+        closeFeaturesDropdown();
+        (featuresRef.current?.querySelector('button') as HTMLButtonElement | null)?.focus();
+      } else if (e.key === 'Tab') {
+        closeFeaturesDropdown();
+      }
+    },
+    [closeFeaturesDropdown],
+  );
 
   const featuresRef = useRef<HTMLDivElement>(null);
 
@@ -111,22 +164,12 @@ export function Header() {
     if (!isFeaturesOpen) return;
     const handler = (e: MouseEvent) => {
       if (featuresRef.current && !featuresRef.current.contains(e.target as Node)) {
-        setIsFeaturesOpen(false);
+        closeFeaturesDropdown();
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [isFeaturesOpen]);
-
-  // Close dropdown on Escape key
-  useEffect(() => {
-    if (!isFeaturesOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsFeaturesOpen(false);
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isFeaturesOpen]);
+  }, [isFeaturesOpen, closeFeaturesDropdown]);
 
   const handleSignOut = async () => {
     const supabase = getSupabaseClient();
@@ -162,6 +205,7 @@ export function Header() {
             <button
               className="flex items-center gap-1 hover:text-white transition-colors"
               onClick={() => setIsFeaturesOpen((prev) => !prev)}
+              onKeyDown={handleTriggerKeyDown}
               aria-haspopup="menu"
               aria-expanded={isFeaturesOpen}
               aria-controls="features-dropdown"
@@ -179,19 +223,24 @@ export function Header() {
                 className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[420px] rounded-xl border border-zinc-800 bg-black/90 p-4 shadow-2xl backdrop-blur-xl"
               >
                 <div className="grid gap-1">
-                  {featureItems.map((item) => (
+                  {featureItems.map((item, index) => (
                     <Link
                       key={item.name}
                       href={item.href}
                       role="menuitem"
-                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-zinc-800/50 transition-colors group"
+                      ref={(el) => {
+                        menuItemRefs.current[index] = el;
+                      }}
+                      tabIndex={focusedItemIndex === index ? 0 : -1}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-zinc-800/50 transition-colors group focus:outline-none focus:bg-zinc-800/50"
                       onClick={() => {
                         if (featuresTimeoutRef.current) {
                           clearTimeout(featuresTimeoutRef.current);
                           featuresTimeoutRef.current = null;
                         }
-                        setIsFeaturesOpen(false);
+                        closeFeaturesDropdown();
                       }}
+                      onKeyDown={(e) => handleMenuItemKeyDown(e, index)}
                     >
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
                         <item.icon className="h-4 w-4 text-blue-400" />

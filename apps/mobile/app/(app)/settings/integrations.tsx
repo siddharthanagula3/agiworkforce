@@ -180,8 +180,8 @@ export default function IntegrationsScreen() {
       <View className="flex-1 px-4 gap-5 pt-2">
         {/* Description */}
         <Text className="text-white/50 text-sm leading-5">
-          Connect device features to give your AI assistant more context about your life. All data
-          stays on your device and is only shared with AI when relevant.
+          Connect device features to add context to your conversations. Data stays on your device
+          and is only sent when you start a chat.
         </Text>
 
         {/* Loading state while checking permissions */}

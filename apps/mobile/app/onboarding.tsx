@@ -23,7 +23,7 @@ const SLIDES: Slide[] = [
     icon: Sparkles,
     title: 'Welcome to AGI Workforce',
     description:
-      'Your AI assistant that works across 20+ models from 7 providers. One app, unlimited intelligence.',
+      'Chat with 20+ models from 7 providers. Pick the right model for every task, all in one place.',
   },
   {
     icon: Mic,
@@ -46,7 +46,7 @@ const SLIDES: Slide[] = [
   {
     icon: Rocket,
     title: 'Ready to Go',
-    description: "Your AI workforce awaits. Let's start with a conversation.",
+    description: 'Everything is set up. Start a conversation to try it out.',
   },
 ];
 

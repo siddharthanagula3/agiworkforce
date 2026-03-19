@@ -271,6 +271,51 @@ export default function Home() {
             </div>
           </section>
 
+          {/* Social Proof */}
+          <section className="border-t border-zinc-800/50 bg-zinc-950 py-16">
+            <div className="container mx-auto px-4 text-center">
+              <p className="mb-8 text-sm font-medium uppercase tracking-widest text-zinc-500">
+                Trusted by developers worldwide
+              </p>
+              <div className="flex flex-wrap justify-center gap-6 mb-12 md:gap-10">
+                {[
+                  'OpenAI',
+                  'Anthropic',
+                  'Google AI',
+                  'Meta AI',
+                  'Mistral',
+                  'Ollama',
+                  'DeepSeek',
+                ].map((name) => (
+                  <span
+                    key={name}
+                    className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-300"
+                  >
+                    {name}
+                  </span>
+                ))}
+              </div>
+              <div className="mx-auto grid max-w-2xl grid-cols-2 gap-8 md:grid-cols-4">
+                <div>
+                  <div className="text-2xl font-bold text-white">9+</div>
+                  <div className="mt-1 text-xs text-zinc-500">AI Providers</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-white">140+</div>
+                  <div className="mt-1 text-xs text-zinc-500">AI Skills</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-white">&#8734;</div>
+                  <div className="mt-1 text-xs text-zinc-500">MCP Tools</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-white">100%</div>
+                  <div className="mt-1 text-xs text-zinc-500">Local-First</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Stats */}
           <section className="bg-black py-24">
             <div className="container mx-auto px-4">

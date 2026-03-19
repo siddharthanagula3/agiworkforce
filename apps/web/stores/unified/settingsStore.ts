@@ -1,6 +1,11 @@
-// STUB FILE FOR WEB PORT COMPILATION
-// Provides no-op store hooks that mimic Zustand's selector pattern
-// for desktop-only stores that don't exist in the web app.
+/**
+ * STUB: Desktop-port compilation shim. Returns empty state.
+ * Web app should use real implementations when available.
+ *
+ * Fields like chatPreferences.compactMode, alwaysUseAgentMode are desktop-only
+ * and intentionally return false on web. The llmConfig shape delegates to the
+ * real settingsStore (stores/settingsStore.ts) where possible.
+ */
 
 /** Empty state object used as default for all stub stores */
 const EMPTY_STATE: Record<string, never> = {};

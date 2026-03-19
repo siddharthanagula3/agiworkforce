@@ -1,8 +1,3 @@
-/**
- * Popup script for AGI Workforce extension
- * Handles popup UI interactions and state management
- */
-
 import type { PopupState, ConnectionStatusResponse, CaptureScreenshotResponse } from './types';
 import { logger, storageUtils } from './utils';
 
@@ -17,31 +12,21 @@ const popupState: PopupState = {
   isConnected: false,
 };
 
-/**
- * Initialize popup on load
- */
 async function initializePopup(): Promise<void> {
   try {
-    logger.info('Popup initializing');
-
     await Promise.all([updateStatus(), updateTabInfo(), updateStats()]);
-
     setupEventListeners();
     startSessionTimer();
-
-    logger.info('Popup initialized');
   } catch (error) {
     logger.error('Failed to initialize popup', error);
   }
 }
 
-/**
- * Set up event listeners
- */
 function setupEventListeners(): void {
-  // Button listeners
   const captureBtn = document.getElementById('captureBtn') as HTMLButtonElement | null;
   const refreshBtn = document.getElementById('refreshBtn') as HTMLButtonElement | null;
+  const sidePanelBtn = document.getElementById('sidePanelBtn') as HTMLButtonElement | null;
+  const groupBtn = document.getElementById('groupBtn') as HTMLButtonElement | null;
 
   if (captureBtn) {
     captureBtn.addEventListener('click', handleCapturePage);
@@ -51,7 +36,35 @@ function setupEventListeners(): void {
     refreshBtn.addEventListener('click', handleRefresh);
   }
 
-  // Listen for storage changes
+  if (sidePanelBtn) {
+    sidePanelBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'open_side_panel' });
+      window.close();
+    });
+  }
+
+  if (groupBtn) {
+    groupBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage(
+        { type: 'ADD_TAB_TO_GROUP' },
+        (response: { success?: boolean } | undefined) => {
+          if (chrome.runtime.lastError) return;
+          if (groupBtn && response?.success) {
+            groupBtn.textContent = '✓ Grouped';
+            setTimeout(() => {
+              groupBtn.textContent = '📂 Group Tab';
+            }, 1500);
+          }
+        },
+      );
+    });
+  }
+
+  const versionEl = document.getElementById('extVersion');
+  if (versionEl) {
+    versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
+  }
+
   chrome.storage.onChanged.addListener((changes) => {
     if (changes['connectedToDesktop']) {
       updateStatus();
@@ -64,7 +77,6 @@ function setupEventListeners(): void {
     }
   });
 
-  // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
       e.preventDefault();
@@ -73,9 +85,6 @@ function setupEventListeners(): void {
   });
 }
 
-/**
- * Update connection status display
- */
 async function updateStatus(): Promise<void> {
   try {
     const result = await chrome.runtime.sendMessage({
@@ -119,9 +128,6 @@ async function updateStatus(): Promise<void> {
   }
 }
 
-/**
- * Update current tab information
- */
 async function updateTabInfo(): Promise<void> {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -162,19 +168,14 @@ async function updateTabInfo(): Promise<void> {
   }
 }
 
-/**
- * Update statistics display
- */
 async function updateStats(): Promise<void> {
   try {
-    // Update tab count
     const tabs = await chrome.tabs.query({});
     const tabCountEl = document.getElementById('tabCount') as HTMLElement | null;
     if (tabCountEl) {
       tabCountEl.textContent = String(tabs.length);
     }
 
-    // Update action count
     const stats = await storageUtils.getItem<{ actionCount: number }>('stats', { actionCount: 0 });
     const actionCount = stats?.actionCount ?? 0;
     popupState.actionCount = actionCount;
@@ -188,9 +189,6 @@ async function updateStats(): Promise<void> {
   }
 }
 
-/**
- * Start session timer
- */
 function startSessionTimer(): void {
   const sessionTimeEl = document.getElementById('sessionTime') as HTMLElement | null;
 
@@ -208,9 +206,6 @@ function startSessionTimer(): void {
   setInterval(updateSessionTime, 1000);
 }
 
-/**
- * Handle capture page button
- */
 async function handleCapturePage(): Promise<void> {
   const button = document.getElementById('captureBtn') as HTMLButtonElement | null;
   if (!button) return;
@@ -258,9 +253,6 @@ async function handleCapturePage(): Promise<void> {
   }
 }
 
-/**
- * Handle refresh button
- */
 async function handleRefresh(): Promise<void> {
   const button = document.getElementById('refreshBtn') as HTMLButtonElement | null;
   if (!button) return;
@@ -290,11 +282,6 @@ async function handleRefresh(): Promise<void> {
   }
 }
 
-/**
- * Increment action count.
- * Reads storage first to avoid a race condition where concurrent callers might
- * each read a stale in-memory value and both write the same incremented count.
- */
 async function incrementActionCount(): Promise<void> {
   const stats = await storageUtils.getItem<{ actionCount: number }>('stats', { actionCount: 0 });
   const newCount = (stats?.actionCount ?? 0) + 1;
@@ -307,15 +294,12 @@ async function incrementActionCount(): Promise<void> {
   }
 }
 
-// Initialize on DOM content loaded
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializePopup);
 } else {
-  // DOM already loaded
   initializePopup().catch((error) => {
     logger.error('Failed to initialize popup', error);
   });
 }
 
-// Export for testing
 export { popupState, updateStatus, updateTabInfo, updateStats };
