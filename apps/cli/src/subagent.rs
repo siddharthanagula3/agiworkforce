@@ -56,6 +56,8 @@ struct SubagentEntry {
     /// dedicated thread, avoiding the `Send` constraint of `tokio::spawn`.
     handle: Option<thread::JoinHandle<()>>,
     /// Shared cancellation flag polled by the subagent.
+    /// Set by cancel() and checked by the spawned thread.
+    #[allow(dead_code)]
     cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -182,7 +184,7 @@ impl SubagentManager {
 
                 rt.block_on(async move {
                     // Check cancellation before starting
-                    if task_cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                    if task_cancelled.load(std::sync::atomic::Ordering::Acquire) {
                         *task_status.write().await = SubagentStatus::Cancelled;
                         return;
                     }
@@ -197,7 +199,7 @@ impl SubagentManager {
                     .await;
 
                     // Check cancellation after completion
-                    if task_cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                    if task_cancelled.load(std::sync::atomic::Ordering::Acquire) {
                         *task_status.write().await = SubagentStatus::Cancelled;
                         return;
                     }
@@ -284,16 +286,21 @@ impl SubagentManager {
     }
 
     /// Cancel a running subagent.
+    /// Will be wired into the /cancel REPL command for subagent management.
+    #[allow(dead_code)]
     pub async fn cancel(&self, id: &str) -> Result<()> {
         let entries = self.entries.read().await;
         if let Some(entry) = entries.get(id) {
-            let status = entry.status.read().await.clone();
-            if matches!(status, SubagentStatus::Running) {
+            // Hold a single write lock for both the check and the update
+            // to prevent a TOCTOU race where another thread changes the
+            // status between our read and write.
+            let mut status = entry.status.write().await;
+            if matches!(*status, SubagentStatus::Running) {
                 // Signal cancellation — the thread will check this flag.
                 entry
                     .cancelled
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
-                *entry.status.write().await = SubagentStatus::Cancelled;
+                    .store(true, std::sync::atomic::Ordering::Release);
+                *status = SubagentStatus::Cancelled;
                 eprintln!(
                     "  {} Subagent {} cancelled",
                     "[task]".yellow().bold(),
@@ -301,7 +308,8 @@ impl SubagentManager {
                 );
                 Ok(())
             } else {
-                bail!("Subagent '{}' is not running (status: {})", id, status)
+                let status_display = format!("{}", *status);
+                bail!("Subagent '{}' is not running (status: {})", id, status_display)
             }
         } else {
             bail!("Subagent '{}' not found", id)

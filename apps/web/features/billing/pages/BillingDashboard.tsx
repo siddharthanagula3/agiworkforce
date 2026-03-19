@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 import {
   useBillingData,
   useInvalidateBillingQueries,
+  useInvoices,
+  usePaymentMethods,
 } from '@features/billing/hooks/use-billing-queries';
 import {
   DollarSign,
@@ -40,9 +42,37 @@ import {
   ExternalLink,
   RefreshCw,
   X,
+  CreditCard,
+  XCircle,
+  Clock,
 } from 'lucide-react';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { cn } from '@shared/lib/utils';
+
+// Known valid plan tiers — used to validate API responses before rendering
+const VALID_PLANS = ['free', 'pro', 'enterprise'] as const;
+type PlanTier = (typeof VALID_PLANS)[number];
+
+const VALID_STATUSES = ['active', 'cancelled', 'past_due', 'unpaid'] as const;
+type BillingStatus = (typeof VALID_STATUSES)[number];
+
+function isValidPlan(plan: unknown): plan is PlanTier {
+  return typeof plan === 'string' && VALID_PLANS.includes(plan as PlanTier);
+}
+
+function isValidStatus(status: unknown): status is BillingStatus {
+  return typeof status === 'string' && VALID_STATUSES.includes(status as BillingStatus);
+}
+
+/** Safely normalize a plan value, defaulting to 'free' for unknown values */
+function normalizePlan(plan: unknown): PlanTier {
+  return isValidPlan(plan) ? plan : 'free';
+}
+
+/** Safely normalize a status value, defaulting to 'active' for unknown values */
+function normalizeStatus(status: unknown): BillingStatus {
+  return isValidStatus(status) ? status : 'active';
+}
 
 interface LLMUsage {
   provider: string;
@@ -133,6 +163,8 @@ const BillingPage: React.FC = () => {
     error: queryError,
     refetch: refetchBilling,
   } = useBillingData();
+  const { data: invoicesData, isLoading: invoicesLoading } = useInvoices();
+  const { data: paymentMethodsData, isLoading: paymentMethodsLoading } = usePaymentMethods();
   const invalidateBillingQueries = useInvalidateBillingQueries();
 
   // Transform billing data to include UI-specific properties
@@ -171,7 +203,18 @@ const BillingPage: React.FC = () => {
                     : 'bg-orange-50 dark:bg-orange-950/30',
           })),
         },
-        invoices: [],
+        invoices: (invoicesData ?? []).map((inv) => ({
+          id: inv.id,
+          date: inv.createdAt,
+          amount: inv.amount / 100, // convert cents to dollars
+          status:
+            inv.status === 'paid'
+              ? ('paid' as const)
+              : inv.status === 'open'
+                ? ('pending' as const)
+                : ('failed' as const),
+          download_url: inv.invoicePdf ?? inv.hostedInvoiceUrl ?? '',
+        })),
       }
     : null;
 
@@ -201,30 +244,39 @@ const BillingPage: React.FC = () => {
       timeoutIds.push(scrollTimeoutId);
     }
 
+    // Retry billing data refresh with backoff — Stripe webhooks may take a few seconds
+    const scheduleRetryRefresh = () => {
+      const delays = [1000, 3000, 8000]; // 1s, 3s, 8s
+      delays.forEach((delay) => {
+        const id = setTimeout(() => {
+          invalidateBillingQueries();
+        }, delay);
+        timeoutIds.push(id);
+      });
+    };
+
     // Handle successful token purchase (only show once)
     if (success === 'true' && tokensParam && user && !hasShownSuccessToast.current) {
       const tokens = parseInt(tokensParam, 10);
-      toast.success(`Success! ${tokens.toLocaleString()} tokens added to your account.`, {
-        duration: 5000,
-      });
+      if (!Number.isNaN(tokens) && tokens > 0) {
+        toast.success(`Success! ${tokens.toLocaleString()} tokens added to your account.`, {
+          duration: 5000,
+        });
+      } else {
+        toast.success('Token purchase successful!', { duration: 5000 });
+      }
       hasShownSuccessToast.current = true;
 
-      // Refresh billing data using React Query
-      const refreshTimeoutId = setTimeout(() => {
-        invalidateBillingQueries();
-      }, 2000);
-      timeoutIds.push(refreshTimeoutId);
+      // Refresh billing data with retry backoff for webhook propagation
+      scheduleRetryRefresh();
     }
     // Handle successful subscription upgrade (only show once)
     else if (success === 'true' && sessionId && user && !hasShownSuccessToast.current) {
       toast.success('Payment successful! Your subscription has been upgraded.');
       hasShownSuccessToast.current = true;
 
-      // Refresh billing data using React Query
-      const refreshTimeoutId = setTimeout(() => {
-        invalidateBillingQueries();
-      }, 2000);
-      timeoutIds.push(refreshTimeoutId);
+      // Refresh billing data with retry backoff for webhook propagation
+      scheduleRetryRefresh();
     }
 
     // Cleanup timeouts on unmount or dependency change
@@ -293,12 +345,14 @@ const BillingPage: React.FC = () => {
     }
   };
 
-  const handleDownloadInvoice = (_invoiceId: string) => {
-    // In a production environment, this would:
-    // 1. Call the backend to get a signed download URL
-    // 2. Trigger the download
-    // For now, show a message that this feature is coming soon
-    toast.info('Invoice download will be available soon');
+  const handleDownloadInvoice = (invoiceId: string) => {
+    const invoice = invoicesData?.find((inv) => inv.id === invoiceId);
+    const url = invoice?.invoicePdf ?? invoice?.hostedInvoiceUrl;
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      toast.info('Invoice download is not available for this invoice. Please contact support.');
+    }
   };
 
   const handleBuyTokenPack = async (pack: TokenPack) => {
@@ -335,24 +389,58 @@ const BillingPage: React.FC = () => {
     });
   };
 
+  const VALID_CURRENCY_RE = /^[A-Z]{3}$/;
+
   const formatCurrency = (amount: number, currency: string) => {
+    const safeCurrency = VALID_CURRENCY_RE.test(currency) ? currency : 'USD';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: currency,
+      currency: safeCurrency,
     }).format(amount);
   };
 
   const getPlanIcon = (plan: string) => {
-    switch (plan) {
+    const normalized = normalizePlan(plan);
+    switch (normalized) {
       case 'free':
         return <Zap className="h-5 w-5" />;
       case 'pro':
         return <Crown className="h-5 w-5" />;
       case 'enterprise':
         return <Building className="h-5 w-5" />;
-      default:
-        return <Zap className="h-5 w-5" />;
     }
+  };
+
+  const getStatusDisplay = (status: string | undefined) => {
+    const normalized = normalizeStatus(status);
+    switch (normalized) {
+      case 'active':
+        return {
+          icon: <CheckCircle className="h-4 w-4 text-success" />,
+          label: 'Active',
+        };
+      case 'cancelled':
+        return {
+          icon: <XCircle className="h-4 w-4 text-muted-foreground" />,
+          label: 'Cancelled',
+        };
+      case 'past_due':
+        return {
+          icon: <AlertTriangle className="h-4 w-4 text-amber-500" />,
+          label: 'Past Due',
+        };
+      case 'unpaid':
+        return {
+          icon: <AlertTriangle className="h-4 w-4 text-destructive" />,
+          label: 'Unpaid',
+        };
+    }
+  };
+
+  /** Safely compute percentage, guarding against division by zero */
+  const safePercentage = (used: number, limit: number): number => {
+    if (limit <= 0 || used < 0) return 0;
+    return Math.min((used / limit) * 100, 100);
   };
 
   if (isLoading) {
@@ -452,7 +540,7 @@ const BillingPage: React.FC = () => {
                 </CardTitle>
                 <CardDescription>Your current subscription details</CardDescription>
               </div>
-              <Badge>{billing?.plan?.toUpperCase() || 'FREE'}</Badge>
+              <Badge>{normalizePlan(billing?.plan).toUpperCase()}</Badge>
             </div>
           </CardHeader>
           <CardContent>
@@ -471,11 +559,21 @@ const BillingPage: React.FC = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Status</p>
                 <div className="flex items-center space-x-2">
-                  <CheckCircle className="h-4 w-4 text-success" />
-                  <span className="text-sm font-medium capitalize">
-                    {billing?.status || 'Active'}
+                  {getStatusDisplay(billing?.status).icon}
+                  <span className="text-sm font-medium">
+                    {getStatusDisplay(billing?.status).label}
                   </span>
                 </div>
+                {normalizeStatus(billing?.status) === 'past_due' && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+                    Please update your payment method to avoid service interruption.
+                  </p>
+                )}
+                {normalizeStatus(billing?.status) === 'unpaid' && (
+                  <p className="mt-1 text-xs text-destructive">
+                    Your account has an unpaid balance. Please update your payment method.
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Next Billing Date</p>
@@ -535,17 +633,10 @@ const BillingPage: React.FC = () => {
                   </span>
                 </div>
                 <Progress
-                  value={
-                    (billing?.usage?.totalTokens ?? 0) && (billing?.usage?.totalLimit ?? 1)
-                      ? Math.min(
-                          Math.max(
-                            (billing!.usage.totalTokens / billing!.usage.totalLimit) * 100,
-                            0,
-                          ),
-                          100,
-                        )
-                      : 0
-                  }
+                  value={safePercentage(
+                    billing?.usage?.totalTokens ?? 0,
+                    billing?.usage?.totalLimit ?? 1,
+                  )}
                   className="h-3"
                 />
                 <div className="flex items-center justify-between text-sm">
@@ -590,7 +681,7 @@ const BillingPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Would be</span>
                   <span className="text-2xl font-bold">
-                    {formatCurrency(billing?.usage.totalCost || 0, billing?.currency || 'USD')}
+                    {formatCurrency(billing?.usage?.totalCost ?? 0, billing?.currency || 'USD')}
                   </span>
                 </div>
                 <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/30">
@@ -599,7 +690,7 @@ const BillingPage: React.FC = () => {
                     <span className="font-medium">Free Tier Active</span>
                   </div>
                   <p className="mt-1 text-sm text-green-600 dark:text-green-500">
-                    You&apos;re saving {formatCurrency(billing?.usage.totalCost || 0, 'USD')} with
+                    You&apos;re saving {formatCurrency(billing?.usage?.totalCost ?? 0, 'USD')} with
                     the free plan!
                   </p>
                 </div>
@@ -624,14 +715,18 @@ const BillingPage: React.FC = () => {
                 </CardDescription>
               </div>
               <Badge variant="outline" className="px-3 py-1">
-                {billing?.plan === 'pro' ? 'Pro Plan' : 'Free Tier'}
+                {normalizePlan(billing?.plan) === 'enterprise'
+                  ? 'Enterprise'
+                  : normalizePlan(billing?.plan) === 'pro'
+                    ? 'Pro Plan'
+                    : 'Free Tier'}
               </Badge>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
               {billing?.usage.llmUsage.map((llm, _index) => {
-                const percentage = (llm.tokens / llm.limit) * 100;
+                const percentage = safePercentage(llm.tokens, llm.limit);
                 const isNearLimit = percentage >= 80;
                 const isAtLimit = percentage >= 100;
 
@@ -828,7 +923,9 @@ const BillingPage: React.FC = () => {
                     <CardHeader className="pb-4">
                       <CardTitle className="text-lg">{pack.name}</CardTitle>
                       <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-bold">${pack.price}</span>
+                        <span className="text-3xl font-bold">
+                          {formatCurrency(pack.price, 'USD')}
+                        </span>
                         <span className="text-sm text-muted-foreground">one-time</span>
                       </div>
                       {pack.savings && (
@@ -847,7 +944,7 @@ const BillingPage: React.FC = () => {
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Cost per 1K</span>
                           <span className="font-medium">
-                            ${((pack.price / pack.tokens) * 1000).toFixed(3)}
+                            {formatCurrency((pack.price / pack.tokens) * 1000, 'USD')}
                           </span>
                         </div>
                       </div>
@@ -1094,14 +1191,133 @@ const BillingPage: React.FC = () => {
           </Card>
         )}
 
+        {/* Payment Methods */}
+        {billing?.plan !== 'free' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <CreditCard className="h-5 w-5" />
+                <span>Payment Methods</span>
+              </CardTitle>
+              <CardDescription>Your saved payment methods</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {paymentMethodsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (paymentMethodsData ?? []).length === 0 ? (
+                <div className="py-8 text-center">
+                  <CreditCard className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
+                  <p className="text-sm font-medium">No payment methods on file</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Add a payment method through the billing portal
+                  </p>
+                  {stripeCustomerId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4"
+                      onClick={handleManageBilling}
+                      disabled={isManagingBilling}
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Manage in Portal
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {(paymentMethodsData ?? []).map((pm) => {
+                    const isExpired =
+                      pm.card && new Date(pm.card.expYear, pm.card.expMonth - 1) < new Date();
+                    return (
+                      <div
+                        key={pm.id}
+                        className={cn(
+                          'flex items-center justify-between rounded-lg border p-4',
+                          isExpired && 'border-destructive/30 bg-destructive/5',
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                            <CreditCard className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium capitalize">
+                                {pm.card?.brand ?? pm.type} ending in {pm.card?.last4 ?? '••••'}
+                              </p>
+                              {pm.isDefault && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Default
+                                </Badge>
+                              )}
+                              {isExpired && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Expired
+                                </Badge>
+                              )}
+                            </div>
+                            {pm.card && (
+                              <p className="text-sm text-muted-foreground">
+                                Expires {String(pm.card.expMonth).padStart(2, '0')}/
+                                {pm.card.expYear}
+                                {isExpired && (
+                                  <span className="ml-2 text-destructive">
+                                    — Please update your card
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {stripeCustomerId && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleManageBilling}
+                            disabled={isManagingBilling}
+                          >
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {stripeCustomerId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={handleManageBilling}
+                      disabled={isManagingBilling}
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Manage Payment Methods
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Invoice History */}
         <Card>
           <CardHeader>
-            <CardTitle>Invoice History</CardTitle>
+            <CardTitle className="flex items-center space-x-2">
+              <FileText className="h-5 w-5" />
+              <span>Invoice History</span>
+            </CardTitle>
             <CardDescription>Your recent invoices and payments</CardDescription>
           </CardHeader>
           <CardContent>
-            {billing?.invoices.length === 0 ? (
+            {invoicesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : billing?.invoices.length === 0 ? (
               <div className="py-12 text-center">
                 <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-muted">
                   <FileText className="h-12 w-12 text-muted-foreground" />
@@ -1113,39 +1329,74 @@ const BillingPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {billing?.invoices.map((invoice) => (
-                  <div
-                    key={invoice.id}
-                    className="flex items-center justify-between rounded-lg border p-4"
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary">
-                        <FileText className="h-5 w-5 text-primary-foreground" />
+                {billing?.invoices.map((invoice) => {
+                  const statusConfig = {
+                    paid: {
+                      icon: <CheckCircle className="h-4 w-4 text-success" />,
+                      variant: 'default' as const,
+                      label: 'Paid',
+                    },
+                    pending: {
+                      icon: <Clock className="h-4 w-4 text-amber-500" />,
+                      variant: 'secondary' as const,
+                      label: 'Pending',
+                    },
+                    failed: {
+                      icon: <XCircle className="h-4 w-4 text-destructive" />,
+                      variant: 'destructive' as const,
+                      label: 'Failed',
+                    },
+                  };
+                  const config = statusConfig[invoice.status] ?? statusConfig.pending;
+                  return (
+                    <div
+                      key={invoice.id}
+                      className={cn(
+                        'flex items-center justify-between rounded-lg border p-4',
+                        invoice.status === 'failed' && 'border-destructive/30 bg-destructive/5',
+                        invoice.status === 'pending' && 'border-amber-500/30 bg-amber-500/5',
+                      )}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                          <FileText className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="font-medium">
+                            Invoice #{invoice.id.slice(0, 8).toUpperCase()}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatDate(invoice.date)}
+                          </p>
+                          {invoice.status === 'failed' && (
+                            <p className="mt-0.5 text-xs text-destructive">
+                              Payment failed — please update your payment method
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium">Invoice #{invoice.id}</p>
-                        <p className="text-sm text-muted-foreground">{formatDate(invoice.date)}</p>
+                      <div className="flex items-center space-x-4">
+                        <div className="text-right">
+                          <p className="font-medium">
+                            {formatCurrency(invoice.amount, billing?.currency || 'USD')}
+                          </p>
+                          <Badge variant={config.variant} className="flex items-center gap-1">
+                            {config.icon}
+                            {config.label}
+                          </Badge>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadInvoice(invoice.id)}
+                          title="Download invoice"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-4">
-                      <div className="text-right">
-                        <p className="font-medium">
-                          {formatCurrency(invoice.amount, billing?.currency || 'USD')}
-                        </p>
-                        <Badge variant={invoice.status === 'paid' ? 'default' : 'destructive'}>
-                          {invoice.status}
-                        </Badge>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownloadInvoice(invoice.id)}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

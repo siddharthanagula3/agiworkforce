@@ -1,6 +1,11 @@
 /**
  * Workforce Store
- * Manages hired AI employees and provides real-time sync
+ * Manages hired AI employees and provides real-time sync.
+ *
+ * All mutations and queries go through the API routes (/api/workforce,
+ * /api/marketplace) which provide server-side validation, rate limiting,
+ * CSRF protection, and catalog enrichment. The Supabase client import is
+ * retained only for the real-time subscription (postgres_changes).
  */
 
 import { create } from 'zustand';
@@ -9,6 +14,7 @@ import { immer } from 'zustand/middleware/immer';
 import { supabase } from '@shared/lib/supabase-client';
 import { useAuthStore } from './authentication-store';
 import { logger } from '@shared/lib/logger';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 export interface HiredEmployee {
   id: string;
@@ -38,6 +44,21 @@ export interface WorkforceState {
   reset: () => void;
 }
 
+/**
+ * Parse a standard API error response, falling back to status text.
+ */
+async function parseApiError(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as {
+      error?: { message?: string };
+      message?: string;
+    };
+    return body.error?.message || body.message || `Request failed (${response.status})`;
+  } catch {
+    return `Request failed (${response.status})`;
+  }
+}
+
 const enableDevtools = process.env.NODE_ENV !== 'production';
 
 export const useWorkforceStore = create<WorkforceState>()(
@@ -57,19 +78,42 @@ export const useWorkforceStore = create<WorkforceState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const { data, error } = await supabase
-            .from('hired_employees')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('hired_at', { ascending: false });
+          const response = await fetch('/api/workforce', {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+          });
 
-          if (error) {
-            logger.error('[WorkforceStore] Error fetching hired employees:', error);
-            set({ error: error.message, isLoading: false });
+          if (!response.ok) {
+            const errorMessage = await parseApiError(response);
+            logger.error('[WorkforceStore] Error fetching hired employees:', errorMessage);
+            set({ error: errorMessage, isLoading: false });
             return;
           }
 
-          set({ hiredEmployees: (data as HiredEmployee[]) || [], isLoading: false });
+          const body = (await response.json()) as {
+            success: boolean;
+            data: {
+              employees: Array<{
+                id: string;
+                employeeId: string;
+                name: string;
+                hiredAt: string | null;
+              }>;
+            };
+          };
+
+          // Map the enriched API response back to the HiredEmployee shape
+          // expected by the rest of the store and its consumers.
+          const employees: HiredEmployee[] = (body.data?.employees || []).map((emp) => ({
+            id: emp.id,
+            user_id: user.id,
+            employee_id: emp.employeeId,
+            employee_name: emp.name,
+            hired_at: emp.hiredAt,
+          }));
+
+          set({ hiredEmployees: employees, isLoading: false });
         } catch (error) {
           logger.error('[WorkforceStore] Unexpected error:', error);
           set({
@@ -86,8 +130,9 @@ export const useWorkforceStore = create<WorkforceState>()(
       },
 
       /**
-       * Hire an employee - persists to database and updates local state
-       * This is the primary method for hiring employees from the UI
+       * Hire an employee - calls POST /api/workforce and updates local state.
+       * The API validates the employee against the catalog, performs an upsert,
+       * and returns the enriched record.
        */
       hireEmployee: async (params: HireEmployeeParams) => {
         const { user } = useAuthStore.getState();
@@ -99,28 +144,44 @@ export const useWorkforceStore = create<WorkforceState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const { data, error } = await supabase
-            .from('hired_employees')
-            // @ts-expect-error - Supabase upsert type inference issue with onConflict
-            .upsert(
-              {
-                user_id: user.id,
-                employee_id: params.employee_id,
-                employee_name: params.employee_name,
-              },
-              { onConflict: 'user_id,employee_id' },
-            )
-            .select('*')
-            .maybeSingle();
+          const headers = await addCsrfHeaders({
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          });
 
-          if (error) {
-            logger.error('[WorkforceStore] Error hiring employee:', error);
-            set({ error: error.message, isLoading: false });
+          const response = await fetch('/api/workforce', {
+            method: 'POST',
+            headers,
+            credentials: 'same-origin',
+            body: JSON.stringify({ employeeId: params.employee_id }),
+          });
+
+          if (!response.ok) {
+            const errorMessage = await parseApiError(response);
+            logger.error('[WorkforceStore] Error hiring employee:', errorMessage);
+            set({ error: errorMessage, isLoading: false });
             return null;
           }
 
-          if (data) {
-            const hired = data as HiredEmployee;
+          const body = (await response.json()) as {
+            success: boolean;
+            data: {
+              id: string;
+              employeeId: string;
+              name: string;
+              hiredAt: string | null;
+            };
+          };
+
+          if (body.data) {
+            const hired: HiredEmployee = {
+              id: body.data.id,
+              user_id: user.id,
+              employee_id: body.data.employeeId,
+              employee_name: body.data.name,
+              hired_at: body.data.hiredAt,
+            };
+
             // Add to local state (real-time subscription might also do this, but better to be responsive)
             const exists = get().hiredEmployees.some(
               (emp) => emp.employee_id === params.employee_id,
@@ -155,8 +216,8 @@ export const useWorkforceStore = create<WorkforceState>()(
       },
 
       /**
-       * Fire an employee - persists to database and updates local state
-       * Sets is_active to false rather than deleting
+       * Fire an employee - calls DELETE /api/workforce and updates local state.
+       * The API deletes the record from the database.
        */
       fireEmployee: async (employeeId: string) => {
         const { user } = useAuthStore.getState();
@@ -168,15 +229,23 @@ export const useWorkforceStore = create<WorkforceState>()(
         set({ isLoading: true, error: null });
 
         try {
-          const { error } = await supabase
-            .from('hired_employees')
-            .delete()
-            .eq('user_id', user.id)
-            .eq('employee_id', employeeId);
+          const headers = await addCsrfHeaders({
+            Accept: 'application/json',
+          });
 
-          if (error) {
-            logger.error('[WorkforceStore] Error firing employee:', error);
-            set({ error: error.message, isLoading: false });
+          const response = await fetch(
+            `/api/workforce?employeeId=${encodeURIComponent(employeeId)}`,
+            {
+              method: 'DELETE',
+              headers,
+              credentials: 'same-origin',
+            },
+          );
+
+          if (!response.ok) {
+            const errorMessage = await parseApiError(response);
+            logger.error('[WorkforceStore] Error firing employee:', errorMessage);
+            set({ error: errorMessage, isLoading: false });
             return false;
           }
 
@@ -209,7 +278,51 @@ export const useWorkforceStore = create<WorkforceState>()(
   ),
 );
 
+// ---------------------------------------------------------------------------
+// Realtime payload validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Runtime type-guard for incoming realtime payloads.
+ * Supabase Realtime delivers raw JSON — we must verify the shape before
+ * merging into local state to prevent corrupted / spoofed data.
+ */
+function isValidHiredEmployeePayload(data: unknown, expectedUserId: string): data is HiredEmployee {
+  if (!data || typeof data !== 'object') return false;
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d['id'] === 'string' &&
+    (d['id'] as string).length > 0 &&
+    typeof d['user_id'] === 'string' &&
+    d['user_id'] === expectedUserId &&
+    typeof d['employee_id'] === 'string' &&
+    (d['employee_id'] as string).length > 0 &&
+    (d['employee_name'] === null || typeof d['employee_name'] === 'string') &&
+    (d['hired_at'] === null || typeof d['hired_at'] === 'string')
+  );
+}
+
+/**
+ * Minimal guard for DELETE payloads — we only need employee_id from the old record.
+ */
+function isValidDeletePayload(
+  data: unknown,
+  expectedUserId: string,
+): data is { employee_id: string; user_id: string } {
+  if (!data || typeof data !== 'object') return false;
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d['employee_id'] === 'string' &&
+    (d['employee_id'] as string).length > 0 &&
+    typeof d['user_id'] === 'string' &&
+    d['user_id'] === expectedUserId
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Set up real-time subscription
+// ---------------------------------------------------------------------------
+
 // Track both the subscription and the user ID it was created for
 let subscription: ReturnType<typeof supabase.channel> | null = null;
 let subscriptionUserId: string | null = null;
@@ -261,18 +374,37 @@ export const setupWorkforceSubscription = () => {
 
         switch (eventType) {
           case 'INSERT':
-            if (newRecord) {
-              useWorkforceStore.getState().addHiredEmployee(newRecord as HiredEmployee);
+            if (!isValidHiredEmployeePayload(newRecord, currentUser.id)) {
+              logger.warn('[WorkforceStore] Invalid INSERT payload, ignoring', {
+                hasRecord: !!newRecord,
+              });
+              return;
             }
+            useWorkforceStore.getState().addHiredEmployee(newRecord);
             break;
           case 'UPDATE':
+            // Verify the update payload belongs to the current user before
+            // triggering a refetch. Reject null/missing records AND
+            // cross-tenant events to prevent unauthorized data leaks.
+            if (
+              !newRecord ||
+              typeof newRecord !== 'object' ||
+              (newRecord as Record<string, unknown>)['user_id'] !== currentUser.id
+            ) {
+              logger.warn('[WorkforceStore] UPDATE payload missing or user_id mismatch, ignoring');
+              return;
+            }
             // Refresh the full list on updates to ensure consistency
             useWorkforceStore.getState().fetchHiredEmployees();
             break;
           case 'DELETE':
-            if (oldRecord) {
-              useWorkforceStore.getState().removeHiredEmployee(oldRecord['employee_id']);
+            if (!isValidDeletePayload(oldRecord, currentUser.id)) {
+              logger.warn('[WorkforceStore] Invalid DELETE payload, ignoring', {
+                hasRecord: !!oldRecord,
+              });
+              return;
             }
+            useWorkforceStore.getState().removeHiredEmployee(oldRecord.employee_id);
             break;
         }
       },
