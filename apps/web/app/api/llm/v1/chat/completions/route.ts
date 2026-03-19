@@ -94,9 +94,9 @@ const ChatCompletionRequestSchema = z.object({
 
 // Auto model tier mappings - translate tier-based model selections to actual models
 const AUTO_MODEL_MAPPINGS: Record<string, string> = {
-  'auto-economy': 'gpt-5-nano', // Fast, cost-effective
-  'auto-balanced': 'gpt-5.2', // Good balance of speed and quality
-  'auto-premium': 'claude-sonnet-4.5', // Best quality
+  'auto-economy': 'gpt-5.4-nano', // Fast, cost-effective ($0.20/$1.25 per 1M)
+  'auto-balanced': 'gpt-5.4', // Good balance of speed and quality ($2.50/$15.00 per 1M)
+  'auto-premium': 'claude-sonnet-4.6', // Best quality ($3/$15 per 1M)
 };
 
 /**
@@ -112,7 +112,7 @@ function resolveAutoModel(model: string, subscriptionTier?: string): string {
   // Hobby tier can only use economy models — downgrade balanced/premium
   const tierLower = subscriptionTier?.toLowerCase();
   if (tierLower === 'hobby' && (modelLower === 'auto-balanced' || modelLower === 'auto-premium')) {
-    return 'gpt-5-nano'; // Best economy model
+    return 'gpt-5.4-nano'; // Best economy model for hobby tier
   }
 
   return mapped;
@@ -149,7 +149,7 @@ function findCheaperFallbackModel(
   const fallbackModels = [
     { model: 'deepseek-chat', provider: 'deepseek' },
     { model: 'qwen-flash', provider: 'qwen' },
-    { model: 'gpt-5-nano', provider: 'openai' },
+    { model: 'gpt-5.4-nano', provider: 'openai' },
     { model: 'gemini-2.5-flash-lite', provider: 'google' },
     { model: 'claude-haiku-4.5', provider: 'anthropic' },
   ];
