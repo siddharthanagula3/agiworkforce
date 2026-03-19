@@ -705,13 +705,11 @@ export const UnifiedAgenticChat: React.FC<{
         const state = useUnifiedChatStore.getState();
         const targetMessageId = resolveStreamTargetMessageId(conversationId, payloadMessageId);
         if (!targetMessageId) {
-          console.warn('[upsertToolArtifact] No target message found for toolCallId:', toolCallId);
           return;
         }
 
         const targetMessage = findMessageById(targetMessageId);
         if (!targetMessage) {
-          console.warn('[upsertToolArtifact] Message not found for id:', targetMessageId);
           return;
         }
 
@@ -878,9 +876,6 @@ export const UnifiedAgenticChat: React.FC<{
           if (!isMountedRef.current) return;
           if (!toolExecutionTimeoutsRef.current.has(toolCallId)) return;
 
-          console.warn(
-            `[UnifiedAgenticChat] Tool execution timed out: ${toolName} (${toolCallId})`,
-          );
           const timeoutMessage =
             'Tool is taking longer than expected. Waiting for a final result from the agent.';
           const abortOnTimeout = shouldAbortGenerationOnToolTimeout(toolName);
@@ -921,12 +916,7 @@ export const UnifiedAgenticChat: React.FC<{
               });
             }
             if (isTauri) {
-              void ipcInvoke('chat_stop_generation').catch((error: unknown) => {
-                console.warn(
-                  '[UnifiedAgenticChat] Failed to stop generation after tool timeout:',
-                  error,
-                );
-              });
+              void ipcInvoke('chat_stop_generation').catch(() => {});
             }
           } else {
             upsertToolArtifact(
@@ -1150,19 +1140,6 @@ export const UnifiedAgenticChat: React.FC<{
           const hasOtherActiveStreams = activeStreamSessionsRef.current.size > 0;
           const shouldClearGlobalState = hasValidTarget || !hasOtherActiveStreams;
 
-          if (!hasValidTarget) {
-            console.warn(
-              '[UnifiedAgenticChat] stream-end received without valid target; applying fallback cleanup policy',
-              {
-                payloadMessageId: messageId,
-                sessionMessageId,
-                currentStreamingId,
-                finalizedMessageId,
-                hasOtherActiveStreams,
-              },
-            );
-          }
-
           if (shouldClearGlobalState) {
             finalizeStream(finalizedMessageId, 'completed');
           }
@@ -1257,19 +1234,6 @@ export const UnifiedAgenticChat: React.FC<{
             const hasOtherActiveStreams = activeStreamSessionsRef.current.size > 0;
             const shouldClearGlobalState = hasValidTarget || !hasOtherActiveStreams;
 
-            if (!hasValidTarget) {
-              console.warn(
-                '[UnifiedAgenticChat] stream-error received without valid target; applying fallback cleanup policy',
-                {
-                  payloadMessageId: messageId,
-                  sessionMessageId,
-                  currentStreamingId,
-                  finalizedMessageId,
-                  hasOtherActiveStreams,
-                },
-              );
-            }
-
             if (shouldClearGlobalState) {
               finalizeStream(finalizedMessageId, 'failed', payload.error);
             }
@@ -1341,8 +1305,7 @@ export const UnifiedAgenticChat: React.FC<{
               await ipcInvoke('chat_pop_pending_message', {
                 request: { conversation_id: payload.conversation_id },
               });
-            } catch (err) {
-              console.error('[UnifiedAgenticChat] Failed to pop pending message:', err);
+            } catch {
               // CHT-002 fix: Show user-visible error for pending message processing failure
               toast({
                 variant: 'destructive',
@@ -1365,8 +1328,7 @@ export const UnifiedAgenticChat: React.FC<{
                   detail: { content: pending.content, pendingId: pending.id },
                 }),
               );
-            } catch (err) {
-              console.error('[UnifiedAgenticChat] Failed to send pending message:', err);
+            } catch {
               // CHT-002 fix: Show user-visible error for pending message send failure
               toast({
                 variant: 'destructive',
@@ -2205,11 +2167,7 @@ export const UnifiedAgenticChat: React.FC<{
       entryPoint,
     });
     if (isTauri) {
-      try {
-        await ipcInvoke('agent_set_workflow_hash', { workflow_hash: workflowHash });
-      } catch (error) {
-        console.error('[UnifiedAgenticChat] Failed to set workflow hash', error);
-      }
+      void ipcInvoke('agent_set_workflow_hash', { workflow_hash: workflowHash }).catch(() => {});
     }
 
     const taskMetadata = deriveTaskMetadata(entryPoint, enrichedOptions.attachments);
@@ -2406,7 +2364,6 @@ export const UnifiedAgenticChat: React.FC<{
         void refreshCreditsAfterMessage();
       }
     } catch (error) {
-      console.error('[UnifiedAgenticChat] Error sending message:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Always use friendly messages — formatErrorForChat handles all modes consistently
@@ -2456,11 +2413,6 @@ export const UnifiedAgenticChat: React.FC<{
           }
 
           if (state.isLoading || state.currentStreamingMessageId) {
-            console.warn(
-              '[UnifiedAgenticChat] AUDIT-STREAM-059: Inactivity watchdog triggered - cleaning up stale streaming state',
-              { idleMs, messageId: assistantMessageId },
-            );
-
             clearQueuedStreamUpdates(assistantMessageId);
             state.setIsLoading(false);
             state.setStreamingMessage(null);
@@ -2516,11 +2468,7 @@ export const UnifiedAgenticChat: React.FC<{
     const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
 
     if (isTauri) {
-      try {
-        await ipcInvoke('chat_stop_generation', { conversationId: conversationDbId });
-      } catch (error) {
-        console.warn('[UnifiedAgenticChat] Failed to stop generation:', error);
-      }
+      await ipcInvoke('chat_stop_generation', { conversationId: conversationDbId }).catch(() => {});
     }
 
     const currentStreamingId = useUnifiedChatStore.getState().currentStreamingMessageId;
@@ -2559,9 +2507,7 @@ export const UnifiedAgenticChat: React.FC<{
       toolExecutionTimeoutsRef.current.clear();
 
       if (isTauri) {
-        void ipcInvoke('chat_stop_generation').catch((error: unknown) => {
-          console.warn('[UnifiedAgenticChat] Failed to stop generation on new chat:', error);
-        });
+        void ipcInvoke('chat_stop_generation').catch(() => {});
       }
 
       const state = useUnifiedChatStore.getState();

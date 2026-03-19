@@ -83,7 +83,7 @@ pub(super) fn resolve_provider_and_model(
         .model_override
         .clone()
         .or(request.model.clone())
-        .unwrap_or_else(|| "gpt-5-nano".to_string());
+        .unwrap_or_else(|| "gpt-5.4-nano".to_string());
 
     (provider_enum, model)
 }
@@ -307,6 +307,7 @@ pub(super) async fn prepare_send_message(
             &request.content,
         ),
         effort: request.reasoning_effort.clone(),
+        output_config: request.output_config.clone(),
         ..Default::default()
     };
 

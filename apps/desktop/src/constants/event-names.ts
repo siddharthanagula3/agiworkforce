@@ -33,6 +33,11 @@ export const EVENTS = {
   // Extension events
   EXTENSION_TASK_RESULT: 'extension:task-result',
   EXTENSION_PAGE_CONTEXT: 'extension:page-context',
+
+  // Chat lifecycle events
+  CHAT_CONTEXT_COMPACTED: 'chat:context-compacted',
+  COMPACTION_AUTO_TRIGGERED: 'compaction:auto-triggered',
+  COMPACTION_COMPLETED: 'compaction:completed',
 } as const;
 
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS];

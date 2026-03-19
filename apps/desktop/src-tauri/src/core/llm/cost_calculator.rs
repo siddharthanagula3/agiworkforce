@@ -154,7 +154,7 @@ impl CostCalculator {
     }
 
     /// Providers whose pricing entries ManagedCloud may proxy through.
-    /// ManagedCloud routes to models like `gpt-5-nano` (OpenAI), `deepseek-reasoner`
+    /// ManagedCloud routes to models like `gpt-5.4-nano` (OpenAI), `deepseek-reasoner`
     /// (DeepSeek), `gemini-3-flash-preview` (Google), etc. -- instead of duplicating every
     /// pricing entry, we look up the model under its original provider.
     const MANAGED_CLOUD_ORIGIN_PROVIDERS: &'static [Provider] = &[
@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn calculate_returns_zero_for_zero_tokens() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5-nano", 0, 0);
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4-nano", 0, 0);
         assert!(
             (cost - 0.0).abs() < f64::EPSILON,
             "zero tokens must produce zero cost"
@@ -433,10 +433,10 @@ mod tests {
     #[test]
     fn managed_cloud_looks_up_origin_provider_pricing() {
         let calc = CostCalculator::new();
-        // ManagedCloud should find gpt-5-nano pricing via OpenAI origin
-        let cost = calc.calculate(Provider::ManagedCloud, "gpt-5-nano", 1_000_000, 1_000_000);
+        // ManagedCloud should find gpt-5.4-nano pricing via OpenAI origin
+        let cost = calc.calculate(Provider::ManagedCloud, "gpt-5.4-nano", 1_000_000, 1_000_000);
         let direct_cost =
-            calc.calculate(Provider::OpenAI, "gpt-5-nano", 1_000_000, 1_000_000);
+            calc.calculate(Provider::OpenAI, "gpt-5.4-nano", 1_000_000, 1_000_000);
         assert!(
             (cost - direct_cost).abs() < f64::EPSILON,
             "ManagedCloud cost ({}) must equal direct provider cost ({})",

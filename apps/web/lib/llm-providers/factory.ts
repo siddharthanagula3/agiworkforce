@@ -37,15 +37,18 @@ const MODEL_ID_TO_API_ID: Record<string, string> = {
   'claude-haiku-4.5': 'claude-haiku-4-5-20251001', // Claude Haiku 4.5
   'claude-haiku-4-5': 'claude-haiku-4-5-20251001', // Claude Haiku 4.5 (hyphen alias)
   // OpenAI GPT-5 models (per docs/llm-provider-reference.md)
-  'gpt-5.2': 'gpt-5.2', // GPT-5.2 flagship
-  'gpt-5.2-codex': 'gpt-5-codex', // GPT-5.2 Codex alias
-  'gpt-5.2-codex-low': 'gpt-5-codex', // GPT-5.2 Codex (Low)
-  'gpt-5.2-codex-medium': 'gpt-5-codex', // GPT-5.2 Codex (Medium)
-  'gpt-5.2-codex-high': 'gpt-5-codex', // GPT-5.2 Codex (High)
-  'gpt-5.2-codex-xhigh': 'gpt-5-codex', // GPT-5.2 Codex (XHigh)
-  'gpt-5-codex': 'gpt-5-codex', // Canonical Codex model
-  'gpt-5-pro': 'gpt-5-pro-2025-10-06', // GPT-5 Pro (use snapshot for stability)
-  'gpt-5-nano': 'gpt-5-nano', // GPT-5 Nano (no date suffix per OpenAI docs)
+  'gpt-5.4': 'gpt-5.4', // GPT-5.4 flagship
+  'gpt-5.4-codex': 'gpt-5.4-codex', // GPT-5.4 Codex canonical
+  'gpt-5.4-codex-low': 'gpt-5.4-codex', // GPT-5.4 Codex (Low)
+  'gpt-5.4-codex-medium': 'gpt-5.4-codex', // GPT-5.4 Codex (Medium)
+  'gpt-5.4-codex-high': 'gpt-5.4-codex', // GPT-5.4 Codex (High)
+  'gpt-5.4-codex-xhigh': 'gpt-5.4-codex', // GPT-5.4 Codex (XHigh)
+  'gpt-5-codex': 'gpt-5.4-codex', // Legacy redirect → gpt-5.4-codex
+  'gpt-5.4-pro': 'gpt-5.4-pro', // GPT-5.4 Pro flagship
+  'gpt-5-pro': 'gpt-5.4-pro', // Legacy redirect → gpt-5.4-pro
+  'gpt-5.4-mini': 'gpt-5.4-mini', // GPT-5.4 Mini
+  'gpt-5.4-nano': 'gpt-5.4-nano', // GPT-5.4 Nano
+  'gpt-5-nano': 'gpt-5.4-nano', // Legacy redirect → gpt-5.4-nano
   o3: 'o3-2025-04-16', // o3 reasoning model
   // xAI Grok 4 models (per docs/llm-provider-reference.md)
   'grok-4': 'grok-4', // Grok 4 flagship

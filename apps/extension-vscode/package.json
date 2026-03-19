@@ -2,7 +2,7 @@
   "name": "agi-workforce",
   "displayName": "AGI Workforce",
   "description": "Multi-model AI coding assistant — GPT, Claude, Gemini, and 15+ LLMs in VS Code",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "publisher": "agiworkforce",
   "license": "PROPRIETARY",
   "repository": {
@@ -12,9 +12,18 @@
   "engines": {
     "vscode": "^1.95.0"
   },
+  "preview": true,
+  "pricing": "Free",
+  "galleryBanner": {
+    "color": "#0f0f0f",
+    "theme": "dark"
+  },
+  "qna": "marketplace",
   "categories": [
     "AI",
     "Chat",
+    "Machine Learning",
+    "Programming Languages",
     "Other"
   ],
   "keywords": [
@@ -192,6 +201,46 @@
         "command": "agi-workforce.showTokenBreakdown",
         "title": "AGI Workforce: Show Token Breakdown",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "agi-workforce.acceptDiff",
+        "title": "AGI Workforce: Accept Diff",
+        "icon": "$(check)"
+      },
+      {
+        "command": "agi-workforce.rejectDiff",
+        "title": "AGI Workforce: Reject Diff",
+        "icon": "$(close)"
+      },
+      {
+        "command": "agi-workforce.acceptAllDiffs",
+        "title": "AGI Workforce: Accept All Diffs",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "agi-workforce.rejectAllDiffs",
+        "title": "AGI Workforce: Reject All Diffs",
+        "icon": "$(close-all)"
+      },
+      {
+        "command": "agi-workforce.addToContext",
+        "title": "AGI Workforce: Add File to Context",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "agi-workforce.removeFromContext",
+        "title": "AGI Workforce: Remove from Context",
+        "icon": "$(pinned-dirty)"
+      },
+      {
+        "command": "agi-workforce.clearContext",
+        "title": "AGI Workforce: Clear Context",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "agi-workforce.refreshContext",
+        "title": "AGI Workforce: Refresh Context",
+        "icon": "$(refresh)"
       }
     ],
     "chatParticipants": [
@@ -272,6 +321,13 @@
           "id": "agi-workforce.conversations",
           "name": "History",
           "contextualTitle": "Conversation History"
+        },
+        {
+          "type": "tree",
+          "id": "agi-workforce.contextPanel",
+          "name": "Context Files",
+          "contextualTitle": "AI Context",
+          "visibility": "collapsed"
         }
       ]
     },
@@ -286,6 +342,11 @@
           "command": "agi-workforce.deleteConversation",
           "when": "view == agi-workforce.conversations && viewItem == conversation",
           "group": "inline@2"
+        },
+        {
+          "command": "agi-workforce.removeFromContext",
+          "when": "view == agi-workforce.contextPanel && viewItem == pinnedFile",
+          "group": "inline"
         }
       ],
       "view/title": [
@@ -293,6 +354,16 @@
           "command": "agi-workforce.refreshConversations",
           "when": "view == agi-workforce.conversations",
           "group": "navigation"
+        },
+        {
+          "command": "agi-workforce.refreshContext",
+          "when": "view == agi-workforce.contextPanel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agi-workforce.clearContext",
+          "when": "view == agi-workforce.contextPanel",
+          "group": "navigation@2"
         }
       ],
       "editor/context": [
@@ -333,6 +404,10 @@
         {
           "command": "agi-workforce.explainError",
           "group": "agi-workforce@8"
+        },
+        {
+          "command": "agi-workforce.addToContext",
+          "group": "agi-workforce@9"
         }
       ],
       "commandPalette": [
@@ -451,6 +526,11 @@
           "minimum": 1024,
           "maximum": 65535,
           "description": "Local port for AGI Workforce desktop bridge connection"
+        },
+        "agiWorkforce.telemetryEndpoint": {
+          "type": "string",
+          "default": "https://telemetry.agiworkforce.com/v1/events",
+          "description": "Endpoint URL for sending anonymous telemetry events"
         }
       }
     },
@@ -493,6 +573,17 @@
         "command": "agi-workforce.newConversation",
         "key": "ctrl+shift+alt+n",
         "mac": "cmd+shift+alt+n"
+      },
+      {
+        "command": "agi-workforce.acceptDiff",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorTextFocus && agi-workforce.hasDiff"
+      },
+      {
+        "command": "agi-workforce.rejectDiff",
+        "key": "escape",
+        "when": "editorTextFocus && agi-workforce.hasDiff"
       }
     ]
   },

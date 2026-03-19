@@ -23,7 +23,7 @@ import * as Print from 'expo-print';
 // Types
 // ---------------------------------------------------------------------------
 
-export type ExportFormat = 'pdf' | 'text';
+export type ExportFormat = 'pdf' | 'text' | 'docx' | 'markdown';
 
 export interface ExportResult {
   uri: string;
@@ -261,8 +261,96 @@ export async function shareFile(uri: string): Promise<void> {
     throw new Error('Sharing is not available on this device');
   }
 
+  const ext = uri.split('.').pop()?.toLowerCase();
+  const utiMap: Record<string, string> = {
+    pdf: 'com.adobe.pdf',
+    docx: 'org.openxmlformats.wordprocessingml.document',
+    md: 'net.daringfireball.markdown',
+  };
+  const mimeMap: Record<string, string> = {
+    pdf: 'application/pdf',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    md: 'text/markdown',
+  };
   await Sharing.shareAsync(uri, {
-    UTI: uri.endsWith('.pdf') ? 'com.adobe.pdf' : 'public.plain-text',
-    mimeType: uri.endsWith('.pdf') ? 'application/pdf' : 'text/plain',
+    UTI: utiMap[ext ?? ''] ?? 'public.plain-text',
+    mimeType: mimeMap[ext ?? ''] ?? 'text/plain',
   });
+}
+
+// ---------------------------------------------------------------------------
+// DOCX Export (HTML-in-DOCX)
+// ---------------------------------------------------------------------------
+
+export async function exportToDocx(content: string, title: string): Promise<ExportResult> {
+  if (!content.trim()) throw new Error('Cannot export empty content');
+  const html = markdownToHtml(content, title);
+  const fileName = `${sanitizeFileName(title)}.docx`;
+  const destUri = `${documentDirectory}${fileName}`;
+  await writeAsStringAsync(destUri, html, { encoding: EncodingType.UTF8 });
+  return { uri: destUri, format: 'docx', fileName };
+}
+
+// ---------------------------------------------------------------------------
+// Markdown Export
+// ---------------------------------------------------------------------------
+
+export async function exportToMarkdown(content: string, title: string): Promise<ExportResult> {
+  if (!content.trim()) throw new Error('Cannot export empty content');
+  const header = `# ${title}\n\n_Exported: ${new Date().toISOString()}_\n\n---\n\n`;
+  const fileName = `${sanitizeFileName(title)}.md`;
+  const destUri = `${documentDirectory}${fileName}`;
+  await writeAsStringAsync(destUri, header + content, { encoding: EncodingType.UTF8 });
+  return { uri: destUri, format: 'markdown', fileName };
+}
+
+// ---------------------------------------------------------------------------
+// Conversation-level exports
+// ---------------------------------------------------------------------------
+
+import type { ChatMessage } from '@/types/chat';
+
+function roleLabel(role: string): string {
+  return role === 'user' ? 'You' : role === 'assistant' ? 'Assistant' : role;
+}
+
+function formatTimestamp(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
+export function formatConversationAsMarkdown(messages: ChatMessage[], title: string): string {
+  const lines = [`# ${title}\n`];
+  for (const m of messages) {
+    if (!m.content.trim()) continue;
+    lines.push(`## ${roleLabel(m.role)}\n`);
+    if (m.createdAt) lines.push(`_${formatTimestamp(m.createdAt)}_\n`);
+    lines.push(m.content + '\n');
+  }
+  return lines.join('\n');
+}
+
+export async function exportConversationToPDF(
+  messages: ChatMessage[],
+  title: string,
+): Promise<ExportResult> {
+  const md = formatConversationAsMarkdown(messages, title);
+  return exportToPDF(md, title);
+}
+
+export async function exportConversationToText(
+  messages: ChatMessage[],
+  title: string,
+): Promise<ExportResult> {
+  const lines = [`${title}\nExported: ${new Date().toISOString()}\n${'─'.repeat(40)}\n`];
+  for (const m of messages) {
+    if (!m.content.trim()) continue;
+    lines.push(`[${roleLabel(m.role)}] ${m.createdAt ? formatTimestamp(m.createdAt) : ''}`);
+    lines.push(m.content);
+    lines.push('');
+  }
+  return exportToText(lines.join('\n'), title);
 }

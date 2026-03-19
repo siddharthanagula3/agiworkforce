@@ -82,6 +82,10 @@ pub enum SchedulerActionType {
     Webhook,
     /// Run a custom script
     Script,
+    /// Run memory summarization (24h batch synthesis)
+    MemorySummarization,
+    /// Run memory decay (weekly importance decay)
+    MemoryDecay,
 }
 
 impl std::fmt::Display for SchedulerActionType {
@@ -93,6 +97,8 @@ impl std::fmt::Display for SchedulerActionType {
             SchedulerActionType::Notification => write!(f, "notification"),
             SchedulerActionType::Webhook => write!(f, "webhook"),
             SchedulerActionType::Script => write!(f, "script"),
+            SchedulerActionType::MemorySummarization => write!(f, "memorySummarization"),
+            SchedulerActionType::MemoryDecay => write!(f, "memoryDecay"),
         }
     }
 }
@@ -349,6 +355,73 @@ impl SchedulerState {
         Self {
             scheduler: Arc::new(ProactiveScheduler::new()),
             execution_history: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+
+    /// Register default memory maintenance jobs (summarization + decay).
+    ///
+    /// Called once during app initialization. Skips registration if a job
+    /// with the same name already exists (idempotent).
+    pub fn register_default_memory_jobs(&self) {
+        // Daily memory summarization at 3 AM
+        // Cron: sec min hour day month weekday
+        let summarization_name = "memory_auto_summarization";
+        if !self.has_job_by_name(summarization_name) {
+            match self.scheduler.add_job(
+                summarization_name.to_string(),
+                "0 0 3 * * *".to_string(),
+                SchedulerActionType::MemorySummarization,
+                serde_json::json!({ "max_conversations": 50 }),
+            ) {
+                Ok(job_id) => {
+                    tracing::info!(
+                        "[Scheduler] Registered default job '{}' (id={})",
+                        summarization_name,
+                        job_id
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "[Scheduler] Failed to register '{}': {}",
+                        summarization_name,
+                        e
+                    );
+                }
+            }
+        }
+
+        // Weekly memory decay on Sundays at 4 AM
+        let decay_name = "memory_weekly_decay";
+        if !self.has_job_by_name(decay_name) {
+            match self.scheduler.add_job(
+                decay_name.to_string(),
+                "0 0 4 * * 0".to_string(),
+                SchedulerActionType::MemoryDecay,
+                serde_json::json!({}),
+            ) {
+                Ok(job_id) => {
+                    tracing::info!(
+                        "[Scheduler] Registered default job '{}' (id={})",
+                        decay_name,
+                        job_id
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "[Scheduler] Failed to register '{}': {}",
+                        decay_name,
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    /// Check if a job with the given name already exists.
+    fn has_job_by_name(&self, name: &str) -> bool {
+        match self.scheduler.jobs.read() {
+            Ok(jobs) => jobs.values().any(|job| job.name == name),
+            Err(_) => false,
         }
     }
 
@@ -1530,6 +1603,73 @@ async fn dispatch_job_action(
             }
 
             Ok(())
+        }
+
+        SchedulerActionType::MemorySummarization => {
+            use tauri::Manager;
+
+            let max_conversations = action_data
+                .get("max_conversations")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
+
+            tracing::info!(
+                "[Scheduler] Running daily memory summarization (max_conversations: {:?})",
+                max_conversations
+            );
+
+            let summarizer_state = app_handle
+                .try_state::<crate::sys::commands::memory::ConversationSummarizerState>()
+                .ok_or_else(|| {
+                    "ConversationSummarizerState not available. Summarization skipped.".to_string()
+                })?;
+
+            let summarizer = summarizer_state.summarizer.clone();
+            match summarizer.run_summarization(None).await {
+                Ok(stats) => {
+                    tracing::info!(
+                        "[Scheduler] Daily memory summarization complete: {} conversations summarized, {} memories extracted",
+                        stats.conversations_summarized,
+                        stats.memories_created
+                    );
+                    Ok(())
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "[Scheduler] Daily memory summarization failed: {}",
+                        e
+                    );
+                    Err(format!("Memory summarization failed: {}", e))
+                }
+            }
+        }
+
+        SchedulerActionType::MemoryDecay => {
+            use tauri::Manager;
+
+            tracing::info!("[Scheduler] Running weekly memory decay");
+
+            let memory_state = app_handle
+                .try_state::<crate::sys::commands::memory::MemoryState>()
+                .ok_or_else(|| {
+                    "MemoryState not available. Memory decay skipped.".to_string()
+                })?;
+
+            match memory_state.manager.decay_memories() {
+                Ok(result) => {
+                    tracing::info!(
+                        "[Scheduler] Weekly memory decay complete: {} memories decayed, {} at minimum, {} total importance removed",
+                        result.memories_decayed,
+                        result.at_minimum,
+                        result.total_decay
+                    );
+                    Ok(())
+                }
+                Err(e) => {
+                    tracing::error!("[Scheduler] Weekly memory decay failed: {}", e);
+                    Err(format!("Memory decay failed: {}", e))
+                }
+            }
         }
     }
 }

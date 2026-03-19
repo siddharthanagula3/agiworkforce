@@ -41,7 +41,6 @@ import {
   YAxis,
 } from 'recharts';
 import { toast } from 'sonner';
-import { useThemeContext } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
 import { useCodeStore } from '@/stores/unified/codeStore';
 import { sanitizeHtml } from '@/utils/security';
@@ -68,7 +67,6 @@ interface ArtifactRendererProps {
 
 export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps) {
   const [copied, setCopied] = useState(false);
-  const { theme } = useThemeContext();
   const rootPath = useCodeStore((state: any) => state.rootPath);
   const openFile = useCodeStore((state: any) => state.openFile);
   const setActiveFile = useCodeStore((state: any) => state.setActiveFile);
@@ -128,7 +126,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       setActiveFile(absolutePath);
       toast.success('Code applied to editor');
     } catch (error) {
-      console.error('Failed to apply code to editor', error);
       toast.error('Failed to write code to file');
     }
   };
@@ -152,7 +149,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
         copyTimeoutRef.current = null;
       }, 2000);
     } catch (error) {
-      console.error('Failed to copy artifact output:', error);
       toast.error('Failed to copy output');
     }
   };
@@ -223,7 +219,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       URL.revokeObjectURL(url);
       toast.success('Exported as SVG');
     } catch (error) {
-      console.error('Failed to export SVG:', error);
       toast.error('Failed to export SVG');
     }
   };
@@ -299,7 +294,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       };
       img.src = url;
     } catch (error) {
-      console.error('Failed to export PNG:', error);
       toast.error('Failed to export PNG');
     }
   };
@@ -332,7 +326,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       await navigator.clipboard.writeText(markdown);
       toast.success('Copied as Markdown table');
     } catch (error) {
-      console.error('Failed to copy as Markdown:', error);
       toast.error('Failed to copy as Markdown');
     }
   };
@@ -508,7 +501,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
           {awaitingOutput ? (
             <div className="p-4 text-sm text-muted-foreground">Waiting for tool output...</div>
           ) : artifact.type === 'code' ? (
-            <CodeArtifact artifact={artifact} isDark={theme === 'dark'} />
+            <CodeArtifact artifact={artifact} />
           ) : artifact.type === 'chart' ? (
             <ChartArtifact artifact={artifact} />
           ) : artifact.type === 'table' ? (
@@ -533,12 +526,11 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   );
 }
 
-function CodeArtifact({ artifact, isDark: _isDark }: { artifact: Artifact; isDark: boolean }) {
+function CodeArtifact({ artifact }: { artifact: Artifact }) {
   const lineCount = artifact.content.split('\n').length;
 
   return (
     <div className="overflow-x-auto bg-gray-950">
-      {}
       <SyntaxHighlighter
         language={artifact.language || 'text'}
         style={oneDark}
@@ -752,7 +744,6 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
         }
       } catch (err) {
         if (mounted) {
-          console.error('Mermaid render error:', err);
           setError(err instanceof Error ? err.message : String(err));
         }
       }

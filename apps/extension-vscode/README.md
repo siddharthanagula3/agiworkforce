@@ -26,10 +26,7 @@ AGI Workforce brings the power of every major LLM provider into your editor. Swi
 
 ## Screenshots
 
-<!-- Screenshots will be added before Marketplace submission -->
-
-![Sidebar Chat](media/screenshot-sidebar.png)
-![Agent Mode](media/screenshot-agent.png)
+<!-- TODO: add screenshots before Marketplace publish -->
 
 ## Getting Started
 

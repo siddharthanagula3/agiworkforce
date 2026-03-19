@@ -185,10 +185,10 @@ pub fn get_default_model(provider: &Provider) -> &'static str {
         .and_then(|p| p.default_model.as_deref())
         .unwrap_or_else(|| {
             debug_assert!(
-                CONFIG.models.contains_key("gpt-5-nano"),
-                "Fallback model 'gpt-5-nano' not found in models.json"
+                CONFIG.models.contains_key("gpt-5.4-nano"),
+                "Fallback model 'gpt-5.4-nano' not found in models.json"
             );
-            "gpt-5-nano"
+            "gpt-5.4-nano"
         })
 }
 
@@ -465,8 +465,8 @@ mod tests {
     #[test]
     fn get_provider_for_model_returns_some_for_known_prefix() {
         // gpt- prefix maps to OpenAI
-        let provider = get_provider_for_model("gpt-5.2");
-        assert!(provider.is_some(), "gpt-5.2 should resolve to a provider");
+        let provider = get_provider_for_model("gpt-5.4");
+        assert!(provider.is_some(), "gpt-5.4 should resolve to a provider");
         assert_eq!(provider.unwrap(), Provider::OpenAI);
     }
 
@@ -479,8 +479,8 @@ mod tests {
     #[test]
     fn model_uses_responses_api_for_gpt5_models() {
         // GPT-5 series
-        assert!(model_uses_responses_api("gpt-5.2"));
-        assert!(model_uses_responses_api("gpt-5-nano"));
+        assert!(model_uses_responses_api("gpt-5.4"));
+        assert!(model_uses_responses_api("gpt-5.4-nano"));
         assert!(model_uses_responses_api("gpt-5-turbo"));
         assert!(model_uses_responses_api("gpt-5"));
         // Future GPT versions

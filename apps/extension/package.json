@@ -1,6 +1,6 @@
 {
   "name": "@agiworkforce/extension",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Intelligent browser automation extension for AGI Workforce desktop application",
   "private": true,
   "type": "module",
@@ -30,6 +30,7 @@
     "format": "prettier --write \"src/**/*.{js,html}\""
   },
   "dependencies": {
+    "@mcp-b/smart-dom-reader": "^2.2.0",
     "dompurify": "^3.2.4"
   },
   "devDependencies": {

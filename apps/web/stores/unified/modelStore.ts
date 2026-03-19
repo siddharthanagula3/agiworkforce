@@ -1,4 +1,7 @@
-// STUB FILE FOR WEB PORT COMPILATION
+/**
+ * STUB: Desktop-port compilation shim. Returns empty state.
+ * Web app should use real implementations when available.
+ */
 export const _stub = true;
 export default {} as any;
 export const useAuth = () => ({ user: null });
