@@ -105,7 +105,7 @@ export default function ProfileScreen() {
 
   const handleManageSubscription = useCallback(async () => {
     try {
-      const data = await api.post<{ url: string }>('/api/billing/portal');
+      const data = await api.post<{ url: string }>('/api/portal');
       if (data.url) {
         await Linking.openURL(data.url);
         return;

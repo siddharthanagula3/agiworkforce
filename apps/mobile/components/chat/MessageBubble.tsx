@@ -26,6 +26,7 @@ import { ImageGenProgress } from './ImageGenProgress';
 import { ImageFullScreen } from './ImageFullScreen';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { FileExportButton } from './FileExportButton';
+import { CitationChip } from './CitationChip';
 import { copyToClipboard } from '@/lib/clipboard';
 import { colors } from '@/lib/theme';
 import type { ChatMessage, Artifact } from '@/types/chat';
@@ -543,6 +544,20 @@ export const MessageBubble = memo(function MessageBubble({
                 onPress={() => handleImagePress(message.imageUrl!)}
               />
             )}
+
+            {/* Citations */}
+            {isAssistant && message.citations && message.citations.length > 0 ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                {message.citations.map((cit, i) => (
+                  <CitationChip
+                    key={`cit-${i}`}
+                    index={i + 1}
+                    title={cit.title ?? cit.url}
+                    url={cit.url}
+                  />
+                ))}
+              </View>
+            ) : null}
 
             {/* Inline artifacts */}
             {isAssistant && message.artifacts && message.artifacts.length > 0 ? (

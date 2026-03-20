@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage } from '@/lib/mmkv';
@@ -6,6 +7,7 @@ import { streamChat, type StreamDelta } from '@/services/streaming';
 import { useProjectStore } from '@/stores/projectStore';
 import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/components/chat/AttachmentPreview';
+import type { UploadFileInput, UploadFileResult } from '@/services/api';
 
 interface ChatState {
   /** All conversation summaries for the sidebar */
@@ -28,12 +30,26 @@ interface ChatState {
   error: string | null;
   /** Global search query for conversations + messages */
   searchQuery: string;
-  /** Search results: matching conversation IDs with snippet */
-  searchResults: Array<{ conversationId: string; messageId: string; snippet: string }>;
+  /** Search results: matching conversation IDs with snippet and optional match offset for highlighting */
+  searchResults: Array<{
+    conversationId: string;
+    messageId: string;
+    snippet: string;
+    /** Byte offset within snippet where the match starts (for text highlighting) */
+    matchStart?: number;
+    /** Length of the matched text (for text highlighting) */
+    matchLength?: number;
+  }>;
+  /** Whether a search is pending (debounce in flight) */
+  isSearching: boolean;
+  /** Whether an edit operation is currently in progress */
+  isEditing: boolean;
+  /** Retry attempt counts keyed by message ID */
+  retryAttempts: Record<string, number>;
 
   // --- Actions ---
   loadConversations: () => Promise<void>;
-  createConversation: (title?: string) => Promise<string>;
+  createConversation: (title?: string, projectId?: string) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   sendMessage: (
@@ -59,9 +75,54 @@ interface ChatState {
 const abortControllers = new Map<string, AbortController>();
 /** Tracks which conversation is currently streaming (for stopStreaming) */
 let streamingConversationId: string | null = null;
+/** Debounce timer for search */
+let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+/** Maximum retry attempts before showing permanent failure */
+const MAX_RETRY_ATTEMPTS = 3;
 
 function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * Upload a single file with up to MAX_UPLOAD_RETRIES attempts.
+ * Uses exponential backoff between retries (1s, 2s).
+ * Surfaces a clear Alert on permanent failure so the user knows to retry.
+ */
+const MAX_UPLOAD_RETRIES = 2;
+
+async function uploadWithRetry(
+  file: UploadFileInput,
+  fileName: string,
+): Promise<UploadFileResult | null> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= MAX_UPLOAD_RETRIES; attempt++) {
+    try {
+      return await api.uploadFile(file);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+
+      // 401 errors are already handled inside api.uploadFile (shows alert, throws)
+      // so we re-throw immediately rather than retrying
+      if (lastError.message.includes('session expired') || lastError.message.includes('401')) {
+        throw lastError;
+      }
+
+      if (attempt < MAX_UPLOAD_RETRIES) {
+        // Backoff before next retry: 1s, 2s
+        await new Promise<void>((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+      }
+    }
+  }
+
+  // All retries exhausted — show a user-facing error
+  Alert.alert(
+    'Upload Failed',
+    `Could not upload "${fileName}". Please check your connection and try again.`,
+    [{ text: 'OK' }],
+  );
+  return null;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -78,6 +139,9 @@ export const useChatStore = create<ChatState>()(
       error: null,
       searchQuery: '',
       searchResults: [],
+      isSearching: false,
+      isEditing: false,
+      retryAttempts: {},
 
       setCurrentConversationId: (id) => {
         set({ currentConversationId: id });
@@ -100,13 +164,16 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      createConversation: async (title?: string) => {
+      createConversation: async (title?: string, projectId?: string) => {
+        // Auto-inherit active project if caller didn't specify one
+        const effectiveProjectId =
+          projectId ?? useProjectStore.getState().activeProjectId ?? undefined;
         try {
           const data = await api.post<{ conversation: ConversationSummary }>(
             '/api/chat/conversations',
-            { title: title ?? 'New Chat' },
+            { title: title ?? 'New Chat', projectId: effectiveProjectId },
           );
-          const conversation = data.conversation;
+          const conversation = { ...data.conversation, projectId: effectiveProjectId };
           set((state) => ({
             conversations: [conversation, ...state.conversations],
             currentConversationId: conversation.id,
@@ -123,6 +190,7 @@ export const useChatStore = create<ChatState>()(
             createdAt: new Date().toISOString(),
             messageCount: 0,
             pinned: false,
+            projectId: effectiveProjectId,
           };
           set((state) => ({
             conversations: [localConversation, ...state.conversations],
@@ -198,18 +266,26 @@ export const useChatStore = create<ChatState>()(
         let uploadedAttachments: MessageAttachment[] | undefined;
         if (attachments && attachments.length > 0) {
           try {
-            const uploads = await Promise.all(
+            const uploadResults = await Promise.all(
               attachments.map((a) =>
-                api.uploadFile({ uri: a.uri, name: a.fileName, type: a.mimeType }),
+                uploadWithRetry({ uri: a.uri, name: a.fileName, type: a.mimeType }, a.fileName),
               ),
             );
-            uploadedAttachments = uploads.map((u, i) => ({
-              url: u.url,
-              mimeType: attachments[i]!.mimeType,
-              fileName: attachments[i]!.fileName,
-            }));
+            // Filter out null results (individual failures already showed alerts)
+            const successful = uploadResults
+              .map((result, i) => ({ result, attachment: attachments[i]! }))
+              .filter((x) => x.result !== null);
+
+            if (successful.length > 0) {
+              uploadedAttachments = successful.map(({ result, attachment }) => ({
+                url: result!.url,
+                mimeType: attachment.mimeType,
+                fileName: attachment.fileName,
+              }));
+            }
           } catch {
-            // Continue without attachments if upload fails
+            // 401 / session-expired errors bubble up from uploadWithRetry —
+            // continue without attachments so the message still sends
           }
         }
 
@@ -520,45 +596,78 @@ export const useChatStore = create<ChatState>()(
       },
 
       searchConversations: (query: string) => {
-        const trimmed = query.trim().toLowerCase();
+        const trimmed = query.trim();
         if (!trimmed) {
-          set({ searchQuery: '', searchResults: [] });
+          // Clear search immediately when query is emptied
+          if (searchDebounceTimer !== undefined) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = undefined;
+          }
+          set({ searchQuery: '', searchResults: [], isSearching: false });
           return;
         }
 
-        set({ searchQuery: trimmed });
+        // Update query display immediately, but debounce the actual search
+        set({ searchQuery: trimmed, isSearching: true });
 
-        const state = get();
-        const results: Array<{ conversationId: string; messageId: string; snippet: string }> = [];
+        if (searchDebounceTimer !== undefined) {
+          clearTimeout(searchDebounceTimer);
+        }
 
-        // Search through all messages
-        for (const [convId, msgs] of Object.entries(state.messages)) {
-          for (const msg of msgs) {
-            if (msg.content.toLowerCase().includes(trimmed)) {
-              const idx = msg.content.toLowerCase().indexOf(trimmed);
-              const start = Math.max(0, idx - 30);
-              const end = Math.min(msg.content.length, idx + trimmed.length + 30);
-              const snippet =
-                (start > 0 ? '...' : '') +
-                msg.content.slice(start, end) +
-                (end < msg.content.length ? '...' : '');
-              results.push({ conversationId: convId, messageId: msg.id, snippet });
-              break; // one result per conversation
+        searchDebounceTimer = setTimeout(() => {
+          searchDebounceTimer = undefined;
+          const lower = trimmed.toLowerCase();
+          const state = get();
+          const results: Array<{
+            conversationId: string;
+            messageId: string;
+            snippet: string;
+            matchStart?: number;
+            matchLength?: number;
+          }> = [];
+
+          // Search through all messages — capture match position for highlight
+          for (const [convId, msgs] of Object.entries(state.messages)) {
+            for (const msg of msgs) {
+              const contentLower = msg.content.toLowerCase();
+              const idx = contentLower.indexOf(lower);
+              if (idx !== -1) {
+                const start = Math.max(0, idx - 30);
+                const end = Math.min(msg.content.length, idx + lower.length + 30);
+                const snippet =
+                  (start > 0 ? '...' : '') +
+                  msg.content.slice(start, end) +
+                  (end < msg.content.length ? '...' : '');
+                results.push({
+                  conversationId: convId,
+                  messageId: msg.id,
+                  snippet,
+                  // Adjust matchStart relative to snippet (accounting for '...' prefix)
+                  matchStart: idx - start + (start > 0 ? 3 : 0),
+                  matchLength: trimmed.length,
+                });
+                break; // one result per conversation
+              }
             }
           }
-        }
 
-        // Also search conversation titles
-        for (const conv of state.conversations) {
-          if (
-            conv.title.toLowerCase().includes(trimmed) &&
-            !results.some((r) => r.conversationId === conv.id)
-          ) {
-            results.push({ conversationId: conv.id, messageId: '', snippet: conv.title });
+          // Also search conversation titles
+          for (const conv of state.conversations) {
+            const titleLower = conv.title.toLowerCase();
+            const idx = titleLower.indexOf(lower);
+            if (idx !== -1 && !results.some((r) => r.conversationId === conv.id)) {
+              results.push({
+                conversationId: conv.id,
+                messageId: '',
+                snippet: conv.title,
+                matchStart: idx,
+                matchLength: trimmed.length,
+              });
+            }
           }
-        }
 
-        set({ searchResults: results });
+          set({ searchResults: results, isSearching: false });
+        }, 300);
       },
 
       deleteMessage: (conversationId, messageId) => {
@@ -576,6 +685,10 @@ export const useChatStore = create<ChatState>()(
 
       retryMessage: (conversationId, messageId) => {
         const state = get();
+
+        // Guard: don't retry while streaming
+        if (state.isStreaming) return;
+
         const msgs = state.messages[conversationId];
         if (!msgs) return;
 
@@ -589,21 +702,61 @@ export const useChatStore = create<ChatState>()(
         const userMsg = msgIndex > 0 ? msgs[msgIndex - 1] : null;
         if (!userMsg || userMsg.role !== 'user') return;
 
+        // Track retry count for this message
+        const currentAttempts = state.retryAttempts[messageId] ?? 0;
+        const nextAttempt = currentAttempts + 1;
+
+        if (nextAttempt > MAX_RETRY_ATTEMPTS) {
+          Alert.alert(
+            'Retry Limit Reached',
+            `This message has failed ${MAX_RETRY_ATTEMPTS} times. Please check your connection and try a new message.`,
+            [{ text: 'OK' }],
+          );
+          return;
+        }
+
+        // Exponential backoff delay: 0s, 1s, 2s (attempt 1, 2, 3)
+        const backoffMs = nextAttempt > 1 ? 1000 * Math.pow(2, nextAttempt - 2) : 0;
+
         const userContent = userMsg.content;
         const userModel = userMsg.model ?? assistantMsg.model ?? 'claude-3-5-sonnet-20241022';
 
-        // Remove both the user message and assistant message
+        // Record new attempt count (keyed by the original messageId)
+        set((s) => ({
+          retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt },
+        }));
+
+        // Remove both user + assistant messages before re-sending
         const trimmedMsgs = msgs.slice(0, msgIndex - 1);
         set((s) => ({
           messages: { ...s.messages, [conversationId]: trimmedMsgs },
         }));
 
-        // Re-send the user message
-        get().sendMessage(conversationId, userContent, userModel);
+        if (backoffMs > 0) {
+          setTimeout(() => {
+            get().sendMessage(conversationId, userContent, userModel);
+          }, backoffMs);
+        } else {
+          get().sendMessage(conversationId, userContent, userModel);
+        }
       },
 
       editMessage: (conversationId, messageId, newContent) => {
         const state = get();
+
+        // Guard: prevent editing while a stream is in progress
+        if (state.isStreaming) {
+          Alert.alert(
+            'Cannot Edit',
+            'Please wait for the current response to finish before editing a message.',
+            [{ text: 'OK' }],
+          );
+          return;
+        }
+
+        // Guard: prevent re-entrant edits
+        if (state.isEditing) return;
+
         const msgs = state.messages[conversationId];
         if (!msgs) return;
 
@@ -615,14 +768,21 @@ export const useChatStore = create<ChatState>()(
 
         const userModel = targetMsg.model ?? 'claude-3-5-sonnet-20241022';
 
+        // Set editing state so UI can show loading indicator
+        set({ isEditing: true });
+
         // Keep messages up to (but not including) the target message
         const trimmedMsgs = msgs.slice(0, msgIndex);
         set((s) => ({
           messages: { ...s.messages, [conversationId]: trimmedMsgs },
         }));
 
-        // Re-send with new content
-        get().sendMessage(conversationId, newContent, userModel);
+        // Re-send with new content, then clear editing flag
+        get()
+          .sendMessage(conversationId, newContent, userModel)
+          .finally(() => {
+            set({ isEditing: false });
+          });
       },
 
       pinConversation: async (id) => {
@@ -690,6 +850,8 @@ export const useChatStore = create<ChatState>()(
           conversations,
           messages,
           currentConversationId: state.currentConversationId,
+          // Do NOT persist transient UI state
+          // retryAttempts are also not persisted — they reset on app restart
         };
       },
     },

@@ -4,15 +4,32 @@ import { mmkvStorage } from '@/lib/mmkv';
 import { useConnectionStore } from '@/stores/connectionStore';
 import type { StatusStep, ToolCall, ApprovalRequest } from '@/types/chat';
 
+/** A file or output artifact produced by an agent run */
+export interface RunArtifact {
+  id: string;
+  type: 'file_created' | 'file_modified' | 'command_run' | 'error';
+  label: string;
+  detail?: string;
+  timestamp: string;
+}
+
 export interface Agent {
   id: string;
   name: string;
   model: string;
   status: 'running' | 'completed' | 'failed' | 'waiting';
   currentStep: string;
+  /** Current action being performed, e.g. "Running: search_files in /src" */
+  currentAction?: string;
   progress: number; // 0-100
+  /** Total number of steps (used for ETA calculation) */
+  totalSteps?: number;
+  /** Steps completed count (used for ETA calculation) */
+  stepsCompleted?: number;
   steps: StatusStep[];
   toolCalls: ToolCall[];
+  /** Artifacts produced during the run */
+  artifacts?: RunArtifact[];
   startedAt: string;
   updatedAt: string;
 }

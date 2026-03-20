@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, TextInput, Pressable } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -11,7 +11,8 @@ import { AutoModeCards } from './AutoModeCard';
 import { ModelGroup } from './ModelGroup';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/stores/modelStore';
-import { AUTO_MODES, PROVIDERS, MODEL_LIST, isAutoMode } from '@/lib/models';
+import { AUTO_MODES, PROVIDERS, MODEL_LIST, isAutoMode, type ModelDef } from '@/lib/models';
+import { fetchModelCatalog } from '@/services/modelCatalog';
 import { colors } from '@/lib/theme';
 
 interface ModelPickerSheetProps {
@@ -37,18 +38,35 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
 
   const [search, setSearch] = useState('');
   const searchInputRef = useRef<TextInput>(null);
+  const [remoteModels, setRemoteModels] = useState<ModelDef[]>([]);
+
+  // Fetch remote model catalog on mount (falls back to embedded MODEL_LIST)
+  useEffect(() => {
+    fetchModelCatalog()
+      .then((models) => {
+        if (models.length > 0 && models !== MODEL_LIST) {
+          setRemoteModels(models);
+        }
+      })
+      .catch(() => {
+        // Fall through — use embedded MODEL_LIST
+      });
+  }, []);
+
+  // Use remote models if available, otherwise fall back to embedded list
+  const modelSource = remoteModels.length > 0 ? remoteModels : MODEL_LIST;
 
   // Filter models by search query
   const query = search.trim().toLowerCase();
   const filteredModels = useMemo(() => {
-    if (!query) return MODEL_LIST;
-    return MODEL_LIST.filter(
+    if (!query) return modelSource;
+    return modelSource.filter(
       (m) =>
         m.name.toLowerCase().includes(query) ||
         m.provider.toLowerCase().includes(query) ||
         m.id.toLowerCase().includes(query),
     );
-  }, [query]);
+  }, [query, modelSource]);
 
   // Group filtered models by provider
   const providerGroups = useMemo(() => {
@@ -66,9 +84,9 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
   // Determine which provider group should start expanded
   const selectedProviderForModel = useMemo(() => {
     if (isAutoMode(selectedModel)) return null;
-    const m = MODEL_LIST.find((mod) => mod.id === selectedModel);
+    const m = modelSource.find((mod) => mod.id === selectedModel);
     return m?.provider ?? null;
-  }, [selectedModel]);
+  }, [selectedModel, modelSource]);
 
   const handleSelectModel = useCallback(
     (id: string) => {

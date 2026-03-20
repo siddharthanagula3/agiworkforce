@@ -17,6 +17,7 @@ import { streamChatCompletion, AgiWorkforceApiError, type ChatMessage } from '..
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
 import { getContextBuilder } from '../services/contextBuilder';
+import { getContextPanelProvider } from './contextPanelProvider';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 
@@ -151,6 +152,20 @@ async function buildSystemPrompt(ctx: EditorContext, options: PromptOptions): Pr
   const workspaceContext = await getContextBuilder().buildFullContext();
   if (workspaceContext !== '') {
     parts.push('\n' + workspaceContext);
+  }
+
+  // Include pinned files from ContextPanel (wired into actual prompt)
+  const contextPanel = getContextPanelProvider();
+  if (contextPanel !== undefined) {
+    const pinnedFiles = contextPanel.getContextFiles();
+    if (pinnedFiles.length > 0) {
+      const pinnedList = pinnedFiles
+        .slice(0, 10)
+        .map((fp) => `- ${vscode.workspace.asRelativePath(fp)}`)
+        .join('\n');
+      const suffix = pinnedFiles.length > 10 ? `\n  ... (${pinnedFiles.length - 10} more)` : '';
+      parts.push(`\nPinned/context files:\n${pinnedList}${suffix}`);
+    }
   }
 
   return parts.join('\n');

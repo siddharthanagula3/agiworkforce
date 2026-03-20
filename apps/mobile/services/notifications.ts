@@ -250,7 +250,7 @@ function isValidAgentId(value: unknown): value is string {
 
 const ALLOWED_ROUTE_PREFIXES = [
   '/(app)/companion',
-  '/(app)/chat',
+  '/(app)/(tabs)/chat',
   '/(app)/settings',
   '/(app)/notifications',
   '/(app)/schedules',
@@ -369,7 +369,7 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
           safeNavigate(data.route as '/(app)');
         } else {
           console.warn('[notifications] Blocked navigation to disallowed route:', data.route);
-          safeNavigate('/(app)/chat');
+          safeNavigate('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
         }
       }
       break;
