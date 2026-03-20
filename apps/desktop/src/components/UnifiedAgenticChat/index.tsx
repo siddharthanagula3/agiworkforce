@@ -1124,7 +1124,7 @@ export const UnifiedAgenticChat: React.FC<{
             temperature: useSettingsStore.getState().llmConfig?.temperature,
             maxOutputTokens: useSettingsStore.getState().llmConfig?.maxTokens,
             isExplicitModelSelection,
-            preferCloudCredits: true,
+            preferCloudCredits: useAppModeStore.getState().mode === 'cloud',
             frontendMessageId: assistantMessageId, // Pass frontend message ID for event coordination
             customInstructions: mergedCustomInstructions || undefined, // Include merged custom instructions
             autoInjectSkills: useSettingsStore.getState().chatPreferences.autoInjectSkills ?? true,
