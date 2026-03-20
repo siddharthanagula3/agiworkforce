@@ -223,7 +223,7 @@ export function ChatInput({
             ref={inputRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyPress}
             placeholder={placeholder}
             disabled={isStreaming}
             rows={1}
