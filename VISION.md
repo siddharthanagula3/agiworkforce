@@ -1,6 +1,6 @@
 # AGI Workforce — Product Vision
 
-_March 2026_
+_March 20, 2026_
 
 ---
 
@@ -84,7 +84,7 @@ Enterprise-grade security that competitors treat as an afterthought.
 
 ## Architecture
 
-### 6-Surface Monorepo
+### 8-Surface Monorepo
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -128,12 +128,12 @@ Swarm Orchestrator (parallel agents, if needed)
 
 | Layer                     | LOC            | Files      |
 | ------------------------- | -------------- | ---------- |
-| Rust backend              | 704,795        | 1,434      |
-| TypeScript (all surfaces) | 611,722        | ~4,540     |
+| Rust backend              | ~397,000       | 759        |
+| TypeScript (all surfaces) | ~753,000       | ~2,848     |
 | AI skill definitions      | ~15,000        | 150        |
-| **Total**                 | **~1,334,000** | **~6,439** |
+| **Total**                 | **~1,165,000** | **~3,757** |
 
-Development velocity: 1,448 commits in 4.5 months (10.6 commits/day).
+Development velocity: 1,508 commits (verified 2026-03-20).
 
 ## Market Landscape 2026
 
@@ -205,7 +205,7 @@ Development velocity: 1,448 commits in 4.5 months (10.6 commits/day).
 
 **Complete wiring:**
 
-- Wire remaining 70% of Tauri commands to frontend
+- Wire remaining ~55% of Tauri commands to frontend (643 of 1,439 wired)
 - Email workspace UI (IMAP backend ready)
 - Visual workflow builder (engine ready, need drag-drop canvas)
 - Knowledge base browser (RAG backend ready)
@@ -246,7 +246,7 @@ Development velocity: 1,448 commits in 4.5 months (10.6 commits/day).
 
 ## The Ask
 
-**AGI Workforce is 1.3M lines of working code across 6 surfaces.** The technical moat is deep — 22-provider LLM router, ToolGuard security layer, 150+ domain skills, native desktop automation, mobile companion, and the only production-grade multi-model agent platform.
+**AGI Workforce is ~1.2M lines of working code across 8 surfaces.** The technical moat is deep — 22-provider LLM router, ToolGuard security layer, 150+ domain skills, native desktop automation, mobile companion, and the only production-grade multi-model agent platform.
 
 What's needed to win:
 
@@ -254,4 +254,4 @@ What's needed to win:
 2. **Distribution** — Chrome Web Store, VS Code Marketplace, App Stores, ProductHunt
 3. **Community** — Open-source the core, build contributor ecosystem
 4. **Revenue** — BYOK free tier + Pro subscription + Enterprise licensing
-5. **Team** — 2-3 engineers to accelerate the 70% unwired command gap and enterprise features
+5. **Team** — 2-3 engineers to accelerate the ~55% unwired command gap and enterprise features
