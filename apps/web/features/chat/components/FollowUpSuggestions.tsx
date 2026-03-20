@@ -234,7 +234,7 @@ const GENERIC_FOLLOW_UPS: Array<{ text: string; type: FollowUpType }> = [
  * Derive 2-3 contextual follow-up questions from assistant content.
  * Returns typed suggestions with per-type icons for the UI.
  */
-function deriveFollowUps(content: string, messageCount: number): FollowUp[] {
+export function deriveFollowUps(content: string, messageCount: number): FollowUp[] {
   if (!content || content.trim().length < 20) return [];
 
   // Cap content length to prevent ReDoS on very long LLM responses
