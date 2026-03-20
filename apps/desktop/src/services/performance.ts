@@ -266,7 +266,7 @@ class PerformanceMonitoringService {
       marks: Array.from(this.marks.values()),
       measures: this.measures,
       memory_used_mb: systemMetrics.memoryUsedMb,
-      cpu_usage_percent: systemMetrics.cpuUsage,
+      cpu_usage_percent: systemMetrics.cpuUsage * 100,
     };
   }
 
@@ -313,6 +313,7 @@ class PerformanceMonitoringService {
     this.memoryMonitorInterval = setInterval(async () => {
       try {
         const metrics = await this.getSystemMetrics();
+        if (metrics.memoryTotalMb === 0) return;
         const memoryUsagePercent = (metrics.memoryUsedMb / metrics.memoryTotalMb) * 100;
 
         if (memoryUsagePercent > 80) {
