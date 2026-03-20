@@ -41,14 +41,6 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
     action: 'chat.clear',
   },
   {
-    id: 'focus-input',
-    key: 'i',
-    modifiers: { meta: true },
-    description: 'Focus input',
-    category: 'chat',
-    action: 'chat.focusInput',
-  },
-  {
     id: 'copy-last',
     key: 'c',
     modifiers: { meta: true, shift: true },
@@ -82,6 +74,46 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
     category: 'navigation',
     action: 'app.search',
   },
+  {
+    id: 'navigate-images',
+    key: 'i',
+    modifiers: { meta: true, shift: true },
+    description: 'Images',
+    category: 'navigation',
+    action: 'app.navigateImages',
+  },
+  {
+    id: 'navigate-skills',
+    key: 'k',
+    modifiers: { meta: true, shift: true },
+    description: 'Skills',
+    category: 'navigation',
+    action: 'app.navigateSkills',
+  },
+  {
+    id: 'navigate-schedules',
+    key: 's',
+    modifiers: { meta: true, shift: true },
+    description: 'Schedules',
+    category: 'navigation',
+    action: 'app.navigateSchedules',
+  },
+  {
+    id: 'navigate-research',
+    key: 'r',
+    modifiers: { meta: true, shift: true },
+    description: 'Research',
+    category: 'navigation',
+    action: 'app.navigateResearch',
+  },
+  {
+    id: 'navigate-artifacts',
+    key: 'a',
+    modifiers: { meta: true, shift: true },
+    description: 'Artifacts Gallery',
+    category: 'navigation',
+    action: 'app.navigateArtifacts',
+  },
 
   // Model
   {
@@ -94,7 +126,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   },
   {
     id: 'cycle-model',
-    key: 'm',
+    key: 'd',
     modifiers: { meta: true, shift: true },
     description: 'Cycle model',
     category: 'model',
@@ -112,7 +144,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   // Agent
   {
     id: 'cycle-agent',
-    key: 'a',
+    key: 'g',
     modifiers: { meta: true, shift: true },
     description: 'Cycle agent mode',
     category: 'agent',
@@ -157,8 +189,8 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   // Window
   {
     id: 'toggle-sidebar',
-    key: 's',
-    modifiers: { meta: true },
+    key: 'b',
+    modifiers: { meta: true, shift: true },
     description: 'Toggle sidebar',
     category: 'window',
     action: 'window.toggleSidebar',
