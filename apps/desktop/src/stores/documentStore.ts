@@ -10,7 +10,7 @@ import {
 
 interface GeneratedDocument {
   path: string;
-  format: 'pdf' | 'word' | 'excel';
+  format: 'pdf' | 'word' | 'excel' | 'powerpoint';
   title: string;
 }
 
@@ -44,6 +44,18 @@ interface DocumentState {
     sheetName: string,
     headers: string[],
     rows: string[][],
+  ) => Promise<string>;
+  generateExcelNumbers: (
+    outputPath: string,
+    sheetName: string,
+    headers: string[],
+    rows: number[][],
+  ) => Promise<string>;
+  generatePowerpoint: (
+    outputPath: string,
+    title: string,
+    author: string,
+    slides: Array<[string, string[]]>,
   ) => Promise<string>;
   clearError: () => void;
   reset: () => void;
@@ -214,6 +226,62 @@ export const useDocumentStore = create<DocumentState>((set) => ({
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message, isGenerating: false });
       toast.error(`Failed to create Excel spreadsheet: ${message}`);
+      throw err;
+    }
+  },
+
+  generateExcelNumbers: async (
+    outputPath: string,
+    sheetName: string,
+    headers: string[],
+    rows: number[][],
+  ) => {
+    set({ isGenerating: true, error: null });
+    try {
+      const result = await invoke<string>('document_create_excel_numbers', {
+        outputPath,
+        sheetName,
+        headers,
+        rows,
+      });
+      set({
+        isGenerating: false,
+        lastGenerated: { path: result, format: 'excel', title: sheetName },
+      });
+      toast.success(`Excel spreadsheet created: ${sheetName}`);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message, isGenerating: false });
+      toast.error(`Failed to create Excel spreadsheet: ${message}`);
+      throw err;
+    }
+  },
+
+  generatePowerpoint: async (
+    outputPath: string,
+    title: string,
+    author: string,
+    slides: Array<[string, string[]]>,
+  ) => {
+    set({ isGenerating: true, error: null });
+    try {
+      const result = await invoke<string>('document_create_powerpoint_simple', {
+        outputPath,
+        title,
+        author,
+        slides,
+      });
+      set({
+        isGenerating: false,
+        lastGenerated: { path: result, format: 'powerpoint', title },
+      });
+      toast.success(`PowerPoint created: ${title}`);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message, isGenerating: false });
+      toast.error(`Failed to create PowerPoint: ${message}`);
       throw err;
     }
   },

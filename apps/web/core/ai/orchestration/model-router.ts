@@ -80,7 +80,7 @@ const AVAILABLE_MODELS: ModelInfo[] = [
   // ==================== OPENAI MODELS (GPT-5 & o3 Series) ====================
   {
     provider: 'openai',
-    model: 'gpt-5.2',
+    model: 'gpt-5.4',
     displayName: 'GPT-5.2',
     description: 'Most advanced reasoning and multimodal capabilities',
     strengths: ['reasoning', 'coding', 'research', 'vision', 'agentic'],
@@ -104,16 +104,16 @@ const AVAILABLE_MODELS: ModelInfo[] = [
   },
   {
     provider: 'openai',
-    model: 'gpt-4o',
-    displayName: 'GPT-4o',
+    model: 'gpt-5.4',
+    displayName: 'GPT-5.4',
     description: 'Best for general tasks and multimodal',
     strengths: ['general', 'research', 'creative', 'vision'],
     costPer1KTokens: 0.0025,
   },
   {
     provider: 'openai',
-    model: 'gpt-4o-mini',
-    displayName: 'GPT-4o Mini',
+    model: 'gpt-5.4-mini',
+    displayName: 'GPT-5.4 Mini',
     description: 'Fast and cost-effective for most tasks',
     strengths: ['general'],
     costPer1KTokens: 0.00015,
@@ -154,16 +154,16 @@ const AVAILABLE_MODELS: ModelInfo[] = [
   },
   {
     provider: 'google',
-    model: 'gemini-2.5-pro',
-    displayName: 'Gemini 2.5 Pro',
+    model: 'gemini-3.1-pro-preview',
+    displayName: 'Gemini 3.1 Pro',
     description: 'Excellent for complex tasks and large context',
     strengths: ['coding', 'research', 'general'],
     costPer1KTokens: 0.00125,
   },
   {
     provider: 'google',
-    model: 'gemini-2.5-flash',
-    displayName: 'Gemini 2.5 Flash',
+    model: 'gemini-3-flash',
+    displayName: 'Gemini 3 Flash',
     description: 'Fast and efficient multimodal model',
     strengths: ['general', 'vision'],
     costPer1KTokens: 0.0005,
@@ -469,7 +469,7 @@ export class ModelRouter {
       // Fallback to Claude 4.5 Sonnet as general purpose
       const fallback =
         AVAILABLE_MODELS.find((m) => m.model === 'claude-sonnet-4-5-20250929') ||
-        AVAILABLE_MODELS.find((m) => m.model === 'gpt-5.2') ||
+        AVAILABLE_MODELS.find((m) => m.model === 'gpt-5.4') ||
         AVAILABLE_MODELS[0];
       return {
         provider: fallback?.provider ?? 'anthropic',

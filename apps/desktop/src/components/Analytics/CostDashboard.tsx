@@ -1,4 +1,5 @@
 import { useEffect, useMemo, memo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   ResponsiveContainer,
   LineChart,
@@ -42,17 +43,19 @@ export const CostDashboard = memo(function CostDashboard() {
     loadOverview,
     loadAnalytics,
     setMonthlyBudget,
-  } = useBillingUsageStore((state) => ({
-    overview: state.costOverview,
-    analytics: state.costAnalytics,
-    filters: state.costFilters,
-    loadingOverview: state.loadingCostOverview,
-    loadingAnalytics: state.loadingCostAnalytics,
-    error: state.costError,
-    loadOverview: state.loadCostOverview,
-    loadAnalytics: state.loadCostAnalytics,
-    setMonthlyBudget: state.setMonthlyBudget,
-  }));
+  } = useBillingUsageStore(
+    useShallow((state) => ({
+      overview: state.costOverview,
+      analytics: state.costAnalytics,
+      filters: state.costFilters,
+      loadingOverview: state.loadingCostOverview,
+      loadingAnalytics: state.loadingCostAnalytics,
+      error: state.costError,
+      loadOverview: state.loadCostOverview,
+      loadAnalytics: state.loadCostAnalytics,
+      setMonthlyBudget: state.setMonthlyBudget,
+    })),
+  );
 
   const { prompt, dialog: promptDialog } = usePrompt();
 

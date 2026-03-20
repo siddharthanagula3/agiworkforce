@@ -115,26 +115,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'project_get_settings':
       return {} as T;
 
-    case 'chat_get_conversation_stats':
-      return {
-        message_count: 0,
-        total_tokens: 0,
-        total_input_tokens: 0,
-        total_output_tokens: 0,
-        total_cost: 0,
-      } as T;
-
-    case 'chat_create_conversation':
-      return {
-        id: 0,
-        title:
-          (args?.['request'] as { title?: string } | undefined)?.title ??
-          args?.['title'] ??
-          'New Conversation',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as T;
-
     case 'chat_send_message':
       throw new Error('Chat functionality requires the desktop application');
 
@@ -500,6 +480,105 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'conversation_export_pdf':
       return (args?.['outputPath'] ?? '/tmp/mock-conversation.pdf') as T;
+
+    // Backend-wired chat commands
+    case 'chat_get_conversation':
+      return {
+        id: (args?.['id'] as number) ?? 1,
+        user_id: (args?.['userId'] as string) ?? 'mock-user',
+        title: 'Mock Conversation',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as T;
+
+    case 'chat_create_conversation':
+      return {
+        id: Date.now(),
+        user_id: 'mock-user',
+        title: (args?.['request'] as Record<string, unknown>)?.['title'] ?? 'New Conversation',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as T;
+
+    case 'chat_update_conversation':
+      return undefined as T;
+
+    case 'chat_create_message':
+      return {
+        id: Date.now(),
+        conversation_id: 1,
+        user_id: 'mock-user',
+        role: 'user',
+        content: '',
+        tokens: null,
+        cost: null,
+        provider: null,
+        model: null,
+        created_at: new Date().toISOString(),
+      } as T;
+
+    case 'chat_update_message':
+      return {
+        id: (args?.['id'] as number) ?? 1,
+        conversation_id: 1,
+        user_id: 'mock-user',
+        role: 'user',
+        content: (args?.['content'] as string) ?? '',
+        tokens: null,
+        cost: null,
+        provider: null,
+        model: null,
+        created_at: new Date().toISOString(),
+      } as T;
+
+    case 'chat_delete_message':
+      return undefined as T;
+
+    case 'chat_get_conversation_stats':
+      return {
+        message_count: 0,
+        total_tokens: 0,
+        total_input_tokens: 0,
+        total_output_tokens: 0,
+        total_cost: 0,
+      } as T;
+
+    case 'search_chat_history':
+    case 'search_chat_history_semantic':
+      return [] as T;
+
+    case 'search_past_conversations':
+    case 'get_recent_conversations':
+      return [] as T;
+
+    case 'conversation_export':
+      return '# Mock Conversation\n\nNo messages.' as T;
+
+    case 'chat_get_cost_overview':
+      return {
+        today_total: 0,
+        month_total: 0,
+        monthly_budget: null,
+        remaining_budget: null,
+      } as T;
+
+    case 'chat_get_cost_analytics':
+      return {
+        timeseries: [],
+        providers: [],
+        top_conversations: [],
+      } as T;
+
+    case 'chat_compact_context':
+      return {
+        messages_compacted: 0,
+        tokens_before: 0,
+        tokens_after: 0,
+        savings_percent: 0,
+        summary_created: false,
+        focus: null,
+        message: 'No compaction needed.',
+      } as T;
 
     case 'media_generate_image':
       return {
@@ -915,18 +994,73 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'notification_request_permission':
       return true as T;
 
+    case 'notification_show':
     case 'notification_show_with_actions':
     case 'notification_schedule':
     case 'notification_schedule_reminder':
     case 'notification_register_actions':
     case 'notification_update':
+    case 'notification_cancel':
+    case 'notification_set_settings':
       return undefined as T;
+
+    case 'notification_cancel_all':
+    case 'notification_delete_all_read':
+    case 'notification_mark_all_read':
+      return 0 as T;
 
     case 'notification_get_scheduled':
       return [] as T;
 
     case 'notification_unread_count':
       return 0 as T;
+
+    case 'notification_get':
+      return null as T;
+
+    case 'notification_list':
+      return {
+        notifications: [],
+        total: 0,
+        unreadCount: 0,
+        page: 1,
+        pageSize: 20,
+        hasMore: false,
+      } as T;
+
+    case 'notification_mark_read':
+    case 'notification_delete':
+      return true as T;
+
+    case 'notification_get_settings':
+      return {
+        enabled: true,
+        soundEnabled: true,
+        badgeEnabled: true,
+        desktopNotifications: true,
+        enabledTypes: [],
+        doNotDisturb: false,
+        dndStartTime: null,
+        dndEndTime: null,
+      } as T;
+
+    case 'notification_create':
+      return {
+        id: `notif_mock_${Date.now()}`,
+        title: (args?.['input'] as Record<string, unknown>)?.['title'] ?? 'Mock',
+        message: (args?.['input'] as Record<string, unknown>)?.['message'] ?? '',
+        type: 'info',
+        priority: 'normal',
+        read: false,
+        createdAt: new Date().toISOString(),
+        readAt: null,
+        actionUrl: null,
+        actionLabel: null,
+        icon: null,
+        metadata: null,
+        dismissible: true,
+        expiresAt: null,
+      } as T;
 
     // ── Tutorial commands ───────────────────────────────────────────
     case 'get_tutorials':
@@ -983,9 +1117,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'code_generate_edit':
       return { edit: '(mock edit)' } as T;
 
-    case 'search_chat_history_semantic':
-      return [] as T;
-
     case 'sync_conversations_to_cloud':
     case 'clear_sample_data':
     case 'populate_sample_data':
@@ -1009,10 +1140,29 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'window_is_floating_visible':
       return false as T;
 
+    case 'window_get_state':
+      return {
+        pinned: false,
+        alwaysOnTop: false,
+        dock: null,
+        maximized: false,
+        fullscreen: false,
+      } as T;
+
     case 'window_maximize':
     case 'window_unmaximize':
+    case 'window_toggle_maximize':
+    case 'window_set_fullscreen':
+    case 'window_set_pinned':
+    case 'window_set_always_on_top':
+    case 'window_set_visibility':
+    case 'window_dock':
     case 'window_open_floating':
+    case 'window_close_floating':
       return undefined as T;
+
+    case 'window_toggle_floating':
+      return false as T;
 
     case 'form_undo_record':
     case 'form_undo_clear':
@@ -1045,6 +1195,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'shortcuts_list':
     case 'shortcuts_get_defaults':
+    case 'shortcuts_reset':
       return [] as T;
 
     case 'shortcuts_register':
@@ -1052,12 +1203,21 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'shortcuts_register_global':
     case 'shortcuts_unregister_global':
     case 'shortcuts_trigger':
-    case 'shortcuts_update':
-    case 'shortcuts_apply_quick_query_preferences':
       return undefined as T;
 
+    case 'shortcuts_update':
+    case 'shortcuts_apply_quick_query_preferences':
+      return {
+        id: 'mock_shortcut',
+        key: 'CommandOrControl+K',
+        description: 'Mock shortcut',
+        action: 'mock_action',
+        enabled: true,
+        isGlobal: false,
+      } as T;
+
     case 'shortcuts_check_key':
-      return { available: true } as T;
+      return false as T;
 
     case 'intent_detect':
     case 'intent_detect_with_llm':
@@ -1143,6 +1303,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_workflows_by_category':
     case 'get_workflow_templates_by_category':
     case 'search_workflow_templates':
+    case 'get_workflow_templates':
+    case 'get_user_clones':
+    case 'get_user_favorites':
       return [] as T;
 
     // ── Misc/catch-all for remaining newly registered commands ──────
@@ -1161,10 +1324,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'browser_enable_request_interception':
     case 'calendar_disconnect':
     case 'cloud_disconnect':
-    case 'chat_create_message':
-    case 'chat_update_message':
-    case 'chat_delete_message':
-    case 'chat_update_conversation':
     case 'chat_delete_conversation':
     case 'chat_clear_pending_messages':
     case 'chat_get_pending_messages':

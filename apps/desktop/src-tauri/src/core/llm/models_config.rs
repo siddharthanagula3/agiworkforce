@@ -503,8 +503,8 @@ mod tests {
 
     #[test]
     fn model_supports_gemini_thinking_for_pro_models() {
-        assert!(model_supports_gemini_thinking("gemini-2.5-pro"));
-        assert!(!model_supports_gemini_thinking("gemini-2.0-flash"));
+        assert!(model_supports_gemini_thinking("gemini-3.1-pro-preview"));
+        assert!(!model_supports_gemini_thinking("gemini-3-flash"));
         assert!(!model_supports_gemini_thinking("claude-opus-4-6"));
     }
 

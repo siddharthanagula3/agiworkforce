@@ -1,5 +1,6 @@
 import { Check, Copy, Link, Linkedin, Mail, MessageSquare, Newspaper, Twitter } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '../../../components/ui/Button';
 import {
   Dialog,
@@ -15,7 +16,15 @@ import { useMarketplaceStore } from '../marketplaceStore';
 
 export function ShareModal() {
   const { selectedWorkflow, showShareModal, closeShareModal, getShareUrl, getEmbedCode } =
-    useMarketplaceStore();
+    useMarketplaceStore(
+      useShallow((s) => ({
+        selectedWorkflow: s.selectedWorkflow,
+        showShareModal: s.showShareModal,
+        closeShareModal: s.closeShareModal,
+        getShareUrl: s.getShareUrl,
+        getEmbedCode: s.getEmbedCode,
+      })),
+    );
 
   const [shareUrl, setShareUrl] = useState('');
   const [embedCode, setEmbedCode] = useState('');

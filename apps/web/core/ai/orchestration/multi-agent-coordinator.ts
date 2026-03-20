@@ -461,7 +461,7 @@ class CompanyHubOrchestrator {
 
         // Simulate token usage
         onTokenUpdate(
-          emp.provider === 'claude' ? 'claude-3-5-sonnet-20241022' : 'gpt-4o-mini',
+          emp.provider === 'claude' ? 'claude-3-5-sonnet-20241022' : 'gpt-5.4-mini',
           150,
           0.002,
           emp.provider,

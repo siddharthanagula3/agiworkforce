@@ -16,6 +16,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
+  Clock,
+  Briefcase,
 } from 'lucide-react';
 
 interface DashboardSidebarProps {
@@ -57,9 +59,19 @@ const PRODUCT_NAVIGATION: NavigationItem[] = [
     icon: Image,
   },
   {
+    name: 'Workforce',
+    href: '/dashboard/workforce',
+    icon: Briefcase,
+  },
+  {
     name: 'Connectors',
     href: '/dashboard/connectors',
     icon: Plug,
+  },
+  {
+    name: 'Schedules',
+    href: '/dashboard/schedules',
+    icon: Clock,
   },
 ];
 

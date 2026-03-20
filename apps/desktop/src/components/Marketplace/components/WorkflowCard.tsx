@@ -1,5 +1,6 @@
 import { Clock, Copy, DollarSign, Eye, Share2, Sparkles, Star } from 'lucide-react';
 import React, { memo, useCallback, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import {
@@ -10,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '../../../components/ui/Card';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import { useAuthStore } from '../../../stores/auth';
 import type { PublishedWorkflow } from '../../../types/marketplace';
 import { useMarketplaceStore } from '../marketplaceStore';
@@ -39,8 +40,14 @@ export const WorkflowCard = memo(function WorkflowCard({
   workflow,
   showAnalytics = false,
 }: WorkflowCardProps) {
-  const { openDetailModal, openShareModal, cloneWorkflow, showCloneSuccess } =
-    useMarketplaceStore();
+  const { openDetailModal, openShareModal, cloneWorkflow, showCloneSuccess } = useMarketplaceStore(
+    useShallow((s) => ({
+      openDetailModal: s.openDetailModal,
+      openShareModal: s.openShareModal,
+      cloneWorkflow: s.cloneWorkflow,
+      showCloneSuccess: s.showCloneSuccess,
+    })),
+  );
   const [isCloning, setIsCloning] = useState(false);
 
   const handlePreview = useCallback(() => {
@@ -63,10 +70,8 @@ export const WorkflowCard = memo(function WorkflowCard({
         // MKT-003 fix: Validate user ID before attempting clone
         const userId = useAuthStore.getState().getCurrentUserId();
         if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
-          toast({
-            title: 'Authentication required',
+          toast.error('Authentication required', {
             description: 'Please sign in to clone workflows.',
-            variant: 'destructive',
           });
           return;
         }
@@ -81,10 +86,8 @@ export const WorkflowCard = memo(function WorkflowCard({
         showCloneSuccess(workflow);
       } catch (error) {
         console.error('Failed to clone workflow:', error);
-        toast({
-          title: 'Clone failed',
+        toast.error('Clone failed', {
           description: 'Failed to clone workflow. Please try again.',
-          variant: 'destructive',
         });
       } finally {
         setIsCloning(false);

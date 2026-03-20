@@ -19,7 +19,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { invoke, listen } from '@/lib/tauri-mock';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { ScrollArea } from '../ui/ScrollArea';
@@ -105,10 +105,8 @@ export function ExtensionsSettings() {
     // Listen for install completed
     unlisteners.push(
       listen<{ extensionId: string; name: string }>('extension:install_completed', (event) => {
-        toast({
-          title: 'Extension installed',
+        toast.success('Extension installed', {
           description: `${event.payload.name} has been installed successfully.`,
-          variant: 'success',
         });
         setInstalling(false);
         setInstallProgress(null);
@@ -119,10 +117,8 @@ export function ExtensionsSettings() {
     // Listen for install failed
     unlisteners.push(
       listen<{ error: string }>('extension:install_failed', (event) => {
-        toast({
-          title: 'Installation failed',
+        toast.error('Installation failed', {
           description: event.payload.error,
-          variant: 'destructive',
         });
         setInstalling(false);
         setInstallProgress(null);
@@ -186,10 +182,8 @@ export function ExtensionsSettings() {
       // Success handled by event listener
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Installation failed';
-      toast({
-        title: 'Installation failed',
+      toast.error('Installation failed', {
         description: errorMessage,
-        variant: 'destructive',
       });
       setInstalling(false);
       setInstallProgress(null);
@@ -211,18 +205,14 @@ export function ExtensionsSettings() {
     try {
       setActionInProgress(extension.id);
       await invoke<string>('extension_uninstall', { extensionId: extension.id });
-      toast({
-        title: 'Extension uninstalled',
+      toast.success('Extension uninstalled', {
         description: `${extension.name} has been removed.`,
-        variant: 'success',
       });
       void loadExtensions();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to uninstall extension';
-      toast({
-        title: 'Uninstall failed',
+      toast.error('Uninstall failed', {
         description: errorMessage,
-        variant: 'destructive',
       });
     } finally {
       setActionInProgress(null);
@@ -238,16 +228,13 @@ export function ExtensionsSettings() {
 
       if (isEnabled) {
         await invoke<string>('extension_disable', { extensionId: extension.id });
-        toast({
-          title: 'Extension disabled',
+        toast.message('Extension disabled', {
           description: `${extension.name} has been disabled.`,
         });
       } else {
         await invoke<string>('extension_enable', { extensionId: extension.id });
-        toast({
-          title: 'Extension enabled',
+        toast.success('Extension enabled', {
           description: `${extension.name} is now running.`,
-          variant: 'success',
         });
       }
 
@@ -257,10 +244,8 @@ export function ExtensionsSettings() {
         err instanceof Error
           ? err.message
           : `Failed to ${isEnabled ? 'disable' : 'enable'} extension`;
-      toast({
-        title: `${isEnabled ? 'Disable' : 'Enable'} failed`,
+      toast.error(`${isEnabled ? 'Disable' : 'Enable'} failed`, {
         description: errorMessage,
-        variant: 'destructive',
       });
     } finally {
       setActionInProgress(null);

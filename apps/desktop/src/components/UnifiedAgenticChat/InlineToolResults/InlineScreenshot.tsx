@@ -200,8 +200,7 @@ export const InlineScreenshot: React.FC<ToolResultProps> = ({ result, status }) 
         <img
           src={imageSrc}
           alt="Screenshot"
-          className={`w-full object-contain ${expanded ? '' : 'max-h-48'}`}
-          style={{ backgroundColor: '#1a1a1a' }}
+          className={`w-full object-contain bg-surface-elevated ${expanded ? '' : 'max-h-48'}`}
         />
         {!expanded && (
           <div className="absolute bottom-0 left-0 right-0 h-8 bg-linear-to-t from-surface-elevated to-transparent pointer-events-none" />

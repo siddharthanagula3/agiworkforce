@@ -27,6 +27,8 @@ import { useSettingsStore } from './settingsStore';
 import { useTerminalStore } from './terminalStore';
 import { useUnifiedChatStore } from './unifiedChatStore';
 import { useAutomationStore } from './automationStore';
+import { useOnboardingStore } from './onboardingStore';
+import { useSettingsV2Store } from './settingsV2Store';
 
 /**
  * Clears all store state on logout.
@@ -156,6 +158,22 @@ export function cleanupAllStoresOnLogout(): void {
       error: null,
     });
     console.debug('[LogoutCleanup] Settings store cleaned up');
+
+    // Onboarding store - clear session-specific state on logout
+    useOnboardingStore.setState({
+      session: null,
+      firstRunSession: null,
+      error: null,
+    });
+    console.debug('[LogoutCleanup] Onboarding store cleaned up');
+
+    // Settings V2 store - clear cached settings (will reload from DB on next login)
+    useSettingsV2Store.setState({
+      settings: {},
+      appSettings: null,
+      error: null,
+    });
+    console.debug('[LogoutCleanup] Settings V2 store cleaned up');
 
     console.debug('[LogoutCleanup] All stores cleaned up successfully');
   } catch (error) {

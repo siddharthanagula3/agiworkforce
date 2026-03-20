@@ -26,19 +26,30 @@ interface CalendarState {
   selectedAccountId: string | null;
   selectedCalendarId: string | null;
   loading: boolean;
+  syncing: boolean;
   error: string | null;
   pendingAuth: PendingAuthorization | null;
 
   refreshAccounts: () => Promise<void>;
   beginConnect: (config: CalendarConnectConfig) => Promise<void>;
   completeConnect: (code: string) => Promise<void>;
+  disconnectAccount: (accountId: string) => Promise<void>;
   selectAccount: (accountId: string | null) => Promise<void>;
   selectCalendar: (calendarId: string | null) => Promise<void>;
   refreshEvents: (options?: Partial<ListEventsOptions>) => Promise<void>;
+  getEvent: (calendarId: string, eventId: string) => Promise<CalendarEvent>;
   createEvent: (request: CreateEventRequest) => Promise<void>;
   updateEvent: (calendarId: string, eventId: string, request: UpdateEventRequest) => Promise<void>;
   deleteEvent: (calendarId: string, eventId: string) => Promise<void>;
+  syncCalendar: () => Promise<CalendarSyncResponse>;
+  getSystemTimezone: () => Promise<string>;
   clearError: () => void;
+}
+
+export interface CalendarSyncResponse {
+  calendars_synced: number;
+  events_synced: number;
+  errors: string[];
 }
 
 export interface CalendarConnectConfig {
@@ -138,6 +149,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   selectedAccountId: null,
   selectedCalendarId: null,
   loading: false,
+  syncing: false,
   error: null,
   pendingAuth: null,
 
@@ -221,6 +233,30 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       throw error;
     } finally {
       set({ loading: false });
+    }
+  },
+
+  disconnectAccount: async (accountId) => {
+    try {
+      set({ loading: true, error: null });
+      await invoke('calendar_disconnect', { accountId });
+      set((state) => ({
+        accounts: state.accounts.filter((acc) => acc.account_id !== accountId),
+        selectedAccountId: state.selectedAccountId === accountId ? null : state.selectedAccountId,
+        calendars: state.selectedAccountId === accountId ? [] : state.calendars,
+        events: state.selectedAccountId === accountId ? [] : state.events,
+        loading: false,
+      }));
+      toast.success('Calendar disconnected');
+      const remaining = get().accounts;
+      const next = remaining[0];
+      if (next) {
+        await get().selectAccount(next.account_id);
+      }
+    } catch (error) {
+      console.error('[calendar] disconnect failed', error);
+      set({ error: (error as Error).message, loading: false });
+      throw error;
     }
   },
 
@@ -391,6 +427,68 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     } catch (error) {
       console.error('[calendar] failed to delete event', error);
       set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+
+  getEvent: async (calendarId, eventId) => {
+    const { selectedAccountId } = get();
+    if (!selectedAccountId) {
+      throw new Error('No calendar account selected');
+    }
+
+    try {
+      set({ loading: true, error: null });
+      const event = await invoke<CalendarEvent>('calendar_get_event', {
+        accountId: selectedAccountId,
+        calendarId,
+        eventId,
+      });
+      set({ loading: false });
+      return normalizeEvent(event);
+    } catch (error) {
+      console.error('[calendar] failed to get event', error);
+      set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+
+  syncCalendar: async () => {
+    const { selectedAccountId } = get();
+    if (!selectedAccountId) {
+      throw new Error('No calendar account selected');
+    }
+
+    try {
+      set({ syncing: true, error: null });
+      const response = await invoke<CalendarSyncResponse>('calendar_sync', {
+        accountId: selectedAccountId,
+      });
+
+      if (response.errors.length > 0) {
+        console.warn('[calendar] sync completed with errors', response.errors);
+      }
+
+      await get().refreshEvents();
+      set({ syncing: false });
+      toast.success(
+        `Synced ${response.calendars_synced} calendars, ${response.events_synced} events`,
+      );
+      return response;
+    } catch (error) {
+      console.error('[calendar] sync failed', error);
+      set({ error: (error as Error).message, syncing: false });
+      throw error;
+    }
+  },
+
+  getSystemTimezone: async () => {
+    try {
+      const timezone = await invoke<string>('calendar_get_system_timezone');
+      return timezone;
+    } catch (error) {
+      console.error('[calendar] failed to get system timezone', error);
+      set({ error: (error as Error).message });
       throw error;
     }
   },

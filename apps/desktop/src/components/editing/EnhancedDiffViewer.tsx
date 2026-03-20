@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react';
+import { useShallow } from 'zustand/react/shallow';
 import { useEditingStore } from '../../stores/editingStore';
 import { cn } from '../../lib/utils';
 import { defaultEditorOptions, getMonacoTheme } from '../../lib/monaco-config';
@@ -23,7 +24,17 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
     rejectHunk,
     inlineMode,
     toggleInlineMode,
-  } = useEditingStore();
+  } = useEditingStore(
+    useShallow((s) => ({
+      pendingChanges: s.pendingChanges,
+      acceptChange: s.acceptChange,
+      rejectChange: s.rejectChange,
+      acceptHunk: s.acceptHunk,
+      rejectHunk: s.rejectHunk,
+      inlineMode: s.inlineMode,
+      toggleInlineMode: s.toggleInlineMode,
+    })),
+  );
   const { theme } = useThemeContext();
 
   const diff = pendingChanges.get(filePath);

@@ -18,11 +18,7 @@
     "notifications",
     "tabGroups"
   ],
-  "host_permissions": [
-    "https://api.agiworkforce.com/*",
-    "https://*.supabase.co/*",
-    "https://agiworkforce.com/*"
-  ],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
   },

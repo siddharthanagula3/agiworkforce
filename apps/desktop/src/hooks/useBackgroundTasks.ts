@@ -17,7 +17,7 @@ import { invoke, listen, isTauri } from '../lib/tauri-mock';
 import type { UnlistenFn } from '../lib/tauri-mock';
 import { useAgentStore } from '../stores/chat/agentStore';
 import type { BackgroundTask, BackgroundTaskStatus } from '../stores/chat/agentStore';
-import { toast } from './useToast';
+import { toast } from 'sonner';
 
 /**
  * Backend task response structure (snake_case from Rust)
@@ -133,9 +133,21 @@ export interface UseBackgroundTasksReturn {
    */
   refreshTasks: () => Promise<void>;
   /**
+   * Submit a new background task (bg_submit_task)
+   */
+  submitTask: (name: string, description?: string, priority?: string) => Promise<string | null>;
+  /**
    * Cancel a specific task
    */
   cancelTask: (taskId: string) => Promise<boolean>;
+  /**
+   * Pause a running task (bg_pause_task)
+   */
+  pauseTask: (taskId: string) => Promise<boolean>;
+  /**
+   * Resume a paused task (bg_resume_task)
+   */
+  resumeTask: (taskId: string) => Promise<boolean>;
   /**
    * Get status of a specific task
    */
@@ -238,8 +250,7 @@ export function useBackgroundTasks(
           completedAt: new Date(),
         });
 
-        toast({
-          title: 'Task cancelled',
+        toast.success('Task cancelled', {
           description: 'The background task has been cancelled.',
         });
 
@@ -248,9 +259,121 @@ export function useBackgroundTasks(
         const errorMessage = err instanceof Error ? err.message : String(err);
         console.error('[useBackgroundTasks] Failed to cancel task:', errorMessage);
 
-        toast({
-          variant: 'destructive',
-          title: 'Failed to cancel task',
+        toast.error('Failed to cancel task', {
+          description: errorMessage,
+        });
+
+        return false;
+      }
+    },
+    [updateBackgroundTask],
+  );
+
+  /**
+   * Submit a new background task (bg_submit_task)
+   */
+  const submitTask = useCallback(
+    async (
+      name: string,
+      description?: string,
+      priority: string = 'Normal',
+    ): Promise<string | null> => {
+      if (!isTauri) {
+        console.debug('[useBackgroundTasks] Not in Tauri environment, cannot submit task');
+        return null;
+      }
+
+      try {
+        const taskId = await invoke<string>('bg_submit_task', {
+          request: {
+            name,
+            description: description ?? null,
+            priority,
+            payload: null,
+          },
+        });
+
+        // Refresh the task list to pick up the new task
+        await refreshTasks();
+
+        toast.success('Task submitted', {
+          description: `Background task "${name}" has been queued.`,
+        });
+
+        return taskId;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error('[useBackgroundTasks] Failed to submit task:', errorMessage);
+
+        toast.error('Failed to submit task', {
+          description: errorMessage,
+        });
+
+        return null;
+      }
+    },
+    [refreshTasks],
+  );
+
+  /**
+   * Pause a running task (bg_pause_task)
+   */
+  const pauseTask = useCallback(
+    async (taskId: string): Promise<boolean> => {
+      if (!isTauri) {
+        console.debug('[useBackgroundTasks] Not in Tauri environment, cannot pause task');
+        return false;
+      }
+
+      try {
+        await invoke<void>('bg_pause_task', { taskId });
+
+        updateBackgroundTask(taskId, { status: 'paused' });
+
+        toast.success('Task paused', {
+          description: 'The background task has been paused.',
+        });
+
+        return true;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error('[useBackgroundTasks] Failed to pause task:', errorMessage);
+
+        toast.error('Failed to pause task', {
+          description: errorMessage,
+        });
+
+        return false;
+      }
+    },
+    [updateBackgroundTask],
+  );
+
+  /**
+   * Resume a paused task (bg_resume_task)
+   */
+  const resumeTask = useCallback(
+    async (taskId: string): Promise<boolean> => {
+      if (!isTauri) {
+        console.debug('[useBackgroundTasks] Not in Tauri environment, cannot resume task');
+        return false;
+      }
+
+      try {
+        await invoke<void>('bg_resume_task', { taskId });
+
+        updateBackgroundTask(taskId, { status: 'running' });
+
+        toast.success('Task resumed', {
+          description: 'The background task has been resumed.',
+        });
+
+        return true;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error('[useBackgroundTasks] Failed to resume task:', errorMessage);
+
+        toast.error('Failed to resume task', {
           description: errorMessage,
         });
 
@@ -384,7 +507,10 @@ export function useBackgroundTasks(
     isLoading,
     error,
     refreshTasks,
+    submitTask,
     cancelTask,
+    pauseTask,
+    resumeTask,
     getTaskStatus,
   };
 }

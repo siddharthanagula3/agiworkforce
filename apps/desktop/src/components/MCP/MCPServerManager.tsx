@@ -14,6 +14,7 @@ import {
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { McpClient } from '../../api/mcp';
+import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 import type { McpServerInfo, McpServersConfig } from '../../types/mcp';
 import { Badge } from '../ui/Badge';
@@ -71,7 +72,11 @@ const curatedCatalog = [
 function ServerConfigDialog({ server, open, onClose, onSave }: ServerConfigDialogProps) {
   const [apiKey, setApiKey] = useState('');
   const [endpoint, setEndpoint] = useState('');
-  const { storeCredential } = useMcpStore();
+  const { storeCredential } = useMcpStore(
+    useShallow((s) => ({
+      storeCredential: s.storeCredential,
+    })),
+  );
 
   const handleSave = async () => {
     if (server && apiKey) {
@@ -279,7 +284,20 @@ export function MCPServerManager() {
     enableServer,
     disableServer,
     clearError,
-  } = useMcpStore();
+  } = useMcpStore(
+    useShallow((s) => ({
+      servers: s.servers,
+      isLoading: s.isLoading,
+      error: s.error,
+      initialize: s.initialize,
+      refreshServers: s.refreshServers,
+      connectServer: s.connectServer,
+      disconnectServer: s.disconnectServer,
+      enableServer: s.enableServer,
+      disableServer: s.disableServer,
+      clearError: s.clearError,
+    })),
+  );
 
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedServer, setSelectedServer] = useState<McpServerInfo | null>(null);

@@ -59,7 +59,7 @@ export function ExecutionSidecarTerminal() {
     if (el) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [terminalOutput.length]);
+  }, [terminalOutput]);
 
   const isIdle = activeTerminalStreams.length === 0 && terminalCommands.length === 0;
 
@@ -73,7 +73,7 @@ export function ExecutionSidecarTerminal() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#0d1117]">
+    <div className="flex flex-col h-full bg-surface-base">
       {/* Terminal header */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/5 shrink-0">
         <Terminal className="w-3 h-3 text-green-400/70" />
@@ -96,7 +96,7 @@ export function ExecutionSidecarTerminal() {
 
           return (
             <div
-              key={index}
+              key={`${index}-${line}`}
               className={
                 isCommand
                   ? 'text-green-300 font-semibold'

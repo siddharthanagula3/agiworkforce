@@ -17,6 +17,9 @@ import {
   Save,
   X,
   Upload,
+  Cloud,
+  CloudOff,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -49,16 +52,26 @@ function getAuthHeaders(): Record<string, string> {
   };
 }
 
+interface SyncStatus {
+  lastSync: string | null;
+  entriesCount: number;
+  sources: Record<string, number>;
+}
+
 export default function MemoryPage() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [serverSearchResults, setServerSearchResults] = useState<Memory[] | null>(null);
+  const [searching, setSearching] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchMemories = useCallback(async () => {
     setLoading(true);
@@ -76,9 +89,75 @@ export default function MemoryPage() {
     }
   }, []);
 
+  const fetchSyncStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/memory/sync', {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as SyncStatus;
+      setSyncStatus(data);
+    } catch {
+      // Silently fail — sync status is non-critical
+    }
+  }, []);
+
   useEffect(() => {
     void fetchMemories();
-  }, [fetchMemories]);
+    void fetchSyncStatus();
+  }, [fetchMemories, fetchSyncStatus]);
+
+  // Server-side search with debounce
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 2) {
+      setServerSearchResults(null);
+      return;
+    }
+
+    setSearching(true);
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/memory/search?q=${encodeURIComponent(trimmed)}`, {
+            headers: getAuthHeaders(),
+          });
+          if (!res.ok) {
+            setServerSearchResults(null);
+            return;
+          }
+          const data = (await res.json()) as { memories?: Memory[] };
+          setServerSearchResults(data.memories ?? []);
+        } catch {
+          setServerSearchResults(null);
+        } finally {
+          setSearching(false);
+        }
+      })();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/memory/sync', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Sync failed');
+      const data = (await res.json()) as { synced: number; conflicts: number };
+      toast.success(`Synced ${data.synced} memories`);
+      // Refresh both the memory list and sync status
+      void fetchMemories();
+      void fetchSyncStatus();
+    } catch {
+      toast.error('Failed to sync memories');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -164,12 +243,15 @@ export default function MemoryPage() {
     }
   };
 
-  const filteredMemories = memories.filter((m) =>
-    searchQuery
-      ? m.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (m.category?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
-      : true,
-  );
+  // Use server search results when available (query >= 2 chars); fall back to client filter
+  const filteredMemories = serverSearchResults
+    ? serverSearchResults
+    : memories.filter((m) =>
+        searchQuery
+          ? m.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (m.category?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+          : true,
+      );
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('en-US', {
@@ -191,6 +273,14 @@ export default function MemoryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => void handleSync()} disabled={syncing}>
+            {syncing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Cloud className="mr-2 h-4 w-4" />
+            )}
+            {syncing ? 'Syncing...' : 'Sync'}
+          </Button>
           <Link href="/dashboard/settings/memory/import">
             <Button variant="outline" size="sm">
               <Upload className="mr-2 h-4 w-4" />
@@ -212,6 +302,53 @@ export default function MemoryPage() {
           </Button>
         </div>
       </div>
+
+      {/* Sync status card */}
+      {syncStatus && (
+        <Card className="border-zinc-800 bg-zinc-900">
+          <CardContent className="flex items-center justify-between pt-4 pb-4">
+            <div className="flex items-center gap-3">
+              {syncStatus.lastSync ? (
+                <Cloud className="h-5 w-5 text-emerald-400" />
+              ) : (
+                <CloudOff className="h-5 w-5 text-zinc-500" />
+              )}
+              <div>
+                <p className="text-sm font-medium text-zinc-200">
+                  {syncStatus.entriesCount} memories synced
+                </p>
+                <p className="text-xs text-zinc-500">
+                  {syncStatus.lastSync
+                    ? `Last synced ${formatDate(syncStatus.lastSync)}`
+                    : 'Never synced'}
+                  {syncStatus.sources && Object.keys(syncStatus.sources).length > 0 && (
+                    <span className="ml-2">
+                      (
+                      {Object.entries(syncStatus.sources)
+                        .filter(([, count]) => count > 0)
+                        .map(([source, count]) => `${count} ${source}`)
+                        .join(', ')}
+                      )
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleSync()}
+              disabled={syncing}
+            >
+              {syncing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Reset confirmation banner */}
       {showResetConfirm && (
@@ -279,13 +416,26 @@ export default function MemoryPage() {
 
       {/* Search bar */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+        {searching ? (
+          <Loader2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary animate-spin" />
+        ) : (
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+        )}
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search memories..."
+          placeholder="Search memories... (server-side for 2+ chars)"
           className="pl-10"
         />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+            aria-label="Clear search"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Memory list */}

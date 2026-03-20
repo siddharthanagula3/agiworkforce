@@ -71,7 +71,7 @@ export function getConfiguredProviders(): AIProvider[] {
 
 function getDefaultModel(provider: AIProvider): string {
   const defaultModels: Record<AIProvider, string> = {
-    openai: 'gpt-4o',
+    openai: 'gpt-5.4',
     anthropic: 'claude-3-5-sonnet-20241022',
     google: 'gemini-2.0-flash',
     perplexity: 'sonar-pro',

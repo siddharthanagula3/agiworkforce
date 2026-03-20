@@ -463,8 +463,8 @@ function getWebviewContent(
         <option value="claude-sonnet-4.6">Claude Sonnet 4.6</option>
         <option value="claude-haiku-4.5">Claude Haiku 4.5</option>
         <option value="gpt-5-pro">GPT-5 Pro</option>
-        <option value="gpt-5.2">GPT-5.2</option>
-        <option value="gpt-5-nano">GPT-5 Nano</option>
+        <option value="gpt-5.4">GPT-5.4</option>
+        <option value="gpt-5.4-nano">GPT-5.4 Nano</option>
         <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
         <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
         <option value="deepseek-r1">DeepSeek R1</option>

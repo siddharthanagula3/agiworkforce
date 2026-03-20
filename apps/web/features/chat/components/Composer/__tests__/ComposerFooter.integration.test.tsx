@@ -21,14 +21,14 @@ vi.mock('@shared/stores/model-store', () => ({
     }) => unknown,
   ) => {
     const state = {
-      selectedModelId: 'gpt-4o',
+      selectedModelId: 'gpt-5.4',
       setSelectedModelId: vi.fn(),
-      getSelectedModel: () => ({ id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI' }),
+      getSelectedModel: () => ({ id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI' }),
     };
     return selector(state);
   },
   AVAILABLE_MODELS: [
-    { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI' },
+    { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI' },
     { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic' },
   ],
 }));
@@ -131,7 +131,7 @@ describe('ComposerFooter — model selector integration', () => {
   it('renders the current model name in the selector button', () => {
     render(<ComposerFooter />);
     // The button that triggers the popover contains the model name
-    expect(screen.getByRole('button', { name: /change model/i })).toHaveTextContent('GPT-4o');
+    expect(screen.getByRole('button', { name: /change model/i })).toHaveTextContent('GPT-5.4');
   });
 
   it('renders the model selector button with aria-label', () => {

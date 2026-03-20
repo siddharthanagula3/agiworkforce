@@ -106,8 +106,8 @@ function FormField({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       onChange?.(e);
 
-      // Run validation with debouncing
-      if (validate && touched) {
+      // Run validation with debouncing — always validate internally, but only show errors when touched
+      if (validate) {
         if (validateTimeoutRef.current) {
           clearTimeout(validateTimeoutRef.current);
         }
@@ -117,7 +117,7 @@ function FormField({
         }, validateDebounce);
       }
     },
-    [onChange, validate, touched, validateDebounce],
+    [onChange, validate, validateDebounce],
   );
 
   const handleBlur = React.useCallback(

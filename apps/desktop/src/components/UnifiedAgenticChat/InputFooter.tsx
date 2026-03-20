@@ -1,14 +1,11 @@
 /**
  * InputFooter Component
  *
- * Footer section with keyboard hints, usage meters, and project folder selector.
+ * Minimal footer with keyboard hints and usage meters (shown only when usage > 80%).
  */
 
-import React, { useCallback } from 'react';
-import { FolderOpen } from 'lucide-react';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import React from 'react';
 import { cn } from '../../lib/utils';
-import { useProjectStore } from '../../stores/projectStore';
 
 export interface InputFooterProps {
   /** Whether in simple mode */
@@ -43,25 +40,9 @@ export const InputFooter: React.FC<InputFooterProps> = ({
 
   const hasTokenUsage = tokenCurrent != null && tokenMax != null && tokenMax > 0;
 
-  const currentFolder = useProjectStore((s) => s.currentFolder);
-  const setCurrentFolder = useProjectStore((s) => s.setCurrentFolder);
-
-  // Derive basename from the full path for display
-  const folderBasename = currentFolder
-    ? currentFolder.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? currentFolder
-    : null;
-
-  const handleSelectFolder = useCallback(async () => {
-    try {
-      const selected = await openDialog({ directory: true });
-      if (typeof selected === 'string' && selected.length > 0) {
-        setCurrentFolder(selected);
-      }
-    } catch (err) {
-      // User cancelled the dialog or dialog is unavailable — silently ignore
-      console.debug('[InputFooter] Folder dialog cancelled or unavailable', err);
-    }
-  }, [setCurrentFolder]);
+  // Only show usage meters when usage exceeds 80%
+  const showCreditMeter = !isSimpleMode && showCreditUsage && creditPercentage > 80;
+  const showTokenMeter = !isSimpleMode && !showCreditMeter && hasTokenUsage && tokenPercentage > 80;
 
   return (
     <div className="flex items-center justify-between px-4 py-2 border-t border-[hsl(var(--border))]">
@@ -75,30 +56,10 @@ export const InputFooter: React.FC<InputFooterProps> = ({
             <>Enter to send / Shift+Enter for newline</>
           )}
         </span>
-
-        {/* Project folder pill */}
-        {!isSimpleMode && (
-          <button
-            type="button"
-            onClick={handleSelectFolder}
-            title={currentFolder ?? 'Select project folder'}
-            className={cn(
-              'flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs',
-              'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]',
-              'hover:text-[hsl(var(--foreground))] hover:border-[hsl(var(--foreground)/0.3)]',
-              'transition-colors duration-150 shrink-0 max-w-[160px]',
-            )}
-          >
-            <FolderOpen className="w-3 h-3 shrink-0" />
-            <span className="truncate">
-              {folderBasename ?? 'Select project'}
-            </span>
-          </button>
-        )}
       </div>
 
-      {/* Usage meters - hidden in simple mode */}
-      {!isSimpleMode && showCreditUsage ? (
+      {/* Usage meters - only shown when usage > 80% */}
+      {showCreditMeter ? (
         <div
           className="flex items-center gap-2"
           title={`Monthly Usage: ${creditPercentage.toFixed(1)}%`}
@@ -113,11 +74,7 @@ export const InputFooter: React.FC<InputFooterProps> = ({
             <div
               className={cn(
                 'h-full rounded-full transition-all duration-300',
-                creditPercentage > 90
-                  ? 'bg-red-500'
-                  : creditPercentage > 75
-                    ? 'bg-amber-500'
-                    : 'bg-green-500',
+                creditPercentage > 90 ? 'bg-red-500' : 'bg-amber-500',
               )}
               style={{ width: `${Math.min(creditPercentage, 100)}%` }}
             />
@@ -133,7 +90,7 @@ export const InputFooter: React.FC<InputFooterProps> = ({
             {creditPercentage.toFixed(1)}%
           </span>
         </div>
-      ) : !isSimpleMode && hasTokenUsage ? (
+      ) : showTokenMeter ? (
         <div className="flex items-center gap-2" title="Context Window Usage">
           <div
             className="w-24 h-1.5 bg-[hsl(var(--muted))] rounded-full overflow-hidden"
@@ -145,11 +102,7 @@ export const InputFooter: React.FC<InputFooterProps> = ({
             <div
               className={cn(
                 'h-full rounded-full transition-all duration-300',
-                tokenPercentage > 90
-                  ? 'bg-red-500'
-                  : tokenPercentage > 70
-                    ? 'bg-amber-500'
-                    : 'bg-primary',
+                tokenPercentage > 90 ? 'bg-red-500' : 'bg-amber-500',
               )}
               style={{ width: `${tokenPercentage}%` }}
             />
@@ -162,5 +115,3 @@ export const InputFooter: React.FC<InputFooterProps> = ({
     </div>
   );
 };
-
-export default InputFooter;

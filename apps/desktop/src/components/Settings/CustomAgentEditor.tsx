@@ -5,9 +5,11 @@
  * Writes the agent config to disk via the Rust backend.
  */
 
-import { Loader2, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { Lock, Loader2, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
+import { getAllModels } from '../../constants/llm';
 import { type CustomAgentConfig, useCustomAgentsStore } from '../../stores/customAgentsStore';
 import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';
@@ -17,16 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 // ---- Constants ---------------------------------------------------------------
 
-const MODEL_OPTIONS = [
-  { value: '', label: 'Inherit from settings' },
-  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (recommended)' },
-  { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-  { value: 'gpt-5.4', label: 'GPT-5.4' },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-  { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite' },
-  { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
-] as const;
+const INHERIT_OPTION = { value: '', label: 'Inherit from settings', provider: undefined };
 
 const TOOL_OPTIONS = [
   'Read',
@@ -68,7 +61,29 @@ function createEmpty(): CustomAgentConfig {
 // ---- Component ---------------------------------------------------------------
 
 export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorProps) {
-  const { saveAgent, deleteAgent, isLoading } = useCustomAgentsStore();
+  const { saveAgent, deleteAgent, isLoading } = useCustomAgentsStore(
+    useShallow((s) => ({
+      saveAgent: s.saveAgent,
+      deleteAgent: s.deleteAgent,
+      isLoading: s.isLoading,
+    })),
+  );
+
+  const modelOptions = useMemo(
+    () => [
+      INHERIT_OPTION,
+      ...getAllModels()
+        .filter(
+          (m) =>
+            m.modelType === 'chat' ||
+            m.modelType === 'code' ||
+            m.modelType === 'reasoning' ||
+            m.modelType === 'multimodal',
+        )
+        .map((m) => ({ value: m.id, label: m.name, provider: m.provider })),
+    ],
+    [],
+  );
 
   const [form, setForm] = useState<CustomAgentConfig>(() =>
     initialAgent ? { ...initialAgent } : createEmpty(),
@@ -120,6 +135,16 @@ export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorPr
   const handleSave = useCallback(async () => {
     if (!form.name.trim()) {
       toast.error('Agent name is required');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(form.name.trim())) {
+      toast.error('Agent name may only contain letters, numbers, hyphens, and underscores');
+      return;
+    }
+
+    if (!form.systemPrompt || !form.systemPrompt.trim()) {
+      toast.error('System prompt is required');
       return;
     }
 
@@ -204,8 +229,9 @@ export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorPr
       <div className="space-y-4">
         {/* Name */}
         <div className="space-y-1.5">
-          <Label htmlFor="agent-name">
+          <Label htmlFor="agent-name" className="flex items-center gap-1">
             Name <span className="text-destructive">*</span>
+            {isEditing && <Lock className="w-3 h-3 text-muted-foreground" />}
           </Label>
           <Input
             id="agent-name"
@@ -213,6 +239,7 @@ export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorPr
             value={form.name}
             onChange={(e) => handleFieldChange('name', e.target.value)}
             disabled={busy || isEditing}
+            title={isEditing ? 'Agent name cannot be changed after creation' : undefined}
           />
           <p className="text-xs text-muted-foreground">
             Used as the filename. Use lowercase letters, hyphens, and underscores only. Cannot be
@@ -244,7 +271,7 @@ export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorPr
               <SelectValue placeholder="Inherit from settings" />
             </SelectTrigger>
             <SelectContent>
-              {MODEL_OPTIONS.map((opt) => (
+              {modelOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>

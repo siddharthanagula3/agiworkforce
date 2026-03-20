@@ -74,7 +74,7 @@ mod unit_tests {
                 tool_calls: None,
                 tool_call_id: None,
             }],
-            model: "gpt-4o".to_string(),
+            model: "gpt-5.4".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(1024),
             stream: false,
@@ -85,7 +85,7 @@ mod unit_tests {
         };
 
         assert_eq!(request.messages.len(), 1);
-        assert_eq!(request.model, "gpt-4o");
+        assert_eq!(request.model, "gpt-5.4");
         assert!(request.messages[0].multimodal_content.is_some());
     }
 
@@ -198,7 +198,7 @@ mod unit_tests {
                 tool_calls: None,
                 tool_call_id: None,
             }],
-            model: "gpt-4o".to_string(),
+            model: "gpt-5.4".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(1024),
             stream: false,

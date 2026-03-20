@@ -1,6 +1,6 @@
 import { invoke } from '@/lib/tauri-mock';
 import { Eye, EyeOff, KeyRound, Lock, LockOpen, RefreshCw, Shield } from 'lucide-react';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '../ui/Button';
@@ -80,10 +80,8 @@ export function MasterPasswordSettings() {
           await loadStatus();
         } catch (err) {
           console.error('Failed to lock master password:', err);
-          toast({
-            title: 'Lock failed',
+          toast.error('Lock failed', {
             description: 'Failed to lock. Please try again.',
-            variant: 'destructive',
           });
         }
       }}
@@ -259,6 +257,7 @@ function SetupView({ onDone, onCancel }: SetupViewProps) {
             />
             <button
               type="button"
+              aria-label={showPw ? 'Hide password' : 'Show password'}
               onClick={() => setShowPw((v) => !v)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
@@ -350,6 +349,7 @@ function UnlockView({ onDone, onCancel }: UnlockViewProps) {
             />
             <button
               type="button"
+              aria-label={showPw ? 'Hide password' : 'Show password'}
               onClick={() => setShowPw((v) => !v)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
@@ -443,6 +443,7 @@ function ChangeView({ onDone, onCancel }: ChangeViewProps) {
             />
             <button
               type="button"
+              aria-label={showPw ? 'Hide password' : 'Show password'}
               onClick={() => setShowPw((v) => !v)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
@@ -500,6 +501,7 @@ interface MigrationViewProps {
 function MigrationView({ onDone, onCancel }: MigrationViewProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [migrationConfirmed, setMigrationConfirmed] = useState(false);
 
   const handleMigrate = async () => {
     setError(null);
@@ -528,11 +530,21 @@ function MigrationView({ onDone, onCancel }: MigrationViewProps) {
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 
+      <label className="flex items-center gap-2 text-sm mb-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={migrationConfirmed}
+          onChange={(e) => setMigrationConfirmed(e.target.checked)}
+          className="rounded"
+        />
+        I understand this cannot be undone and I have backed up my API keys
+      </label>
+
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" onClick={onCancel} disabled={loading}>
           Cancel
         </Button>
-        <Button onClick={() => void handleMigrate()} disabled={loading}>
+        <Button onClick={() => void handleMigrate()} disabled={loading || !migrationConfirmed}>
           {loading ? 'Migrating...' : 'Start Migration'}
         </Button>
       </div>

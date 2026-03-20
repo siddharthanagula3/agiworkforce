@@ -41,6 +41,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu';
+import { useShallow } from 'zustand/react/shallow';
 import {
   useArtifactStore,
   type Artifact,
@@ -81,7 +82,24 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     getArtifactsByConversation,
     applyDiffToArtifact,
     getVersionHistory,
-  } = useArtifactStore();
+  } = useArtifactStore(
+    useShallow((s) => ({
+      activeArtifactId: s.activeArtifactId,
+      panelOpen: s.panelOpen,
+      isStreaming: s.isStreaming,
+      setActiveArtifact: s.setActiveArtifact,
+      closePanel: s.closePanel,
+      getArtifact: s.getArtifact,
+      getRenderedArtifact: s.getRenderedArtifact,
+      deleteArtifact: s.deleteArtifact,
+      archiveArtifact: s.archiveArtifact,
+      pinArtifact: s.pinArtifact,
+      rollbackArtifact: s.rollbackArtifact,
+      getArtifactsByConversation: s.getArtifactsByConversation,
+      applyDiffToArtifact: s.applyDiffToArtifact,
+      getVersionHistory: s.getVersionHistory,
+    })),
+  );
 
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
   const [renderedArtifact, setRenderedArtifact] = useState<RenderedArtifact | null>(null);
@@ -97,14 +115,23 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
   // Load artifacts for conversation
   useEffect(() => {
     if (conversationId) {
-      getArtifactsByConversation(conversationId).then(setArtifacts);
+      getArtifactsByConversation(conversationId)
+        .then(setArtifacts)
+        .catch((err: unknown) => {
+          console.error('Failed to load artifacts:', err);
+          toast.error('Failed to load artifacts');
+        });
     }
   }, [conversationId, getArtifactsByConversation]);
 
   // Load rendered artifact when active artifact changes
   useEffect(() => {
     if (activeArtifactId) {
-      getRenderedArtifact(activeArtifactId).then(setRenderedArtifact);
+      getRenderedArtifact(activeArtifactId)
+        .then(setRenderedArtifact)
+        .catch((err: unknown) => {
+          console.error('Failed to load rendered artifact:', err);
+        });
     } else {
       setRenderedArtifact(null);
     }
@@ -115,9 +142,13 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     if (isStreaming && activeArtifactId === isStreaming) {
       let cancelled = false;
       const interval = setInterval(() => {
-        getRenderedArtifact(activeArtifactId).then((r) => {
-          if (!cancelled) setRenderedArtifact(r);
-        });
+        getRenderedArtifact(activeArtifactId)
+          .then((r) => {
+            if (!cancelled) setRenderedArtifact(r);
+          })
+          .catch((err: unknown) => {
+            console.error('Failed to poll rendered artifact:', err);
+          });
       }, 100);
       return () => {
         cancelled = true;
@@ -133,6 +164,10 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
       setIsLoadingVersions(true);
       getVersionHistory(activeArtifactId)
         .then((v) => setVersions(v ?? []))
+        .catch((err: unknown) => {
+          console.error('Failed to load version history:', err);
+          toast.error('Failed to load version history');
+        })
         .finally(() => setIsLoadingVersions(false));
     }
   }, [innerTab, activeArtifactId, getVersionHistory]);
@@ -146,60 +181,94 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
 
   const handleCopy = useCallback(async () => {
     if (!renderedArtifact) return;
-    const artifact = await getArtifact(renderedArtifact.id);
-    if (artifact) {
-      await navigator.clipboard.writeText(artifact.content);
-      toast.success('Copied to clipboard');
+    try {
+      const artifact = await getArtifact(renderedArtifact.id);
+      if (artifact) {
+        await navigator.clipboard.writeText(artifact.content);
+        toast.success('Copied to clipboard');
+      }
+    } catch (err: unknown) {
+      console.error('Failed to copy artifact:', err);
+      toast.error('Failed to copy to clipboard');
     }
   }, [renderedArtifact, getArtifact]);
 
   const handleDownload = useCallback(async () => {
     if (!renderedArtifact) return;
-    const artifact = await getArtifact(renderedArtifact.id);
-    if (!artifact) return;
-    const blob = new Blob([artifact.content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${artifact.title}.${getArtifactFileExtension(artifact.artifact_type)}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast.success('Downloaded artifact');
+    try {
+      const artifact = await getArtifact(renderedArtifact.id);
+      if (!artifact) return;
+      const blob = new Blob([artifact.content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${artifact.title}.${getArtifactFileExtension(artifact.artifact_type)}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success('Downloaded artifact');
+    } catch (err: unknown) {
+      console.error('Failed to download artifact:', err);
+      toast.error('Failed to download artifact');
+    }
   }, [renderedArtifact, getArtifact]);
 
   const handleDelete = useCallback(async () => {
     if (!renderedArtifact) return;
-    const success = await deleteArtifact(renderedArtifact.id);
-    if (success) {
-      toast.success('Artifact deleted');
-      setArtifacts((prev) => prev.filter((a) => a.id !== renderedArtifact.id));
+    try {
+      const success = await deleteArtifact(renderedArtifact.id);
+      if (success) {
+        toast.success('Artifact deleted');
+        setArtifacts((prev) => prev.filter((a) => a.id !== renderedArtifact.id));
+      }
+    } catch (err: unknown) {
+      console.error('Failed to delete artifact:', err);
+      toast.error('Failed to delete artifact');
     }
   }, [renderedArtifact, deleteArtifact]);
 
   const handleArchive = useCallback(async () => {
     if (!renderedArtifact) return;
-    const success = await archiveArtifact(renderedArtifact.id);
-    if (success) toast.success('Artifact archived');
+    try {
+      const success = await archiveArtifact(renderedArtifact.id);
+      if (success) toast.success('Artifact archived');
+    } catch (err: unknown) {
+      console.error('Failed to archive artifact:', err);
+      toast.error('Failed to archive artifact');
+    }
   }, [renderedArtifact, archiveArtifact]);
 
   const handlePin = useCallback(async () => {
     if (!renderedArtifact) return;
-    const artifact = await getArtifact(renderedArtifact.id);
-    if (!artifact) return;
-    const success = await pinArtifact(renderedArtifact.id, !artifact.pinned);
-    if (success) toast.success(artifact.pinned ? 'Unpinned artifact' : 'Pinned artifact');
+    try {
+      const artifact = await getArtifact(renderedArtifact.id);
+      if (!artifact) return;
+      const success = await pinArtifact(renderedArtifact.id, !artifact.pinned);
+      if (success) toast.success(artifact.pinned ? 'Unpinned artifact' : 'Pinned artifact');
+    } catch (err: unknown) {
+      console.error('Failed to pin artifact:', err);
+      toast.error('Failed to pin artifact');
+    }
   }, [renderedArtifact, getArtifact, pinArtifact]);
 
   const handleRollback = useCallback(
     async (version: number) => {
       if (!activeArtifactId) return;
-      const artifact = await rollbackArtifact(activeArtifactId, version);
-      if (artifact) {
-        toast.success(`Rolled back to version ${version}`);
-        setShowVersionHistoryDialog(false);
-        getRenderedArtifact(activeArtifactId).then(setRenderedArtifact);
+      try {
+        const artifact = await rollbackArtifact(activeArtifactId, version);
+        if (artifact) {
+          toast.success(`Rolled back to version ${version}`);
+          setShowVersionHistoryDialog(false);
+          getRenderedArtifact(activeArtifactId)
+            .then(setRenderedArtifact)
+            .catch((err: unknown) => {
+              console.error('Failed to refresh artifact after rollback:', err);
+            });
+        }
+      } catch (err: unknown) {
+        console.error('Failed to rollback artifact:', err);
+        toast.error('Failed to rollback artifact');
       }
     },
     [activeArtifactId, rollbackArtifact, getRenderedArtifact],
@@ -208,12 +277,21 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
   const handleEditSave = useCallback(
     async (diff: ArtifactDiff) => {
       if (!activeArtifactId) return;
-      const artifact = await applyDiffToArtifact(activeArtifactId, diff);
-      if (artifact) {
-        toast.success('Artifact updated');
-        setIsEditing(false);
-        getRenderedArtifact(activeArtifactId).then(setRenderedArtifact);
-      } else {
+      try {
+        const artifact = await applyDiffToArtifact(activeArtifactId, diff);
+        if (artifact) {
+          toast.success('Artifact updated');
+          setIsEditing(false);
+          getRenderedArtifact(activeArtifactId)
+            .then(setRenderedArtifact)
+            .catch((err: unknown) => {
+              console.error('Failed to refresh artifact after edit:', err);
+            });
+        } else {
+          toast.error('Failed to save changes');
+        }
+      } catch (err: unknown) {
+        console.error('Failed to apply diff to artifact:', err);
         toast.error('Failed to save changes');
       }
     },
@@ -347,7 +425,12 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                               className="h-7 w-7"
                               onClick={() => {
                                 if (!isEditing) {
-                                  getArtifact(artifact.id).then(setEditingArtifact);
+                                  getArtifact(artifact.id)
+                                    .then(setEditingArtifact)
+                                    .catch((err: unknown) => {
+                                      console.error('Failed to load artifact for editing:', err);
+                                      toast.error('Failed to load artifact');
+                                    });
                                 } else {
                                   setEditingArtifact(null);
                                 }

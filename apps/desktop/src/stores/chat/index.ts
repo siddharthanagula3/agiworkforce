@@ -44,7 +44,15 @@ export type {
 } from './types';
 
 // Export types from individual stores
-export type { ChatState } from './chatStore';
+export type {
+  ChatState,
+  ChatSearchResult,
+  ConversationSearchResult,
+  BackendConversationStats,
+  CostOverviewResponse,
+  CostAnalyticsResponse,
+  ContextCompactionResponse,
+} from './chatStore';
 export type {
   AgentStatus,
   BackgroundTaskStatus,

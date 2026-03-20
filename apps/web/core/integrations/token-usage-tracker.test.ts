@@ -37,7 +37,7 @@ describe('Token Usage Tracker', () => {
   describe('logTokenUsage', () => {
     it('should log token usage successfully', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-4o',
+        'gpt-5.4',
         100,
         'user-123',
         'session-456',
@@ -56,7 +56,7 @@ describe('Token Usage Tracker', () => {
     });
 
     it('should use default session ID when not provided', async () => {
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123');
 
       const summary = tokenLogger.getSessionSummary('default');
 
@@ -65,8 +65,8 @@ describe('Token Usage Tracker', () => {
     });
 
     it('should accumulate tokens for same session', async () => {
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-1');
-      await tokenLogger.logTokenUsage('gpt-4o', 150, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage('gpt-5.4', 150, 'user-123', 'session-1');
 
       const summary = tokenLogger.getSessionSummary('session-1');
 
@@ -75,7 +75,7 @@ describe('Token Usage Tracker', () => {
 
     it('should track by model correctly', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-4o',
+        'gpt-5.4',
         100,
         'user-123',
         'session-1',
@@ -97,15 +97,15 @@ describe('Token Usage Tracker', () => {
 
       const summary = tokenLogger.getSessionSummary('session-1');
 
-      expect(summary?.byModel['gpt-4o']).toBeDefined();
-      expect(summary?.byModel['gpt-4o']?.totalTokens).toBe(100);
+      expect(summary?.byModel['gpt-5.4']).toBeDefined();
+      expect(summary?.byModel['gpt-5.4']?.totalTokens).toBe(100);
       expect(summary?.byModel['claude-3-5-sonnet-20241022']).toBeDefined();
       expect(summary?.byModel['claude-3-5-sonnet-20241022']?.totalTokens).toBe(200);
     });
 
     it('should calculate cost correctly', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-4o',
+        'gpt-5.4',
         1000,
         'user-123',
         'session-1',
@@ -117,13 +117,13 @@ describe('Token Usage Tracker', () => {
 
       const summary = tokenLogger.getSessionSummary('session-1');
 
-      // gpt-4o: input $2.5/1M, output $10/1M
+      // gpt-5.4: input $2.5/1M, output $10/1M
       // 400 input tokens = 0.001, 600 output tokens = 0.006
       expect(summary?.totalCost).toBeGreaterThan(0);
     });
 
     it('should estimate input/output tokens when not provided', async () => {
-      await tokenLogger.logTokenUsage('gpt-4o', 1000, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage('gpt-5.4', 1000, 'user-123', 'session-1');
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
@@ -133,7 +133,7 @@ describe('Token Usage Tracker', () => {
 
     it('should use provided agent info', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-4o',
+        'gpt-5.4',
         100,
         'user-123',
         'session-1',
@@ -149,7 +149,7 @@ describe('Token Usage Tracker', () => {
 
     it('should handle concurrent calls safely', async () => {
       const promises = Array.from({ length: 10 }, (_, _i) =>
-        tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-1'),
+        tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1'),
       );
 
       await Promise.all(promises);
@@ -159,19 +159,19 @@ describe('Token Usage Tracker', () => {
     });
 
     it('should increment call count per model', async () => {
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-1');
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-1');
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1');
 
       const summary = tokenLogger.getSessionSummary('session-1');
 
-      expect(summary?.byModel['gpt-4o']?.callCount).toBe(3);
+      expect(summary?.byModel['gpt-5.4']?.callCount).toBe(3);
     });
   });
 
   describe('calculateCost', () => {
-    it('should calculate GPT-4o cost correctly', () => {
-      const cost = tokenLogger.calculateCost('gpt-4o', 1000000, 1000000);
+    it('should calculate GPT-5.4 cost correctly', () => {
+      const cost = tokenLogger.calculateCost('gpt-5.4', 1000000, 1000000);
 
       // Input: $2.5/1M, Output: $10/1M
       expect(cost).toBe(12.5);
@@ -199,7 +199,7 @@ describe('Token Usage Tracker', () => {
     });
 
     it('should handle zero tokens', () => {
-      const cost = tokenLogger.calculateCost('gpt-4o', 0, 0);
+      const cost = tokenLogger.calculateCost('gpt-5.4', 0, 0);
 
       expect(cost).toBe(0);
     });
@@ -214,7 +214,7 @@ describe('Token Usage Tracker', () => {
 
     it('should return correct session summary', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-4o',
+        'gpt-5.4',
         100,
         'user-123',
         'session-1',
@@ -242,7 +242,7 @@ describe('Token Usage Tracker', () => {
     });
 
     it('should return all logs for session', async () => {
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1');
       await tokenLogger.logTokenUsage('claude-3-5-sonnet-20241022', 200, 'user-123', 'session-1');
 
       const logs = tokenLogger.getSessionLogs('session-1');
@@ -252,7 +252,7 @@ describe('Token Usage Tracker', () => {
 
     it('should include task description in logs', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-4o',
+        'gpt-5.4',
         100,
         'user-123',
         'session-1',
@@ -280,7 +280,7 @@ describe('Token Usage Tracker', () => {
 
     it('should return current usage', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-4o',
+        'gpt-5.4',
         100,
         'user-123',
         'session-1',
@@ -294,14 +294,14 @@ describe('Token Usage Tracker', () => {
 
       expect(usage.totalTokens).toBe(100);
       expect(usage.totalCost).toBeGreaterThan(0);
-      expect(usage.byModel['gpt-4o']).toBeDefined();
+      expect(usage.byModel['gpt-5.4']).toBeDefined();
     });
   });
 
   describe('clearSessionCache', () => {
     it('should clear specific session cache', async () => {
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-1');
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-2');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-2');
 
       tokenLogger.clearSessionCache('session-1');
 
@@ -312,8 +312,8 @@ describe('Token Usage Tracker', () => {
 
   describe('clearAllCaches', () => {
     it('should clear all session caches', async () => {
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-1');
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-2');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-2');
 
       tokenLogger.clearAllCaches();
 
@@ -333,14 +333,14 @@ describe('Token Usage Tracker', () => {
       const TokenLoggerClass = tokenLogger.constructor as unknown as TokenLoggerServiceStatic;
       const models = TokenLoggerClass.getSupportedModels();
 
-      expect(models).toContain('gpt-4o');
+      expect(models).toContain('gpt-5.4');
       expect(models).toContain('claude-3-5-sonnet-20241022');
       expect(models).toContain('gemini-2.0-flash');
     });
 
     it('should return model pricing', () => {
       const TokenLoggerClass = tokenLogger.constructor as unknown as TokenLoggerServiceStatic;
-      const pricing = TokenLoggerClass.getModelPricing('gpt-4o');
+      const pricing = TokenLoggerClass.getModelPricing('gpt-5.4');
 
       expect(pricing?.input).toBe(2.5);
       expect(pricing?.output).toBe(10.0);
@@ -357,7 +357,7 @@ describe('Token Usage Tracker', () => {
 
   describe('convenience function', () => {
     it('should log token usage through convenience function', async () => {
-      await logTokenUsage('gpt-4o', 100, 'user-123');
+      await logTokenUsage('gpt-5.4', 100, 'user-123');
 
       const summary = tokenLogger.getSessionSummary('default');
 
@@ -367,13 +367,13 @@ describe('Token Usage Tracker', () => {
 
   describe('provider detection', () => {
     it('should detect OpenAI provider', async () => {
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1');
 
       const logs = tokenLogger.getSessionLogs('session-1');
       const summary = tokenLogger.getSessionSummary('session-1');
 
       expect(logs?.[0]?.provider).toBe('openai');
-      expect(summary?.byModel['gpt-4o']?.provider).toBe('openai');
+      expect(summary?.byModel['gpt-5.4']?.provider).toBe('openai');
     });
 
     it('should detect Anthropic provider', async () => {
@@ -410,9 +410,9 @@ describe('Token Usage Tracker', () => {
   });
 
   describe('pricing accuracy', () => {
-    it('should use correct GPT-4o pricing', async () => {
+    it('should use correct GPT-5.4 pricing', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-4o',
+        'gpt-5.4',
         1000000,
         'user-123',
         'session-1',
@@ -430,9 +430,9 @@ describe('Token Usage Tracker', () => {
       expect(summary?.totalCost).toBeCloseTo(6.25, 2);
     });
 
-    it('should use correct GPT-4o-mini pricing', async () => {
+    it('should use correct GPT-5.4-mini pricing', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-4o-mini',
+        'gpt-5.4-mini',
         1000000,
         'user-123',
         'session-1',
@@ -476,7 +476,7 @@ describe('Token Usage Tracker', () => {
       const warnSpy = vi.spyOn(console, 'warn');
 
       await tokenLogger.logTokenUsage(
-        'gpt-4o',
+        'gpt-5.4',
         100,
         'user-123',
         'session-1',
@@ -503,7 +503,7 @@ describe('Token Usage Tracker', () => {
       const errorSpy = vi.spyOn(console, 'error');
 
       // Should not throw
-      await tokenLogger.logTokenUsage('gpt-4o', 100, 'user-123', 'session-db-error');
+      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-db-error');
 
       // In-memory tracking should still work
       const summary = tokenLogger.getSessionSummary('session-db-error');

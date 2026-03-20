@@ -3,6 +3,11 @@
 //! Each provider normalizes messages, tool definitions, and streaming responses
 //! into a common format. Provider-specific quirks are handled here.
 
+// Model catalog API surface is intentionally broad: find_model, models_for_provider,
+// supports_tool_use, etc. are used by --list-models and will be wired into model
+// selection heuristics, deprecation warnings, and the /models REPL command.
+#![allow(dead_code)]
+
 use serde_json::Value;
 
 /// Static model catalog entry.

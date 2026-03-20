@@ -33,11 +33,12 @@ describe('chatStore modelStore subscription', () => {
 
     vi.doMock('../../modelStore', () => ({
       useModelStore: {
-        getState: () => ({ selectedModel: 'gpt-5.2' }),
+        getState: () => ({ selectedModel: 'gpt-5.4' }),
       },
     }));
 
-    const { initializeChatStoreModelStoreSubscription, useChatStore } = await import('../chatStore');
+    const { initializeChatStoreModelStoreSubscription, useChatStore } =
+      await import('../chatStore');
     await initializeChatStoreModelStoreSubscription();
 
     expect(warnSpy).not.toHaveBeenCalled();
@@ -51,24 +52,25 @@ describe('chatStore modelStore subscription', () => {
         _selector: (state: { selectedModel: string | null }) => string | null,
         listener: (selectedModel: string | null) => void,
       ) => {
-        listener('gpt-5.2');
+        listener('gpt-5.4');
         return unsubscribe;
       },
     );
 
     vi.doMock('../../modelStore', () => ({
       useModelStore: {
-        getState: () => ({ selectedModel: 'gpt-5.2' }),
+        getState: () => ({ selectedModel: 'gpt-5.4' }),
         subscribe,
       },
     }));
 
-    const { initializeChatStoreModelStoreSubscription, useChatStore } = await import('../chatStore');
+    const { initializeChatStoreModelStoreSubscription, useChatStore } =
+      await import('../chatStore');
     await initializeChatStoreModelStoreSubscription();
 
     expect(subscribe).toHaveBeenCalled();
     expect(unsubscribe).not.toHaveBeenCalled();
-    expect(useChatStore.getState().tokenUsage.max).toBe(getModelContextWindow('gpt-5.2'));
+    expect(useChatStore.getState().tokenUsage.max).toBe(getModelContextWindow('gpt-5.4'));
   });
 
   it('does not auto-initialize the subscription on import in test mode', async () => {
@@ -76,7 +78,7 @@ describe('chatStore modelStore subscription', () => {
 
     vi.doMock('../../modelStore', () => ({
       useModelStore: {
-        getState: () => ({ selectedModel: 'gpt-5.2' }),
+        getState: () => ({ selectedModel: 'gpt-5.4' }),
         subscribe,
       },
     }));

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useTemplateStore } from '../../stores/templateStore';
 import { TemplateCard } from './TemplateCard';
 import { TemplateDetails } from './TemplateDetails';
@@ -19,7 +20,23 @@ export const TemplateMarketplace: React.FC = () => {
     filterByCategory,
     selectTemplate,
     clearError,
-  } = useTemplateStore();
+  } = useTemplateStore(
+    useShallow((s) => ({
+      templates: s.templates,
+      installedTemplates: s.installedTemplates,
+      selectedTemplate: s.selectedTemplate,
+      isLoading: s.isLoading,
+      error: s.error,
+      searchQuery: s.searchQuery,
+      selectedCategory: s.selectedCategory,
+      fetchTemplates: s.fetchTemplates,
+      fetchInstalledTemplates: s.fetchInstalledTemplates,
+      searchTemplates: s.searchTemplates,
+      filterByCategory: s.filterByCategory,
+      selectTemplate: s.selectTemplate,
+      clearError: s.clearError,
+    })),
+  );
 
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const [showInstalled, setShowInstalled] = useState(false);
@@ -66,7 +83,8 @@ export const TemplateMarketplace: React.FC = () => {
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </form>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setShowInstalled(!showInstalled)}
                 className={`px-4 py-2 rounded-md font-medium transition-colors ${
                   showInstalled
@@ -80,7 +98,8 @@ export const TemplateMarketplace: React.FC = () => {
 
             {/* Category Filters */}
             <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => handleCategoryFilter(null)}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                   selectedCategory === null
@@ -91,7 +110,8 @@ export const TemplateMarketplace: React.FC = () => {
                 All Categories
               </button>
               {Object.entries(CATEGORY_INFO).map(([key, info]) => (
-                <button type="button"
+                <button
+                  type="button"
                   key={key}
                   onClick={() => handleCategoryFilter(key as TemplateCategory)}
                   className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
@@ -112,7 +132,11 @@ export const TemplateMarketplace: React.FC = () => {
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded relative">
               <span className="block sm:inline">{error}</span>
-              <button type="button" onClick={clearError} className="absolute top-0 bottom-0 right-0 px-4 py-3">
+              <button
+                type="button"
+                onClick={clearError}
+                className="absolute top-0 bottom-0 right-0 px-4 py-3"
+              >
                 <span className="text-2xl">&times;</span>
               </button>
             </div>

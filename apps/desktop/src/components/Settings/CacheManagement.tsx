@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { CacheService } from '../../services/cacheService';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import type { CacheStats, CacheAnalytics } from '../../types/cache';
 import {
   AlertDialog,
@@ -26,6 +26,8 @@ export const CacheManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
+  const [clearLLMDialogOpen, setClearLLMDialogOpen] = useState(false);
+  const [clearProviderDialog, setClearProviderDialog] = useState<string | null>(null);
 
   // Load cache statistics on component mount
   useEffect(() => {
@@ -54,18 +56,15 @@ export const CacheManagement: React.FC = () => {
     try {
       setLoading(true);
       await CacheService.clearAll();
-      toast({
-        title: 'Cache cleared',
+      toast.success('Cache cleared', {
         description: 'All cache entries have been removed.',
       });
       await loadStats();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to clear cache';
       setError(message);
-      toast({
-        title: 'Clear failed',
+      toast.error('Clear failed', {
         description: message,
-        variant: 'destructive',
       });
       console.error('Error clearing cache:', err);
     } finally {
@@ -90,17 +89,14 @@ export const CacheManagement: React.FC = () => {
     try {
       setLoading(true);
       await CacheService.clearByProvider(provider);
-      toast({
-        title: 'Provider cache cleared',
+      toast.success('Provider cache cleared', {
         description: `Cache for ${provider} has been removed.`,
       });
       await loadStats();
     } catch (err) {
       const message = err instanceof Error ? err.message : `Failed to clear cache for ${provider}`;
-      toast({
-        title: 'Clear failed',
+      toast.error('Clear failed', {
         description: message,
-        variant: 'destructive',
       });
       console.error(`Error clearing cache for provider ${provider}:`, err);
     } finally {
@@ -112,17 +108,14 @@ export const CacheManagement: React.FC = () => {
     try {
       setLoading(true);
       const pruned = await CacheService.pruneExpired();
-      toast({
-        title: 'Cache pruned',
+      toast.success('Cache pruned', {
         description: `Successfully removed ${pruned} expired cache entries`,
       });
       await loadStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to prune expired cache');
-      toast({
-        title: 'Prune failed',
+      toast.error('Prune failed', {
         description: err instanceof Error ? err.message : 'Failed to prune expired cache',
-        variant: 'destructive',
       });
       console.error('Error pruning cache:', err);
     } finally {
@@ -164,7 +157,8 @@ export const CacheManagement: React.FC = () => {
     return (
       <div className="p-4 text-red-600">
         <p>Failed to load cache statistics. Please try again.</p>
-        <button type="button"
+        <button
+          type="button"
           onClick={loadStats}
           className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
@@ -190,7 +184,7 @@ export const CacheManagement: React.FC = () => {
       )}
 
       {/* Overall Statistics */}
-      <div className="bg-white border rounded-lg p-4 shadow-xs">
+      <div className="bg-card border rounded-lg p-4 shadow-xs">
         <h3 className="text-lg font-semibold mb-4">Overall Statistics</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -210,11 +204,12 @@ export const CacheManagement: React.FC = () => {
 
       {/* LLM Cache */}
       {stats && (
-        <div className="bg-white border rounded-lg p-4 shadow-xs">
+        <div className="bg-card border rounded-lg p-4 shadow-xs">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold">LLM Cache</h3>
-            <button type="button"
-              onClick={() => handleClearByType('llm')}
+            <button
+              type="button"
+              onClick={() => setClearLLMDialogOpen(true)}
               disabled={loading || stats.llm_cache.entries === 0}
               className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -242,7 +237,7 @@ export const CacheManagement: React.FC = () => {
 
       {/* Analytics */}
       {analytics && analytics.most_cached_queries.length > 0 && (
-        <div className="bg-white border rounded-lg p-4 shadow-xs">
+        <div className="bg-card border rounded-lg p-4 shadow-xs">
           <h3 className="text-lg font-semibold mb-4">Most Cached Queries</h3>
           <div className="space-y-2">
             {analytics.most_cached_queries.slice(0, 5).map((query, index) => (
@@ -267,7 +262,7 @@ export const CacheManagement: React.FC = () => {
 
       {/* Provider Breakdown */}
       {analytics && analytics.provider_breakdown.length > 0 && (
-        <div className="bg-white border rounded-lg p-4 shadow-xs">
+        <div className="bg-card border rounded-lg p-4 shadow-xs">
           <h3 className="text-lg font-semibold mb-4">Cache by Provider</h3>
           <div className="space-y-2">
             {analytics.provider_breakdown.map((provider, index) => (
@@ -280,8 +275,9 @@ export const CacheManagement: React.FC = () => {
                   <p className="text-sm font-semibold text-green-600">
                     {formatCurrency(provider.cost_saved)}
                   </p>
-                  <button type="button"
-                    onClick={() => void handleClearByProvider(provider.provider)}
+                  <button
+                    type="button"
+                    onClick={() => setClearProviderDialog(provider.provider)}
                     disabled={loading}
                     className="text-xs text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -295,31 +291,35 @@ export const CacheManagement: React.FC = () => {
       )}
 
       {/* Actions */}
-      <div className="bg-white border rounded-lg p-4 shadow-xs">
+      <div className="bg-card border rounded-lg p-4 shadow-xs">
         <h3 className="text-lg font-semibold mb-4">Cache Actions</h3>
         <div className="flex flex-wrap gap-2">
-          <button type="button"
+          <button
+            type="button"
             onClick={loadStats}
             disabled={loading}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
           >
             Refresh Stats
           </button>
-          <button type="button"
+          <button
+            type="button"
             onClick={handlePruneExpired}
             disabled={loading}
             className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
           >
             Prune Expired
           </button>
-          <button type="button"
+          <button
+            type="button"
             onClick={handleExport}
             disabled={loading}
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
           >
             Export Cache
           </button>
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setClearAllDialogOpen(true)}
             disabled={loading}
             className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
@@ -328,6 +328,56 @@ export const CacheManagement: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Confirmation dialog for clearing LLM cache */}
+      <AlertDialog open={clearLLMDialogOpen} onOpenChange={setClearLLMDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear LLM Cache?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all cached responses. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleClearByType('llm')}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Clear LLM Cache
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmation dialog for clearing a provider's cache */}
+      <AlertDialog
+        open={clearProviderDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setClearProviderDialog(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear provider cache?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (clearProviderDialog !== null) {
+                  void handleClearByProvider(clearProviderDialog);
+                }
+                setClearProviderDialog(null);
+              }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Clear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirmation dialog for clearing all cache */}
       <AlertDialog open={clearAllDialogOpen} onOpenChange={setClearAllDialogOpen}>

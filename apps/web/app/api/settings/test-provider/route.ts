@@ -16,7 +16,7 @@ import { requireCsrfToken } from '@/lib/csrf';
  * and a lightweight probe model for each.
  */
 const PROVIDER_PROBE: Record<string, { provider: string; model: string }> = {
-  OpenAI: { provider: 'openai', model: 'gpt-5-nano' },
+  OpenAI: { provider: 'openai', model: 'gpt-5.4-nano' },
   Anthropic: { provider: 'anthropic', model: 'claude-haiku-4-5' },
   Google: { provider: 'google', model: 'gemini-2.0-flash' },
   Perplexity: { provider: 'perplexity', model: 'sonar' },

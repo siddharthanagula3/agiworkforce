@@ -176,20 +176,20 @@ mod production_parser_tests {
 
     #[test]
     fn test_openai_content_delta() {
-        let event = r#"data: {"id":"chatcmpl-abc","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}],"model":"gpt-5.2"}"#;
+        let event = r#"data: {"id":"chatcmpl-abc","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}],"model":"gpt-5.4"}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
         assert_eq!(chunk.content, "Hello");
         assert!(!chunk.done);
         assert!(chunk.finish_reason.is_none());
-        assert_eq!(chunk.model.as_deref(), Some("gpt-5.2"));
+        assert_eq!(chunk.model.as_deref(), Some("gpt-5.4"));
         assert!(!chunk.keepalive);
     }
 
     #[test]
     fn test_openai_finish_reason_stop() {
-        let event = r#"data: {"id":"chatcmpl-abc","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"gpt-5.2"}"#;
+        let event = r#"data: {"id":"chatcmpl-abc","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"gpt-5.4"}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -210,7 +210,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_openai_with_usage() {
-        let event = r#"data: {"id":"chatcmpl-abc","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"gpt-5.2","usage":{"prompt_tokens":15,"completion_tokens":25,"total_tokens":40}}"#;
+        let event = r#"data: {"id":"chatcmpl-abc","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"gpt-5.4","usage":{"prompt_tokens":15,"completion_tokens":25,"total_tokens":40}}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -223,7 +223,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_openai_tool_call_delta() {
-        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_xyz","type":"function","function":{"name":"get_weather","arguments":"{\"city\":"}}]},"finish_reason":null}],"model":"gpt-5.2"}"#;
+        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_xyz","type":"function","function":{"name":"get_weather","arguments":"{\"city\":"}}]},"finish_reason":null}],"model":"gpt-5.4"}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -280,7 +280,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_openai_finish_reason_length() {
-        let event = r#"data: {"choices":[{"index":0,"delta":{"content":"..."},"finish_reason":"length"}],"model":"gpt-5.2"}"#;
+        let event = r#"data: {"choices":[{"index":0,"delta":{"content":"..."},"finish_reason":"length"}],"model":"gpt-5.4"}"#;
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -303,7 +303,7 @@ mod production_parser_tests {
     #[test]
     fn test_openai_multi_line_event() {
         // SSE events can have multiple data: lines; only lines with "data:" prefix are parsed
-        let event = "event: message\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}],\"model\":\"gpt-5.2\"}";
+        let event = "event: message\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}],\"model\":\"gpt-5.4\"}";
 
         let chunk = parse_sse_event(event, Provider::OpenAI).unwrap();
 
@@ -794,8 +794,8 @@ mod stream_buffer_tests {
     fn test_multiple_events_in_single_buffer_openai() {
         // Simulates two OpenAI events arriving in one TCP chunk
         let raw = concat!(
-            "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}],\"model\":\"gpt-5.2\"}\n\n",
-            "data: {\"choices\":[{\"delta\":{\"content\":\" world\"},\"finish_reason\":null}],\"model\":\"gpt-5.2\"}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}],\"model\":\"gpt-5.4\"}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\" world\"},\"finish_reason\":null}],\"model\":\"gpt-5.4\"}\n\n",
         );
 
         let chunks = split_and_parse_events(raw, Provider::OpenAI);

@@ -33,6 +33,7 @@ export type { AgentMode };
 
 /** Base theme modes. Any other string value is treated as a named theme ID from the theme registry. */
 export type Theme = 'light' | 'dark' | 'system' | string;
+export type ChatFont = 'default' | 'sans' | 'mono' | 'dyslexic';
 export type Language =
   | 'en'
   | 'es'
@@ -48,6 +49,25 @@ export type Language =
   | 'hi';
 
 export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video';
+
+export type EmojiUsage = 'never' | 'sometimes' | 'often';
+
+export interface PersonalizationPreferences {
+  /** User's display name shown to the AI */
+  name: string;
+  /** User's occupation or role */
+  occupation: string;
+  /** Background info about the user */
+  bio: string;
+  /** Response formality: 1 = very casual, 5 = very formal */
+  formality: number;
+  /** Response warmth: 1 = very direct, 5 = very warm */
+  warmth: number;
+  /** Response detail level: 1 = very concise, 5 = very detailed */
+  detail: number;
+  /** How often the AI should use emoji */
+  emojiUsage: EmojiUsage;
+}
 
 export interface TaskRouting {
   search: { provider: Provider; model: string };
@@ -82,6 +102,8 @@ interface WindowPreferences {
   selectedTheme?: string;
   /** When true, applies the OpenDyslexic font for improved readability. */
   dyslexicFont?: boolean;
+  /** Selected chat font family: default | sans | mono | dyslexic */
+  chatFont?: ChatFont;
 }
 
 export interface ChatPreferences {
@@ -108,6 +130,14 @@ export interface ChatPreferences {
   chatStorageMode: 'local' | 'cloud';
 }
 
+/**
+ * Policy applied when an approval request times out.
+ * - 'auto-deny'    — automatically reject the tool call (safest, default)
+ * - 'auto-approve' — automatically approve (use with caution)
+ * - 'pause'        — pause the agent and wait for the user to return
+ */
+export type ApprovalTimeoutPolicy = 'auto-deny' | 'auto-approve' | 'pause';
+
 export interface ExecutionPreferences {
   /** Maximum task timeout in minutes (1-4320, default 1440=24hrs) */
   maxTimeoutMinutes: number;
@@ -119,6 +149,12 @@ export interface ExecutionPreferences {
   autoResumeOnRestart: boolean;
   /** Show timeout warnings at 1hr, 30min, 5min remaining */
   enableTimeoutWarnings: boolean;
+  /** Seconds before a pending approval times out (default 300 = 5 minutes) */
+  approvalTimeoutSeconds: number;
+  /** What to do when an approval request times out */
+  approvalTimeoutPolicy: ApprovalTimeoutPolicy;
+  /** Duration (seconds) of inactivity on an active stream before triggering timeout recovery */
+  streamInactivityTimeoutSeconds: number;
 }
 
 export interface GlobalHotkeyPreferences {
@@ -154,6 +190,7 @@ interface SettingsState {
   chatPreferences: ChatPreferences;
   executionPreferences: ExecutionPreferences;
   globalHotkeyPreferences: GlobalHotkeyPreferences;
+  personalization: PersonalizationPreferences;
   allowedDirectories: string[];
   customModels: CustomModelConfig[];
   /**
@@ -183,6 +220,7 @@ interface SettingsState {
   setTheme: (theme: Theme) => void;
   setSelectedTheme: (themeId: string | undefined) => void;
   setDyslexicFont: (enabled: boolean) => void;
+  setChatFont: (font: ChatFont) => void;
   setLanguage: (language: Language) => void;
   setStartupPosition: (position: 'center' | 'remember') => void;
   setDockOnStartup: (dock: 'left' | 'right' | null) => void;
@@ -200,6 +238,11 @@ interface SettingsState {
   setCheckpointInterval: (interval: number) => void;
   setAutoResumeOnRestart: (enabled: boolean) => void;
   setEnableTimeoutWarnings: (enabled: boolean) => void;
+  setApprovalTimeoutSeconds: (seconds: number) => void;
+  setApprovalTimeoutPolicy: (policy: ApprovalTimeoutPolicy) => void;
+  setStreamInactivityTimeoutSeconds: (seconds: number) => void;
+
+  setPersonalization: (updates: Partial<PersonalizationPreferences>) => void;
 
   setGlobalHotkeyEnabled: (enabled: boolean) => void;
   setGlobalHotkeyCombo: (combo: string) => void;
@@ -224,6 +267,16 @@ interface SettingsState {
   setHasHydrated: (state: boolean) => void;
 }
 
+const defaultPersonalization: PersonalizationPreferences = {
+  name: '',
+  occupation: '',
+  bio: '',
+  formality: 3,
+  warmth: 3,
+  detail: 3,
+  emojiUsage: 'sometimes',
+};
+
 const defaultSettings: Pick<
   SettingsState,
   | 'llmConfig'
@@ -231,6 +284,7 @@ const defaultSettings: Pick<
   | 'chatPreferences'
   | 'executionPreferences'
   | 'globalHotkeyPreferences'
+  | 'personalization'
   | 'allowedDirectories'
   | 'customModels'
   | 'customKeybindings'
@@ -278,11 +332,15 @@ const defaultSettings: Pick<
     checkpointInterval: 5, // Steps between checkpoints
     autoResumeOnRestart: true,
     enableTimeoutWarnings: true,
+    approvalTimeoutSeconds: 300, // 5 minutes default
+    approvalTimeoutPolicy: 'auto-deny' as ApprovalTimeoutPolicy,
+    streamInactivityTimeoutSeconds: 30, // 30 seconds default
   },
   globalHotkeyPreferences: {
     enabled: true, // Enabled by default — competitive parity with Claude Desktop / ChatGPT Desktop
     combo: getDefaultGlobalHotkeyCombo(),
   },
+  personalization: defaultPersonalization,
   allowedDirectories: [],
   customModels: [],
   customKeybindings: {},
@@ -321,7 +379,10 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v17: Added selectedTheme to windowPreferences (named theme registry ID)
 // v18: Coding tools parity (no schema changes, version bump to invalidate stale caches)
 // v19: Added dyslexicFont accessibility toggle to windowPreferences
-const SETTINGS_STORE_VERSION = 19;
+// v20: Added approvalTimeoutSeconds, approvalTimeoutPolicy, streamInactivityTimeoutSeconds
+// v21: Added chatFont to windowPreferences for chat font selector tiles
+// v22: Added personalization preferences (name, occupation, bio, formality, warmth, detail, emojiUsage)
+const SETTINGS_STORE_VERSION = 22;
 
 export function isTaskRoutingModelAllowedForTier(
   category: TaskCategory,
@@ -448,6 +509,57 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setEnableTimeoutWarnings',
+          );
+        },
+
+        setApprovalTimeoutSeconds: (seconds: number) => {
+          const clamped = Math.max(30, Math.min(3600, seconds)); // 30s to 1 hour
+          set(
+            (state) => ({
+              executionPreferences: {
+                ...state.executionPreferences,
+                approvalTimeoutSeconds: clamped,
+              },
+            }),
+            undefined,
+            'settings/setApprovalTimeoutSeconds',
+          );
+        },
+
+        setApprovalTimeoutPolicy: (policy: ApprovalTimeoutPolicy) => {
+          set(
+            (state) => ({
+              executionPreferences: {
+                ...state.executionPreferences,
+                approvalTimeoutPolicy: policy,
+              },
+            }),
+            undefined,
+            'settings/setApprovalTimeoutPolicy',
+          );
+        },
+
+        setStreamInactivityTimeoutSeconds: (seconds: number) => {
+          const clamped = Math.max(10, Math.min(300, seconds)); // 10s to 5 minutes
+          set(
+            (state) => ({
+              executionPreferences: {
+                ...state.executionPreferences,
+                streamInactivityTimeoutSeconds: clamped,
+              },
+            }),
+            undefined,
+            'settings/setStreamInactivityTimeoutSeconds',
+          );
+        },
+
+        setPersonalization: (updates: Partial<PersonalizationPreferences>) => {
+          set(
+            (state) => ({
+              personalization: { ...state.personalization, ...updates },
+            }),
+            undefined,
+            'settings/setPersonalization',
           );
         },
 
@@ -684,6 +796,26 @@ export const useSettingsStore = create<SettingsState>()(
             } else {
               document.documentElement.classList.remove('dyslexic-font');
             }
+          }
+        },
+
+        setChatFont: (font: ChatFont) => {
+          set(
+            (state) => ({
+              windowPreferences: { ...state.windowPreferences, chatFont: font },
+            }),
+            undefined,
+            'settings/setChatFont',
+          );
+          // Apply chat font CSS variable immediately
+          if (typeof document !== 'undefined') {
+            const fontMap: Record<ChatFont, string> = {
+              default: 'ui-sans-serif, system-ui, sans-serif',
+              sans: "'Inter', system-ui, sans-serif",
+              mono: "'JetBrains Mono', ui-monospace, monospace",
+              dyslexic: "'OpenDyslexic', sans-serif",
+            };
+            document.documentElement.style.setProperty('--chat-font-family', fontMap[font]);
           }
         },
 
@@ -1058,6 +1190,11 @@ export const useSettingsStore = create<SettingsState>()(
                 'settings/loadSettings/error',
               );
             }
+          } finally {
+            // Safety net: ensure loading is always cleared even if catch handler throws
+            if (get().loading) {
+              set({ loading: false }, undefined, 'settings/loadSettings/finally');
+            }
           }
         },
 
@@ -1150,10 +1287,12 @@ export const useSettingsStore = create<SettingsState>()(
             startupPosition: state.windowPreferences.startupPosition,
             dockOnStartup: state.windowPreferences.dockOnStartup,
             selectedTheme: state.windowPreferences.selectedTheme,
+            chatFont: state.windowPreferences.chatFont,
           },
           chatPreferences: state.chatPreferences,
           executionPreferences: state.executionPreferences,
           globalHotkeyPreferences: state.globalHotkeyPreferences,
+          personalization: state.personalization,
           allowedDirectories: state.allowedDirectories,
           customModels: state.customModels,
           customKeybindings: state.customKeybindings,
@@ -1210,6 +1349,12 @@ export const useSettingsStore = create<SettingsState>()(
             ...(persisted?.globalHotkeyPreferences ?? {}),
           };
 
+          const mergedPersonalization: PersonalizationPreferences = {
+            ...defaultPersonalization,
+            ...currentState.personalization,
+            ...(persisted?.personalization ?? {}),
+          };
+
           return {
             ...currentState,
             ...persisted,
@@ -1218,6 +1363,7 @@ export const useSettingsStore = create<SettingsState>()(
             chatPreferences: mergedChatPreferences,
             executionPreferences: mergedExecutionPreferences,
             globalHotkeyPreferences: mergedGlobalHotkeyPreferences,
+            personalization: mergedPersonalization,
             allowedDirectories: persisted?.allowedDirectories ?? currentState.allowedDirectories,
             customModels: Array.isArray(persisted?.customModels)
               ? persisted.customModels
@@ -1284,6 +1430,9 @@ export const useSettingsStore = create<SettingsState>()(
                 checkpointInterval: 5,
                 autoResumeOnRestart: true,
                 enableTimeoutWarnings: true,
+                approvalTimeoutSeconds: 300,
+                approvalTimeoutPolicy: 'auto-deny' as ApprovalTimeoutPolicy,
+                streamInactivityTimeoutSeconds: 30,
               };
             }
           }
@@ -1429,6 +1578,40 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
+          // Migration from v19 to v20: Add approval timeout + stream inactivity settings
+          if (version < 20) {
+            if (state.executionPreferences) {
+              const ep = state.executionPreferences as Partial<ExecutionPreferences>;
+              if (ep.approvalTimeoutSeconds === undefined) {
+                ep.approvalTimeoutSeconds = 300;
+              }
+              if (ep.approvalTimeoutPolicy === undefined) {
+                ep.approvalTimeoutPolicy = 'auto-deny';
+              }
+              if (ep.streamInactivityTimeoutSeconds === undefined) {
+                ep.streamInactivityTimeoutSeconds = 30;
+              }
+            }
+          }
+
+          // Migration from v20 to v21: Add chatFont to windowPreferences
+          if (version < 21) {
+            if (state.windowPreferences && state.windowPreferences.chatFont === undefined) {
+              state.windowPreferences = {
+                ...state.windowPreferences,
+                chatFont: 'default',
+              };
+            }
+          }
+
+          // Migration from v21 to v22: Add personalization preferences
+          if (version < 22) {
+            const stateWithPersonalization = state as Partial<SettingsState>;
+            if (!stateWithPersonalization.personalization) {
+              stateWithPersonalization.personalization = { ...defaultPersonalization };
+            }
+          }
+
           return state as SettingsState;
         },
         // Called when rehydration finishes (with or without errors)
@@ -1523,6 +1706,8 @@ export const selectLanguage = (state: SettingsState) => state.windowPreferences.
 export const selectStartupPosition = (state: SettingsState) =>
   state.windowPreferences.startupPosition;
 export const selectDockOnStartup = (state: SettingsState) => state.windowPreferences.dockOnStartup;
+export const selectChatFont = (state: SettingsState) =>
+  state.windowPreferences.chatFont ?? 'default';
 
 export const selectChatPreferences = (state: SettingsState) => state.chatPreferences;
 export const selectPromptCompletionEnabled = (state: SettingsState) =>
@@ -1549,7 +1734,17 @@ export const selectGlobalHotkeyEnabled = (state: SettingsState) =>
 export const selectGlobalHotkeyCombo = (state: SettingsState) =>
   state.globalHotkeyPreferences.combo;
 
+export const selectApprovalTimeoutSeconds = (state: SettingsState) =>
+  state.executionPreferences.approvalTimeoutSeconds;
+export const selectApprovalTimeoutPolicy = (state: SettingsState) =>
+  state.executionPreferences.approvalTimeoutPolicy;
+export const selectStreamInactivityTimeoutSeconds = (state: SettingsState) =>
+  state.executionPreferences.streamInactivityTimeoutSeconds;
+
 export const selectAllowedDirectories = (state: SettingsState) => state.allowedDirectories;
 export const selectSettingsLoading = (state: SettingsState) => state.loading;
 export const selectSettingsError = (state: SettingsState) => state.error;
 export const selectSettingsHasHydrated = (state: SettingsState) => state._hasHydrated;
+
+export const selectPersonalization = (state: SettingsState) =>
+  state.personalization ?? defaultPersonalization;

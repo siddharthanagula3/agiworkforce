@@ -10,6 +10,7 @@ export function MCPServerSettings() {
   const [copied, setCopied] = useState(false);
   const [tokenVisible, setTokenVisible] = useState(false);
   const [portValue, setPortValue] = useState('9090');
+  const [portError, setPortError] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchConfig();
@@ -46,13 +47,15 @@ export function MCPServerSettings() {
 
   const handlePortBlur = async () => {
     if (!config) return;
-    const parsed = Number(portValue);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-      setPortValue(String(config.port));
+    const portNum = parseInt(portValue, 10);
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+      setPortError('Port must be between 1 and 65535');
       return;
+    } else {
+      setPortError(null);
     }
-    if (parsed !== config.port) {
-      await updateConfig(parsed, undefined);
+    if (portNum !== config.port) {
+      await updateConfig(portNum, undefined);
     }
   };
 
@@ -88,7 +91,8 @@ export function MCPServerSettings() {
             {config?.running ? `Running on port ${config.port}` : 'Stopped'}
           </span>
         </div>
-        <button type="button"
+        <button
+          type="button"
           onClick={config?.running ? stopServer : startServer}
           className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
             config?.running
@@ -105,12 +109,15 @@ export function MCPServerSettings() {
         <label className="text-sm font-medium text-muted-foreground">Port</label>
         <input
           type="number"
+          min="1"
+          max="65535"
           value={portValue}
           onChange={(e) => setPortValue(e.target.value)}
           onBlur={() => void handlePortBlur()}
           disabled={config?.running}
           className="w-32 rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
         />
+        {portError && <p className="text-destructive text-xs mt-1">{portError}</p>}
         {config?.running && (
           <p className="text-xs text-muted-foreground">Stop server to change port</p>
         )}
@@ -123,7 +130,8 @@ export function MCPServerSettings() {
           <code className="flex-1 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground font-mono">
             {tokenVisible ? config?.token : '\u2022'.repeat(36)}
           </code>
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setTokenVisible((v) => !v)}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
@@ -154,7 +162,8 @@ export function MCPServerSettings() {
       </div>
 
       {/* Copy .mcp.json snippet */}
-      <button type="button"
+      <button
+        type="button"
         onClick={copySnippet}
         className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
       >

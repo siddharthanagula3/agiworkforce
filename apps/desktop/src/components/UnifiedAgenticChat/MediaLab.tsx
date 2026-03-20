@@ -10,6 +10,7 @@ import {
   Wand2,
   AlertTriangle,
 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { useMediaGenerationStore } from '../../stores/mediaGenerationStore';
@@ -96,7 +97,16 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [videoStyle, setVideoStyle] = useState('cinematic');
 
   const { imageJobs, videoJobs, loadingImage, loadingVideo, generateImage, generateVideo } =
-    useMediaGenerationStore();
+    useMediaGenerationStore(
+      useShallow((s) => ({
+        imageJobs: s.imageJobs,
+        videoJobs: s.videoJobs,
+        loadingImage: s.loadingImage,
+        loadingVideo: s.loadingVideo,
+        generateImage: s.generateImage,
+        generateVideo: s.generateVideo,
+      })),
+    );
 
   const subscription = useBillingStore((state) => state.subscription);
   const plan = subscription?.plan_name?.toLowerCase() ?? 'free';
@@ -191,7 +201,8 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       </div>
 
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2 text-sm">
-        <button type="button"
+        <button
+          type="button"
           className={cn(
             'flex items-center gap-2 rounded-full px-3 py-1 transition',
             tab === 'image' ? 'bg-white text-black' : 'text-slate-300 hover:bg-white/5',
@@ -201,7 +212,8 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <ImageIcon className="h-4 w-4" />
           Images
         </button>
-        <button type="button"
+        <button
+          type="button"
           className={cn(
             'flex items-center gap-2 rounded-full px-3 py-1 transition',
             tab === 'video' ? 'bg-white text-black' : 'text-slate-300 hover:bg-white/5',
