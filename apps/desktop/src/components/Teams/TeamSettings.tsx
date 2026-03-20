@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { toast } from 'sonner';
 import { useTeamStore } from '../../stores/teamStore';
 import { TeamRole, type Team } from '../../types/teams';
 import { Button } from '../ui/Button';
@@ -41,6 +42,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
       await updateTeam(currentTeam.id, name, description || null);
     } catch (error) {
       console.error('Failed to update team:', error);
+      toast.error('Failed to update team');
     } finally {
       setSaving(false);
     }
@@ -58,6 +60,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
       });
     } catch (error) {
       console.error('Failed to update team settings:', error);
+      toast.error('Failed to update team settings');
     } finally {
       setSavingSettings(false);
     }
@@ -75,6 +78,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
       await deleteTeam(currentTeam.id);
     } catch (error) {
       console.error('Failed to delete team:', error);
+      toast.error('Failed to delete team');
     }
   };
 
@@ -207,11 +211,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
             </button>
           </div>
 
-          <Button
-            type="button"
-            disabled={savingSettings}
-            onClick={() => void handleSaveSettings()}
-          >
+          <Button type="button" disabled={savingSettings} onClick={() => void handleSaveSettings()}>
             <Save className="mr-2 h-4 w-4" />
             {savingSettings ? 'Saving Settings...' : 'Save Settings'}
           </Button>

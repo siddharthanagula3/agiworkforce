@@ -680,7 +680,8 @@ export const useMcpStore = create<McpState>()(
       oauthStatus: async (provider: McpOAuthProvider) => {
         try {
           return await McpClient.oauthStatus(provider);
-        } catch {
+        } catch (error) {
+          console.warn('[mcpStore] Failed to check OAuth status:', error);
           return { connected: false, userInfo: null, expiresAt: null };
         }
       },

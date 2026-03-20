@@ -134,8 +134,17 @@ export interface WorkspaceStats {
  * @param workspacePath - Absolute path to the workspace root
  * @returns The complete workspace index
  */
-export async function indexWorkspaceSymbols(workspacePath: string): Promise<WorkspaceIndex> {
-  return invoke<WorkspaceIndex>('workspace_index', { workspacePath });
+export async function indexWorkspaceSymbols(workspacePath: string): Promise<WorkspaceIndex | null> {
+  if (!isTauri) {
+    return null;
+  }
+
+  try {
+    return await invoke<WorkspaceIndex>('workspace_index', { workspacePath });
+  } catch (error) {
+    console.error('[workspace] indexWorkspaceSymbols failed:', error);
+    return null;
+  }
 }
 
 /**
