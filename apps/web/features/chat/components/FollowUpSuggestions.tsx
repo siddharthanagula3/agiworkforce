@@ -237,6 +237,9 @@ const GENERIC_FOLLOW_UPS: Array<{ text: string; type: FollowUpType }> = [
 function deriveFollowUps(content: string, messageCount: number): FollowUp[] {
   if (!content || content.trim().length < 20) return [];
 
+  // Cap content length to prevent ReDoS on very long LLM responses
+  const sample = content.length > 4000 ? content.slice(0, 4000) : content;
+
   const matched: Array<{ text: string; type: FollowUpType }> = [];
   const seenTexts = new Set<string>();
 
@@ -249,7 +252,7 @@ function deriveFollowUps(content: string, messageCount: number): FollowUp[] {
 
   // Collect follow-ups from matching topic patterns
   for (const { pattern, followUps } of TOPIC_FOLLOW_UPS) {
-    if (pattern.test(content)) {
+    if (pattern.test(sample)) {
       for (const fu of followUps) {
         addUnique(fu);
         if (matched.length >= 5) break;
@@ -261,13 +264,13 @@ function deriveFollowUps(content: string, messageCount: number): FollowUp[] {
   // --- Capability discovery: surface platform features based on content ---
 
   // When the response contains code blocks, offer to run it
-  if (/```[\s\S]{10,}```/.test(content)) {
+  if (/```[\s\S]{10,}```/.test(sample)) {
     addUnique({ text: 'Run this code', type: 'apply' });
   }
 
   // When the response makes factual claims, offer web verification
   if (
-    /\b(according to|studies show|research indicates|data suggests|as of \d{4})\b/i.test(content)
+    /\b(according to|studies show|research indicates|data suggests|as of \d{4})\b/i.test(sample)
   ) {
     addUnique({ text: 'Search the web to verify', type: 'discover' });
   }
