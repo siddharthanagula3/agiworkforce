@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { toast } from 'sonner';
+import { isTauri } from '../../lib/tauri-mock';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/Popover';
 import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
 import type { CaptureResult } from '../../types/capture';
@@ -208,83 +209,89 @@ export function PlusMenu({
           </div>
         ) : (
           <>
-            {/* Attach files */}
-            <button
-              type="button"
-              onClick={() => {
-                onAttachClick();
-                setIsOpen(false);
-              }}
-              title={
-                !visionSupported ? 'Images will not be processed by the current model' : undefined
-              }
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
-            >
-              <Paperclip
-                className={cn(
-                  'h-4 w-4 shrink-0',
-                  !visionSupported && 'text-[hsl(var(--muted-foreground))]',
-                )}
-              />
-              <span>{visionSupported ? 'Add files or photos' : 'Add files'}</span>
-              {!visionSupported && (
-                <span className="ml-auto text-xs text-amber-400/80">No vision</span>
-              )}
-            </button>
-
-            {/* Paste screenshot */}
-            <div title={!visionSupported ? "Selected model doesn't support images" : undefined}>
-              <ScreenCaptureButton
-                conversationId={conversationId}
-                onCaptureComplete={(result) => {
-                  onScreenCapture?.(result);
+            {/* Attach files (requires Tauri file dialog) */}
+            {isTauri && (
+              <button
+                type="button"
+                onClick={() => {
+                  onAttachClick();
                   setIsOpen(false);
                 }}
-                variant="ghost"
-                size="default"
-                mode="quick"
-                suppressToasts
-                className={cn(
-                  'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors justify-start h-auto font-normal',
-                  !visionSupported && 'opacity-40 pointer-events-none',
+                title={
+                  !visionSupported ? 'Images will not be processed by the current model' : undefined
+                }
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+              >
+                <Paperclip
+                  className={cn(
+                    'h-4 w-4 shrink-0',
+                    !visionSupported && 'text-[hsl(var(--muted-foreground))]',
+                  )}
+                />
+                <span>{visionSupported ? 'Add files or photos' : 'Add files'}</span>
+                {!visionSupported && (
+                  <span className="ml-auto text-xs text-amber-400/80">No vision</span>
                 )}
-              />
-            </div>
+              </button>
+            )}
 
-            {/* Select folder */}
-            <button
-              type="button"
-              onClick={handleSelectFolder}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
-            >
-              {currentFolder ? (
-                <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
-              ) : (
-                <Folder className="h-4 w-4 shrink-0" />
-              )}
-              <div className="flex-1 text-left min-w-0">
-                {currentFolder ? (
-                  <>
-                    <div className="text-xs text-[hsl(var(--muted-foreground))] leading-tight">
-                      Project folder
-                    </div>
-                    <div className="truncate leading-tight">{folderDisplayName}</div>
-                  </>
-                ) : (
-                  <span>Select folder</span>
-                )}
+            {/* Paste screenshot (requires Tauri screen capture) */}
+            {isTauri && onScreenCapture && (
+              <div title={!visionSupported ? "Selected model doesn't support images" : undefined}>
+                <ScreenCaptureButton
+                  conversationId={conversationId}
+                  onCaptureComplete={(result) => {
+                    onScreenCapture?.(result);
+                    setIsOpen(false);
+                  }}
+                  variant="ghost"
+                  size="default"
+                  mode="quick"
+                  suppressToasts
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors justify-start h-auto font-normal',
+                    !visionSupported && 'opacity-40 pointer-events-none',
+                  )}
+                />
               </div>
-              {currentFolder && (
-                <button
-                  type="button"
-                  onClick={handleClearFolder}
-                  className="shrink-0 rounded p-0.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
-                  aria-label="Clear project folder"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </button>
+            )}
+
+            {/* Select folder (requires Tauri file dialog) */}
+            {isTauri && (
+              <button
+                type="button"
+                onClick={handleSelectFolder}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+              >
+                {currentFolder ? (
+                  <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
+                ) : (
+                  <Folder className="h-4 w-4 shrink-0" />
+                )}
+                <div className="flex-1 text-left min-w-0">
+                  {currentFolder ? (
+                    <>
+                      <div className="text-xs text-[hsl(var(--muted-foreground))] leading-tight">
+                        Project folder
+                      </div>
+                      <div className="truncate leading-tight">{folderDisplayName}</div>
+                    </>
+                  ) : (
+                    <span>Select folder</span>
+                  )}
+                </div>
+                {currentFolder && (
+                  <button
+                    type="button"
+                    onClick={handleClearFolder}
+                    className="shrink-0 rounded p-0.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+                    aria-label="Clear project folder"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </button>
+            )}
 
             {/* Separator */}
             <div className="my-1.5 h-px bg-[hsl(var(--border))]" />

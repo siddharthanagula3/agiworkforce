@@ -1,19 +1,9 @@
-import { createSupabaseServerClient } from '@/services/supabase-server';
 import { redirect } from 'next/navigation';
-import type { ReactNode } from 'react';
-import ChatLayoutShell from './ChatLayoutShell';
+
+const CHAT_URL = process.env['NEXT_PUBLIC_CHAT_URL'] || 'https://chat.agiworkforce.com';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ChatLayout({ children }: { children: ReactNode }) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    redirect('/login');
-  }
-
-  return <ChatLayoutShell>{children}</ChatLayoutShell>;
+export default function ChatLayout() {
+  redirect(CHAT_URL);
 }
