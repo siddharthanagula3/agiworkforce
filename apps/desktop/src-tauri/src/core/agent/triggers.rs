@@ -238,6 +238,12 @@ fn validate_cron_interval(cron_expr: &str) -> Result<(), String> {
 // Implementation
 // ---------------------------------------------------------------------------
 
+impl Default for TriggerRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TriggerRegistry {
     /// Create a new, empty trigger registry.
     pub fn new() -> Self {
@@ -748,39 +754,34 @@ impl TriggerRegistry {
 
         // Debounce task.
         let debounce_handle = tokio::spawn(async move {
-            loop {
-                match rx.recv().await {
-                    Some(paths) => {
-                        // Debounce: drain any additional events that arrive within the window.
-                        tokio::time::sleep(tokio::time::Duration::from_millis(debounce_ms)).await;
-                        let mut all_paths = paths;
-                        while let Ok(more) = rx.try_recv() {
-                            all_paths.extend(more);
-                        }
-                        all_paths.sort();
-                        all_paths.dedup();
+            while let Some(paths) = rx.recv().await {
+                // Debounce: drain any additional events that arrive within the window.
+                tokio::time::sleep(tokio::time::Duration::from_millis(debounce_ms)).await;
+                let mut all_paths = paths;
+                while let Ok(more) = rx.try_recv() {
+                    all_paths.extend(more);
+                }
+                all_paths.sort();
+                all_paths.dedup();
 
-                        let event_data = serde_json::json!({
-                            "type": "file_change",
-                            "paths": all_paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
-                        });
+                let event_data = serde_json::json!({
+                    "type": "file_change",
+                    "paths": all_paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
+                });
 
-                        if let Err(e) = Self::execute_trigger(
-                            &triggers,
-                            &executions,
-                            &trigger_id,
-                            event_data,
-                            &app_handle,
-                        )
-                        .await
-                        {
-                            tracing::warn!(
-                                "[TriggerRegistry] File watcher trigger execution failed: {}",
-                                e
-                            );
-                        }
-                    }
-                    None => break, // channel closed
+                if let Err(e) = Self::execute_trigger(
+                    &triggers,
+                    &executions,
+                    &trigger_id,
+                    event_data,
+                    &app_handle,
+                )
+                .await
+                {
+                    tracing::warn!(
+                        "[TriggerRegistry] File watcher trigger execution failed: {}",
+                        e
+                    );
                 }
             }
         });
@@ -1096,8 +1097,8 @@ fn parse_http_request(raw: &str) -> (String, String, Option<String>, String) {
     // Body: everything after the blank line
     let body = if found_body {
         // Re-split from the original to grab everything after \r\n\r\n
-        raw.splitn(2, "\r\n\r\n")
-            .nth(1)
+        raw.split_once("\r\n\r\n")
+            .map(|x| x.1)
             .unwrap_or_default()
             .to_string()
     } else {
@@ -1157,15 +1158,16 @@ pub async fn register_trigger(
 
         // For FileWatcher triggers, dynamically start the watcher immediately
         // instead of waiting for the next full engine restart.
-        if trigger.trigger_type == TriggerType::FileWatcher && trigger.enabled {
-            if !registry.file_watchers.contains_key(&trigger.id) {
-                if let Err(e) = registry.start_file_watcher(&trigger).await {
-                    tracing::warn!(
-                        "[TriggerRegistry] Failed to start file watcher on dynamic registration for {}: {}",
-                        trigger.id,
-                        e
-                    );
-                }
+        if trigger.trigger_type == TriggerType::FileWatcher
+            && trigger.enabled
+            && !registry.file_watchers.contains_key(&trigger.id)
+        {
+            if let Err(e) = registry.start_file_watcher(&trigger).await {
+                tracing::warn!(
+                    "[TriggerRegistry] Failed to start file watcher on dynamic registration for {}: {}",
+                    trigger.id,
+                    e
+                );
             }
         }
     }
