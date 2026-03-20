@@ -6,11 +6,13 @@ import { Swipeable } from 'react-native-gesture-handler';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
+import { AutoTagBadge } from '@/components/sidebar/AutoTagBadge';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 import { formatRelativeTime, truncate } from '@agiworkforce/utils';
 import type { ConversationSummary } from '@/types/chat';
+import type { ConversationTag } from '@/services/autotag';
 
 interface ConversationItemProps {
   conversation: ConversationSummary;
@@ -160,6 +162,9 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
                 >
                   {conversation.title}
                 </Text>
+                {conversation.tags?.[0] && (
+                  <AutoTagBadge tag={conversation.tags[0] as ConversationTag} size="sm" />
+                )}
                 {conversation.pinned && <Pin size={10} color={colors.teal} />}
               </View>
 

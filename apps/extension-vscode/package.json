@@ -214,13 +214,58 @@
       },
       {
         "command": "agi-workforce.acceptAllDiffs",
-        "title": "AGI Workforce: Accept All Diffs",
+        "title": "AGI Workforce: Accept All Diffs in File",
         "icon": "$(check-all)"
       },
       {
         "command": "agi-workforce.rejectAllDiffs",
-        "title": "AGI Workforce: Reject All Diffs",
+        "title": "AGI Workforce: Reject All Diffs in File",
         "icon": "$(close-all)"
+      },
+      {
+        "command": "agi-workforce.acceptCurrentDiff",
+        "title": "AGI Workforce: Accept Current Diff",
+        "icon": "$(check)"
+      },
+      {
+        "command": "agi-workforce.rejectCurrentDiff",
+        "title": "AGI Workforce: Reject Current Diff",
+        "icon": "$(close)"
+      },
+      {
+        "command": "agi-workforce.acceptAllDiffsGlobal",
+        "title": "AGI Workforce: Accept All Diffs (All Files)",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "agi-workforce.rejectAllDiffsGlobal",
+        "title": "AGI Workforce: Reject All Diffs (All Files)",
+        "icon": "$(close-all)"
+      },
+      {
+        "command": "agi-workforce.acceptBatch",
+        "title": "AGI Workforce: Accept Entire Patch Batch",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "agi-workforce.rejectBatch",
+        "title": "AGI Workforce: Reject Entire Patch Batch",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agi-workforce.showOriginalContext",
+        "title": "AGI Workforce: Show Original Context (Patch Expected vs Actual)",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "agi-workforce.showPatchLogs",
+        "title": "AGI Workforce: Show Patch Logs",
+        "icon": "$(output)"
+      },
+      {
+        "command": "agi-workforce.bridgeReconnect",
+        "title": "AGI Workforce: Reconnect Desktop Bridge",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "agi-workforce.addToContext",
@@ -539,7 +584,7 @@
         "command": "agi-workforce.chat",
         "key": "ctrl+shift+a",
         "mac": "cmd+shift+a",
-        "when": "!terminalFocus"
+        "when": "!terminalFocus && !agi-workforce.hasDiff"
       },
       {
         "command": "agi-workforce.explain",
@@ -575,6 +620,18 @@
         "mac": "cmd+shift+alt+n"
       },
       {
+        "command": "agi-workforce.acceptCurrentDiff",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a",
+        "when": "editorTextFocus && agi-workforce.hasDiff"
+      },
+      {
+        "command": "agi-workforce.rejectCurrentDiff",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "editorTextFocus && agi-workforce.hasDiff"
+      },
+      {
         "command": "agi-workforce.acceptDiff",
         "key": "ctrl+shift+enter",
         "mac": "cmd+shift+enter",
@@ -584,6 +641,18 @@
         "command": "agi-workforce.rejectDiff",
         "key": "escape",
         "when": "editorTextFocus && agi-workforce.hasDiff"
+      },
+      {
+        "command": "agi-workforce.acceptAllDiffsGlobal",
+        "key": "ctrl+shift+alt+y",
+        "mac": "cmd+shift+alt+y",
+        "when": "agi-workforce.hasDiff"
+      },
+      {
+        "command": "agi-workforce.rejectAllDiffsGlobal",
+        "key": "ctrl+shift+alt+u",
+        "mac": "cmd+shift+alt+u",
+        "when": "agi-workforce.hasDiff"
       }
     ]
   },

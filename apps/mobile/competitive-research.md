@@ -12,7 +12,7 @@ _Generated: 2026-03-18 | Sources: 60+ web searches across 3 parallel research ag
 | Markdown rendering              |           Y           |         Y          |             Y             |            Y            |           Y           |
 | Code blocks + syntax highlight  |           Y           |         Y          |             Y             |            Y            |     Y (monospace)     |
 | Copy message/code               |           Y           |         Y          |             Y             |            Y            |           Y           |
-| Message editing                 |           Y           |         Y          |             N             |            N            |           N           |
+| Message editing                 |           Y           |         Y          |             N             |            N            |           Y           |
 | Conversation branching          |           Y           |         Y          |           Soon            |    Thread follow-ups    |           N           |
 | Extended thinking mode          |           Y           |       Y (o3)       |      Y (Deep Think)       |            N            |           Y           |
 | Web search in chat              |       Y (Brave)       |         Y          |        Y (Google)         |    Y (core product)     |      Via desktop      |
@@ -22,7 +22,7 @@ _Generated: 2026-03-18 | Sources: 60+ web searches across 3 parallel research ag
 | Camera capture → LLM            |           Y           |         Y          |             Y             |            Y            |           Y           |
 | Photo library upload            |           Y           |         Y          |             Y             |            Y            |           Y           |
 | Multi-image per message         |      Y (20 max)       |         Y          |             Y             |            Y            |           Y           |
-| Document/PDF upload             |    Y (30MB, 100pg)    | Y (tier-dependent) |         Y (100MB)         |        Y (40MB)         |           N           |
+| Document/PDF upload             |    Y (30MB, 100pg)    | Y (tier-dependent) |         Y (100MB)         |        Y (40MB)         |           Y           |
 | Real-time camera during voice   |           N           |         Y          |         Y (free)          |            N            |           N           |
 | Screen sharing to AI            |           N           |      Limited       |         Y (free)          |        Via Comet        |           N           |
 | **Voice**                       |                       |                    |                           |                         |                       |
@@ -45,7 +45,7 @@ _Generated: 2026-03-18 | Sources: 60+ web searches across 3 parallel research ag
 | Memory/personalization          |      Y (2-layer)      |    Y (2-layer)     | Y (Personal Intelligence) |        Y (Comet)        |           Y           |
 | Conversation sync cross-device  |           Y           |         Y          |             Y             |            Y            | Y (Supabase Realtime) |
 | Auto-tagging                    |           N           |         N          |             N             |            N            |    **Y (unique)**     |
-| Chat search                     |       Y (paid)        |         Y          |             Y             |            Y            |           N           |
+| Chat search                     |       Y (paid)        |         Y          |             Y             |            Y            |           Y           |
 | **Model Selection**             |                       |                    |                           |                         |                       |
 | Multi-model support             |    N (Claude only)    |    N (GPT only)    |      N (Gemini only)      |    Multi (via Comet)    | **Y (9+ providers)**  |
 | Model picker UI                 |           N           |         N          |             N             |            N            |    **Y (unique)**     |
@@ -89,12 +89,12 @@ _Generated: 2026-03-18 | Sources: 60+ web searches across 3 parallel research ag
 
 ## Competitive Gaps Analysis
 
+**Note (March 19, 2026)**: Document/PDF upload, conversation search, and message editing have all shipped and are now marked in the feature matrix above (rows 15, 25, 48). The gaps list below reflects remaining work only.
+
 ### CRITICAL (Must match to compete)
 
 | Gap                            | Who Has It                            | Effort | Status      |
 | ------------------------------ | ------------------------------------- | ------ | ----------- |
-| Document/PDF upload + analysis | All 4 competitors                     | M      | Not started |
-| Conversation search            | Claude, ChatGPT, Gemini, Perplexity   | M      | Not started |
 | Projects/context on mobile     | Claude, ChatGPT (GPTs), Gemini (Gems) | L      | Not started |
 
 ### HIGH (Strong competitive advantage)
@@ -105,7 +105,6 @@ _Generated: 2026-03-18 | Sources: 60+ web searches across 3 parallel research ag
 | iOS home screen widget          | Claude, ChatGPT   | L      | Not started      |
 | Biometric unlock (FaceID/Touch) | Claude            | S      | Not started      |
 | Light/dark/system theme toggle  | All 4 competitors | S      | Not started      |
-| Message editing                 | Claude, ChatGPT   | M      | Not started      |
 | Web search integration          | All 4 competitors | L      | Via desktop only |
 
 ### MEDIUM (Nice-to-have polish)

@@ -3,7 +3,7 @@
  *
  * Indexes source files and their top-level symbols to provide
  * relevant workspace context to AI requests.
- * Cap: 100 files, 5000 symbols. Cache TTL: 1 hour.
+ * Cap: 500 files, 5000 symbols. Incremental updates via file watcher.
  */
 
 import * as vscode from 'vscode';
@@ -16,10 +16,8 @@ export interface FileEntry {
 }
 
 const CACHE_KEY = 'agiWorkforce.workspaceIndex';
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-const MAX_FILES = 100;
+const MAX_FILES = 500;
 const MAX_SYMBOLS_TOTAL = 5000;
-const MAX_CONTEXT_CHARS = 2000;
 
 interface CacheEntry {
   timestamp: number;
@@ -27,12 +25,91 @@ interface CacheEntry {
 }
 
 export class WorkspaceIndexer {
+  private _fileWatcher: vscode.FileSystemWatcher | undefined;
+
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   isStale(): boolean {
     const cache = this.context.workspaceState.get<CacheEntry>(CACHE_KEY);
-    if (cache === undefined) return true;
-    return Date.now() - cache.timestamp > CACHE_TTL_MS;
+    return cache === undefined;
+  }
+
+  /**
+   * Register a file watcher for incremental index updates.
+   * Call once during extension activation.
+   */
+  registerFileWatcher(): vscode.Disposable[] {
+    const disposables: vscode.Disposable[] = [];
+
+    this._fileWatcher = vscode.workspace.createFileSystemWatcher(
+      '**/*.{ts,tsx,js,jsx,py,go,rs,java,cs,cpp,c,h,rb,php,swift,kt}',
+    );
+
+    const handleChange = (uri: vscode.Uri): void => {
+      void this._reindexFile(uri);
+    };
+
+    disposables.push(
+      this._fileWatcher,
+      this._fileWatcher.onDidChange(handleChange),
+      this._fileWatcher.onDidCreate(handleChange),
+      this._fileWatcher.onDidDelete((uri) => {
+        void this._removeFile(uri);
+      }),
+      vscode.workspace.onDidSaveTextDocument((doc) => {
+        void this._reindexFile(doc.uri);
+      }),
+    );
+
+    return disposables;
+  }
+
+  /**
+   * Re-index a single file in the cache (incremental update).
+   */
+  private async _reindexFile(uri: vscode.Uri): Promise<void> {
+    const cache = this.context.workspaceState.get<CacheEntry>(CACHE_KEY);
+    if (cache === undefined) return; // No index yet — skip incremental, wait for full index.
+
+    const relativePath = vscode.workspace.asRelativePath(uri);
+
+    try {
+      const stat = await vscode.workspace.fs.stat(uri);
+      const symbols = await this._getSymbols(uri);
+
+      // Remove existing entry for this file.
+      const files = cache.files.filter((f) => f.path !== relativePath);
+
+      files.push({
+        path: relativePath,
+        language: this._inferLanguage(uri),
+        symbols: symbols.slice(0, 50),
+        size: stat.size,
+      });
+
+      await this.context.workspaceState.update(CACHE_KEY, {
+        timestamp: Date.now(),
+        files,
+      } satisfies CacheEntry);
+    } catch {
+      // File may have been deleted between event and handler — ignore.
+    }
+  }
+
+  /**
+   * Remove a file from the index cache.
+   */
+  private async _removeFile(uri: vscode.Uri): Promise<void> {
+    const cache = this.context.workspaceState.get<CacheEntry>(CACHE_KEY);
+    if (cache === undefined) return;
+
+    const relativePath = vscode.workspace.asRelativePath(uri);
+    const files = cache.files.filter((f) => f.path !== relativePath);
+
+    await this.context.workspaceState.update(CACHE_KEY, {
+      timestamp: Date.now(),
+      files,
+    } satisfies CacheEntry);
   }
 
   async index(): Promise<void> {
@@ -70,7 +147,12 @@ export class WorkspaceIndexer {
     await this.context.workspaceState.update(CACHE_KEY, cache);
   }
 
-  getRelevantContext(query: string): string {
+  /**
+   * Return workspace context relevant to the query, up to `maxChars`.
+   * When no maxChars is provided, uses a default of 2000.
+   */
+  getRelevantContext(query: string, maxChars?: number): string {
+    const budget = maxChars ?? 2000;
     const cache = this.context.workspaceState.get<CacheEntry>(CACHE_KEY);
     if (cache === undefined) return '';
 
@@ -89,7 +171,7 @@ export class WorkspaceIndexer {
     const relevant = scored
       .filter((s) => s.score > 0)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 10);
+      .slice(0, 20);
 
     if (relevant.length === 0) return '';
 
@@ -97,7 +179,7 @@ export class WorkspaceIndexer {
     for (const { file } of relevant) {
       const symbolList = file.symbols.slice(0, 8).join(', ');
       const line = `- ${file.path}${symbolList ? `: ${symbolList}` : ''}\n`;
-      if (output.length + line.length > MAX_CONTEXT_CHARS) break;
+      if (output.length + line.length > budget) break;
       output += line;
     }
 

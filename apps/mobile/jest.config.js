@@ -2,8 +2,8 @@ module.exports = {
   preset: 'jest-expo',
   // Runs BEFORE jest-expo's setup to fix missing UIManager mock
   setupFiles: ['./jest.setup.js'],
-  // setupFilesAfterFramework was a typo — correct key is setupFilesAfterEnv
-  setupFilesAfterEnv: ['@testing-library/react-native/extend-expect'],
+  // @testing-library/react-native v13+ auto-extends jest matchers — no explicit setup needed
+  // The extend-expect subpath was removed; matchers register automatically on import
   // The pnpm package store resolves to paths like:
   //   node_modules/.pnpm/@react-native+js-polyfills@X.Y.Z/node_modules/@react-native/...
   // The optional (?:.pnpm/[^/]+/node_modules/)? prefix handles both npm and pnpm layouts

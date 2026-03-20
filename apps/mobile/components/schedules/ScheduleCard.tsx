@@ -1,12 +1,14 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Clock, Trash2 } from 'lucide-react-native';
+import { Clock, Trash2, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
+import { ScheduleRunHistory } from './ScheduleRunHistory';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 import type { Schedule } from '@/stores/scheduleStore';
@@ -113,6 +115,7 @@ function getStatusBadge(status: Schedule['lastRunStatus']): {
 export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: ScheduleCardProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const statusBadge = getStatusBadge(schedule.lastRunStatus);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   const handleDelete = useCallback(() => {
     if (hapticsEnabled) {
@@ -120,6 +123,13 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
     }
     onDelete(schedule.id);
   }, [hapticsEnabled, onDelete, schedule.id]);
+
+  const handleToggleHistory = useCallback(() => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setHistoryExpanded((v) => !v);
+  }, [hapticsEnabled]);
 
   return (
     <Animated.View
@@ -159,21 +169,46 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             <Badge label={statusBadge.label} color={statusBadge.color} />
           </View>
 
-          {/* Footer: Next run + delete */}
+          {/* Footer: Next run + history toggle + delete */}
           <View className="flex-row items-center justify-between mt-1">
             <Text className="text-[11px] text-white/30">
               Next run: {formatRelativeTime(schedule.nextRunAt)}
             </Text>
-            <Pressable
-              onPress={handleDelete}
-              hitSlop={12}
-              className="p-1.5 rounded-md active:bg-red-500/10"
-              accessibilityLabel="Delete schedule"
-              accessibilityRole="button"
-            >
-              <Trash2 size={14} color={colors.agentError} />
-            </Pressable>
+            <View className="flex-row items-center gap-1">
+              {/* History toggle */}
+              <Pressable
+                onPress={handleToggleHistory}
+                hitSlop={8}
+                className="flex-row items-center gap-1 px-2 py-1 rounded-md active:bg-white/5"
+                accessibilityLabel={historyExpanded ? 'Hide run history' : 'Show run history'}
+                accessibilityRole="button"
+              >
+                <Text className="text-[10px] text-white/40">History</Text>
+                {historyExpanded ? (
+                  <ChevronUp size={11} color={colors.textMuted} />
+                ) : (
+                  <ChevronDown size={11} color={colors.textMuted} />
+                )}
+              </Pressable>
+              <Pressable
+                onPress={handleDelete}
+                hitSlop={12}
+                className="p-1.5 rounded-md active:bg-red-500/10"
+                accessibilityLabel="Delete schedule"
+                accessibilityRole="button"
+              >
+                <Trash2 size={14} color={colors.agentError} />
+              </Pressable>
+            </View>
           </View>
+
+          {/* Expandable run history */}
+          {historyExpanded && (
+            <>
+              <Separator className="mt-3 mb-3" />
+              <ScheduleRunHistory scheduleId={schedule.id} maxRuns={5} />
+            </>
+          )}
         </Card>
       </Pressable>
     </Animated.View>

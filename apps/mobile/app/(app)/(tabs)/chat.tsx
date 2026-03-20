@@ -2,17 +2,26 @@ import { useCallback, useRef, useState, useEffect } from 'react';
 import { View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Plus } from 'lucide-react-native';
+import { Plus, Menu } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
+import BottomSheetImpl, {
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
+} from '@gorhom/bottom-sheet';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { ProjectSelectorBar } from '@/components/chat/ProjectSelectorBar';
 import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/components/voice/VoiceConversationScreen';
 import { ConversationList } from '@/components/sidebar/ConversationList';
+import { SidebarContent } from '@/components/sidebar/SidebarContent';
 import { SearchBar } from '@/components/sidebar/SearchBar';
+import { TagFilter } from '@/components/sidebar/TagFilter';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
+import { useProjectStore } from '@/stores/projectStore';
 import { colors } from '@/lib/theme';
+import type { ConversationTag } from '@/services/autotag';
 
 /**
  * Chat tab -- shows conversation list with a new-chat input bar.
@@ -22,8 +31,10 @@ import { colors } from '@/lib/theme';
 export default function ChatTabScreen() {
   const router = useRouter();
   const modelPickerRef = useRef<BottomSheet>(null);
+  const sidebarSheetRef = useRef<BottomSheetImpl>(null);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTag, setSelectedTag] = useState<ConversationTag | null>(null);
 
   const loadConversations = useChatStore((s) => s.loadConversations);
   const createConversation = useChatStore((s) => s.createConversation);
@@ -32,6 +43,7 @@ export default function ChatTabScreen() {
   const searchResults = useChatStore((s) => s.searchResults);
   const storeSearchQuery = useChatStore((s) => s.searchQuery);
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const activeProjectId = useProjectStore((s) => s.activeProjectId);
 
   useEffect(() => {
     loadConversations();
@@ -101,9 +113,19 @@ export default function ChatTabScreen() {
     <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 h-12">
-        <Text variant="subheading" className="text-white">
-          Chats
-        </Text>
+        <View className="flex-row items-center gap-2">
+          <Pressable
+            onPress={() => sidebarSheetRef.current?.snapToIndex(0)}
+            className="w-8 h-8 rounded-lg items-center justify-center active:bg-white/5"
+            accessibilityLabel="Open sidebar"
+            accessibilityRole="button"
+          >
+            <Menu size={18} color={colors.textSecondary} />
+          </Pressable>
+          <Text variant="subheading" className="text-white">
+            Chats
+          </Text>
+        </View>
         <Pressable
           onPress={handleNewChat}
           className="w-8 h-8 rounded-lg bg-teal-500/20 items-center justify-center active:bg-teal-500/30"
@@ -117,11 +139,20 @@ export default function ChatTabScreen() {
       {/* Search bar */}
       <SearchBar value={searchQuery} onChangeText={handleSearchChange} />
 
-      {/* Conversation list */}
+      {/* Project selector */}
+      <ProjectSelectorBar />
+
+      {/* Tag filter chips */}
+      <View style={{ paddingVertical: 8 }}>
+        <TagFilter selectedTag={selectedTag} onSelectTag={setSelectedTag} />
+      </View>
+
+      {/* Conversation list — filtered by active project when one is set */}
       <View className="flex-1">
         <ConversationList
           searchQuery={searchQuery}
           searchResults={storeSearchQuery ? searchResults : undefined}
+          filterProjectId={activeProjectId}
         />
       </View>
 
@@ -141,6 +172,28 @@ export default function ChatTabScreen() {
         onClose={handleCloseVoiceMode}
         onSendMessage={handleVoiceSendMessage}
       />
+
+      {/* Sidebar drawer as bottom sheet */}
+      <BottomSheetImpl
+        ref={sidebarSheetRef}
+        index={-1}
+        snapPoints={['85%']}
+        enablePanDownToClose
+        enableDynamicSizing={false}
+        backdropComponent={(props: BottomSheetBackdropProps) => (
+          <BottomSheetBackdrop
+            {...props}
+            disappearsOnIndex={-1}
+            appearsOnIndex={0}
+            opacity={0.6}
+            pressBehavior="close"
+          />
+        )}
+        backgroundStyle={{ backgroundColor: colors.background }}
+        handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
+      >
+        <SidebarContent />
+      </BottomSheetImpl>
     </SafeAreaView>
   );
 }
