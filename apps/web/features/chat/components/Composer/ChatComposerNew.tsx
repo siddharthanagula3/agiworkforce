@@ -59,6 +59,8 @@ interface ChatComposerProps {
   droppedFiles?: File[] | null;
   /** Callback fired after droppedFiles have been consumed and added to attachments. */
   onDroppedFilesConsumed?: () => void;
+  /** Fires when the input transitions between empty and non-empty (debounced 500ms on clear). */
+  onTypingChange?: (isTyping: boolean) => void;
 }
 
 const TOOLS = [
@@ -95,6 +97,7 @@ const ChatComposerNewComponent = ({
   onPrefillConsumed,
   droppedFiles,
   onDroppedFilesConsumed,
+  onTypingChange,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const {
@@ -134,6 +137,41 @@ const ChatComposerNewComponent = ({
   const overflowRef = useRef<HTMLDivElement>(null);
   const mentionsRef = useRef<HTMLDivElement>(null);
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasTypingRef = useRef(false);
+
+  // Track empty <-> non-empty transitions with 500ms debounce on clearing
+  useEffect(() => {
+    const hasContent = message.trim().length > 0;
+
+    if (hasContent && !wasTypingRef.current) {
+      wasTypingRef.current = true;
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+      onTypingChange?.(true);
+    } else if (!hasContent && wasTypingRef.current) {
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+      }
+      typingTimerRef.current = setTimeout(() => {
+        wasTypingRef.current = false;
+        onTypingChange?.(false);
+        typingTimerRef.current = null;
+      }, 500);
+    }
+  }, [message, onTypingChange]);
+
+  // Cleanup typing timer on unmount
+  useEffect(() => {
+    const timer = typingTimerRef;
+    return () => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
+    };
+  }, []);
 
   // Ghost-text prompt completion
   const {
@@ -827,7 +865,8 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.prefillText === next.prefillText &&
     prev.onPrefillConsumed === next.onPrefillConsumed &&
     prev.droppedFiles === next.droppedFiles &&
-    prev.onDroppedFilesConsumed === next.onDroppedFilesConsumed
+    prev.onDroppedFilesConsumed === next.onDroppedFilesConsumed &&
+    prev.onTypingChange === next.onTypingChange
   );
 });
 

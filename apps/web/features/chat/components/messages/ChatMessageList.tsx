@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { ChatMessage } from '../../stores/chat-store';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
+import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
@@ -36,6 +37,10 @@ export interface ChatMessageListProps {
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
   onDelete?: (messageId: string) => void;
+  /** Called when user selects a follow-up suggestion pill */
+  onSendMessage?: (content: string) => void;
+  /** When true, follow-up suggestion pills fade out (user is typing in the composer) */
+  isUserTyping?: boolean;
   className?: string;
 }
 
@@ -163,6 +168,8 @@ const ChatMessageListComponent = ({
   isLoading,
   onRegenerate,
   onDelete,
+  onSendMessage,
+  isUserTyping = false,
   className,
 }: ChatMessageListProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -189,6 +196,14 @@ const ChatMessageListComponent = ({
   );
 
   const showTypingIndicator = isLoading && messages.length > 0 && !lastMessage?.isStreaming;
+
+  /** Show follow-up suggestions when last message is a completed assistant reply */
+  const showFollowUps =
+    onSendMessage &&
+    !isLoading &&
+    lastMessage?.role === 'assistant' &&
+    !lastMessage?.isStreaming &&
+    lastMessage.content.length > 20;
 
   // ---------------------------------------------------------------------------
   // Scroll management
@@ -264,6 +279,19 @@ const ChatMessageListComponent = ({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Follow-up suggestion pills after last assistant message */}
+          {showFollowUps && lastMessage && (
+            <div className="px-4 md:px-12 lg:px-20">
+              <FollowUpSuggestions
+                lastAssistantContent={lastMessage.content}
+                onSelect={onSendMessage!}
+                isGenerating={isLoading}
+                isUserTyping={isUserTyping}
+                messageCount={messages.length}
+              />
+            </div>
+          )}
         </div>
 
         {/* Sentinel for scrollIntoView */}
@@ -297,8 +325,10 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
   return (
     prev.messages.length === next.messages.length &&
     prev.isLoading === next.isLoading &&
+    prev.isUserTyping === next.isUserTyping &&
     prev.onRegenerate === next.onRegenerate &&
     prev.onDelete === next.onDelete &&
+    prev.onSendMessage === next.onSendMessage &&
     prev.className === next.className &&
     // Detect streaming content changes in the last message
     lastPrev?.content === lastNext?.content &&
