@@ -12,6 +12,7 @@ import { ResizeHandle } from '../ui/ResizeHandle';
 import { DynamicSidecar } from './DynamicSidecar';
 import { KeyboardShortcutsOverlay } from './KeyboardShortcutsOverlay';
 import { Sidebar } from './Sidebar';
+import { Breadcrumb } from './Breadcrumb';
 import { MemoryPanel } from '../MemoryPanel';
 import { AgentTaskPanel } from '../AGI/AgentTaskPanel';
 import { CanvasContainer } from '../Canvas/CanvasContainer';
@@ -22,6 +23,10 @@ import { toast } from 'sonner';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import MCPWorkspace from '../MCP/MCPWorkspace';
 import { MCPBundleBrowser } from '../MCP/MCPBundleBrowser';
+import { ImagesGallery } from '../Images/ImagesGallery';
+import { SkillMarketplace } from '../SkillMarketplace/SkillMarketplace';
+import { ScheduledTasksPanel } from '../Scheduler/ScheduledTasksPanel';
+import { ArtifactsGallery } from '../Artifacts/ArtifactsGallery';
 
 // Lazy load MediaLab for code splitting
 const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
@@ -71,6 +76,10 @@ export function AppLayout({ children }: AppLayoutProps) {
     | 'rewind'
     | 'mcp-workspace'
     | 'mcp-bundles'
+    | 'images'
+    | 'skills'
+    | 'schedules'
+    | 'artifacts'
     | null;
   const [activeRightPanel, setActiveRightPanel] = useState<RightPanel>(null);
   const RIGHT_PANEL_WIDTH = 420;
@@ -213,7 +222,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey;
 
-      if (isMeta && e.shiftKey && e.key.toLowerCase() === 's') {
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         setSidebarCollapsed(!sidebarCollapsed);
       }
@@ -232,6 +241,32 @@ export function AppLayout({ children }: AppLayoutProps) {
         e.preventDefault();
         useUnifiedChatStore.getState().toggleMessageTimestamps();
       }
+
+      // Navigation shortcuts
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        openRightPanel('images');
+      }
+
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        openRightPanel('skills');
+      }
+
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        openRightPanel('schedules');
+      }
+
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        openRightPanel('research');
+      }
+
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        openRightPanel('artifacts');
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -242,6 +277,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     sidebarCollapsed,
     setShortcutsDialogOpen,
     shortcutsDialogOpen,
+    openRightPanel,
   ]);
 
   return (
@@ -283,6 +319,10 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
         style={{ marginRight: rightPanelOffset }}
       >
+        <Breadcrumb
+          activeView={activeRightPanel}
+          onNavigateHome={() => setActiveRightPanel(null)}
+        />
         {}
         <div className="relative flex h-full flex-col">
           {}
@@ -402,7 +442,15 @@ export function AppLayout({ children }: AppLayoutProps) {
                       ? 'MCP Workspace'
                       : activeRightPanel === 'mcp-bundles'
                         ? 'Tool Registry'
-                        : activeRightPanel}
+                        : activeRightPanel === 'images'
+                          ? 'Images'
+                          : activeRightPanel === 'skills'
+                            ? 'Skills'
+                            : activeRightPanel === 'schedules'
+                              ? 'Schedules'
+                              : activeRightPanel === 'artifacts'
+                                ? 'Artifacts Gallery'
+                                : activeRightPanel}
             </h2>
             <button
               type="button"
@@ -437,6 +485,10 @@ export function AppLayout({ children }: AppLayoutProps) {
             {activeRightPanel === 'rewind' && <RewindTimeline />}
             {activeRightPanel === 'mcp-workspace' && <MCPWorkspace />}
             {activeRightPanel === 'mcp-bundles' && <MCPBundleBrowser />}
+            {activeRightPanel === 'images' && <ImagesGallery />}
+            {activeRightPanel === 'skills' && <SkillMarketplace />}
+            {activeRightPanel === 'schedules' && <ScheduledTasksPanel />}
+            {activeRightPanel === 'artifacts' && <ArtifactsGallery />}
           </div>
         </div>
       )}
