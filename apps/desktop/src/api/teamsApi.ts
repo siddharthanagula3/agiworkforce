@@ -1,90 +1,184 @@
-import { invoke } from '@tauri-apps/api/core';
-import {
+/**
+ * Teams API
+ *
+ * TypeScript wrappers for all 26 team-related Tauri commands.
+ * Covers team CRUD, members, invitations, resources, activity,
+ * billing, settings, and ownership transfer.
+ *
+ * invoke() params: camelCase (TS) -> snake_case (Rust) automatic conversion.
+ */
+
+import { invoke } from '../lib/tauri-mock';
+import type {
   Team,
   TeamMember,
   TeamInvitation,
-  TeamRole,
   TeamResource,
-  ResourceType,
   TeamActivity,
   TeamBilling,
-  BillingPlan,
-  BillingCycle,
   UsageMetrics,
 } from '../types/teams';
 
-export const teamsApi = {
-  createTeam: async (name: string, description: string | null, ownerId: string): Promise<Team> => {
-    return invoke('create_team', { name, description, ownerId });
-  },
+// ============================================================================
+// Interfaces for settings update (mirrors Rust update_team_settings params)
+// ============================================================================
 
-  getTeam: async (teamId: string): Promise<Team | null> => {
-    return invoke('get_team', { teamId });
-  },
+export interface UpdateTeamSettingsParams {
+  teamId: string;
+  defaultMemberRole?: string | null;
+  allowResourceSharing?: boolean | null;
+  requireApprovalForAutomations?: boolean | null;
+  enableActivityNotifications?: boolean | null;
+  maxMembers?: number | null;
+}
 
-  updateTeam: async (teamId: string, name?: string, description?: string): Promise<void> => {
-    return invoke('update_team', { teamId, name, description });
-  },
+// ============================================================================
+// Team CRUD
+// ============================================================================
 
-  deleteTeam: async (teamId: string): Promise<void> => {
-    return invoke('delete_team', { teamId });
-  },
+export async function createTeam(
+  name: string,
+  description: string | null,
+  ownerId: string,
+): Promise<Team> {
+  try {
+    return await invoke<Team>('create_team', { name, description, ownerId });
+  } catch (error) {
+    throw new Error(`Failed to create team: ${String(error)}`);
+  }
+}
 
-  getUserTeams: async (userId: string): Promise<Team[]> => {
-    return invoke('get_user_teams', { userId });
-  },
+export async function getTeam(teamId: string): Promise<Team | null> {
+  try {
+    return await invoke<Team | null>('get_team', { teamId });
+  } catch (error) {
+    throw new Error(`Failed to get team: ${String(error)}`);
+  }
+}
 
-  transferOwnership: async (
-    teamId: string,
-    newOwnerId: string,
-    transferredBy: string,
-  ): Promise<void> => {
-    return invoke('transfer_team_ownership', { teamId, newOwnerId, transferredBy });
-  },
+export async function updateTeam(
+  teamId: string,
+  name: string | null,
+  description: string | null,
+): Promise<void> {
+  try {
+    await invoke('update_team', { teamId, name, description });
+  } catch (error) {
+    throw new Error(`Failed to update team: ${String(error)}`);
+  }
+}
 
-  inviteMember: async (
-    teamId: string,
-    email: string,
-    role: TeamRole,
-    invitedBy: string,
-  ): Promise<string> => {
-    return invoke('invite_member', { teamId, email, role, invitedBy });
-  },
+export async function updateTeamSettings(params: UpdateTeamSettingsParams): Promise<void> {
+  try {
+    await invoke('update_team_settings', {
+      teamId: params.teamId,
+      defaultMemberRole: params.defaultMemberRole ?? null,
+      allowResourceSharing: params.allowResourceSharing ?? null,
+      requireApprovalForAutomations: params.requireApprovalForAutomations ?? null,
+      enableActivityNotifications: params.enableActivityNotifications ?? null,
+      maxMembers: params.maxMembers ?? null,
+    });
+  } catch (error) {
+    throw new Error(`Failed to update team settings: ${String(error)}`);
+  }
+}
 
-  acceptInvitation: async (token: string, userId: string): Promise<Team> => {
-    return invoke('accept_invitation', { token, userId });
-  },
+export async function deleteTeam(teamId: string): Promise<void> {
+  try {
+    await invoke('delete_team', { teamId });
+  } catch (error) {
+    throw new Error(`Failed to delete team: ${String(error)}`);
+  }
+}
 
-  removeMember: async (teamId: string, userId: string, removedBy: string): Promise<void> => {
-    return invoke('remove_member', { teamId, userId, removedBy });
-  },
+export async function getUserTeams(userId: string): Promise<Team[]> {
+  try {
+    return await invoke<Team[]>('get_user_teams', { userId });
+  } catch (error) {
+    throw new Error(`Failed to get user teams: ${String(error)}`);
+  }
+}
 
-  updateMemberRole: async (
-    teamId: string,
-    userId: string,
-    role: TeamRole,
-    updatedBy: string,
-  ): Promise<void> => {
-    return invoke('update_member_role', { teamId, userId, role, updatedBy });
-  },
+// ============================================================================
+// Members
+// ============================================================================
 
-  getTeamMembers: async (teamId: string): Promise<TeamMember[]> => {
-    return invoke('get_team_members', { teamId });
-  },
+export async function inviteMember(
+  teamId: string,
+  email: string,
+  role: string,
+  invitedBy: string,
+): Promise<string> {
+  try {
+    return await invoke<string>('invite_member', { teamId, email, role, invitedBy });
+  } catch (error) {
+    throw new Error(`Failed to invite member: ${String(error)}`);
+  }
+}
 
-  getTeamInvitations: async (teamId: string): Promise<TeamInvitation[]> => {
-    return invoke('get_team_invitations', { teamId });
-  },
+export async function acceptInvitation(token: string, userId: string): Promise<Team> {
+  try {
+    return await invoke<Team>('accept_invitation', { token, userId });
+  } catch (error) {
+    throw new Error(`Failed to accept invitation: ${String(error)}`);
+  }
+}
 
-  shareResource: async (
-    teamId: string,
-    resourceType: ResourceType,
-    resourceId: string,
-    resourceName: string,
-    resourceDescription: string | null,
-    sharedBy: string,
-  ): Promise<void> => {
-    return invoke('share_resource', {
+export async function removeMember(
+  teamId: string,
+  userId: string,
+  removedBy: string,
+): Promise<void> {
+  try {
+    await invoke('remove_member', { teamId, userId, removedBy });
+  } catch (error) {
+    throw new Error(`Failed to remove member: ${String(error)}`);
+  }
+}
+
+export async function updateMemberRole(
+  teamId: string,
+  userId: string,
+  role: string,
+  updatedBy: string,
+): Promise<void> {
+  try {
+    await invoke('update_member_role', { teamId, userId, role, updatedBy });
+  } catch (error) {
+    throw new Error(`Failed to update member role: ${String(error)}`);
+  }
+}
+
+export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
+  try {
+    return await invoke<TeamMember[]>('get_team_members', { teamId });
+  } catch (error) {
+    throw new Error(`Failed to get team members: ${String(error)}`);
+  }
+}
+
+export async function getTeamInvitations(teamId: string): Promise<TeamInvitation[]> {
+  try {
+    return await invoke<TeamInvitation[]>('get_team_invitations', { teamId });
+  } catch (error) {
+    throw new Error(`Failed to get team invitations: ${String(error)}`);
+  }
+}
+
+// ============================================================================
+// Resources
+// ============================================================================
+
+export async function shareResource(
+  teamId: string,
+  resourceType: string,
+  resourceId: string,
+  resourceName: string,
+  resourceDescription: string | null,
+  sharedBy: string,
+): Promise<void> {
+  try {
+    await invoke('share_resource', {
       teamId,
       resourceType,
       resourceId,
@@ -92,74 +186,165 @@ export const teamsApi = {
       resourceDescription,
       sharedBy,
     });
-  },
+  } catch (error) {
+    throw new Error(`Failed to share resource: ${String(error)}`);
+  }
+}
 
-  unshareResource: async (
-    teamId: string,
-    resourceType: ResourceType,
-    resourceId: string,
-    unsharedBy: string,
-  ): Promise<void> => {
-    return invoke('unshare_resource', { teamId, resourceType, resourceId, unsharedBy });
-  },
+export async function unshareResource(
+  teamId: string,
+  resourceType: string,
+  resourceId: string,
+  unsharedBy: string,
+): Promise<void> {
+  try {
+    await invoke('unshare_resource', { teamId, resourceType, resourceId, unsharedBy });
+  } catch (error) {
+    throw new Error(`Failed to unshare resource: ${String(error)}`);
+  }
+}
 
-  getTeamResources: async (teamId: string): Promise<TeamResource[]> => {
-    return invoke('get_team_resources', { teamId });
-  },
+export async function getTeamResources(teamId: string): Promise<TeamResource[]> {
+  try {
+    return await invoke<TeamResource[]>('get_team_resources', { teamId });
+  } catch (error) {
+    throw new Error(`Failed to get team resources: ${String(error)}`);
+  }
+}
 
-  getTeamResourcesByType: async (
-    teamId: string,
-    resourceType: ResourceType,
-  ): Promise<TeamResource[]> => {
-    return invoke('get_team_resources_by_type', { teamId, resourceType });
-  },
+export async function getTeamResourcesByType(
+  teamId: string,
+  resourceType: string,
+): Promise<TeamResource[]> {
+  try {
+    return await invoke<TeamResource[]>('get_team_resources_by_type', { teamId, resourceType });
+  } catch (error) {
+    throw new Error(`Failed to get team resources by type: ${String(error)}`);
+  }
+}
 
-  getTeamActivity: async (
-    teamId: string,
-    limit: number = 50,
-    offset: number = 0,
-  ): Promise<TeamActivity[]> => {
-    return invoke('get_team_activity', { teamId, limit, offset });
-  },
+// ============================================================================
+// Activity
+// ============================================================================
 
-  getUserTeamActivity: async (
-    teamId: string,
-    userId: string,
-    limit: number = 20,
-  ): Promise<TeamActivity[]> => {
-    return invoke('get_user_team_activity', { teamId, userId, limit });
-  },
+export async function getTeamActivity(
+  teamId: string,
+  limit: number,
+  offset: number,
+): Promise<TeamActivity[]> {
+  try {
+    return await invoke<TeamActivity[]>('get_team_activity', { teamId, limit, offset });
+  } catch (error) {
+    throw new Error(`Failed to get team activity: ${String(error)}`);
+  }
+}
 
-  getTeamBilling: async (teamId: string): Promise<TeamBilling | null> => {
-    return invoke('get_team_billing', { teamId });
-  },
+export async function getUserTeamActivity(
+  teamId: string,
+  userId: string,
+  limit: number,
+): Promise<TeamActivity[]> {
+  try {
+    return await invoke<TeamActivity[]>('get_user_team_activity', { teamId, userId, limit });
+  } catch (error) {
+    throw new Error(`Failed to get user team activity: ${String(error)}`);
+  }
+}
 
-  initializeTeamBilling: async (
-    teamId: string,
-    plan: BillingPlan,
-    cycle: BillingCycle,
-    seatCount: number,
-  ): Promise<TeamBilling> => {
-    return invoke('initialize_team_billing', { teamId, plan, cycle, seatCount });
-  },
+// ============================================================================
+// Billing
+// ============================================================================
 
-  updateTeamPlan: async (teamId: string, plan: BillingPlan, updatedBy: string): Promise<void> => {
-    return invoke('update_team_plan', { teamId, plan, updatedBy });
-  },
+export async function getTeamBilling(teamId: string): Promise<TeamBilling | null> {
+  try {
+    return await invoke<TeamBilling | null>('get_team_billing', { teamId });
+  } catch (error) {
+    throw new Error(`Failed to get team billing: ${String(error)}`);
+  }
+}
 
-  addTeamSeats: async (teamId: string, count: number, updatedBy: string): Promise<void> => {
-    return invoke('add_team_seats', { teamId, count, updatedBy });
-  },
+export async function initializeTeamBilling(
+  teamId: string,
+  plan: string,
+  cycle: string,
+  seatCount: number,
+): Promise<TeamBilling> {
+  try {
+    return await invoke<TeamBilling>('initialize_team_billing', {
+      teamId,
+      plan,
+      cycle,
+      seatCount,
+    });
+  } catch (error) {
+    throw new Error(`Failed to initialize team billing: ${String(error)}`);
+  }
+}
 
-  removeTeamSeats: async (teamId: string, count: number, updatedBy: string): Promise<void> => {
-    return invoke('remove_team_seats', { teamId, count, updatedBy });
-  },
+export async function updateTeamPlan(
+  teamId: string,
+  plan: string,
+  updatedBy: string,
+): Promise<void> {
+  try {
+    await invoke('update_team_plan', { teamId, plan, updatedBy });
+  } catch (error) {
+    throw new Error(`Failed to update team plan: ${String(error)}`);
+  }
+}
 
-  calculateTeamCost: async (teamId: string): Promise<number> => {
-    return invoke('calculate_team_cost', { teamId });
-  },
+export async function addTeamSeats(
+  teamId: string,
+  count: number,
+  updatedBy: string,
+): Promise<void> {
+  try {
+    await invoke('add_team_seats', { teamId, count, updatedBy });
+  } catch (error) {
+    throw new Error(`Failed to add team seats: ${String(error)}`);
+  }
+}
 
-  updateTeamUsage: async (teamId: string, metrics: UsageMetrics): Promise<void> => {
-    return invoke('update_team_usage', { teamId, metrics });
-  },
-};
+export async function removeTeamSeats(
+  teamId: string,
+  count: number,
+  updatedBy: string,
+): Promise<void> {
+  try {
+    await invoke('remove_team_seats', { teamId, count, updatedBy });
+  } catch (error) {
+    throw new Error(`Failed to remove team seats: ${String(error)}`);
+  }
+}
+
+export async function calculateTeamCost(teamId: string): Promise<number> {
+  try {
+    return await invoke<number>('calculate_team_cost', { teamId });
+  } catch (error) {
+    throw new Error(`Failed to calculate team cost: ${String(error)}`);
+  }
+}
+
+export async function updateTeamUsage(teamId: string, metrics: UsageMetrics): Promise<void> {
+  try {
+    await invoke('update_team_usage', { teamId, metrics });
+  } catch (error) {
+    throw new Error(`Failed to update team usage: ${String(error)}`);
+  }
+}
+
+// ============================================================================
+// Ownership
+// ============================================================================
+
+export async function transferTeamOwnership(
+  teamId: string,
+  newOwnerId: string,
+  transferredBy: string,
+): Promise<void> {
+  try {
+    await invoke('transfer_team_ownership', { teamId, newOwnerId, transferredBy });
+  } catch (error) {
+    throw new Error(`Failed to transfer team ownership: ${String(error)}`);
+  }
+}

@@ -6,6 +6,7 @@ import type {
   ElementSelector,
   ExecutionResult,
   GeneratedCode,
+  RecordedAction,
   Recording,
   RecordingSession,
 } from '../types/automationEnhanced';
@@ -367,5 +368,100 @@ export async function generateCode(
     return convertKeysToCamelCase(result) as GeneratedCode;
   } catch (error) {
     throw new Error(`Failed to generate code for language ${language}: ${error}`);
+  }
+}
+
+// ============================================================================
+// Bridge commands — match frontend invoke() names to existing implementations
+// ============================================================================
+
+export async function listAutomationScripts(): Promise<AutomationScript[]> {
+  try {
+    const result = await invokeWithTimeout<unknown[]>('list_automation_scripts');
+    return result.map((item) => convertKeysToCamelCase(item) as AutomationScript);
+  } catch (error) {
+    throw new Error(`Failed to list automation scripts: ${error}`);
+  }
+}
+
+export async function saveAutomationScript(script: AutomationScript): Promise<void> {
+  try {
+    if (!script || typeof script !== 'object') {
+      throw new Error('script must be a valid AutomationScript object');
+    }
+    const snakeScript = convertKeysToSnakeCase(script);
+    await invokeWithTimeout<void>('save_automation_script', { script: snakeScript });
+  } catch (error) {
+    throw new Error(`Failed to save automation script: ${error}`);
+  }
+}
+
+export async function deleteAutomationScript(scriptId: string): Promise<void> {
+  try {
+    validateNonEmpty(scriptId, 'scriptId');
+    await invokeWithTimeout<void>('delete_automation_script', { scriptId });
+  } catch (error) {
+    throw new Error(`Failed to delete automation script ${scriptId}: ${error}`);
+  }
+}
+
+export async function executeAutomationScript(
+  scriptId: string,
+  script?: AutomationScript,
+): Promise<ExecutionResult> {
+  try {
+    validateNonEmpty(scriptId, 'scriptId');
+    const args: Record<string, unknown> = { scriptId };
+    if (script) {
+      args['script'] = convertKeysToSnakeCase(script);
+    }
+    const result = await invokeWithTimeout<unknown>(
+      'execute_automation_script',
+      args,
+      AUTOMATION_EXECUTE_TIMEOUT_MS,
+    );
+    return convertKeysToCamelCase(result) as ExecutionResult;
+  } catch (error) {
+    throw new Error(`Failed to execute automation script ${scriptId}: ${error}`);
+  }
+}
+
+export async function saveRecordingAsScriptBridge(
+  recordingId: string,
+  name: string,
+  description: string,
+  tags: string[],
+  actions?: RecordedAction[],
+): Promise<AutomationScript> {
+  try {
+    validateNonEmpty(recordingId, 'recordingId');
+    validateNonEmpty(name, 'name');
+    validateNonEmpty(description, 'description');
+    if (!Array.isArray(tags)) {
+      throw new Error('tags must be an array');
+    }
+    const args: Record<string, unknown> = {
+      recordingId,
+      name,
+      description,
+      tags,
+    };
+    if (actions) {
+      args['actions'] = actions.map((a) => convertKeysToSnakeCase(a));
+    }
+    const result = await invokeWithTimeout<unknown>('save_recording_as_script', args);
+    return convertKeysToCamelCase(result) as AutomationScript;
+  } catch (error) {
+    throw new Error(`Failed to save recording as script: ${error}`);
+  }
+}
+
+export async function inspectElementAt(x: number, y: number): Promise<DetailedElementInfo | null> {
+  try {
+    validateCoordinates(x, y);
+    const result = await invokeWithTimeout<unknown | null>('inspect_element_at', { x, y });
+    return result ? (convertKeysToCamelCase(result) as DetailedElementInfo) : null;
+  } catch (error) {
+    throw new Error(`Failed to inspect element at (${x}, ${y}): ${error}`);
   }
 }

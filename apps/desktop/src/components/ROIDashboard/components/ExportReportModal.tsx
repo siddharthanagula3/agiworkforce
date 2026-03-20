@@ -1,6 +1,7 @@
 import { Download, FileJson, FileSpreadsheet, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '../../../components/ui/Button';
 import { Checkbox } from '../../../components/ui/Checkbox';
 import {
@@ -29,7 +30,7 @@ interface ExportReportModalProps {
 }
 
 export function ExportReportModal({ open, onClose }: ExportReportModalProps) {
-  const { exportReport } = useROIStore();
+  const { exportReport } = useROIStore(useShallow((s) => ({ exportReport: s.exportReport })));
   const [loading, setLoading] = useState(false);
 
   const [options, setOptions] = useState<ExportOptions>({

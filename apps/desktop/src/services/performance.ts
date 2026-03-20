@@ -1,4 +1,4 @@
-import { invoke } from '../lib/tauri-mock';
+import { metricsGetSystem, metricsGetApp } from '../api/analytics';
 import {
   AppMetrics,
   PerformanceMark,
@@ -273,7 +273,7 @@ class PerformanceMonitoringService {
 
   public async getSystemMetrics(): Promise<SystemMetrics> {
     try {
-      return await invoke<SystemMetrics>('metrics_get_system');
+      return (await metricsGetSystem()) as unknown as SystemMetrics;
     } catch (error) {
       console.error('Failed to get system metrics:', error);
       return {
@@ -291,7 +291,7 @@ class PerformanceMonitoringService {
 
   public async getAppMetrics(): Promise<AppMetrics> {
     try {
-      return await invoke<AppMetrics>('metrics_get_app');
+      return (await metricsGetApp()) as unknown as AppMetrics;
     } catch (error) {
       console.error('Failed to get app metrics:', error);
       return {
