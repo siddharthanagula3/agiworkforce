@@ -145,15 +145,22 @@ const MessageGroupRow = memo(
       </div>
     );
   },
-  (prev, next) =>
-    prev.group.firstId === next.group.firstId &&
-    prev.group.messages.length === next.group.messages.length &&
-    prev.group.messages[prev.group.messages.length - 1]?.content ===
-      next.group.messages[next.group.messages.length - 1]?.content &&
-    prev.group.messages[prev.group.messages.length - 1]?.isStreaming ===
-      next.group.messages[next.group.messages.length - 1]?.isStreaming &&
-    prev.onRegenerate === next.onRegenerate &&
-    prev.onDelete === next.onDelete,
+  (prev, next) => {
+    const prevLast = prev.group.messages[prev.group.messages.length - 1];
+    const nextLast = next.group.messages[next.group.messages.length - 1];
+
+    return (
+      prev.group.firstId === next.group.firstId &&
+      prev.group.messages.length === next.group.messages.length &&
+      prevLast?.content === nextLast?.content &&
+      prevLast?.isStreaming === nextLast?.isStreaming &&
+      // Re-render when thinking content or its streaming state changes
+      prevLast?.metadata?.thinkingContent === nextLast?.metadata?.thinkingContent &&
+      prevLast?.metadata?.isThinkingStreaming === nextLast?.metadata?.isThinkingStreaming &&
+      prev.onRegenerate === next.onRegenerate &&
+      prev.onDelete === next.onDelete
+    );
+  },
 );
 MessageGroupRow.displayName = 'MessageGroupRow';
 
@@ -332,7 +339,10 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.className === next.className &&
     // Detect streaming content changes in the last message
     lastPrev?.content === lastNext?.content &&
-    lastPrev?.isStreaming === lastNext?.isStreaming
+    lastPrev?.isStreaming === lastNext?.isStreaming &&
+    // Detect thinking content changes
+    lastPrev?.metadata?.thinkingContent === lastNext?.metadata?.thinkingContent &&
+    lastPrev?.metadata?.isThinkingStreaming === lastNext?.metadata?.isThinkingStreaming
   );
 });
 
