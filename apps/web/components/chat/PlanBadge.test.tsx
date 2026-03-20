@@ -30,7 +30,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
-  billingData: null as null | Record<string, unknown>,
+  billingData: null as null | unknown,
   isLoading: false,
   isError: false,
 }));

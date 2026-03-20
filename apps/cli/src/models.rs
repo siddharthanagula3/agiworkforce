@@ -1470,12 +1470,12 @@ mod tests {
         assert_eq!(detect_provider("gpt-4o"), Provider::OpenAI);
         assert_eq!(detect_provider("gpt-4-turbo"), Provider::OpenAI);
         assert_eq!(detect_provider("o3-mini"), Provider::OpenAI);
-        assert_eq!(detect_provider("gemini-2.0-flash"), Provider::Google);
+        assert_eq!(detect_provider("gemini-3-flash-preview"), Provider::Google);
         assert_eq!(detect_provider("models/gemini-pro"), Provider::Google);
         assert_eq!(detect_provider("llama3.1:8b"), Provider::Ollama);
         assert_eq!(detect_provider("mistral-large"), Provider::Mistral);
         assert_eq!(detect_provider("codestral-latest"), Provider::Mistral);
-        assert_eq!(detect_provider("grok-2"), Provider::XAI);
+        assert_eq!(detect_provider("grok-4.1"), Provider::XAI);
         assert_eq!(detect_provider("grok-beta"), Provider::XAI);
         assert_eq!(detect_provider("deepseek-chat"), Provider::DeepSeek);
         assert_eq!(detect_provider("deepseek-reasoner"), Provider::DeepSeek);

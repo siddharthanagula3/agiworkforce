@@ -17,6 +17,9 @@
     "a11y:audit": "node scripts/a11y-audit.mjs"
   },
   "dependencies": {
+    "@agiworkforce/api": "workspace:*",
+    "@agiworkforce/runtime": "workspace:*",
+    "@agiworkforce/stores": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.58",
