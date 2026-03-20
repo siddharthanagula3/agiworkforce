@@ -17,6 +17,7 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../lib/tauri-mock';
+import { toast } from 'sonner';
 import { storageFallback } from '../lib/storageFallback';
 import type { CostAnalyticsResponse, CostOverviewResponse } from '../types/chat';
 import { supabaseAuth } from '../services/supabaseAuth';
@@ -50,11 +51,13 @@ import {
   trackWorkflowView as apiTrackWorkflowView,
 } from '../api/analytics';
 import type {
+  SystemMetrics as ApiSystemMetrics,
+  AppMetrics as ApiAppMetrics,
+} from '../api/analytics';
+import type {
   AnalyticsConfig,
-  AppMetrics,
   FeatureUsageStats,
   PrivacyConsent,
-  SystemMetrics,
   UsageStats as AnalyticsUsageStats,
 } from '../types/analytics';
 import type { AllTimeStats, ChartDataPoint, TopEmployee } from '../types/roi';
@@ -167,8 +170,8 @@ interface BillingUsageState {
   budgetAlerts: BudgetAlert[];
 
   // --- Analytics State ---
-  systemMetrics: SystemMetrics | null;
-  appMetrics: AppMetrics | null;
+  systemMetrics: ApiSystemMetrics | null;
+  appMetrics: ApiAppMetrics | null;
   analyticsUsageStats: AnalyticsUsageStats | null;
   featureUsage: FeatureUsageStats[];
   analyticsConfig: AnalyticsConfig;
@@ -506,6 +509,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           },
 
           fetchCurrentPlan: async (userId: string) => {
+            if (!userId?.trim()) {
+              toast.error('User ID is required to fetch current plan');
+              return null;
+            }
             set({ isLoadingPlans: true, subscriptionError: null });
             try {
               const plan = await invoke<RustPricingPlan>('get_current_plan', { userId });
@@ -519,6 +526,14 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           },
 
           subscribeToPlan: async (userId: string, planId: string, billingInterval?: string) => {
+            if (!userId?.trim()) {
+              toast.error('User ID is required to subscribe');
+              return null;
+            }
+            if (!planId?.trim()) {
+              toast.error('Plan ID is required to subscribe');
+              return null;
+            }
             set({ isLoadingPlans: true, subscriptionError: null });
             try {
               const sub = await invoke<RustSubscriptionInfo>('subscribe_to_plan', {
@@ -538,6 +553,14 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           },
 
           upgradePlan: async (userId: string, newPlanId: string) => {
+            if (!userId?.trim()) {
+              toast.error('User ID is required to upgrade plan');
+              return null;
+            }
+            if (!newPlanId?.trim()) {
+              toast.error('Plan ID is required to upgrade');
+              return null;
+            }
             set({ isLoadingPlans: true, subscriptionError: null });
             try {
               const sub = await invoke<RustSubscriptionInfo>('upgrade_plan', {
@@ -556,6 +579,14 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           },
 
           cancelPlanSubscription: async (userId: string, subscriptionId: string) => {
+            if (!userId?.trim()) {
+              toast.error('User ID is required to cancel subscription');
+              return false;
+            }
+            if (!subscriptionId?.trim()) {
+              toast.error('Subscription ID is required to cancel');
+              return false;
+            }
             set({ isLoadingPlans: true, subscriptionError: null });
             try {
               await invoke('cancel_subscription', { userId, subscriptionId });
@@ -1392,7 +1423,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             try {
               await metricsIncrementAutomations();
             } catch (error) {
-              console.error('Failed to increment automations metric:', error);
+              errorTracking.captureError(
+                error instanceof Error ? error : new Error(String(error)),
+                { component: 'billingUsageStore', tags: { action: 'incrementAutomationsMetric' } },
+              );
             }
           },
 
@@ -1400,7 +1434,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             try {
               await metricsIncrementGoals();
             } catch (error) {
-              console.error('Failed to increment goals metric:', error);
+              errorTracking.captureError(
+                error instanceof Error ? error : new Error(String(error)),
+                { component: 'billingUsageStore', tags: { action: 'incrementGoalsMetric' } },
+              );
             }
           },
 
@@ -1408,7 +1445,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             try {
               await metricsSetMcpServers(count);
             } catch (error) {
-              console.error('Failed to set MCP servers metric:', error);
+              errorTracking.captureError(
+                error instanceof Error ? error : new Error(String(error)),
+                { component: 'billingUsageStore', tags: { action: 'setMcpServersMetric' } },
+              );
             }
           },
 
@@ -1416,7 +1456,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             try {
               await metricsSetCacheHitRate(rate);
             } catch (error) {
-              console.error('Failed to set cache hit rate metric:', error);
+              errorTracking.captureError(
+                error instanceof Error ? error : new Error(String(error)),
+                { component: 'billingUsageStore', tags: { action: 'setCacheHitRateMetric' } },
+              );
             }
           },
 
@@ -1424,7 +1467,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
             try {
               await apiTrackWorkflowView(workflowId);
             } catch (error) {
-              console.error('Failed to track workflow view:', error);
+              errorTracking.captureError(
+                error instanceof Error ? error : new Error(String(error)),
+                { component: 'billingUsageStore', tags: { action: 'trackWorkflowView' } },
+              );
             }
           },
 

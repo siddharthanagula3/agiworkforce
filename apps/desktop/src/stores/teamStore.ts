@@ -193,6 +193,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           currentTeam: state.currentTeam?.id === params.teamId ? team : state.currentTeam,
           isLoading: false,
         }));
+      } else {
+        set({ isLoading: false });
       }
     } catch (error) {
       set({ error: String(error), isLoading: false });
