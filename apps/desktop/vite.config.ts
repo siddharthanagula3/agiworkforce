@@ -21,6 +21,7 @@ const DEFAULT_DEV_PORT = 5173;
 export default defineConfig(async ({ mode }: ConfigEnv) => {
   // Load environment variables based on mode (development, production, test)
   const env = loadEnv(mode, process.cwd(), ['VITE_', 'TAURI_']);
+  const isWebBuild = env['VITE_BUILD_TARGET'] === 'web';
 
   // Determine port configuration
   const requestedPort = Number(env['VITE_DEV_PORT']) || DEFAULT_DEV_PORT;
@@ -34,6 +35,8 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
   const buildTarget = isWindows ? 'chrome105' : 'safari14';
 
   const config: UserConfig = {
+    base: isWebBuild ? '/' : undefined,
+
     // ===================
     // Plugins
     // ===================
@@ -107,7 +110,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
     // ===================
     build: {
       // Modern build target - use esnext for optimal performance
-      target: buildTarget,
+      target: isWebBuild ? 'esnext' : buildTarget,
 
       // Minification settings
       minify: isDebug ? false : 'esbuild',
@@ -127,6 +130,20 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
 
       // Rollup-specific options
       rollupOptions: {
+        // Externalize Tauri packages in web builds — they're never used
+        ...(isWebBuild && {
+          external: [
+            '@tauri-apps/api',
+            '@tauri-apps/api/core',
+            '@tauri-apps/api/event',
+            '@tauri-apps/api/window',
+            '@tauri-apps/plugin-dialog',
+            '@tauri-apps/plugin-shell',
+            '@tauri-apps/plugin-process',
+            '@tauri-apps/plugin-updater',
+            '@tauri-apps/cli',
+          ],
+        }),
         output: {
           /**
            * Manual chunk splitting for optimal loading performance.
@@ -153,8 +170,12 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
               '@radix-ui/react-tooltip',
             ],
 
-            // Terminal emulation - loaded when terminal features are used
-            'terminal-vendor': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-webgl'],
+            // Terminal is desktop-only
+            ...(isWebBuild
+              ? {}
+              : {
+                  'terminal-vendor': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-webgl'],
+                }),
 
             // Markdown rendering and syntax highlighting
             'markdown-vendor': [
@@ -232,7 +253,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         'react-dom',
         'react-router-dom',
         'zustand',
-        '@tauri-apps/api',
+        ...(isWebBuild ? [] : ['@tauri-apps/api']),
         'framer-motion',
         'clsx',
         'date-fns',
@@ -240,7 +261,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         'react-syntax-highlighter',
       ],
       // Exclude CLI tools from optimization
-      exclude: ['@tauri-apps/cli'],
+      exclude: isWebBuild ? [] : ['@tauri-apps/cli'],
       // Force optimization even for linked dependencies
       force: false,
     },
@@ -263,6 +284,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       __APP_VERSION__: JSON.stringify(env['npm_package_version'] || '0.0.0'),
       __DEV__: JSON.stringify(mode === 'development'),
       __PROD__: JSON.stringify(mode === 'production'),
+      __WEB_BUILD__: JSON.stringify(isWebBuild),
     },
 
     // ===================

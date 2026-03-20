@@ -796,7 +796,23 @@ const DesktopShell = () => {
             <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
           </div>
         )}
-        <VoiceInputOverlay />
+        {!isTauri && !import.meta.env.DEV && (
+          <div className="bg-gradient-to-r from-teal-600 to-blue-600 px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-white font-semibold text-sm">AGI Workforce</span>
+              <span className="text-white/60 text-xs">Web Chat</span>
+            </div>
+            <a
+              href="https://agiworkforce.com/download"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-white/90 hover:text-white bg-white/15 hover:bg-white/25 px-3 py-1 rounded-full transition-colors"
+            >
+              Download Desktop App
+            </a>
+          </div>
+        )}
+        {isTauri && <VoiceInputOverlay />}
         {showOnboarding && !onboardingCompleted && (
           <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
         )}
@@ -870,8 +886,8 @@ const DesktopShell = () => {
             initialTab={settingsInitialTab}
           />
         </Suspense>
-        <UpdateChecker onUpdateNow={openSettings} />
-        <AutomationPermissionsModal />
+        {isTauri && <UpdateChecker onUpdateNow={openSettings} />}
+        {isTauri && <AutomationPermissionsModal />}
         <ErrorToastContainer position="top-right" />
         <TimeoutWarningDialog
           warning={timeoutWarning}
