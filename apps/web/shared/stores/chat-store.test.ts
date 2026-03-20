@@ -34,7 +34,7 @@ describe('Chat Store', () => {
         expect(state.conversations[id]).toBeDefined();
         expect(state.conversations[id]!.title).toBe('New Conversation');
         expect(state.conversations[id]!.messages).toHaveLength(0);
-        expect(state.conversations[id]!.model).toBe('gpt-4o-mini');
+        expect(state.conversations[id]!.model).toBe('gpt-5.4-mini');
         expect(state.activeConversationId).toBe(id);
       });
 

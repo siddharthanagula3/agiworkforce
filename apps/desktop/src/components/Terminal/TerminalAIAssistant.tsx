@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useTerminalStore, type ShellTypeLiteral } from '../../stores/terminalStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import { Loader2, Sparkles, AlertTriangle, CheckCircle, Code } from 'lucide-react';
 
 interface TerminalAIAssistantProps {
@@ -26,7 +27,13 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const terminalStore = useTerminalStore();
+  const terminalStore = useTerminalStore(
+    useShallow((s) => ({
+      aiSuggestCommand: s.aiSuggestCommand,
+      aiSuggestImprovements: s.aiSuggestImprovements,
+      smartCommit: s.smartCommit,
+    })),
+  );
 
   const handleSuggestCommand = async () => {
     if (!intent.trim()) {
@@ -75,16 +82,13 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
       setImprovements(null);
       setIntent('');
 
-      toast({
-        title: 'Smart commit successful',
+      toast.success('Smart commit successful', {
         description: result.substring(0, 100) + (result.length > 100 ? '...' : ''),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Smart commit failed');
-      toast({
-        title: 'Commit failed',
+      toast.error('Commit failed', {
         description: err instanceof Error ? err.message : 'Smart commit failed',
-        variant: 'destructive',
       });
       console.error('Smart commit failed:', err);
     } finally {
@@ -110,7 +114,6 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {}
         <div className="space-y-2">
           <label htmlFor="intent" className="text-sm font-medium">
             What do you want to do?
@@ -146,7 +149,6 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
           </div>
         </div>
 
-        {}
         {error && (
           <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
             <AlertTriangle className="h-4 w-4 text-destructive mt-0.5" />
@@ -154,7 +156,6 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
           </div>
         )}
 
-        {}
         {suggestedCommand && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -173,10 +174,7 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
                 <Button
                   onClick={() => {
                     navigator.clipboard.writeText(suggestedCommand);
-                    toast({
-                      title: 'Copied',
-                      description: 'Command copied to clipboard!',
-                    });
+                    toast.success('Command copied to clipboard!');
                   }}
                   size="sm"
                   variant="outline"
@@ -198,7 +196,6 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
           </div>
         )}
 
-        {}
         {improvements && (
           <div className="flex items-start gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
             <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
@@ -213,7 +210,6 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
           </div>
         )}
 
-        {}
         <div className="pt-4 border-t">
           <Button
             onClick={handleSmartCommit}

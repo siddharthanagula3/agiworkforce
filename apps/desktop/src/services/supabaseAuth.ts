@@ -24,7 +24,7 @@ import { isTauri } from '../lib/tauri-mock';
 // LocalStorage Cache for Resilience Against Cold Starts
 // ============================================================================
 const AUTH_CACHE_PREFIX = 'agiworkforce_auth_cache_';
-const AUTH_CACHE_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes - limits exposure window after token revocation
+const AUTH_CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes - limits exposure window after token revocation
 
 interface CachedAuthData<T> {
   data: T;

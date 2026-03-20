@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -173,7 +174,8 @@ function ToolCard({ tool, isFavorite, onToggleFavorite, onTest, usageCount = 0 }
           </div>
           <p className="text-sm text-gray-600 mb-2">{tool.description}</p>
         </div>
-        <button type="button"
+        <button
+          type="button"
           onClick={() => onToggleFavorite(tool.id)}
           className="text-yellow-500 hover:scale-110 transition-transform"
         >
@@ -218,7 +220,17 @@ function ToolCard({ tool, isFavorite, onToggleFavorite, onTest, usageCount = 0 }
 
 export function MCPToolExplorer() {
   const { tools, stats, searchQuery, setSearchQuery, searchTools, refreshTools, initialize } =
-    useMcpStore();
+    useMcpStore(
+      useShallow((s) => ({
+        tools: s.tools,
+        stats: s.stats,
+        searchQuery: s.searchQuery,
+        setSearchQuery: s.setSearchQuery,
+        searchTools: s.searchTools,
+        refreshTools: s.refreshTools,
+        initialize: s.initialize,
+      })),
+    );
 
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [selectedTool, setSelectedTool] = useState<McpToolInfo | null>(null);

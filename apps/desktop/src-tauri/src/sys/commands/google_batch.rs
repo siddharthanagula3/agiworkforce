@@ -39,7 +39,7 @@ fn get_timestamp() -> String {
 fn get_model_pricing(model: &str) -> (f64, f64, f64) {
     // (input_price_per_1m, output_price_per_1m, cache_price_per_1m)
     match model {
-        "gemini-2.0-flash" => (0.0, 0.0, 0.0),
+        "gemini-3-flash" => (0.0, 0.0, 0.0),
         "gemini-1.5-flash" => (0.075, 0.3, 0.01875),
         "gemini-1.5-pro" => (1.25, 5.0, 0.3125),
         "gemini-embedding-001" => (0.15, 0.15, 0.0), // Embeddings priced differently

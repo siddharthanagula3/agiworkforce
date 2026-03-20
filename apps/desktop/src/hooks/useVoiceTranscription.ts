@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke } from '../lib/tauri-mock';
 import { API_BASE_URL } from '../api/client';
+import { voiceCheckLocalWhisper, voiceConfigure, voiceGetSettings } from '../api/voice';
 import { supabaseAuth } from '../services/supabaseAuth';
 
 /**
@@ -193,10 +193,7 @@ export function useVoiceTranscription(
    */
   const checkLocalWhisperImpl = useCallback(async (): Promise<string[]> => {
     try {
-      const availability = await invoke<boolean | string[]>('voice_check_local_whisper');
-      if (Array.isArray(availability)) {
-        return availability.filter((engine): engine is string => typeof engine === 'string');
-      }
+      const availability = await voiceCheckLocalWhisper();
       return availability ? ['whisper'] : [];
     } catch {
       return [];
@@ -209,13 +206,7 @@ export function useVoiceTranscription(
   const configureImpl = useCallback(
     async (settings: Partial<VoiceSettings>): Promise<void> => {
       try {
-        await invoke('voice_configure', {
-          // BUG-VT-05: Only forward provider when explicitly set by the caller;
-          // do not override with 'cloud' when the caller omits the field (e.g. language-only updates).
-          ...(settings.provider !== undefined ? { provider: settings.provider } : {}),
-          model: settings.model,
-          language: settings.language,
-        });
+        await voiceConfigure(settings.provider, settings.model, settings.language ?? undefined);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         setState((prev) => ({ ...prev, error: errorMessage }));
@@ -231,8 +222,7 @@ export function useVoiceTranscription(
    */
   const getSettingsImpl = useCallback(async (): Promise<VoiceSettings> => {
     try {
-      const settings = await invoke<VoiceSettings>('voice_get_settings');
-      return settings;
+      return await voiceGetSettings();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       setState((prev) => ({ ...prev, error: errorMessage }));

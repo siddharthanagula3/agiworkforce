@@ -7,7 +7,7 @@ import { Input } from '../ui/Input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
 import { ScrollArea } from '../ui/ScrollArea';
 import { Dialog } from '../ui/Dialog';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import {
   Search,
   Download,
@@ -229,10 +229,7 @@ export function MCPServerBrowser() {
 
   const handleInstall = async (server: McpRegistryPackage) => {
     try {
-      toast({
-        title: 'Installing tool',
-        description: `Installing ${server.name}...`,
-      });
+      toast.info(`Installing ${server.name}...`);
 
       await McpClient.installServer(server.id);
 
@@ -240,19 +237,12 @@ export function MCPServerBrowser() {
       const updatedServers = await McpClient.getRegistry();
       setServers(updatedServers);
 
-      toast({
-        title: 'Installation complete',
-        description: `${server.name} has been installed. Enable it in settings to start using it.`,
-      });
+      toast.success(`${server.name} has been installed. Enable it in settings to start using it.`);
 
       setDetailsOpen(false);
     } catch (err) {
       console.error('Failed to install server:', err);
-      toast({
-        title: 'Installation failed',
-        description: err instanceof Error ? err.message : 'Failed to install server',
-        variant: 'destructive',
-      });
+      toast.error(err instanceof Error ? err.message : 'Failed to install server');
     }
   };
 

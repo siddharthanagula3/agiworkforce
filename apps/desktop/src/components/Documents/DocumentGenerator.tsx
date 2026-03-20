@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   FileText,
   FileSpreadsheet,
@@ -73,7 +74,14 @@ export function DocumentGenerator({
   const [includeCover, setIncludeCover] = useState(false);
   const [resultPath, setResultPath] = useState<string | null>(null);
 
-  const { isGenerating, generatePdf, generateWord, generateExcel } = useDocumentStore();
+  const { isGenerating, generatePdf, generateWord, generateExcel } = useDocumentStore(
+    useShallow((s) => ({
+      isGenerating: s.isGenerating,
+      generatePdf: s.generatePdf,
+      generateWord: s.generateWord,
+      generateExcel: s.generateExcel,
+    })),
+  );
 
   const getExtension = useCallback(() => {
     return FORMAT_TABS.find((t) => t.id === format)?.extension ?? 'pdf';
@@ -134,7 +142,8 @@ export function DocumentGenerator({
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-foreground">Generate Document</h3>
           {onClose && (
-            <button type="button"
+            <button
+              type="button"
               onClick={onClose}
               className="text-muted-foreground hover:text-foreground text-xs transition-colors"
             >
@@ -145,7 +154,8 @@ export function DocumentGenerator({
 
         <div className="flex gap-1 mt-3">
           {FORMAT_TABS.map((tab) => (
-            <button type="button"
+            <button
+              type="button"
               key={tab.id}
               onClick={() => {
                 setFormat(tab.id);
@@ -200,7 +210,8 @@ export function DocumentGenerator({
               <label className="block text-xs text-muted-foreground mb-1">Page Size</label>
               <div className="flex gap-1">
                 {PAGE_SIZE_OPTIONS.map((opt) => (
-                  <button type="button"
+                  <button
+                    type="button"
                     key={opt.value}
                     onClick={() => setPageSize(opt.value)}
                     className={cn(
@@ -216,7 +227,8 @@ export function DocumentGenerator({
               </div>
             </div>
             <div className="flex items-center gap-2 mt-4">
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setIncludeCover(!includeCover)}
                 className={cn(
                   'w-8 h-5 rounded-full transition-colors relative',

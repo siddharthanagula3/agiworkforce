@@ -25,6 +25,8 @@ export interface MessageBubbleProps {
   showAvatar?: boolean;
   showTimestamp?: boolean;
   enableActions?: boolean;
+  /** True when this bubble is the last message in the list — used to control source pill visibility */
+  isLastMessage?: boolean;
   onRegenerate?: () => void;
   /** Called when user clicks edit button - passes current content */
   onEdit?: (content: string) => void;
@@ -33,6 +35,8 @@ export interface MessageBubbleProps {
   onDelete?: () => void;
   onCopy?: () => void;
   onToggleSidecar?: (tab: SidecarMode) => void;
+  /** Called when user clicks a follow-up suggestion pill — populates the chat input */
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
 /**

@@ -3,6 +3,16 @@ import { exists } from '@tauri-apps/plugin-fs';
 import { AlertCircle, FolderPlus, FolderX } from 'lucide-react';
 import { useState } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/AlertDialog';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';
@@ -15,6 +25,7 @@ export function AllowedDirectoriesSettings() {
   const removeAllowedDirectory = useSettingsStore((state) => state.removeAllowedDirectory);
   const [manualPath, setManualPath] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [removeDirPath, setRemoveDirPath] = useState<string | null>(null);
 
   const handleAddManualPath = async () => {
     if (!manualPath.trim()) return;
@@ -108,7 +119,7 @@ export function AllowedDirectoriesSettings() {
         )}
 
         <div className="border rounded-md">
-          <div className="p-3 bg-[#222222] border-b text-sm font-medium">
+          <div className="p-3 bg-muted border-b text-sm font-medium">
             Allowed Paths ({allowedDirectories.length})
           </div>
           <ScrollArea className="h-[200px]">
@@ -125,14 +136,14 @@ export function AllowedDirectoriesSettings() {
                 {allowedDirectories.map((path) => (
                   <div
                     key={path}
-                    className="flex items-center justify-between p-2 rounded-md hover:bg-[#222222] group transition-colors"
+                    className="flex items-center justify-between p-2 rounded-md hover:bg-muted group transition-colors"
                   >
                     <code className="text-xs font-mono break-all">{path}</code>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                      onClick={() => removeAllowedDirectory(path)}
+                      onClick={() => setRemoveDirPath(path)}
                       title="Remove path"
                     >
                       <FolderX className="h-4 w-4" />
@@ -144,6 +155,36 @@ export function AllowedDirectoriesSettings() {
           </ScrollArea>
         </div>
       </div>
+
+      <AlertDialog
+        open={removeDirPath !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveDirPath(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this directory?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The agent will lose access to files in this path.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => {
+                if (removeDirPath !== null) {
+                  removeAllowedDirectory(removeDirPath);
+                  setRemoveDirPath(null);
+                }
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

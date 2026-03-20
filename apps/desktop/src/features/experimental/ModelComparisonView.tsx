@@ -42,11 +42,9 @@ export const ModelComparisonView: React.FC<{ className?: string }> = ({ classNam
 
   // Default to first two available models, or well-known fallbacks
   const defaultModels = React.useMemo(() => {
-    const candidates = availableModels
-      .slice(0, 2)
-      .map((m) => m.id);
+    const candidates = availableModels.slice(0, 2).map((m) => m.id);
     if (candidates.length >= 2) return candidates;
-    return ['claude-opus-4-6', 'gpt-4o'];
+    return ['claude-opus-4-6', 'gpt-5.4'];
   }, [availableModels]);
 
   const [selectedModels, setSelectedModels] = useState<string[]>(defaultModels);

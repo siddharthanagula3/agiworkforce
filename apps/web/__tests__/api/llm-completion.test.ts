@@ -311,11 +311,11 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should detect OpenAI provider from gpt model', async () => {
-      // gpt-5-nano is in ECONOMY_MODELS
+      // gpt-5.4-nano is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('openai');
       mockSendRequest.mockResolvedValue({
         content: 'Response from GPT',
-        model: 'gpt-5-nano',
+        model: 'gpt-5.4-nano',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -328,17 +328,17 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'gpt-5-nano',
+          model: 'gpt-5.4-nano',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gpt-5-nano');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gpt-5.4-nano');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'openai',
-        expect.objectContaining({ model: 'gpt-5-nano' }),
+        expect.objectContaining({ model: 'gpt-5.4-nano' }),
       );
     });
 

@@ -6,7 +6,7 @@
  */
 
 import { motion } from 'framer-motion';
-import { Brain, FolderOpen, Globe, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke, isTauri } from '../../lib/tauri-mock';
@@ -46,7 +46,6 @@ import { ActiveModeTags, ModeTag, intentToModeTag } from './ActiveModeTags';
 import { AttachmentPreview } from './AttachmentPreview';
 import { ContextDisplay } from './ContextDisplay';
 import { DragOverlay } from './DragOverlay';
-import { AgentModeSwitcher } from './AgentModeSwitcher';
 import { FocusModeButtons, getFocusModePlaceholder } from './FocusModeButtons';
 import { InputFooter } from './InputFooter';
 import { InlineSuggestion } from './InlineSuggestion';
@@ -58,11 +57,8 @@ import { FileMentionPicker, MentionFile } from './FileMentionPicker';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceRecordingStatus } from './VoiceRecordingStatus';
-import { PromptStash } from './PromptStash';
 
 import { classifyIntentLocally } from '../../lib/intentClassifier';
-import { open as openFolderDialog } from '@tauri-apps/plugin-dialog';
-import { useProjectStore, selectCurrentFolder } from '../../stores/projectStore';
 
 // Hooks
 import {
@@ -144,9 +140,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [fileMentionQuery, setFileMentionQuery] = useState<string | null>(null);
 
   // Voice transcription state
-  // AUDIT-VOICE-043 fix: Renamed to preferWhisperCloud for clarity (true = Whisper Cloud, false = Web Speech)
-  const [preferWhisperCloud, setPreferWhisperCloud] = useState(false);
-  const [showTranscriptionModeSelector, setShowTranscriptionModeSelector] = useState(false);
+  const [preferWhisperCloud] = useState(false);
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -202,7 +196,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const visionSupported = capabilities?.supportsVision ?? true;
 
   const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
-  const currentFolder = useProjectStore(selectCurrentFolder);
 
   // Attachment management
   const {
@@ -256,7 +249,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     isSupported: isVoiceSupported,
     interimTranscript,
     error: voiceError,
-    availableLocalWhisper,
     toggleRecording,
   } = useVoiceTranscription({
     preferWhisperCloud: preferWhisperCloud,
@@ -786,6 +778,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       } catch (error) {
         console.error('[ChatInputArea] Failed to process screenshot:', error);
         setSubmitError('Failed to attach screenshot. Please try again.');
+        toast.error('Failed to attach file. Please try again.');
         return null;
       }
     },
@@ -814,7 +807,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         console.debug('[ChatInputArea] Detected screen query, auto-capturing...');
         try {
           // Auto-capture full screen
-          await import('../../hooks/useScreenCapture'); // Keep import for side effects if needed, or remove if purely for unused function
           // AUDIT-CAPTURE-063 fix: Use imported uuidToDbId directly instead of store method
           const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
           const conversationDbId = activeConversationId
@@ -1387,28 +1379,9 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             />
           )}
 
-          {/* Ollama capability info line */}
-          {selectedProvider === 'ollama' && capabilities && !isSimpleMode && (
-            <div className="px-4 pb-1 flex items-center gap-2 text-[10px] text-muted-foreground/50">
-              <span>Local model</span>
-              <span>·</span>
-              <span>Vision: {capabilities.supportsVision ? '✓' : '✗'}</span>
-              <span>·</span>
-              <span>
-                Tools:{' '}
-                {capabilities.toolMode === 'native'
-                  ? 'native'
-                  : capabilities.toolMode === 'prompt_injection'
-                    ? 'fallback'
-                    : 'none'}
-              </span>
-            </div>
-          )}
-
-          {/* Toolbar row */}
+          {/* Toolbar row: [+Menu] [Model] [Mic] [Send] */}
           <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-1 overflow-hidden">
             <div className="flex items-center gap-1 shrink-0">
-              <AgentModeSwitcher />
               <PlusMenu
                 disabled={isAttachmentInteractionDisabled}
                 onAttachClick={() => fileInputRef.current?.click()}
@@ -1417,75 +1390,19 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 webSearchEnabled={webSearchEnabled}
                 onToggleWebSearch={() => setWebSearchEnabled((v) => !v)}
                 visionSupported={visionSupported}
+                promptStashText={content}
+                onPromptStashLoad={(text) => {
+                  setContent(text);
+                  setDraftContent(text);
+                }}
               />
-
-              {/* Compact active mode icons — shown inline next to + button */}
-              {webSearchEnabled && (
-                <button
-                  type="button"
-                  onClick={() => setWebSearchEnabled(false)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
-                  title="Web Search enabled (click to disable)"
-                  aria-label="Disable web search"
-                >
-                  <Globe size={16} />
-                </button>
-              )}
-              {currentFolder && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const selected = await openFolderDialog({
-                        directory: true,
-                        multiple: false,
-                        title: 'Select Project Folder',
-                      });
-                      if (selected && typeof selected === 'string') {
-                        useProjectStore.getState().setCurrentFolder(selected);
-                      }
-                    } catch {
-                      // User cancelled
-                    }
-                  }}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
-                  title={`Folder: ${currentFolder} (click to change)`}
-                  aria-label={`Project folder: ${currentFolder}. Click to change.`}
-                >
-                  <FolderOpen size={16} />
-                </button>
-              )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {content.length > maxLength * 0.8 && (
-                <div
-                  className={cn(
-                    'text-xs font-medium',
-                    content.length > maxLength * 0.9
-                      ? 'text-orange-500 dark:text-orange-400'
-                      : 'text-[hsl(var(--muted-foreground))]',
-                  )}
-                >
-                  {content.length} / {maxLength}
-                </div>
+                <span className="text-xs text-muted-foreground">
+                  {maxLength - content.length} chars left
+                </span>
               )}
-              <button
-                type="button"
-                onClick={() => useModelStore.getState().toggleThinkingMode()}
-                className={cn(
-                  'flex items-center justify-center rounded-md p-1.5 transition-colors',
-                  thinkingModeEnabled
-                    ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
-                    : 'text-zinc-500 hover:bg-zinc-700/50 hover:text-zinc-300',
-                )}
-                title={
-                  thinkingModeEnabled
-                    ? 'Thinking mode on — click to disable'
-                    : 'Enable extended thinking'
-                }
-              >
-                <Brain className="h-4 w-4" />
-              </button>
               <ModelSelectorButton
                 modelDisplayName={modelDisplayName}
                 thinkingModeEnabled={thinkingModeEnabled}
@@ -1496,25 +1413,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                 capabilities={capabilities}
                 isToolFallback={isToolFallback}
               />
-              <PromptStash
-                currentText={content}
-                onLoad={(text) => {
-                  setContent(text);
-                  setDraftContent(text);
-                }}
-                disabled={disabled}
-              />
               <VoiceInputButton
                 disabled={disabled}
                 isSupported={isVoiceSupported}
                 isRecording={isListening}
                 isTranscribing={isTranscribing}
-                isSimpleMode={isSimpleMode}
-                preferWhisperCloud={preferWhisperCloud}
-                availableLocalWhisper={availableLocalWhisper}
-                showModeSelector={showTranscriptionModeSelector}
-                onModeSelectorChange={setShowTranscriptionModeSelector}
-                onPreferWhisperCloudChange={setPreferWhisperCloud}
                 onToggleRecording={toggleListening}
               />
               <SendButton

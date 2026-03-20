@@ -57,7 +57,7 @@ function findCheaperFallbackModel(
   const fallbackModels = [
     { model: 'deepseek-chat', provider: 'deepseek' }, // $0.28/$0.42 per 1M - DeepSeek Chat (V3), best value
     { model: 'qwen-flash', provider: 'qwen' }, // $0.05/$0.15 per 1M - Ultra cheap Qwen
-    { model: 'gpt-5-nano', provider: 'openai' }, // $0.05/$0.4 per 1M - OpenAI's cheapest
+    { model: 'gpt-5.4-nano', provider: 'openai' }, // $0.05/$0.4 per 1M - OpenAI's cheapest
     { model: 'qwen-turbo', provider: 'qwen' }, // $0.1/$0.3 per 1M - Fast Qwen
     { model: 'gemini-3-flash-preview', provider: 'google' }, // $0.50/$3.0 per 1M - Gemini 3 Flash
     { model: 'grok-4-fast-reasoning', provider: 'xai' }, // $0.1/$0.4 per 1M - Grok 4 Fast Reasoning

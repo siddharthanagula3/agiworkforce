@@ -65,7 +65,7 @@ describe('GoogleProvider', () => {
     it('should create provider with default configuration', () => {
       const config = provider.getConfig();
 
-      expect(config.model).toBe('gemini-2.5-pro');
+      expect(config.model).toBe('gemini-3.1-pro-preview');
       expect(config.maxTokens).toBe(4096);
       expect(config.temperature).toBe(0.7);
       expect(config.systemPrompt).toBe('You are a helpful AI assistant.');
@@ -73,7 +73,7 @@ describe('GoogleProvider', () => {
 
     it('should create provider with custom configuration', () => {
       const customProvider = new GoogleProvider({
-        model: 'gemini-2.5-pro',
+        model: 'gemini-3.1-pro-preview',
         maxTokens: 8000,
         temperature: 0.5,
         systemPrompt: 'Custom prompt',
@@ -82,7 +82,7 @@ describe('GoogleProvider', () => {
 
       const config = customProvider.getConfig();
 
-      expect(config.model).toBe('gemini-2.5-pro');
+      expect(config.model).toBe('gemini-3.1-pro-preview');
       expect(config.maxTokens).toBe(8000);
       expect(config.temperature).toBe(0.5);
       expect(config.systemPrompt).toBe('Custom prompt');
@@ -122,7 +122,7 @@ describe('GoogleProvider', () => {
       const models = GoogleProvider.getAvailableModels();
 
       expect(models).toContain('gemini-2.0-flash');
-      expect(models).toContain('gemini-2.5-pro');
+      expect(models).toContain('gemini-3.1-pro-preview');
       expect(models).toContain('gemini-3-pro-preview');
       expect(models.length).toBeGreaterThan(0);
     });
@@ -172,7 +172,7 @@ describe('GoogleProvider', () => {
       expect(response.usage?.promptTokens).toBe(10);
       expect(response.usage?.completionTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
-      expect(response.model).toBe('gemini-2.5-pro');
+      expect(response.model).toBe('gemini-3.1-pro-preview');
     });
 
     it('should handle response with candidates format', async () => {
@@ -372,7 +372,7 @@ describe('GoogleProvider', () => {
       );
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(requestBody.model).toBe('gemini-2.5-pro');
+      expect(requestBody.model).toBe('gemini-3.1-pro-preview');
       expect(requestBody.max_tokens).toBe(4096);
       expect(requestBody.temperature).toBe(0.7);
     });

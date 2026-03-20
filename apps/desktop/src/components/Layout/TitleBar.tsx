@@ -1,5 +1,17 @@
-import { X, Minus, Square, Search, Minimize2, Menu } from 'lucide-react';
+import { useEffect } from 'react';
+import {
+  X,
+  Minus,
+  Square,
+  Search,
+  Minimize2,
+  Menu,
+  Pin,
+  PinOff,
+  ArrowUpFromDot,
+} from 'lucide-react';
 import { WindowActions } from '../../hooks/useWindowManager';
+import { useWindowStore } from '../../stores/windowStore';
 import { Button } from '../ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import { cn } from '../../lib/utils';
@@ -13,7 +25,6 @@ interface TitleBarProps {
   actions: WindowActions;
   onOpenCommandPalette: () => void;
   commandShortcutHint?: string;
-  sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
   hideWindowControls?: boolean;
 }
@@ -23,12 +34,23 @@ const TitleBar = ({
   actions,
   onOpenCommandPalette,
   commandShortcutHint,
-  sidebarCollapsed: _sidebarCollapsed,
   onToggleSidebar,
   hideWindowControls,
 }: TitleBarProps) => {
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  // Window store state and actions
+  const pinned = useWindowStore((s) => s.pinned);
+  const alwaysOnTop = useWindowStore((s) => s.alwaysOnTop);
+  const windowStoreInit = useWindowStore((s) => s.init);
+  const setPinned = useWindowStore((s) => s.setPinned);
+  const setAlwaysOnTop = useWindowStore((s) => s.setAlwaysOnTop);
+
+  // Initialize window store on mount
+  useEffect(() => {
+    void windowStoreInit();
+  }, [windowStoreInit]);
 
   return (
     <header
@@ -43,11 +65,13 @@ const TitleBar = ({
       )}
       data-tauri-drag-region
     >
-      {}
       <div className="flex items-center gap-3 min-w-0 shrink" data-tauri-drag-region>
         <button
           type="button"
-          onClick={onToggleSidebar}
+          onClick={() => {
+            if (!onToggleSidebar) return;
+            onToggleSidebar();
+          }}
           disabled={!onToggleSidebar}
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-lg border border-border/50 text-muted-foreground transition-colors',
@@ -71,7 +95,6 @@ const TitleBar = ({
         </div>
       </div>
 
-      {}
       <div className="flex items-center gap-1 shrink-0" data-tauri-drag-region="false">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -97,6 +120,42 @@ const TitleBar = ({
 
         {!hideWindowControls && (
           <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn('h-9 w-9 hover:bg-accent', pinned && 'text-primary')}
+                  onClick={() => void setPinned(!pinned)}
+                  aria-label={pinned ? 'Unpin window' : 'Pin window'}
+                  aria-pressed={pinned}
+                >
+                  {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{pinned ? 'Unpin' : 'Pin'}</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn('h-9 w-9 hover:bg-accent', alwaysOnTop && 'text-primary')}
+                  onClick={() => void setAlwaysOnTop(!alwaysOnTop)}
+                  aria-label={alwaysOnTop ? 'Disable always on top' : 'Keep on top'}
+                  aria-pressed={alwaysOnTop}
+                >
+                  <ArrowUpFromDot className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{alwaysOnTop ? 'Disable always on top' : 'Always on top'}</p>
+              </TooltipContent>
+            </Tooltip>
+
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

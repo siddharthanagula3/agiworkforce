@@ -490,12 +490,12 @@ export function activate(context: vscode.ExtensionContext): void {
           detail: "Max tier · OpenAI's most capable model",
         },
         {
-          label: 'gpt-5.2',
-          description: 'OpenAI — mid-tier general',
+          label: 'gpt-5.4',
+          description: 'OpenAI — flagship general',
           detail: 'Pro tier · great for general coding',
         },
         {
-          label: 'gpt-5-nano',
+          label: 'gpt-5.4-nano',
           description: 'OpenAI — ultra-fast & cheap',
           detail: 'Economy · best OpenAI speed/cost ratio',
         },
@@ -1106,7 +1106,7 @@ async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
   }
 
   const choice = await vscode.window.showInformationMessage(
-    'Welcome to AGI Workforce! Set up your API key to use GPT-4o, Claude, Gemini, and more in VS Code.',
+    'Welcome to AGI Workforce! Set up your API key to use GPT-5.4, Claude, Gemini, and more in VS Code.',
     'Set API Key',
     'Later',
   );

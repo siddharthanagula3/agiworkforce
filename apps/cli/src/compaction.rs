@@ -23,6 +23,8 @@ pub const BYTES_PER_TOKEN: usize = 4;
 pub const CONTEXT_WARN_THRESHOLD: f64 = 0.80;
 
 /// Token budget to protect during compaction (keep the most recent content).
+/// Used by the compaction algorithm when deciding which messages to preserve.
+#[allow(dead_code)]
 pub const RECENT_WINDOW_TOKENS: usize = 50_000;
 
 /// Default context window when the model is not in the catalog.
@@ -32,6 +34,7 @@ const DEFAULT_CONTEXT_LIMIT: usize = 200_000;
 const MAX_INSTRUCTION_TOKENS: usize = 10_000;
 
 /// Root markers used by [`find_project_root`] to detect project boundaries.
+#[allow(dead_code)]
 const ROOT_MARKERS: &[&str] = &[
     ".git",
     "Cargo.toml",
@@ -75,6 +78,8 @@ const INSTRUCTION_FILES: &[&str] = &[
 #[derive(Debug, Clone)]
 pub struct CompressionConfig {
     /// Fraction of the context limit at which auto-compaction triggers (0.90 = 90%).
+    /// Consumed by the auto-compaction pipeline when checking context window usage.
+    #[allow(dead_code)]
     pub auto_trigger_fraction: f64,
     /// Fraction of messages at the tail to keep untouched during compaction (0.30 = 30%).
     pub preserve_fraction: f64,
@@ -626,6 +631,7 @@ fn select_recent(messages: Vec<Message>, target_tokens: usize) -> Vec<Message> {
 /// `go.mod`, `pyproject.toml`).
 ///
 /// Returns `None` if no marker is found before reaching the filesystem root.
+#[allow(dead_code)]
 pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut current = start.to_path_buf();
     loop {

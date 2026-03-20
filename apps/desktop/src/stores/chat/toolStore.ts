@@ -24,6 +24,7 @@ import {
 } from '../../lib/toolTimelineRuntime';
 import { useAgentStore } from './agentStore';
 import { useChatStore } from './chatStore';
+import type { ApprovalTimeoutPolicy } from '../settingsStore';
 
 export type FileOperationType = 'read' | 'write' | 'create' | 'delete' | 'move' | 'rename';
 
@@ -218,34 +219,46 @@ function upsertApprovalAuditEntry(
   status: ActionLogStatus,
   extras?: Partial<ActionLogEntry>,
 ): void {
+  // Clone the approval to avoid reading from a mutated Immer draft proxy.
+  // Callers (e.g., rejectOperation) may mutate the draft before passing it here,
+  // and reading nested properties from a mutated draft can produce stale values.
+  const approvalSnapshot = {
+    ...approval,
+    scope: approval.scope ? { ...approval.scope } : undefined,
+    details: approval.details ? { ...approval.details } : undefined,
+  };
   const now = new Date();
   const existingIndex = actionLog.findIndex(
     (entry) =>
-      entry.id === approval.id ||
-      entry.actionId === approval.id ||
-      (approval.actionId !== undefined && entry.actionId === approval.actionId),
+      entry.id === approvalSnapshot.id ||
+      entry.actionId === approvalSnapshot.id ||
+      (approvalSnapshot.actionId !== undefined && entry.actionId === approvalSnapshot.actionId),
   );
 
   const baseMetadata = {
-    approvalId: approval.id,
-    approvalType: approval.type,
-    riskLevel: approval.riskLevel,
-    details: approval.details,
-    ...(approval.messageId ? { messageId: approval.messageId } : {}),
-    ...(approval.workflowHash ? { workflowHash: approval.workflowHash } : {}),
-    ...(approval.actionSignature ? { actionSignature: approval.actionSignature } : {}),
+    approvalId: approvalSnapshot.id,
+    approvalType: approvalSnapshot.type,
+    riskLevel: approvalSnapshot.riskLevel,
+    details: approvalSnapshot.details,
+    ...(approvalSnapshot.messageId ? { messageId: approvalSnapshot.messageId } : {}),
+    ...(approvalSnapshot.workflowHash ? { workflowHash: approvalSnapshot.workflowHash } : {}),
+    ...(approvalSnapshot.actionSignature
+      ? { actionSignature: approvalSnapshot.actionSignature }
+      : {}),
   };
 
   const nextEntry: ActionLogEntry = {
-    ...(existingIndex !== -1 ? actionLog[existingIndex]! : { id: approval.id, createdAt: now }),
-    actionId: approval.actionId ?? approval.id,
-    workflowHash: approval.workflowHash,
+    ...(existingIndex !== -1
+      ? actionLog[existingIndex]!
+      : { id: approvalSnapshot.id, createdAt: now }),
+    actionId: approvalSnapshot.actionId ?? approvalSnapshot.id,
+    workflowHash: approvalSnapshot.workflowHash,
     type: 'approval',
-    title: approval.description,
-    description: approval.impact ?? approval.scope?.description,
+    title: approvalSnapshot.description,
+    description: approvalSnapshot.impact ?? approvalSnapshot.scope?.description,
     status,
     requiresApproval: true,
-    scope: approval.scope,
+    scope: approvalSnapshot.scope,
     metadata: {
       ...(existingIndex !== -1 ? actionLog[existingIndex]!.metadata : {}),
       ...baseMetadata,
@@ -353,6 +366,15 @@ export interface ToolState {
   setTerminalStatusFilter: (statuses: ('success' | 'error')[]) => void;
   setToolNameFilter: (names: string[]) => void;
 
+  // Approval timeout tracking
+  approvalTimeoutTimers: Map<string, ReturnType<typeof setTimeout>>;
+
+  // Actions - Approval timeout
+  startApprovalTimeout: (approvalId: string) => void;
+  clearApprovalTimeout: (approvalId: string) => void;
+  clearAllApprovalTimeouts: () => void;
+  handleApprovalTimeout: (approvalId: string) => void;
+
   // Actions - Reset
   resetOnLogout: () => void;
 }
@@ -374,6 +396,7 @@ export const useToolStore = create<ToolState>()(
           workflowContext: null,
           plan: null,
           activeToolStreams: new Map<string, ToolStreamStateEntry>(),
+          approvalTimeoutTimers: new Map<string, ReturnType<typeof setTimeout>>(),
           filters: {
             fileOperations: [],
             terminalStatus: [],
@@ -575,7 +598,7 @@ export const useToolStore = create<ToolState>()(
             ),
 
           // Approvals
-          addApprovalRequest: (request) =>
+          addApprovalRequest: (request) => {
             set(
               (state) => {
                 const normalized = {
@@ -601,9 +624,13 @@ export const useToolStore = create<ToolState>()(
               },
               undefined,
               'tool/addApprovalRequest',
-            ),
+            );
+            // Start the approval timeout timer after the state update
+            get().startApprovalTimeout(request.id);
+          },
 
-          approveOperation: (id) =>
+          approveOperation: (id) => {
+            get().clearApprovalTimeout(id);
             set(
               (state) => {
                 const index = state.pendingApprovals.findIndex((a) => a.id === id);
@@ -618,9 +645,11 @@ export const useToolStore = create<ToolState>()(
               },
               undefined,
               'tool/approveOperation',
-            ),
+            );
+          },
 
-          rejectOperation: (id, reason) =>
+          rejectOperation: (id, reason) => {
+            get().clearApprovalTimeout(id);
             set(
               (state) => {
                 const index = state.pendingApprovals.findIndex((a) => a.id === id);
@@ -638,9 +667,11 @@ export const useToolStore = create<ToolState>()(
               },
               undefined,
               'tool/rejectOperation',
-            ),
+            );
+          },
 
-          removeApprovalRequest: (id) =>
+          removeApprovalRequest: (id) => {
+            get().clearApprovalTimeout(id);
             set(
               (state) => {
                 state.pendingApprovals = state.pendingApprovals.filter(
@@ -649,7 +680,8 @@ export const useToolStore = create<ToolState>()(
               },
               undefined,
               'tool/removeApprovalRequest',
-            ),
+            );
+          },
 
           // Trusted workflows
           setTrustedWorkflow: (workflow) =>
@@ -734,7 +766,7 @@ export const useToolStore = create<ToolState>()(
             ),
 
           // Tool streaming
-          updateToolStream: (toolId, updates) =>
+          updateToolStream: (toolId, updates) => {
             set(
               (state) => {
                 const existing = state.activeToolStreams.get(toolId);
@@ -779,7 +811,21 @@ export const useToolStore = create<ToolState>()(
               },
               undefined,
               'tool/updateToolStream',
-            ),
+            );
+
+            // Cleanup completed/errored tool streams after a short delay.
+            // This prevents unbounded growth of activeToolStreams when tools
+            // complete but are not explicitly removed by the event listener.
+            const resolvedStatus = updates.status;
+            if (resolvedStatus === 'completed' || resolvedStatus === 'error') {
+              setTimeout(() => {
+                const current = get().activeToolStreams.get(toolId);
+                if (current && (current.status === 'completed' || current.status === 'error')) {
+                  get().removeToolStream(toolId);
+                }
+              }, 5_000);
+            }
+          },
 
           removeToolStream: (toolId) =>
             set(
@@ -871,8 +917,168 @@ export const useToolStore = create<ToolState>()(
               'tool/setToolNameFilter',
             ),
 
+          // Approval timeout actions
+          startApprovalTimeout: (approvalId) => {
+            // Lazy import to avoid circular dependency at module load time
+            let timeoutSeconds = 300;
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { useSettingsStore } = require('../settingsStore') as {
+                useSettingsStore: {
+                  getState: () => {
+                    executionPreferences: {
+                      approvalTimeoutSeconds: number;
+                    };
+                  };
+                };
+              };
+              timeoutSeconds =
+                useSettingsStore.getState().executionPreferences.approvalTimeoutSeconds;
+            } catch {
+              // Use defaults if settings store is not available
+            }
+
+            // Clear any existing timer for this approval
+            const existingTimer = get().approvalTimeoutTimers.get(approvalId);
+            if (existingTimer !== undefined) {
+              clearTimeout(existingTimer);
+            }
+
+            const timerId = setTimeout(() => {
+              get().handleApprovalTimeout(approvalId);
+            }, timeoutSeconds * 1000);
+
+            set(
+              (state) => {
+                state.approvalTimeoutTimers.set(approvalId, timerId);
+                // Stamp the timeout seconds on the approval request for UI display
+                const approval = state.pendingApprovals.find((a) => a.id === approvalId);
+                if (approval) {
+                  approval.timeoutSeconds = timeoutSeconds;
+                }
+              },
+              undefined,
+              'tool/startApprovalTimeout',
+            );
+          },
+
+          clearApprovalTimeout: (approvalId) => {
+            const timerId = get().approvalTimeoutTimers.get(approvalId);
+            if (timerId !== undefined) {
+              clearTimeout(timerId);
+            }
+            set(
+              (state) => {
+                state.approvalTimeoutTimers.delete(approvalId);
+              },
+              undefined,
+              'tool/clearApprovalTimeout',
+            );
+          },
+
+          clearAllApprovalTimeouts: () => {
+            const timers = get().approvalTimeoutTimers;
+            timers.forEach((timerId) => clearTimeout(timerId));
+            set(
+              (state) => {
+                state.approvalTimeoutTimers = new Map();
+              },
+              undefined,
+              'tool/clearAllApprovalTimeouts',
+            );
+          },
+
+          handleApprovalTimeout: (approvalId) => {
+            let timeoutPolicy: ApprovalTimeoutPolicy = 'auto-deny';
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { useSettingsStore } = require('../settingsStore') as {
+                useSettingsStore: {
+                  getState: () => {
+                    executionPreferences: {
+                      approvalTimeoutPolicy: ApprovalTimeoutPolicy;
+                    };
+                  };
+                };
+              };
+              timeoutPolicy =
+                useSettingsStore.getState().executionPreferences.approvalTimeoutPolicy;
+            } catch {
+              // Use default
+            }
+
+            const approval = get().pendingApprovals.find((a) => a.id === approvalId);
+            if (!approval) {
+              // Approval was already handled (approved/rejected manually)
+              return;
+            }
+
+            if (timeoutPolicy === 'auto-deny') {
+              set(
+                (state) => {
+                  const idx = state.pendingApprovals.findIndex((a) => a.id === approvalId);
+                  if (idx !== -1) {
+                    const timedOutApproval = state.pendingApprovals[idx]!;
+                    timedOutApproval.status = 'timeout';
+                    timedOutApproval.rejectedAt = new Date();
+                    timedOutApproval.rejectionReason = 'Timed out — automatically denied';
+                    upsertApprovalAuditEntry(state.actionLog, timedOutApproval, 'failed', {
+                      error: 'Approval timed out — automatically denied',
+                    });
+                    state.pendingApprovals.splice(idx, 1);
+                  }
+                  state.approvalTimeoutTimers.delete(approvalId);
+                },
+                undefined,
+                'tool/handleApprovalTimeout/deny',
+              );
+              toast.warning(
+                `Approval timed out: "${approval.description}" was automatically denied`,
+              );
+            } else if (timeoutPolicy === 'auto-approve') {
+              set(
+                (state) => {
+                  const idx = state.pendingApprovals.findIndex((a) => a.id === approvalId);
+                  if (idx !== -1) {
+                    const timedOutApproval = state.pendingApprovals[idx]!;
+                    upsertApprovalAuditEntry(state.actionLog, timedOutApproval, 'success', {
+                      result: 'Approval timed out — automatically approved',
+                    });
+                    state.pendingApprovals.splice(idx, 1);
+                  }
+                  state.approvalTimeoutTimers.delete(approvalId);
+                },
+                undefined,
+                'tool/handleApprovalTimeout/approve',
+              );
+              toast.info(
+                `Approval timed out: "${approval.description}" was automatically approved`,
+              );
+            } else {
+              // 'pause' — leave the approval pending but notify the user and pause the agent
+              set(
+                (state) => {
+                  state.approvalTimeoutTimers.delete(approvalId);
+                },
+                undefined,
+                'tool/handleApprovalTimeout/pause',
+              );
+              toast.warning(`Agent paused: "${approval.description}" is waiting for your decision`);
+              // Pause the active agent through the agent store
+              const agentStatus = useAgentStore.getState().agentStatus;
+              if (agentStatus && agentStatus.status === 'running') {
+                useAgentStore.getState().setAgentStatus({
+                  ...agentStatus,
+                  status: 'paused',
+                });
+              }
+            }
+          },
+
           // Reset
           resetOnLogout: () => {
+            // Clear all approval timeout timers before resetting state
+            get().approvalTimeoutTimers.forEach((timerId) => clearTimeout(timerId));
             set(
               (state) => {
                 state.fileOperations = [];
@@ -886,6 +1092,7 @@ export const useToolStore = create<ToolState>()(
                 state.workflowContext = null;
                 state.plan = null;
                 state.activeToolStreams = new Map();
+                state.approvalTimeoutTimers = new Map();
               },
               undefined,
               'tool/resetOnLogout',

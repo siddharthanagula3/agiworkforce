@@ -5,6 +5,7 @@
  * Integrates with the mcpbStore for state management.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { listen } from '../../lib/tauri-mock';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -566,7 +567,26 @@ export function MCPBundleBrowser() {
     uninstallBundle,
     clearError,
     setInstallProgress,
-  } = useMcpbStore();
+  } = useMcpbStore(
+    useShallow((state) => ({
+      bundles: state.bundles,
+      featuredBundles: state.featuredBundles,
+      categories: state.categories,
+      selectedCategory: state.selectedCategory,
+      searchQuery: state.searchQuery,
+      isLoading: state.isLoading,
+      isInstalling: state.isInstalling,
+      installProgress: state.installProgress,
+      error: state.error,
+      fetchRegistry: state.fetchRegistry,
+      searchBundles: state.searchBundles,
+      filterByCategory: state.filterByCategory,
+      installBundle: state.installBundle,
+      uninstallBundle: state.uninstallBundle,
+      clearError: state.clearError,
+      setInstallProgress: state.setInstallProgress,
+    })),
+  );
 
   const filteredBundles = useMcpbStore(selectFilteredBundles);
   const bundlesWithUpdates = useMcpbStore(selectBundlesWithUpdates);

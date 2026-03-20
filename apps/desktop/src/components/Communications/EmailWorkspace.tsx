@@ -1,4 +1,5 @@
-﻿import { open } from '@tauri-apps/plugin-shell';
+﻿import { useShallow } from 'zustand/react/shallow';
+import { open } from '@tauri-apps/plugin-shell';
 import { Check, Circle, Inbox, Mail, Plus, RefreshCcw, Search, Send, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -88,7 +89,34 @@ export function EmailWorkspace({ className }: EmailWorkspaceProps) {
     refreshContacts,
     downloadAttachment,
     saveContact,
-  } = useEmailStore();
+  } = useEmailStore(
+    useShallow((s) => ({
+      accounts: s.accounts,
+      selectedAccountId: s.selectedAccountId,
+      folders: s.folders,
+      selectedFolder: s.selectedFolder,
+      emails: s.emails,
+      selectedEmail: s.selectedEmail,
+      loading: s.loading,
+      error: s.error,
+      filter: s.filter,
+      contacts: s.contacts,
+      refreshAccounts: s.refreshAccounts,
+      connectAccount: s.connectAccount,
+      removeAccount: s.removeAccount,
+      selectAccount: s.selectAccount,
+      refreshFolders: s.refreshFolders,
+      refreshEmails: s.refreshEmails,
+      selectEmail: s.selectEmail,
+      markRead: s.markRead,
+      deleteEmail: s.deleteEmail,
+      sendEmail: s.sendEmail,
+      setFilter: s.setFilter,
+      refreshContacts: s.refreshContacts,
+      downloadAttachment: s.downloadAttachment,
+      saveContact: s.saveContact,
+    })),
+  );
 
   const [connectOpen, setConnectOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);

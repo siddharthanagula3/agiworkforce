@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCheck, Loader2, Mic, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useVoiceInputStore } from '../../stores/voiceInputStore';
@@ -19,6 +19,20 @@ const PREVIEW_AUTO_CONFIRM_MS = 2000;
  *   processing   → grey sparkles + "Cleaning up..."
  *   preview      → green check + transcript text preview + "Inserting in Xs..."
  */
+const isPermissionError = (err: unknown): boolean => {
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    const name = (err as DOMException).name?.toLowerCase() ?? '';
+    return (
+      msg.includes('permission') ||
+      msg.includes('denied') ||
+      name.includes('notallowed') ||
+      name.includes('permission')
+    );
+  }
+  return false;
+};
+
 export function VoiceInputOverlay() {
   const mode = useVoiceInputStore((s) => s.mode);
   const error = useVoiceInputStore((s) => s.error);
@@ -26,22 +40,54 @@ export function VoiceInputOverlay() {
   const pendingTranscript = useVoiceInputStore((s) => s.pendingTranscript);
   const confirmTranscript = useVoiceInputStore((s) => s.confirmTranscript);
 
+  const [permissionDenied, setPermissionDenied] = useState(false);
+
   // Auto-confirm after PREVIEW_AUTO_CONFIRM_MS when in preview mode
   const confirmRef = useRef(confirmTranscript);
-  confirmRef.current = confirmTranscript;
+  useEffect(() => {
+    confirmRef.current = confirmTranscript;
+  }, [confirmTranscript]);
   useEffect(() => {
     if (mode !== 'preview') return;
     const timer = setTimeout(() => confirmRef.current(), PREVIEW_AUTO_CONFIRM_MS);
     return () => clearTimeout(timer);
   }, [mode]);
 
-  // Show error as toast — the overlay itself is hidden when mode:'idle',
-  // so the inline error div was never visible on permission-denied etc.
+  // Show error as toast — also track permission-denied state for persistent banner.
   useEffect(() => {
     if (error) {
       toast.error(error, { duration: 5000 });
+      if (isPermissionError(new Error(error))) {
+        setPermissionDenied(true);
+      }
     }
   }, [error]);
+
+  // Reset permission-denied state on unmount.
+  useEffect(() => {
+    return () => {
+      setPermissionDenied(false);
+    };
+  }, []);
+
+  // Reset permission-denied state when microphone access is successfully granted
+  // (i.e. mode transitions away from idle into an active recording state).
+  useEffect(() => {
+    if (mode === 'listening') {
+      setPermissionDenied(false);
+    }
+  }, [mode]);
+
+  if (permissionDenied) {
+    return (
+      <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+        <p className="text-sm text-destructive font-medium">Microphone access denied</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Check your system settings to allow microphone access.
+        </p>
+      </div>
+    );
+  }
 
   if (mode === 'idle') return null;
 

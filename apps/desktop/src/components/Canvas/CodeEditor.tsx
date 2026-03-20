@@ -9,7 +9,7 @@
  */
 
 import { Check, Copy, Play } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
@@ -36,7 +36,15 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rafRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   const lineCount = content.split('\n').length;
   const isExecutable = language ? EXECUTABLE_LANGUAGES.has(language.toLowerCase()) : false;
@@ -67,7 +75,8 @@ export function CodeEditor({
       onChange(newValue);
 
       // Restore cursor position after React updates the value
-      requestAnimationFrame(() => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
         textarea.selectionStart = start + 2;
         textarea.selectionEnd = start + 2;
       });

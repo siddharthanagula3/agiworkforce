@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
@@ -10,7 +11,14 @@ interface MCPServerCardProps {
 }
 
 export default function MCPServerCard({ server }: MCPServerCardProps) {
-  const { connectServer, disconnectServer, isLoading, stats } = useMcpStore();
+  const { connectServer, disconnectServer, isLoading, stats } = useMcpStore(
+    useShallow((s) => ({
+      connectServer: s.connectServer,
+      disconnectServer: s.disconnectServer,
+      isLoading: s.isLoading,
+      stats: s.stats,
+    })),
+  );
 
   const handleToggleConnection = async () => {
     if (server.connected) {
@@ -44,7 +52,7 @@ export default function MCPServerCard({ server }: MCPServerCardProps) {
     return <Badge variant="outline">Disconnected</Badge>;
   };
 
-  const toolCount = stats[server.name] || server.tool_count || 0;
+  const toolCount = stats[server.name] ?? server.tool_count ?? 0;
 
   return (
     <Card className={`${!server.enabled ? 'opacity-60' : ''}`}>
@@ -65,13 +73,11 @@ export default function MCPServerCard({ server }: MCPServerCardProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {}
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Available Tools:</span>
             <span className="font-medium">{toolCount}</span>
           </div>
 
-          {}
           <div className="flex items-center gap-2">
             {server.enabled && (
               <Button
@@ -101,7 +107,6 @@ export default function MCPServerCard({ server }: MCPServerCardProps) {
             )}
           </div>
 
-          {}
           {server.connected && toolCount > 0 && (
             <div className="pt-2 border-t">
               <p className="text-xs text-muted-foreground">

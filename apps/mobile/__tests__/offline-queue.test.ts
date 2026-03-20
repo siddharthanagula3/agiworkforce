@@ -98,8 +98,8 @@ describe('enqueue', () => {
   });
 
   it('allows same content in different conversations', () => {
-    offlineQueue.enqueue({ conversationId: 'conv-a', content: 'hello', model: 'gpt-5.2' });
-    offlineQueue.enqueue({ conversationId: 'conv-b', content: 'hello', model: 'gpt-5.2' });
+    offlineQueue.enqueue({ conversationId: 'conv-a', content: 'hello', model: 'gpt-5.4' });
+    offlineQueue.enqueue({ conversationId: 'conv-b', content: 'hello', model: 'gpt-5.4' });
 
     expect(offlineQueue.getQueueSize()).toBe(2);
   });
@@ -333,7 +333,9 @@ describe('clear()', () => {
     const onFailure2 = jest.fn();
 
     offlineQueue.enqueue(makeMsg({ content: 'a' }), { onFailure: onFailure1 });
-    offlineQueue.enqueue(makeMsg({ content: 'b', conversationId: 'conv-b' }), { onFailure: onFailure2 });
+    offlineQueue.enqueue(makeMsg({ content: 'b', conversationId: 'conv-b' }), {
+      onFailure: onFailure2,
+    });
 
     offlineQueue.clear();
 

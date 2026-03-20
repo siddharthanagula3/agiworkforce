@@ -14,6 +14,7 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
+import { UsageLimitBannerContainer } from './UsageLimitBanner';
 import React, {
   Suspense,
   useMemo,
@@ -65,10 +66,12 @@ interface ChatMessageItemProps {
   isCurrentMatch: boolean;
   isSearchMatch: boolean;
   isKeyboardFocused: boolean;
+  isLastMessage: boolean;
   showMessageTimestamps: boolean;
   onOpenSidecar?: (panel: SidecarMode, payload?: Record<string, unknown>) => void;
   onRetry: (id: string, content: string) => void;
   onEditSave: (messageId: string, newContent: string) => void;
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
 const ChatMessageItem = React.memo<ChatMessageItemProps>(
@@ -78,10 +81,12 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
     isCurrentMatch,
     isSearchMatch,
     isKeyboardFocused,
+    isLastMessage,
     showMessageTimestamps,
     onOpenSidecar,
     onRetry,
     onEditSave,
+    onSuggestionClick,
   }) => {
     const renderInlineToolResult = (
       toolName: string,
@@ -97,7 +102,10 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
         return null;
       }
 
-      const typedResult = result as { data?: unknown; status?: typeof status; error?: string };
+      const typedResult =
+        result !== null && typeof result === 'object'
+          ? (result as { data?: unknown; status?: typeof status; error?: string })
+          : { data: result, status, error: undefined };
 
       return (
         <Suspense
@@ -130,71 +138,77 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
           showAvatar
           showTimestamp={showMessageTimestamps}
           enableActions
+          isLastMessage={isLastMessage}
           onToggleSidecar={(tab) => onOpenSidecar?.(tab)}
           onRegenerate={() => onRetry(message.id, message.content)}
           onEdit={(content) => onRetry(message.id, content)}
           onEditSave={onEditSave}
+          onSuggestionClick={onSuggestionClick}
         />
-        {(message.artifacts || (message.metadata as MessageMetadataWithArtifacts)?.artifacts)
-          ?.length ? (
-          <div className="grid grid-cols-1 gap-2">
-            {(
-              message.artifacts ||
-              (message.metadata as MessageMetadataWithArtifacts)?.artifacts ||
-              []
-            ).map((artifact, idx) => {
-              const art = artifact as MessageArtifact;
-              const toolName = art.toolName || art.type;
-              const inlineRenderer =
-                toolName && hasInlineRenderer(toolName)
-                  ? renderInlineToolResult(toolName, { data: art }, art.status || 'completed')
-                  : null;
+        {(() => {
+          const artifactList: MessageArtifact[] =
+            (message.artifacts as MessageArtifact[] | undefined) ??
+            (message.metadata as MessageMetadataWithArtifacts | undefined)?.artifacts ??
+            [];
+          if (artifactList.length === 0) return null;
+          return (
+            <div className="grid grid-cols-1 gap-2">
+              {artifactList.map((artifact, idx) => {
+                const art = artifact as MessageArtifact;
+                const toolName = art.toolName ?? art.type;
+                const inlineRenderer =
+                  toolName && hasInlineRenderer(toolName)
+                    ? renderInlineToolResult(toolName, { data: art }, art.status ?? 'completed')
+                    : null;
 
-              if (inlineRenderer) {
+                if (inlineRenderer) {
+                  return (
+                    <div key={art.id ?? idx} className="space-y-2">
+                      {inlineRenderer}
+                    </div>
+                  );
+                }
+
                 return (
-                  <div key={idx} className="space-y-2">
-                    {inlineRenderer}
+                  <div
+                    key={art.id ?? idx}
+                    onClick={() =>
+                      onOpenSidecar?.('preview', { artifactId: art.id, messageId: message.id })
+                    }
+                    className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
+                        {art.type === 'image' ? (
+                          <FileText className="w-4 h-4" />
+                        ) : (
+                          <Braces className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-zinc-200">
+                          {art.title ?? 'Generated Artifact'}
+                        </div>
+                        <div className="text-xs text-zinc-400">
+                          {art.type === 'code'
+                            ? (art.language ?? art.type)
+                            : (art.type ?? 'artifact')}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 group-hover:text-white"
+                    >
+                      View <PanelTopOpen className="ml-2 w-3 h-3" />
+                    </Button>
                   </div>
                 );
-              }
-
-              return (
-                <div
-                  key={idx}
-                  onClick={() =>
-                    onOpenSidecar?.('preview', { artifactId: art.id, messageId: message.id })
-                  }
-                  className="cursor-pointer group flex items-center justify-between p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-teal-500/10 text-teal-400 group-hover:text-teal-300 transition-colors">
-                      {art.type === 'image' ? (
-                        <FileText className="w-4 h-4" />
-                      ) : (
-                        <Braces className="w-4 h-4" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-zinc-200">
-                        {art.title || 'Generated Artifact'}
-                      </div>
-                      <div className="text-xs text-zinc-400">
-                        {art.type === 'code' ? art.language : art.type}
-                      </div>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-zinc-400 group-hover:text-white"
-                  >
-                    View <PanelTopOpen className="ml-2 w-3 h-3" />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
+              })}
+            </div>
+          );
+        })()}
       </div>
     );
   },
@@ -203,10 +217,12 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
     prev.isCurrentMatch === next.isCurrentMatch &&
     prev.isSearchMatch === next.isSearchMatch &&
     prev.isKeyboardFocused === next.isKeyboardFocused &&
+    prev.isLastMessage === next.isLastMessage &&
     prev.showMessageTimestamps === next.showMessageTimestamps &&
     prev.onOpenSidecar === next.onOpenSidecar &&
     prev.onRetry === next.onRetry &&
-    prev.onEditSave === next.onEditSave,
+    prev.onEditSave === next.onEditSave &&
+    prev.onSuggestionClick === next.onSuggestionClick,
 );
 ChatMessageItem.displayName = 'ChatMessageItem';
 
@@ -526,7 +542,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                 </span>
               )}
               <div className="flex items-center gap-1" role="group" aria-label="Search navigation">
-                <button type="button"
+                <button
+                  type="button"
                   onClick={() => navigateSearch('prev')}
                   disabled={searchMatches.length === 0}
                   className="p-1.5 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -535,7 +552,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                 >
                   <ChevronUp className="h-4 w-4 text-zinc-400" aria-hidden="true" />
                 </button>
-                <button type="button"
+                <button
+                  type="button"
                   onClick={() => navigateSearch('next')}
                   disabled={searchMatches.length === 0}
                   className="p-1.5 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -545,7 +563,8 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                   <ChevronDown className="h-4 w-4 text-zinc-400" aria-hidden="true" />
                 </button>
               </div>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => {
                   setShowSearch(false);
                   setSearchQuery('');
@@ -659,6 +678,9 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
           ) : null}
         </AnimatePresence>
 
+        {/* Inline usage limit banner — only shown when there are messages and usage > 70% */}
+        <UsageLimitBannerContainer hasMessages={items.length > 0} />
+
         {items.length === 0 ? (
           /* Show appropriate empty state based on mode */
           isSimpleMode ? (
@@ -737,10 +759,12 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                   isCurrentMatch={Boolean(isCurrentMatch)}
                   isSearchMatch={Boolean(isSearchMatch)}
                   isKeyboardFocused={Boolean(isKeyboardFocused)}
+                  isLastMessage={messageIndex === items.length - 1}
                   showMessageTimestamps={showMessageTimestamps}
                   onOpenSidecar={onOpenSidecar}
                   onRetry={handleRetry}
                   onEditSave={handleEditSave}
+                  onSuggestionClick={onSuggestionClick}
                 />
               </React.Fragment>
             );
@@ -767,6 +791,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       <AnimatePresence>
         {showScrollButton && (
           <motion.button
+            type="button"
             initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.9 }}
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.9 }}

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Search, X, Filter, Star, Clock, Grid, List } from 'lucide-react';
 import { useModelStore } from '../../stores/modelStore';
 import { useAccountStore } from '../../stores/auth';
@@ -34,7 +35,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
 
-  const { selectedModel, favorites, recentModels, selectModel, toggleFavorite } = useModelStore();
+  const { selectedModel, favorites, recentModels, selectModel, toggleFavorite } = useModelStore(
+    useShallow((s) => ({
+      selectedModel: s.selectedModel,
+      favorites: s.favorites,
+      recentModels: s.recentModels,
+      selectModel: s.selectModel,
+      toggleFavorite: s.toggleFavorite,
+    })),
+  );
   const account = useAccountStore((state) => state.account);
   const planTier = normalizeSubscriptionTier(account.plan);
   const allowedAutoModes = useMemo(() => new Set(getAllowedAutoModesForTier(planTier)), [planTier]);
@@ -103,6 +112,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       fireworks: [],
       cerebras: [],
       deepinfra: [],
+      nvidia_nim: [],
+      open_router: [],
       cohere: [],
       ai21: [],
       sambanova: [],
@@ -157,7 +168,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                        focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             {searchQuery && (
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setSearchQuery('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
@@ -168,7 +180,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
           {/* View Mode Toggle */}
           <div className="flex border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setViewMode('grid')}
               className={cn(
                 'p-2 transition-colors',
@@ -179,7 +192,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             >
               <Grid className="h-4 w-4" />
             </button>
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setViewMode('list')}
               className={cn(
                 'p-2 transition-colors',
@@ -195,7 +209,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
         {/* Filter Mode Tabs */}
         <div className="flex gap-2 mb-3">
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setFilterMode('all')}
             className={cn(
               'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
@@ -207,7 +222,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             <Filter className="inline h-3 w-3 mr-1" />
             All Models
           </button>
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setFilterMode('favorites')}
             className={cn(
               'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
@@ -219,7 +235,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             <Star className="inline h-3 w-3 mr-1" />
             Favorites ({favorites.length})
           </button>
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setFilterMode('recent')}
             className={cn(
               'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
@@ -236,7 +253,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         {/* Provider Filters */}
         <div className="flex flex-wrap gap-2">
           {PROVIDERS_IN_ORDER.map((provider) => (
-            <button type="button"
+            <button
+              type="button"
               key={provider}
               onClick={() => toggleProviderFilter(provider)}
               className={cn(
@@ -250,7 +268,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </button>
           ))}
           {hasActiveFilters && (
-            <button type="button"
+            <button
+              type="button"
               onClick={clearFilters}
               className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/30"
             >

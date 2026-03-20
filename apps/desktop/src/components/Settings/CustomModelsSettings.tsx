@@ -20,6 +20,16 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import type { CustomModelConfig } from '../../types/customModel';
 import { useSettingsStore } from '../../stores/settingsStore';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/AlertDialog';
 import { Button } from '../ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Input } from '../ui/Input';
@@ -175,6 +185,7 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<VerifyResult | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [isVerified, setIsVerified] = useState(false);
 
   // Reset form state when the dialog opens or the edit target changes
   useEffect(() => {
@@ -182,6 +193,7 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
       setForm(configToFormState(initial));
       setTestResult(null);
       setFormError(null);
+      setIsVerified(false);
     }
   }, [open, initial]);
 
@@ -189,12 +201,14 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
     const preset = PROVIDER_PRESETS[value] ?? '';
     setForm((prev) => ({ ...prev, provider: value, baseUrl: preset }));
     setTestResult(null);
+    setIsVerified(false);
   };
 
   const handleFieldChange = (field: keyof ModelFormState, value: string | number | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setTestResult(null);
     setFormError(null);
+    setIsVerified(false);
   };
 
   const handleTest = useCallback(async () => {
@@ -204,8 +218,12 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
     }
     setTesting(true);
     setTestResult(null);
+    setIsVerified(false);
     const result = await verifyCustomModel(form.baseUrl.trim(), form.modelId.trim(), form.apiKey);
     setTestResult(result);
+    if (result.connected) {
+      setIsVerified(true);
+    }
     setTesting(false);
   }, [form.baseUrl, form.modelId, form.apiKey]);
 
@@ -406,7 +424,7 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
             </div>
           )}
 
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-2 pt-2 items-center">
             <Button
               variant="outline"
               size="sm"
@@ -422,6 +440,9 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
                 'Test Connection'
               )}
             </Button>
+            {isVerified && (
+              <span className="text-green-500 text-sm font-medium ml-2">Verified ✓</span>
+            )}
             <div className="flex-1" />
             <Button variant="outline" onClick={onClose}>
               Cancel
@@ -442,6 +463,7 @@ export function CustomModelsSettings() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<CustomModelConfig | null>(null);
+  const [deleteModelId, setDeleteModelId] = useState<string | null>(null);
 
   const handleAdd = () => {
     setEditTarget(null);
@@ -528,7 +550,7 @@ export function CustomModelsSettings() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleDelete(model.id)}
+                  onClick={() => setDeleteModelId(model.id)}
                   className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -549,6 +571,32 @@ export function CustomModelsSettings() {
         }}
         onSave={handleSave}
       />
+
+      <AlertDialog
+        open={deleteModelId !== null}
+        onOpenChange={(open) => !open && setDeleteModelId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete custom model?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteModelId) {
+                  handleDelete(deleteModelId);
+                  setDeleteModelId(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

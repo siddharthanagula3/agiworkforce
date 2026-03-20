@@ -1,6 +1,16 @@
 import { Info, RotateCcw, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/AlertDialog';
 import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';
 import { Switch } from '../ui/Switch';
@@ -13,6 +23,7 @@ export function CustomInstructionsSettings() {
 
   const [localInstructions, setLocalInstructions] = useState(globalInstructions);
   const [isDirty, setIsDirty] = useState(false);
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
 
   // Track if we've initialized to prevent loops during hydration
   const hasInitialized = useRef(false);
@@ -154,17 +165,43 @@ export function CustomInstructionsSettings() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleClear}
+              onClick={() => setClearDialogOpen(true)}
               disabled={!localInstructions}
               className="text-destructive hover:text-destructive"
             >
               Clear
             </Button>
           </div>
-          <Button onClick={handleSave} disabled={!isDirty} size="sm">
-            Save Instructions
-          </Button>
+          <div className="flex items-center gap-3">
+            {isDirty && <div className="text-amber-500 text-sm py-1">You have unsaved changes</div>}
+            <Button
+              onClick={handleSave}
+              disabled={!isDirty}
+              size="sm"
+              title={!isDirty ? 'No unsaved changes' : undefined}
+            >
+              Save Instructions
+            </Button>
+          </div>
         </div>
+
+        <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear custom instructions?</AlertDialogTitle>
+              <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive hover:bg-destructive/90"
+                onClick={handleClear}
+              >
+                Clear
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <div className="rounded-lg border border-muted bg-card p-4 space-y-3">

@@ -42,14 +42,14 @@ export const DEFAULT_ANTHROPIC_MODEL: AnthropicModel = 'claude-sonnet-4-5-202509
 
 export const SUPPORTED_OPENAI_MODELS = [
   // GPT-5.x models (latest - Jan 2026)
-  'gpt-5.2-pro',
-  'gpt-5.2',
-  'gpt-5-nano',
+  'gpt-5.4-pro',
+  'gpt-5.4',
+  'gpt-5.4-nano',
   'gpt-5.1',
   // GPT-4.x models
   'gpt-4.1',
-  'gpt-4o',
-  'gpt-4o-mini',
+  'gpt-5.4',
+  'gpt-5.4-mini',
   'gpt-4-turbo',
   'gpt-4-turbo-preview',
   'gpt-4',
@@ -65,14 +65,14 @@ export const SUPPORTED_OPENAI_MODELS = [
 
 export type OpenAIModel = (typeof SUPPORTED_OPENAI_MODELS)[number];
 
-export const DEFAULT_OPENAI_MODEL: OpenAIModel = 'gpt-4o';
+export const DEFAULT_OPENAI_MODEL: OpenAIModel = 'gpt-5.4';
 
 // OpenAI specialized models (not for chat)
 export const SUPPORTED_OPENAI_IMAGE_MODELS = ['gpt-image-1.5', 'dall-e-3'] as const;
 export const SUPPORTED_OPENAI_VIDEO_MODELS = ['sora-2', 'sora-2-pro'] as const;
 export const SUPPORTED_OPENAI_AUDIO_MODELS = [
-  'gpt-4o-transcribe',
-  'gpt-4o-mini-tts',
+  'gpt-5.4-transcribe',
+  'gpt-5.4-mini-tts',
   'whisper-1',
   'tts-1-hd',
 ] as const;
@@ -86,8 +86,8 @@ export const SUPPORTED_GOOGLE_MODELS = [
   'gemini-3-pro-preview',
   'gemini-3-flash-preview',
   // Gemini 2.x models
-  'gemini-2.5-pro',
-  'gemini-2.5-flash',
+  'gemini-3.1-pro-preview',
+  'gemini-3-flash',
   'gemini-2.0-flash',
   'gemini-2.0-flash-exp',
   // Gemini 1.x models (legacy, still available)
@@ -113,9 +113,9 @@ export const SUPPORTED_GOOGLE_VIDEO_MODELS = [
   'veo-3.0-generate-001',
 ] as const;
 export const SUPPORTED_GOOGLE_AUDIO_MODELS = [
-  'gemini-2.5-flash-native-audio-preview-12-2025',
-  'gemini-2.5-pro-preview-tts',
-  'gemini-2.5-flash-preview-tts',
+  'gemini-3-flash-native-audio-preview-12-2025',
+  'gemini-3.1-pro-preview-tts',
+  'gemini-3-flash-preview-tts',
 ] as const;
 
 // =============================================================================

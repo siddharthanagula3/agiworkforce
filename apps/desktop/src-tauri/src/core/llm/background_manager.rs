@@ -373,7 +373,7 @@ mod tests {
     #[tokio::test]
     async fn test_submit_request_returns_queued() {
         let manager = BackgroundManager::new(2);
-        let request = test_request("gpt-4o");
+        let request = test_request("gpt-5.4");
 
         let result = manager
             .submit_request(request, Provider::OpenAI, None, None)
@@ -422,7 +422,7 @@ mod tests {
     #[tokio::test]
     async fn test_cancel_queued_request() {
         let manager = BackgroundManager::new(2);
-        let request = test_request("gpt-4o");
+        let request = test_request("gpt-5.4");
 
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)
@@ -445,7 +445,7 @@ mod tests {
     #[tokio::test]
     async fn test_cancel_removes_pending_data() {
         let manager = BackgroundManager::new(2);
-        let request = test_request("gpt-4o");
+        let request = test_request("gpt-5.4");
 
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)
@@ -499,7 +499,7 @@ mod tests {
 
         // Submit 3 requests
         for _ in 0..3 {
-            let request = test_request("gpt-4o");
+            let request = test_request("gpt-5.4");
             manager
                 .submit_request(request, Provider::OpenAI, None, None)
                 .await
@@ -534,7 +534,7 @@ mod tests {
 
         // Submit 4 requests
         for _ in 0..4 {
-            let request = test_request("gpt-4o");
+            let request = test_request("gpt-5.4");
             manager
                 .submit_request(request, Provider::OpenAI, None, None)
                 .await
@@ -554,7 +554,7 @@ mod tests {
     async fn test_cleanup_removes_old_completed() {
         let manager = BackgroundManager::new(2);
 
-        let request = test_request("gpt-4o");
+        let request = test_request("gpt-5.4");
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)
             .await
@@ -585,7 +585,7 @@ mod tests {
     async fn test_cleanup_keeps_recent_completed() {
         let manager = BackgroundManager::new(2);
 
-        let request = test_request("gpt-4o");
+        let request = test_request("gpt-5.4");
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)
             .await
@@ -615,7 +615,7 @@ mod tests {
     async fn test_cleanup_keeps_queued_requests() {
         let manager = BackgroundManager::new(2);
 
-        let request = test_request("gpt-4o");
+        let request = test_request("gpt-5.4");
         manager
             .submit_request(request, Provider::OpenAI, None, None)
             .await
@@ -637,7 +637,7 @@ mod tests {
     async fn test_cleanup_removes_orphaned_pending() {
         let manager = BackgroundManager::new(2);
 
-        let request = test_request("gpt-4o");
+        let request = test_request("gpt-5.4");
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)
             .await
@@ -681,7 +681,7 @@ mod tests {
         let notify = manager.notify.clone();
 
         // Submit triggers notify_one() internally
-        let request = test_request("gpt-4o");
+        let request = test_request("gpt-5.4");
         manager
             .submit_request(request, Provider::OpenAI, None, None)
             .await
@@ -707,7 +707,7 @@ mod tests {
 
         let mut ids = Vec::new();
         for _ in 0..10 {
-            let request = test_request("gpt-4o");
+            let request = test_request("gpt-5.4");
             let result = manager
                 .submit_request(request, Provider::OpenAI, None, None)
                 .await
@@ -727,7 +727,7 @@ mod tests {
     #[tokio::test]
     async fn test_cancel_idempotent_on_cancelled() {
         let manager = BackgroundManager::new(2);
-        let request = test_request("gpt-4o");
+        let request = test_request("gpt-5.4");
 
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)

@@ -16,6 +16,7 @@ import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-hel
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
+import { validateEgressUrl, EgressPolicyError } from '@/lib/egress-policy';
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
 const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
@@ -150,7 +151,7 @@ function findCheaperFallbackModel(
     { model: 'deepseek-chat', provider: 'deepseek' },
     { model: 'qwen-flash', provider: 'qwen' },
     { model: 'gpt-5.4-nano', provider: 'openai' },
-    { model: 'gemini-2.5-flash-lite', provider: 'google' },
+    { model: 'gemini-3-flash-lite', provider: 'google' },
     { model: 'claude-haiku-4.5', provider: 'anthropic' },
   ];
 
@@ -411,6 +412,41 @@ async function handleChatCompletions(request: NextRequest) {
   // Determine provider
   let provider = LLMProviderFactory.getProviderFromModel(chatRequest.model);
 
+  // Egress policy: validate custom base URLs from env vars before making external requests.
+  // Standard provider URLs (api.openai.com, api.anthropic.com, etc.) are already in the
+  // egress allowlist. This catches custom/overridden base URLs that admins may configure.
+  const providerBaseUrlEnvMap: Record<string, string> = {
+    openai: 'OPENAI_BASE_URL',
+    qwen: 'QWEN_BASE_URL',
+    deepseek: 'DEEPSEEK_BASE_URL',
+    moonshot: 'MOONSHOT_BASE_URL',
+  };
+  const baseUrlEnvKey = providerBaseUrlEnvMap[provider.toLowerCase()];
+  const customBaseUrl = baseUrlEnvKey ? process.env[baseUrlEnvKey] : undefined;
+
+  if (customBaseUrl) {
+    try {
+      validateEgressUrl(customBaseUrl);
+    } catch (err) {
+      if (err instanceof EgressPolicyError) {
+        logger.warn(
+          { provider, customBaseUrl, model: chatRequest.model },
+          'Egress policy blocked custom provider base URL',
+        );
+        return NextResponse.json(
+          {
+            error: {
+              message: 'Provider endpoint not in approved egress allowlist',
+              type: 'invalid_request_error',
+              code: 'egress_blocked',
+            },
+          },
+          { status: 403 },
+        );
+      }
+    }
+  }
+
   // Calculate message length
   const MAX_MESSAGE_LENGTH = 100000;
   const MAX_TOTAL_LENGTH = 1000000;
@@ -627,7 +663,7 @@ async function handleChatCompletions(request: NextRequest) {
       const modelUsed = chatRequest.model;
       const providerUsed = provider;
       // Use the user-requested model name for responses, not the internal API model
-      // e.g., user requests "gpt-5-nano" -> internally uses "gpt-4o-mini" -> return "gpt-5-nano"
+      // e.g., user requests "gpt-5.4-nano" -> internally uses "gpt-5.4-mini" -> return "gpt-5.4-nano"
       const responseModelName = usedFallback ? chatRequest.model : requestedModel;
 
       let inputTokens = 0;
@@ -1210,7 +1246,7 @@ async function handleChatCompletions(request: NextRequest) {
   const responseId = `chatcmpl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   // Return the user-requested model name, not the internal API model name
-  // e.g., user requests "gpt-5-nano" -> internally uses "gpt-4o-mini" -> return "gpt-5-nano"
+  // e.g., user requests "gpt-5.4-nano" -> internally uses "gpt-5.4-mini" -> return "gpt-5.4-nano"
   const responseModel = usedFallback ? chatRequest.model : requestedModel;
 
   return NextResponse.json(

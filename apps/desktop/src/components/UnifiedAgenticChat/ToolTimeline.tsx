@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, GitBranch, Wrench } from 'lucide-react';
 import { type ToolLabelEntry } from './ToolLabel';
 import { ToolCallCard, type ToolCallStatus } from './ToolCallCard';
+import { TaskPhaseTimeline, type ToolLabelEntryWithPhase } from './TaskPhaseTimeline';
 import { cn } from '../../lib/utils';
 
 /** Map ToolLabelEntry status to ToolCallCard status */
@@ -29,6 +30,13 @@ function argsFromDisplayArgs(displayArgs: string): Record<string, unknown> | und
 interface ToolTimelineProps {
   entries: ToolLabelEntry[];
   className?: string;
+  /**
+   * When `true` and entries carry `phase` metadata, delegates rendering to
+   * `<TaskPhaseTimeline>` which groups tool calls into named phase sections
+   * (Manus-style multi-phase task UI). Defaults to `false` — existing
+   * behaviour is fully preserved when this flag is absent or `false`.
+   */
+  enablePhaseGrouping?: boolean;
 }
 
 /** A rendered group: either a single standalone entry or a set of parallel entries. */
@@ -38,7 +46,11 @@ interface EntryGroup {
   entries: ToolLabelEntry[];
 }
 
-export function ToolTimeline({ entries, className }: ToolTimelineProps) {
+export function ToolTimeline({
+  entries,
+  className,
+  enablePhaseGrouping = false,
+}: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
   const hasRunning = entries.some((e) => e.status === 'running');
@@ -46,10 +58,13 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
   // Reset userForcedClosed when all tools finish so next batch auto-expands
   const prevHasRunning = useRef(hasRunning);
   useEffect(() => {
-    if (prevHasRunning.current && !hasRunning) {
+    const wasRunning = prevHasRunning.current;
+    // Update the ref first so it always reflects the latest value,
+    // preventing stale reads if hasRunning changes rapidly between renders.
+    prevHasRunning.current = hasRunning;
+    if (wasRunning && !hasRunning) {
       setUserForcedClosed(false);
     }
-    prevHasRunning.current = hasRunning;
   }, [hasRunning]);
 
   // Auto-expand while tools are running, but respect user's manual close
@@ -93,6 +108,22 @@ export function ToolTimeline({ entries, className }: ToolTimelineProps) {
   );
 
   if (entries.length === 0) return null;
+
+  // When phase grouping is opted in, check whether any entry carries phase
+  // metadata. If so, delegate entirely to TaskPhaseTimeline.
+  if (enablePhaseGrouping) {
+    const entriesWithPhase = entries as ToolLabelEntryWithPhase[];
+    const hasPhaseData = entriesWithPhase.some((e) => e.phase != null && e.phase !== '');
+    if (hasPhaseData) {
+      return (
+        <TaskPhaseTimeline
+          entries={entriesWithPhase}
+          isStreaming={hasRunning}
+          className={className}
+        />
+      );
+    }
+  }
 
   return (
     <div className={cn('border border-border/30 rounded-lg overflow-hidden', className)}>

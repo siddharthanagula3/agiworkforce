@@ -1,4 +1,5 @@
 import { Code2, Loader2, AlertCircle, MapPin, AlertTriangle, Info } from 'lucide-react';
+import { toast } from 'sonner';
 import type { ToolResultProps } from './index';
 import { cn } from '@/lib/utils';
 import { invoke } from '@/lib/tauri-mock';
@@ -97,9 +98,14 @@ export function InlineLSPResult({ result, status }: ToolResultProps) {
         {type === 'definition' && location && (
           <div
             className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 cursor-pointer"
-            onClick={() => {
+            onClick={async () => {
               if (location.file) {
-                void invoke('file_open_with_default_app', { path: location.file });
+                try {
+                  await invoke('file_open_with_default_app', { path: location.file });
+                } catch (err) {
+                  console.error('Failed to open file:', err);
+                  toast.error('Failed to open file');
+                }
               }
             }}
           >

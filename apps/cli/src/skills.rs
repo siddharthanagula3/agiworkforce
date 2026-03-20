@@ -11,6 +11,11 @@
 //! Skill mentions: Use `$skill-name` or `@skill-name` in a query to explicitly
 //! request a skill by name (scored at 0.9).
 
+// Skills API surface is intentionally broad: scoring, matching, categorization,
+// and formatting functions are all needed by the /skills REPL command and will be
+// wired into automatic skill injection in the system prompt builder.
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use regex::Regex;
 use std::collections::BTreeMap;

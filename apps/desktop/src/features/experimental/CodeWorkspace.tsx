@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { homeDir } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
@@ -53,7 +54,27 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
     getFileByPath,
     revertFile,
     hydrateOpenFiles,
-  } = useCodeStore();
+  } = useCodeStore(
+    useShallow((s) => ({
+      openFiles: s.openFiles,
+      activeFilePath: s.activeFilePath,
+      rootPath: s.rootPath,
+      persistedOpenPaths: s.persistedOpenPaths,
+      setRootPath: s.setRootPath,
+      openFile: s.openFile,
+      closeFile: s.closeFile,
+      closeAllFiles: s.closeAllFiles,
+      closeOtherFiles: s.closeOtherFiles,
+      moveFile: s.moveFile,
+      setActiveFile: s.setActiveFile,
+      updateFileContent: s.updateFileContent,
+      saveFile: s.saveFile,
+      saveAllFiles: s.saveAllFiles,
+      getFileByPath: s.getFileByPath,
+      revertFile: s.revertFile,
+      hydrateOpenFiles: s.hydrateOpenFiles,
+    })),
+  );
 
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [sidebarWidth] = useState(280);
@@ -367,27 +388,31 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           className="absolute z-50 w-52 rounded-md border border-border bg-background p-1 shadow-lg"
           style={{ left: tabMenu.x, top: tabMenu.y }}
         >
-          <button type="button"
+          <button
+            type="button"
             className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={closeCurrent}
           >
             <X className="h-4 w-4" />
             Close tab
           </button>
-          <button type="button"
+          <button
+            type="button"
             className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={closeOthers}
           >
             Close others
           </button>
-          <button type="button"
+          <button
+            type="button"
             className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={closeAll}
           >
             Close all
           </button>
           <div className="my-1 h-px bg-border/60" />
-          <button type="button"
+          <button
+            type="button"
             className={cn(
               'flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted',
               !canMoveLeft && 'cursor-not-allowed text-muted-foreground hover:bg-transparent',
@@ -398,7 +423,8 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
             <MoveLeft className="h-4 w-4" />
             Move left
           </button>
-          <button type="button"
+          <button
+            type="button"
             className={cn(
               'flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted',
               !canMoveRight && 'cursor-not-allowed text-muted-foreground hover:bg-transparent',
@@ -410,14 +436,16 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
             Move right
           </button>
           <div className="my-1 h-px bg-border/60" />
-          <button type="button"
+          <button
+            type="button"
             className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={saveTab}
           >
             <Save className="h-4 w-4" />
             Save tab
           </button>
-          <button type="button"
+          <button
+            type="button"
             className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
             onClick={saveTabAsCopy}
           >
@@ -431,236 +459,244 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
 
   return (
     <ErrorBoundary>
-    <div
-      className={cn(
-        'flex h-full overflow-hidden border border-border rounded-lg bg-background min-h-0 min-w-0',
-        className,
-      )}
-      // WRK-008 fix: ARIA labels for accessibility
-      role="region"
-      aria-label="Code editor workspace"
-    >
-      {/* Sidebar */}
       <div
         className={cn(
-          'flex shrink-0 flex-col border-r border-border bg-muted/10 transition-all duration-200',
-          sidebarVisible ? 'opacity-100' : 'w-0 opacity-0',
+          'flex h-full overflow-hidden border border-border rounded-lg bg-background min-h-0 min-w-0',
+          className,
         )}
-        style={{ width: sidebarVisible ? sidebarWidth : 0 }}
         // WRK-008 fix: ARIA labels for accessibility
-        role="navigation"
-        aria-label="File explorer"
+        role="region"
+        aria-label="Code editor workspace"
       >
-        {sidebarVisible && rootPath ? (
-          <FileTree
-            rootPath={rootPath}
-            onFileSelect={handleFileSelect}
-            {...(activeFilePath ? { selectedFile: activeFilePath } : { selectedFile: '' })}
-            className="flex-1"
-          />
-        ) : null}
-      </div>
+        {/* Sidebar */}
+        <div
+          className={cn(
+            'flex shrink-0 flex-col border-r border-border bg-muted/10 transition-all duration-200',
+            sidebarVisible ? 'opacity-100' : 'w-0 opacity-0',
+          )}
+          style={{ width: sidebarVisible ? sidebarWidth : 0 }}
+          // WRK-008 fix: ARIA labels for accessibility
+          role="navigation"
+          aria-label="File explorer"
+        >
+          {sidebarVisible && rootPath ? (
+            <FileTree
+              rootPath={rootPath}
+              onFileSelect={handleFileSelect}
+              {...(activeFilePath ? { selectedFile: activeFilePath } : { selectedFile: '' })}
+              className="flex-1"
+            />
+          ) : null}
+        </div>
 
-      {/* Main Content */}
-      <div className="flex flex-1 flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border bg-muted/20 px-3 py-2">
-          <div className="flex items-center gap-2">
-            <button type="button"
-              className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-muted"
-              onClick={() => setSidebarVisible((value) => !value)}
-            >
-              {sidebarVisible ? (
-                <ChevronLeft className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
+        {/* Main Content */}
+        <div className="flex flex-1 flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-border bg-muted/20 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-muted"
+                onClick={() => setSidebarVisible((value) => !value)}
+              >
+                {sidebarVisible ? (
+                  <ChevronLeft className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </button>
+              <span className="text-sm font-medium">
+                {activeFilePath
+                  ? activeFilePath.split(/[/\\]/).slice(-2).join('/')
+                  : 'No file selected'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={handleSelectFolder}>
+                <FolderOpen className="mr-2 h-4 w-4" />
+                {rootPath ? 'Switch Folder' : 'Open Folder'}
+              </Button>
+
+              {openFiles.length > 0 && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSaveAll}
+                    disabled={dirtyCount === 0}
+                  >
+                    <Save className="h-4 w-4 mr-1" />
+                    Save All ({dirtyCount})
+                  </Button>
+                  {activeFile?.isDirty && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCompareWithSaved}
+                      title="Compare with saved version"
+                    >
+                      <GitCompare className="h-4 w-4 mr-1" />
+                      Compare
+                    </Button>
+                  )}
+                </>
               )}
-            </button>
-            <span className="text-sm font-medium">
-              {activeFilePath
-                ? activeFilePath.split(/[/\\]/).slice(-2).join('/')
-                : 'No file selected'}
-            </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={handleSelectFolder}>
-              <FolderOpen className="mr-2 h-4 w-4" />
-              {rootPath ? 'Switch Folder' : 'Open Folder'}
-            </Button>
+          {/* Tabs */}
+          {openFiles.length > 0 && (
+            <div className="flex items-center gap-1 px-2 py-1 border-b border-border bg-muted/5 overflow-x-auto">
+              {openFiles.map((file, index) => {
+                const isActive = file.path === activeFilePath;
+                const fileName = file.path.split(/[/\\]/).pop() || file.path;
 
-            {openFiles.length > 0 && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSaveAll}
-                  disabled={dirtyCount === 0}
-                >
-                  <Save className="h-4 w-4 mr-1" />
-                  Save All ({dirtyCount})
-                </Button>
-                {activeFile?.isDirty && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCompareWithSaved}
-                    title="Compare with saved version"
+                return (
+                  <div
+                    key={file.path}
+                    draggable
+                    onDragStart={handleTabDragStart(file.path)}
+                    onDragOver={handleTabDragOver}
+                    onDrop={handleTabDrop(index)}
+                    onDragEnd={handleTabDragEnd}
+                    onClick={() => setActiveFile(file.path)}
+                    onContextMenu={(e) => handleTabContextMenu(e, file.path)}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer',
+                      'transition-colors group whitespace-nowrap select-none',
+                      isActive
+                        ? 'bg-background border border-border shadow-xs'
+                        : 'hover:bg-muted/50',
+                    )}
                   >
-                    <GitCompare className="h-4 w-4 mr-1" />
-                    Compare
-                  </Button>
-                )}
-              </>
+                    <span
+                      className={cn(
+                        'text-sm font-mono',
+                        isActive && 'font-medium',
+                        file.isDirty && 'text-amber-500',
+                      )}
+                    >
+                      {fileName}
+                      {file.isDirty && ' *'}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={(e) => requestCloseTab(file.path, e)}
+                      className={cn(
+                        'text-muted-foreground hover:text-foreground',
+                        'transition-colors opacity-0 group-hover:opacity-100',
+                        isActive && 'opacity-100',
+                      )}
+                      title="Close tab"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Editor Area */}
+          <div className="flex-1 overflow-hidden">
+            {activeFile ? (
+              <CodeEditor
+                key={activeFile.path}
+                defaultValue={activeFile.content}
+                language={activeFile.language}
+                path={activeFile.path}
+                readOnly={false}
+                onChange={(value) => {
+                  if (value !== undefined) {
+                    updateFileContent(activeFile.path, value);
+                  }
+                }}
+                onSave={handleEditorSave}
+                className="h-full"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <div className="text-center space-y-4">
+                  <div className="text-6xl opacity-20">
+                    <FileCode className="inline-block h-16 w-16" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-medium mb-2">No File Open</p>
+                    <p className="text-sm">
+                      {rootPath
+                        ? 'Select a file from the explorer to start editing'
+                        : 'Open a folder to get started'}
+                    </p>
+                  </div>
+                  {!rootPath && (
+                    <Button onClick={handleSelectFolder} variant="outline">
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      Open Folder
+                    </Button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Tabs */}
-        {openFiles.length > 0 && (
-          <div className="flex items-center gap-1 px-2 py-1 border-b border-border bg-muted/5 overflow-x-auto">
-            {openFiles.map((file, index) => {
-              const isActive = file.path === activeFilePath;
-              const fileName = file.path.split(/[/\\]/).pop() || file.path;
+        {renderTabContextMenu()}
 
-              return (
-                <div
-                  key={file.path}
-                  draggable
-                  onDragStart={handleTabDragStart(file.path)}
-                  onDragOver={handleTabDragOver}
-                  onDrop={handleTabDrop(index)}
-                  onDragEnd={handleTabDragEnd}
-                  onClick={() => setActiveFile(file.path)}
-                  onContextMenu={(e) => handleTabContextMenu(e, file.path)}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer',
-                    'transition-colors group whitespace-nowrap select-none',
-                    isActive ? 'bg-background border border-border shadow-xs' : 'hover:bg-muted/50',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'text-sm font-mono',
-                      isActive && 'font-medium',
-                      file.isDirty && 'text-amber-500',
-                    )}
-                  >
-                    {fileName}
-                    {file.isDirty && ' *'}
-                  </span>
+        <Dialog open={diffOpen} onOpenChange={setDiffOpen}>
+          <DialogContent className="max-w-5xl p-0 overflow-hidden">
+            {activeFile && (
+              <DiffViewer
+                originalValue={activeFile.originalContent}
+                modifiedValue={activeFile.content}
+                originalLabel="Saved version"
+                modifiedLabel="Working copy"
+                language={activeFile.language}
+                readOnly={false}
+                onAccept={handleAcceptDiff}
+                onReject={handleRejectDiff}
+                onClose={() => setDiffOpen(false)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
 
-                  <button type="button"
-                    onClick={(e) => requestCloseTab(file.path, e)}
-                    className={cn(
-                      'text-muted-foreground hover:text-foreground',
-                      'transition-colors opacity-0 group-hover:opacity-100',
-                      isActive && 'opacity-100',
-                    )}
-                    title="Close tab"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Editor Area */}
-        <div className="flex-1 overflow-hidden">
-          {activeFile ? (
-            <CodeEditor
-              key={activeFile.path}
-              defaultValue={activeFile.content}
-              language={activeFile.language}
-              path={activeFile.path}
-              readOnly={false}
-              onChange={(value) => {
-                if (value !== undefined) {
-                  updateFileContent(activeFile.path, value);
-                }
-              }}
-              onSave={handleEditorSave}
-              className="h-full"
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-              <div className="text-center space-y-4">
-                <div className="text-6xl opacity-20">
-                  <FileCode className="inline-block h-16 w-16" />
-                </div>
-                <div>
-                  <p className="text-lg font-medium mb-2">No File Open</p>
-                  <p className="text-sm">
-                    {rootPath
-                      ? 'Select a file from the explorer to start editing'
-                      : 'Open a folder to get started'}
-                  </p>
-                </div>
-                {!rootPath && (
-                  <Button onClick={handleSelectFolder} variant="outline">
-                    <FolderOpen className="h-4 w-4 mr-2" />
-                    Open Folder
-                  </Button>
-                )}
-              </div>
+        <Dialog
+          open={!!pendingCloseFile}
+          onOpenChange={(open) => !open && !pendingCloseSaving && setPendingCloseFile(null)}
+        >
+          <DialogContent className="sm:max-w-lg space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold">Unsaved changes</h2>
+              <p className="text-sm text-muted-foreground">
+                {pendingCloseFile?.path
+                  ? `${pendingCloseFile.path} has unsaved changes. How would you like to proceed?`
+                  : 'This file has unsaved changes.'}
+              </p>
             </div>
-          )}
-        </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={handleKeepEditingPending}
+                disabled={pendingCloseSaving}
+              >
+                Keep editing
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleDiscardPending}
+                disabled={pendingCloseSaving}
+              >
+                Discard changes
+              </Button>
+              <Button onClick={handleSaveAndClosePending} disabled={pendingCloseSaving}>
+                {pendingCloseSaving ? 'Saving…' : 'Save & Close'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
-
-      {renderTabContextMenu()}
-
-      <Dialog open={diffOpen} onOpenChange={setDiffOpen}>
-        <DialogContent className="max-w-5xl p-0 overflow-hidden">
-          {activeFile && (
-            <DiffViewer
-              originalValue={activeFile.originalContent}
-              modifiedValue={activeFile.content}
-              originalLabel="Saved version"
-              modifiedLabel="Working copy"
-              language={activeFile.language}
-              readOnly={false}
-              onAccept={handleAcceptDiff}
-              onReject={handleRejectDiff}
-              onClose={() => setDiffOpen(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!pendingCloseFile}
-        onOpenChange={(open) => !open && !pendingCloseSaving && setPendingCloseFile(null)}
-      >
-        <DialogContent className="sm:max-w-lg space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Unsaved changes</h2>
-            <p className="text-sm text-muted-foreground">
-              {pendingCloseFile?.path
-                ? `${pendingCloseFile.path} has unsaved changes. How would you like to proceed?`
-                : 'This file has unsaved changes.'}
-            </p>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              onClick={handleKeepEditingPending}
-              disabled={pendingCloseSaving}
-            >
-              Keep editing
-            </Button>
-            <Button variant="outline" onClick={handleDiscardPending} disabled={pendingCloseSaving}>
-              Discard changes
-            </Button>
-            <Button onClick={handleSaveAndClosePending} disabled={pendingCloseSaving}>
-              {pendingCloseSaving ? 'Saving…' : 'Save & Close'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
     </ErrorBoundary>
   );
 }

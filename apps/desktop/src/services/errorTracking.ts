@@ -285,8 +285,15 @@ class ErrorTrackingService {
 
 export const errorTracking = new ErrorTrackingService();
 
-export function setupGlobalErrorHandler() {
-  window.addEventListener('unhandledrejection', (event) => {
+let globalErrorHandlerInstalled = false;
+
+export function setupGlobalErrorHandler(): (() => void) | undefined {
+  if (globalErrorHandlerInstalled) {
+    return;
+  }
+  globalErrorHandlerInstalled = true;
+
+  const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
     const errorMessage = String(event.reason);
 
     // Suppress known Tauri internal errors that occur during cleanup
@@ -303,9 +310,9 @@ export function setupGlobalErrorHandler() {
         tags: { type: 'unhandled_promise' },
       },
     );
-  });
+  };
 
-  window.addEventListener('error', (event) => {
+  const handleError = (event: ErrorEvent) => {
     errorTracking.captureError(event.error || new Error(event.message), {
       component: 'global',
       severity: ErrorSeverity.HIGH,
@@ -316,7 +323,16 @@ export function setupGlobalErrorHandler() {
         colno: String(event.colno || ''),
       },
     });
-  });
+  };
+
+  window.addEventListener('unhandledrejection', handleUnhandledRejection);
+  window.addEventListener('error', handleError);
+
+  return () => {
+    window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    window.removeEventListener('error', handleError);
+    globalErrorHandlerInstalled = false;
+  };
 }
 
 export function captureErrorBoundaryError(error: Error, errorInfo: { componentStack: string }) {

@@ -54,8 +54,8 @@ export interface TokenStats {
 // Official pricing as of Jan 2026 (per 1M tokens)
 const PRICING = {
   openai: {
-    'gpt-4o': { input: 2.5, output: 10 },
-    'gpt-4o-mini': { input: 0.15, output: 0.6 },
+    'gpt-5.4': { input: 2.5, output: 10 },
+    'gpt-5.4-mini': { input: 0.15, output: 0.6 },
     o1: { input: 15, output: 60 },
     'o1-mini': { input: 3, output: 12 },
   },

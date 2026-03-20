@@ -539,7 +539,7 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::Google,
-                        "gemini-2.0-flash".to_string(),
+                        "gemini-3-flash".to_string(),
                         "Agentic intent + budget plan - routing to Gemini 3 Flash for tool use."
                             .to_string(),
                     )
@@ -556,9 +556,9 @@ impl LLMRouter {
             "multimodal" => (
                 Provider::Google,
                 if is_budget_plan {
-                    "gemini-2.0-flash".to_string()
+                    "gemini-3-flash".to_string()
                 } else {
-                    "gemini-2.0-pro-exp".to_string()
+                    "gemini-3.1-pro-preview".to_string()
                 },
                 "Multimodal intent detected - routing to Google Gemini for vision capabilities."
                     .to_string(),
@@ -578,13 +578,13 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::Google,
-                        "gemini-2.0-flash".to_string(),
+                        "gemini-3-flash".to_string(),
                         "Chat intent + budget plan - routing to Gemini 3 Flash.".to_string(),
                     )
                 } else {
                     (
                         Provider::Google,
-                        "gemini-2.0-pro-exp".to_string(),
+                        "gemini-3.1-pro-preview".to_string(),
                         "Chat intent detected - routing to Gemini 3 Pro.".to_string(),
                     )
                 }
@@ -1436,7 +1436,7 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Google,
-                        model: "gemini-2.0-flash".to_string(),
+                        model: "gemini-3-flash".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -1456,7 +1456,7 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: "gpt-5".to_string(),
+                        model: "gpt-5.4".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -1470,7 +1470,7 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Google,
-                        model: "gemini-2.0-pro-exp".to_string(),
+                        model: "gemini-3.1-pro-preview".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -1491,7 +1491,7 @@ impl LLMRouter {
                 RouteCandidate {
                     strategy: None,
                     provider: Provider::Google,
-                    model: "gemini-2.0-flash".to_string(),
+                    model: "gemini-3-flash".to_string(),
                     reason: "strategy-latency",
                 },
             ],
@@ -1544,7 +1544,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-2.0-flash".to_string(), // Best value: 3,307 Elo/$, $0.375/1M
+                                model: "gemini-3-flash".to_string(), // Best value: 3,307 Elo/$, $0.375/1M
                                 reason: "auto-economy-best-chat-value",
                             },
                             RouteCandidate {
@@ -1580,7 +1580,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-2.0-flash".to_string(), // Best value: 3,307 Elo/$
+                                model: "gemini-3-flash".to_string(), // Best value: 3,307 Elo/$
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
@@ -1604,7 +1604,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-3-mini".to_string(), // General purpose: $0.80/1M (legacy)
+                                model: "grok-4-1-fast".to_string(), // General purpose: $0.80/1M (legacy)
                                 reason: "auto-economy-xai-legacy",
                             },
                         ]
@@ -1614,7 +1614,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-2.0-flash".to_string(), // Best value, multimodal: 3,307 Elo/$
+                                model: "gemini-3-flash".to_string(), // Best value, multimodal: 3,307 Elo/$
                                 reason: "auto-economy",
                             },
                             // Anthropic early fallback — ensures users with only an Anthropic key
@@ -1658,7 +1658,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::XAI,
-                                model: "grok-3-mini".to_string(), // General purpose: $0.30/$0.50 per 1M
+                                model: "grok-4-1-fast".to_string(), // General purpose: $0.30/$0.50 per 1M
                                 reason: "auto-economy-xai-legacy",
                             },
                         ]
@@ -1684,7 +1684,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-2.0-pro-exp".to_string(), // Best chat: 1501 Elo, best reasoning
+                                model: "gemini-3.1-pro-preview".to_string(), // Best chat: 1501 Elo, best reasoning
                                 reason: "auto-balanced-best-quality",
                             },
                             RouteCandidate {
@@ -1696,7 +1696,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Moonshot,
-                                model: "moonshot-v1-8k".to_string(),
+                                model: "kimi-k2.5".to_string(),
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
@@ -1718,7 +1718,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5".to_string(),
+                                model: "gpt-5.4".to_string(),
                                 reason: "auto-balanced-performance",
                             },
                             RouteCandidate {
@@ -1742,7 +1742,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Moonshot,
-                                model: "moonshot-v1-8k".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
+                                model: "kimi-k2.5".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
@@ -1754,13 +1754,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-2.0-pro-exp".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA ($7.50/1M)
+                                model: "gemini-3.1-pro-preview".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA ($7.50/1M)
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5".to_string(), // Fast inference: 187 tok/s, 76.3% SWE-bench, 88.1% GPQA
+                                model: "gpt-5.4".to_string(), // Fast inference: 187 tok/s, 76.3% SWE-bench, 88.1% GPQA
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
@@ -1788,7 +1788,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Moonshot,
-                                model: "moonshot-v1-8k".to_string(),
+                                model: "kimi-k2.5".to_string(),
                                 reason: "auto-balanced-reasoning",
                             },
                             RouteCandidate {
@@ -1800,13 +1800,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-2.0-pro-exp".to_string(),
+                                model: "gemini-3.1-pro-preview".to_string(),
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5".to_string(),
+                                model: "gpt-5.4".to_string(),
                                 reason: "auto-balanced",
                             },
                             RouteCandidate {
@@ -1839,7 +1839,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5".to_string(),
+                                model: "gpt-5.4".to_string(),
                                 reason: "auto-premium-quality",
                             },
                             RouteCandidate {
@@ -1863,7 +1863,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-2.0-pro-exp".to_string(), // Best multimodal
+                                model: "gemini-3.1-pro-preview".to_string(), // Best multimodal
                                 reason: "auto-premium",
                             },
                             RouteCandidate {
@@ -1921,7 +1921,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-2.0-pro-exp".to_string(),
+                                model: "gemini-3.1-pro-preview".to_string(),
                                 reason: "auto-premium-complex",
                             },
                             RouteCandidate {
@@ -1943,7 +1943,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-2.0-pro-exp".to_string(), // Best multimodal/creative
+                                model: "gemini-3.1-pro-preview".to_string(), // Best multimodal/creative
                                 reason: "auto-premium-creative",
                             },
                             RouteCandidate {
@@ -1976,7 +1976,7 @@ impl LLMRouter {
     ///
     /// **Other Providers Checked:**
     /// - **Qwen**: `qwen-max` has thinking mode built-in (always reasoning, no separate non-reasoning variant)
-    /// - **OpenAI**: GPT-5.2 supports effort-based reasoning controls without a separate "thinking" model ID
+    /// - **OpenAI**: GPT-5.4 supports effort-based reasoning controls without a separate "thinking" model ID
     /// - **DeepSeek**: V3.2-Exp Reasoner mentioned but model ID not in current codebase
     /// - **Anthropic**: Reasoning variants (Opus) priced higher than non-reasoning (Sonnet)
     /// - **Google**: Reasoning variants (Deep Think) priced higher than non-reasoning (Pro/Flash)
@@ -1984,7 +1984,7 @@ impl LLMRouter {
         match provider {
             Provider::OpenAI => match task {
                 TaskCategory::Simple => "gpt-5.4-nano".to_string(),
-                TaskCategory::Complex => "gpt-5".to_string(),
+                TaskCategory::Complex => "gpt-5.4".to_string(),
                 TaskCategory::Creative => "gpt-5.4-nano".to_string(),
             },
             Provider::Anthropic => match task {
@@ -1993,9 +1993,9 @@ impl LLMRouter {
                 TaskCategory::Creative => "claude-sonnet-4-6".to_string(),
             },
             Provider::Google => match task {
-                TaskCategory::Simple => "gemini-2.0-flash".to_string(),
-                TaskCategory::Complex => "gemini-2.0-pro-exp".to_string(),
-                TaskCategory::Creative => "gemini-2.0-pro-exp".to_string(),
+                TaskCategory::Simple => "gemini-3-flash".to_string(),
+                TaskCategory::Complex => "gemini-3.1-pro-preview".to_string(),
+                TaskCategory::Creative => "gemini-3.1-pro-preview".to_string(),
             },
             Provider::Ollama => "llama4-maverick".to_string(),
             Provider::XAI => match task {
@@ -2015,9 +2015,9 @@ impl LLMRouter {
                 TaskCategory::Creative => "qwen-max".to_string(),
             },
             Provider::Moonshot => match task {
-                TaskCategory::Simple => "moonshot-v1-8k".to_string(),
-                TaskCategory::Complex => "moonshot-v1-8k".to_string(),
-                TaskCategory::Creative => "moonshot-v1-8k".to_string(),
+                TaskCategory::Simple => "kimi-k2.5".to_string(),
+                TaskCategory::Complex => "kimi-k2.5".to_string(),
+                TaskCategory::Creative => "kimi-k2.5".to_string(),
             },
             // ZhipuAI - GLM-4.7 is excellent for coding (73.8% SWE-bench)
             Provider::Zhipu => match task {
@@ -2037,8 +2037,8 @@ impl LLMRouter {
             },
             Provider::ManagedCloud => match task {
                 TaskCategory::Simple => "gpt-5.4-nano".to_string(),
-                TaskCategory::Complex => "gpt-5".to_string(),
-                TaskCategory::Creative => "gpt-5".to_string(),
+                TaskCategory::Complex => "gpt-5.4".to_string(),
+                TaskCategory::Creative => "gpt-5.4".to_string(),
             },
             // New providers — use their best available models
             Provider::Groq => match task {
@@ -2089,14 +2089,14 @@ impl LLMRouter {
             },
             Provider::Azure => match task {
                 // Azure uses deployment names — these are typical defaults
-                TaskCategory::Simple => "gpt-4o-mini".to_string(),
-                TaskCategory::Complex => "gpt-4o".to_string(),
-                TaskCategory::Creative => "gpt-4o".to_string(),
+                TaskCategory::Simple => "gpt-5.4-mini".to_string(),
+                TaskCategory::Complex => "gpt-5.4".to_string(),
+                TaskCategory::Creative => "gpt-5.4".to_string(),
             },
             Provider::Bedrock => match task {
-                TaskCategory::Simple => "anthropic.claude-3-haiku-20240307-v1:0".to_string(),
-                TaskCategory::Complex => "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string(),
-                TaskCategory::Creative => "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string(),
+                TaskCategory::Simple => "anthropic.claude-haiku-4-5-v1:0".to_string(),
+                TaskCategory::Complex => "anthropic.claude-sonnet-4-6-v1:0".to_string(),
+                TaskCategory::Creative => "anthropic.claude-sonnet-4-6-v1:0".to_string(),
             },
             Provider::NvidiaNim => match task {
                 TaskCategory::Simple => "meta/llama-3.3-70b-instruct".to_string(),
@@ -2130,7 +2130,7 @@ impl LLMRouter {
                 } else if token_count < 8000 {
                     "deepseek-chat".to_string() // $0.28/$0.42 per 1M - best value for medium context
                 } else {
-                    "gemini-2.0-flash".to_string() // $0.50/$3.00 per 1M - long context value
+                    "gemini-3-flash".to_string() // $0.50/$3.00 per 1M - long context value
                 }
             }
             RoutingStrategy::AutoBalanced => {
@@ -2140,7 +2140,7 @@ impl LLMRouter {
                 } else if token_count < 4000 {
                     "claude-sonnet-4-6".to_string() // $3/$15 per 1M - excellent quality
                 } else {
-                    "gpt-5".to_string() // Strong OpenAI balanced model
+                    "gpt-5.4".to_string() // Strong OpenAI balanced model
                 }
             }
             RoutingStrategy::AutoPremium => {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { open } from '@tauri-apps/plugin-shell';
 import { CalendarDays, CheckSquare, ExternalLink, Plus, RefreshCcw, Tag, User } from 'lucide-react';
@@ -98,7 +99,31 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
     asanaWorkspaceId,
     setAsanaWorkspace,
     asanaListProjects,
-  } = useProductivityStore();
+  } = useProductivityStore(
+    useShallow((s) => ({
+      connectedProviders: s.connectedProviders,
+      selectedProvider: s.selectedProvider,
+      tasks: s.tasks,
+      loading: s.loading,
+      error: s.error,
+      connect: s.connect,
+      selectProvider: s.selectProvider,
+      refreshTasks: s.refreshTasks,
+      createTask: s.createTask,
+      notionPages: s.notionPages,
+      notionListPages: s.notionListPages,
+      trelloBoards: s.trelloBoards,
+      trelloListBoards: s.trelloListBoards,
+      trelloCards: s.trelloCards,
+      trelloListCards: s.trelloListCards,
+      asanaProjects: s.asanaProjects,
+      asanaTasks: s.asanaTasks,
+      asanaListProjectTasks: s.asanaListProjectTasks,
+      asanaWorkspaceId: s.asanaWorkspaceId,
+      setAsanaWorkspace: s.setAsanaWorkspace,
+      asanaListProjects: s.asanaListProjects,
+    })),
+  );
 
   const [connectOpen, setConnectOpen] = useState(false);
   const [connectProvider, setConnectProvider] = useState<ProductivityProvider>('notion');
@@ -408,7 +433,8 @@ export function ProductivityWorkspace({ className }: ProductivityWorkspaceProps)
               const isSelected = selectedProvider === provider.value;
 
               return (
-                <button type="button"
+                <button
+                  type="button"
                   key={provider.value}
                   onClick={() => isConnected && selectProvider(provider.value)}
                   disabled={!isConnected}
