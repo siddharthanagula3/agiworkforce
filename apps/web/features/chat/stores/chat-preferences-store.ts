@@ -32,6 +32,12 @@ export const useChatPreferencesStore = create<ChatPreferencesState & ChatPrefere
     {
       name: 'agi-chat-preferences',
       version: 2,
+      migrate: (persisted: unknown, version: number) => {
+        if (version < 2) {
+          return { ...(persisted as Record<string, unknown>), connectorBarDismissed: false };
+        }
+        return persisted;
+      },
     },
   ),
 );
