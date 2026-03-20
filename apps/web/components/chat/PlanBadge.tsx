@@ -47,6 +47,7 @@ function formatCents(cents: number): string {
 function formatResetDate(isoDate: string): string {
   try {
     const date = new Date(isoDate);
+    if (isNaN(date.getTime())) return 'next month';
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   } catch {
     return 'next month';
@@ -71,8 +72,7 @@ const colorClasses: Record<'green' | 'yellow' | 'red', string> = {
   red: 'bg-red-500/10 text-red-700 border-red-500/20 hover:bg-red-500/20 dark:text-red-400 dark:border-red-500/30',
 };
 
-const freePillClasses =
-  'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20';
+const freePillClasses = 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20';
 
 // ============================================================================
 // Component
@@ -84,12 +84,7 @@ export function PlanBadge() {
 
   // Loading state: skeleton pill
   if (isLoading) {
-    return (
-      <div
-        className="w-28 h-7 rounded-full animate-pulse bg-muted"
-        aria-hidden="true"
-      />
-    );
+    return <div className="w-28 h-7 rounded-full animate-pulse bg-muted" aria-hidden="true" />;
   }
 
   // Error or no data: render nothing (graceful degradation)
@@ -104,15 +99,11 @@ export function PlanBadge() {
   // Credits are stored in cents in currentBalance
   const balanceCents = billing.usage?.currentBalance ?? 0;
   // totalLimit is in tokens; map to cents via the same 1:100 ratio used in the dashboard
-  const allocatedCents = billing.usage?.totalLimit
-    ? Math.round(billing.usage.totalLimit / 100)
-    : 0;
+  const allocatedCents = billing.usage?.totalLimit ? Math.round(billing.usage.totalLimit / 100) : 0;
 
   // Compute remaining percentage (0–100, where 100 = full balance remaining)
   const pctRemaining =
-    allocatedCents > 0
-      ? Math.min(100, Math.round((balanceCents / allocatedCents) * 100))
-      : 0;
+    allocatedCents > 0 ? Math.min(100, Math.round((balanceCents / allocatedCents) * 100)) : 0;
 
   const colorVariant = getColorVariant(pctRemaining);
   const resetDate = formatResetDate(billing.current_period_end);
@@ -127,7 +118,9 @@ export function PlanBadge() {
     : `${formatCents(balanceCents)} credits remaining · Resets ${resetDate}`;
 
   // ---- Pill label ----
-  const pillLabel = isFree ? `${planLabel} · Upgrade →` : `${planLabel} · ${formatCents(balanceCents)} left`;
+  const pillLabel = isFree
+    ? `${planLabel} · Upgrade →`
+    : `${planLabel} · ${formatCents(balanceCents)} left`;
 
   return (
     <TooltipProvider delayDuration={300}>
