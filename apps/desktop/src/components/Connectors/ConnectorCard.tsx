@@ -1,4 +1,5 @@
-import { Check, Loader2, MoreHorizontal, Plus, Settings } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Loader2, MoreHorizontal, Plus, Puzzle, Settings } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
 import type { ConnectorDef } from './connectorDefinitions';
 
@@ -21,31 +22,26 @@ export function ConnectorCard({
   onDisconnect,
   onConfigure,
 }: ConnectorCardProps) {
+  const [logoFailed, setLogoFailed] = useState(false);
+
   return (
     <div
       className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3
         transition-colors hover:bg-muted/50"
     >
-      {/* Icon */}
-      {connector.iconUrl ? (
-        <img
-          src={connector.iconUrl}
-          alt={connector.name}
-          className="h-6 w-6 shrink-0 rounded"
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-            const sibling = e.currentTarget.nextElementSibling;
-            if (sibling) sibling.classList.remove('hidden');
-          }}
-        />
-      ) : null}
-      <span
-        className={`text-2xl leading-none shrink-0${connector.iconUrl ? ' hidden' : ''}`}
-        role="img"
-        aria-label={connector.name}
-      >
-        {connector.icon}
-      </span>
+      {/* Logo/Icon */}
+      <div className="shrink-0 flex items-center justify-center h-8 w-8">
+        {connector.iconUrl && !logoFailed ? (
+          <img
+            src={connector.iconUrl}
+            alt={connector.name}
+            className="h-8 w-8 rounded"
+            onError={() => setLogoFailed(true)}
+          />
+        ) : (
+          <Puzzle className="h-5 w-5 text-muted-foreground" />
+        )}
+      </div>
 
       {/* Name + description */}
       <div className="flex-1 min-w-0">
