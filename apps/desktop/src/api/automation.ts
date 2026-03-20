@@ -224,6 +224,46 @@ export async function sendKeys(
   }
 }
 
+/**
+ * Type text with forced focus — uses automation_type which always focuses the
+ * target element before typing (unlike sendKeys/automation_send_keys which
+ * optionally focuses based on the `focus` flag).
+ */
+export async function typeTextForced(
+  text: string,
+  options: { elementId?: string; x?: number; y?: number } = {},
+): Promise<void> {
+  try {
+    if (text === undefined || text === null) {
+      throw new Error('text cannot be null or undefined');
+    }
+    validateCoordinates(options.x, options.y);
+    await invokeWithTimeout('automation_type', {
+      request: {
+        text,
+        elementId: options.elementId,
+        x: options.x,
+        y: options.y,
+      },
+    });
+  } catch (error) {
+    throw new Error(`Failed to type text (forced): ${error}`);
+  }
+}
+
+/**
+ * Get the text value of an automation element by its ID.
+ * Wires to automation_get_text (alias for automation_get_value).
+ */
+export async function getElementText(elementId: string): Promise<string> {
+  try {
+    validateNonEmpty(elementId, 'elementId');
+    return await invokeWithTimeout<string>('automation_get_text', { elementId });
+  } catch (error) {
+    throw new Error(`Failed to get element text for ${elementId}: ${error}`);
+  }
+}
+
 export async function sendHotkey(key: number, modifiers: string[]): Promise<void> {
   try {
     if (!Number.isInteger(key) || key < 0) {
@@ -341,5 +381,26 @@ export async function replayOverlayEvents(limit?: number): Promise<void> {
     await invokeWithTimeout('overlay_replay_recent', { limit });
   } catch (error) {
     throw new Error(`Failed to replay overlay events: ${error}`);
+  }
+}
+
+export async function dragDrop(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  durationMs: number = 500,
+): Promise<void> {
+  try {
+    validateCoordinates(fromX, fromY);
+    validateCoordinates(toX, toY);
+    if (!Number.isFinite(durationMs) || durationMs < 0) {
+      throw new Error(`Invalid durationMs: ${durationMs}`);
+    }
+    await invokeWithTimeout('automation_drag_drop', {
+      request: { fromX, fromY, toX, toY, durationMs },
+    });
+  } catch (error) {
+    throw new Error(`Failed to perform drag and drop: ${error}`);
   }
 }

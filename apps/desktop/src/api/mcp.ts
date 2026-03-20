@@ -794,6 +794,92 @@ export async function mcpExtensionSelectPackage(): Promise<string | null> {
   }
 }
 
+export async function mcpExtensionValidate(filePath: string): Promise<McpExtensionPackageInfo> {
+  try {
+    validateNonEmpty(filePath, 'file path');
+    return await invokeWithTimeout<McpExtensionPackageInfo>('extension_validate', { filePath });
+  } catch (error) {
+    throw new Error(`Failed to validate extension package '${filePath}': ${error}`);
+  }
+}
+
+export async function mcpExtensionListByStatus(status: string): Promise<McpExtensionInfo[]> {
+  try {
+    validateNonEmpty(status, 'status');
+    return await invokeWithTimeout<McpExtensionInfo[]>('extension_list_by_status', { status });
+  } catch (error) {
+    throw new Error(`Failed to list extensions by status '${status}': ${error}`);
+  }
+}
+
+export async function mcpExtensionStartAll(): Promise<string> {
+  try {
+    return await invokeWithTimeout<string>('extension_start_all');
+  } catch (error) {
+    throw new Error(`Failed to start all extensions: ${error}`);
+  }
+}
+
+export async function mcpExtensionStopAll(): Promise<string> {
+  try {
+    return await invokeWithTimeout<string>('extension_stop_all');
+  } catch (error) {
+    throw new Error(`Failed to stop all extensions: ${error}`);
+  }
+}
+
+export async function mcpExtensionGetDirectory(): Promise<string> {
+  try {
+    return await invokeWithTimeout<string>('extension_get_directory');
+  } catch (error) {
+    throw new Error(`Failed to get extensions directory: ${error}`);
+  }
+}
+
+export async function mcpExtensionGetConfig(extensionId: string): Promise<Record<string, unknown>> {
+  try {
+    validateNonEmpty(extensionId, 'extension ID');
+    return await invokeWithTimeout<Record<string, unknown>>('extension_get_config', {
+      extensionId,
+    });
+  } catch (error) {
+    throw new Error(`Failed to get config for extension '${extensionId}': ${error}`);
+  }
+}
+
+export async function mcpExtensionSetConfig(
+  extensionId: string,
+  config: Record<string, unknown>,
+): Promise<string> {
+  try {
+    validateNonEmpty(extensionId, 'extension ID');
+    return await invokeWithTimeout<string>('extension_set_config', { extensionId, config });
+  } catch (error) {
+    throw new Error(`Failed to set config for extension '${extensionId}': ${error}`);
+  }
+}
+
+export interface ConnectorManifest {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  icon: string;
+  authType: string;
+  provider: string | null;
+  envKeys: string[];
+  npmPackage: string;
+  docsUrl: string | null;
+}
+
+export async function mcpGetConnectorManifests(): Promise<ConnectorManifest[]> {
+  try {
+    return await invokeWithTimeout<ConnectorManifest[]>('get_connector_manifests');
+  } catch (error) {
+    throw new Error(`Failed to get connector manifests: ${error}`);
+  }
+}
+
 /**
  * Get the status of all OAuth providers.
  *
@@ -1099,6 +1185,41 @@ export class McpClient {
 
   static async selectExtensionPackage(): Promise<string | null> {
     return mcpExtensionSelectPackage();
+  }
+
+  static async validateExtensionPackage(filePath: string): Promise<McpExtensionPackageInfo> {
+    return mcpExtensionValidate(filePath);
+  }
+
+  static async listExtensionsByStatus(status: string): Promise<McpExtensionInfo[]> {
+    return mcpExtensionListByStatus(status);
+  }
+
+  static async startAllExtensions(): Promise<string> {
+    return mcpExtensionStartAll();
+  }
+
+  static async stopAllExtensions(): Promise<string> {
+    return mcpExtensionStopAll();
+  }
+
+  static async getExtensionsDirectory(): Promise<string> {
+    return mcpExtensionGetDirectory();
+  }
+
+  static async getExtensionConfig(extensionId: string): Promise<Record<string, unknown>> {
+    return mcpExtensionGetConfig(extensionId);
+  }
+
+  static async setExtensionConfig(
+    extensionId: string,
+    config: Record<string, unknown>,
+  ): Promise<string> {
+    return mcpExtensionSetConfig(extensionId, config);
+  }
+
+  static async getConnectorManifests(): Promise<ConnectorManifest[]> {
+    return mcpGetConnectorManifests();
   }
 
   /**

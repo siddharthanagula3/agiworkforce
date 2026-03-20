@@ -1,4 +1,4 @@
-import { invoke } from '../lib/tauri-mock';
+import { featureFlagGetAll } from '../api/analytics';
 import { FeatureFlag, FeatureFlagConfig, UserProperties } from '../types/analytics';
 import { analytics } from './analytics';
 
@@ -330,7 +330,7 @@ class FeatureFlagsService {
 
   private async fetchRemoteFlags() {
     try {
-      const remoteFlagsResult = await invoke<unknown>('feature_flag_get_all');
+      const remoteFlagsResult = (await featureFlagGetAll()) as unknown;
       if (
         !remoteFlagsResult ||
         typeof remoteFlagsResult !== 'object' ||

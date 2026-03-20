@@ -618,20 +618,14 @@ pub async fn scheduler_add_job(
 
 /// Remove a scheduled job by ID
 ///
-/// Accepts either `job_id` or `id` parameter for compatibility with both stores.
-///
 /// # Returns
 /// `true` if the job was found and removed, `false` otherwise
 #[tauri::command]
 pub async fn scheduler_remove_job(
-    job_id: Option<String>,
-    id: Option<String>,
+    job_id: String,
     state: State<'_, SchedulerState>,
 ) -> Result<bool> {
-    let resolved_id = job_id
-        .or(id)
-        .ok_or_else(|| Error::Generic("Either job_id or id must be provided".to_string()))?;
-    state.scheduler.remove_job(&resolved_id)
+    state.scheduler.remove_job(&job_id)
 }
 
 /// List all scheduled jobs
@@ -645,56 +639,38 @@ pub async fn scheduler_list_jobs(state: State<'_, SchedulerState>) -> Result<Vec
 
 /// Pause a scheduled job
 ///
-/// Accepts either `job_id` or `id` parameter for compatibility with both stores.
-///
 /// # Returns
 /// `true` if the job was found and paused, `false` if not found or already paused
 #[tauri::command]
 pub async fn scheduler_pause_job(
-    job_id: Option<String>,
-    id: Option<String>,
+    job_id: String,
     state: State<'_, SchedulerState>,
 ) -> Result<bool> {
-    let resolved_id = job_id
-        .or(id)
-        .ok_or_else(|| Error::Generic("Either job_id or id must be provided".to_string()))?;
-    state.scheduler.pause_job(&resolved_id)
+    state.scheduler.pause_job(&job_id)
 }
 
 /// Resume a paused scheduled job
-///
-/// Accepts either `job_id` or `id` parameter for compatibility with both stores.
 ///
 /// # Returns
 /// `true` if the job was found and resumed, `false` if not found or not paused
 #[tauri::command]
 pub async fn scheduler_resume_job(
-    job_id: Option<String>,
-    id: Option<String>,
+    job_id: String,
     state: State<'_, SchedulerState>,
 ) -> Result<bool> {
-    let resolved_id = job_id
-        .or(id)
-        .ok_or_else(|| Error::Generic("Either job_id or id must be provided".to_string()))?;
-    state.scheduler.resume_job(&resolved_id)
+    state.scheduler.resume_job(&job_id)
 }
 
 /// Get a specific scheduled job by ID
-///
-/// Accepts either `job_id` or `id` parameter for compatibility with both stores.
 ///
 /// # Returns
 /// The job if found, `None` otherwise
 #[tauri::command]
 pub async fn scheduler_get_job(
-    job_id: Option<String>,
-    id: Option<String>,
+    job_id: String,
     state: State<'_, SchedulerState>,
 ) -> Result<Option<ScheduledJob>> {
-    let resolved_id = job_id
-        .or(id)
-        .ok_or_else(|| Error::Generic("Either job_id or id must be provided".to_string()))?;
-    state.scheduler.get_job(&resolved_id)
+    state.scheduler.get_job(&job_id)
 }
 
 /// Serializable next run entry for frontend consumption

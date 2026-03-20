@@ -5,16 +5,36 @@ import {
   automationOcr,
   automationScreenshot,
   clickAutomation,
+  dragDrop as dragDropApi,
   emitOverlayClick,
   emitOverlayRegion,
   emitOverlayType,
   findAutomationElements,
+  focusWindow as focusWindowApi,
+  getClipboardText,
+  getElementText,
   listAutomationWindows,
   replayOverlayEvents,
   sendHotkey,
   sendKeys,
+  setClipboardText,
+  typeTextForced as typeTextForcedApi,
 } from '../api/automation';
-import { invoke } from '../lib/tauri-mock';
+import {
+  deleteAutomationScript,
+  executeAutomationScript,
+  findElementBySelector,
+  generateCode,
+  generateSelector,
+  getElementTree,
+  inspectElementAt,
+  inspectElementById,
+  listAutomationScripts,
+  saveAutomationScript,
+  saveRecordingAsScriptBridge,
+  startRecording,
+  stopRecording,
+} from '../api/automationEnhanced';
 import type {
   AutomationClickRequest,
   AutomationElementInfo,
@@ -28,6 +48,7 @@ import type {
 import type {
   AutomationScript,
   DetailedElementInfo,
+  ElementSelector,
   ExecutionHistory,
   ExecutionResult,
   InspectorState,
@@ -122,6 +143,18 @@ interface AutomationState {
   handleShortcutAction: (action: string) => void;
   handleShortcutRegistered: (shortcut: Shortcut) => void;
   handleShortcutUnregistered: (shortcutId: string) => void;
+
+  // Focus window (wired to automation.rs automation_focus_window)
+  focusWindow: (elementId: string) => Promise<void>;
+
+  // Force-focus type (wired to automation.rs automation_type — focuses element before typing)
+  typeTextForced: (
+    text: string,
+    options?: { elementId?: string; x?: number; y?: number },
+  ) => Promise<void>;
+
+  // Get element text value (wired to automation.rs automation_get_text)
+  getElementText: (elementId: string) => Promise<string | null>;
 
   // Clipboard operations (wired to automation.rs)
   clipboardGet: () => Promise<string | null>;
@@ -361,16 +394,10 @@ export const useAutomationStore = create<AutomationState>()(
         },
 
         startRecording: async () => {
-          // BUG-003 fix: call backend to start recording and store the returned recordingId
           try {
-            const result = await invoke<{ recordingId: string }>('automation_record_start');
-            const recordingSession: RecordingSession = {
-              sessionId: result.recordingId,
-              startTime: Date.now(),
-              isRecording: true,
-            };
+            const session = await startRecording();
             set(
-              { isRecording: true, currentRecording: recordingSession },
+              { isRecording: true, currentRecording: session },
               undefined,
               'automation/startRecording',
             );
@@ -382,31 +409,39 @@ export const useAutomationStore = create<AutomationState>()(
         },
 
         stopRecording: async () => {
-          // BUG-003 fix: call backend to stop recording before clearing state
-          const { currentRecording } = get();
           try {
-            await invoke('automation_record_stop', { recordingId: currentRecording?.sessionId });
+            const recording = await stopRecording();
+            set(
+              (state) => {
+                state.isRecording = false;
+                state.currentRecording = null;
+                state.recordings.unshift(recording);
+              },
+              undefined,
+              'automation/stopRecording',
+            );
+            return recording;
           } catch (error) {
             console.error('[automationStore] Failed to stop recording on backend:', error);
             // Continue so UI state is still cleared even if backend call fails
+            set(
+              { isRecording: false, currentRecording: null },
+              undefined,
+              'automation/stopRecording/fallback',
+            );
+            return null;
           }
-          set(
-            { isRecording: false, currentRecording: null },
-            undefined,
-            'automation/stopRecording',
-          );
-          return null;
         },
 
         saveRecordingAsScript: async (recording, name, description, tags) => {
           try {
-            const script = await invoke<AutomationScript>('save_recording_as_script', {
-              recordingId: recording.id,
+            const script = await saveRecordingAsScriptBridge(
+              recording.id,
               name,
               description,
               tags,
-              actions: recording.actions,
-            });
+              recording.actions,
+            );
             set(
               (state) => {
                 state.scripts.unshift(script);
@@ -441,7 +476,7 @@ export const useAutomationStore = create<AutomationState>()(
         loadScripts: async () => {
           set({ loadingScripts: true, error: null }, undefined, 'automation/loadScripts/start');
           try {
-            const scripts = await invoke<AutomationScript[]>('list_automation_scripts');
+            const scripts = await listAutomationScripts();
             set({ scripts, loadingScripts: false }, undefined, 'automation/loadScripts/success');
           } catch (error) {
             console.error('Failed to load scripts:', error);
@@ -452,7 +487,7 @@ export const useAutomationStore = create<AutomationState>()(
 
         saveScript: async (script) => {
           try {
-            await invoke('save_automation_script', { script });
+            await saveAutomationScript(script);
             set(
               (state) => {
                 const idx = state.scripts.findIndex((s) => s.id === script.id);
@@ -485,7 +520,7 @@ export const useAutomationStore = create<AutomationState>()(
 
         deleteScript: async (scriptId) => {
           try {
-            await invoke('delete_automation_script', { scriptId });
+            await deleteAutomationScript(scriptId);
           } catch (error) {
             console.error('Failed to delete script from backend:', error);
             // Continue with local deletion even if backend fails
@@ -516,10 +551,7 @@ export const useAutomationStore = create<AutomationState>()(
             'automation/executeScript/start',
           );
           try {
-            const result = await invoke<ExecutionResult>('execute_automation_script', {
-              scriptId: script.id,
-              script,
-            });
+            const result = await executeAutomationScript(script.id, script);
             const historyEntry: ExecutionHistory = {
               id: `exec_${Date.now()}`,
               scriptId: script.id,
@@ -596,14 +628,16 @@ export const useAutomationStore = create<AutomationState>()(
 
         inspectElementAt: async (x, y) => {
           try {
-            const element = await invoke<DetailedElementInfo>('inspect_element_at', { x, y });
-            set(
-              (state) => {
-                state.inspector.currentElement = element;
-              },
-              undefined,
-              'automation/inspectElementAt/success',
-            );
+            const element = await inspectElementAt(x, y);
+            if (element) {
+              set(
+                (state) => {
+                  state.inspector.currentElement = element;
+                },
+                undefined,
+                'automation/inspectElementAt/success',
+              );
+            }
           } catch (error) {
             console.error('Failed to inspect element at coordinates:', error);
             set({ error: String(error) }, undefined, 'automation/inspectElementAt/error');
@@ -686,12 +720,70 @@ export const useAutomationStore = create<AutomationState>()(
         },
 
         // ====================================================================
+        // Focus window
+        // ====================================================================
+
+        focusWindow: async (elementId) => {
+          set({ runningAction: true, error: null }, undefined, 'automation/focusWindow/start');
+          try {
+            await focusWindowApi(elementId);
+            set({ runningAction: false }, undefined, 'automation/focusWindow/success');
+          } catch (error) {
+            console.error('Automation focus window failed:', error);
+            set(
+              { error: String(error), runningAction: false },
+              undefined,
+              'automation/focusWindow/error',
+            );
+            throw error;
+          }
+        },
+
+        // ====================================================================
+        // Force-focus type (automation_type — focuses element before typing)
+        // ====================================================================
+
+        typeTextForced: async (text, options) => {
+          set({ runningAction: true, error: null }, undefined, 'automation/typeTextForced/start');
+          try {
+            await typeTextForcedApi(text, {
+              elementId: options?.elementId,
+              x: options?.x,
+              y: options?.y,
+            });
+            set({ runningAction: false }, undefined, 'automation/typeTextForced/success');
+          } catch (error) {
+            console.error('Automation forced type failed:', error);
+            set(
+              { error: String(error), runningAction: false },
+              undefined,
+              'automation/typeTextForced/error',
+            );
+            throw error;
+          }
+        },
+
+        // ====================================================================
+        // Get element text value
+        // ====================================================================
+
+        getElementText: async (elementId) => {
+          try {
+            return await getElementText(elementId);
+          } catch (error) {
+            console.error('Failed to get element text:', error);
+            set({ error: String(error) }, undefined, 'automation/getElementText/error');
+            return null;
+          }
+        },
+
+        // ====================================================================
         // Clipboard operations
         // ====================================================================
 
         clipboardGet: async () => {
           try {
-            return await invoke<string>('automation_clipboard_get');
+            return await getClipboardText();
           } catch (error) {
             console.error('Failed to get clipboard:', error);
             set({ error: String(error) }, undefined, 'automation/clipboardGet/error');
@@ -701,7 +793,7 @@ export const useAutomationStore = create<AutomationState>()(
 
         clipboardSet: async (text) => {
           try {
-            await invoke('automation_clipboard_set', { text });
+            await setClipboardText(text);
             return true;
           } catch (error) {
             console.error('Failed to set clipboard:', error);
@@ -717,9 +809,7 @@ export const useAutomationStore = create<AutomationState>()(
         dragDrop: async (fromX, fromY, toX, toY, durationMs = 500) => {
           set({ runningAction: true, error: null }, undefined, 'automation/dragDrop/start');
           try {
-            await invoke('automation_drag_drop', {
-              request: { fromX, fromY, toX, toY, durationMs },
-            });
+            await dragDropApi(fromX, fromY, toX, toY, durationMs);
             set({ runningAction: false }, undefined, 'automation/dragDrop/success');
             return true;
           } catch (error) {
@@ -737,13 +827,21 @@ export const useAutomationStore = create<AutomationState>()(
         // Enhanced automation commands
         // ====================================================================
 
-        generateCode: async (recordingId, language, framework) => {
+        generateCode: async (_recordingId, language, _framework) => {
           try {
-            return await invoke<string>('automation_generate_code', {
-              recordingId,
-              language,
-              framework,
-            });
+            // generateCode takes a script + language; for recording-based code gen
+            // the store passes a recordingId but the API needs a script object.
+            // Use the selected script if available, otherwise return null.
+            const { selectedScript } = get();
+            if (!selectedScript) {
+              console.warn('No selected script for code generation');
+              return null;
+            }
+            const result = await generateCode(
+              selectedScript,
+              language as 'python' | 'rust' | 'javascript' | 'typescript',
+            );
+            return result.code;
           } catch (error) {
             console.error('Failed to generate code from recording:', error);
             set({ error: String(error) }, undefined, 'automation/generateCode/error');
@@ -753,10 +851,11 @@ export const useAutomationStore = create<AutomationState>()(
 
         generateSelector: async (elementId) => {
           try {
-            return await invoke<Array<{ selector: string; type: string }>>(
-              'automation_generate_selector',
-              { elementId },
-            );
+            const selectors = await generateSelector(elementId);
+            return selectors.map((s) => ({
+              selector: s.value,
+              type: s.selectorType,
+            }));
           } catch (error) {
             console.error('Failed to generate selector:', error);
             set({ error: String(error) }, undefined, 'automation/generateSelector/error');
@@ -764,12 +863,13 @@ export const useAutomationStore = create<AutomationState>()(
           }
         },
 
-        getElementTree: async (canvasId, depth) => {
+        getElementTree: async (canvasId, _depth) => {
           try {
-            return await invoke<unknown[]>('automation_get_element_tree', {
-              canvasId,
-              depth,
-            });
+            const tree = await getElementTree(canvasId);
+            const result: unknown[] = [];
+            if (tree.parent) result.push(tree.parent);
+            result.push(...tree.children);
+            return result;
           } catch (error) {
             console.error('Failed to get element tree:', error);
             set({ error: String(error) }, undefined, 'automation/getElementTree/error');
@@ -779,10 +879,11 @@ export const useAutomationStore = create<AutomationState>()(
 
         findElementBySelector: async (selectorType, selectorValue) => {
           try {
-            return await invoke<string | null>('automation_find_element_by_selector', {
-              selectorType,
-              selectorValue,
-            });
+            const selector: ElementSelector = {
+              selectorType: selectorType as ElementSelector['selectorType'],
+              value: selectorValue,
+            };
+            return await findElementBySelector(selector);
           } catch (error) {
             console.error('Failed to find element by selector:', error);
             set({ error: String(error) }, undefined, 'automation/findElementBySelector/error');
@@ -792,9 +893,7 @@ export const useAutomationStore = create<AutomationState>()(
 
         inspectElementById: async (elementId) => {
           try {
-            return await invoke<DetailedElementInfo>('automation_inspect_element_by_id', {
-              elementId,
-            });
+            return await inspectElementById(elementId);
           } catch (error) {
             console.error('Failed to inspect element by ID:', error);
             set({ error: String(error) }, undefined, 'automation/inspectElementById/error');

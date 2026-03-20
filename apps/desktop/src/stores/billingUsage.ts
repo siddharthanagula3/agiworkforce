@@ -33,6 +33,22 @@ import { analytics } from '../services/analytics';
 import { ErrorSeverity, errorTracking } from '../services/errorTracking';
 import { featureFlags } from '../services/featureFlags';
 import { performanceMonitor } from '../services/performance';
+import {
+  analyticsDeleteAllData,
+  analyticsGetUsageStats,
+  analyticsGetFeatureUsage,
+  analyticsCalculateRoi,
+  analyticsGetProcessMetrics,
+  analyticsGetUserMetrics,
+  analyticsGetToolMetrics,
+  analyticsGetMetricTrends,
+  analyticsExportReport,
+  metricsIncrementAutomations,
+  metricsIncrementGoals,
+  metricsSetMcpServers,
+  metricsSetCacheHitRate,
+  trackWorkflowView as apiTrackWorkflowView,
+} from '../api/analytics';
 import type {
   AnalyticsConfig,
   AppMetrics,
@@ -46,6 +62,29 @@ import type { AllTimeStats, ChartDataPoint, TopEmployee } from '../types/roi';
 // ============================================================================
 // Types
 // ============================================================================
+
+// Subscription/Billing Types (matches Rust PricingPlan struct in subscription.rs)
+export interface RustPricingPlan {
+  id: string;
+  tier: string;
+  name: string;
+  display_name: string;
+  description: string;
+  price_monthly_usd: number;
+  price_annual_usd: number;
+  features: string[];
+  limits: Record<string, unknown>;
+  is_popular: boolean;
+  is_available: boolean;
+}
+
+export interface RustSubscriptionInfo {
+  stripe_subscription_id: string;
+  plan_name: string;
+  status: string;
+  current_period_start?: number;
+  current_period_end?: number;
+}
 
 // Cost Types
 interface CostFilters {
@@ -106,6 +145,12 @@ interface BillingUsageState {
   loadingCostAnalytics: boolean;
   costError: string | null;
 
+  // --- Subscription State ---
+  pricingPlans: RustPricingPlan[];
+  currentPlan: RustPricingPlan | null;
+  isLoadingPlans: boolean;
+  subscriptionError: string | null;
+
   // --- Usage State ---
   usageStats: UsageStats | null;
   usageStatsLoading: boolean;
@@ -149,6 +194,17 @@ interface BillingUsageActions {
   loadCostOverview: () => Promise<void>;
   loadCostAnalytics: (overrides?: Partial<CostFilters>) => Promise<void>;
   setMonthlyBudget: (amount?: number) => Promise<void>;
+
+  // --- Subscription Actions (wired to Rust subscription.rs) ---
+  fetchPricingPlans: () => Promise<RustPricingPlan[]>;
+  fetchCurrentPlan: (userId: string) => Promise<RustPricingPlan | null>;
+  subscribeToPlan: (
+    userId: string,
+    planId: string,
+    billingInterval?: string,
+  ) => Promise<RustSubscriptionInfo | null>;
+  upgradePlan: (userId: string, newPlanId: string) => Promise<RustSubscriptionInfo | null>;
+  cancelPlanSubscription: (userId: string, subscriptionId: string) => Promise<boolean>;
 
   // --- Usage Actions ---
   fetchUsage: (customerId: string, periodStart: number, periodEnd: number) => Promise<void>;
@@ -200,6 +256,13 @@ interface BillingUsageActions {
   deleteAllAnalyticsData: () => Promise<void>;
   isFeatureEnabled: (flagName: string) => boolean;
   trackFeatureUsage: (flagName: string) => void;
+
+  // --- Analytics Metric Actions (wired to Rust analytics.rs) ---
+  incrementAutomationsMetric: () => Promise<void>;
+  incrementGoalsMetric: () => Promise<void>;
+  setMcpServersMetric: (count: number) => Promise<void>;
+  setCacheHitRateMetric: (rate: number) => Promise<void>;
+  trackWorkflowView: (workflowId: string) => Promise<void>;
 
   // --- ROI Actions ---
   calculateROI: (startDate: number, endDate: number) => Promise<AllTimeStats>;
@@ -280,6 +343,12 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           loadingCostOverview: false,
           loadingCostAnalytics: false,
           costError: null,
+
+          // Subscription State
+          pricingPlans: [],
+          currentPlan: null,
+          isLoadingPlans: false,
+          subscriptionError: null,
 
           // Usage State
           usageStats: null,
@@ -416,6 +485,86 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
               console.error('Failed to update monthly budget:', error);
               set({ costError: String(error) });
               throw error;
+            }
+          },
+
+          // ----------------------------------------------------------------
+          // Subscription Actions (wired to Rust subscription.rs)
+          // ----------------------------------------------------------------
+
+          fetchPricingPlans: async () => {
+            set({ isLoadingPlans: true, subscriptionError: null });
+            try {
+              const plans = await invoke<RustPricingPlan[]>('get_pricing_plans');
+              set({ pricingPlans: plans, isLoadingPlans: false });
+              return plans;
+            } catch (error) {
+              console.error('Failed to fetch pricing plans:', error);
+              set({ isLoadingPlans: false, subscriptionError: String(error) });
+              return [];
+            }
+          },
+
+          fetchCurrentPlan: async (userId: string) => {
+            set({ isLoadingPlans: true, subscriptionError: null });
+            try {
+              const plan = await invoke<RustPricingPlan>('get_current_plan', { userId });
+              set({ currentPlan: plan, isLoadingPlans: false });
+              return plan;
+            } catch (error) {
+              console.error('Failed to fetch current plan:', error);
+              set({ isLoadingPlans: false, subscriptionError: String(error) });
+              return null;
+            }
+          },
+
+          subscribeToPlan: async (userId: string, planId: string, billingInterval?: string) => {
+            set({ isLoadingPlans: true, subscriptionError: null });
+            try {
+              const sub = await invoke<RustSubscriptionInfo>('subscribe_to_plan', {
+                userId,
+                planId,
+                billingInterval: billingInterval ?? null,
+              });
+              set({ isLoadingPlans: false });
+              // Refresh current plan after subscribing
+              await get().fetchCurrentPlan(userId);
+              return sub;
+            } catch (error) {
+              console.error('Failed to subscribe to plan:', error);
+              set({ isLoadingPlans: false, subscriptionError: String(error) });
+              return null;
+            }
+          },
+
+          upgradePlan: async (userId: string, newPlanId: string) => {
+            set({ isLoadingPlans: true, subscriptionError: null });
+            try {
+              const sub = await invoke<RustSubscriptionInfo>('upgrade_plan', {
+                userId,
+                newPlanId,
+              });
+              set({ isLoadingPlans: false });
+              // Refresh current plan after upgrade
+              await get().fetchCurrentPlan(userId);
+              return sub;
+            } catch (error) {
+              console.error('Failed to upgrade plan:', error);
+              set({ isLoadingPlans: false, subscriptionError: String(error) });
+              return null;
+            }
+          },
+
+          cancelPlanSubscription: async (userId: string, subscriptionId: string) => {
+            set({ isLoadingPlans: true, subscriptionError: null });
+            try {
+              await invoke('cancel_subscription', { userId, subscriptionId });
+              set({ isLoadingPlans: false, currentPlan: null });
+              return true;
+            } catch (error) {
+              console.error('Failed to cancel subscription:', error);
+              set({ isLoadingPlans: false, subscriptionError: String(error) });
+              return false;
             }
           },
 
@@ -1117,7 +1266,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           loadAnalyticsUsageStats: async () => {
             set({ isLoadingStats: true });
             try {
-              const stats = await invoke<AnalyticsUsageStats>('analytics_get_usage_stats');
+              const stats = (await analyticsGetUsageStats()) as unknown as AnalyticsUsageStats;
               set({ analyticsUsageStats: stats });
             } catch (error) {
               console.error('Failed to load usage stats:', error);
@@ -1135,7 +1284,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           loadFeatureUsage: async () => {
             try {
-              const usage = await invoke<FeatureUsageStats[]>('analytics_get_feature_usage');
+              const usage = (await analyticsGetFeatureUsage()) as unknown as FeatureUsageStats[];
               // STR-006 fix: Cap featureUsage at 500 entries to prevent unbounded growth
               const cappedUsage = Array.isArray(usage) ? usage.slice(0, 500) : [];
               set({ featureUsage: cappedUsage });
@@ -1206,7 +1355,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           deleteAllAnalyticsData: async () => {
             try {
               await analytics.deleteAllData();
-              await invoke('analytics_delete_all_data');
+              await analyticsDeleteAllData();
 
               set({
                 systemMetrics: null,
@@ -1236,16 +1385,60 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
           },
 
           // ----------------------------------------------------------------
+          // Analytics Metric Actions (wired to Rust analytics.rs)
+          // ----------------------------------------------------------------
+
+          incrementAutomationsMetric: async () => {
+            try {
+              await metricsIncrementAutomations();
+            } catch (error) {
+              console.error('Failed to increment automations metric:', error);
+            }
+          },
+
+          incrementGoalsMetric: async () => {
+            try {
+              await metricsIncrementGoals();
+            } catch (error) {
+              console.error('Failed to increment goals metric:', error);
+            }
+          },
+
+          setMcpServersMetric: async (count: number) => {
+            try {
+              await metricsSetMcpServers(count);
+            } catch (error) {
+              console.error('Failed to set MCP servers metric:', error);
+            }
+          },
+
+          setCacheHitRateMetric: async (rate: number) => {
+            try {
+              await metricsSetCacheHitRate(rate);
+            } catch (error) {
+              console.error('Failed to set cache hit rate metric:', error);
+            }
+          },
+
+          trackWorkflowView: async (workflowId: string) => {
+            try {
+              await apiTrackWorkflowView(workflowId);
+            } catch (error) {
+              console.error('Failed to track workflow view:', error);
+            }
+          },
+
+          // ----------------------------------------------------------------
           // ROI Actions
           // ----------------------------------------------------------------
 
           calculateROI: async (startDate: number, endDate: number) => {
             set({ isLoadingROI: true });
             try {
-              const roi = await invoke<AllTimeStats>('analytics_calculate_roi', {
+              const roi = (await analyticsCalculateRoi(
                 startDate,
                 endDate,
-              });
+              )) as unknown as AllTimeStats;
               set({ roiReport: roi });
               return roi;
             } catch (error) {
@@ -1265,10 +1458,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           loadProcessMetrics: async (startDate: number, endDate: number) => {
             try {
-              const metrics = await invoke<ChartDataPoint[]>('analytics_get_process_metrics', {
+              const metrics = (await analyticsGetProcessMetrics(
                 startDate,
                 endDate,
-              });
+              )) as unknown as ChartDataPoint[];
               set({ processMetrics: metrics || [] });
               return metrics || [];
             } catch (error) {
@@ -1279,10 +1472,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           loadUserMetrics: async (startDate: number, endDate: number) => {
             try {
-              const metrics = await invoke<TopEmployee[]>('analytics_get_user_metrics', {
+              const metrics = (await analyticsGetUserMetrics(
                 startDate,
                 endDate,
-              });
+              )) as unknown as TopEmployee[];
               set({ userMetrics: metrics || [] });
               return metrics || [];
             } catch (error) {
@@ -1293,10 +1486,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           loadToolMetrics: async (startDate: number, endDate: number) => {
             try {
-              const metrics = await invoke<ChartDataPoint[]>('analytics_get_tool_metrics', {
+              const metrics = (await analyticsGetToolMetrics(
                 startDate,
                 endDate,
-              });
+              )) as unknown as ChartDataPoint[];
               set({ toolMetrics: metrics || [] });
               return metrics || [];
             } catch (error) {
@@ -1307,10 +1500,10 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           loadTrends: async (metric: string, days: number) => {
             try {
-              const trendsData = await invoke<ChartDataPoint[]>('analytics_get_metric_trends', {
+              const trendsData = (await analyticsGetMetricTrends(
                 metric,
                 days,
-              });
+              )) as unknown as ChartDataPoint[];
               // STR-007 fix: Cap trends dictionary at 20 metrics to prevent unbounded growth
               // Each metric can have up to 365 data points, so 20 metrics × 365 = 7,300 points max
               const MAX_TREND_METRICS = 20;
@@ -1334,11 +1527,7 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
 
           exportReport: async (format: string, startDate: number, endDate: number) => {
             try {
-              const report = await invoke<string>('analytics_export_report', {
-                format,
-                startDate,
-                endDate,
-              });
+              const report = await analyticsExportReport(format, startDate, endDate);
 
               const blob = new Blob([report as string], {
                 type:

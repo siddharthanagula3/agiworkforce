@@ -9,7 +9,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke as tauriInvoke } from '../lib/tauri-mock';
+import {
+  voiceTtsSpeak,
+  voiceTtsSpeakWithBargeIn,
+  voiceTtsStop,
+  voiceTtsIsPlaying,
+} from '../api/voice';
 
 function stripMarkdown(text: string): string {
   return (
@@ -41,7 +46,13 @@ export interface UseTTSReturn {
   isSupported: boolean;
   speak: (text: string) => void;
   speakNative: (text: string) => Promise<void>;
+  /** Speak with barge-in support (interrupts if user starts talking) */
+  speakWithBargeIn: (text: string) => Promise<void>;
   stop: () => void;
+  /** Stop backend TTS playback */
+  stopNative: () => Promise<void>;
+  /** Check if backend TTS is currently playing */
+  isNativePlaying: () => Promise<boolean>;
 }
 
 export function useTTS(): UseTTSReturn {
@@ -98,22 +109,75 @@ export function useTTS(): UseTTSReturn {
     async (text: string) => {
       const clean = stripMarkdown(text);
       if (!clean) return;
+      setIsSpeaking(true);
       try {
-        await tauriInvoke('voice_tts_speak', { text: clean });
+        await voiceTtsSpeak(clean);
       } catch {
         // Fallback to browser TTS when native is unavailable
         speak(clean);
+      } finally {
+        setIsSpeaking(false);
       }
     },
     [speak],
   );
 
+  const speakWithBargeIn = useCallback(
+    async (text: string) => {
+      const clean = stripMarkdown(text);
+      if (!clean) return;
+      setIsSpeaking(true);
+      try {
+        await voiceTtsSpeakWithBargeIn(clean);
+      } catch {
+        // Fallback to regular native TTS
+        try {
+          await voiceTtsSpeak(clean);
+        } catch {
+          // Fallback to browser TTS
+          speak(clean);
+        }
+      } finally {
+        setIsSpeaking(false);
+      }
+    },
+    [speak],
+  );
+
+  const stopNative = useCallback(async () => {
+    try {
+      await voiceTtsStop();
+    } catch {
+      // Ignore errors -- backend may not have an active session
+    }
+    setIsSpeaking(false);
+  }, []);
+
+  const isNativePlaying = useCallback(async (): Promise<boolean> => {
+    try {
+      return await voiceTtsIsPlaying();
+    } catch {
+      return false;
+    }
+  }, []);
+
   // Cancel on unmount
   useEffect(() => {
     return () => {
       if (isSupported) window.speechSynthesis.cancel();
+      // Also stop backend TTS
+      voiceTtsStop().catch(() => {});
     };
   }, [isSupported]);
 
-  return { isSpeaking, isSupported, speak, speakNative, stop };
+  return {
+    isSpeaking,
+    isSupported,
+    speak,
+    speakNative,
+    speakWithBargeIn,
+    stop,
+    stopNative,
+    isNativePlaying,
+  };
 }

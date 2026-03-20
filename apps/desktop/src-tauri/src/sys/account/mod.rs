@@ -183,10 +183,18 @@ fn generate_device_fingerprint(device_id: &str) -> String {
 
 #[tauri::command]
 pub async fn device_link_initiate(
-    mut request: DeviceLinkRequest,
     state: State<'_, ApiState>,
 ) -> Result<DeviceLinkResponse, String> {
-    request.device_fingerprint = Some(generate_device_fingerprint(&request.device_id));
+    let hostname = std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("COMPUTERNAME"))
+        .unwrap_or_else(|_| "Desktop".to_string());
+    let device_id = generate_device_fingerprint(&hostname);
+    let request = DeviceLinkRequest {
+        device_id: device_id.clone(),
+        device_name: Some(hostname),
+        device_type: Some("desktop".to_string()),
+        device_fingerprint: Some(generate_device_fingerprint(&device_id)),
+    };
     let api_base = get_api_base_url();
 
     let url = format!("{}/api/device/link", api_base);
@@ -220,10 +228,13 @@ pub async fn device_link_initiate(
 
 #[tauri::command]
 pub async fn device_link_poll(
-    mut request: DevicePollRequest,
+    device_id: String,
     state: State<'_, ApiState>,
 ) -> Result<DevicePollResponse, String> {
-    request.device_fingerprint = Some(generate_device_fingerprint(&request.device_id));
+    let request = DevicePollRequest {
+        device_id: device_id.clone(),
+        device_fingerprint: Some(generate_device_fingerprint(&device_id)),
+    };
     let api_base = get_api_base_url();
 
     let url = format!("{}/api/device/poll", api_base);
