@@ -17,7 +17,8 @@
  */
 
 import { Check, Code2, Copy, Download, Eye, FileText, Globe, Play, Trash2, X } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import {
@@ -25,6 +26,16 @@ import {
   type CanvasArtifact,
   type CanvasArtifactType,
 } from '../../stores/canvasStore';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/AlertDialog';
 import { ArtifactPreview } from './ArtifactPreview';
 import { CodeEditor } from './CodeEditor';
 
@@ -56,16 +67,42 @@ interface CanvasPanelProps {
 }
 
 export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
-  const { updateArtifact, executeArtifact, deleteArtifact } = useCanvasStore();
+  const { updateArtifact, executeArtifact, deleteArtifact } = useCanvasStore(
+    useShallow((s) => ({
+      updateArtifact: s.updateArtifact,
+      executeArtifact: s.executeArtifact,
+      deleteArtifact: s.deleteArtifact,
+    })),
+  );
   const [activeTab, setActiveTab] = useState<ActiveTab>('code');
   const [copied, setCopied] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isRunning = artifact.executionState === 'running';
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isDirty) {
+          setCloseDialogOpen(true);
+        } else {
+          onClose();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, [onClose, isDirty]);
+
   const handleContentChange = useCallback(
     (value: string) => {
       updateArtifact(artifact.id, { content: value });
+      setIsDirty(true);
     },
     [artifact.id, updateArtifact],
   );
@@ -134,12 +171,12 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
 
   return (
     <div
-      className="flex flex-col h-full bg-[#0d0e17] border-l border-white/10"
+      className="flex flex-col h-full bg-surface-base border-l border-white/10"
       role="region"
       aria-label="Canvas panel"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10 bg-[#0b0c14]">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10 bg-surface-elevated">
         <TypeIcon type={artifact.type} />
 
         <input
@@ -160,7 +197,13 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
           )}
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              if (isDirty) {
+                setCloseDialogOpen(true);
+              } else {
+                onClose();
+              }
+            }}
             className="ml-1 p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-colors"
             aria-label="Close canvas panel"
           >
@@ -170,7 +213,7 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-white/10 bg-[#0d0e17]">
+      <div className="flex border-b border-white/10 bg-surface-base">
         <button
           type="button"
           onClick={() => setActiveTab('code')}
@@ -224,7 +267,7 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-t border-white/10 bg-[#0b0c14]">
+      <div className="flex items-center gap-2 px-4 py-3 border-t border-white/10 bg-surface-elevated">
         {/* Run button */}
         {artifact.type === 'code' && (
           <button
@@ -281,6 +324,21 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
+
+      <AlertDialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close without saving?</AlertDialogTitle>
+            <AlertDialogDescription>Your changes will be lost.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={onClose}>
+              Close anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

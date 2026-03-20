@@ -1,4 +1,5 @@
 import { AlertCircle, AlertTriangle, CheckCircle, Info, X, RefreshCw } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import useErrorStore, { type AppError, type ErrorSeverity } from '../../stores/ui';
 import { getErrorMessage } from '../../constants/errorMessages';
 
@@ -91,7 +92,8 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
             )}
           </div>
 
-          <button type="button"
+          <button
+            type="button"
             onClick={onDismiss}
             className="shrink-0 rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-300"
             aria-label="Dismiss"
@@ -103,7 +105,8 @@ function ErrorToastItem({ error, onDismiss, onRetry }: ErrorToastItemProps) {
         {(onRetry || errorDef.helpLink) && (
           <div className="mt-3 flex gap-2">
             {onRetry && errorDef.recoverable && (
-              <button type="button"
+              <button
+                type="button"
                 onClick={onRetry}
                 className="flex items-center gap-1 rounded bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-700"
               >
@@ -135,7 +138,9 @@ interface ErrorToastContainerProps {
 }
 
 export function ErrorToastContainer({ position = 'top-right', onRetry }: ErrorToastContainerProps) {
-  const { toasts, dismissError } = useErrorStore();
+  const { toasts, dismissError } = useErrorStore(
+    useShallow((s) => ({ toasts: s.toasts, dismissError: s.dismissError })),
+  );
 
   const positionClasses = {
     'top-right': 'top-4 right-4',

@@ -53,12 +53,26 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
 }) => {
   const thinkingMeta = message.metadata as ThinkingMessageMetadata | undefined;
   const summary = thinkingMeta?.thinkingSummary || thinkingMeta?.summary;
-  const duration = thinkingMeta?.duration;
   const steps = thinkingMeta?.steps;
+  const isStreaming = Boolean(message.metadata?.streaming);
+
+  // Prefer server-reported duration (seconds). When absent and thinking is complete,
+  // estimate from message timestamp so the accordion can show "Thought for Xs".
+  const duration: number | undefined = (() => {
+    if (thinkingMeta?.duration !== undefined) {
+      return thinkingMeta.duration;
+    }
+    // Only compute fallback when not streaming (thinking finished)
+    if (!isStreaming && message.timestamp instanceof Date) {
+      const elapsedSeconds = Math.round((Date.now() - message.timestamp.getTime()) / 1000);
+      // Guard against unreasonably large values (e.g. old messages loaded from history)
+      return elapsedSeconds > 0 && elapsedSeconds < 3600 ? elapsedSeconds : undefined;
+    }
+    return undefined;
+  })();
 
   const thinkingBlock = thinkingMatch.content;
   const widgets = getMessageWidgets(message);
-  const isStreaming = Boolean(message.metadata?.streaming);
 
   // Remove all thinking-related tags from the remaining content
   const remainingContent = message.content
@@ -162,14 +176,16 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
             role="group"
             aria-label="Message actions"
           >
-            <button type="button"
+            <button
+              type="button"
               onClick={onCopy}
               className="p-1 text-zinc-500 hover:text-zinc-300"
               title="Copy message"
             >
               {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
             </button>
-            <button type="button"
+            <button
+              type="button"
               onClick={onBookmark}
               className="p-1 text-zinc-500 hover:text-zinc-300"
               title={message.bookmarked ? 'Remove bookmark' : 'Bookmark message'}

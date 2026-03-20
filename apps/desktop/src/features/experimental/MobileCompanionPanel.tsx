@@ -1,14 +1,21 @@
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Smartphone, Wifi, WifiOff } from 'lucide-react';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useToolStore } from '../../stores/chat/toolStore';
-import { QRPairingCard } from './QRPairingCard';
-import { RemoteApprovalCard } from './RemoteApprovalCard';
-import { Badge } from '../ui/Badge';
-import { Button } from '../ui/Button';
+import { QRPairingCard } from '../../components/Mobile/QRPairingCard';
+import { RemoteApprovalCard } from '../../components/Mobile/RemoteApprovalCard';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
 
 export function MobileCompanionPanel() {
-  const { status, peerConnected, stopSession } = useConnectionStore();
+  const { status, peerConnected, stopSession } = useConnectionStore(
+    useShallow((s) => ({
+      status: s.status,
+      peerConnected: s.peerConnected,
+      stopSession: s.stopSession,
+    })),
+  );
   const pendingApprovals = useToolStore((state) => state.pendingApprovals);
 
   const isConnected = status === 'streaming' || (status === 'pairing' && peerConnected);

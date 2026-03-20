@@ -36,7 +36,7 @@ export interface AgentConfig {
   /** Human-readable agent name. */
   name: string;
 
-  /** LLM model identifier (e.g., `"claude-opus-4-6"`, `"gpt-4o"`). */
+  /** LLM model identifier (e.g., `"claude-opus-4-6"`, `"gpt-5.4"`). */
   model: string;
 
   /** LLM provider identifier (e.g., `"anthropic"`, `"openai"`). */

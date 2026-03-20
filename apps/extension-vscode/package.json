@@ -293,7 +293,7 @@
         "id": "agiworkforce.agi",
         "name": "agi",
         "fullName": "AGI Workforce",
-        "description": "Model-agnostic AI assistant — use any LLM (GPT-4o, Claude, Gemini, and more)",
+        "description": "Model-agnostic AI assistant — use any LLM (GPT-5.4, Claude, Gemini, and more)",
         "isSticky": true,
         "commands": [
           {
@@ -485,7 +485,7 @@
         "agiWorkforce.model": {
           "type": "string",
           "default": "auto-balanced",
-          "description": "Default LLM model (e.g. auto-balanced, claude-sonnet-4.6, gpt-5.2, gemini-3-pro-preview)"
+          "description": "Default LLM model (e.g. auto-balanced, claude-sonnet-4.6, gpt-5.4, gemini-3-pro-preview)"
         },
         "agiWorkforce.streamingEnabled": {
           "type": "boolean",

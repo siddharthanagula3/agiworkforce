@@ -36,7 +36,7 @@ import { WidgetList, WidgetData } from './WidgetList';
 // Hooks
 import { useMessageActions } from './useMessageActions';
 import { useMessageReactions } from './useMessageReactions';
-import { useTTS } from '@/hooks/useTTS';
+import { useTTS } from '@/lib/hooks/useTTS';
 
 // Types
 import { MessageBubbleProps, ThinkingMatch, LightboxImage, ContextMenuPosition } from './types';

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { FileText, Search, FileSearch, Download, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -26,7 +27,18 @@ export function DocumentWorkspace({ className }: DocumentWorkspaceProps) {
     extractText,
     search,
     reset,
-  } = useDocumentStore();
+  } = useDocumentStore(
+    useShallow((s) => ({
+      currentDocument: s.currentDocument,
+      searchResults: s.searchResults,
+      loading: s.loading,
+      error: s.error,
+      readDocument: s.readDocument,
+      extractText: s.extractText,
+      search: s.search,
+      reset: s.reset,
+    })),
+  );
 
   const [searchQuery, setSearchQuery] = useState('');
 

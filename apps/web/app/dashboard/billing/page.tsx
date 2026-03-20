@@ -1,10 +1,12 @@
 import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { Card, CardContent, CardTitle, CardHeader, CardDescription, Button } from '@/components/ui';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { ManageBillingButton } from '../../../components/stripe/ManageBillingButton';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
+import BillingDashboardClient from './BillingDashboardClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +35,9 @@ export default async function BillingPage() {
       <div className="space-y-6 py-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Billing & Plans</h1>
-          <p className="text-muted-foreground mt-2">Manage your subscription and payment details.</p>
+          <p className="text-muted-foreground mt-2">
+            Manage your subscription and payment details.
+          </p>
         </div>
 
         <Card className="glass-strong">
@@ -81,6 +85,17 @@ export default async function BillingPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Detailed Billing Dashboard — token usage, per-LLM breakdown, invoices */}
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          }
+        >
+          <BillingDashboardClient />
+        </Suspense>
       </div>
     </ErrorBoundary>
   );

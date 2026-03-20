@@ -2,8 +2,9 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Home, Loader2 } from 'lucide-react';
 import { logger } from '@shared/lib/logger';
+import { useErrorRecovery } from '@/hooks/useErrorRecovery';
 
 export default function ChatError({
   error,
@@ -12,12 +13,28 @@ export default function ChatError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const { isRecovering, retryCount, retry } = useErrorRecovery({
+    maxRetries: 3,
+    retryDelay: 1500,
+    showToast: true,
+    toastMessage: 'Chat encountered an error. Retrying...',
+    onError: (err) => {
+      logger.error('Chat error recovery failed', { message: err.message });
+    },
+  });
+
   useEffect(() => {
     logger.error('Chat error boundary caught', {
       digest: error.digest,
       message: error.message,
     });
   }, [error]);
+
+  const handleRetryWithRecovery = () => {
+    retry(async () => {
+      reset();
+    });
+  };
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
@@ -36,11 +53,21 @@ export default function ChatError({
 
       <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
         <button
-          onClick={reset}
-          className="inline-flex h-10 items-center justify-center rounded-full bg-blue-600 px-6 text-sm font-medium hover:bg-blue-700 transition-colors text-white"
+          onClick={handleRetryWithRecovery}
+          disabled={isRecovering}
+          className="inline-flex h-10 items-center justify-center rounded-full bg-blue-600 px-6 text-sm font-medium hover:bg-blue-700 transition-colors text-white disabled:opacity-60"
         >
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Try Again
+          {isRecovering ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Recovering ({retryCount}/3)...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </>
+          )}
         </button>
         <Link
           href="/"

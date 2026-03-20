@@ -335,7 +335,7 @@ export class ChatAIService {
       expertise: emp.expertise || RoleExpertiseMapping[emp.name] || [],
       tools: emp.tools,
       systemPrompt: emp.systemPrompt || '',
-      model: (emp.model as string) || 'gpt-4o',
+      model: (emp.model as string) || 'gpt-5.4',
       temperature: 0.7,
     }));
 

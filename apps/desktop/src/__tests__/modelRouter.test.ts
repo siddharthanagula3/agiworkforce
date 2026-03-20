@@ -167,7 +167,7 @@ describe('isManualSelection', () => {
   });
 
   it('returns true for a specific model id', () => {
-    expect(isManualSelection('gpt-5.2')).toBe(true);
+    expect(isManualSelection('gpt-5.4')).toBe(true);
     expect(isManualSelection('claude-opus-4.6')).toBe(true);
     expect(isManualSelection('grok-4')).toBe(true);
     expect(isManualSelection('mistral-large-3')).toBe(true);

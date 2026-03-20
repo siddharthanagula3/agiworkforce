@@ -69,6 +69,19 @@ export interface GitHubCommit {
   };
 }
 
+const getLabelTextColor = (hexColor: string): string => {
+  if (!hexColor || hexColor.length < 7) return 'text-white';
+  try {
+    const r = parseInt(hexColor.slice(1, 3), 16) / 255;
+    const g = parseInt(hexColor.slice(3, 5), 16) / 255;
+    const b = parseInt(hexColor.slice(5, 7), 16) / 255;
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luminance > 0.5 ? 'text-gray-900' : 'text-white';
+  } catch {
+    return 'text-white';
+  }
+};
+
 export const InlineGitHubPR: React.FC<ToolResultProps> = ({ result, status }) => {
   const data = result?.data as GitHubPR | undefined;
 
@@ -201,15 +214,20 @@ export const InlineGitHubIssue: React.FC<ToolResultProps> = ({ result, status })
 
         {labels.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
-            {labels.map((label, i) => (
-              <span
-                key={i}
-                className="text-xs px-2 py-0.5 rounded-full text-white"
-                style={{ backgroundColor: `#${label.color}` }}
-              >
-                {label.name}
-              </span>
-            ))}
+            {labels.map((label, i) => {
+              const color = label.color?.startsWith('#')
+                ? label.color
+                : `#${label.color ?? '000000'}`;
+              return (
+                <span
+                  key={i}
+                  className={`text-xs px-2 py-0.5 rounded-full ${getLabelTextColor(color)}`}
+                  style={{ backgroundColor: color }}
+                >
+                  {label.name}
+                </span>
+              );
+            })}
           </div>
         )}
 

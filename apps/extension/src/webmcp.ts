@@ -33,7 +33,7 @@ export interface WebMCPCallToolResponse {
  *     <input name="param" tool-param-description="..." />
  *   </form>
  */
-export function discoverDeclarativeTools(): WebMCPToolInfo[] {
+function discoverDeclarativeTools(): WebMCPToolInfo[] {
   const tools: WebMCPToolInfo[] = [];
 
   const forms = document.querySelectorAll('form[tool-name]');
@@ -84,7 +84,7 @@ export function discoverDeclarativeTools(): WebMCPToolInfo[] {
 
 // ─── Imperative tool detection (navigator.modelContext) ───────────────────────
 
-export function discoverImperativeTools(): WebMCPToolInfo[] {
+function discoverImperativeTools(): WebMCPToolInfo[] {
   const tools: WebMCPToolInfo[] = [];
 
   // Try Chromium early-preview testing API

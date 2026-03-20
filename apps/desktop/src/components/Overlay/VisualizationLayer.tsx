@@ -114,7 +114,7 @@ export function VisualizationLayer() {
     };
   }, []);
 
-  if (typeof document === 'undefined') {
+  if (typeof document === 'undefined' || !document.body) {
     return null;
   }
 

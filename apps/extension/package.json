@@ -30,7 +30,6 @@
     "format": "prettier --write \"src/**/*.{js,html}\""
   },
   "dependencies": {
-    "@mcp-b/smart-dom-reader": "^2.2.0",
     "dompurify": "^3.2.4"
   },
   "devDependencies": {

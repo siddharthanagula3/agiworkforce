@@ -58,7 +58,7 @@ describe('API Abuse Prevention Service', () => {
       it('should allow request when rate limit is not exceeded', async () => {
         mockCheckRateLimit.mockResolvedValueOnce({ allowed: true } as unknown as RateLimitResult);
 
-        const result = await checkApiAbuse(userId, 'gpt-4o-mini', 1000);
+        const result = await checkApiAbuse(userId, 'gpt-5.4-mini', 1000);
 
         expect(result.allowed).toBe(true);
         expect(mockCheckRateLimit).toHaveBeenCalledWith('AI_REQUEST', userId);
@@ -70,7 +70,7 @@ describe('API Abuse Prevention Service', () => {
           retryAfter: 60,
         } as unknown as RateLimitResult);
 
-        const result = await checkApiAbuse(userId, 'gpt-4o-mini', 1000);
+        const result = await checkApiAbuse(userId, 'gpt-5.4-mini', 1000);
 
         expect(result.allowed).toBe(false);
         expect(result.reason).toContain('Rate limit exceeded');
@@ -84,7 +84,7 @@ describe('API Abuse Prevention Service', () => {
         mockCheckRateLimit.mockResolvedValueOnce({ allowed: true } as unknown as RateLimitResult);
 
         // Input exceeds maxMessageLength (200000 chars)
-        const result = await checkApiAbuse(sizeTestUser, 'gpt-4o-mini', 250000);
+        const result = await checkApiAbuse(sizeTestUser, 'gpt-5.4-mini', 250000);
 
         expect(result.allowed).toBe(false);
         expect(result.reason).toContain('Input too long');
@@ -95,7 +95,7 @@ describe('API Abuse Prevention Service', () => {
         mockCheckRateLimit.mockResolvedValueOnce({ allowed: true } as unknown as RateLimitResult);
 
         // 500000 chars / 4 = 125000 tokens (exceeds 100000)
-        const result = await checkApiAbuse(sizeTestUser, 'gpt-4o-mini', 500000);
+        const result = await checkApiAbuse(sizeTestUser, 'gpt-5.4-mini', 500000);
 
         expect(result.allowed).toBe(false);
         expect(result.reason).toContain('Input too');
@@ -105,7 +105,7 @@ describe('API Abuse Prevention Service', () => {
         const sizeTestUser = 'user-size-test-ok';
         mockCheckRateLimit.mockResolvedValueOnce({ allowed: true } as unknown as RateLimitResult);
 
-        const result = await checkApiAbuse(sizeTestUser, 'gpt-4o-mini', 1000);
+        const result = await checkApiAbuse(sizeTestUser, 'gpt-5.4-mini', 1000);
 
         expect(result.allowed).toBe(true);
       });
@@ -113,20 +113,20 @@ describe('API Abuse Prevention Service', () => {
 
     describe('Model-based throttling', () => {
       it('should apply stricter limits for high-cost models', async () => {
-        // High cost model: gpt-4o - max 10 per minute, max 2 concurrent
+        // High cost model: gpt-5.4 - max 10 per minute, max 2 concurrent
         const highCostUser = 'user-throttle-high-cost';
         mockCheckRateLimit.mockResolvedValue({ allowed: true } as unknown as RateLimitResult);
 
         // Make requests up to per-minute limit
         // Note: Each checkApiAbuse increments concurrent count, so we also need to end them
         for (let i = 0; i < 10; i++) {
-          await checkApiAbuse(highCostUser, 'gpt-4o', 1000);
-          trackRequestStart(highCostUser, 'gpt-4o', 250);
+          await checkApiAbuse(highCostUser, 'gpt-5.4', 1000);
+          trackRequestStart(highCostUser, 'gpt-5.4', 250);
           trackRequestEnd(highCostUser); // End the request to allow more
         }
 
         // 11th request should be blocked due to per-minute limit
-        const result = await checkApiAbuse(highCostUser, 'gpt-4o', 1000);
+        const result = await checkApiAbuse(highCostUser, 'gpt-5.4', 1000);
 
         expect(result.allowed).toBe(false);
         expect(result.reason).toContain('Too many requests');
@@ -153,14 +153,14 @@ describe('API Abuse Prevention Service', () => {
         mockCheckRateLimit.mockResolvedValue({ allowed: true } as unknown as RateLimitResult);
 
         // Start multiple concurrent requests (high-cost model max 2)
-        const result1 = await checkApiAbuse(concurrentUser, 'gpt-4o', 1000);
+        const result1 = await checkApiAbuse(concurrentUser, 'gpt-5.4', 1000);
         expect(result1.allowed).toBe(true);
 
-        const result2 = await checkApiAbuse(concurrentUser, 'gpt-4o', 1000);
+        const result2 = await checkApiAbuse(concurrentUser, 'gpt-5.4', 1000);
         expect(result2.allowed).toBe(true);
 
         // Third concurrent request should be blocked
-        const result3 = await checkApiAbuse(concurrentUser, 'gpt-4o', 1000);
+        const result3 = await checkApiAbuse(concurrentUser, 'gpt-5.4', 1000);
         expect(result3.allowed).toBe(false);
         expect(result3.reason).toContain('concurrent requests');
       });
@@ -186,7 +186,7 @@ describe('API Abuse Prevention Service', () => {
       it('should return current metrics when allowed', async () => {
         mockCheckRateLimit.mockResolvedValueOnce({ allowed: true } as unknown as RateLimitResult);
 
-        const result = await checkApiAbuse('user-metrics', 'gpt-4o-mini', 1000);
+        const result = await checkApiAbuse('user-metrics', 'gpt-5.4-mini', 1000);
 
         expect(result.currentMetrics).toBeDefined();
         expect(typeof result.currentMetrics?.requestsLastMinute).toBe('number');
@@ -204,9 +204,9 @@ describe('API Abuse Prevention Service', () => {
       mockCheckRateLimit.mockResolvedValue({ allowed: true } as unknown as RateLimitResult);
 
       // Initialize the user metrics by making a check first
-      await checkApiAbuse(trackUser, 'gpt-4o', 1000);
+      await checkApiAbuse(trackUser, 'gpt-5.4', 1000);
 
-      trackRequestStart(trackUser, 'gpt-4o', 1000);
+      trackRequestStart(trackUser, 'gpt-5.4', 1000);
 
       const stats = getUserUsageStats(trackUser);
       expect(stats.requestsLastMinute).toBeGreaterThanOrEqual(0);
@@ -215,7 +215,7 @@ describe('API Abuse Prevention Service', () => {
     it('should handle non-existent user gracefully', () => {
       // Should not throw
       expect(() => {
-        trackRequestStart('nonexistent-user', 'gpt-4o', 1000);
+        trackRequestStart('nonexistent-user', 'gpt-5.4', 1000);
       }).not.toThrow();
     });
   });
@@ -227,8 +227,8 @@ describe('API Abuse Prevention Service', () => {
       mockCheckRateLimit.mockResolvedValue({ allowed: true } as unknown as RateLimitResult);
 
       // Start requests
-      await checkApiAbuse(endUser, 'gpt-4o-mini', 1000);
-      await checkApiAbuse(endUser, 'gpt-4o-mini', 1000);
+      await checkApiAbuse(endUser, 'gpt-5.4-mini', 1000);
+      await checkApiAbuse(endUser, 'gpt-5.4-mini', 1000);
 
       const beforeEnd = getUserUsageStats(endUser);
       const concurrentBefore = beforeEnd.concurrentRequests;
@@ -245,7 +245,7 @@ describe('API Abuse Prevention Service', () => {
       const mockCheckRateLimit = vi.mocked(checkRateLimit);
       mockCheckRateLimit.mockResolvedValue({ allowed: true } as unknown as RateLimitResult);
 
-      await checkApiAbuse(zeroUser, 'gpt-4o-mini', 1000);
+      await checkApiAbuse(zeroUser, 'gpt-5.4-mini', 1000);
 
       // End more requests than started
       trackRequestEnd(zeroUser);
@@ -271,8 +271,8 @@ describe('API Abuse Prevention Service', () => {
 
       // Make many requests quickly
       for (let i = 0; i < 60; i++) {
-        await checkApiAbuse(rapidUser, 'gpt-4o-mini', 1000);
-        trackRequestStart(rapidUser, 'gpt-4o-mini', 100);
+        await checkApiAbuse(rapidUser, 'gpt-5.4-mini', 1000);
+        trackRequestStart(rapidUser, 'gpt-5.4-mini', 100);
       }
 
       const result = detectAbusePatterns(rapidUser, 60);
@@ -288,8 +288,8 @@ describe('API Abuse Prevention Service', () => {
 
       // Make many requests to the same model
       for (let i = 0; i < 35; i++) {
-        await checkApiAbuse(spamUser, 'gpt-4o-mini', 1000);
-        trackRequestStart(spamUser, 'gpt-4o-mini', 100);
+        await checkApiAbuse(spamUser, 'gpt-5.4-mini', 1000);
+        trackRequestStart(spamUser, 'gpt-5.4-mini', 100);
       }
 
       const result = detectAbusePatterns(spamUser, 35);
@@ -330,8 +330,8 @@ describe('API Abuse Prevention Service', () => {
 
       // Make some requests
       for (let i = 0; i < 5; i++) {
-        await checkApiAbuse(activeUser, 'gpt-4o-mini', 1000);
-        trackRequestStart(activeUser, 'gpt-4o-mini', 100);
+        await checkApiAbuse(activeUser, 'gpt-5.4-mini', 1000);
+        trackRequestStart(activeUser, 'gpt-5.4-mini', 100);
       }
 
       const stats = getUserUsageStats(activeUser);
@@ -365,7 +365,7 @@ describe('API Abuse Prevention Service', () => {
 
     it('should categorize high-cost models correctly', async () => {
       const highCostModels = [
-        'gpt-4o',
+        'gpt-5.4',
         'o1',
         'claude-sonnet-4-20250514',
         'claude-3-5-sonnet-20241022',
@@ -381,7 +381,7 @@ describe('API Abuse Prevention Service', () => {
     });
 
     it('should categorize medium-cost models correctly', async () => {
-      const mediumCostModels = ['gpt-4o-mini', 'o1-mini', 'gemini-1.5-pro', 'sonar-reasoning'];
+      const mediumCostModels = ['gpt-5.4-mini', 'o1-mini', 'gemini-1.5-pro', 'sonar-reasoning'];
 
       for (const model of mediumCostModels) {
         const result = await checkApiAbuse(`user-med-${model}`, model, 1000);

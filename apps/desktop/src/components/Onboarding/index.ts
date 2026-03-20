@@ -1,1 +1,3 @@
-export { default as OnboardingWelcome } from './OnboardingWelcome';
+export { OnboardingWizard as OnboardingWelcome } from './OnboardingWizard';
+export { OnboardingWizard } from './OnboardingWizard';
+export { default } from './OnboardingWizard';

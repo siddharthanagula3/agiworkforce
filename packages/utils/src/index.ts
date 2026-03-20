@@ -84,3 +84,8 @@ export {
   hmacSha256,
   timingSafeEqual,
 } from './crypto';
+
+// Performance instrumentation utilities
+export { measureAsync, measureSync, PerformanceTracker } from './performance';
+
+export type { MeasureResult, PerformanceMetrics } from './performance';

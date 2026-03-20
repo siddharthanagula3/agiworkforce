@@ -140,6 +140,59 @@
         color: #1e7e34;
       }
 
+      .status-card.reconnecting {
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+        border-color: #ffc107;
+      }
+
+      .status-card.reconnecting .status-dot {
+        background: #ffc107;
+        animation: pulse-yellow 2s infinite;
+      }
+
+      @keyframes pulse-yellow {
+        0% {
+          box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+        }
+        70% {
+          box-shadow: 0 0 0 6px rgba(255, 193, 7, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+        }
+      }
+
+      .status-card.reconnecting .status-title {
+        color: #856404;
+      }
+
+      .status-card.reconnecting .status-subtitle {
+        color: #6d5012;
+      }
+
+      .reconnect-btn {
+        display: none;
+        margin-top: 8px;
+        padding: 6px 12px;
+        background: transparent;
+        border: 1px solid #6c757d;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #495057;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .reconnect-btn:hover {
+        background: #e9ecef;
+        border-color: #495057;
+      }
+
+      .reconnect-btn.visible {
+        display: inline-block;
+      }
+
       .actions {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -317,6 +370,7 @@
         <div class="status-info">
           <div class="status-title" id="statusTitle">Checking connection...</div>
           <div class="status-subtitle" id="statusSubtitle">Connecting to desktop app</div>
+          <button class="reconnect-btn" id="reconnectBtn">Reconnect</button>
         </div>
       </div>
 

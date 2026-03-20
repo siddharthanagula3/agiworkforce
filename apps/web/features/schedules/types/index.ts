@@ -72,9 +72,7 @@ export const INITIAL_FORM: ScheduleFormData = {
   recurrence: 'daily',
   timeOfDay: '09:00',
   timezone:
-    typeof Intl !== 'undefined'
-      ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-      : 'UTC',
+    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' : 'UTC',
   isActive: true,
   cronExpression: '',
   daysOfWeek: [],
@@ -104,10 +102,10 @@ export const AVAILABLE_MODELS = [
   { value: 'auto-fast', label: 'Auto (Fast)' },
   { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
   { value: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
-  { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+  { value: 'gpt-5.4', label: 'GPT-5.4' },
+  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
   { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
 ];
 
 export const DAYS_OF_WEEK = [

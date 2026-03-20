@@ -196,7 +196,7 @@ export class ChatStreamingService {
       const tokensUsed = response.usage?.totalTokens || 0;
       const inputTokens = response.usage?.promptTokens || 0;
       const outputTokens = response.usage?.completionTokens || 0;
-      const model = response.model || options.model || 'gpt-4o';
+      const model = response.model || options.model || 'gpt-5.4';
 
       metrics.latency = Date.now() - startTime;
 

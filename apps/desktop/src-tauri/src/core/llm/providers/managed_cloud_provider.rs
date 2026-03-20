@@ -74,8 +74,7 @@ impl ManagedCloudProvider {
         // Cloud-specific aliases not in models.json (pattern-based rules that
         // cannot be expressed as simple key-value pairs in the JSON map).
         match trimmed.as_str() {
-            m if m.starts_with("gpt-5.4-codex-") || m.starts_with("gpt-5.2-codex-") => "gpt-5.4-codex".to_string(),
-            m if m.starts_with("gpt-5.3-codex-") => "gpt-5.3-codex".to_string(),
+            m if m.starts_with("gpt-5.4-codex-") => "gpt-5.4-codex".to_string(),
             // Keep the trimmed/lowercased model ID when no alias is needed.
             _ => trimmed,
         }

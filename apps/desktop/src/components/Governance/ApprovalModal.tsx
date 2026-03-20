@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { ApprovalRequest } from '../../stores/governanceStore';
 import { useGovernanceStore } from '../../stores/governanceStore';
 import { useAuthStore } from '../../stores/auth';
@@ -12,7 +13,9 @@ interface ApprovalModalProps {
 }
 
 export const ApprovalModal: React.FC<ApprovalModalProps> = ({ request, action, onClose }) => {
-  const { approveRequest, rejectRequest } = useGovernanceStore();
+  const { approveRequest, rejectRequest } = useGovernanceStore(
+    useShallow((s) => ({ approveRequest: s.approveRequest, rejectRequest: s.rejectRequest })),
+  );
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +64,8 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({ request, action, o
               </>
             )}
           </h2>
-          <button type="button"
+          <button
+            type="button"
             onClick={onClose}
             className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
           >

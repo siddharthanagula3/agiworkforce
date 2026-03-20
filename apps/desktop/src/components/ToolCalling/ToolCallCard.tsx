@@ -45,6 +45,7 @@ export function ToolCallCard({
 }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded || toolCall.expanded || false);
   const [copied, setCopied] = useState(false);
+  const [isPending, setIsPending] = useState(false);
 
   const handleCopy = async () => {
     const text = JSON.stringify(
@@ -147,9 +148,12 @@ export function ToolCallCard({
       )}
     >
       {/* Header */}
-      <div
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-label="Toggle tool details"
         className={cn(
-          'flex items-center gap-3 px-3 py-2.5 bg-muted/40 cursor-pointer hover:bg-muted/60 transition-colors',
+          'flex items-center gap-3 px-3 py-2.5 bg-muted/40 cursor-pointer hover:bg-muted/60 transition-colors w-full text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden',
           needsApproval && 'bg-yellow-50 dark:bg-yellow-950/20',
         )}
         onClick={() => setExpanded(!expanded)}
@@ -188,6 +192,7 @@ export function ToolCallCard({
             <Button
               variant="ghost"
               size="sm"
+              aria-label="Cancel tool"
               onClick={(e) => {
                 e.stopPropagation();
                 onCancel(toolCall.id);
@@ -201,6 +206,7 @@ export function ToolCallCard({
           <Button
             variant="ghost"
             size="sm"
+            aria-label="Copy result"
             onClick={(e) => {
               e.stopPropagation();
               handleCopy();
@@ -214,7 +220,7 @@ export function ToolCallCard({
             )}
           </Button>
         </div>
-      </div>
+      </button>
 
       {/* Expanded Content */}
       {expanded && (
@@ -230,21 +236,47 @@ export function ToolCallCard({
                 {onApprove && (
                   <Button
                     size="sm"
-                    onClick={() => onApprove(toolCall.id)}
+                    disabled={isPending}
+                    onClick={async () => {
+                      setIsPending(true);
+                      try {
+                        await onApprove(toolCall.id);
+                      } catch (err) {
+                        console.error(err);
+                      } finally {
+                        setIsPending(false);
+                      }
+                    }}
                     className="h-7 bg-green-600 hover:bg-green-700 text-white"
                   >
-                    <Play className="h-3 w-3 mr-1" />
-                    Approve
+                    {isPending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <>
+                        <Play className="h-3 w-3 mr-1" />
+                        Approve
+                      </>
+                    )}
                   </Button>
                 )}
                 {onReject && (
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => onReject(toolCall.id)}
+                    disabled={isPending}
+                    onClick={async () => {
+                      setIsPending(true);
+                      try {
+                        await onReject(toolCall.id);
+                      } catch (err) {
+                        console.error(err);
+                      } finally {
+                        setIsPending(false);
+                      }
+                    }}
                     className="h-7"
                   >
-                    Reject
+                    {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Reject'}
                   </Button>
                 )}
               </div>

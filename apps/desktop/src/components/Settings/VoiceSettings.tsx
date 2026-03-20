@@ -1,8 +1,30 @@
-import { useCallback, useState } from 'react';
-import { Mic, MicOff, Loader2, Sparkles, Zap, Ban } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Mic,
+  MicOff,
+  Loader2,
+  Sparkles,
+  Zap,
+  Ban,
+  Radio,
+  Volume2,
+  Shield,
+  Download,
+  CheckCircle2,
+  Globe,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { useVoiceInputStore, type PostProcessingMode } from '../../stores/voiceInputStore';
+import {
+  useVoiceModeStore,
+  type WhisperModelInfo,
+  type PiperVoiceInfo,
+} from '../../stores/voiceModeStore';
+import { VoicePersonaSelector } from './VoicePersonaSelector';
+
+const VOICE_PERSONA_STORAGE_KEY = 'agiworkforce-voice-persona';
 
 const HOTKEY_OPTIONS = [
   { value: 'option', label: 'Option / Alt (hold to dictate)' },
@@ -67,24 +89,96 @@ export function VoiceSettings() {
   const startListening = useVoiceInputStore((s) => s.startListening);
   const stopListening = useVoiceInputStore((s) => s.stopListening);
 
+  // Backend voice capabilities and controls
+  const capabilities = useVoiceModeStore((s) => s.capabilities);
+  const wakeWordActive = useVoiceModeStore((s) => s.wakeWordActive);
+  const globalPttActive = useVoiceModeStore((s) => s.globalPttActive);
+  const bargeInEnabled = useVoiceModeStore((s) => s.bargeInEnabled);
+  const fetchCapabilities = useVoiceModeStore((s) => s.fetchCapabilities);
+  const enableWakeWord = useVoiceModeStore((s) => s.enableWakeWord);
+  const disableWakeWord = useVoiceModeStore((s) => s.disableWakeWord);
+  const startGlobalPtt = useVoiceModeStore((s) => s.startGlobalPtt);
+  const stopGlobalPtt = useVoiceModeStore((s) => s.stopGlobalPtt);
+  const enableBargeIn = useVoiceModeStore((s) => s.enableBargeIn);
+  const listWhisperModels = useVoiceModeStore((s) => s.listWhisperModels);
+  const downloadWhisperModel = useVoiceModeStore((s) => s.downloadWhisperModel);
+  const listPiperVoices = useVoiceModeStore((s) => s.listPiperVoices);
+  const downloadPiperVoice = useVoiceModeStore((s) => s.downloadPiperVoice);
+
+  const [whisperModels, setWhisperModels] = useState<WhisperModelInfo[]>([]);
+  const [piperVoices, setPiperVoices] = useState<PiperVoiceInfo[]>([]);
+  const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
+  const [downloadingVoice, setDownloadingVoice] = useState<string | null>(null);
+  const [selectedPersona, setSelectedPersona] = useState<string>(
+    () => localStorage.getItem(VOICE_PERSONA_STORAGE_KEY) ?? 'professional',
+  );
+
+  const handlePersonaSelect = useCallback((personaId: string) => {
+    setSelectedPersona(personaId);
+    localStorage.setItem(VOICE_PERSONA_STORAGE_KEY, personaId);
+  }, []);
+
+  // Fetch capabilities and local models on mount
+  useEffect(() => {
+    fetchCapabilities().catch((err: unknown) => {
+      console.error('Failed to fetch voice capabilities:', err);
+    });
+    listWhisperModels()
+      .then(setWhisperModels)
+      .catch((err: unknown) => {
+        console.error('Failed to load Whisper models:', err);
+      });
+    listPiperVoices()
+      .then(setPiperVoices)
+      .catch((err: unknown) => {
+        console.error('Failed to load Piper voices:', err);
+      });
+  }, [fetchCapabilities, listWhisperModels, listPiperVoices]);
+
   const [testError, setTestError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopCountdown = useCallback(() => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    setCountdown(null);
+  }, []);
 
   const handleTestToggle = useCallback(async () => {
     setTestError(null);
     try {
       if (mode === 'idle') {
         await startListening();
-        // Auto-stop after 5 seconds for the test
-        setTimeout(() => {
-          void stopListening();
-        }, 5000);
+        setCountdown(5);
+        countdownRef.current = setInterval(() => {
+          setCountdown((prev) => {
+            if (prev === null || prev <= 1) {
+              clearInterval(countdownRef.current!);
+              countdownRef.current = null;
+              void stopListening();
+              return null;
+            }
+            return prev - 1;
+          });
+        }, 1000);
       } else {
+        stopCountdown();
         await stopListening();
       }
     } catch (err) {
+      stopCountdown();
       setTestError(String(err));
     }
-  }, [mode, startListening, stopListening]);
+  }, [mode, startListening, stopListening, stopCountdown]);
+
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, []);
 
   const isRecording = mode === 'listening';
   const isTranscribing = mode === 'transcribing';
@@ -200,7 +294,7 @@ export function VoiceSettings() {
             </button>
             {isBusy && !isTranscribing && !isProcessing && (
               <p className="text-xs text-red-400 animate-pulse">
-                Recording... will auto-stop after 5 seconds
+                {countdown !== null ? `Recording... ${countdown}s remaining` : 'Recording...'}
               </p>
             )}
             {testError && <p className="text-xs text-destructive">{testError}</p>}
@@ -288,6 +382,280 @@ export function VoiceSettings() {
               <span className="font-medium text-foreground">commands</span>. Instead of appending
               new text, they edit the current content in the composer.
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Advanced Voice Features -- wired to Rust backend */}
+      <div>
+        <h3 className="text-lg font-semibold mb-1">Advanced Voice Features</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Native voice capabilities powered by the Rust backend.
+        </p>
+
+        <div className="rounded-lg border border-border bg-card p-6 space-y-5">
+          {/* Capabilities status */}
+          {capabilities && (
+            <div className="space-y-2">
+              <Label>System Status</Label>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
+                  <Volume2 size={14} className="text-muted-foreground" />
+                  <span>
+                    TTS: {capabilities.ttsAvailable ? capabilities.ttsProvider : 'Unavailable'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
+                  <Globe size={14} className="text-muted-foreground" />
+                  <span>VAD: {capabilities.vadAvailable ? 'Available' : 'Not built'}</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
+                  <Mic size={14} className="text-muted-foreground" />
+                  <span>
+                    Local STT:{' '}
+                    {capabilities.localSttAvailable
+                      ? (capabilities.localSttModel ?? 'Ready')
+                      : 'Not downloaded'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 p-2 rounded bg-muted/30">
+                  <Volume2 size={14} className="text-muted-foreground" />
+                  <span>
+                    Local TTS:{' '}
+                    {capabilities.localTtsAvailable
+                      ? (capabilities.localTtsVoice ?? 'Ready')
+                      : 'Not downloaded'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Wake Word */}
+          <div className="space-y-2 pt-2 border-t border-border">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Wake Word Detection</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Say a wake phrase to activate voice input hands-free.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (wakeWordActive) {
+                    void disableWakeWord();
+                  } else {
+                    void enableWakeWord();
+                  }
+                }}
+                className={[
+                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                  wakeWordActive
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                    : 'bg-muted/40 text-foreground border border-border hover:bg-accent',
+                ].join(' ')}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Radio size={12} />
+                  {wakeWordActive ? 'Listening' : 'Enable'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Global Push-to-Talk */}
+          <div className="space-y-2 pt-2 border-t border-border">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Global Push-to-Talk (Fn key)</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Hold the Fn key system-wide to record and auto-inject text.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (globalPttActive) {
+                    void stopGlobalPtt();
+                  } else {
+                    void startGlobalPtt();
+                  }
+                }}
+                className={[
+                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                  globalPttActive
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                    : 'bg-muted/40 text-foreground border border-border hover:bg-accent',
+                ].join(' ')}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Mic size={12} />
+                  {globalPttActive ? 'Active' : 'Enable'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Barge-in Detection */}
+          <div className="space-y-2 pt-2 border-t border-border">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Barge-in Detection</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Interrupt AI speech by talking. Requires VAD support.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void enableBargeIn(!bargeInEnabled)}
+                disabled={!capabilities?.vadAvailable}
+                className={[
+                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                  bargeInEnabled
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                    : 'bg-muted/40 text-foreground border border-border hover:bg-accent',
+                  !capabilities?.vadAvailable ? 'opacity-50 cursor-not-allowed' : '',
+                ].join(' ')}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Shield size={12} />
+                  {bargeInEnabled ? 'Enabled' : 'Enable'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Voice Persona */}
+      <div>
+        <h3 className="text-lg font-semibold mb-1">Voice Persona</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Choose a speaking style for AI voice responses. Preview each persona before selecting.
+        </p>
+
+        <div className="rounded-lg border border-border bg-card p-6">
+          <VoicePersonaSelector selectedPersona={selectedPersona} onSelect={handlePersonaSelect} />
+        </div>
+      </div>
+
+      {/* Local Models Management */}
+      <div>
+        <h3 className="text-lg font-semibold mb-1">Local Voice Models</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Download models for fully offline speech recognition and synthesis.
+        </p>
+
+        <div className="rounded-lg border border-border bg-card p-6 space-y-5">
+          {/* Whisper STT Models */}
+          <div className="space-y-2">
+            <Label>Whisper STT Models</Label>
+            <div className="space-y-2">
+              {whisperModels.map((model) => (
+                <div
+                  key={model.size}
+                  className="flex items-center justify-between p-2 rounded bg-muted/30"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <Mic size={14} className="text-muted-foreground" />
+                    <span className="font-medium">{model.size}</span>
+                    <span className="text-xs text-muted-foreground">
+                      ({(model.sizeBytes / 1024 / 1024).toFixed(0)} MB)
+                    </span>
+                  </div>
+                  {model.downloaded ? (
+                    <span className="flex items-center gap-1 text-xs text-green-400">
+                      <CheckCircle2 size={12} />
+                      Downloaded
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={downloadingModel === model.size}
+                      onClick={async () => {
+                        setDownloadingModel(model.size);
+                        try {
+                          await downloadWhisperModel(model.size);
+                          const updated = await listWhisperModels();
+                          setWhisperModels(updated);
+                        } catch (err) {
+                          console.error('Whisper download failed:', err);
+                          toast.error('Failed to download model');
+                        } finally {
+                          setDownloadingModel(null);
+                        }
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-muted/40 border border-border hover:bg-accent transition-colors"
+                    >
+                      {downloadingModel === model.size ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Download size={12} />
+                      )}
+                      Download
+                    </button>
+                  )}
+                </div>
+              ))}
+              {whisperModels.length === 0 && (
+                <p className="text-xs text-muted-foreground">Loading models...</p>
+              )}
+            </div>
+          </div>
+
+          {/* Piper TTS Voices */}
+          <div className="space-y-2 pt-3 border-t border-border">
+            <Label>Piper TTS Voices</Label>
+            <div className="space-y-2">
+              {piperVoices.slice(0, 6).map((voice) => (
+                <div
+                  key={voice.id}
+                  className="flex items-center justify-between p-2 rounded bg-muted/30"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <Volume2 size={14} className="text-muted-foreground" />
+                    <span className="font-medium">{voice.name || voice.id}</span>
+                    <span className="text-xs text-muted-foreground">{voice.language}</span>
+                  </div>
+                  {voice.isDownloaded ? (
+                    <span className="flex items-center gap-1 text-xs text-green-400">
+                      <CheckCircle2 size={12} />
+                      Downloaded
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={downloadingVoice === voice.id}
+                      onClick={async () => {
+                        setDownloadingVoice(voice.id);
+                        try {
+                          await downloadPiperVoice(voice.id);
+                          const updated = await listPiperVoices();
+                          setPiperVoices(updated);
+                        } catch (err) {
+                          console.error('Piper download failed:', err);
+                          toast.error('Failed to download voice');
+                        } finally {
+                          setDownloadingVoice(null);
+                        }
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-muted/40 border border-border hover:bg-accent transition-colors"
+                    >
+                      {downloadingVoice === voice.id ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Download size={12} />
+                      )}
+                      Download
+                    </button>
+                  )}
+                </div>
+              ))}
+              {piperVoices.length === 0 && (
+                <p className="text-xs text-muted-foreground">Loading voices...</p>
+              )}
+            </div>
           </div>
         </div>
       </div>

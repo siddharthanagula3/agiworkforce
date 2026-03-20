@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { format as formatDate } from 'date-fns';
 import {
   Calendar,
@@ -60,7 +61,26 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
     createEvent,
     updateEvent,
     deleteEvent,
-  } = useCalendarStore();
+  } = useCalendarStore(
+    useShallow((s) => ({
+      accounts: s.accounts,
+      calendars: s.calendars,
+      events: s.events,
+      selectedAccountId: s.selectedAccountId,
+      selectedCalendarId: s.selectedCalendarId,
+      loading: s.loading,
+      pendingAuth: s.pendingAuth,
+      refreshAccounts: s.refreshAccounts,
+      beginConnect: s.beginConnect,
+      completeConnect: s.completeConnect,
+      selectAccount: s.selectAccount,
+      selectCalendar: s.selectCalendar,
+      refreshEvents: s.refreshEvents,
+      createEvent: s.createEvent,
+      updateEvent: s.updateEvent,
+      deleteEvent: s.deleteEvent,
+    })),
+  );
 
   const [connectOpen, setConnectOpen] = useState(false);
   const [connectConfig, setConnectConfig] = useState<CalendarConnectConfig>({
@@ -311,7 +331,8 @@ export function CalendarWorkspace({ className }: CalendarWorkspaceProps) {
             <h3 className="mb-4 text-sm font-medium text-muted-foreground">Connected Accounts</h3>
             <div className="space-y-2">
               {accounts.map((account) => (
-                <button type="button"
+                <button
+                  type="button"
                   key={account.account_id}
                   onClick={() => selectAccount(account.account_id)}
                   className="flex w-full items-center justify-between rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent hover:text-accent-foreground"

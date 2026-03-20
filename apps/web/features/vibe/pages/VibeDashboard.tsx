@@ -39,6 +39,7 @@ import { Button } from '@shared/ui/button';
 import { AlertTriangle, RefreshCw, ArrowLeft } from 'lucide-react';
 import { useSSEStreaming } from '../hooks/useSSEStreaming';
 import { useVibeSend } from '../hooks/useVibeSend';
+import VibeChatCanvas from '../components/chat/VibeChatCanvas';
 
 // Error fallback component for Vibe page
 const VibeErrorFallback = () => (
@@ -537,14 +538,17 @@ const VibeDashboard: React.FC = () => {
                 ))}
               </div>
               <div className="flex-1 overflow-hidden">
-                {mobileTab === 'chat' && (
-                  <SimpleChatPanel
-                    messages={messages}
-                    isLoading={isLoading}
-                    onPromptSelect={handleSendMessage}
-                    showEmptyState={messages.length === 0}
-                  />
-                )}
+                {mobileTab === 'chat' &&
+                  (messages.length === 0 ? (
+                    <VibeChatCanvas />
+                  ) : (
+                    <SimpleChatPanel
+                      messages={messages}
+                      isLoading={isLoading}
+                      onPromptSelect={handleSendMessage}
+                      showEmptyState={false}
+                    />
+                  ))}
                 {mobileTab === 'code' && <CodeEditorPanel />}
                 {mobileTab === 'preview' && <LivePreviewPanel key={previewKey} />}
               </div>

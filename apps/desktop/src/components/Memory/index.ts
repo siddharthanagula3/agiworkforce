@@ -19,9 +19,6 @@ export type { MemoryImportanceIndicatorProps } from './MemoryImportanceIndicator
 export { CreateMemoryDialog } from './CreateMemoryDialog';
 export type { CreateMemoryDialogProps } from './CreateMemoryDialog';
 
-export { MemorySidebar, MemoryLoadedIndicator } from './MemorySidebar';
-export type { MemorySidebarProps } from './MemorySidebar';
-
 export { MemoryBrowserModal, useMemoryBrowserModal } from './MemoryBrowserModal';
 export type { MemoryBrowserModalProps } from './MemoryBrowserModal';
 
@@ -34,3 +31,6 @@ export type { MemoryBadgeProps } from './MemoryBadge';
 
 export { SaveToMemoryButton } from './SaveToMemoryButton';
 export type { SaveToMemoryButtonProps } from './SaveToMemoryButton';
+
+export { MemoryImport } from './MemoryImport';
+export type { MemoryImportProps, ImportSource } from './MemoryImport';

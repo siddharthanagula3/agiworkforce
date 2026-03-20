@@ -27,6 +27,7 @@ import {
 import { cn } from '../../lib/utils';
 import type { ToolLabelEntry } from '@agiworkforce/types';
 import React, { useState, useCallback } from 'react';
+import { toast } from 'sonner';
 import { invoke } from '../../lib/tauri-mock';
 import { useToolStore } from '../../stores/chat/toolStore';
 
@@ -118,6 +119,9 @@ function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
       onRewind?.();
     } catch (err) {
       console.error('[ToolLabel] Rewind failed:', err);
+      toast.error('Rewind failed', {
+        description: err instanceof Error ? err.message : 'Could not undo this change',
+      });
     } finally {
       setRewinding(false);
     }

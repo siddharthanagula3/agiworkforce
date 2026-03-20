@@ -168,6 +168,22 @@ export const MAX_METADATA_SIZE_BYTES = 4096;
 export const MAX_METADATA_KEYS = 20;
 
 // =============================================================================
+// Session Resilience
+// =============================================================================
+
+/** Default long-lived session TTL (24 hours) — used after initial pairing handshake */
+export const SESSION_LONG_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Stale session threshold: remove sessions without heartbeat for >5 minutes */
+export const STALE_SESSION_HEARTBEAT_THRESHOLD_MS = 5 * 60 * 1000;
+
+/** Maximum pending approvals stored per session while mobile is disconnected */
+export const MAX_PENDING_APPROVALS_PER_SESSION = 50;
+
+/** TTL for pending approvals before they expire (10 minutes) */
+export const PENDING_APPROVAL_TTL_MS = 10 * 60 * 1000;
+
+// =============================================================================
 // Admin Endpoints
 // =============================================================================
 

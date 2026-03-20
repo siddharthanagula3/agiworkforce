@@ -1,43 +1,8 @@
-import type { ExtensionConfig, RateLimitState } from './types';
-
-/** Default WebSocket port — must match AGI_REALTIME_PORT env var in the Rust backend (default: 8787) */
-const DEFAULT_DESKTOP_PORT = 8787;
-
-// Configuration — port can be overridden via extension settings (popup → Advanced)
-export const DEFAULT_CONFIG: ExtensionConfig = {
-  desktopAppPort: DEFAULT_DESKTOP_PORT,
-  desktopAppUrl: `http://localhost:${DEFAULT_DESKTOP_PORT}`,
-  enableLogging: true,
-  maxRetries: 3,
-  retryDelayMs: 1000,
-  requestTimeoutMs: 30000,
-};
-
-export async function getConfig(): Promise<ExtensionConfig> {
-  try {
-    const stored = await chrome.storage.local.get('config');
-    return stored['config']
-      ? { ...DEFAULT_CONFIG, ...(stored['config'] as Partial<ExtensionConfig>) }
-      : DEFAULT_CONFIG;
-  } catch {
-    return DEFAULT_CONFIG;
-  }
-}
-
-export async function saveConfig(config: Partial<ExtensionConfig>): Promise<void> {
-  try {
-    const current = await getConfig();
-    await chrome.storage.local.set({ config: { ...current, ...config } });
-  } catch (error) {
-    logger.error('Failed to save config', error);
-  }
-}
+import type { RateLimitState } from './types';
 
 export const logger = {
   debug: (message: string, data?: unknown) => {
-    if (DEFAULT_CONFIG.enableLogging) {
-      console.debug(`[AGI Workforce] ${message}`, data);
-    }
+    console.debug(`[AGI Workforce] ${message}`, data);
   },
   info: (message: string, data?: unknown) => {
     console.info(`[AGI Workforce] ${message}`, data);
@@ -54,33 +19,7 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function retry<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = DEFAULT_CONFIG.maxRetries,
-  delayMs: number = DEFAULT_CONFIG.retryDelayMs,
-): Promise<T> {
-  let lastError: unknown;
-
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      if (i < maxRetries - 1) {
-        const delay = delayMs * Math.pow(2, i);
-        logger.warn(`Attempt ${i + 1} failed, retrying in ${delay}ms`, error);
-        await sleep(delay);
-      }
-    }
-  }
-
-  throw lastError;
-}
-
-export async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number = DEFAULT_CONFIG.requestTimeoutMs,
-): Promise<T> {
+export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 30000): Promise<T> {
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
   const timeoutPromise = new Promise<T>((_resolve, reject) => {

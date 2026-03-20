@@ -78,7 +78,7 @@ describe('OpenAIProvider', () => {
     it('should create provider with default configuration', () => {
       const config = provider.getConfig();
 
-      expect(config.model).toBe('gpt-4o');
+      expect(config.model).toBe('gpt-5.4');
       expect(config.maxTokens).toBe(4000);
       expect(config.temperature).toBe(0.7);
       expect(config.systemPrompt).toBe('You are a helpful AI assistant.');
@@ -87,7 +87,7 @@ describe('OpenAIProvider', () => {
 
     it('should create provider with custom configuration', () => {
       const customProvider = new OpenAIProvider({
-        model: 'gpt-5.2',
+        model: 'gpt-5.4',
         maxTokens: 8000,
         temperature: 0.5,
         systemPrompt: 'Custom prompt',
@@ -95,7 +95,7 @@ describe('OpenAIProvider', () => {
 
       const config = customProvider.getConfig();
 
-      expect(config.model).toBe('gpt-5.2');
+      expect(config.model).toBe('gpt-5.4');
       expect(config.maxTokens).toBe(8000);
       expect(config.temperature).toBe(0.5);
       expect(config.systemPrompt).toBe('Custom prompt');
@@ -133,8 +133,8 @@ describe('OpenAIProvider', () => {
     it('should return available models', () => {
       const models = OpenAIProvider.getAvailableModels();
 
-      expect(models).toContain('gpt-4o');
-      expect(models).toContain('gpt-5.2');
+      expect(models).toContain('gpt-5.4');
+      expect(models).toContain('gpt-5.4');
       expect(models).toContain('o3');
       expect(models.length).toBeGreaterThan(0);
     });
@@ -192,7 +192,7 @@ describe('OpenAIProvider', () => {
       expect(response.usage?.promptTokens).toBe(10);
       expect(response.usage?.completionTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
-      expect(response.model).toBe('gpt-4o');
+      expect(response.model).toBe('gpt-5.4');
     });
 
     it('should handle response with content field directly', async () => {
@@ -490,7 +490,7 @@ describe('OpenAIProvider', () => {
       );
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(requestBody.model).toBe('gpt-4o');
+      expect(requestBody.model).toBe('gpt-5.4');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
     });

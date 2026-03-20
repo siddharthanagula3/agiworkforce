@@ -7,7 +7,7 @@ import { ScrollArea } from '../../../components/ui/ScrollArea';
 import { Separator } from '../../../components/ui/Separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/Tabs';
 import { Textarea } from '../../../components/ui/Textarea';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import { useAuthStore } from '../../../stores/auth';
 import type { WorkflowDefinition } from '../../../types/workflow';
 import { useMarketplaceStore } from '../marketplaceStore';
@@ -49,10 +49,8 @@ export function WorkflowDetailModal() {
       // MKT-003 fix: Validate user ID before attempting clone
       const userId = useAuthStore.getState().getCurrentUserId();
       if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
-        toast({
-          title: 'Authentication required',
+        toast.error('Authentication required', {
           description: 'Please sign in to clone workflows.',
-          variant: 'destructive',
         });
         return;
       }
@@ -68,10 +66,8 @@ export function WorkflowDetailModal() {
       showCloneSuccess(selectedWorkflow);
     } catch (error) {
       console.error('Failed to clone workflow:', error);
-      toast({
-        title: 'Clone failed',
+      toast.error('Clone failed', {
         description: 'Failed to clone workflow. Please try again.',
-        variant: 'destructive',
       });
     } finally {
       setIsCloning(false);
@@ -84,10 +80,8 @@ export function WorkflowDetailModal() {
 
   const handleSubmitReview = async () => {
     if (userRating === 0) {
-      toast({
-        title: 'Rating required',
+      toast.error('Rating required', {
         description: 'Please select a rating before submitting.',
-        variant: 'destructive',
       });
       return;
     }
@@ -97,10 +91,8 @@ export function WorkflowDetailModal() {
       // MKT-003 fix: Validate user ID before attempting review submission
       const userId = useAuthStore.getState().getCurrentUserId();
       if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
-        toast({
-          title: 'Authentication required',
+        toast.error('Authentication required', {
           description: 'Please sign in to submit reviews.',
-          variant: 'destructive',
         });
         return;
       }
@@ -114,16 +106,13 @@ export function WorkflowDetailModal() {
 
       setUserRating(0);
       setReviewText('');
-      toast({
-        title: 'Review submitted',
+      toast.success('Review submitted', {
         description: 'Thank you for your feedback!',
       });
     } catch (error) {
       console.error('Failed to submit review:', error);
-      toast({
-        title: 'Submission failed',
+      toast.error('Submission failed', {
         description: 'Failed to submit review. Please try again.',
-        variant: 'destructive',
       });
     } finally {
       setIsSubmittingReview(false);
@@ -334,7 +323,8 @@ export function WorkflowDetailModal() {
                         <label className="text-sm font-medium mb-2 block">Your Rating</label>
                         <div className="flex gap-2">
                           {[1, 2, 3, 4, 5].map((rating) => (
-                            <button type="button"
+                            <button
+                              type="button"
                               key={rating}
                               onClick={() => setUserRating(rating)}
                               className="transition-transform hover:scale-110"
@@ -407,7 +397,10 @@ export function WorkflowDetailModal() {
                           {review.review_text && (
                             <p className="text-muted-foreground mb-2">{review.review_text}</p>
                           )}
-                          <button type="button" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                          >
                             <ThumbsUp className="h-4 w-4" />
                             <span>Helpful ({review.helpful_count})</span>
                           </button>

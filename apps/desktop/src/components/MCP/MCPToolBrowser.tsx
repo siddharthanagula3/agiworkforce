@@ -97,7 +97,6 @@ export default function MCPToolBrowser({ tools }: MCPToolBrowserProps) {
                     {isExpanded && (
                       <CardContent>
                         <div className="space-y-3">
-                          {}
                           <div>
                             <p className="text-xs font-medium text-muted-foreground mb-1">
                               Tool ID
@@ -107,7 +106,6 @@ export default function MCPToolBrowser({ tools }: MCPToolBrowserProps) {
                             </code>
                           </div>
 
-                          {}
                           {tool.description && (
                             <div>
                               <p className="text-xs font-medium text-muted-foreground mb-1">
@@ -117,7 +115,6 @@ export default function MCPToolBrowser({ tools }: MCPToolBrowserProps) {
                             </div>
                           )}
 
-                          {}
                           <div className="pt-2 border-t">
                             <Button variant="outline" size="sm" disabled>
                               <Play className="w-3 h-3 mr-2" />

@@ -29,7 +29,7 @@ vi.mock('@/utils/supabase/client', () => ({
 vi.mock('@shared/stores/model-store', () => ({
   useModelStore: {
     getState: vi.fn(() => ({
-      selectedModelId: 'gpt-4o',
+      selectedModelId: 'gpt-5.4',
     })),
   },
 }));

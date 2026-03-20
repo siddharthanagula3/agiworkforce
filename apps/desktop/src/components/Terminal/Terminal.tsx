@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -20,8 +21,14 @@ export function Terminal({ sessionId, className }: TerminalProps) {
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const { theme } = useThemeContext();
-  const { sendInput, resizeTerminal, setupOutputListener, removeOutputListener } =
-    useTerminalStore();
+  const { sendInput, resizeTerminal, setupOutputListener, removeOutputListener } = useTerminalStore(
+    useShallow((s) => ({
+      sendInput: s.sendInput,
+      resizeTerminal: s.resizeTerminal,
+      setupOutputListener: s.setupOutputListener,
+      removeOutputListener: s.removeOutputListener,
+    })),
+  );
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {

@@ -26,8 +26,8 @@ export const SUPPORTED_MODELS = [
   'gpt-5.4-nano',
   'o3',
   // OpenAI GPT-4 models
-  'gpt-4o',
-  'gpt-4o-mini',
+  'gpt-5.4',
+  'gpt-5.4-mini',
   'gpt-4-turbo',
   'gpt-4',
   'gpt-3.5-turbo',

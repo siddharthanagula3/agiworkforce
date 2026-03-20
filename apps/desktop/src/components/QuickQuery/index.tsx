@@ -87,6 +87,8 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
   useEffect(() => {
     if (!open) return;
 
+    let cleaned = false;
+
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
       if (overlayRef.current && !overlayRef.current.contains(target)) {
@@ -100,10 +102,12 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
 
     // Use a small delay so the opening click doesn't immediately close it
     const timer = setTimeout(() => {
+      if (cleaned) return; // effect was cleaned up before the timer fired
       document.addEventListener('mousedown', handleClick);
     }, 100);
 
     return () => {
+      cleaned = true;
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClick);
     };
@@ -163,7 +167,7 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-[18vh] animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[var(--z-fullscreen)] flex items-start justify-center pt-[18vh] animate-in fade-in duration-150">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
@@ -186,7 +190,8 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
             Quick Query
           </span>
           <div className="flex-1" />
-          <button type="button"
+          <button
+            type="button"
             onClick={onClose}
             className="p-1 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors"
             aria-label="Close quick query"
@@ -220,7 +225,8 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
         <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.06]">
           {/* Model selector */}
           <div className="relative" ref={dropdownRef}>
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setModelDropdownOpen((prev) => !prev)}
               className={cn(
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg',
@@ -255,7 +261,8 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
                 {modelOptions.map((option) => {
                   const isSelected = selectedModel === option.value;
                   return (
-                    <button type="button"
+                    <button
+                      type="button"
                       key={option.value}
                       onClick={() => {
                         void selectModel(option.value, option.provider);
@@ -296,7 +303,8 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
               </kbd>
               <span>to send</span>
             </div>
-            <button type="button"
+            <button
+              type="button"
               onClick={handleSubmit}
               disabled={!query.trim()}
               className={cn(

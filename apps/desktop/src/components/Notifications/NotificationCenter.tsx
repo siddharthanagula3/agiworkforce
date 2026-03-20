@@ -23,14 +23,24 @@ import {
   Users,
   Trophy,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 import {
-  useNotifications,
-  type Notification,
-  type NotificationType,
-} from '@/hooks/useNotifications';
+  useNotificationStore,
+  selectNotifications,
+  selectUnreadCount,
+  selectNotificationLoading,
+  selectNotificationError,
+  selectHasMore,
+} from '@/stores/notificationStore';
+import type {
+  Notification,
+  NotificationType,
+  NotificationPriority,
+} from '@/stores/notificationStore';
+import { useSettingsDialogStore } from '@/stores/settingsDialogStore';
+import type { SettingsTab } from '@/stores/settingsDialogStore';
 import { Button } from '@/components/ui/Button';
 import { ScrollArea } from '@/components/ui/ScrollArea';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -102,6 +112,40 @@ function formatRelativeTime(dateString: string): string {
   return date.toLocaleDateString();
 }
 
+function getPriorityConfig(priority: NotificationPriority) {
+  switch (priority) {
+    case 'urgent':
+      return {
+        label: 'Critical',
+        dotColor: 'bg-red-500',
+        badgeClass: 'bg-red-500/15 text-red-500 border-red-500/30',
+        ringClass: 'ring-1 ring-red-500/20',
+      };
+    case 'high':
+      return {
+        label: 'High',
+        dotColor: 'bg-orange-500',
+        badgeClass: 'bg-orange-500/15 text-orange-500 border-orange-500/30',
+        ringClass: 'ring-1 ring-orange-500/10',
+      };
+    case 'normal':
+      return {
+        label: 'Normal',
+        dotColor: 'bg-blue-500',
+        badgeClass: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+        ringClass: '',
+      };
+    case 'low':
+    default:
+      return {
+        label: 'Low',
+        dotColor: 'bg-muted-foreground/40',
+        badgeClass: 'bg-muted text-muted-foreground border-border',
+        ringClass: '',
+      };
+  }
+}
+
 // ============================================================================
 // Sub-components
 // ============================================================================
@@ -123,7 +167,7 @@ function NotificationItem({
     if (!notification.read) {
       onMarkRead(notification.id);
     }
-    if (notification.action_url && onActionClick) {
+    if (notification.actionUrl && onActionClick) {
       onActionClick(notification);
     }
   }, [notification, onMarkRead, onActionClick]);
@@ -144,12 +188,15 @@ function NotificationItem({
     [notification.id, onMarkRead],
   );
 
+  const priorityConf = getPriorityConfig(notification.priority);
+
   return (
     <div
       className={cn(
         'flex items-start gap-3 p-3 rounded-lg transition-colors cursor-pointer',
         'hover:bg-accent/50',
         !notification.read && 'bg-accent/30',
+        priorityConf.ringClass,
       )}
       onClick={handleClick}
       role="button"
@@ -160,26 +207,47 @@ function NotificationItem({
         }
       }}
     >
-      {/* Icon */}
-      <div
-        className={cn('flex h-9 w-9 items-center justify-center rounded-full shrink-0', 'bg-muted')}
-      >
-        {getNotificationIcon(notification.type)}
+      {/* Priority dot + Icon */}
+      <div className="relative shrink-0">
+        <div className={cn('flex h-9 w-9 items-center justify-center rounded-full', 'bg-muted')}>
+          {getNotificationIcon(notification.type)}
+        </div>
+        {/* Priority indicator dot */}
+        {(notification.priority === 'urgent' || notification.priority === 'high') && (
+          <span
+            className={cn(
+              'absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background',
+              priorityConf.dotColor,
+            )}
+          />
+        )}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p
-              className={cn(
-                'text-sm font-medium truncate',
-                !notification.read && 'text-foreground',
-                notification.read && 'text-muted-foreground',
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p
+                className={cn(
+                  'text-sm font-medium truncate',
+                  !notification.read && 'text-foreground',
+                  notification.read && 'text-muted-foreground',
+                )}
+              >
+                {notification.title}
+              </p>
+              {(notification.priority === 'urgent' || notification.priority === 'high') && (
+                <span
+                  className={cn(
+                    'shrink-0 rounded border px-1 py-0 text-[9px] font-semibold uppercase tracking-wider',
+                    priorityConf.badgeClass,
+                  )}
+                >
+                  {priorityConf.label}
+                </span>
               )}
-            >
-              {notification.title}
-            </p>
+            </div>
             <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
               {notification.message}
             </p>
@@ -194,14 +262,19 @@ function NotificationItem({
         {/* Footer */}
         <div className="flex items-center justify-between mt-2">
           <span className="text-xs text-muted-foreground">
-            {formatRelativeTime(notification.created_at)}
+            {formatRelativeTime(notification.createdAt)}
           </span>
 
           <div className="flex items-center gap-1">
-            {notification.action_url && (
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleClick}>
-                <ChevronRight className="h-3 w-3" />
-              </Button>
+            {notification.actionUrl && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleClick}>
+                    <ChevronRight className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{notification.actionLabel ?? 'Go to context'}</TooltipContent>
+              </Tooltip>
             )}
             {!notification.read && (
               <Tooltip>
@@ -243,22 +316,67 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
   const [isOpen, setIsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
-  const {
-    notifications,
-    unreadCount,
-    isLoading,
-    error,
-    hasMore,
-    markRead,
-    markAllRead,
-    deleteNotification,
-    deleteAllRead,
-    refresh,
-    loadMore,
-  } = useNotifications({
-    autoFetch: true,
-    pageSize: 20,
-  });
+  // Default navigation handler: parse actionUrl like "task:abc-123", "approval:xyz", etc.
+  // and open the settings dialog at the relevant tab or emit a navigation event.
+  const handleNavigate = useCallback(
+    (notification: Notification) => {
+      if (onActionClick) {
+        onActionClick(notification);
+        return;
+      }
+
+      const url = notification.actionUrl;
+      if (!url) return;
+
+      // Simple scheme-based routing
+      const [scheme, id] = url.split(':', 2);
+      switch (scheme) {
+        case 'task':
+        case 'approval':
+        case 'workflow': {
+          // Emit a custom event that the app shell can listen to for routing
+          window.dispatchEvent(
+            new CustomEvent('notification:navigate', { detail: { scheme, id, notification } }),
+          );
+          break;
+        }
+        case 'settings': {
+          useSettingsDialogStore.getState().openSettings((id as SettingsTab) || 'general');
+          break;
+        }
+        default:
+          // For plain URLs, open externally
+          if (url.startsWith('http')) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+          }
+      }
+
+      setIsOpen(false);
+    },
+    [onActionClick],
+  );
+
+  const notifications = useNotificationStore(selectNotifications);
+  const unreadCount = useNotificationStore(selectUnreadCount);
+  const isLoading = useNotificationStore(selectNotificationLoading);
+  const error = useNotificationStore(selectNotificationError);
+  const hasMore = useNotificationStore(selectHasMore);
+  const storeMarkRead = useNotificationStore((s) => s.markRead);
+  const storeMarkAllRead = useNotificationStore((s) => s.markAllRead);
+  const storeDelete = useNotificationStore((s) => s.deleteNotification);
+  const storeDeleteAllRead = useNotificationStore((s) => s.deleteAllRead);
+  const storeList = useNotificationStore((s) => s.list);
+  const page = useNotificationStore((s) => s.page);
+
+  // Initialize the notification store on mount
+  useEffect(() => {
+    const store = useNotificationStore.getState();
+    void store.init();
+    void store.list(1, 20);
+    return () => {
+      useNotificationStore.getState().cleanup();
+    };
+  }, []);
 
   // Filter notifications based on active tab
   const filteredNotifications = useMemo(() => {
@@ -271,56 +389,58 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
   const handleMarkRead = useCallback(
     async (id: string) => {
       try {
-        await markRead(id);
+        await storeMarkRead(id);
       } catch (err) {
         console.error('[NotificationCenter] Failed to mark as read:', err);
       }
     },
-    [markRead],
+    [storeMarkRead],
   );
 
   const handleDelete = useCallback(
     async (id: string) => {
       try {
-        await deleteNotification(id);
+        await storeDelete(id);
       } catch (err) {
         console.error('[NotificationCenter] Failed to delete:', err);
       }
     },
-    [deleteNotification],
+    [storeDelete],
   );
 
   const handleMarkAllRead = useCallback(async () => {
     try {
-      await markAllRead();
+      await storeMarkAllRead();
     } catch (err) {
       console.error('[NotificationCenter] Failed to mark all as read:', err);
     }
-  }, [markAllRead]);
+  }, [storeMarkAllRead]);
 
   const handleDeleteAllRead = useCallback(async () => {
     try {
-      await deleteAllRead();
+      await storeDeleteAllRead();
     } catch (err) {
       console.error('[NotificationCenter] Failed to delete all read:', err);
     }
-  }, [deleteAllRead]);
+  }, [storeDeleteAllRead]);
 
   const handleRefresh = useCallback(async () => {
     try {
-      await refresh();
+      await storeList(1, 20);
     } catch (err) {
       console.error('[NotificationCenter] Failed to refresh:', err);
     }
-  }, [refresh]);
+  }, [storeList]);
 
   const handleLoadMore = useCallback(async () => {
     try {
-      await loadMore();
+      if (hasMore && !isLoading) {
+        await storeList(page + 1, 20);
+      }
     } catch (err) {
       console.error('[NotificationCenter] Failed to load more:', err);
     }
-  }, [loadMore]);
+  }, [storeList, hasMore, isLoading, page]);
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -479,7 +599,7 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
                     notification={notification}
                     onMarkRead={handleMarkRead}
                     onDelete={handleDelete}
-                    onActionClick={onActionClick}
+                    onActionClick={handleNavigate}
                   />
                 ))}
 

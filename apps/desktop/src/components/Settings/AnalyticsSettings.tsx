@@ -1,16 +1,19 @@
 import { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBillingUsageStore } from '../../stores/billingUsage';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import { PrivacyConsent } from '../../types/analytics';
 
 export const AnalyticsSettings = () => {
   const { privacyConsent, updatePrivacyConsent, exportAnalyticsData, deleteAllAnalyticsData } =
-    useBillingUsageStore((state) => ({
-      privacyConsent: state.privacyConsent,
-      updatePrivacyConsent: state.updatePrivacyConsent,
-      exportAnalyticsData: state.exportAnalyticsData,
-      deleteAllAnalyticsData: state.deleteAllAnalyticsData,
-    }));
+    useBillingUsageStore(
+      useShallow((state) => ({
+        privacyConsent: state.privacyConsent,
+        updatePrivacyConsent: state.updatePrivacyConsent,
+        exportAnalyticsData: state.exportAnalyticsData,
+        deleteAllAnalyticsData: state.deleteAllAnalyticsData,
+      })),
+    );
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -37,16 +40,13 @@ export const AnalyticsSettings = () => {
     setIsExporting(true);
     try {
       await exportAnalyticsData();
-      toast({
-        title: 'Export successful',
+      toast.success('Export successful', {
         description: 'Analytics data exported successfully!',
       });
     } catch (error) {
       console.error('Failed to export data:', error);
-      toast({
-        title: 'Export failed',
+      toast.error('Export failed', {
         description: 'Failed to export analytics data. Please try again.',
-        variant: 'destructive',
       });
     } finally {
       setIsExporting(false);
@@ -57,17 +57,14 @@ export const AnalyticsSettings = () => {
     setIsDeleting(true);
     try {
       await deleteAllAnalyticsData();
-      toast({
-        title: 'Data deleted',
+      toast.success('Data deleted', {
         description: 'All analytics data deleted successfully!',
       });
       setShowDeleteConfirm(false);
     } catch (error) {
       console.error('Failed to delete data:', error);
-      toast({
-        title: 'Delete failed',
+      toast.error('Delete failed', {
         description: 'Failed to delete analytics data. Please try again.',
-        variant: 'destructive',
       });
     } finally {
       setIsDeleting(false);
@@ -193,7 +190,8 @@ export const AnalyticsSettings = () => {
                 Download all analytics data we've collected about you
               </p>
             </div>
-            <button type="button"
+            <button
+              type="button"
               onClick={handleExportData}
               disabled={isExporting}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
@@ -210,7 +208,8 @@ export const AnalyticsSettings = () => {
                 Permanently delete all analytics data associated with this device
               </p>
             </div>
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setShowDeleteConfirm(true)}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
             >
@@ -254,14 +253,16 @@ export const AnalyticsSettings = () => {
               undone.
             </p>
             <div className="flex gap-3">
-              <button type="button"
+              <button
+                type="button"
                 onClick={handleDeleteAllData}
                 disabled={isDeleting}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 {isDeleting ? 'Deleting...' : 'Delete All Data'}
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={isDeleting}
                 className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
@@ -290,7 +291,8 @@ const SettingToggle: React.FC<SettingToggleProps> = ({ title, description, enabl
         <h4 className="font-medium text-gray-900 dark:text-white mb-1">{title}</h4>
         <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
       </div>
-      <button type="button"
+      <button
+        type="button"
         onClick={onToggle}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
           enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'

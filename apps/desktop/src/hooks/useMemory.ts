@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useShallow } from 'zustand/react/shallow';
 import { invoke } from '../lib/tauri-mock';
 import type { MemoryCategory, MemoryEntry } from '../stores/memoryStore';
 import { useMemoryStore } from '../stores/memoryStore';
@@ -158,8 +159,9 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
   const [error, setError] = useState<string | null>(null);
 
   // Use the memory store for shared state
-  const memoryStore = useMemoryStore();
-  const { memories, isLoading, loadAll } = memoryStore;
+  const { memories, isLoading, loadAll } = useMemoryStore(
+    useShallow((s) => ({ memories: s.memories, isLoading: s.isLoading, loadAll: s.loadAll })),
+  );
 
   // ============================================================================
   // Memory operations

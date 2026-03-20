@@ -74,7 +74,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   // Google Gemini
   'gemini-3-pro-preview': 1_000_000,
   'gemini-3-flash-preview': 1_000_000,
-  'gemini-2.5-flash-lite': 1_000_000,
+  'gemini-3-flash-lite': 1_000_000,
   // xAI Grok 4
   'grok-4': 128_000,
   'grok-4-fast-reasoning': 128_000,

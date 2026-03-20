@@ -23,7 +23,7 @@ export interface AIPreferences {
 export function useAIPreferences() {
   const [preferences, setPreferences] = useState<AIPreferences>({
     provider: 'openai',
-    model: 'gpt-4o',
+    model: 'gpt-5.4',
     temperature: 0.7,
     maxTokens: 4000,
     isLoading: true,

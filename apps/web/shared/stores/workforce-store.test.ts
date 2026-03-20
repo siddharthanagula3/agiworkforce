@@ -1,6 +1,10 @@
 /**
  * Workforce Store Unit Tests
- * Tests for the workforce management store (hired employees)
+ * Tests for the workforce management store (hired employees).
+ *
+ * The store now calls /api/workforce (GET, POST, DELETE) via fetch()
+ * instead of direct Supabase queries. Tests mock global fetch and the
+ * CSRF header helper accordingly.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -18,34 +22,18 @@ vi.mock('./authentication-store', () => ({
   },
 }));
 
-// Mock Supabase client
-let mockSupabaseResponse: { data: unknown; error: unknown } = {
-  data: [],
-  error: null,
-};
+// Mock CSRF helper — returns headers with a fake token
+vi.mock('@/lib/client/csrf', () => ({
+  addCsrfHeaders: vi.fn(async (headers: Record<string, string> = {}) => ({
+    ...headers,
+    'x-csrf-token': 'mock-csrf-token',
+  })),
+}));
 
+// Mock Supabase client (still needed for realtime subscription code)
 vi.mock('@shared/lib/supabase-client', () => ({
   supabase: {
-    from: vi.fn(() => {
-      const chainable = {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            order: vi.fn(() => Promise.resolve(mockSupabaseResponse)),
-          })),
-        })),
-        upsert: vi.fn(() => ({
-          select: vi.fn(() => ({
-            maybeSingle: vi.fn(() => Promise.resolve(mockSupabaseResponse)),
-          })),
-        })),
-        delete: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            eq: vi.fn(() => Promise.resolve(mockSupabaseResponse)),
-          })),
-        })),
-      };
-      return chainable;
-    }),
+    from: vi.fn(),
     channel: vi.fn(() => ({
       on: vi.fn(() => ({
         subscribe: vi.fn(),
@@ -54,6 +42,16 @@ vi.mock('@shared/lib/supabase-client', () => ({
     removeChannel: vi.fn(),
   },
 }));
+
+// Helper to create a mock fetch Response
+function mockFetchResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: vi.fn(async () => body),
+    headers: new Headers({ 'content-type': 'application/json' }),
+  } as unknown as Response;
+}
 
 // Import after mocks are set up
 import { useWorkforceStore } from './workforce-store';
@@ -75,9 +73,6 @@ describe('Workforce Store', () => {
 
     // Reset user to authenticated state
     currentUser = mockUser;
-
-    // Reset mock response
-    mockSupabaseResponse = { data: [], error: null };
 
     // Suppress console logs in tests
     vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -102,15 +97,39 @@ describe('Workforce Store', () => {
 
   describe('fetchHiredEmployees', () => {
     it('should fetch employees for authenticated user', async () => {
-      mockSupabaseResponse = { data: [mockEmployee], error: null };
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        mockFetchResponse({
+          success: true,
+          data: {
+            employees: [
+              {
+                id: 'emp-1',
+                employeeId: 'code-reviewer',
+                name: 'Code Reviewer',
+                hiredAt: '2025-01-01T00:00:00Z',
+              },
+            ],
+            stats: { totalHired: 1, activeEmployees: 1, totalTasksCompleted: 0 },
+          },
+        }),
+      );
 
       await useWorkforceStore.getState().fetchHiredEmployees();
 
       const state = useWorkforceStore.getState();
       expect(state.hiredEmployees).toHaveLength(1);
       expect(state.hiredEmployees[0]!.employee_name).toBe('Code Reviewer');
+      expect(state.hiredEmployees[0]!.employee_id).toBe('code-reviewer');
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
+
+      // Verify fetch was called with correct URL and method
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/workforce',
+        expect.objectContaining({
+          method: 'GET',
+        }),
+      );
     });
 
     it('should handle no authenticated user', async () => {
@@ -121,10 +140,18 @@ describe('Workforce Store', () => {
       const state = useWorkforceStore.getState();
       expect(state.hiredEmployees).toEqual([]);
       expect(state.error).toBeNull();
+
+      // fetch should not have been called
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
     it('should handle fetch errors', async () => {
-      mockSupabaseResponse = { data: null, error: { message: 'Database error' } };
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        mockFetchResponse(
+          { success: false, error: { code: 'INTERNAL_ERROR', message: 'Database error' } },
+          500,
+        ),
+      );
 
       await useWorkforceStore.getState().fetchHiredEmployees();
 
@@ -136,20 +163,16 @@ describe('Workforce Store', () => {
     it('should set loading state during fetch', async () => {
       let loadingDuringFetch = false;
 
-      // Create a delayed response to capture loading state
-      const originalFrom = vi.mocked((await import('@shared/lib/supabase-client')).supabase.from);
-      originalFrom.mockImplementationOnce((() => ({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            order: vi.fn(async () => {
-              loadingDuringFetch = useWorkforceStore.getState().isLoading;
-              return { data: [], error: null };
-            }),
-          })),
-        })),
-        upsert: vi.fn(),
-        update: vi.fn(),
-      })) as unknown as typeof originalFrom);
+      vi.spyOn(globalThis, 'fetch').mockImplementationOnce(async () => {
+        loadingDuringFetch = useWorkforceStore.getState().isLoading;
+        return mockFetchResponse({
+          success: true,
+          data: {
+            employees: [],
+            stats: { totalHired: 0, activeEmployees: 0, totalTasksCompleted: 0 },
+          },
+        });
+      });
 
       await useWorkforceStore.getState().fetchHiredEmployees();
 
@@ -182,30 +205,57 @@ describe('Workforce Store', () => {
 
   describe('hireEmployee', () => {
     it('should hire employee successfully', async () => {
-      const params = {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        mockFetchResponse(
+          {
+            success: true,
+            data: {
+              id: 'new-emp-id',
+              employeeId: 'new-employee',
+              name: 'New Employee',
+              hiredAt: '2025-01-01T00:00:00Z',
+            },
+            message: 'New Employee has been hired successfully',
+          },
+          201,
+        ),
+      );
+
+      const result = await useWorkforceStore.getState().hireEmployee({
         employee_id: 'new-employee',
         employee_name: 'New Employee',
-      };
+      });
 
-      const hiredEmployee = {
-        ...mockEmployee,
-        ...params,
+      expect(result).toEqual({
         id: 'new-emp-id',
-      };
-
-      mockSupabaseResponse = { data: hiredEmployee, error: null };
-
-      const result = await useWorkforceStore.getState().hireEmployee(params);
-
-      expect(result).toEqual(hiredEmployee);
+        user_id: 'test-user-123',
+        employee_id: 'new-employee',
+        employee_name: 'New Employee',
+        hired_at: '2025-01-01T00:00:00Z',
+      });
 
       const state = useWorkforceStore.getState();
-      expect(state.hiredEmployees).toContainEqual(hiredEmployee);
+      expect(state.hiredEmployees).toContainEqual(result);
       expect(state.isLoading).toBe(false);
+
+      // Verify fetch was called with POST and CSRF header
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/workforce',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ employeeId: 'new-employee' }),
+          headers: expect.objectContaining({ 'x-csrf-token': 'mock-csrf-token' }),
+        }),
+      );
     });
 
     it('should handle hire failure', async () => {
-      mockSupabaseResponse = { data: null, error: { message: 'Hire failed' } };
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        mockFetchResponse(
+          { success: false, error: { code: 'INTERNAL_ERROR', message: 'Hire failed' } },
+          500,
+        ),
+      );
 
       const result = await useWorkforceStore.getState().hireEmployee({
         employee_id: 'emp-1',
@@ -223,12 +273,20 @@ describe('Workforce Store', () => {
         employee_id: 'existing-employee',
       });
 
-      const hiredEmployee = {
-        ...mockEmployee,
-        employee_id: 'existing-employee',
-      };
-
-      mockSupabaseResponse = { data: hiredEmployee, error: null };
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        mockFetchResponse(
+          {
+            success: true,
+            data: {
+              id: 'emp-1',
+              employeeId: 'existing-employee',
+              name: 'Employee',
+              hiredAt: '2025-01-01T00:00:00Z',
+            },
+          },
+          201,
+        ),
+      );
 
       await useWorkforceStore.getState().hireEmployee({
         employee_id: 'existing-employee',
@@ -283,18 +341,34 @@ describe('Workforce Store', () => {
     it('should fire employee successfully', async () => {
       useWorkforceStore.getState().addHiredEmployee(mockEmployee);
 
-      mockSupabaseResponse = { data: null, error: null };
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        mockFetchResponse({ success: true, message: 'Employee removed from workforce' }),
+      );
 
       const result = await useWorkforceStore.getState().fireEmployee(mockEmployee.employee_id);
 
       expect(result).toBe(true);
       expect(useWorkforceStore.getState().hiredEmployees).toHaveLength(0);
+
+      // Verify fetch was called with DELETE, correct query param, and CSRF header
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `/api/workforce?employeeId=${encodeURIComponent(mockEmployee.employee_id)}`,
+        expect.objectContaining({
+          method: 'DELETE',
+          headers: expect.objectContaining({ 'x-csrf-token': 'mock-csrf-token' }),
+        }),
+      );
     });
 
     it('should handle fire failure', async () => {
       useWorkforceStore.getState().addHiredEmployee(mockEmployee);
 
-      mockSupabaseResponse = { data: null, error: { message: 'Fire failed' } };
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        mockFetchResponse(
+          { success: false, error: { code: 'INTERNAL_ERROR', message: 'Fire failed' } },
+          500,
+        ),
+      );
 
       const result = await useWorkforceStore.getState().fireEmployee(mockEmployee.employee_id);
 
@@ -344,7 +418,15 @@ describe('Workforce Store', () => {
 
   describe('Edge Cases', () => {
     it('should handle empty employee list', async () => {
-      mockSupabaseResponse = { data: [], error: null };
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        mockFetchResponse({
+          success: true,
+          data: {
+            employees: [],
+            stats: { totalHired: 0, activeEmployees: 0, totalTasksCompleted: 0 },
+          },
+        }),
+      );
 
       await useWorkforceStore.getState().fetchHiredEmployees();
 
@@ -352,7 +434,12 @@ describe('Workforce Store', () => {
     });
 
     it('should handle null data from fetch', async () => {
-      mockSupabaseResponse = { data: null, error: null };
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        mockFetchResponse({
+          success: true,
+          data: { employees: null },
+        }),
+      );
 
       await useWorkforceStore.getState().fetchHiredEmployees();
 
@@ -360,10 +447,7 @@ describe('Workforce Store', () => {
     });
 
     it('should handle unexpected errors in fetchHiredEmployees', async () => {
-      const { supabase } = await import('@shared/lib/supabase-client');
-      vi.mocked(supabase.from).mockImplementationOnce(() => {
-        throw new Error('Unexpected error');
-      });
+      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Unexpected error'));
 
       await useWorkforceStore.getState().fetchHiredEmployees();
 
@@ -371,10 +455,7 @@ describe('Workforce Store', () => {
     });
 
     it('should handle unexpected errors in hireEmployee', async () => {
-      const { supabase } = await import('@shared/lib/supabase-client');
-      vi.mocked(supabase.from).mockImplementationOnce(() => {
-        throw new Error('Unexpected hire error');
-      });
+      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Unexpected hire error'));
 
       const result = await useWorkforceStore.getState().hireEmployee({
         employee_id: 'emp-1',
@@ -386,10 +467,7 @@ describe('Workforce Store', () => {
     });
 
     it('should handle unexpected errors in fireEmployee', async () => {
-      const { supabase } = await import('@shared/lib/supabase-client');
-      vi.mocked(supabase.from).mockImplementationOnce(() => {
-        throw new Error('Unexpected fire error');
-      });
+      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Unexpected fire error'));
 
       const result = await useWorkforceStore.getState().fireEmployee('emp-1');
 
@@ -401,13 +479,21 @@ describe('Workforce Store', () => {
   describe('Performance', () => {
     it('should handle large employee lists', async () => {
       const largeList = Array.from({ length: 100 }, (_, i) => ({
-        ...mockEmployee,
         id: `emp-${i}`,
-        employee_id: `employee-${i}`,
-        employee_name: `Employee ${i}`,
+        employeeId: `employee-${i}`,
+        name: `Employee ${i}`,
+        hiredAt: '2025-01-01T00:00:00Z',
       }));
 
-      mockSupabaseResponse = { data: largeList, error: null };
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        mockFetchResponse({
+          success: true,
+          data: {
+            employees: largeList,
+            stats: { totalHired: 100, activeEmployees: 100, totalTasksCompleted: 0 },
+          },
+        }),
+      );
 
       const start = performance.now();
       await useWorkforceStore.getState().fetchHiredEmployees();

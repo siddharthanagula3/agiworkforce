@@ -12,8 +12,7 @@ import { useUnifiedChatStore, uuidToDbId } from '../../stores/unifiedChatStore';
 import { useChatStore } from '../../stores/chat/chatStore';
 import { useBillingStore } from '../../stores/auth';
 import { useExecutionStore } from '../../stores/executionStore';
-import { toast } from '../../hooks/useToast';
-import { toast as sonnerToast } from 'sonner';
+import { toast } from 'sonner';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
 import {
   normalizeToolNameForUi,
@@ -835,10 +834,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             } catch (err) {
               console.error('[UnifiedAgenticChat] Failed to send pending message:', err);
               // CHT-002 fix: Show user-visible error for pending message send failure
-              toast({
-                variant: 'destructive',
-                title: 'Failed to send queued message. Please try again.',
-              });
+              toast.error('Failed to send queued message. Please try again.');
             }
           }
         }),
@@ -1414,7 +1410,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
       // Agent mode tool-blocked events — notify user when a tool is blocked by the current mode
       registerListener(
         listen<{ tool_name: string; mode: string }>('tool:blocked_by_mode', ({ payload }) => {
-          sonnerToast.error(`Tool "${payload.tool_name}" is blocked in Safe mode`);
+          toast.error(`Tool "${payload.tool_name}" is blocked in Safe mode`);
         }),
       );
     };

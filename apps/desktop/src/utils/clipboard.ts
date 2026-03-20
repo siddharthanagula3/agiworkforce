@@ -8,7 +8,7 @@
  * - Promise-based API for async/await usage
  */
 
-import { toast } from '../hooks/useToast';
+import { toast } from 'sonner';
 
 export interface CopyToClipboardOptions {
   /** Show success toast on copy (default: true) */
@@ -59,7 +59,7 @@ export async function copyToClipboard(
     try {
       await navigator.clipboard.writeText(text);
       if (showSuccessToast) {
-        toast({ variant: 'success', title: successMessage });
+        toast.success(successMessage);
       }
       return true;
     } catch (err) {
@@ -74,7 +74,7 @@ export async function copyToClipboard(
     const success = fallbackCopyToClipboard(text);
     if (success) {
       if (showSuccessToast) {
-        toast({ variant: 'success', title: successMessage });
+        toast.success(successMessage);
       }
       return true;
     } else {
@@ -83,7 +83,7 @@ export async function copyToClipboard(
   } catch (err) {
     console.error('[Clipboard] All copy methods failed:', err);
     if (showErrorToast) {
-      toast({ variant: 'destructive', title: errorMessage });
+      toast.error(errorMessage);
     }
     return false;
   }
