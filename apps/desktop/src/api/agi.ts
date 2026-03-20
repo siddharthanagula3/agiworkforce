@@ -15,6 +15,8 @@
  *   get_system_resources          — get system resource usage
  */
 
+import { toast } from 'sonner';
+
 import { invoke, isTauri } from '../lib/tauri-mock';
 
 // ============================================================================
@@ -117,7 +119,14 @@ export async function agiStop(): Promise<void> {
  * The swarm decomposes the goal into parallelizable subtasks and
  * spawns multiple agents for concurrent execution.
  */
-export async function submitGoalSwarm(request: SubmitGoalRequest): Promise<SwarmGoalResponse> {
+export async function submitGoalSwarm(
+  request: SubmitGoalRequest,
+): Promise<SwarmGoalResponse | null> {
+  if (!request.description?.trim()) {
+    toast.error('Description is required');
+    return null;
+  }
+
   if (!isTauri) {
     console.info('[agi] submitGoalSwarm (mock)', request);
     return {
@@ -133,14 +142,20 @@ export async function submitGoalSwarm(request: SubmitGoalRequest): Promise<Swarm
     };
   }
 
-  return invoke<SwarmGoalResponse>('agi_submit_goal_swarm', {
-    request: {
-      description: request.description,
-      priority: request.priority,
-      deadline: request.deadline,
-      successCriteria: request.successCriteria,
-    },
-  });
+  try {
+    return await invoke<SwarmGoalResponse>('agi_submit_goal_swarm', {
+      request: {
+        description: request.description,
+        priority: request.priority,
+        deadline: request.deadline,
+        successCriteria: request.successCriteria,
+      },
+    });
+  } catch (error) {
+    console.error('[agi] submitGoalSwarm failed:', error);
+    toast.error('Failed to submit swarm goal');
+    return null;
+  }
 }
 
 /**
@@ -148,20 +163,33 @@ export async function submitGoalSwarm(request: SubmitGoalRequest): Promise<Swarm
  * The AGI determines whether to use sequential, parallel, or swarm execution.
  * This is the recommended entry point for goal submission.
  */
-export async function submitGoalAuto(request: SubmitGoalRequest): Promise<SubmitGoalResponse> {
+export async function submitGoalAuto(
+  request: SubmitGoalRequest,
+): Promise<SubmitGoalResponse | null> {
+  if (!request.description?.trim()) {
+    toast.error('Description is required');
+    return null;
+  }
+
   if (!isTauri) {
     console.info('[agi] submitGoalAuto (mock)', request);
     return { goalId: `mock_auto_${Date.now()}` };
   }
 
-  return invoke<SubmitGoalResponse>('agi_submit_goal_auto', {
-    request: {
-      description: request.description,
-      priority: request.priority,
-      deadline: request.deadline,
-      successCriteria: request.successCriteria,
-    },
-  });
+  try {
+    return await invoke<SubmitGoalResponse>('agi_submit_goal_auto', {
+      request: {
+        description: request.description,
+        priority: request.priority,
+        deadline: request.deadline,
+        successCriteria: request.successCriteria,
+      },
+    });
+  } catch (error) {
+    console.error('[agi] submitGoalAuto failed:', error);
+    toast.error('Failed to submit goal');
+    return null;
+  }
 }
 
 /**
@@ -244,5 +272,19 @@ export async function getSystemResources(): Promise<SystemResources> {
     };
   }
 
-  return invoke<SystemResources>('get_system_resources');
+  try {
+    return await invoke<SystemResources>('get_system_resources');
+  } catch (error) {
+    console.error('[agi] getSystemResources failed:', error);
+    toast.error('Failed to get system resources');
+    return {
+      cpuUsagePercent: 0,
+      memoryUsageMb: 0,
+      memoryTotalMb: 0,
+      networkUsageMbps: 0,
+      storageUsageMb: 0,
+      storageTotalMb: 0,
+      availableTools: [],
+    };
+  }
 }

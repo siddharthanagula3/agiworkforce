@@ -50,6 +50,7 @@ export interface TtsVoice {
 
 export interface TtsConfig {
   provider: string;
+  /** @deprecated API keys should be managed via SecretManager on the Rust side. Do not pass keys through frontend code. */
   apiKey?: string;
   voice?: string;
   speed?: number;
@@ -68,7 +69,8 @@ export interface PttConfig {
 }
 
 export interface DeepgramConfig {
-  apiKey: string;
+  /** @deprecated API keys should be managed via SecretManager on the Rust side. Do not pass keys through frontend code. */
+  apiKey?: string;
   model: string;
   language: string;
   sampleRate: number;
@@ -309,11 +311,13 @@ export async function voiceTtsSpeakLocal(
   volume?: number,
 ): Promise<number[]> {
   try {
-    return (await invoke<number[]>('voice_tts_speak_local', {
-      text,
-      ...(rate !== undefined ? { rate } : {}),
-      ...(volume !== undefined ? { volume } : {}),
-    })) ?? [];
+    return (
+      (await invoke<number[]>('voice_tts_speak_local', {
+        text,
+        ...(rate !== undefined ? { rate } : {}),
+        ...(volume !== undefined ? { volume } : {}),
+      })) ?? []
+    );
   } catch (e) {
     throw new Error(`voiceTtsSpeakLocal failed: ${e}`);
   }

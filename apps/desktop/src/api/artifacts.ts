@@ -499,12 +499,7 @@ export async function artifactApplyDiff(
   }
   const response = await invoke<ArtifactResponse<Artifact>>('artifact_apply_diff', {
     id,
-    hunks: hunks.map((h) => ({
-      start_line: h.startLine,
-      end_line: h.endLine,
-      original_content: h.originalContent,
-      new_content: h.newContent,
-    })),
+    hunks,
     changeDescription: changeDescription ?? null,
   });
   return unwrap(response);

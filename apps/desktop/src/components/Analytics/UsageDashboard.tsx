@@ -122,7 +122,8 @@ export const UsageDashboard: React.FC = () => {
         {}
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Analytics Dashboard</h1>
-          <button type="button"
+          <button
+            type="button"
             onClick={refreshAllMetrics}
             disabled={isLoadingMetrics}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
@@ -290,13 +291,13 @@ export const UsageDashboard: React.FC = () => {
           />
           <MetricCard
             title="Total Automations"
-            value={appMetrics?.automations_count || 0}
+            value={appMetrics?.automationsCount || 0}
             trend="+25"
             trendUp={true}
           />
           <MetricCard
             title="Goals Completed"
-            value={appMetrics?.goals_count || 0}
+            value={appMetrics?.goalsCount || 0}
             trend="+18"
             trendUp={true}
           />
@@ -306,26 +307,26 @@ export const UsageDashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             title="CPU Usage"
-            value={formatPercentage(systemMetrics?.cpu_usage || 0)}
+            value={formatPercentage(systemMetrics?.cpuUsage || 0)}
             trend=""
             trendUp={false}
           />
           <MetricCard
             title="Memory Used"
-            value={formatBytes(systemMetrics?.memory_used_mb || 0)}
-            subtitle={`/ ${formatBytes(systemMetrics?.memory_total_mb || 0)}`}
+            value={formatBytes(systemMetrics?.memoryUsedMb || 0)}
+            subtitle={`/ ${formatBytes(systemMetrics?.memoryTotalMb || 0)}`}
             trend=""
             trendUp={false}
           />
           <MetricCard
             title="Cache Hit Rate"
-            value={formatPercentage((appMetrics?.cache_hit_rate || 0) * 100)}
+            value={formatPercentage((appMetrics?.cacheHitRate || 0) * 100)}
             trend=""
             trendUp={true}
           />
           <MetricCard
             title="Avg Goal Duration"
-            value={`${((appMetrics?.avg_goal_duration_ms || 0) / 1000).toFixed(1)}s`}
+            value={`${((appMetrics?.avgGoalDurationMs || 0) / 1000).toFixed(1)}s`}
             trend=""
             trendUp={false}
           />

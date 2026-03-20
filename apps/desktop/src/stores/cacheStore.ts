@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import {
   codebaseCacheGetStats,
   codebaseCacheClearProject,
@@ -66,134 +67,150 @@ interface CacheStoreState {
   clearError: () => void;
 }
 
-export const useCacheStore = create<CacheStoreState>((set) => ({
-  codebaseStats: null,
-  isLoading: false,
-  error: null,
+export const useCacheStore = create<CacheStoreState>()(
+  devtools(
+    persist(
+      (set) => ({
+        codebaseStats: null,
+        isLoading: false,
+        error: null,
 
-  getCodebaseCacheStats: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const stats = await codebaseCacheGetStats();
-      set({ codebaseStats: stats, isLoading: false });
-      return stats;
-    } catch (error) {
-      set({ isLoading: false, error: String(error) });
-      throw error;
-    }
-  },
+        getCodebaseCacheStats: async () => {
+          set({ isLoading: true, error: null });
+          try {
+            const stats = await codebaseCacheGetStats();
+            set({ codebaseStats: stats, isLoading: false });
+            return stats;
+          } catch (error) {
+            set({ isLoading: false, error: String(error) });
+            throw error;
+          }
+        },
 
-  clearProjectCache: async (projectPath: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const deleted = await codebaseCacheClearProject(projectPath);
-      set({ isLoading: false });
-      return deleted;
-    } catch (error) {
-      set({ isLoading: false, error: String(error) });
-      throw error;
-    }
-  },
+        clearProjectCache: async (projectPath: string) => {
+          set({ isLoading: true, error: null });
+          try {
+            const deleted = await codebaseCacheClearProject(projectPath);
+            set({ isLoading: false });
+            return deleted;
+          } catch (error) {
+            set({ isLoading: false, error: String(error) });
+            throw error;
+          }
+        },
 
-  clearFileCache: async (filePath: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const deleted = await codebaseCacheClearFile(filePath);
-      set({ isLoading: false });
-      return deleted;
-    } catch (error) {
-      set({ isLoading: false, error: String(error) });
-      throw error;
-    }
-  },
+        clearFileCache: async (filePath: string) => {
+          set({ isLoading: true, error: null });
+          try {
+            const deleted = await codebaseCacheClearFile(filePath);
+            set({ isLoading: false });
+            return deleted;
+          } catch (error) {
+            set({ isLoading: false, error: String(error) });
+            throw error;
+          }
+        },
 
-  clearAllCodebaseCache: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const deleted = await codebaseCacheClearAll();
-      set({ codebaseStats: null, isLoading: false });
-      return deleted;
-    } catch (error) {
-      set({ isLoading: false, error: String(error) });
-      throw error;
-    }
-  },
+        clearAllCodebaseCache: async () => {
+          set({ isLoading: true, error: null });
+          try {
+            const deleted = await codebaseCacheClearAll();
+            set({ codebaseStats: null, isLoading: false });
+            return deleted;
+          } catch (error) {
+            set({ isLoading: false, error: String(error) });
+            throw error;
+          }
+        },
 
-  clearExpiredCodebaseCache: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const deleted = await codebaseCacheClearExpired();
-      set({ isLoading: false });
-      return deleted;
-    } catch (error) {
-      set({ isLoading: false, error: String(error) });
-      throw error;
-    }
-  },
+        clearExpiredCodebaseCache: async () => {
+          set({ isLoading: true, error: null });
+          try {
+            const deleted = await codebaseCacheClearExpired();
+            set({ isLoading: false });
+            return deleted;
+          } catch (error) {
+            set({ isLoading: false, error: String(error) });
+            throw error;
+          }
+        },
 
-  getFileTree: async (projectPath: string) => {
-    try {
-      return await codebaseCacheGetFileTree(projectPath);
-    } catch (error) {
-      console.warn('[CacheStore] Failed to get file tree:', error);
-      return null;
-    }
-  },
+        getFileTree: async (projectPath: string) => {
+          try {
+            return await codebaseCacheGetFileTree(projectPath);
+          } catch (error) {
+            console.warn('[CacheStore] Failed to get file tree:', error);
+            return null;
+          }
+        },
 
-  setFileTree: async (projectPath: string, fileTree: FileTree) => {
-    try {
-      await codebaseCacheSetFileTree(projectPath, fileTree);
-    } catch (error) {
-      console.warn('[CacheStore] Failed to set file tree:', error);
-      throw error;
-    }
-  },
+        setFileTree: async (projectPath: string, fileTree: FileTree) => {
+          try {
+            await codebaseCacheSetFileTree(projectPath, fileTree);
+          } catch (error) {
+            console.warn('[CacheStore] Failed to set file tree:', error);
+            throw error;
+          }
+        },
 
-  getSymbols: async (filePath: string, fileHash?: string) => {
-    try {
-      return await codebaseCacheGetSymbols(filePath, fileHash);
-    } catch (error) {
-      console.warn('[CacheStore] Failed to get symbols:', error);
-      return null;
-    }
-  },
+        getSymbols: async (filePath: string, fileHash?: string) => {
+          try {
+            return await codebaseCacheGetSymbols(filePath, fileHash);
+          } catch (error) {
+            console.warn('[CacheStore] Failed to get symbols:', error);
+            return null;
+          }
+        },
 
-  setSymbols: async (filePath: string, symbols: SymbolTable, fileHash?: string) => {
-    try {
-      await codebaseCacheSetSymbols(filePath, symbols, fileHash);
-    } catch (error) {
-      console.warn('[CacheStore] Failed to set symbols:', error);
-      throw error;
-    }
-  },
+        setSymbols: async (filePath: string, symbols: SymbolTable, fileHash?: string) => {
+          try {
+            await codebaseCacheSetSymbols(filePath, symbols, fileHash);
+          } catch (error) {
+            console.warn('[CacheStore] Failed to set symbols:', error);
+            throw error;
+          }
+        },
 
-  getDependencies: async (projectPath: string) => {
-    try {
-      return await codebaseCacheGetDependencies(projectPath);
-    } catch (error) {
-      console.warn('[CacheStore] Failed to get dependencies:', error);
-      return null;
-    }
-  },
+        getDependencies: async (projectPath: string) => {
+          try {
+            return await codebaseCacheGetDependencies(projectPath);
+          } catch (error) {
+            console.warn('[CacheStore] Failed to get dependencies:', error);
+            return null;
+          }
+        },
 
-  setDependencies: async (projectPath: string, dependencies: DependencyGraph) => {
-    try {
-      await codebaseCacheSetDependencies(projectPath, dependencies);
-    } catch (error) {
-      console.warn('[CacheStore] Failed to set dependencies:', error);
-      throw error;
-    }
-  },
+        setDependencies: async (projectPath: string, dependencies: DependencyGraph) => {
+          try {
+            await codebaseCacheSetDependencies(projectPath, dependencies);
+          } catch (error) {
+            console.warn('[CacheStore] Failed to set dependencies:', error);
+            throw error;
+          }
+        },
 
-  calculateFileHash: async (content: number[]) => {
-    try {
-      return await codebaseCacheCalculateHash(content);
-    } catch (error) {
-      throw error;
-    }
-  },
+        calculateFileHash: async (content: number[]) => {
+          try {
+            return await codebaseCacheCalculateHash(content);
+          } catch (error) {
+            throw error;
+          }
+        },
 
-  clearError: () => {
-    set({ error: null });
-  },
-}));
+        clearError: () => {
+          set({ error: null });
+        },
+      }),
+      {
+        name: 'agiworkforce-cache',
+        storage: createJSONStorage(() =>
+          typeof window === 'undefined' ? localStorage : window.localStorage,
+        ),
+        partialize: (state) => ({
+          codebaseStats: state.codebaseStats,
+        }),
+      },
+    ),
+    { name: 'CacheStore', enabled: import.meta.env.DEV },
+  ),
+);

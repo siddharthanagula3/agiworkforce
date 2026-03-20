@@ -51,6 +51,9 @@ export async function productivityConnect(
 ): Promise<ConnectResponse> {
   try {
     if (!isTauri) throw new Error('Productivity requires Tauri runtime');
+    if (!credentials || Object.keys(credentials).length === 0) {
+      throw new Error('Credentials are required to connect to a productivity provider');
+    }
     return await invoke<ConnectResponse>('productivity_connect', {
       provider,
       credentials,

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { devtools, subscribeWithSelector } from 'zustand/middleware';
+import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import {
   gitInit,
   gitStatus,
@@ -108,12 +108,7 @@ interface GitState {
   commit: (message: string, path?: string) => Promise<string>;
 
   /** Push to remote */
-  push: (
-    remote?: string,
-    branch?: string,
-    force?: boolean,
-    path?: string,
-  ) => Promise<string>;
+  push: (remote?: string, branch?: string, force?: boolean, path?: string) => Promise<string>;
 
   /** Pull from remote */
   pull: (remote?: string, branch?: string, path?: string) => Promise<string>;
@@ -122,11 +117,7 @@ interface GitState {
   fetch: (remote?: string, path?: string) => Promise<string>;
 
   /** Get diff */
-  diff: (
-    filePath?: string,
-    staged?: boolean,
-    path?: string,
-  ) => Promise<GitDiff[]>;
+  diff: (filePath?: string, staged?: boolean, path?: string) => Promise<GitDiff[]>;
 
   /** Get commit log */
   log: (limit?: number, path?: string) => Promise<GitCommit[]>;
@@ -146,11 +137,7 @@ interface GitState {
   checkoutNewBranch: (branchName: string, path?: string) => Promise<string>;
 
   /** Delete a branch */
-  deleteBranch: (
-    branchName: string,
-    force?: boolean,
-    path?: string,
-  ) => Promise<string>;
+  deleteBranch: (branchName: string, force?: boolean, path?: string) => Promise<string>;
 
   /** Merge a branch */
   merge: (branchName: string, path?: string) => Promise<string>;
@@ -199,10 +186,7 @@ interface GitState {
   listConflicts: (path?: string) => Promise<string[]>;
 
   /** Get conflict details for a file */
-  getConflictDetails: (
-    filePath: string,
-    path?: string,
-  ) => Promise<GitConflictDetails>;
+  getConflictDetails: (filePath: string, path?: string) => Promise<GitConflictDetails>;
 
   /** Resolve conflicts in a file */
   resolveConflict: (
@@ -244,10 +228,7 @@ interface GitState {
   ) => Promise<GeneratedPrContent>;
 
   /** Create a pull request */
-  createPr: (
-    config: PrCreationConfig,
-    path?: string,
-  ) => Promise<PrCreationResult>;
+  createPr: (config: PrCreationConfig, path?: string) => Promise<PrCreationResult>;
 
   /** Check if branch is ready for PR */
   checkPrReadiness: (
@@ -262,276 +243,217 @@ interface GitState {
 
 export const useGitStore = create<GitState>()(
   devtools(
-    subscribeWithSelector((set, get) => {
-      /** Resolve repo path: explicit arg > store repoPath */
-      const resolvePath = (path?: string): string => {
-        const resolved = path ?? get().repoPath;
-        if (!resolved) {
-          throw new Error('No repository path set. Call setRepoPath() first.');
-        }
-        return resolved;
-      };
+    persist(
+      subscribeWithSelector((set, get) => {
+        /** Resolve repo path: explicit arg > store repoPath */
+        const resolvePath = (path?: string): string => {
+          const resolved = path ?? get().repoPath;
+          if (!resolved) {
+            throw new Error('No repository path set. Call setRepoPath() first.');
+          }
+          return resolved;
+        };
 
-      /** Wrap an async operation with loading/error handling */
-      const withLoading = async <T>(
-        actionName: string,
-        fn: () => Promise<T>,
-      ): Promise<T> => {
-        set({ loading: true, error: null }, undefined, `git/${actionName}`);
-        try {
-          const result = await fn();
-          set({ loading: false }, undefined, `git/${actionName}/done`);
-          return result;
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          set(
-            { loading: false, error: message },
-            undefined,
-            `git/${actionName}/error`,
-          );
-          throw err;
-        }
-      };
+        /** Wrap an async operation with loading/error handling */
+        const withLoading = async <T>(actionName: string, fn: () => Promise<T>): Promise<T> => {
+          set({ loading: true, error: null }, undefined, `git/${actionName}`);
+          try {
+            const result = await fn();
+            set({ loading: false }, undefined, `git/${actionName}/done`);
+            return result;
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            set({ loading: false, error: message }, undefined, `git/${actionName}/error`);
+            throw err;
+          }
+        };
 
-      return {
-        repoPath: null,
-        status: null,
-        loading: false,
-        error: null,
+        return {
+          repoPath: null,
+          status: null,
+          loading: false,
+          error: null,
 
-        // --- Core ---
+          // --- Core ---
 
-        setRepoPath: (path: string) => {
-          set({ repoPath: path, error: null }, undefined, 'git/setRepoPath');
-        },
+          setRepoPath: (path: string) => {
+            set({ repoPath: path, error: null }, undefined, 'git/setRepoPath');
+          },
 
-        init: (path: string) =>
-          withLoading('init', () => gitInit(path)),
+          init: (path: string) => withLoading('init', () => gitInit(path)),
 
-        clone: (url: string, destination: string) =>
-          withLoading('clone', () => gitClone(url, destination)),
+          clone: (url: string, destination: string) =>
+            withLoading('clone', () => gitClone(url, destination)),
 
-        getStatus: (path?: string) =>
-          withLoading('getStatus', async () => {
-            const resolved = resolvePath(path);
-            const status = await gitStatus(resolved);
-            set({ status }, undefined, 'git/getStatus/set');
-            return status;
-          }),
+          getStatus: (path?: string) =>
+            withLoading('getStatus', async () => {
+              const resolved = resolvePath(path);
+              const status = await gitStatus(resolved);
+              set({ status }, undefined, 'git/getStatus/set');
+              return status;
+            }),
 
-        add: (files: string[], path?: string) =>
-          withLoading('add', () => gitAdd(resolvePath(path), files)),
+          add: (files: string[], path?: string) =>
+            withLoading('add', () => gitAdd(resolvePath(path), files)),
 
-        commit: (message: string, path?: string) =>
-          withLoading('commit', () => gitCommit(resolvePath(path), message)),
+          commit: (message: string, path?: string) =>
+            withLoading('commit', () => gitCommit(resolvePath(path), message)),
 
-        push: (
-          remote?: string,
-          branch?: string,
-          force?: boolean,
-          path?: string,
-        ) =>
-          withLoading('push', () =>
-            gitPush(resolvePath(path), remote, branch, force),
-          ),
+          push: (remote?: string, branch?: string, force?: boolean, path?: string) =>
+            withLoading('push', () => gitPush(resolvePath(path), remote, branch, force)),
 
-        pull: (remote?: string, branch?: string, path?: string) =>
-          withLoading('pull', () =>
-            gitPull(resolvePath(path), remote, branch),
-          ),
+          pull: (remote?: string, branch?: string, path?: string) =>
+            withLoading('pull', () => gitPull(resolvePath(path), remote, branch)),
 
-        fetch: (remote?: string, path?: string) =>
-          withLoading('fetch', () => gitFetch(resolvePath(path), remote)),
+          fetch: (remote?: string, path?: string) =>
+            withLoading('fetch', () => gitFetch(resolvePath(path), remote)),
 
-        diff: (filePath?: string, staged?: boolean, path?: string) =>
-          withLoading('diff', () =>
-            gitDiff(resolvePath(path), filePath, staged),
-          ),
+          diff: (filePath?: string, staged?: boolean, path?: string) =>
+            withLoading('diff', () => gitDiff(resolvePath(path), filePath, staged)),
 
-        log: (limit?: number, path?: string) =>
-          withLoading('log', () => gitLog(resolvePath(path), limit)),
+          log: (limit?: number, path?: string) =>
+            withLoading('log', () => gitLog(resolvePath(path), limit)),
 
-        // --- Branches ---
+          // --- Branches ---
 
-        listBranches: (path?: string) =>
-          withLoading('listBranches', () =>
-            gitListBranches(resolvePath(path)),
-          ),
+          listBranches: (path?: string) =>
+            withLoading('listBranches', () => gitListBranches(resolvePath(path))),
 
-        createBranch: (branchName: string, path?: string) =>
-          withLoading('createBranch', () =>
-            gitCreateBranch(resolvePath(path), branchName),
-          ),
+          createBranch: (branchName: string, path?: string) =>
+            withLoading('createBranch', () => gitCreateBranch(resolvePath(path), branchName)),
 
-        checkout: (branchName: string, path?: string) =>
-          withLoading('checkout', () =>
-            gitCheckout(resolvePath(path), branchName),
-          ),
+          checkout: (branchName: string, path?: string) =>
+            withLoading('checkout', () => gitCheckout(resolvePath(path), branchName)),
 
-        checkoutNewBranch: (branchName: string, path?: string) =>
-          withLoading('checkoutNewBranch', () =>
-            gitCheckoutNewBranch(resolvePath(path), branchName),
-          ),
+          checkoutNewBranch: (branchName: string, path?: string) =>
+            withLoading('checkoutNewBranch', () =>
+              gitCheckoutNewBranch(resolvePath(path), branchName),
+            ),
 
-        deleteBranch: (branchName: string, force?: boolean, path?: string) =>
-          withLoading('deleteBranch', () =>
-            gitDeleteBranch(resolvePath(path), branchName, force),
-          ),
+          deleteBranch: (branchName: string, force?: boolean, path?: string) =>
+            withLoading('deleteBranch', () =>
+              gitDeleteBranch(resolvePath(path), branchName, force),
+            ),
 
-        merge: (branchName: string, path?: string) =>
-          withLoading('merge', () =>
-            gitMerge(resolvePath(path), branchName),
-          ),
+          merge: (branchName: string, path?: string) =>
+            withLoading('merge', () => gitMerge(resolvePath(path), branchName)),
 
-        currentBranch: (path?: string) =>
-          withLoading('currentBranch', () =>
-            gitCurrentBranch(resolvePath(path)),
-          ),
+          currentBranch: (path?: string) =>
+            withLoading('currentBranch', () => gitCurrentBranch(resolvePath(path))),
 
-        defaultBranch: (path?: string) =>
-          withLoading('defaultBranch', () =>
-            gitDefaultBranch(resolvePath(path)),
-          ),
+          defaultBranch: (path?: string) =>
+            withLoading('defaultBranch', () => gitDefaultBranch(resolvePath(path))),
 
-        // --- Stash ---
+          // --- Stash ---
 
-        stash: (message?: string, path?: string) =>
-          withLoading('stash', () =>
-            gitStash(resolvePath(path), message),
-          ),
+          stash: (message?: string, path?: string) =>
+            withLoading('stash', () => gitStash(resolvePath(path), message)),
 
-        stashPop: (path?: string) =>
-          withLoading('stashPop', () => gitStashPop(resolvePath(path))),
+          stashPop: (path?: string) =>
+            withLoading('stashPop', () => gitStashPop(resolvePath(path))),
 
-        // --- Reset ---
+          // --- Reset ---
 
-        reset: (
-          commitHash: string,
-          mode: 'soft' | 'mixed' | 'hard',
-          path?: string,
-          files?: string[],
-        ) =>
-          withLoading('reset', () =>
-            gitReset(resolvePath(path), commitHash, mode, files),
-          ),
+          reset: (
+            commitHash: string,
+            mode: 'soft' | 'mixed' | 'hard',
+            path?: string,
+            files?: string[],
+          ) => withLoading('reset', () => gitReset(resolvePath(path), commitHash, mode, files)),
 
-        checkoutFiles: (files: string[], path?: string) =>
-          withLoading('checkoutFiles', () =>
-            gitCheckoutFiles(resolvePath(path), files),
-          ),
+          checkoutFiles: (files: string[], path?: string) =>
+            withLoading('checkoutFiles', () => gitCheckoutFiles(resolvePath(path), files)),
 
-        // --- Remotes ---
+          // --- Remotes ---
 
-        listRemotes: (path?: string) =>
-          withLoading('listRemotes', () =>
-            gitListRemotes(resolvePath(path)),
-          ),
+          listRemotes: (path?: string) =>
+            withLoading('listRemotes', () => gitListRemotes(resolvePath(path))),
 
-        addRemote: (name: string, url: string, path?: string) =>
-          withLoading('addRemote', () =>
-            gitAddRemote(resolvePath(path), name, url),
-          ),
+          addRemote: (name: string, url: string, path?: string) =>
+            withLoading('addRemote', () => gitAddRemote(resolvePath(path), name, url)),
 
-        // --- Conflicts ---
+          // --- Conflicts ---
 
-        hasConflicts: (path?: string) =>
-          withLoading('hasConflicts', () =>
-            gitHasConflicts(resolvePath(path)),
-          ),
+          hasConflicts: (path?: string) =>
+            withLoading('hasConflicts', () => gitHasConflicts(resolvePath(path))),
 
-        listConflicts: (path?: string) =>
-          withLoading('listConflicts', () =>
-            gitListConflicts(resolvePath(path)),
-          ),
+          listConflicts: (path?: string) =>
+            withLoading('listConflicts', () => gitListConflicts(resolvePath(path))),
 
-        getConflictDetails: (filePath: string, path?: string) =>
-          withLoading('getConflictDetails', () =>
-            gitGetConflictDetails(resolvePath(path), filePath),
-          ),
+          getConflictDetails: (filePath: string, path?: string) =>
+            withLoading('getConflictDetails', () =>
+              gitGetConflictDetails(resolvePath(path), filePath),
+            ),
 
-        resolveConflict: (
-          filePath: string,
-          resolutions: ConflictResolutionRequest[],
-          path?: string,
-        ) =>
-          withLoading('resolveConflict', () =>
-            gitResolveConflict(resolvePath(path), filePath, resolutions),
-          ),
+          resolveConflict: (
+            filePath: string,
+            resolutions: ConflictResolutionRequest[],
+            path?: string,
+          ) =>
+            withLoading('resolveConflict', () =>
+              gitResolveConflict(resolvePath(path), filePath, resolutions),
+            ),
 
-        markResolved: (filePath: string, path?: string) =>
-          withLoading('markResolved', () =>
-            gitMarkResolved(resolvePath(path), filePath),
-          ),
+          markResolved: (filePath: string, path?: string) =>
+            withLoading('markResolved', () => gitMarkResolved(resolvePath(path), filePath)),
 
-        getConflictSuggestionPrompt: (
-          filePath: string,
-          hunkIndex: number,
-          path?: string,
-        ) =>
-          withLoading('getConflictSuggestionPrompt', () =>
-            gitGetConflictSuggestionPrompt(resolvePath(path), filePath, hunkIndex),
-          ),
+          getConflictSuggestionPrompt: (filePath: string, hunkIndex: number, path?: string) =>
+            withLoading('getConflictSuggestionPrompt', () =>
+              gitGetConflictSuggestionPrompt(resolvePath(path), filePath, hunkIndex),
+            ),
 
-        abortMerge: (path?: string) =>
-          withLoading('abortMerge', () =>
-            gitAbortMerge(resolvePath(path)),
-          ),
+          abortMerge: (path?: string) =>
+            withLoading('abortMerge', () => gitAbortMerge(resolvePath(path))),
 
-        completeMerge: (message?: string, path?: string) =>
-          withLoading('completeMerge', () =>
-            gitCompleteMerge(resolvePath(path), message),
-          ),
+          completeMerge: (message?: string, path?: string) =>
+            withLoading('completeMerge', () => gitCompleteMerge(resolvePath(path), message)),
 
-        // --- PR operations ---
+          // --- PR operations ---
 
-        getBranchDiffSummary: (
-          baseBranch: string,
-          headBranch: string,
-          path?: string,
-        ) =>
-          withLoading('getBranchDiffSummary', () =>
-            gitGetBranchDiffSummary(resolvePath(path), baseBranch, headBranch),
-          ),
+          getBranchDiffSummary: (baseBranch: string, headBranch: string, path?: string) =>
+            withLoading('getBranchDiffSummary', () =>
+              gitGetBranchDiffSummary(resolvePath(path), baseBranch, headBranch),
+            ),
 
-        generatePrDescription: (
-          baseBranch: string,
-          headBranch: string,
-          path?: string,
-        ) =>
-          withLoading('generatePrDescription', () =>
-            gitGeneratePrDescription(resolvePath(path), baseBranch, headBranch),
-          ),
+          generatePrDescription: (baseBranch: string, headBranch: string, path?: string) =>
+            withLoading('generatePrDescription', () =>
+              gitGeneratePrDescription(resolvePath(path), baseBranch, headBranch),
+            ),
 
-        createPr: (config: PrCreationConfig, path?: string) =>
-          withLoading('createPr', () =>
-            gitCreatePr(resolvePath(path), config),
-          ),
+          createPr: (config: PrCreationConfig, path?: string) =>
+            withLoading('createPr', () => gitCreatePr(resolvePath(path), config)),
 
-        checkPrReadiness: (
-          baseBranch: string,
-          headBranch: string,
-          path?: string,
-        ) =>
-          withLoading('checkPrReadiness', () =>
-            gitCheckPrReadiness(resolvePath(path), baseBranch, headBranch),
-          ),
+          checkPrReadiness: (baseBranch: string, headBranch: string, path?: string) =>
+            withLoading('checkPrReadiness', () =>
+              gitCheckPrReadiness(resolvePath(path), baseBranch, headBranch),
+            ),
 
-        // --- Reset store ---
+          // --- Reset store ---
 
-        resetStore: () => {
-          set(
-            {
-              repoPath: null,
-              status: null,
-              loading: false,
-              error: null,
-            },
-            undefined,
-            'git/resetStore',
-          );
-        },
-      };
-    }),
+          resetStore: () => {
+            set(
+              {
+                repoPath: null,
+                status: null,
+                loading: false,
+                error: null,
+              },
+              undefined,
+              'git/resetStore',
+            );
+          },
+        };
+      }),
+      {
+        name: 'agiworkforce-git',
+        storage: createJSONStorage(() =>
+          typeof window === 'undefined' ? localStorage : window.localStorage,
+        ),
+        partialize: (state) => ({
+          repoPath: state.repoPath,
+        }),
+      },
+    ),
     { name: 'GitStore', enabled: import.meta.env.DEV },
   ),
 );

@@ -13,6 +13,7 @@
  *   form_undo_list_undoable, form_undo_get, form_undo_clear, form_undo_clear_old,
  *   form_undo_stats
  */
+import { toast } from 'sonner';
 
 import { invoke } from '../lib/tauri-mock';
 
@@ -94,6 +95,7 @@ export const undoGetSummary = async (taskId?: string): Promise<UndoSummary> => {
     });
   } catch (error) {
     console.error('Failed to get undo summary:', error);
+    toast.error('Failed to get undo summary');
     throw error;
   }
 };
@@ -110,6 +112,7 @@ export const undoGetChanges = async (
     });
   } catch (error) {
     console.error('Failed to get undo changes:', error);
+    toast.error('Failed to get undo changes');
     throw error;
   }
 };
@@ -120,6 +123,7 @@ export const undoChange = async (changeId: string): Promise<UndoResult> => {
     return await invoke<UndoResult>('undo_change', { changeId });
   } catch (error) {
     console.error('Failed to undo change:', error);
+    toast.error('Failed to undo change');
     throw error;
   }
 };
@@ -132,6 +136,7 @@ export const undoLast = async (taskId?: string): Promise<UndoResult> => {
     });
   } catch (error) {
     console.error('Failed to undo last change:', error);
+    toast.error('Failed to undo last change');
     throw error;
   }
 };
@@ -163,10 +168,7 @@ export const undoCanUndo = async (taskId?: string): Promise<boolean> => {
 // ============================================================================
 
 /** Create a named checkpoint by snapshotting file contents. Returns checkpoint ID. */
-export const codingCheckpointCreate = async (
-  name: string,
-  paths: string[],
-): Promise<string> => {
+export const codingCheckpointCreate = async (name: string, paths: string[]): Promise<string> => {
   try {
     return await invoke<string>('coding_checkpoint_create', { name, paths });
   } catch (error) {
@@ -246,10 +248,7 @@ export const formUndoCanUndo = async (submissionId: string): Promise<boolean> =>
 };
 
 /** List recent form submissions, optionally filtered by task */
-export const formUndoList = async (
-  limit?: number,
-  taskId?: string,
-): Promise<FormSubmission[]> => {
+export const formUndoList = async (limit?: number, taskId?: string): Promise<FormSubmission[]> => {
   try {
     return await invoke<FormSubmission[]>('form_undo_list', {
       limit: limit ?? null,
