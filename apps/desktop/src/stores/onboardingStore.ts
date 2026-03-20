@@ -30,6 +30,7 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { storageFallback } from '../lib/storageFallback';
 import {
   getOnboardingStatus,
   completeOnboardingStep,
@@ -737,7 +738,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
       {
         name: 'agiworkforce-onboarding',
         storage: createJSONStorage(() =>
-          typeof window === 'undefined' ? localStorage : window.localStorage,
+          typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
         partialize: (state) => ({
           firstRunCompleted: state.firstRunCompleted,

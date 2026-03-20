@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { storageFallback } from '../lib/storageFallback';
 import {
   cloneMarketplaceWorkflow as apiCloneWorkflow,
   commentOnWorkflow as apiCommentOnWorkflow,
@@ -272,7 +273,8 @@ export const useMarketplaceStore = create<MarketplaceState>()(
         getWorkflowById: async (workflowId) => {
           try {
             return await apiGetWorkflowById(workflowId);
-          } catch {
+          } catch (error) {
+            console.warn('[marketplace] getWorkflowById failed:', error);
             return null;
           }
         },
@@ -280,7 +282,8 @@ export const useMarketplaceStore = create<MarketplaceState>()(
         getWorkflowByShareUrl: async (shareUrl) => {
           try {
             return await apiGetWorkflowByShareUrl(shareUrl);
-          } catch {
+          } catch (error) {
+            console.warn('[marketplace] getWorkflowByShareUrl failed:', error);
             return null;
           }
         },
@@ -297,8 +300,8 @@ export const useMarketplaceStore = create<MarketplaceState>()(
           try {
             const categoryCounts = await apiGetCategoryCounts();
             set({ categoryCounts });
-          } catch {
-            // non-fatal
+          } catch (error) {
+            console.warn('[marketplace] fetchCategoryCounts failed:', error);
           }
         },
 
@@ -306,8 +309,8 @@ export const useMarketplaceStore = create<MarketplaceState>()(
           try {
             const popularTags = await apiGetPopularTags(limit);
             set({ popularTags });
-          } catch {
-            // non-fatal
+          } catch (error) {
+            console.warn('[marketplace] fetchPopularTags failed:', error);
           }
         },
 
@@ -371,7 +374,8 @@ export const useMarketplaceStore = create<MarketplaceState>()(
         isWorkflowFavorited: async (workflowId, userId) => {
           try {
             return await apiIsFavorited(workflowId, userId);
-          } catch {
+          } catch (error) {
+            console.warn('[marketplace] isWorkflowFavorited failed:', error);
             return false;
           }
         },
@@ -434,7 +438,7 @@ export const useMarketplaceStore = create<MarketplaceState>()(
       {
         name: 'agiworkforce-marketplace',
         storage: createJSONStorage(() =>
-          typeof window === 'undefined' ? localStorage : window.localStorage,
+          typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
         partialize: (state) => ({
           featured: state.featured,

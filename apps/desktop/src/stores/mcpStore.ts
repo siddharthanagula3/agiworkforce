@@ -1126,7 +1126,8 @@ export const useMcpStore = create<McpState>()(
       oauthNeedsRefresh: async (provider: McpOAuthProvider) => {
         try {
           return await McpClient.oauthNeedsRefresh(provider);
-        } catch {
+        } catch (error) {
+          console.warn('[mcpStore] oauthNeedsRefresh failed:', error);
           return false;
         }
       },

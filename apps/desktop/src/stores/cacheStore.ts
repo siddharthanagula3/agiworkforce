@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
+import { storageFallback } from '../lib/storageFallback';
 import {
   codebaseCacheGetStats,
   codebaseCacheClearProject,
@@ -204,7 +205,7 @@ export const useCacheStore = create<CacheStoreState>()(
       {
         name: 'agiworkforce-cache',
         storage: createJSONStorage(() =>
-          typeof window === 'undefined' ? localStorage : window.localStorage,
+          typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
         partialize: (state) => ({
           codebaseStats: state.codebaseStats,
