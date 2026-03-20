@@ -8,6 +8,7 @@
 import { invoke, listen } from '../lib/tauri-mock';
 import type { InlinePanel } from '../stores/chat/types';
 import { useChatStore } from '../stores/chat/chatStore';
+import { voiceTtsSpeak, speechStartRecording } from '../api/voice';
 
 /**
  * Executes a shell command and returns results in an inline panel.
@@ -1251,10 +1252,12 @@ export async function executeVoiceCommand(args: string): Promise<InlinePanel> {
 
     if (trimmed.toLowerCase().startsWith('tts ')) {
       const text = trimmed.slice('tts '.length).trim();
-      response = await invoke<Record<string, unknown>>('voice_tts_speak', { text });
+      await voiceTtsSpeak(text);
+      response = { status: 'speaking', text };
     } else {
       // No args — trigger voice input recording
-      response = await invoke<Record<string, unknown>>('speech_start_recording');
+      await speechStartRecording('cloud');
+      response = { status: 'recording' };
     }
 
     panel.content.data = { ...response };
@@ -1907,7 +1910,7 @@ export async function executeEnhanceCommand(lastMessage: string): Promise<Inline
   try {
     const startTime = Date.now();
     const response = await invoke<Record<string, unknown>>('enhance_prompt', {
-      prompt: lastMessage,
+      text: lastMessage,
     });
 
     const duration = Date.now() - startTime;

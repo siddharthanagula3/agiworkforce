@@ -1,12 +1,20 @@
 import { Copy, Search, TrendingUp, Upload, Users } from 'lucide-react';
 import React, { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { useMarketplaceStore } from '../marketplaceStore';
 import { WorkflowCard } from './WorkflowCard';
 
 export function MarketplaceHero() {
-  const { marketplaceStats, featuredWorkflows, searchWorkflows, filters } = useMarketplaceStore();
+  const { marketplaceStats, featuredWorkflows, searchWorkflows, filters } = useMarketplaceStore(
+    useShallow((s) => ({
+      marketplaceStats: s.marketplaceStats,
+      featuredWorkflows: s.featuredWorkflows,
+      searchWorkflows: s.searchWorkflows,
+      filters: s.filters,
+    })),
+  );
 
   const [searchInput, setSearchInput] = useState(filters.searchQuery);
 
@@ -40,23 +48,23 @@ export function MarketplaceHero() {
         <div className="flex items-center justify-center gap-6 mb-8 flex-wrap">
           <StatCard
             icon={<Upload className="h-5 w-5" />}
-            value={formatNumber(marketplaceStats?.total_workflows || 0)}
+            value={formatNumber(marketplaceStats?.ratingCount || 0)}
             label="Total Workflows"
           />
           <StatCard
             icon={<Copy className="h-5 w-5" />}
-            value={formatNumber(marketplaceStats?.total_clones || 0)}
+            value={formatNumber(marketplaceStats?.cloneCount || 0)}
             label="Total Clones"
           />
           <StatCard
             icon={<Users className="h-5 w-5" />}
-            value={formatNumber(marketplaceStats?.total_creators || 0)}
-            label="Creators"
+            value={formatNumber(marketplaceStats?.commentCount || 0)}
+            label="Contributors"
           />
           <StatCard
             icon={<TrendingUp className="h-5 w-5" />}
-            value={formatNumber(marketplaceStats?.workflows_this_week || 0)}
-            label="New This Week"
+            value={formatNumber(marketplaceStats?.viewCount || 0)}
+            label="Total Views"
           />
         </div>
 

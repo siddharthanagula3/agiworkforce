@@ -1,5 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import { invoke } from '../lib/tauri-mock';
+import {
+  analyticsTrackEvent,
+  analyticsFlushEvents,
+  analyticsGetSessionId,
+  analyticsSetUserProperty,
+  analyticsDeleteAllData,
+} from '../api/analytics';
 import {
   AnalyticsConfig,
   AnalyticsEvent,
@@ -26,6 +32,7 @@ class AnalyticsService {
   private flushTimer?: ReturnType<typeof setInterval>;
   private isOnline: boolean = true;
   private privacyConsent?: PrivacyConsent;
+  private initialized: boolean = false;
 
   constructor() {
     this.sessionId = uuidv4();
@@ -69,6 +76,9 @@ class AnalyticsService {
   };
 
   private async initializeService() {
+    if (this.initialized) return;
+    this.initialized = true;
+
     try {
       await this.loadConfig();
 
@@ -76,7 +86,7 @@ class AnalyticsService {
 
       await this.loadUserId();
 
-      const backendSessionId = await invoke<string>('analytics_get_session_id');
+      const backendSessionId = await analyticsGetSessionId();
       if (backendSessionId) {
         this.sessionId = backendSessionId;
       }
@@ -161,7 +171,7 @@ class AnalyticsService {
 
     if (this.config.enabled) {
       Object.entries(properties).forEach(([key, value]) => {
-        invoke('analytics_set_user_property', { key, value }).catch((error) =>
+        analyticsSetUserProperty(key, value).catch((error) =>
           console.error('Failed to set user property:', error),
         );
       });
@@ -237,7 +247,7 @@ class AnalyticsService {
     this.eventQueue = [];
 
     try {
-      await invoke('analytics_delete_all_data');
+      await analyticsDeleteAllData();
     } catch (error) {
       console.error('Failed to delete backend analytics data:', error);
     }
@@ -257,7 +267,7 @@ class AnalyticsService {
     }
 
     try {
-      await invoke('analytics_flush_events');
+      await analyticsFlushEvents();
 
       this.eventQueue = [];
 
@@ -296,7 +306,13 @@ class AnalyticsService {
 
   private async sendEventToBackend(event: AnalyticsEvent) {
     try {
-      await invoke('analytics_track_event', { event });
+      await analyticsTrackEvent({
+        name: event.name,
+        properties: event.properties as Record<string, unknown>,
+        timestamp: event.timestamp,
+        sessionId: event.sessionId,
+        userId: event.userId,
+      });
     } catch (error) {
       console.error('Failed to send event to backend:', error);
     }

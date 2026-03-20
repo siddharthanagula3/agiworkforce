@@ -766,7 +766,7 @@ export const useSchedulerStore = create<SchedulerState>()(
 
         deleteTask: async (id: string) => {
           try {
-            await invoke('scheduler_remove_job', { id });
+            await invoke('scheduler_remove_job', { jobId: id });
           } catch {
             // Fallback: delete locally
           }

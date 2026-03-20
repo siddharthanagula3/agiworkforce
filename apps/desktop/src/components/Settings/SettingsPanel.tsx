@@ -1,4 +1,5 @@
 import { invoke } from '@/lib/tauri-mock';
+import { analyticsDeleteAllData } from '@/api/analytics';
 import { McpClient } from '@/api/mcp';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { toast } from 'sonner';
@@ -8,23 +9,20 @@ import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
   Bell,
   Check,
+  Cloud,
   CreditCard,
   Database,
   Download,
-  FlaskConical,
-  Keyboard,
   Loader2,
+  Mic,
   Palette,
   Plug,
-  Puzzle,
-  Share2,
-  Wrench,
   Server,
   Settings2,
   Shield,
-  Sparkles,
-  TerminalSquare,
+  Wrench,
   X,
+  Zap,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -37,9 +35,7 @@ import {
   type Language,
   type GlobalHotkeyPreferences,
 } from '../../stores/settingsStore';
-import type { SettingsTab } from '../../stores/settingsDialogStore';
-import { useAccountStore, useAuthStore } from '../../stores/auth';
-import { openPricingPage } from '../../utils/navigation';
+import { LEGACY_TAB_MAP, type SettingsTab } from '../../stores/settingsDialogStore';
 import { SUPPORTED_LANGUAGES } from '../../i18n';
 import { useModelStore } from '../../stores/modelStore';
 import { errorTracking } from '../../services/errorTracking';
@@ -73,30 +69,58 @@ import { ResearchSettings } from './ResearchSettings';
 import { ToolsPanel } from '../Tools/ToolsPanel';
 import { KeybindingsSettings } from './KeybindingsSettings';
 import { ThemeSettings } from './ThemeSettings';
+import { TaskRoutingSettings } from './TaskRoutingSettings';
+import { NotificationsSettings } from './NotificationsSettings';
+import { AnalyticsSettings } from './AnalyticsSettings';
+import { AccountSettings } from './AccountSettings';
+import { FeaturesPrivacySettings } from './FeaturesPrivacySettings';
+import { OAuthCredentialsPanel } from './OAuthCredentialsPanel';
+import { SafetyPolicies } from '../Governance/SafetyPolicies';
+import { AuditLog } from '../Governance/AuditLog';
+import { ToolHistoryTable } from '../Governance/ToolHistoryTable';
+import { AgentExecutionSettings } from './AgentExecutionSettings';
+import { PersonalizationSettings } from './PersonalizationSettings';
+import { TeamAccountSettings } from './TeamAccountSettings';
+import { UsageDashboard } from './UsageDashboard';
+import { useSimpleModeStore } from '../../stores/ui';
+import { cn } from '@/lib/utils';
+import { useAppModeStore, selectMode, selectIsCloud } from '../../stores/appModeStore';
 
-interface SettingsPanelProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  initialTab?: SettingsTab;
+// ── Canonical tab IDs (10 tabs displayed in nav) ──────────────────────────────
+type CanonicalTab =
+  | 'general'
+  | 'account'
+  | 'appearance'
+  | 'privacy'
+  | 'models-keys'
+  | 'agents'
+  | 'mcp-skills'
+  | 'connectors'
+  | 'notifications'
+  | 'voice';
+
+/** Resolve any legacy alias to its canonical tab. */
+function resolveTab(tab: SettingsTab): CanonicalTab {
+  return (LEGACY_TAB_MAP[tab] as CanonicalTab | undefined) ?? (tab as CanonicalTab);
 }
 
-const SETTINGS_NAV: { key: SettingsTab; label: string; icon: React.ElementType }[] = [
+const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType }[] = [
   { key: 'general', label: 'General', icon: Settings2 },
-  { key: 'account', label: 'Account & Billing', icon: CreditCard },
-  { key: 'personalization', label: 'Personalization', icon: Sparkles },
-  { key: 'privacy', label: 'Privacy & Data', icon: Shield },
+  { key: 'account', label: 'Account', icon: CreditCard },
+  { key: 'appearance', label: 'Appearance', icon: Palette },
+  { key: 'privacy', label: 'Privacy', icon: Shield },
+  { key: 'models-keys', label: 'Models & Keys', icon: Server },
+  { key: 'agents', label: 'Agents', icon: Zap },
+  { key: 'mcp-skills', label: 'MCP & Skills', icon: Wrench },
   { key: 'connectors', label: 'Connectors', icon: Plug },
-  { key: 'api-keys', label: 'API Keys', icon: Server },
-  { key: 'mcp', label: 'MCP & Skills', icon: Wrench },
-  { key: 'mcp-server', label: 'MCP Server', icon: Share2 },
-  { key: 'extensions', label: 'Extensions', icon: Puzzle },
   { key: 'notifications', label: 'Notifications', icon: Bell },
-  { key: 'tools', label: 'Tools', icon: TerminalSquare },
-  { key: 'research', label: 'Research', icon: FlaskConical },
-  { key: 'keybindings', label: 'Keybindings', icon: Keyboard },
-  { key: 'themes', label: 'Themes', icon: Palette },
+  { key: 'voice', label: 'Voice', icon: Mic },
 ];
 
+// ── Tabs that manage their own saves (no deferred Save/Cancel footer) ─────────
+const SELF_SAVING_TABS = new Set<CanonicalTab>(['mcp-skills', 'connectors']);
+
+// ── BYOK providers ────────────────────────────────────────────────────────────
 const BYOK_PROVIDERS = [
   { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...' },
   { id: 'openai', name: 'OpenAI', placeholder: 'sk-...' },
@@ -109,12 +133,23 @@ const BYOK_PROVIDERS = [
   { id: 'nvidia_nim', name: 'NVIDIA NIM', placeholder: 'nvapi-...' },
 ] as const;
 
+// ── BYOK API Keys section ─────────────────────────────────────────────────────
 function BYOKApiKeysSection() {
   const [keys, setKeys] = React.useState<Record<string, string>>({});
   const [statuses, setStatuses] = React.useState<
     Record<string, 'idle' | 'saving' | 'saved' | 'error'>
   >({});
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const savedTimersRef = React.useRef<Record<string, number>>({});
+
+  React.useEffect(() => {
+    const timers = savedTimersRef.current;
+    return () => {
+      for (const timerId of Object.values(timers)) {
+        window.clearTimeout(timerId);
+      }
+    };
+  }, []);
 
   const handleSave = React.useCallback(
     async (providerId: string) => {
@@ -126,7 +161,13 @@ function BYOKApiKeysSection() {
         await McpClient.saveApiKey(providerId, key);
         setStatuses((s) => ({ ...s, [providerId]: 'saved' }));
         setKeys((k) => ({ ...k, [providerId]: '' }));
-        setTimeout(() => setStatuses((s) => ({ ...s, [providerId]: 'idle' })), 2500);
+        if (savedTimersRef.current[providerId]) {
+          window.clearTimeout(savedTimersRef.current[providerId]);
+        }
+        savedTimersRef.current[providerId] = window.setTimeout(() => {
+          setStatuses((s) => ({ ...s, [providerId]: 'idle' }));
+          delete savedTimersRef.current[providerId];
+        }, 2500);
       } catch (err) {
         setStatuses((s) => ({ ...s, [providerId]: 'error' }));
         setErrors((e) => ({ ...e, [providerId]: String(err) }));
@@ -171,7 +212,7 @@ function BYOKApiKeysSection() {
                   'Save'
                 )}
               </button>
-              {errors[id] && <p className="absolute text-xs text-destructive mt-1">{errors[id]}</p>}
+              {errors[id] && <p className="text-xs text-destructive mt-1">{errors[id]}</p>}
             </div>
           );
         })}
@@ -180,6 +221,7 @@ function BYOKApiKeysSection() {
   );
 }
 
+// ── Stable-serialize helper ───────────────────────────────────────────────────
 function stableSerialize(value: unknown): string {
   const sortRecursively = (input: unknown): unknown => {
     if (Array.isArray(input)) {
@@ -195,1082 +237,30 @@ function stableSerialize(value: unknown): string {
     }
     return input;
   };
-
   return JSON.stringify(sortRecursively(value));
 }
 
-export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: SettingsPanelProps) {
-  const hasInitializedOpenStateRef = useRef(false);
-  const connectedConnectorCount = useConnectorsStore((state) => state.connectedIds.length);
-  const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
-  const windowPreferences = useSettingsStore(useShallow((state) => state.windowPreferences));
-  const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
-  const executionPreferences = useSettingsStore(useShallow((state) => state.executionPreferences));
-  const allowedDirectories = useSettingsStore(useShallow((state) => state.allowedDirectories));
-  const customModels = useSettingsStore(useShallow((state) => state.customModels));
-  const features = useSettingsStore(useShallow((state) => state.features));
-  const setTheme = useSettingsStore((state) => state.setTheme);
-  const setLanguage = useSettingsStore((state) => state.setLanguage);
-  const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
-  const setAutoApproveTools = useSettingsStore((state) => state.setAutoApproveTools);
-  const setCompactMode = useSettingsStore((state) => state.setCompactMode);
-  const setPromptCompletionEnabled = useSettingsStore((state) => state.setPromptCompletionEnabled);
-  const globalHotkeyPreferences = useSettingsStore(
-    useShallow((state) => state.globalHotkeyPreferences),
-  );
-  const setGlobalHotkeyEnabled = useSettingsStore((state) => state.setGlobalHotkeyEnabled);
-  const setGlobalHotkeyCombo = useSettingsStore((state) => state.setGlobalHotkeyCombo);
-  const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
-  const setProviderMode = useSettingsStore((state) => state.setProviderMode);
-  const setOllamaUrl = useSettingsStore((state) => state.setOllamaUrl);
-  const loadSettings = useSettingsStore((state) => state.loadSettings);
-  const saveSettings = useSettingsStore((state) => state.saveSettings);
-  const loading = useSettingsStore((state) => state.loading);
-  const error = useSettingsStore((state) => state.error);
-
-  const providerStatuses = useModelStore(useShallow((state) => state.providerStatuses));
-  const checkProviderStatus = useModelStore((state) => state.checkProviderStatus);
-  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
-  const [selectedOllamaModel, setSelectedOllamaModel] = useState<string>('');
-  const [checkingOllama, setCheckingOllama] = useState(false);
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(
-    null,
-  );
-  const [notificationLoading, setNotificationLoading] = useState(false);
-  const [notificationError, setNotificationError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const baselineSnapshotRef = useRef<string | null>(null);
-
-  const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
-  const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
-  const defaultGlobalHotkeyCombo = getDefaultGlobalHotkeyCombo();
-  const resolvedGlobalHotkeyPreferences: GlobalHotkeyPreferences = globalHotkeyPreferences ?? {
-    enabled: true,
-    combo: defaultGlobalHotkeyCombo,
+// ── Restart Onboarding section ────────────────────────────────────────────────
+function RestartOnboardingSection() {
+  const handleRestart = () => {
+    useSimpleModeStore.setState({ onboardingCompleted: false });
   };
 
-  const ollamaStatus = providerStatuses.ollama;
-  const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
-  const ollamaEnabled = Boolean(resolvedLLMConfig.defaultModels?.ollama);
-  const isBusy = loading || isSaving || notificationLoading;
-
-  const handleExportSettings = useCallback(async () => {
-    try {
-      const settings = useSettingsStore.getState();
-      const exportData = JSON.stringify(
-        {
-          llmConfig: settings.llmConfig,
-          windowPreferences: settings.windowPreferences,
-          chatPreferences: settings.chatPreferences,
-          executionPreferences: settings.executionPreferences,
-          globalHotkeyPreferences: settings.globalHotkeyPreferences,
-          customModels: settings.customModels,
-        },
-        null,
-        2,
-      );
-      const savePath = await save({
-        defaultPath: `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`,
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-      });
-      if (savePath) {
-        await writeTextFile(savePath, exportData);
-      }
-    } catch (error) {
-      console.error('Failed to export settings:', error);
-    }
-  }, []);
-
-  const handleOllamaEnabledChange = useCallback(
-    (enabled: boolean) => {
-      if (enabled) {
-        const modelToSet = selectedOllamaModel || ollamaModels[0] || 'llama3';
-        setDefaultModel('ollama', modelToSet);
-        setSelectedOllamaModel(modelToSet);
-      } else {
-        setDefaultModel('ollama', '');
-      }
-      setHasUnsavedChanges(true);
-    },
-    [selectedOllamaModel, ollamaModels, setDefaultModel],
-  );
-
-  const handleOllamaModelChange = useCallback(
-    (model: string) => {
-      setSelectedOllamaModel(model);
-      if (ollamaEnabled) {
-        setDefaultModel('ollama', model);
-      }
-      setHasUnsavedChanges(true);
-    },
-    [ollamaEnabled, setDefaultModel],
-  );
-
-  const loadNotificationSettings = useCallback(async (): Promise<NotificationSettings | null> => {
-    setNotificationLoading(true);
-    setNotificationError(null);
-
-    try {
-      const settings = await invoke<NotificationSettings>('notification_get_settings');
-      setNotificationSettings(settings);
-      return settings;
-    } catch (err) {
-      console.error('Failed to load notification settings:', err);
-      setNotificationError(getSimpleErrorMessage(err));
-      setNotificationSettings(null);
-      return null;
-    } finally {
-      setNotificationLoading(false);
-    }
-  }, []);
-
-  const updateNotificationSettings = useCallback((updates: Partial<NotificationSettings>) => {
-    setNotificationSettings((current) => {
-      if (!current) {
-        return current;
-      }
-      return { ...current, ...updates };
-    });
-    setNotificationError(null);
-    setHasUnsavedChanges(true);
-  }, []);
-
-  const refreshOllamaState = useCallback(async () => {
-    setCheckingOllama(true);
-    try {
-      await checkProviderStatus('ollama');
-      const models =
-        (await invoke<string[]>('llm_get_ollama_models').catch(() => [] as string[])) || [];
-
-      setOllamaModels(models);
-      setSelectedOllamaModel((currentModel) => {
-        const persistedModel = useSettingsStore.getState().llmConfig.defaultModels?.ollama;
-        if (persistedModel && models.includes(persistedModel)) {
-          return persistedModel;
-        }
-        if (currentModel && models.includes(currentModel)) {
-          return currentModel;
-        }
-        return models[0] || '';
-      });
-    } catch (error) {
-      console.error('Failed to refresh Ollama settings:', error);
-      setOllamaModels([]);
-      setSelectedOllamaModel('');
-    } finally {
-      setCheckingOllama(false);
-    }
-  }, [checkProviderStatus]);
-
-  const buildCurrentSnapshot = useCallback((notifications: NotificationSettings | null) => {
-    const state = useSettingsStore.getState();
-    return stableSerialize({
-      llmConfig: state.llmConfig,
-      windowPreferences: state.windowPreferences,
-      chatPreferences: state.chatPreferences,
-      executionPreferences: state.executionPreferences,
-      globalHotkeyPreferences: state.globalHotkeyPreferences,
-      allowedDirectories: state.allowedDirectories,
-      customModels: state.customModels,
-      features: state.features,
-      notifications,
-    });
-  }, []);
-
-  useEffect(() => {
-    if (open && !hasInitializedOpenStateRef.current) {
-      hasInitializedOpenStateRef.current = true;
-      void (async () => {
-        try {
-          const [, loadedNotifications] = await Promise.all([
-            loadSettings(),
-            loadNotificationSettings(),
-          ]);
-          baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
-        } catch (err) {
-          console.error('Failed to load settings:', err);
-          baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
-        }
-        await refreshOllamaState();
-        setHasUnsavedChanges(false);
-      })();
-      return;
-    }
-
-    if (!open) {
-      hasInitializedOpenStateRef.current = false;
-      baselineSnapshotRef.current = null;
-    }
-  }, [
-    open,
-    buildCurrentSnapshot,
-    loadNotificationSettings,
-    loadSettings,
-    notificationSettings,
-    refreshOllamaState,
-  ]);
-
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
-  const requiresDeferredSave =
-    activeTab !== 'mcp' &&
-    activeTab !== 'mcp-server' &&
-    activeTab !== 'extensions' &&
-    activeTab !== 'tools' &&
-    activeTab !== 'research';
-  const accountData = useAccountStore((state) => state.account);
-
-  useEffect(() => {
-    if (open) {
-      setActiveTab(initialTab);
-    }
-  }, [open, initialTab]);
-
-  useEffect(() => {
-    if (!open || !baselineSnapshotRef.current) {
-      return;
-    }
-
-    const currentSnapshot = buildCurrentSnapshot(notificationSettings);
-    setHasUnsavedChanges(currentSnapshot !== baselineSnapshotRef.current);
-  }, [
-    open,
-    llmConfig,
-    windowPreferences,
-    chatPreferences,
-    executionPreferences,
-    globalHotkeyPreferences,
-    allowedDirectories,
-    customModels,
-    features,
-    notificationSettings,
-    buildCurrentSnapshot,
-  ]);
-
-  const handleThemeChange = useCallback(
-    (value: 'light' | 'dark' | 'system') => {
-      setTheme(value);
-      setHasUnsavedChanges(true);
-    },
-    [setTheme],
-  );
-
-  const handleLanguageChange = useCallback(
-    (value: Language) => {
-      setLanguage(value);
-      setHasUnsavedChanges(true);
-    },
-    [setLanguage],
-  );
-
-  const handleAgentModeChange = useCallback(
-    (value: boolean) => {
-      setAlwaysUseAgentMode(value);
-      setHasUnsavedChanges(true);
-    },
-    [setAlwaysUseAgentMode],
-  );
-
-  const handleAutoApproveToolsChange = useCallback(
-    (value: boolean) => {
-      setAutoApproveTools(value);
-      setHasUnsavedChanges(true);
-    },
-    [setAutoApproveTools],
-  );
-
-  const handleCompactModeChange = useCallback(
-    (value: boolean) => {
-      setCompactMode(value);
-      setHasUnsavedChanges(true);
-    },
-    [setCompactMode],
-  );
-
-  const handlePromptCompletionChange = useCallback(
-    (value: boolean) => {
-      setPromptCompletionEnabled(value);
-      setHasUnsavedChanges(true);
-    },
-    [setPromptCompletionEnabled],
-  );
-
-  const handleGlobalHotkeyEnabledChange = useCallback(
-    (value: boolean) => {
-      setGlobalHotkeyEnabled(value);
-      setHasUnsavedChanges(true);
-    },
-    [setGlobalHotkeyEnabled],
-  );
-
-  const handleGlobalHotkeyComboChange = useCallback(
-    (value: string) => {
-      setGlobalHotkeyCombo(value);
-      setHasUnsavedChanges(true);
-    },
-    [setGlobalHotkeyCombo],
-  );
-
-  useEffect(() => {
-    if (open) {
-      setSaveError(null);
-    }
-  }, [open]);
-
-  const handleSaveSettings = useCallback(async () => {
-    if (isSaving) {
-      return;
-    }
-
-    setIsSaving(true);
-    setSaveError(null);
-    try {
-      await saveSettings();
-      if (notificationSettings) {
-        await invoke('notification_set_settings', { settings: notificationSettings });
-      }
-      baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
-      setHasUnsavedChanges(false);
-      onOpenChange(false);
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      setSaveError(getSimpleErrorMessage(error));
-    } finally {
-      setIsSaving(false);
-    }
-  }, [buildCurrentSnapshot, isSaving, notificationSettings, onOpenChange, saveSettings]);
-
-  const handleCancel = useCallback(async () => {
-    try {
-      // Always reload to revert mutations from nested settings panels.
-      const [, loadedNotifications] = await Promise.all([
-        loadSettings(),
-        loadNotificationSettings(),
-      ]);
-      baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
-      await refreshOllamaState();
-    } catch (error) {
-      console.error('Failed to reload settings:', error);
-      setSaveError('Failed to discard changes. Please try again.');
-      return;
-    }
-    setSaveError(null);
-    setHasUnsavedChanges(false);
-    onOpenChange(false);
-  }, [
-    buildCurrentSnapshot,
-    loadNotificationSettings,
-    loadSettings,
-    onOpenChange,
-    refreshOllamaState,
-  ]);
-
-  const handleDialogOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      if (nextOpen) {
-        onOpenChange(true);
-        return;
-      }
-
-      void handleCancel();
-    },
-    [handleCancel, onOpenChange],
-  );
-
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="max-w-5xl w-full p-0 overflow-hidden bg-background">
-        <div className="flex h-[85vh]">
-          {/* Vertical sidebar navigation */}
-          <div className="w-52 border-r border-border bg-[#1c1c1c] py-4 px-2 space-y-1 shrink-0 overflow-y-auto">
-            <DialogHeader className="px-3 pb-4">
-              <DialogTitle className="text-lg font-bold">Settings</DialogTitle>
-              <DialogDescription className="text-xs">Configure your preferences</DialogDescription>
-            </DialogHeader>
-
-            {SETTINGS_NAV.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setActiveTab(item.key)}
-                disabled={isBusy}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
-                  activeTab === item.key
-                    ? 'bg-background text-foreground font-medium'
-                    : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
-                } ${isBusy ? 'opacity-60 cursor-not-allowed' : ''}`}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                <span className="truncate flex-1 text-left">{item.label}</span>
-                {item.key === 'connectors' && connectedConnectorCount > 0 && (
-                  <span className="ml-auto shrink-0 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-500/15 px-1.5 text-[10px] font-semibold text-green-500">
-                    {connectedConnectorCount}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Content area */}
-          <div className="flex-1 flex flex-col min-w-0">
-            <div
-              className={`flex-1 overflow-y-auto px-6 py-6 ${
-                isBusy ? 'pointer-events-none opacity-80' : ''
-              }`}
-            >
-              {error && (
-                <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* General Tab */}
-                  {activeTab === 'general' && (
-                    <>
-                      <div>
-                        <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
-                        <p className="text-sm text-muted-foreground mb-6">
-                          Customize window behavior and appearance
-                        </p>
-                        <div className="space-y-6">
-                          <div className="rounded-lg border border-border bg-card p-6 space-y-4">
-                            <h4 className="font-semibold">Global Hotkey</h4>
-                            <div className="flex items-center justify-between">
-                              <div className="space-y-0.5">
-                                <Label htmlFor="globalHotkeyEnabled">Enable Global Hotkey</Label>
-                                <p className="text-xs text-muted-foreground">
-                                  Open AGI Workforce from anywhere with a keyboard shortcut.
-                                </p>
-                              </div>
-                              <Switch
-                                id="globalHotkeyEnabled"
-                                checked={resolvedGlobalHotkeyPreferences.enabled}
-                                onCheckedChange={handleGlobalHotkeyEnabledChange}
-                              />
-                            </div>
-                            {resolvedGlobalHotkeyPreferences.enabled && (
-                              <div className="space-y-2">
-                                <Label htmlFor="globalHotkeyCombo">Key Combination</Label>
-                                <input
-                                  id="globalHotkeyCombo"
-                                  type="text"
-                                  value={resolvedGlobalHotkeyPreferences.combo}
-                                  onChange={(e) => handleGlobalHotkeyComboChange(e.target.value)}
-                                  placeholder={defaultGlobalHotkeyCombo}
-                                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                  Use Tauri accelerator format, e.g.{' '}
-                                  <code className="rounded bg-muted px-1 py-0.5">
-                                    {defaultGlobalHotkeyCombo}
-                                  </code>
-                                </p>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="theme">Theme</Label>
-                            <Select
-                              value={resolvedWindowPreferences.theme}
-                              onValueChange={(value) =>
-                                handleThemeChange(value as 'light' | 'dark' | 'system')
-                              }
-                            >
-                              <SelectTrigger id="theme">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="light">Light</SelectItem>
-                                <SelectItem value="dark">Dark</SelectItem>
-                                <SelectItem value="system">System</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="language">Language</Label>
-                            <Select
-                              value={resolvedWindowPreferences.language}
-                              onValueChange={(value) => handleLanguageChange(value as Language)}
-                            >
-                              <SelectTrigger id="language">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {SUPPORTED_LANGUAGES.map((lang) => (
-                                  <SelectItem key={lang.code} value={lang.code}>
-                                    {lang.nativeName}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="pt-6 border-t border-border">
-                        <VoiceSettings />
-                      </div>
-
-                      <div className="pt-6 border-t border-border">
-                        <h3 className="text-lg font-semibold mb-4">System Resources</h3>
-                        <ResourceMonitor showTools={true} />
-                      </div>
-                      <div className="pt-6 border-t border-border">
-                        <h3 className="text-lg font-semibold mb-4">Agent Permissions</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          macOS system permissions required for agent mode automation.
-                        </p>
-                        <AutomationPermissionsSettings />
-                      </div>
-                      <div className="pt-6 border-t border-border">
-                        <UpdateSettings />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Account & Billing Tab */}
-                  {activeTab === 'account' && (
-                    <div>
-                      <h3 className="text-lg font-semibold mb-4">Account</h3>
-                      <div className="rounded-lg border border-border bg-card p-6">
-                        <div className="flex items-center gap-4 mb-6">
-                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-purple-500 text-xl font-semibold text-white">
-                            {accountData.avatar ? (
-                              <img
-                                src={accountData.avatar}
-                                alt={accountData.displayName || ''}
-                                className="h-full w-full rounded-full object-cover"
-                              />
-                            ) : (
-                              <span>
-                                {(accountData.displayName || accountData.email || 'U')
-                                  .split(/[\s._-]+/)
-                                  .filter(Boolean)
-                                  .map((n: string) => n[0])
-                                  .join('')
-                                  .toUpperCase()
-                                  .slice(0, 2)}
-                              </span>
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-lg font-semibold">
-                              {accountData.displayName ||
-                                accountData.email?.split('@')[0] ||
-                                'User'}
-                            </div>
-                            <div className="text-sm text-muted-foreground">{accountData.email}</div>
-                            <div className="mt-1 inline-flex items-center rounded bg-muted/40 px-2 py-0.5 text-xs font-medium uppercase tracking-wider text-foreground">
-                              {accountData.planDisplayName || 'Free'}
-                            </div>
-                          </div>
-                        </div>
-
-                        {accountData.credits && (
-                          <div className="space-y-3 mb-6">
-                            {accountData.credits.daily_limit_cents !== undefined &&
-                              accountData.credits.daily_limit_cents > 0 && (
-                                <div className="rounded-lg border border-border bg-card p-4">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium">Daily Credits</span>
-                                    <span className="text-sm text-muted-foreground">
-                                      {accountData.credits.daily_remaining_cents ?? 0} remaining
-                                    </span>
-                                  </div>
-                                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                                    <div
-                                      className="h-full bg-primary transition-all"
-                                      style={{
-                                        width: `${Math.min(
-                                          ((accountData.credits.daily_used_cents || 0) /
-                                            (accountData.credits.daily_limit_cents || 1)) *
-                                            100,
-                                          100,
-                                        )}%`,
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                            {accountData.credits.allocated_cents &&
-                              accountData.credits.allocated_cents > 0 && (
-                                <div className="rounded-lg border border-border bg-card p-4">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium">Monthly Credits</span>
-                                    <span className="text-sm text-muted-foreground">
-                                      {accountData.credits.remaining_cents ?? 0} remaining
-                                    </span>
-                                  </div>
-                                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                                    <div
-                                      className="h-full bg-primary transition-all"
-                                      style={{
-                                        width: `${Math.min(
-                                          ((accountData.credits.used_cents || 0) /
-                                            (accountData.credits.allocated_cents || 1)) *
-                                            100,
-                                          100,
-                                        )}%`,
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                          </div>
-                        )}
-
-                        <div className="flex gap-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void openPricingPage()}
-                          >
-                            <CreditCard className="mr-2 h-4 w-4" />
-                            Manage Subscription
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => void useAuthStore.getState().signOut()}
-                          >
-                            Sign Out
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Personalization Tab */}
-                  {activeTab === 'personalization' && (
-                    <>
-                      <MemoryPanel />
-                      <div className="pt-6 border-t border-border">
-                        <CustomInstructionsSettings />
-                      </div>
-                      <div className="pt-6 border-t border-border">
-                        <InstructionFilesSettings />
-                      </div>
-                      <div className="pt-6 border-t border-border">
-                        <AgentsSettings />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Privacy & Data Tab */}
-                  {activeTab === 'privacy' && (
-                    <>
-                      <div>
-                        <h3 className="text-lg font-semibold mb-1">Master Password</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Encrypt stored API keys and secrets with an Argon2id-derived master
-                          password.
-                        </p>
-                        <MasterPasswordSettings />
-                      </div>
-                      <div className="pt-6 border-t border-border">
-                        <DataPrivacyTab />
-                      </div>
-                      <div className="pt-6 border-t border-border">
-                        <CacheManagement />
-                      </div>
-                      <div className="pt-6 border-t border-border">
-                        <AllowedDirectoriesSettings />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Connectors Tab */}
-                  {activeTab === 'connectors' && (
-                    <div className="space-y-6">
-                      <ConnectorGallery />
-                      <ConnectorHealthDashboard />
-                    </div>
-                  )}
-
-                  {/* API Keys Tab */}
-                  {activeTab === 'api-keys' && (
-                    <>
-                      <BYOKApiKeysSection />
-
-                      <div className="pt-6 border-t border-border">
-                        <h3 className="text-lg font-semibold mb-4">Local Models</h3>
-                        <div className="space-y-6">
-                          {/* Provider Mode */}
-                          <div className="flex flex-col gap-2">
-                            <label className="text-sm font-medium">Provider Mode</label>
-                            <div className="flex gap-2">
-                              {(['auto', 'local', 'cloud'] as const).map((mode) => (
-                                <button
-                                  key={mode}
-                                  type="button"
-                                  onClick={() => {
-                                    setProviderMode(mode);
-                                    setHasUnsavedChanges(true);
-                                  }}
-                                  className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors ${
-                                    (resolvedLLMConfig.providerMode ?? 'auto') === mode
-                                      ? 'bg-primary text-primary-foreground border-primary'
-                                      : 'bg-background border-border hover:bg-accent'
-                                  }`}
-                                >
-                                  {mode === 'auto'
-                                    ? '⚡ Auto'
-                                    : mode === 'local'
-                                      ? '🖥️ Local'
-                                      : '☁️ Cloud'}
-                                </button>
-                              ))}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {(resolvedLLMConfig.providerMode ?? 'auto') === 'local'
-                                ? 'Always use local Ollama. No data leaves your machine.'
-                                : (resolvedLLMConfig.providerMode ?? 'auto') === 'cloud'
-                                  ? 'Always use cloud providers (OpenAI, Anthropic, etc.).'
-                                  : 'Automatically route to the best provider for each task.'}
-                            </p>
-                          </div>
-
-                          {/* Ollama URL */}
-                          {(resolvedLLMConfig.providerMode ?? 'auto') !== 'cloud' && (
-                            <div className="flex flex-col gap-2">
-                              <label className="text-sm font-medium">Ollama URL</label>
-                              <input
-                                type="url"
-                                value={resolvedLLMConfig.ollamaUrl ?? 'http://localhost:11434'}
-                                onChange={(e) => {
-                                  const raw = e.target.value;
-                                  // Allow empty / partial typing without blocking input
-                                  if (!raw.trim()) {
-                                    setOllamaUrl(raw);
-                                    setHasUnsavedChanges(true);
-                                    return;
-                                  }
-                                  // Validate on blur-like basis: if it looks like a full URL, validate
-                                  try {
-                                    new URL(raw);
-                                    const result = validateUrl(raw, { allowLocalhost: true });
-                                    if (!result.valid) {
-                                      toast.error(result.error ?? 'Invalid Ollama URL');
-                                      return;
-                                    }
-                                    setOllamaUrl(result.sanitized ?? raw);
-                                  } catch {
-                                    // Still typing a partial URL — allow it through
-                                    setOllamaUrl(raw);
-                                  }
-                                  setHasUnsavedChanges(true);
-                                }}
-                                placeholder="http://localhost:11434"
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                URL for the local Ollama server. Default: http://localhost:11434
-                              </p>
-                            </div>
-                          )}
-
-                          <div className="rounded-lg border border-border bg-card p-6">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="flex items-start gap-4">
-                                <div className="rounded-md bg-muted p-3">
-                                  <Server className="h-6 w-6 text-muted-foreground" />
-                                </div>
-                                <div className="flex-1">
-                                  <h4 className="font-semibold mb-2">
-                                    Local Ollama (Offline Mode)
-                                  </h4>
-                                  <p className="text-sm text-muted-foreground mb-3">
-                                    Use Ollama for offline AI processing. Models run locally on your
-                                    machine for complete privacy and no internet required.
-                                  </p>
-                                  {checkingOllama ? (
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                      <span>Checking Ollama status...</span>
-                                    </div>
-                                  ) : isOllamaAvailable ? (
-                                    <div className="space-y-3">
-                                      <div className="flex items-center gap-2 text-xs text-green-600">
-                                        <Check className="h-3 w-3" />
-                                        <span>Ollama is running and available</span>
-                                      </div>
-                                      {ollamaEnabled && ollamaModels.length > 0 && (
-                                        <Select
-                                          value={selectedOllamaModel}
-                                          onValueChange={handleOllamaModelChange}
-                                        >
-                                          <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Select model" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {ollamaModels.map((model) => (
-                                              <SelectItem key={model} value={model}>
-                                                {model}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-yellow-600">
-                                      Ollama not detected. Install from{' '}
-                                      <a
-                                        href="https://ollama.ai"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="underline"
-                                      >
-                                        ollama.ai
-                                      </a>
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                              <Switch
-                                checked={ollamaEnabled}
-                                onCheckedChange={handleOllamaEnabledChange}
-                              />
-                            </div>
-                          </div>
-
-                          <FavoriteModelsSelector />
-                          <CustomModelsSettings />
-                        </div>
-                      </div>
-
-                      <div className="pt-6 border-t border-border">
-                        <h3 className="text-lg font-semibold mb-4">Settings Management</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Export or import your settings configuration
-                        </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void handleExportSettings()}
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Export Settings
-                        </Button>
-                      </div>
-
-                      <div className="pt-6 border-t border-border">
-                        <h3 className="text-lg font-semibold mb-4">Model Behavior</h3>
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <Label htmlFor="agentMode">Always Use Agent Mode</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Agent mode enables tool use, web browsing, and code execution
-                              </p>
-                            </div>
-                            <Switch
-                              id="agentMode"
-                              checked={chatPreferences?.alwaysUseAgentMode ?? false}
-                              onCheckedChange={handleAgentModeChange}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <Label htmlFor="autoApprove">Auto-Approve Tools</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Automatically approve safe tool executions without confirmation
-                              </p>
-                            </div>
-                            <Switch
-                              id="autoApprove"
-                              checked={chatPreferences?.autoApproveTools ?? false}
-                              onCheckedChange={handleAutoApproveToolsChange}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <Label htmlFor="compactMode">Compact Mode</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Reduce spacing between messages for a denser view
-                              </p>
-                            </div>
-                            <Switch
-                              id="compactMode"
-                              checked={chatPreferences?.compactMode ?? false}
-                              onCheckedChange={handleCompactModeChange}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <Label htmlFor="promptCompletion">Prompt Completion</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Show AI-powered suggestions as you type
-                              </p>
-                            </div>
-                            <Switch
-                              id="promptCompletion"
-                              checked={chatPreferences?.promptCompletionEnabled ?? true}
-                              onCheckedChange={handlePromptCompletionChange}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="pt-4 text-xs text-muted-foreground">
-                        <h4 className="font-medium mb-2">Supported Providers</h4>
-                        <ul className="list-disc list-inside space-y-1">
-                          <li>OpenAI (GPT-5.4, GPT-5.4 Mini, o3)</li>
-                          <li>Anthropic (Claude Opus 4.6, Sonnet 4.6, Haiku 4.5)</li>
-                          <li>Google (Gemini 3.1 Flash Lite, Gemini 3.1 Pro)</li>
-                          <li>xAI (Grok 4, Grok 4.1 Fast)</li>
-                          <li>DeepSeek (R1, V3.2)</li>
-                          <li>Mistral (Large, Codestral)</li>
-                          <li>Qwen (Qwen3.5 Plus, Qwen3.5 Flash)</li>
-                          <li>Kimi (K2.5, K2.5 Thinking)</li>
-                          <li>Perplexity (Sonar Pro, Sonar Reasoning)</li>
-                          <li>NVIDIA NIM (Nemotron Ultra, Super, Nano — free tier)</li>
-                          <li>OpenRouter (200+ models, generous free tier)</li>
-                          <li>Ollama (any local model)</li>
-                        </ul>
-                      </div>
-                    </>
-                  )}
-
-                  {/* MCP Tab */}
-                  {activeTab === 'mcp' && (
-                    <div className="space-y-6">
-                      <MCPToolsSettings />
-                      <div className="pt-6 border-t border-border">
-                        <SkillsPluginsSettings />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* MCP Server Tab */}
-                  {activeTab === 'mcp-server' && <MCPServerSettings />}
-
-                  {/* Extensions Tab */}
-                  {activeTab === 'extensions' && <ExtensionsSettings />}
-
-                  {/* Notifications Tab */}
-                  {activeTab === 'notifications' && (
-                    <div>
-                      <h3 className="text-lg font-semibold mb-4">Notifications</h3>
-                      <p className="text-sm text-muted-foreground mb-6">
-                        Configure how you receive notifications
-                      </p>
-                      {notificationLoading ? (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Loading notification settings...</span>
-                        </div>
-                      ) : notificationSettings ? (
-                        <div className="space-y-4">
-                          {notificationError && (
-                            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                              {notificationError}
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <Label>Desktop Notifications</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Show system notifications for agent completions and alerts
-                              </p>
-                            </div>
-                            <Switch
-                              checked={notificationSettings.desktop_notifications}
-                              onCheckedChange={(enabled) =>
-                                updateNotificationSettings({ desktop_notifications: enabled })
-                              }
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <Label>Sound Effects</Label>
-                              <p className="text-xs text-muted-foreground">
-                                Play sounds for message received and task completion
-                              </p>
-                            </div>
-                            <Switch
-                              checked={notificationSettings.sound_enabled}
-                              onCheckedChange={(enabled) =>
-                                updateNotificationSettings({ sound_enabled: enabled })
-                              }
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                          {notificationError || 'Notification settings are unavailable.'}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Tools Tab */}
-                  {activeTab === 'tools' && (
-                    <div className="h-full flex flex-col min-h-0">
-                      <ToolsPanel />
-                    </div>
-                  )}
-
-                  {/* Research Tab */}
-                  {activeTab === 'research' && <ResearchSettings />}
-
-                  {/* Keybindings Tab */}
-                  {activeTab === 'keybindings' && <KeybindingsSettings />}
-
-                  {/* Themes Tab */}
-                  {activeTab === 'themes' && <ThemeSettings />}
-                </div>
-              )}
-            </div>
-
-            {/* Footer buttons */}
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border shrink-0">
-              {requiresDeferredSave ? (
-                <>
-                  {saveError && (
-                    <div className="mr-auto rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                      {saveError}
-                    </div>
-                  )}
-                  <Button variant="outline" onClick={() => void handleCancel()} disabled={isBusy}>
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => void handleSaveSettings()}
-                    disabled={isBusy || !hasUnsavedChanges}
-                  >
-                    {loading || isSaving ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <p className="mr-auto text-xs text-muted-foreground">
-                    Changes in this section apply immediately.
-                  </p>
-                  <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
-                    Close
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <div>
+      <h3 className="text-lg font-semibold mb-1">Onboarding</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        Re-run the first-run setup wizard to reconfigure API keys, model selection, and tour.
+      </p>
+      <Button variant="outline" size="sm" onClick={handleRestart}>
+        Restart Onboarding Wizard
+      </Button>
+    </div>
   );
 }
 
-function DataPrivacyTab() {
+// ── Data & Privacy section (inline component) ─────────────────────────────────
+function DataPrivacySection() {
   const chatStorageMode = useSettingsStore((state) => state.chatPreferences.chatStorageMode);
   const setChatStorageMode = useSettingsStore((state) => state.setChatStorageMode);
   const [exporting, setExporting] = useState(false);
@@ -1285,7 +275,6 @@ function DataPrivacyTab() {
 
   useEffect(() => {
     let mounted = true;
-
     const loadPreference = async () => {
       try {
         const result = await invoke<{ value: string } | null>('get_user_preference', {
@@ -1296,16 +285,14 @@ function DataPrivacyTab() {
           setCrashReportingEnabled(enabled);
           errorTracking.updateConfig({ enabled });
         }
-      } catch (error) {
+      } catch (err) {
         if (mounted) {
-          console.error('Failed to load crash reporting preference:', error);
+          console.error('Failed to load crash reporting preference:', err);
           setCrashReportingEnabled(errorTracking.getConfig().enabled);
         }
       }
     };
-
     void loadPreference();
-
     return () => {
       mounted = false;
     };
@@ -1315,9 +302,7 @@ function DataPrivacyTab() {
     const confirmed = confirm(
       'Are you sure you want to clear all local data? This will delete chat history, settings, cached data, and encrypted local credentials, then reload the app.',
     );
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setClearingData(true);
     setClearError(null);
@@ -1327,7 +312,7 @@ function DataPrivacyTab() {
         invoke('clear_local_database'),
         invoke('cache_clear_all'),
         invoke('settings_v2_clear_cache'),
-        invoke('analytics_delete_all_data'),
+        analyticsDeleteAllData(),
       ]);
 
       const failures = results
@@ -1341,8 +326,8 @@ function DataPrivacyTab() {
       localStorage.clear();
       sessionStorage.clear();
       window.location.reload();
-    } catch (error) {
-      setClearError(getSimpleErrorMessage(error));
+    } catch (err) {
+      setClearError(getSimpleErrorMessage(err));
     } finally {
       setClearingData(false);
     }
@@ -1360,8 +345,8 @@ function DataPrivacyTab() {
       });
       errorTracking.updateConfig({ enabled });
       setCrashReportingEnabled(enabled);
-    } catch (error) {
-      console.error('Failed to save crash reporting preference:', error);
+    } catch (err) {
+      console.error('Failed to save crash reporting preference:', err);
     } finally {
       setSavingCrashReporting(false);
     }
@@ -1372,12 +357,8 @@ function DataPrivacyTab() {
 
   useEffect(() => {
     return () => {
-      if (exportSuccessTimerRef.current) {
-        window.clearTimeout(exportSuccessTimerRef.current);
-      }
-      if (exportErrorTimerRef.current) {
-        window.clearTimeout(exportErrorTimerRef.current);
-      }
+      if (exportSuccessTimerRef.current) window.clearTimeout(exportSuccessTimerRef.current);
+      if (exportErrorTimerRef.current) window.clearTimeout(exportErrorTimerRef.current);
     };
   }, []);
 
@@ -1388,31 +369,20 @@ function DataPrivacyTab() {
 
     try {
       const exportData = await invoke<string>('export_user_data');
-
       const savePath = await save({
         defaultPath: `agi-workforce-export-${new Date().toISOString().split('T')[0]}.json`,
-        filters: [
-          {
-            name: 'JSON',
-            extensions: ['json'],
-          },
-        ],
+        filters: [{ name: 'JSON', extensions: ['json'] }],
       });
-
       if (savePath) {
         await writeTextFile(savePath, exportData);
         setExportSuccess(true);
-        if (exportSuccessTimerRef.current) {
-          window.clearTimeout(exportSuccessTimerRef.current);
-        }
+        if (exportSuccessTimerRef.current) window.clearTimeout(exportSuccessTimerRef.current);
         exportSuccessTimerRef.current = window.setTimeout(() => setExportSuccess(false), 5000);
       }
-    } catch (error) {
-      console.error('Failed to export data:', error);
-      setExportError(getSimpleErrorMessage(error));
-      if (exportErrorTimerRef.current) {
-        window.clearTimeout(exportErrorTimerRef.current);
-      }
+    } catch (err) {
+      console.error('Failed to export data:', err);
+      setExportError(getSimpleErrorMessage(err));
+      if (exportErrorTimerRef.current) window.clearTimeout(exportErrorTimerRef.current);
       exportErrorTimerRef.current = window.setTimeout(() => setExportError(null), 5000);
     } finally {
       setExporting(false);
@@ -1421,7 +391,7 @@ function DataPrivacyTab() {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-4">Data & Privacy</h3>
+      <h3 className="text-lg font-semibold mb-4">Data &amp; Privacy</h3>
       <p className="text-sm text-muted-foreground mb-6">
         Manage your data, privacy settings, and GDPR compliance
       </p>
@@ -1538,7 +508,7 @@ function DataPrivacyTab() {
         </div>
 
         <div className="rounded-lg border border-border bg-card p-6">
-          <h4 className="font-semibold mb-2">Privacy & Security</h4>
+          <h4 className="font-semibold mb-2">Privacy &amp; Security</h4>
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
@@ -1609,4 +579,1056 @@ function DataPrivacyTab() {
   );
 }
 
-export default SettingsPanel;
+// ── App Mode section (Local / Cloud toggle) ───────────────────────────────────
+function AppModeSection() {
+  const mode = useAppModeStore(selectMode);
+  const isCloud = useAppModeStore(selectIsCloud);
+
+  // Detect whether the user is signed in (planTier > free implies cloud auth)
+  const planTier = useAppModeStore((state) => state.planTier);
+  const isAuthenticated = planTier !== 'free';
+
+  return (
+    <div>
+      <h3 className="text-lg font-semibold mb-1">Mode</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        Choose between fully local (offline, free) or cloud-connected (Pro features).
+      </p>
+
+      {/* Toggle buttons */}
+      <div className="flex gap-2 mb-4">
+        <button
+          type="button"
+          onClick={() => useAppModeStore.getState().setMode('local')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
+            mode === 'local'
+              ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50 border-emerald-500/30'
+              : 'bg-background border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+          )}
+        >
+          <Shield className="h-4 w-4 shrink-0" />
+          <span>Local</span>
+          <span className="text-xs opacity-70">(Free)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => useAppModeStore.getState().setMode('cloud')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
+            mode === 'cloud'
+              ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50 border-blue-500/30'
+              : 'bg-background border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+          )}
+        >
+          <Cloud className="h-4 w-4 shrink-0" />
+          <span>Cloud</span>
+          <span className="text-xs opacity-70">(Pro)</span>
+        </button>
+      </div>
+
+      {/* Cloud-specific sub-panel */}
+      {isCloud && !isAuthenticated && (
+        <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
+          <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
+          <p className="text-sm text-blue-400 flex-1">
+            Sign in to unlock Cloud Mode and sync your conversations across devices.
+          </p>
+          <button
+            type="button"
+            onClick={() => toast.info('Sign-in flow coming soon.')}
+            className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50 hover:bg-blue-500/30 transition-colors"
+          >
+            Sign in to enable Cloud Mode
+          </button>
+        </div>
+      )}
+
+      {isCloud && isAuthenticated && (
+        <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
+          <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
+          <p className="text-sm text-blue-400 flex-1">
+            Plan: <span className="font-semibold capitalize">{planTier}</span>{' '}
+            <span className="opacity-70">($20/mo)</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => toast.info('Billing portal coming soon.')}
+            className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50 hover:bg-blue-500/30 transition-colors"
+          >
+            Manage Billing &rarr;
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main component props ──────────────────────────────────────────────────────
+interface SettingsPanelProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialTab?: SettingsTab;
+}
+
+export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: SettingsPanelProps) {
+  const hasInitializedOpenStateRef = useRef(false);
+  const connectedConnectorCount = useConnectorsStore((state) => state.connectedIds.length);
+  const llmConfig = useSettingsStore(useShallow((state) => state.llmConfig));
+  const windowPreferences = useSettingsStore(useShallow((state) => state.windowPreferences));
+  const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
+  const executionPreferences = useSettingsStore(useShallow((state) => state.executionPreferences));
+  const allowedDirectories = useSettingsStore(useShallow((state) => state.allowedDirectories));
+  const customModels = useSettingsStore(useShallow((state) => state.customModels));
+  const features = useSettingsStore(useShallow((state) => state.features));
+  const setTheme = useSettingsStore((state) => state.setTheme);
+  const setLanguage = useSettingsStore((state) => state.setLanguage);
+  const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
+  const setAutoApproveTools = useSettingsStore((state) => state.setAutoApproveTools);
+  const setCompactMode = useSettingsStore((state) => state.setCompactMode);
+  const setPromptCompletionEnabled = useSettingsStore((state) => state.setPromptCompletionEnabled);
+  const globalHotkeyPreferences = useSettingsStore(
+    useShallow((state) => state.globalHotkeyPreferences),
+  );
+  const setGlobalHotkeyEnabled = useSettingsStore((state) => state.setGlobalHotkeyEnabled);
+  const setGlobalHotkeyCombo = useSettingsStore((state) => state.setGlobalHotkeyCombo);
+  const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
+  const setProviderMode = useSettingsStore((state) => state.setProviderMode);
+  const setOllamaUrl = useSettingsStore((state) => state.setOllamaUrl);
+  const loadSettings = useSettingsStore((state) => state.loadSettings);
+  const saveSettings = useSettingsStore((state) => state.saveSettings);
+  const loading = useSettingsStore((state) => state.loading);
+  const error = useSettingsStore((state) => state.error);
+
+  const providerStatuses = useModelStore(useShallow((state) => state.providerStatuses));
+  const checkProviderStatus = useModelStore((state) => state.checkProviderStatus);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [selectedOllamaModel, setSelectedOllamaModel] = useState<string>('');
+  const [checkingOllama, setCheckingOllama] = useState(false);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(
+    null,
+  );
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const baselineSnapshotRef = useRef<string | null>(null);
+
+  const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
+  const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
+  const defaultGlobalHotkeyCombo = getDefaultGlobalHotkeyCombo();
+  const resolvedGlobalHotkeyPreferences: GlobalHotkeyPreferences = globalHotkeyPreferences ?? {
+    enabled: true,
+    combo: defaultGlobalHotkeyCombo,
+  };
+
+  const ollamaStatus = providerStatuses.ollama;
+  const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
+  const ollamaEnabled = Boolean(resolvedLLMConfig.defaultModels?.ollama);
+  const isBusy = loading || isSaving || notificationLoading;
+
+  const handleExportSettings = useCallback(async () => {
+    try {
+      const settings = useSettingsStore.getState();
+      const exportData = JSON.stringify(
+        {
+          llmConfig: settings.llmConfig,
+          windowPreferences: settings.windowPreferences,
+          chatPreferences: settings.chatPreferences,
+          executionPreferences: settings.executionPreferences,
+          globalHotkeyPreferences: settings.globalHotkeyPreferences,
+          customModels: settings.customModels,
+        },
+        null,
+        2,
+      );
+      const savePath = await save({
+        defaultPath: `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (savePath) {
+        await writeTextFile(savePath, exportData);
+      }
+    } catch (err) {
+      console.error('Failed to export settings:', err);
+    }
+  }, []);
+
+  const handleOllamaEnabledChange = useCallback(
+    (enabled: boolean) => {
+      if (enabled) {
+        const modelToSet = selectedOllamaModel || ollamaModels[0] || 'llama3';
+        setDefaultModel('ollama', modelToSet);
+        setSelectedOllamaModel(modelToSet);
+      } else {
+        setDefaultModel('ollama', '');
+      }
+      setHasUnsavedChanges(true);
+    },
+    [selectedOllamaModel, ollamaModels, setDefaultModel],
+  );
+
+  const handleOllamaModelChange = useCallback(
+    (model: string) => {
+      setSelectedOllamaModel(model);
+      if (ollamaEnabled) {
+        setDefaultModel('ollama', model);
+      }
+      setHasUnsavedChanges(true);
+    },
+    [ollamaEnabled, setDefaultModel],
+  );
+
+  const loadNotificationSettings = useCallback(async (): Promise<NotificationSettings | null> => {
+    setNotificationLoading(true);
+    setNotificationError(null);
+    try {
+      const settings = await invoke<NotificationSettings>('notification_get_settings');
+      setNotificationSettings(settings);
+      return settings;
+    } catch (err) {
+      console.error('Failed to load notification settings:', err);
+      setNotificationError(getSimpleErrorMessage(err));
+      setNotificationSettings(null);
+      return null;
+    } finally {
+      setNotificationLoading(false);
+    }
+  }, []);
+
+  const updateNotificationSettings = useCallback((updates: Partial<NotificationSettings>) => {
+    setNotificationSettings((current) => {
+      if (!current) return current;
+      return { ...current, ...updates };
+    });
+    setNotificationError(null);
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const refreshOllamaState = useCallback(async () => {
+    setCheckingOllama(true);
+    try {
+      await checkProviderStatus('ollama');
+      const models =
+        (await invoke<string[]>('llm_get_ollama_models').catch(() => [] as string[])) || [];
+      setOllamaModels(models);
+      setSelectedOllamaModel((currentModel) => {
+        const persistedModel = useSettingsStore.getState().llmConfig.defaultModels?.ollama;
+        if (persistedModel && models.includes(persistedModel)) return persistedModel;
+        if (currentModel && models.includes(currentModel)) return currentModel;
+        return models[0] || '';
+      });
+    } catch (err) {
+      console.error('Failed to refresh Ollama settings:', err);
+      setOllamaModels([]);
+      setSelectedOllamaModel('');
+    } finally {
+      setCheckingOllama(false);
+    }
+  }, [checkProviderStatus]);
+
+  const buildCurrentSnapshot = useCallback((notifications: NotificationSettings | null) => {
+    const state = useSettingsStore.getState();
+    return stableSerialize({
+      llmConfig: state.llmConfig,
+      windowPreferences: state.windowPreferences,
+      chatPreferences: state.chatPreferences,
+      executionPreferences: state.executionPreferences,
+      globalHotkeyPreferences: state.globalHotkeyPreferences,
+      allowedDirectories: state.allowedDirectories,
+      customModels: state.customModels,
+      features: state.features,
+      notifications,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (open && !hasInitializedOpenStateRef.current) {
+      hasInitializedOpenStateRef.current = true;
+      void (async () => {
+        try {
+          const [, loadedNotifications] = await Promise.all([
+            loadSettings(),
+            loadNotificationSettings(),
+          ]);
+          baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
+        } catch (err) {
+          console.error('Failed to load settings:', err);
+          baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
+        }
+        await refreshOllamaState();
+        setHasUnsavedChanges(false);
+      })();
+      return;
+    }
+    if (!open) {
+      hasInitializedOpenStateRef.current = false;
+      baselineSnapshotRef.current = null;
+    }
+  }, [
+    open,
+    buildCurrentSnapshot,
+    loadNotificationSettings,
+    loadSettings,
+    notificationSettings,
+    refreshOllamaState,
+  ]);
+
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [activeTab, setActiveTab] = useState<CanonicalTab>(() => resolveTab(initialTab));
+
+  // Tabs that skip the deferred Save/Cancel footer
+  const requiresDeferredSave = !SELF_SAVING_TABS.has(activeTab);
+
+  useEffect(() => {
+    if (open) {
+      setActiveTab(resolveTab(initialTab));
+    }
+  }, [open, initialTab]);
+
+  useEffect(() => {
+    if (!open || !baselineSnapshotRef.current) return;
+    const currentSnapshot = buildCurrentSnapshot(notificationSettings);
+    setHasUnsavedChanges(currentSnapshot !== baselineSnapshotRef.current);
+  }, [
+    open,
+    llmConfig,
+    windowPreferences,
+    chatPreferences,
+    executionPreferences,
+    globalHotkeyPreferences,
+    allowedDirectories,
+    customModels,
+    features,
+    notificationSettings,
+    buildCurrentSnapshot,
+  ]);
+
+  const handleThemeChange = useCallback(
+    (value: 'light' | 'dark' | 'system') => {
+      setTheme(value);
+      setHasUnsavedChanges(true);
+    },
+    [setTheme],
+  );
+
+  const handleLanguageChange = useCallback(
+    (value: Language) => {
+      setLanguage(value);
+      setHasUnsavedChanges(true);
+    },
+    [setLanguage],
+  );
+
+  const handleAgentModeChange = useCallback(
+    (value: boolean) => {
+      setAlwaysUseAgentMode(value);
+      setHasUnsavedChanges(true);
+    },
+    [setAlwaysUseAgentMode],
+  );
+
+  const handleAutoApproveToolsChange = useCallback(
+    (value: boolean) => {
+      setAutoApproveTools(value);
+      setHasUnsavedChanges(true);
+    },
+    [setAutoApproveTools],
+  );
+
+  const handleCompactModeChange = useCallback(
+    (value: boolean) => {
+      setCompactMode(value);
+      setHasUnsavedChanges(true);
+    },
+    [setCompactMode],
+  );
+
+  const handlePromptCompletionChange = useCallback(
+    (value: boolean) => {
+      setPromptCompletionEnabled(value);
+      setHasUnsavedChanges(true);
+    },
+    [setPromptCompletionEnabled],
+  );
+
+  const handleGlobalHotkeyEnabledChange = useCallback(
+    (value: boolean) => {
+      setGlobalHotkeyEnabled(value);
+      setHasUnsavedChanges(true);
+    },
+    [setGlobalHotkeyEnabled],
+  );
+
+  const handleGlobalHotkeyComboChange = useCallback(
+    (value: string) => {
+      setGlobalHotkeyCombo(value);
+      setHasUnsavedChanges(true);
+    },
+    [setGlobalHotkeyCombo],
+  );
+
+  useEffect(() => {
+    if (open) setSaveError(null);
+  }, [open]);
+
+  const handleSaveSettings = useCallback(async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await saveSettings();
+      if (notificationSettings) {
+        await invoke('notification_set_settings', { settings: notificationSettings });
+      }
+      baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
+      setHasUnsavedChanges(false);
+      onOpenChange(false);
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+      setSaveError(getSimpleErrorMessage(err));
+    } finally {
+      setIsSaving(false);
+    }
+  }, [buildCurrentSnapshot, isSaving, notificationSettings, onOpenChange, saveSettings]);
+
+  const handleCancel = useCallback(async () => {
+    try {
+      const [, loadedNotifications] = await Promise.all([
+        loadSettings(),
+        loadNotificationSettings(),
+      ]);
+      baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
+      await refreshOllamaState();
+    } catch (err) {
+      console.error('Failed to reload settings:', err);
+      setSaveError('Failed to discard changes. Please try again.');
+      return;
+    }
+    setSaveError(null);
+    setHasUnsavedChanges(false);
+    onOpenChange(false);
+  }, [
+    buildCurrentSnapshot,
+    loadNotificationSettings,
+    loadSettings,
+    onOpenChange,
+    refreshOllamaState,
+  ]);
+
+  const handleDialogOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (nextOpen) {
+        onOpenChange(true);
+        return;
+      }
+      void handleCancel();
+    },
+    [handleCancel, onOpenChange],
+  );
+
+  // ── Tab content renderer ──────────────────────────────────────────────────
+  const renderTabContent = () => {
+    switch (activeTab) {
+      // ── 1. General (General + Keybindings) ─────────────────────────────
+      case 'general':
+        return (
+          <>
+            <AppModeSection />
+
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                Customize window behavior and appearance
+              </p>
+              <div className="space-y-6">
+                <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+                  <h4 className="font-semibold">Global Hotkey</h4>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="globalHotkeyEnabled">Enable Global Hotkey</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Open AGI Workforce from anywhere with a keyboard shortcut.
+                      </p>
+                    </div>
+                    <Switch
+                      id="globalHotkeyEnabled"
+                      checked={resolvedGlobalHotkeyPreferences.enabled}
+                      onCheckedChange={handleGlobalHotkeyEnabledChange}
+                    />
+                  </div>
+                  {resolvedGlobalHotkeyPreferences.enabled && (
+                    <div className="space-y-2">
+                      <Label htmlFor="globalHotkeyCombo">Key Combination</Label>
+                      <input
+                        id="globalHotkeyCombo"
+                        type="text"
+                        value={resolvedGlobalHotkeyPreferences.combo}
+                        onChange={(e) => handleGlobalHotkeyComboChange(e.target.value)}
+                        placeholder={defaultGlobalHotkeyCombo}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use Tauri accelerator format, e.g.{' '}
+                        <code className="rounded bg-muted px-1 py-0.5">
+                          {defaultGlobalHotkeyCombo}
+                        </code>
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="theme">Theme</Label>
+                  <Select
+                    value={resolvedWindowPreferences.theme}
+                    onValueChange={(value) =>
+                      handleThemeChange(value as 'light' | 'dark' | 'system')
+                    }
+                  >
+                    <SelectTrigger id="theme">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Light</SelectItem>
+                      <SelectItem value="dark">Dark</SelectItem>
+                      <SelectItem value="system">System</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="language">Language</Label>
+                  <Select
+                    value={resolvedWindowPreferences.language}
+                    onValueChange={(value) => handleLanguageChange(value as Language)}
+                  >
+                    <SelectTrigger id="language">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUPPORTED_LANGUAGES.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.nativeName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">System Resources</h3>
+              <ResourceMonitor showTools={true} />
+            </div>
+
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Agent Permissions</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                macOS system permissions required for agent mode automation.
+              </p>
+              <AutomationPermissionsSettings />
+            </div>
+
+            <div className="pt-6 border-t border-border">
+              <UpdateSettings />
+            </div>
+
+            <div className="pt-6 border-t border-border">
+              <RestartOnboardingSection />
+            </div>
+
+            {/* Keybindings (merged from old 'keybindings' tab) */}
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Keybindings</h3>
+              <KeybindingsSettings />
+            </div>
+          </>
+        );
+
+      // ── 2. Account (Account & Billing + Usage + Team & Devices) ───────
+      case 'account':
+        return (
+          <>
+            <AccountSettings />
+            <div className="pt-6 border-t border-border">
+              <UsageDashboard />
+            </div>
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Team &amp; Devices</h3>
+              <TeamAccountSettings />
+            </div>
+          </>
+        );
+
+      // ── 3. Appearance (Personalization + Themes) ───────────────────────
+      case 'appearance':
+        return (
+          <>
+            <PersonalizationSettings />
+            <div className="pt-6 border-t border-border">
+              <MemoryPanel />
+            </div>
+            <div className="pt-6 border-t border-border">
+              <CustomInstructionsSettings />
+            </div>
+            <div className="pt-6 border-t border-border">
+              <InstructionFilesSettings />
+            </div>
+            <div className="pt-6 border-t border-border">
+              <AgentsSettings />
+            </div>
+            {/* Themes (merged from old 'themes' tab) */}
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Themes</h3>
+              <ThemeSettings />
+            </div>
+          </>
+        );
+
+      // ── 4. Privacy (Privacy & Data + Analytics + Governance) ──────────
+      case 'privacy':
+        return (
+          <>
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Master Password</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Encrypt stored API keys and secrets with an Argon2id-derived master password.
+              </p>
+              <MasterPasswordSettings />
+            </div>
+            <div className="pt-6 border-t border-border">
+              <DataPrivacySection />
+            </div>
+            <div className="pt-6 border-t border-border">
+              <CacheManagement />
+            </div>
+            <div className="pt-6 border-t border-border">
+              <AllowedDirectoriesSettings />
+            </div>
+            {/* Analytics (merged from old 'analytics' tab) */}
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Analytics</h3>
+              <AnalyticsSettings />
+            </div>
+            {/* Governance (merged from old 'governance' tab) */}
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-1">Governance &amp; Compliance</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Manage tool approval policies, audit trails, and security settings.
+              </p>
+              <SafetyPolicies />
+              <div className="pt-6">
+                <AuditLog />
+              </div>
+              <div className="pt-6">
+                <ToolHistoryTable />
+              </div>
+            </div>
+          </>
+        );
+
+      // ── 5. Models & Keys (API Keys + Custom Models + Task Routing) ─────
+      case 'models-keys':
+        return (
+          <>
+            <BYOKApiKeysSection />
+
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Local Models</h3>
+              <div className="space-y-6">
+                {/* Provider Mode */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Provider Mode</label>
+                  <div className="flex gap-2">
+                    {(['auto', 'local', 'cloud'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => {
+                          setProviderMode(mode);
+                          setHasUnsavedChanges(true);
+                        }}
+                        className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors ${
+                          (resolvedLLMConfig.providerMode ?? 'auto') === mode
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background border-border hover:bg-accent'
+                        }`}
+                      >
+                        {mode === 'auto' ? '⚡ Auto' : mode === 'local' ? '🖥️ Local' : '☁️ Cloud'}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {(resolvedLLMConfig.providerMode ?? 'auto') === 'local'
+                      ? 'Always use local Ollama. No data leaves your machine.'
+                      : (resolvedLLMConfig.providerMode ?? 'auto') === 'cloud'
+                        ? 'Always use cloud providers (OpenAI, Anthropic, etc.).'
+                        : 'Automatically route to the best provider for each task.'}
+                  </p>
+                </div>
+
+                {/* Ollama URL */}
+                {(resolvedLLMConfig.providerMode ?? 'auto') !== 'cloud' && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">Ollama URL</label>
+                    <input
+                      type="url"
+                      value={resolvedLLMConfig.ollamaUrl ?? 'http://localhost:11434'}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (!raw.trim()) {
+                          setOllamaUrl(raw);
+                          setHasUnsavedChanges(true);
+                          return;
+                        }
+                        try {
+                          new URL(raw);
+                          const result = validateUrl(raw, { allowLocalhost: true });
+                          if (!result.valid) {
+                            toast.error(result.error ?? 'Invalid Ollama URL');
+                            return;
+                          }
+                          setOllamaUrl(result.sanitized ?? raw);
+                        } catch {
+                          setOllamaUrl(raw);
+                        }
+                        setHasUnsavedChanges(true);
+                      }}
+                      placeholder="http://localhost:11434"
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      URL for the local Ollama server. Default: http://localhost:11434
+                    </p>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-border bg-card p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-md bg-muted p-3">
+                        <Server className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold mb-2">Local Ollama (Offline Mode)</h4>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          Use Ollama for offline AI processing. Models run locally on your machine
+                          for complete privacy and no internet required.
+                        </p>
+                        {checkingOllama ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <span>Checking Ollama status...</span>
+                          </div>
+                        ) : isOllamaAvailable ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-xs text-green-600">
+                              <Check className="h-3 w-3" />
+                              <span>Ollama is running and available</span>
+                            </div>
+                            {ollamaEnabled && ollamaModels.length > 0 && (
+                              <Select
+                                value={selectedOllamaModel}
+                                onValueChange={handleOllamaModelChange}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Select model" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {ollamaModels.map((model) => (
+                                    <SelectItem key={model} value={model}>
+                                      {model}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-yellow-600">
+                            Ollama not detected. Install from{' '}
+                            <a
+                              href="https://ollama.ai"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline"
+                            >
+                              ollama.ai
+                            </a>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <Switch checked={ollamaEnabled} onCheckedChange={handleOllamaEnabledChange} />
+                  </div>
+                </div>
+
+                <FavoriteModelsSelector />
+                <CustomModelsSettings />
+              </div>
+            </div>
+
+            {/* Task Routing (merged from old 'task-routing' tab) */}
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Task Routing</h3>
+              <TaskRoutingSettings />
+            </div>
+
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Settings Management</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Export or import your settings configuration
+              </p>
+              <Button variant="outline" size="sm" onClick={() => void handleExportSettings()}>
+                <Download className="mr-2 h-4 w-4" />
+                Export Settings
+              </Button>
+            </div>
+
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Model Behavior</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="agentMode">Always Use Agent Mode</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Agent mode enables tool use, web browsing, and code execution
+                    </p>
+                  </div>
+                  <Switch
+                    id="agentMode"
+                    checked={chatPreferences?.alwaysUseAgentMode ?? false}
+                    onCheckedChange={handleAgentModeChange}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="autoApprove">Auto-Approve Tools</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically approve safe tool executions without confirmation
+                    </p>
+                  </div>
+                  <Switch
+                    id="autoApprove"
+                    checked={chatPreferences?.autoApproveTools ?? false}
+                    onCheckedChange={handleAutoApproveToolsChange}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="compactMode">Compact Mode</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Reduce spacing between messages for a denser view
+                    </p>
+                  </div>
+                  <Switch
+                    id="compactMode"
+                    checked={chatPreferences?.compactMode ?? false}
+                    onCheckedChange={handleCompactModeChange}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="promptCompletion">Prompt Completion</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Show AI-powered suggestions as you type
+                    </p>
+                  </div>
+                  <Switch
+                    id="promptCompletion"
+                    checked={chatPreferences?.promptCompletionEnabled ?? true}
+                    onCheckedChange={handlePromptCompletionChange}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 text-xs text-muted-foreground">
+              <h4 className="font-medium mb-2">Supported Providers</h4>
+              <ul className="list-disc list-inside space-y-1">
+                <li>OpenAI (GPT-5.4, GPT-5.4 Mini, o3)</li>
+                <li>Anthropic (Claude Opus 4.6, Sonnet 4.6, Haiku 4.5)</li>
+                <li>Google (Gemini 3.1 Flash Lite, Gemini 3.1 Pro)</li>
+                <li>xAI (Grok 4, Grok 4.1 Fast)</li>
+                <li>DeepSeek (R1, V3.2)</li>
+                <li>Mistral (Large, Codestral)</li>
+                <li>Qwen (Qwen3.5 Plus, Qwen3.5 Flash)</li>
+                <li>Kimi (K2.5, K2.5 Thinking)</li>
+                <li>Perplexity (Sonar Pro, Sonar Reasoning)</li>
+                <li>NVIDIA NIM (Nemotron Ultra, Super, Nano — free tier)</li>
+                <li>OpenRouter (200+ models, generous free tier)</li>
+                <li>Ollama (any local model)</li>
+              </ul>
+            </div>
+          </>
+        );
+
+      // ── 6. Agents (Agent Execution + Features) ────────────────────────
+      case 'agents':
+        return (
+          <>
+            <AgentExecutionSettings onSettingsChange={() => setHasUnsavedChanges(true)} />
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Features</h3>
+              <FeaturesPrivacySettings />
+            </div>
+          </>
+        );
+
+      // ── 7. MCP & Skills (MCP & Skills + MCP Server + Tools + Research) ─
+      case 'mcp-skills':
+        return (
+          <div className="space-y-6">
+            <MCPToolsSettings />
+            <div className="pt-6 border-t border-border">
+              <SkillsPluginsSettings />
+            </div>
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">MCP Server</h3>
+              <MCPServerSettings />
+            </div>
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Tools</h3>
+              <div className="h-full flex flex-col min-h-0">
+                <ToolsPanel />
+              </div>
+            </div>
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Research</h3>
+              <ResearchSettings />
+            </div>
+          </div>
+        );
+
+      // ── 8. Connectors (Connectors + OAuth + Extensions) ───────────────
+      case 'connectors':
+        return (
+          <div className="space-y-6">
+            <ConnectorGallery />
+            <ConnectorHealthDashboard />
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">OAuth Credentials</h3>
+              <OAuthCredentialsPanel />
+            </div>
+            <div className="pt-6 border-t border-border">
+              <h3 className="text-lg font-semibold mb-4">Extensions</h3>
+              <ExtensionsSettings />
+            </div>
+          </div>
+        );
+
+      // ── 9. Notifications ───────────────────────────────────────────────
+      case 'notifications':
+        return (
+          <NotificationsSettings
+            notificationLoading={notificationLoading}
+            notificationSettings={notificationSettings}
+            notificationError={notificationError}
+            onUpdateNotificationSettings={updateNotificationSettings}
+          />
+        );
+
+      // ── 10. Voice ──────────────────────────────────────────────────────
+      case 'voice':
+        return <VoiceSettings />;
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent className="max-w-5xl w-full p-0 overflow-hidden bg-background">
+        <div className="flex h-[85vh]">
+          {/* Vertical sidebar navigation */}
+          <div className="w-52 border-r border-border bg-muted py-4 px-2 space-y-1 shrink-0 overflow-y-auto">
+            <DialogHeader className="px-3 pb-4">
+              <DialogTitle className="text-lg font-bold">Settings</DialogTitle>
+              <DialogDescription className="text-xs">Configure your preferences</DialogDescription>
+            </DialogHeader>
+
+            {SETTINGS_NAV.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setActiveTab(item.key)}
+                disabled={isBusy}
+                className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                  activeTab === item.key
+                    ? 'bg-background text-foreground font-medium'
+                    : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                } ${isBusy ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                <item.icon className="h-4 w-4 shrink-0" />
+                <span className="truncate flex-1 text-left">{item.label}</span>
+                {item.key === 'connectors' && connectedConnectorCount > 0 && (
+                  <span className="ml-auto shrink-0 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-500/15 px-1.5 text-[10px] font-semibold text-green-500">
+                    {connectedConnectorCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Content area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div
+              className={`flex-1 overflow-y-auto px-6 py-6 ${
+                isBusy ? 'pointer-events-none opacity-80' : ''
+              }`}
+            >
+              {error && (
+                <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="space-y-6">{renderTabContent()}</div>
+              )}
+            </div>
+
+            {/* Footer buttons */}
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border shrink-0">
+              {requiresDeferredSave ? (
+                <>
+                  {saveError && (
+                    <div className="mr-auto rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                      {saveError}
+                    </div>
+                  )}
+                  <Button variant="outline" onClick={() => void handleCancel()} disabled={isBusy}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => void handleSaveSettings()}
+                    disabled={isBusy || !hasUnsavedChanges}
+                  >
+                    {loading || isSaving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="mr-auto text-xs text-muted-foreground">
+                    Changes in this section apply immediately.
+                  </p>
+                  <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
+                    Close
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

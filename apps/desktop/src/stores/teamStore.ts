@@ -1,6 +1,34 @@
 import { create } from 'zustand';
-import { invoke } from '../lib/tauri-mock';
 import {
+  createTeam as apiCreateTeam,
+  getTeam as apiGetTeam,
+  updateTeam as apiUpdateTeam,
+  updateTeamSettings as apiUpdateTeamSettings,
+  deleteTeam as apiDeleteTeam,
+  getUserTeams as apiGetUserTeams,
+  inviteMember as apiInviteMember,
+  acceptInvitation as apiAcceptInvitation,
+  removeMember as apiRemoveMember,
+  updateMemberRole as apiUpdateMemberRole,
+  getTeamMembers as apiGetTeamMembers,
+  getTeamInvitations as apiGetTeamInvitations,
+  shareResource as apiShareResource,
+  unshareResource as apiUnshareResource,
+  getTeamResources as apiGetTeamResources,
+  getTeamResourcesByType as apiGetTeamResourcesByType,
+  getTeamActivity as apiGetTeamActivity,
+  getUserTeamActivity as apiGetUserTeamActivity,
+  getTeamBilling as apiGetTeamBilling,
+  initializeTeamBilling as apiInitializeTeamBilling,
+  updateTeamPlan as apiUpdateTeamPlan,
+  addTeamSeats as apiAddTeamSeats,
+  removeTeamSeats as apiRemoveTeamSeats,
+  calculateTeamCost as apiCalculateTeamCost,
+  updateTeamUsage as apiUpdateTeamUsage,
+  transferTeamOwnership as apiTransferTeamOwnership,
+} from '../api/teamsApi';
+import type { UpdateTeamSettingsParams } from '../api/teamsApi';
+import type {
   Team,
   TeamMember,
   TeamInvitation,
@@ -30,6 +58,7 @@ interface TeamState {
   createTeam: (name: string, description: string | null, ownerId: string) => Promise<Team>;
   getTeam: (teamId: string) => Promise<Team | null>;
   updateTeam: (teamId: string, name: string | null, description: string | null) => Promise<void>;
+  updateTeamSettings: (params: UpdateTeamSettingsParams) => Promise<void>;
   deleteTeam: (teamId: string) => Promise<void>;
   getUserTeams: (userId: string) => Promise<Team[]>;
   setCurrentTeam: (team: Team | null) => void;
@@ -107,10 +136,14 @@ const initialState = {
 export const useTeamStore = create<TeamState>((set, get) => ({
   ...initialState,
 
+  // --------------------------------------------------------------------------
+  // Team CRUD
+  // --------------------------------------------------------------------------
+
   createTeam: async (name, description, ownerId) => {
     set({ isLoading: true, error: null });
     try {
-      const team = await invoke<Team>('create_team', { name, description, ownerId });
+      const team = await apiCreateTeam(name, description, ownerId);
       set((state) => ({ teams: [...state.teams, team], isLoading: false }));
       return team;
     } catch (error) {
@@ -122,7 +155,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   getTeam: async (teamId) => {
     set({ isLoading: true, error: null });
     try {
-      const team = await invoke<Team | null>('get_team', { teamId });
+      const team = await apiGetTeam(teamId);
       set({ isLoading: false });
       return team;
     } catch (error) {
@@ -134,8 +167,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   updateTeam: async (teamId, name, description) => {
     set({ isLoading: true, error: null });
     try {
-      await invoke('update_team', { teamId, name, description });
-      const team = await invoke<Team | null>('get_team', { teamId });
+      await apiUpdateTeam(teamId, name, description);
+      const team = await apiGetTeam(teamId);
       if (team) {
         set((state) => ({
           teams: state.teams.map((t) => (t.id === teamId ? team : t)),
@@ -149,10 +182,28 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     }
   },
 
+  updateTeamSettings: async (params) => {
+    set({ isLoading: true, error: null });
+    try {
+      await apiUpdateTeamSettings(params);
+      const team = await apiGetTeam(params.teamId);
+      if (team) {
+        set((state) => ({
+          teams: state.teams.map((t) => (t.id === params.teamId ? team : t)),
+          currentTeam: state.currentTeam?.id === params.teamId ? team : state.currentTeam,
+          isLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({ error: String(error), isLoading: false });
+      throw error;
+    }
+  },
+
   deleteTeam: async (teamId) => {
     set({ isLoading: true, error: null });
     try {
-      await invoke('delete_team', { teamId });
+      await apiDeleteTeam(teamId);
       set((state) => ({
         teams: state.teams.filter((t) => t.id !== teamId),
         currentTeam: state.currentTeam?.id === teamId ? null : state.currentTeam,
@@ -167,7 +218,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   getUserTeams: async (userId) => {
     set({ isLoading: true, error: null });
     try {
-      const teams = await invoke<Team[]>('get_user_teams', { userId });
+      const teams = await apiGetUserTeams(userId);
       set({ teams, isLoading: false });
       return teams;
     } catch (error) {
@@ -180,10 +231,14 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     set({ currentTeam: team });
   },
 
+  // --------------------------------------------------------------------------
+  // Members
+  // --------------------------------------------------------------------------
+
   inviteMember: async (teamId, email, role, invitedBy) => {
     set({ isLoadingMembers: true, error: null });
     try {
-      const token = await invoke<string>('invite_member', { teamId, email, role, invitedBy });
+      const token = await apiInviteMember(teamId, email, role, invitedBy);
       await get().getTeamInvitations(teamId);
       set({ isLoadingMembers: false });
       return token;
@@ -196,7 +251,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   acceptInvitation: async (token, userId) => {
     set({ isLoading: true, error: null });
     try {
-      const team = await invoke<Team>('accept_invitation', { token, userId });
+      const team = await apiAcceptInvitation(token, userId);
       set((state) => ({
         teams: [...state.teams, team],
         isLoading: false,
@@ -211,7 +266,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   removeMember: async (teamId, userId, removedBy) => {
     set({ isLoadingMembers: true, error: null });
     try {
-      await invoke('remove_member', { teamId, userId, removedBy });
+      await apiRemoveMember(teamId, userId, removedBy);
       await get().getTeamMembers(teamId);
       set({ isLoadingMembers: false });
     } catch (error) {
@@ -223,7 +278,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   updateMemberRole: async (teamId, userId, role, updatedBy) => {
     set({ isLoadingMembers: true, error: null });
     try {
-      await invoke('update_member_role', { teamId, userId, role, updatedBy });
+      await apiUpdateMemberRole(teamId, userId, role, updatedBy);
       await get().getTeamMembers(teamId);
       set({ isLoadingMembers: false });
     } catch (error) {
@@ -235,7 +290,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   getTeamMembers: async (teamId) => {
     set({ isLoadingMembers: true, error: null });
     try {
-      const members = await invoke<TeamMember[]>('get_team_members', { teamId });
+      const members = await apiGetTeamMembers(teamId);
       set({ members, isLoadingMembers: false });
       return members;
     } catch (error) {
@@ -247,7 +302,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   getTeamInvitations: async (teamId) => {
     set({ isLoadingMembers: true, error: null });
     try {
-      const invitations = await invoke<TeamInvitation[]>('get_team_invitations', { teamId });
+      const invitations = await apiGetTeamInvitations(teamId);
       set({ invitations, isLoadingMembers: false });
       return invitations;
     } catch (error) {
@@ -255,6 +310,10 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       throw error;
     }
   },
+
+  // --------------------------------------------------------------------------
+  // Resources
+  // --------------------------------------------------------------------------
 
   shareResource: async (
     teamId,
@@ -266,14 +325,14 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   ) => {
     set({ isLoadingResources: true, error: null });
     try {
-      await invoke('share_resource', {
+      await apiShareResource(
         teamId,
         resourceType,
         resourceId,
         resourceName,
         resourceDescription,
         sharedBy,
-      });
+      );
       await get().getTeamResources(teamId);
       set({ isLoadingResources: false });
     } catch (error) {
@@ -285,7 +344,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   unshareResource: async (teamId, resourceType, resourceId, unsharedBy) => {
     set({ isLoadingResources: true, error: null });
     try {
-      await invoke('unshare_resource', { teamId, resourceType, resourceId, unsharedBy });
+      await apiUnshareResource(teamId, resourceType, resourceId, unsharedBy);
       await get().getTeamResources(teamId);
       set({ isLoadingResources: false });
     } catch (error) {
@@ -297,7 +356,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   getTeamResources: async (teamId) => {
     set({ isLoadingResources: true, error: null });
     try {
-      const resources = await invoke<TeamResource[]>('get_team_resources', { teamId });
+      const resources = await apiGetTeamResources(teamId);
       set({ resources, isLoadingResources: false });
       return resources;
     } catch (error) {
@@ -309,10 +368,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   getTeamResourcesByType: async (teamId, resourceType) => {
     set({ isLoadingResources: true, error: null });
     try {
-      const resources = await invoke<TeamResource[]>('get_team_resources_by_type', {
-        teamId,
-        resourceType,
-      });
+      const resources = await apiGetTeamResourcesByType(teamId, resourceType);
       set({ isLoadingResources: false });
       return resources;
     } catch (error) {
@@ -321,14 +377,14 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     }
   },
 
+  // --------------------------------------------------------------------------
+  // Activity
+  // --------------------------------------------------------------------------
+
   getTeamActivity: async (teamId, limit, offset) => {
     set({ isLoadingActivities: true, error: null });
     try {
-      const activities = await invoke<TeamActivity[]>('get_team_activity', {
-        teamId,
-        limit,
-        offset,
-      });
+      const activities = await apiGetTeamActivity(teamId, limit, offset);
       set({ activities, isLoadingActivities: false });
       return activities;
     } catch (error) {
@@ -340,11 +396,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   getUserTeamActivity: async (teamId, userId, limit) => {
     set({ isLoadingActivities: true, error: null });
     try {
-      const activities = await invoke<TeamActivity[]>('get_user_team_activity', {
-        teamId,
-        userId,
-        limit,
-      });
+      const activities = await apiGetUserTeamActivity(teamId, userId, limit);
       set({ isLoadingActivities: false });
       return activities;
     } catch (error) {
@@ -353,10 +405,14 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     }
   },
 
+  // --------------------------------------------------------------------------
+  // Billing
+  // --------------------------------------------------------------------------
+
   getTeamBilling: async (teamId) => {
     set({ isLoadingBilling: true, error: null });
     try {
-      const billing = await invoke<TeamBilling | null>('get_team_billing', { teamId });
+      const billing = await apiGetTeamBilling(teamId);
       set({ billing, isLoadingBilling: false });
       return billing;
     } catch (error) {
@@ -368,12 +424,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   initializeTeamBilling: async (teamId, plan, cycle, seatCount) => {
     set({ isLoadingBilling: true, error: null });
     try {
-      const billing = await invoke<TeamBilling>('initialize_team_billing', {
-        teamId,
-        plan,
-        cycle,
-        seatCount,
-      });
+      const billing = await apiInitializeTeamBilling(teamId, plan, cycle, seatCount);
       set({ billing, isLoadingBilling: false });
       return billing;
     } catch (error) {
@@ -385,7 +436,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   updateTeamPlan: async (teamId, plan, updatedBy) => {
     set({ isLoadingBilling: true, error: null });
     try {
-      await invoke('update_team_plan', { teamId, plan, updatedBy });
+      await apiUpdateTeamPlan(teamId, plan, updatedBy);
       await get().getTeamBilling(teamId);
       set({ isLoadingBilling: false });
     } catch (error) {
@@ -397,7 +448,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   addTeamSeats: async (teamId, count, updatedBy) => {
     set({ isLoadingBilling: true, error: null });
     try {
-      await invoke('add_team_seats', { teamId, count, updatedBy });
+      await apiAddTeamSeats(teamId, count, updatedBy);
       await get().getTeamBilling(teamId);
       set({ isLoadingBilling: false });
     } catch (error) {
@@ -409,7 +460,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   removeTeamSeats: async (teamId, count, updatedBy) => {
     set({ isLoadingBilling: true, error: null });
     try {
-      await invoke('remove_team_seats', { teamId, count, updatedBy });
+      await apiRemoveTeamSeats(teamId, count, updatedBy);
       await get().getTeamBilling(teamId);
       set({ isLoadingBilling: false });
     } catch (error) {
@@ -420,7 +471,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
 
   calculateTeamCost: async (teamId) => {
     try {
-      const cost = await invoke<number>('calculate_team_cost', { teamId });
+      const cost = await apiCalculateTeamCost(teamId);
       return cost;
     } catch (error) {
       set({ error: String(error) });
@@ -430,19 +481,23 @@ export const useTeamStore = create<TeamState>((set, get) => ({
 
   updateTeamUsage: async (teamId, metrics) => {
     try {
-      await invoke('update_team_usage', { teamId, metrics });
+      await apiUpdateTeamUsage(teamId, metrics);
     } catch (error) {
       set({ error: String(error) });
       throw error;
     }
   },
 
+  // --------------------------------------------------------------------------
+  // Ownership
+  // --------------------------------------------------------------------------
+
   transferTeamOwnership: async (teamId, newOwnerId, transferredBy) => {
     set({ isLoadingMembers: true, error: null });
     try {
-      await invoke('transfer_team_ownership', { teamId, newOwnerId, transferredBy });
+      await apiTransferTeamOwnership(teamId, newOwnerId, transferredBy);
       await get().getTeamMembers(teamId);
-      const team = await invoke<Team | null>('get_team', { teamId });
+      const team = await apiGetTeam(teamId);
       if (team) {
         set((state) => ({
           teams: state.teams.map((t) => (t.id === teamId ? team : t)),

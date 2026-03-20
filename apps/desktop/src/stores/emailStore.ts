@@ -1,10 +1,32 @@
 import { toast } from 'sonner';
 import { create } from 'zustand';
-import { invoke } from '../lib/tauri-mock';
+
+import {
+  contactCreate,
+  contactDelete,
+  contactExportVcard,
+  contactImportVcard,
+  contactList,
+  contactSearch,
+  contactUpdate,
+  emailConnect,
+  emailDelete,
+  emailDownloadAttachment,
+  emailFetchInbox,
+  emailGetMessage,
+  emailListAccounts,
+  emailListFolders,
+  emailMarkRead,
+  emailMoveMessage,
+  emailRemoveAccount,
+  emailSearch,
+  emailSend,
+  type EmailSearchResult,
+  type SendEmailRequest,
+} from '../api/email';
 
 import type {
   Contact,
-  EmailAccount,
   EmailAddress,
   EmailFilter,
   EmailMessage,
@@ -36,7 +58,7 @@ export interface SendEmailPayload {
 }
 
 interface EmailState {
-  accounts: EmailAccount[];
+  accounts: import('../types/email').EmailAccount[];
   selectedAccountId: number | null;
   folders: string[];
   selectedFolder: string;
@@ -61,6 +83,9 @@ interface EmailState {
   markRead: (uid: number, read: boolean) => Promise<void>;
   deleteEmail: (uid: number) => Promise<void>;
   sendEmail: (payload: SendEmailPayload) => Promise<string>;
+  searchEmails: (query: string, folder?: string, limit?: number) => Promise<EmailSearchResult>;
+  getMessage: (folder: string, uid: number) => Promise<EmailMessage>;
+  moveMessage: (uid: number, fromFolder: string, toFolder: string) => Promise<void>;
   setFilter: (partial: Partial<EmailFilter>) => void;
   downloadAttachment: (message: EmailMessage, attachmentIndex: number) => Promise<string>;
   clearError: () => void;
@@ -68,7 +93,12 @@ interface EmailState {
   refreshContacts: () => Promise<void>;
   saveContact: (contact: Partial<Contact> & { email: string }) => Promise<void>;
   deleteContact: (id: number) => Promise<void>;
+  searchContacts: (query: string, limit?: number) => Promise<Contact[]>;
+  importContacts: (filePath: string) => Promise<number>;
+  exportContacts: (filePath: string) => Promise<number>;
 }
+
+export { type EmailSearchResult };
 
 function mergeFilter(current: EmailFilter, partial?: Partial<EmailFilter>): EmailFilter {
   if (!partial) {
@@ -95,7 +125,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
 
   refreshAccounts: async () => {
     try {
-      const accounts = await invoke<EmailAccount[]>('email_list_accounts');
+      const accounts = await emailListAccounts();
       set({ accounts });
 
       const { selectedAccountId } = get();
@@ -124,13 +154,13 @@ export const useEmailStore = create<EmailState>((set, get) => ({
   connectAccount: async ({ provider, email, password, display_name, custom_config }) => {
     set({ loading: true, error: null });
     try {
-      const account = await invoke<EmailAccount>('email_connect', {
+      const account = await emailConnect(
         provider,
         email,
         password,
         display_name,
         custom_config,
-      });
+      );
 
       toast.success(`Connected ${email}`);
       set((state) => ({
@@ -147,7 +177,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
 
   removeAccount: async (accountId) => {
     try {
-      await invoke('email_remove_account', { accountId });
+      await emailRemoveAccount(accountId);
       set((state) => ({
         accounts: state.accounts.filter((acc) => acc.id !== accountId),
         selectedAccountId: state.selectedAccountId === accountId ? null : state.selectedAccountId,
@@ -182,7 +212,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
       return;
     }
     try {
-      const folders = await invoke<string[]>('email_list_folders', { accountId: id });
+      const folders = await emailListFolders(id);
       set({ folders });
 
       if (!folders.includes(get().selectedFolder)) {
@@ -206,12 +236,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
 
     set({ loading: true, error: null, filter });
     try {
-      const emails = await invoke<EmailMessage[]>('email_fetch_inbox', {
-        accountId,
-        folder,
-        limit: 100,
-        filter,
-      });
+      const emails = await emailFetchInbox(accountId, folder, 100, filter);
 
       set({
         emails,
@@ -247,11 +272,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
       return;
     }
     try {
-      await invoke('email_mark_read', {
-        accountId: selectedAccountId,
-        uid,
-        read,
-      });
+      await emailMarkRead(selectedAccountId, uid, read);
       set((state) => {
         const updatedEmails = state.emails.map((message) =>
           message.uid === uid ? { ...message, is_read: read } : message,
@@ -281,10 +302,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     }
 
     try {
-      await invoke('email_delete', {
-        accountId: selectedAccountId,
-        uid,
-      });
+      await emailDelete(selectedAccountId, uid);
       set((state) => ({
         emails: state.emails.filter((message) => message.uid != uid),
         selectedEmail:
@@ -299,19 +317,19 @@ export const useEmailStore = create<EmailState>((set, get) => ({
 
   sendEmail: async (payload) => {
     try {
-      const messageId = await invoke<string>('email_send', {
-        request: {
-          accountId: payload.account_id,
-          to: payload.to,
-          cc: payload.cc ?? [],
-          bcc: payload.bcc ?? [],
-          reply_to: payload.reply_to ?? null,
-          subject: payload.subject,
-          body_text: payload.body_text ?? null,
-          body_html: payload.body_html ?? null,
-          attachments: payload.attachments ?? [],
-        },
-      });
+      const request: SendEmailRequest = {
+        accountId: payload.account_id,
+        to: payload.to,
+        cc: payload.cc ?? [],
+        bcc: payload.bcc ?? [],
+        replyTo: payload.reply_to ?? null,
+        subject: payload.subject,
+        bodyText: payload.body_text ?? null,
+        bodyHtml: payload.body_html ?? null,
+        attachments: payload.attachments ?? [],
+      };
+
+      const messageId = await emailSend(request);
 
       toast.success('Email sent');
       return messageId;
@@ -335,12 +353,12 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     }
 
     try {
-      const filePath = await invoke<string>('email_download_attachment', {
+      const filePath = await emailDownloadAttachment(
         accountId,
-        folder: message.folder,
-        uid: message.uid,
+        message.folder,
+        message.uid,
         attachmentIndex,
-      });
+      );
 
       const applyAttachmentUpdate = (email: EmailMessage): EmailMessage => {
         if (email.id !== message.id) {
@@ -377,7 +395,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
 
   refreshContacts: async () => {
     try {
-      const contacts = await invoke<Contact[]>('contact_list', { limit: 500, offset: 0 });
+      const contacts = await contactList(500, 0);
       set({ contacts });
     } catch (error) {
       console.error('[email] failed to load contacts', error);
@@ -390,26 +408,22 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     const existing = contacts.find((c) => c.email === contact.email);
     try {
       if (existing) {
-        await invoke('contact_update', {
-          contact: {
-            ...existing,
-            ...contact,
-          },
-        });
+        await contactUpdate({
+          ...existing,
+          ...contact,
+        } as Contact);
       } else {
-        await invoke<number>('contact_create', {
-          contact: {
-            id: 0,
-            email: contact.email,
-            display_name: contact.display_name ?? null,
-            first_name: contact.first_name ?? null,
-            last_name: contact.last_name ?? null,
-            phone: contact.phone ?? null,
-            company: contact.company ?? null,
-            notes: contact.notes ?? null,
-            created_at: Math.floor(Date.now() / 1000),
-            updated_at: Math.floor(Date.now() / 1000),
-          },
+        await contactCreate({
+          id: 0,
+          email: contact.email,
+          display_name: contact.display_name ?? null,
+          first_name: contact.first_name ?? null,
+          last_name: contact.last_name ?? null,
+          phone: contact.phone ?? null,
+          company: contact.company ?? null,
+          notes: contact.notes ?? null,
+          created_at: Math.floor(Date.now() / 1000),
+          updated_at: Math.floor(Date.now() / 1000),
         });
       }
       await get().refreshContacts();
@@ -422,13 +436,118 @@ export const useEmailStore = create<EmailState>((set, get) => ({
 
   deleteContact: async (id) => {
     try {
-      await invoke('contact_delete', { id });
+      await contactDelete(id);
       set((state) => ({
         contacts: state.contacts.filter((contact) => contact.id !== id),
       }));
     } catch (error) {
       console.error('[email] delete contact failed', error);
       set({ error: (error as Error).message });
+      throw error;
+    }
+  },
+
+  searchEmails: async (query, folder, limit) => {
+    const { selectedAccountId } = get();
+    if (!selectedAccountId) {
+      throw new Error('No email account selected');
+    }
+
+    try {
+      set({ loading: true, error: null });
+      const result = await emailSearch(
+        selectedAccountId,
+        query,
+        folder ?? null,
+        limit ?? 50,
+      );
+      set({ loading: false });
+      return result;
+    } catch (error) {
+      console.error('[email] search failed', error);
+      set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+
+  getMessage: async (folder, uid) => {
+    const { selectedAccountId } = get();
+    if (!selectedAccountId) {
+      throw new Error('No email account selected');
+    }
+
+    try {
+      set({ loading: true, error: null });
+      const message = await emailGetMessage(selectedAccountId, folder, uid);
+      set({ loading: false });
+      return message;
+    } catch (error) {
+      console.error('[email] get message failed', error);
+      set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+
+  moveMessage: async (uid, fromFolder, toFolder) => {
+    const { selectedAccountId } = get();
+    if (!selectedAccountId) {
+      throw new Error('No email account selected');
+    }
+
+    try {
+      set({ loading: true, error: null });
+      await emailMoveMessage(selectedAccountId, uid, fromFolder, toFolder);
+
+      set((state) => ({
+        emails: state.emails.filter((message) => message.uid !== uid),
+        selectedEmail:
+          state.selectedEmail && state.selectedEmail.uid === uid ? null : state.selectedEmail,
+        loading: false,
+      }));
+      toast.success(`Moved to ${toFolder}`);
+    } catch (error) {
+      console.error('[email] move message failed', error);
+      set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+
+  searchContacts: async (query, limit) => {
+    try {
+      const contacts = await contactSearch(query, limit ?? 20);
+      return contacts;
+    } catch (error) {
+      console.error('[email] search contacts failed', error);
+      set({ error: (error as Error).message });
+      throw error;
+    }
+  },
+
+  importContacts: async (filePath) => {
+    try {
+      set({ loading: true, error: null });
+      const count = await contactImportVcard(filePath);
+      await get().refreshContacts();
+      set({ loading: false });
+      toast.success(`Imported ${count} contacts`);
+      return count;
+    } catch (error) {
+      console.error('[email] import contacts failed', error);
+      set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+
+  exportContacts: async (filePath) => {
+    try {
+      set({ loading: true, error: null });
+      const count = await contactExportVcard(filePath);
+      set({ loading: false });
+      toast.success(`Exported ${count} contacts`);
+      return count;
+    } catch (error) {
+      console.error('[email] export contacts failed', error);
+      set({ error: (error as Error).message, loading: false });
       throw error;
     }
   },

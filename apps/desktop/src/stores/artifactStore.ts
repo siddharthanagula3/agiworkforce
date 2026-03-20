@@ -3,264 +3,90 @@
  *
  * Manages artifact state for the live previews panel. Provides CRUD operations,
  * version management, and real-time streaming support.
+ *
+ * All Tauri IPC calls are delegated to the typed API wrappers in '@/api/artifacts'.
  */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
-import { invoke } from '../lib/tauri-mock';
 import { applyDiff } from '@/lib/diffUtils';
+import {
+  artifactCreate,
+  artifactCreateStreaming,
+  artifactAppendStreaming,
+  artifactFinalizeStreaming,
+  artifactGet,
+  artifactGetRendered,
+  artifactUpdate,
+  artifactApplyDiff,
+  artifactRollback,
+  artifactDelete,
+  artifactArchive,
+  artifactUnarchive,
+  artifactPin,
+  artifactAddTags,
+  artifactRemoveTags,
+  artifactList,
+  artifactGetByConversation,
+  artifactGetVersions,
+  artifactGetDiff,
+  artifactGetStats,
+  artifactExportAll,
+  artifactImportAll,
+  artifactClearAll,
+  artifactListPersisted,
+} from '@/api/artifacts';
 
 // =============================================================================
-// Types
+// Re-export types from the API layer so existing consumers keep working
 // =============================================================================
 
-export type ArtifactType =
-  | 'code'
-  | 'document'
-  | 'spreadsheet'
-  | 'diagram'
-  | 'web'
-  | 'chart'
-  | 'presentation'
-  | 'image';
+export type {
+  ArtifactType,
+  ArtifactStatus,
+  CodeMetadata,
+  DocumentMetadata,
+  TocEntry,
+  SpreadsheetMetadata,
+  DiagramMetadata,
+  WebMetadata,
+  ChartMetadata,
+  ArtifactMetadata,
+  ArtifactVersion,
+  Artifact,
+  ArtifactSummary,
+  VersionDiff,
+  ArtifactStoreStats,
+  ArtifactAction,
+  RenderedArtifact,
+  VersionInfo,
+  RenderedContent,
+  CodeRenderData,
+  DocumentRenderData,
+  SpreadsheetRenderData,
+  ColumnInfo,
+  DiagramRenderData,
+  WebRenderData,
+  ChartRenderData,
+  PresentationRenderData,
+  SlideData,
+  ImageRenderData,
+  ArtifactDiffHunk,
+  ArtifactListFilter,
+} from '@/api/artifacts';
 
-export type ArtifactStatus = 'streaming' | 'complete' | 'failed' | 'archived';
-
-export interface CodeMetadata {
-  language: string;
-  file_path?: string;
-  highlight_lines?: number[];
-  executable: boolean;
-}
-
-export interface DocumentMetadata {
-  format: string;
-  toc?: TocEntry[];
-  word_count?: number;
-}
-
-export interface TocEntry {
-  level: number;
-  title: string;
-  anchor: string;
-}
-
-export interface SpreadsheetMetadata {
-  columns: string[];
-  row_count: number;
-  column_types?: Record<string, string>;
-  formulas?: Record<string, string>;
-}
-
-export interface DiagramMetadata {
-  diagram_type: string;
-  theme?: string;
-}
-
-export interface WebMetadata {
-  enable_scripts: boolean;
-  external_resources: string[];
-  viewport?: [number, number];
-}
-
-export interface ChartMetadata {
-  chart_type: string;
-  x_label?: string;
-  y_label?: string;
-  show_legend: boolean;
-}
-
-export type ArtifactMetadata =
-  | { Code: CodeMetadata }
-  | { Document: DocumentMetadata }
-  | { Spreadsheet: SpreadsheetMetadata }
-  | { Diagram: DiagramMetadata }
-  | { Web: WebMetadata }
-  | { Chart: ChartMetadata }
-  | { Generic: Record<string, unknown> };
-
-export interface ArtifactVersion {
-  version: number;
-  content: string;
-  created_at: string;
-  change_description?: string;
-  size_bytes: number;
-  content_hash: string;
-}
-
-export interface Artifact {
-  id: string;
-  title: string;
-  artifact_type: ArtifactType;
-  content: string;
-  metadata: ArtifactMetadata;
-  conversation_id?: number;
-  message_id?: number;
-  status: ArtifactStatus;
-  versions: ArtifactVersion[];
-  current_version: number;
-  created_at: string;
-  updated_at: string;
-  tags: string[];
-  pinned: boolean;
-}
-
-export interface ArtifactSummary {
-  id: string;
-  title: string;
-  artifact_type: ArtifactType;
-  status: ArtifactStatus;
-  current_version: number;
-  version_count: number;
-  created_at: string;
-  updated_at: string;
-  size_bytes: number;
-  tags: string[];
-  pinned: boolean;
-  conversation_id?: number;
-}
-
-export interface VersionDiff {
-  from_version: number;
-  to_version: number;
-  from_content: string;
-  to_content: string;
-  from_timestamp: string;
-  to_timestamp: string;
-}
-
-export interface ArtifactStoreStats {
-  total_artifacts: number;
-  total_versions: number;
-  total_size_bytes: number;
-  by_type: Record<ArtifactType, number>;
-  by_status: Record<ArtifactStatus, number>;
-}
-
-// Rendered artifact types
-export type ArtifactAction =
-  | 'copy'
-  | 'download'
-  | 'edit'
-  | 'delete'
-  | 'pin'
-  | 'share'
-  | 'export_pdf'
-  | 'export_word'
-  | 'export_excel'
-  | 'export_svg'
-  | 'export_png'
-  | 'copy_markdown'
-  | 'run'
-  | 'apply_to_file';
-
-export interface RenderedArtifact {
-  id: string;
-  title: string;
-  artifact_type: ArtifactType;
-  rendered_content: RenderedContent;
-  version_info: VersionInfo;
-  status: ArtifactStatus;
-  available_actions: ArtifactAction[];
-}
-
-export interface VersionInfo {
-  current: number;
-  total: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export type RenderedContent =
-  | { type: 'Code'; data: CodeRenderData }
-  | { type: 'Document'; data: DocumentRenderData }
-  | { type: 'Spreadsheet'; data: SpreadsheetRenderData }
-  | { type: 'Diagram'; data: DiagramRenderData }
-  | { type: 'Web'; data: WebRenderData }
-  | { type: 'Chart'; data: ChartRenderData }
-  | { type: 'Presentation'; data: PresentationRenderData }
-  | { type: 'Image'; data: ImageRenderData };
-
-export interface CodeRenderData {
-  source: string;
-  language: string;
-  highlight_lines: number[];
-  executable: boolean;
-  line_count: number;
-  file_extension: string;
-}
-
-export interface DocumentRenderData {
-  source: string;
-  format: string;
-  toc: TocEntry[];
-  word_count: number;
-  char_count: number;
-}
-
-export interface SpreadsheetRenderData {
-  rows: Record<string, unknown>[];
-  columns: ColumnInfo[];
-  row_count: number;
-  editable: boolean;
-}
-
-export interface ColumnInfo {
-  name: string;
-  data_type: string;
-  width?: number;
-}
-
-export interface DiagramRenderData {
-  source: string;
-  diagram_type: string;
-  theme: string;
-}
-
-export interface WebRenderData {
-  html: string;
-  scripts_enabled: boolean;
-  sandbox_permissions: string[];
-  viewport?: [number, number];
-}
-
-export interface ChartRenderData {
-  chart_type: string;
-  data: Record<string, unknown>[];
-  x_axis?: { label?: string; data_key: string };
-  y_axis?: { label?: string; data_key: string };
-  series: { data_key: string; name?: string; color?: string }[];
-  show_legend: boolean;
-  colors: string[];
-}
-
-export interface PresentationRenderData {
-  slides: SlideData[];
-  slide_count: number;
-  current_slide: number;
-}
-
-export interface SlideData {
-  index: number;
-  title?: string;
-  content: string;
-  notes?: string;
-}
-
-export interface ImageRenderData {
-  source: string;
-  format: string;
-  width?: number;
-  height?: number;
-  alt_text?: string;
-}
-
-// API Response wrapper
-interface ArtifactResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+import type {
+  ArtifactType,
+  ArtifactStatus,
+  ArtifactMetadata,
+  ArtifactVersion,
+  Artifact,
+  ArtifactSummary,
+  VersionDiff,
+  ArtifactStoreStats,
+  RenderedArtifact,
+  ArtifactListFilter,
+} from '@/api/artifacts';
 
 // =============================================================================
 // Diff Types
@@ -341,18 +167,10 @@ interface ArtifactStoreState {
   addTags: (id: string, tags: string[]) => Promise<boolean>;
   removeTags: (id: string, tags: string[]) => Promise<boolean>;
 
-  listArtifacts: (filter?: {
-    artifactTypes?: ArtifactType[];
-    statuses?: ArtifactStatus[];
-    tags?: string[];
-    conversationId?: number;
-    searchQuery?: string;
-    pinnedOnly?: boolean;
-    limit?: number;
-    offset?: number;
-  }) => Promise<ArtifactSummary[]>;
+  listArtifacts: (filter?: ArtifactListFilter) => Promise<ArtifactSummary[]>;
 
   getArtifactsByConversation: (conversationId: number) => Promise<ArtifactSummary[]>;
+  listPersistedArtifacts: (conversationId?: string, limit?: number) => Promise<ArtifactSummary[]>;
   getVersionHistory: (id: string) => Promise<ArtifactVersion[] | null>;
   getVersionDiff: (
     id: string,
@@ -369,10 +187,10 @@ interface ArtifactStoreState {
   togglePanel: () => void;
   setPanelWidth: (width: number) => void;
 
-  // Bulk operations (previously unwired)
+  // Bulk operations
   clearAllArtifacts: () => Promise<boolean>;
-  exportAllArtifacts: () => Promise<string | null>;
-  importAllArtifacts: (exportData: string) => Promise<boolean>;
+  exportAllArtifacts: () => Promise<Artifact[] | null>;
+  importAllArtifacts: (artifacts: Artifact[]) => Promise<boolean>;
 
   // Utility
   clearCache: () => void;
@@ -409,7 +227,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         ) => {
           set({ isLoading: true });
           try {
-            const response = await invoke<ArtifactResponse<Artifact>>('artifact_create', {
+            const artifact = await artifactCreate(
               title,
               artifactType,
               content,
@@ -417,19 +235,13 @@ export const useArtifactStore = create<ArtifactStoreState>()(
               conversationId,
               messageId,
               tags,
+            );
+            set((state) => {
+              const newArtifacts = new Map(state.artifacts);
+              newArtifacts.set(artifact.id, artifact);
+              return { artifacts: newArtifacts, isLoading: false };
             });
-
-            if (response.success && response.data) {
-              const artifact = response.data;
-              set((state) => {
-                const newArtifacts = new Map(state.artifacts);
-                newArtifacts.set(artifact.id, artifact);
-                return { artifacts: newArtifacts, isLoading: false };
-              });
-              return artifact;
-            }
-            console.error('Failed to create artifact:', response.error);
-            return null;
+            return artifact;
           } catch (error) {
             console.error('Error creating artifact:', error);
             return null;
@@ -447,24 +259,19 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           messageId,
         ) => {
           try {
-            const response = await invoke<ArtifactResponse<Artifact>>('artifact_create_streaming', {
+            const artifact = await artifactCreateStreaming(
               title,
               artifactType,
               metadata,
               conversationId,
               messageId,
+            );
+            set((state) => {
+              const newArtifacts = new Map(state.artifacts);
+              newArtifacts.set(artifact.id, artifact);
+              return { artifacts: newArtifacts, isStreaming: artifact.id };
             });
-
-            if (response.success && response.data) {
-              const artifact = response.data;
-              set((state) => {
-                const newArtifacts = new Map(state.artifacts);
-                newArtifacts.set(artifact.id, artifact);
-                return { artifacts: newArtifacts, isStreaming: artifact.id };
-              });
-              return artifact;
-            }
-            return null;
+            return artifact;
           } catch (error) {
             console.error('Error creating streaming artifact:', error);
             return null;
@@ -474,7 +281,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Append content to streaming artifact
         appendStreamingContent: async (id, delta) => {
           try {
-            await invoke<ArtifactResponse<void>>('artifact_append_streaming', { id, delta });
+            await artifactAppendStreaming(id, delta);
 
             // Update local cache
             set((state) => {
@@ -497,24 +304,13 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Finalize streaming artifact
         finalizeStreamingArtifact: async (id, changeDescription) => {
           try {
-            const response = await invoke<ArtifactResponse<Artifact>>(
-              'artifact_finalize_streaming',
-              {
-                id,
-                changeDescription,
-              },
-            );
-
-            if (response.success && response.data) {
-              const artifact = response.data;
-              set((state) => {
-                const newArtifacts = new Map(state.artifacts);
-                newArtifacts.set(artifact.id, artifact);
-                return { artifacts: newArtifacts, isStreaming: null };
-              });
-              return artifact;
-            }
-            return null;
+            const artifact = await artifactFinalizeStreaming(id, changeDescription);
+            set((state) => {
+              const newArtifacts = new Map(state.artifacts);
+              newArtifacts.set(artifact.id, artifact);
+              return { artifacts: newArtifacts, isStreaming: null };
+            });
+            return artifact;
           } catch (error) {
             console.error('Error finalizing streaming artifact:', error);
             set({ isStreaming: null });
@@ -529,17 +325,13 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           if (cached) return cached;
 
           try {
-            const response = await invoke<ArtifactResponse<Artifact>>('artifact_get', { id });
-            if (response.success && response.data) {
-              const artifact = response.data;
-              set((state) => {
-                const newArtifacts = new Map(state.artifacts);
-                newArtifacts.set(artifact.id, artifact);
-                return { artifacts: newArtifacts };
-              });
-              return artifact;
-            }
-            return null;
+            const artifact = await artifactGet(id);
+            set((state) => {
+              const newArtifacts = new Map(state.artifacts);
+              newArtifacts.set(artifact.id, artifact);
+              return { artifacts: newArtifacts };
+            });
+            return artifact;
           } catch (error) {
             console.error('Error getting artifact:', error);
             return null;
@@ -549,13 +341,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Get rendered artifact
         getRenderedArtifact: async (id) => {
           try {
-            const response = await invoke<ArtifactResponse<RenderedArtifact>>(
-              'artifact_get_rendered',
-              {
-                id,
-              },
-            );
-            return response.success ? (response.data ?? null) : null;
+            return await artifactGetRendered(id);
           } catch (error) {
             console.error('Error getting rendered artifact:', error);
             return null;
@@ -566,25 +352,20 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         updateArtifact: async (id, content, changeDescription, title, metadata, tags) => {
           set({ isLoading: true });
           try {
-            const response = await invoke<ArtifactResponse<Artifact>>('artifact_update', {
+            const artifact = await artifactUpdate(
               id,
               content,
               changeDescription,
               title,
               metadata,
               tags,
+            );
+            set((state) => {
+              const newArtifacts = new Map(state.artifacts);
+              newArtifacts.set(artifact.id, artifact);
+              return { artifacts: newArtifacts, isLoading: false };
             });
-
-            if (response.success && response.data) {
-              const artifact = response.data;
-              set((state) => {
-                const newArtifacts = new Map(state.artifacts);
-                newArtifacts.set(artifact.id, artifact);
-                return { artifacts: newArtifacts, isLoading: false };
-              });
-              return artifact;
-            }
-            return null;
+            return artifact;
           } catch (error) {
             console.error('Error updating artifact:', error);
             return null;
@@ -599,28 +380,17 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           try {
             // Attempt the dedicated Tauri command first
             try {
-              const response = await invoke<ArtifactResponse<Artifact>>('artifact_apply_diff', {
+              const artifact = await artifactApplyDiff(
                 id,
-                hunks: diff.hunks.map((h) => ({
-                  start_line: h.startLine,
-                  end_line: h.endLine,
-                  original_content: h.originalContent,
-                  new_content: h.newContent,
-                })),
-                changeDescription: diff.changeDescription,
+                diff.hunks,
+                diff.changeDescription,
+              );
+              set((state) => {
+                const newArtifacts = new Map(state.artifacts);
+                newArtifacts.set(artifact.id, artifact);
+                return { artifacts: newArtifacts, isLoading: false };
               });
-
-              if (response.success && response.data) {
-                const artifact = response.data;
-                set((state) => {
-                  const newArtifacts = new Map(state.artifacts);
-                  newArtifacts.set(artifact.id, artifact);
-                  return { artifacts: newArtifacts, isLoading: false };
-                });
-                return artifact;
-              }
-
-              // artifact_apply_diff returned a non-success — fall through to local fallback
+              return artifact;
             } catch {
               // Command not yet registered — apply the diff locally and call artifact_update
             }
@@ -642,21 +412,13 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         rollbackArtifact: async (id, version) => {
           set({ isLoading: true });
           try {
-            const response = await invoke<ArtifactResponse<Artifact>>('artifact_rollback', {
-              id,
-              version,
+            const artifact = await artifactRollback(id, version);
+            set((state) => {
+              const newArtifacts = new Map(state.artifacts);
+              newArtifacts.set(artifact.id, artifact);
+              return { artifacts: newArtifacts, isLoading: false };
             });
-
-            if (response.success && response.data) {
-              const artifact = response.data;
-              set((state) => {
-                const newArtifacts = new Map(state.artifacts);
-                newArtifacts.set(artifact.id, artifact);
-                return { artifacts: newArtifacts, isLoading: false };
-              });
-              return artifact;
-            }
-            return null;
+            return artifact;
           } catch (error) {
             console.error('Error rolling back artifact:', error);
             return null;
@@ -668,19 +430,16 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Delete artifact
         deleteArtifact: async (id) => {
           try {
-            const response = await invoke<ArtifactResponse<void>>('artifact_delete', { id });
-            if (response.success) {
-              set((state) => {
-                const newArtifacts = new Map(state.artifacts);
-                newArtifacts.delete(id);
-                return {
-                  artifacts: newArtifacts,
-                  activeArtifactId: state.activeArtifactId === id ? null : state.activeArtifactId,
-                };
-              });
-              return true;
-            }
-            return false;
+            await artifactDelete(id);
+            set((state) => {
+              const newArtifacts = new Map(state.artifacts);
+              newArtifacts.delete(id);
+              return {
+                artifacts: newArtifacts,
+                activeArtifactId: state.activeArtifactId === id ? null : state.activeArtifactId,
+              };
+            });
+            return true;
           } catch (error) {
             console.error('Error deleting artifact:', error);
             return false;
@@ -690,20 +449,17 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Archive artifact
         archiveArtifact: async (id) => {
           try {
-            const response = await invoke<ArtifactResponse<void>>('artifact_archive', { id });
-            if (response.success) {
-              set((state) => {
-                const artifact = state.artifacts.get(id);
-                if (artifact) {
-                  const newArtifacts = new Map(state.artifacts);
-                  newArtifacts.set(id, { ...artifact, status: 'archived' as ArtifactStatus });
-                  return { artifacts: newArtifacts };
-                }
-                return state;
-              });
-              return true;
-            }
-            return false;
+            await artifactArchive(id);
+            set((state) => {
+              const artifact = state.artifacts.get(id);
+              if (artifact) {
+                const newArtifacts = new Map(state.artifacts);
+                newArtifacts.set(id, { ...artifact, status: 'archived' as ArtifactStatus });
+                return { artifacts: newArtifacts };
+              }
+              return state;
+            });
+            return true;
           } catch (error) {
             console.error('Error archiving artifact:', error);
             return false;
@@ -713,20 +469,17 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Unarchive artifact
         unarchiveArtifact: async (id) => {
           try {
-            const response = await invoke<ArtifactResponse<void>>('artifact_unarchive', { id });
-            if (response.success) {
-              set((state) => {
-                const artifact = state.artifacts.get(id);
-                if (artifact) {
-                  const newArtifacts = new Map(state.artifacts);
-                  newArtifacts.set(id, { ...artifact, status: 'complete' as ArtifactStatus });
-                  return { artifacts: newArtifacts };
-                }
-                return state;
-              });
-              return true;
-            }
-            return false;
+            await artifactUnarchive(id);
+            set((state) => {
+              const artifact = state.artifacts.get(id);
+              if (artifact) {
+                const newArtifacts = new Map(state.artifacts);
+                newArtifacts.set(id, { ...artifact, status: 'complete' as ArtifactStatus });
+                return { artifacts: newArtifacts };
+              }
+              return state;
+            });
+            return true;
           } catch (error) {
             console.error('Error unarchiving artifact:', error);
             return false;
@@ -736,20 +489,17 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Pin artifact
         pinArtifact: async (id, pinned) => {
           try {
-            const response = await invoke<ArtifactResponse<void>>('artifact_pin', { id, pinned });
-            if (response.success) {
-              set((state) => {
-                const artifact = state.artifacts.get(id);
-                if (artifact) {
-                  const newArtifacts = new Map(state.artifacts);
-                  newArtifacts.set(id, { ...artifact, pinned });
-                  return { artifacts: newArtifacts };
-                }
-                return state;
-              });
-              return true;
-            }
-            return false;
+            await artifactPin(id, pinned);
+            set((state) => {
+              const artifact = state.artifacts.get(id);
+              if (artifact) {
+                const newArtifacts = new Map(state.artifacts);
+                newArtifacts.set(id, { ...artifact, pinned });
+                return { artifacts: newArtifacts };
+              }
+              return state;
+            });
+            return true;
           } catch (error) {
             console.error('Error pinning artifact:', error);
             return false;
@@ -759,15 +509,9 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Add tags
         addTags: async (id, tags) => {
           try {
-            const response = await invoke<ArtifactResponse<void>>('artifact_add_tags', {
-              id,
-              tags,
-            });
-            if (response.success) {
-              await get().getArtifact(id); // Refresh from server
-              return true;
-            }
-            return false;
+            await artifactAddTags(id, tags);
+            await get().getArtifact(id); // Refresh from server
+            return true;
           } catch (error) {
             console.error('Error adding tags:', error);
             return false;
@@ -777,15 +521,9 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Remove tags
         removeTags: async (id, tags) => {
           try {
-            const response = await invoke<ArtifactResponse<void>>('artifact_remove_tags', {
-              id,
-              tags,
-            });
-            if (response.success) {
-              await get().getArtifact(id); // Refresh from server
-              return true;
-            }
-            return false;
+            await artifactRemoveTags(id, tags);
+            await get().getArtifact(id); // Refresh from server
+            return true;
           } catch (error) {
             console.error('Error removing tags:', error);
             return false;
@@ -796,22 +534,9 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         listArtifacts: async (filter) => {
           set({ isLoading: true });
           try {
-            const response = await invoke<ArtifactResponse<ArtifactSummary[]>>('artifact_list', {
-              artifactTypes: filter?.artifactTypes,
-              statuses: filter?.statuses,
-              tags: filter?.tags,
-              conversationId: filter?.conversationId,
-              searchQuery: filter?.searchQuery,
-              pinnedOnly: filter?.pinnedOnly,
-              limit: filter?.limit,
-              offset: filter?.offset,
-            });
-
-            if (response.success && response.data) {
-              set({ summaries: response.data, isLoading: false });
-              return response.data;
-            }
-            return [];
+            const summaries = await artifactList(filter);
+            set({ summaries, isLoading: false });
+            return summaries;
           } catch (error) {
             console.error('Error listing artifacts:', error);
             return [];
@@ -823,13 +548,21 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Get artifacts by conversation
         getArtifactsByConversation: async (conversationId) => {
           try {
-            const response = await invoke<ArtifactResponse<ArtifactSummary[]>>(
-              'artifact_get_by_conversation',
-              { conversationId },
-            );
-            return response.success && response.data ? response.data : [];
+            return await artifactGetByConversation(conversationId);
           } catch (error) {
             console.error('Error getting artifacts by conversation:', error);
+            return [];
+          }
+        },
+
+        // List persisted artifacts from SQLite (bypasses in-memory cache)
+        listPersistedArtifacts: async (conversationId, limit) => {
+          try {
+            const summaries = await artifactListPersisted(conversationId, limit);
+            set({ summaries });
+            return summaries;
+          } catch (error) {
+            console.error('Error listing persisted artifacts:', error);
             return [];
           }
         },
@@ -837,13 +570,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Get version history
         getVersionHistory: async (id) => {
           try {
-            const response = await invoke<ArtifactResponse<ArtifactVersion[]>>(
-              'artifact_get_versions',
-              {
-                id,
-              },
-            );
-            return response.success ? (response.data ?? null) : null;
+            return await artifactGetVersions(id);
           } catch (error) {
             console.error('Error getting version history:', error);
             return null;
@@ -853,12 +580,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Get version diff
         getVersionDiff: async (id, fromVersion, toVersion) => {
           try {
-            const response = await invoke<ArtifactResponse<VersionDiff>>('artifact_get_diff', {
-              id,
-              fromVersion,
-              toVersion,
-            });
-            return response.success ? (response.data ?? null) : null;
+            return await artifactGetDiff(id, fromVersion, toVersion);
           } catch (error) {
             console.error('Error getting version diff:', error);
             return null;
@@ -868,9 +590,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         // Get stats
         getStats: async () => {
           try {
-            const response =
-              await invoke<ArtifactResponse<ArtifactStoreStats>>('artifact_get_stats');
-            return response.success ? (response.data ?? null) : null;
+            return await artifactGetStats();
           } catch (error) {
             console.error('Error getting stats:', error);
             return null;
@@ -889,12 +609,9 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         clearAllArtifacts: async () => {
           set({ isLoading: true });
           try {
-            const response = await invoke<ArtifactResponse<void>>('artifact_clear_all');
-            if (response.success) {
-              set({ artifacts: new Map(), summaries: [], isLoading: false });
-              return true;
-            }
-            return false;
+            await artifactClearAll();
+            set({ artifacts: new Map(), summaries: [], isLoading: false });
+            return true;
           } catch (error) {
             console.error('Error clearing all artifacts:', error);
             return false;
@@ -905,32 +622,21 @@ export const useArtifactStore = create<ArtifactStoreState>()(
 
         exportAllArtifacts: async () => {
           try {
-            const response = await invoke<ArtifactResponse<string>>('artifact_export_all');
-            return response.success ? (response.data ?? null) : null;
+            return await artifactExportAll();
           } catch (error) {
             console.error('Error exporting artifacts:', error);
             return null;
           }
         },
 
-        importAllArtifacts: async (exportData) => {
+        importAllArtifacts: async (artifacts) => {
           set({ isLoading: true });
           try {
-            const response = await invoke<ArtifactResponse<void>>('artifact_import_all', {
-              exportData,
-            });
-            if (response.success) {
-              // Refresh the list after import
-              const refreshResponse = await invoke<ArtifactResponse<ArtifactSummary[]>>(
-                'artifact_list',
-                {},
-              );
-              if (refreshResponse.success && refreshResponse.data) {
-                set({ summaries: refreshResponse.data, isLoading: false });
-              }
-              return true;
-            }
-            return false;
+            await artifactImportAll(artifacts);
+            // Refresh the list after import
+            const summaries = await artifactList();
+            set({ summaries, isLoading: false });
+            return true;
           } catch (error) {
             console.error('Error importing artifacts:', error);
             return false;

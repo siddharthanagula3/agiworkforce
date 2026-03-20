@@ -156,3 +156,75 @@ export async function agentListTrustedWorkflows(): Promise<TrustedWorkflowMap> {
 
   return invoke<TrustedWorkflowMap>('agent_list_trusted_workflows');
 }
+
+// ============================================================================
+// Agent Lifecycle
+// ============================================================================
+
+/**
+ * Stop the autonomous agent.
+ * Gracefully shuts down the agent loop.
+ */
+export async function agentStop(): Promise<void> {
+  if (!isTauri) {
+    console.info('[agent] agentStop (mock)');
+    return;
+  }
+
+  return invoke<void>('agent_stop');
+}
+
+// ============================================================================
+// Billing-Aware Agent Task
+// ============================================================================
+
+/**
+ * Start an agent task with automatic billing-aware model selection.
+ * The backend selects the best model based on the user's subscription tier.
+ * Returns the LLM response content.
+ */
+export async function startAgentTask(
+  goal: string,
+  mode: string = 'default',
+  userId?: string,
+): Promise<string> {
+  if (!isTauri) {
+    console.info('[agent] startAgentTask (mock)', goal);
+    return `[Mock] Agent response for: ${goal}`;
+  }
+
+  return invoke<string>('start_agent_task', {
+    goal,
+    mode,
+    userId,
+  });
+}
+
+// ============================================================================
+// Approval Management
+// ============================================================================
+
+/** Decision for an approval request */
+export type ApprovalDecision = 'approve' | 'reject';
+
+/**
+ * Resolve a pending tool execution approval.
+ * Used by the approval UI to approve or reject tool calls.
+ */
+export async function resolveApproval(
+  approvalId: string,
+  decision: ApprovalDecision,
+  options?: { trust?: boolean; reason?: string },
+): Promise<void> {
+  if (!isTauri) {
+    console.info('[agent] resolveApproval (mock)', { approvalId, decision });
+    return;
+  }
+
+  return invoke<void>('agent_resolve_approval', {
+    approvalId,
+    decision,
+    trust: options?.trust,
+    reason: options?.reason,
+  });
+}
