@@ -14,6 +14,7 @@ import { Copy, Layers, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useArtifactStore, type ArtifactSummary, type ArtifactType } from '@/stores/artifactStore';
 import { ArtifactTypeIcon } from '@/lib/artifactUtils';
 import { ArtifactCategoryFilter, type ArtifactCategory } from './ArtifactCategoryFilter';
@@ -329,23 +330,26 @@ function InspirationCard({ item }: InspirationCardProps) {
 // Empty state
 // =============================================================================
 
-function EmptyState({ query }: { query: string }) {
+function ArtifactsEmptyState({ query }: { query: string }) {
   if (query) {
     return (
-      <div className="col-span-3 flex flex-col items-center justify-center py-20 text-center">
-        <Search className="h-10 w-10 text-white/15 mb-3" />
-        <p className="text-sm text-white/50">No artifacts match "{query}"</p>
+      <div className="col-span-3">
+        <EmptyState
+          icon={Search}
+          title={`No artifacts match "${query}"`}
+          description="Try adjusting your search or category filter"
+        />
       </div>
     );
   }
 
   return (
-    <div className="col-span-3 flex flex-col items-center justify-center py-20 text-center">
-      <Layers className="h-10 w-10 text-white/15 mb-3" />
-      <h3 className="text-sm font-medium text-white/70 mb-1">No artifacts yet</h3>
-      <p className="text-xs text-white/40 max-w-[260px]">
-        Ask the AI to create code, documents, or diagrams and they will appear here.
-      </p>
+    <div className="col-span-3">
+      <EmptyState
+        icon={Layers}
+        title="No artifacts yet"
+        description="Ask the AI to create code, documents, diagrams, or images and they will appear here."
+      />
     </div>
   );
 }
@@ -530,13 +534,25 @@ export function ArtifactsGallery({ className }: ArtifactsGalleryProps) {
       {/* Grid */}
       <div className="flex-1 overflow-y-auto px-6 pb-6">
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white/30" />
+          <div className="grid grid-cols-3 gap-4 pt-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={`skeleton-${i}`}
+                className="animate-pulse rounded-xl border border-white/10 bg-white/5"
+              >
+                <div className="h-32 bg-white/10 rounded-t-xl" />
+                <div className="p-3 space-y-2">
+                  <div className="h-4 w-24 rounded bg-white/10" />
+                  <div className="h-3 w-full rounded bg-white/10" />
+                  <div className="h-3 w-16 rounded bg-white/10" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : activeTab === 'yours' ? (
           <div className="grid grid-cols-3 gap-4 pt-4">
             {filteredSummaries.length === 0 ? (
-              <EmptyState query={searchQuery} />
+              <ArtifactsEmptyState query={searchQuery} />
             ) : (
               filteredSummaries.map((summary) => (
                 <ArtifactCard
@@ -552,7 +568,7 @@ export function ArtifactsGallery({ className }: ArtifactsGalleryProps) {
         ) : (
           <div className="grid grid-cols-3 gap-4 pt-4">
             {filteredInspiration.length === 0 ? (
-              <EmptyState query={searchQuery} />
+              <ArtifactsEmptyState query={searchQuery} />
             ) : (
               filteredInspiration.map((item) => <InspirationCard key={item.id} item={item} />)
             )}
