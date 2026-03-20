@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { AgentStatusBadge } from '@/components/agents/AgentStatusBadge';
+import { ToolTimeline } from '@/components/agents/ToolTimeline';
 import { useAgentStore } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
@@ -575,7 +576,7 @@ export default function AgentDetailScreen() {
           </Animated.View>
         )}
 
-        {/* Steps */}
+        {/* Steps — rich ToolTimeline component */}
         {agent.steps && agent.steps.length > 0 && (
           <Animated.View entering={FadeInDown.delay(160).duration(200)}>
             <Card>
@@ -589,11 +590,9 @@ export default function AgentDetailScreen() {
                   marginBottom: 12,
                 }}
               >
-                Execution Steps
+                Execution Timeline
               </Text>
-              {agent.steps.map((step, i) => (
-                <StepRow key={step.id} step={step} index={i} />
-              ))}
+              <ToolTimeline steps={agent.steps} />
             </Card>
           </Animated.View>
         )}

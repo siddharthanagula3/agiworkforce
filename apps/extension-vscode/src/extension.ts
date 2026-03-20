@@ -25,6 +25,7 @@ import {
 import { getApiKey, setApiKey, clearApiKey, chatCompletion, type ChatMessage } from './utils/api';
 import { applyLlmEdit } from './utils/applyEdit';
 import { AgentModePanel } from './providers/agentModeProvider';
+import { WorkspaceIndexer } from './services/workspaceIndexer';
 import { AgiCodeLensProvider } from './providers/codeLensProvider';
 import { AgiDiagnosticsProvider } from './providers/diagnosticsProvider';
 import * as telemetry from './services/telemetry';
@@ -33,6 +34,9 @@ import { activateDesktopBridge, getDesktopBridge } from './services/desktopBridg
 import { activateTerminal } from './providers/terminalProvider';
 import { activateErrorExplainer } from './providers/errorExplainerProvider';
 import { ModelMetricsPanel, initModelMetrics } from './services/modelMetrics';
+import { ContextPanelProvider, setContextPanelInstance } from './providers/contextPanelProvider';
+import { DiffDecorationProvider } from './providers/diffDecorationProvider';
+import { showOriginalContext, getPatchOutputChannel } from './services/patchEngine';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
@@ -104,6 +108,117 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('agi-workforce.conversations', conversationTreeProvider),
     conversationTreeProvider,
+  );
+
+  // ── 3b. Context panel tree view ────────────────────────────────────────────
+  const contextPanelProvider = new ContextPanelProvider();
+  setContextPanelInstance(contextPanelProvider);
+  context.subscriptions.push(
+    vscode.window.registerTreeDataProvider('agi-workforce.contextPanel', contextPanelProvider),
+    contextPanelProvider,
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agi-workforce.addToContext', (uri?: vscode.Uri) => {
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      if (target === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: No file to add to context.');
+        return;
+      }
+      contextPanelProvider.addFile(target);
+    }),
+
+    vscode.commands.registerCommand('agi-workforce.removeFromContext', (uri?: vscode.Uri) => {
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      if (target === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: No file to remove from context.');
+        return;
+      }
+      contextPanelProvider.removeFile(target);
+    }),
+
+    vscode.commands.registerCommand('agi-workforce.clearContext', () => {
+      contextPanelProvider.clearAll();
+    }),
+
+    vscode.commands.registerCommand('agi-workforce.refreshContext', () => {
+      contextPanelProvider.refreshAutoContext();
+    }),
+  );
+
+  // ── 3c. Workspace indexer file watcher (incremental updates) ─────────────
+  {
+    const indexer = new WorkspaceIndexer(context);
+    const watcherDisposables = indexer.registerFileWatcher();
+    context.subscriptions.push(...watcherDisposables);
+  }
+
+  // ── 3d. Diff decoration provider (accept/reject inline diffs) ────────────
+  const diffDecorationProvider = new DiffDecorationProvider();
+  context.subscriptions.push(diffDecorationProvider);
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider('*', diffDecorationProvider.codeLensProvider),
+  );
+
+  context.subscriptions.push(
+    // Accept/reject single diff (by session ID from CodeLens)
+    vscode.commands.registerCommand('agi-workforce.acceptDiff', async (sessionId: string) => {
+      await diffDecorationProvider.acceptDiff(sessionId);
+    }),
+    vscode.commands.registerCommand('agi-workforce.rejectDiff', (sessionId: string) => {
+      diffDecorationProvider.rejectDiff(sessionId);
+    }),
+
+    // Accept/reject all diffs in a single file
+    vscode.commands.registerCommand('agi-workforce.acceptAllDiffs', async (uri: vscode.Uri) => {
+      await diffDecorationProvider.acceptAll(uri);
+    }),
+    vscode.commands.registerCommand('agi-workforce.rejectAllDiffs', (uri: vscode.Uri) => {
+      diffDecorationProvider.rejectAll(uri);
+    }),
+
+    // Keyboard shortcut handlers: accept/reject nearest diff to cursor
+    vscode.commands.registerCommand('agi-workforce.acceptCurrentDiff', async () => {
+      await diffDecorationProvider.acceptCurrentDiff();
+    }),
+    vscode.commands.registerCommand('agi-workforce.rejectCurrentDiff', () => {
+      diffDecorationProvider.rejectCurrentDiff();
+    }),
+
+    // Accept/reject all diffs across all open files
+    vscode.commands.registerCommand('agi-workforce.acceptAllDiffsGlobal', async () => {
+      await diffDecorationProvider.acceptAllGlobal();
+    }),
+    vscode.commands.registerCommand('agi-workforce.rejectAllDiffsGlobal', () => {
+      diffDecorationProvider.rejectAllGlobal();
+    }),
+
+    // Batch-level accept/reject (for multi-file patch batches)
+    vscode.commands.registerCommand('agi-workforce.acceptBatch', async (batchId: string) => {
+      await diffDecorationProvider.acceptBatch(batchId);
+    }),
+    vscode.commands.registerCommand('agi-workforce.rejectBatch', (batchId: string) => {
+      diffDecorationProvider.rejectBatch(batchId);
+    }),
+
+    // Show original context (patch expected vs actual comparison)
+    vscode.commands.registerCommand(
+      'agi-workforce.showOriginalContext',
+      async (sessionId: string) => {
+        const session = diffDecorationProvider.getSession(sessionId);
+        if (session === undefined) {
+          vscode.window.showWarningMessage('AGI Workforce: Diff session not found.');
+          return;
+        }
+        const filePath = session.filePath ?? vscode.workspace.asRelativePath(session.uri);
+        await showOriginalContext(session.originalText, session.newText, filePath);
+      },
+    ),
+
+    // Show patch output channel
+    vscode.commands.registerCommand('agi-workforce.showPatchLogs', () => {
+      getPatchOutputChannel().show(true);
+    }),
   );
 
   // ── 4. Code intelligence providers ──────────────────────────────────────────

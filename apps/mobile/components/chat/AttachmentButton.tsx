@@ -13,7 +13,26 @@ import type { Attachment } from './AttachmentPreview';
  * Uses expo-image-picker for camera and photo library.
  * Uses expo-document-picker for PDFs and documents.
  * Returns selected media via the onAttach callback.
+ *
+ * Edge case handling:
+ *  - Files exceeding MAX_FILE_SIZE_BYTES are rejected with a clear alert.
+ *  - Unsupported MIME types from the document picker are rejected.
+ *  - All pickers validate results before invoking onAttach.
  */
+
+/** 25 MB upload limit — matches the API gateway limit */
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+
+/** Allowed MIME types for document picker */
+const ALLOWED_DOC_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'text/csv',
+] as const;
+
+type AllowedDocMime = (typeof ALLOWED_DOC_TYPES)[number];
 
 interface AttachmentButtonProps {
   /** Called with new attachment(s) when user selects media */
@@ -31,6 +50,28 @@ function generateId(): string {
 function getFileName(uri: string): string {
   const parts = uri.split('/');
   return parts[parts.length - 1] ?? 'file';
+}
+
+/** Format bytes to a human-readable size string */
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Validate file size. Shows an alert and returns false if the file is too large.
+ * Returns true if the file is within limits.
+ */
+function validateFileSize(fileName: string, fileSize: number | undefined): boolean {
+  if (fileSize !== undefined && fileSize > MAX_FILE_SIZE_BYTES) {
+    Alert.alert(
+      'File Too Large',
+      `"${fileName}" is ${formatSize(fileSize)}, which exceeds the ${formatSize(MAX_FILE_SIZE_BYTES)} limit. Please choose a smaller file.`,
+      [{ text: 'OK' }],
+    );
+    return false;
+  }
+  return true;
 }
 
 /** Map expo-image-picker asset to our Attachment type */
@@ -84,8 +125,14 @@ export function AttachmentButton({ onAttach, disabled = false }: AttachmentButto
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      const attachments = result.assets.map(assetToAttachment);
-      onAttach(attachments);
+      // Filter out oversized images (rare but possible with RAW formats)
+      const valid = result.assets.filter((a) => {
+        const name = a.fileName ?? getFileName(a.uri);
+        return validateFileSize(name, a.fileSize);
+      });
+      if (valid.length > 0) {
+        onAttach(valid.map(assetToAttachment));
+      }
     }
   }, [onAttach]);
 
@@ -109,33 +156,57 @@ export function AttachmentButton({ onAttach, disabled = false }: AttachmentButto
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      const attachments = result.assets.map(assetToAttachment);
-      onAttach(attachments);
+      const valid = result.assets.filter((a) => {
+        const name = a.fileName ?? getFileName(a.uri);
+        return validateFileSize(name, a.fileSize);
+      });
+      if (valid.length > 0) {
+        onAttach(valid.map(assetToAttachment));
+      }
     }
   }, [onAttach]);
 
   const openDocumentPicker = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'text/plain',
-          'text/csv',
-        ],
+        type: [...ALLOWED_DOC_TYPES],
         copyToCacheDirectory: true,
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        const attachments: Attachment[] = result.assets.map((asset) => ({
-          id: generateId(),
-          uri: asset.uri,
-          mimeType: asset.mimeType ?? 'application/octet-stream',
-          fileName: asset.name ?? getFileName(asset.uri),
-          fileSize: asset.size,
-        }));
-        onAttach(attachments);
+        const validAttachments: Attachment[] = [];
+
+        for (const asset of result.assets) {
+          const mimeType = asset.mimeType ?? 'application/octet-stream';
+          const fileName = asset.name ?? getFileName(asset.uri);
+
+          // Reject unsupported MIME types (document picker can return unexpected types)
+          if (!ALLOWED_DOC_TYPES.includes(mimeType as AllowedDocMime)) {
+            Alert.alert(
+              'Unsupported File Type',
+              `"${fileName}" is not a supported file type. Please attach a PDF, Word document, text file, or CSV.`,
+              [{ text: 'OK' }],
+            );
+            continue;
+          }
+
+          // Reject oversized files
+          if (!validateFileSize(fileName, asset.size)) {
+            continue;
+          }
+
+          validAttachments.push({
+            id: generateId(),
+            uri: asset.uri,
+            mimeType,
+            fileName,
+            fileSize: asset.size,
+          });
+        }
+
+        if (validAttachments.length > 0) {
+          onAttach(validAttachments);
+        }
       }
     } catch {
       Alert.alert('Error', 'Failed to pick document. Please try again.');

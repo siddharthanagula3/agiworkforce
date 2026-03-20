@@ -11,6 +11,12 @@
  * they survive app-level state. If the process is killed, unprocessed queued
  * messages are lost; this is acceptable because the user sees the failed
  * messages in the chat and can retry manually.
+ *
+ * Retry behaviour:
+ *  - Exponential backoff between retries: 1s, 2s, 4s (capped at MAX_BACKOFF_MS)
+ *  - Each entry has onSuccess / onFailure callbacks that fire reliably after
+ *    the attempt resolves, regardless of whether processQueue() is awaited.
+ *  - Entries exceeding MAX_RETRY_COUNT are dropped and onFailure is called.
  */
 
 export interface QueuedMessage {
@@ -26,10 +32,32 @@ export interface QueuedMessage {
   queuedAt: string;
   /** Number of times this entry has been attempted */
   retryCount: number;
+  /** Called after a successful send */
+  onSuccess?: () => void;
+  /** Called after the entry is dropped (max retries exceeded or permanent error) */
+  onFailure?: (error: Error) => void;
 }
 
 /** Maximum retry attempts per queued message before it is dropped */
 const MAX_RETRY_COUNT = 3;
+
+/** Maximum number of messages that may be held in the queue at once */
+const MAX_QUEUE_SIZE = 100;
+
+/** Base delay for exponential backoff (ms) */
+const BASE_BACKOFF_MS = 1_000;
+
+/** Maximum backoff delay cap (ms) */
+const MAX_BACKOFF_MS = 8_000;
+
+/** Compute backoff delay for a given retry count (0-based). */
+function backoffDelay(retryCount: number): number {
+  return Math.min(BASE_BACKOFF_MS * Math.pow(2, retryCount), MAX_BACKOFF_MS);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 class OfflineMessageQueue {
   private queue: QueuedMessage[] = [];
@@ -39,19 +67,39 @@ class OfflineMessageQueue {
    * Add a message to the end of the queue.
    * Ignores duplicates by conversationId + content to prevent double-queuing
    * the same message on rapid reconnect cycles.
+   *
+   * @param onSuccess - Called after the message is successfully sent.
+   * @param onFailure - Called if the message is dropped after exhausting retries.
    */
-  enqueue(msg: Omit<QueuedMessage, 'id' | 'queuedAt' | 'retryCount'>): QueuedMessage {
+  enqueue(
+    msg: Omit<QueuedMessage, 'id' | 'queuedAt' | 'retryCount' | 'onSuccess' | 'onFailure'>,
+    callbacks?: { onSuccess?: () => void; onFailure?: (error: Error) => void },
+  ): QueuedMessage {
     // Guard: do not double-enqueue the exact same content for the same conversation
     const duplicate = this.queue.find(
       (q) => q.conversationId === msg.conversationId && q.content === msg.content,
     );
     if (duplicate) return duplicate;
 
+    // Enforce maximum queue size: drop the oldest entry to make room
+    if (this.queue.length >= MAX_QUEUE_SIZE) {
+      const oldest = this.queue.shift();
+      if (oldest) {
+        try {
+          oldest.onFailure?.(new Error('Queue full: oldest message dropped'));
+        } catch {
+          // Ignore callback errors
+        }
+      }
+    }
+
     const entry: QueuedMessage = {
       ...msg,
       id: `qmsg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       queuedAt: new Date().toISOString(),
       retryCount: 0,
+      onSuccess: callbacks?.onSuccess,
+      onFailure: callbacks?.onFailure,
     };
 
     this.queue.push(entry);
@@ -76,9 +124,18 @@ class OfflineMessageQueue {
   /**
    * Drain the queue in FIFO order.
    *
-   * Each entry is passed to sendFn. On success it is removed from the queue.
-   * On failure the retryCount is incremented; entries that exceed
-   * MAX_RETRY_COUNT are dropped to prevent infinite loops.
+   * Each entry is passed to sendFn. On success:
+   *   - entry is removed from the queue
+   *   - entry.onSuccess() is called (if set)
+   *
+   * On failure:
+   *   - retryCount is incremented
+   *   - If under MAX_RETRY_COUNT: a backoff delay is inserted, then we stop
+   *     processing remaining entries (wait for the next reconnect cycle)
+   *   - If at MAX_RETRY_COUNT: entry is dropped, entry.onFailure(err) is called
+   *
+   * Callbacks are invoked synchronously after each attempt — they are
+   * guaranteed to fire even if processQueue() is not awaited by the caller.
    *
    * No-ops if already processing.
    */
@@ -96,17 +153,32 @@ class OfflineMessageQueue {
 
       try {
         await sendFn(entry);
-        // Success — remove from queue
+        // Success — remove from queue and fire success callback
         this.queue = this.queue.filter((q) => q.id !== entry.id);
-      } catch {
+        try {
+          entry.onSuccess?.();
+        } catch {
+          // Callback errors must not abort queue processing
+        }
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
         entry.retryCount += 1;
 
         if (entry.retryCount >= MAX_RETRY_COUNT) {
-          // Drop after max retries — user sees failure state in chat UI
+          // Drop after max retries — call failure callback
           this.queue = this.queue.filter((q) => q.id !== entry.id);
+          try {
+            entry.onFailure?.(error);
+          } catch {
+            // Callback errors must not abort queue processing
+          }
+          // Continue to next entry — this one is permanently gone
+          continue;
         }
-        // If under limit, leave in queue for the next reconnect cycle
-        // Stop processing remaining entries to avoid hammering a flaky connection
+
+        // Under limit: apply backoff then stop — wait for next reconnect
+        const delay = backoffDelay(entry.retryCount - 1);
+        await sleep(delay);
         break;
       }
     }
@@ -116,6 +188,14 @@ class OfflineMessageQueue {
 
   /** Remove all queued messages (e.g. on sign-out). */
   clear(): void {
+    // Fire onFailure for each entry before clearing so callers can clean up UI
+    for (const entry of this.queue) {
+      try {
+        entry.onFailure?.(new Error('Queue cleared'));
+      } catch {
+        // Ignore callback errors during forced clear
+      }
+    }
     this.queue = [];
     this._isProcessing = false;
   }

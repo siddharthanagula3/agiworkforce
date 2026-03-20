@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Mobile Dispatch Defense — Comprehensive Test Suite
  *
@@ -460,19 +461,16 @@ import { getTimeElapsed, estimateTimeRemaining } from '../components/companion/A
 import { startMobileHeartbeat, logApprovalDecision, logEmergencyStop } from '../services/heartbeat';
 
 // Typed references to mock state injected by jest.mock factories
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const connectionMod = require('@/stores/connectionStore') as {
   __state: Record<string, unknown>;
   __mocks: Record<string, jest.Mock>;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const agentMod = require('@/stores/agentStore') as {
   __agentState: Record<string, unknown>;
   __agentMocks: Record<string, jest.Mock>;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const notifMod = require('@/stores/notificationPrefsStore') as {
   __notifState: Record<string, unknown>;
   __mockShouldNotify: jest.Mock;
