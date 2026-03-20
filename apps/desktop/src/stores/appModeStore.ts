@@ -112,3 +112,26 @@ export const selectIsCloud = (state: AppModeState): boolean => state.mode === 'c
 export const selectIsLocal = (state: AppModeState): boolean => state.mode === 'local';
 export const selectPlanTier = (state: AppModeState): PlanTier => state.planTier;
 export const selectHasOnboarded = (state: AppModeState): boolean => state.hasOnboarded;
+
+// Reload conversations when mode changes
+useAppModeStore.subscribe(
+  (state) => state.mode,
+  (mode, prevMode) => {
+    if (mode !== prevMode) {
+      import('./chat/chatStore').then(({ useChatStore }) => {
+        import('./auth').then(({ useAuthStore }) => {
+          const user = useAuthStore.getState().user;
+          if (user?.id) {
+            useChatStore.setState({
+              conversations: [],
+              messages: [],
+              activeConversationId: null,
+              messagesByConversation: {},
+            });
+            useChatStore.getState().loadConversations(user.id);
+          }
+        });
+      });
+    }
+  },
+);
