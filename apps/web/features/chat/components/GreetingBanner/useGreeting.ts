@@ -94,7 +94,8 @@ export function useGreeting(): GreetingResult {
   // Cap name length to prevent layout overflow; strip non-printable chars
   const rawName = userName?.split(' ')[0]?.trim();
   const firstName =
-    rawName && rawName.length <= 50 ? rawName.replace(/[\x00-\x1F\x7F]/g, '') : undefined;
+    // eslint-disable-next-line no-control-regex -- intentional: strip non-printable control chars from user names
+    rawName && rawName.length <= 50 ? rawName.replace(/[\u0000-\u001F\u007F]/g, '') : undefined;
 
   let headline: string;
   if (firstName) {
