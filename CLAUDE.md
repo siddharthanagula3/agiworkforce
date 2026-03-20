@@ -13,7 +13,7 @@ apps/desktop/src-tauri/src/   # Rust backend (core/, sys/, automation/, features
 apps/desktop/src/              # React 19 frontend (components/, stores/, hooks/, services/)
 apps/web/                      # Next.js 16 (Supabase auth, Stripe billing)
 apps/mobile/                   # Expo + React Native (NativeWind)
-apps/cli/                      # Rust CLI agent (24 files, 24K LOC, Whisper voice mode)
+apps/cli/                      # Rust CLI agent (27 files, ~28K LOC, Whisper voice mode)
 apps/extension/                # Chrome MV3 (native messaging, DOM automation)
 apps/extension-vscode/         # VS Code (chat participant, agent mode, inline completions)
 packages/types/                # Shared TS types: a2a, cross-device, mcp-apps, event-triggers, audit
@@ -69,9 +69,9 @@ The #1 source of silent bugs. Tauri auto-converts param names at the boundary.
 
 ## Architecture
 
-- **Rust backend**: `core/` (LLM router, agents, swarm, MCP, embeddings, triggers), `sys/` (1375 commands, security), `automation/`, `features/`, `data/`, `integrations/`
+- **Rust backend**: `core/` (LLM router, agents, swarm, MCP, embeddings, triggers), `sys/` (1415 commands, security), `automation/`, `features/`, `data/`, `integrations/`
 - **Rust entry**: `main.rs` → `lib.rs::run()` → Tauri setup with plugins + managed state
-- **Frontend**: Zustand v5 + Immer + Persist. 75+ component dirs. Radix UI + Tailwind 4 + Lucide + Sonner toasts
+- **Frontend**: Zustand v5 + Immer + Persist. 100+ component dirs. Radix UI + Tailwind 4 + Lucide + Sonner toasts
 - **Frontend↔Backend**: `invoke()` for commands, Tauri event channels for streaming (`tool:event`, `agentic:*`)
 - **Security**: ToolGuard validates tool execution. SecretManager (Argon2id + AES-GCM). Never plaintext secrets
 - **LLM Routing**: `llm_router.rs` routes across 9+ providers. SSE streaming via `sse_parser.rs`
@@ -121,36 +121,42 @@ The #1 source of silent bugs. Tauri auto-converts param names at the boundary.
 ## Workflow Orchestration
 
 ### 1. Plan Mode Default
+
 - Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
 - If something goes sideways, STOP and re-plan immediately
 - Use plan mode for verification steps, not just building
 - Write detailed specs upfront to reduce ambiguity
 
 ### 2. Subagent Strategy
+
 - Use subagents liberally to keep main context window clean
 - Offload research, exploration, and parallel analysis to subagents
 - For complex problems, throw more compute at it via subagents
 - One task per subagent for focused execution
 
 ### 3. Self-Improvement Loop
+
 - After ANY correction from the user: update memory with the pattern
 - Write rules for yourself that prevent the same mistake
 - Ruthlessly iterate on these lessons until mistake rate drops
 - Review lessons at session start for relevant project
 
 ### 4. Verification Before Done
+
 - Never mark a task complete without proving it works
 - Diff behavior between main and your changes when relevant
 - Ask yourself: "Would a staff engineer approve this?"
 - Run tests, check logs, demonstrate correctness
 
 ### 5. Demand Elegance (Balanced)
+
 - For non-trivial changes: pause and ask "is there a more elegant way?"
 - If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
 - Skip this for simple, obvious fixes — don't over-engineer
 - Challenge your own work before presenting it
 
 ### 6. Autonomous Bug Fixing
+
 - When given a bug report: just fix it. Don't ask for hand-holding
 - Point at logs, errors, failing tests — then resolve them
 - Zero context switching required from the user
@@ -173,11 +179,11 @@ The #1 source of silent bugs. Tauri auto-converts param names at the boundary.
 
 ## Zone-Based File Ownership (Multi-Agent)
 
-| Zone | Files |
-|------|-------|
-| A | `apps/desktop/src/components/**`, `apps/desktop/src/pages/**` |
-| B | `apps/desktop/src/services/**`, `apps/web/api/**`, `services/**` |
-| C | `supabase/migrations/**` |
-| D | `apps/desktop/src/stores/mcpStore*`, `apps/extension/**` |
-| SYSTEM | `apps/desktop/src-tauri/**`, `apps/cli/**` |
-| SHARED | `package.json`, `tsconfig.json`, `CLAUDE.md`, `packages/**` |
+| Zone   | Files                                                            |
+| ------ | ---------------------------------------------------------------- |
+| A      | `apps/desktop/src/components/**`, `apps/desktop/src/pages/**`    |
+| B      | `apps/desktop/src/services/**`, `apps/web/api/**`, `services/**` |
+| C      | `supabase/migrations/**`                                         |
+| D      | `apps/desktop/src/stores/mcpStore*`, `apps/extension/**`         |
+| SYSTEM | `apps/desktop/src-tauri/**`, `apps/cli/**`                       |
+| SHARED | `package.json`, `tsconfig.json`, `CLAUDE.md`, `packages/**`      |
