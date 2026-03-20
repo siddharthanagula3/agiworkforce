@@ -36,6 +36,96 @@ import type { SubscriptionTier } from '../constants/planModels';
 import { useAccountStore } from './auth';
 import { useSettingsStore } from './settingsStore';
 import { storageFallback } from '../lib/storageFallback';
+import type { AppMode, PlanTier } from './appModeStore';
+
+// ---------------------------------------------------------------------------
+// Managed cloud models — available in cloud mode without user API keys.
+// Tier: 'hobby' models shown to all cloud users; 'pro' models require pro+.
+// ---------------------------------------------------------------------------
+
+interface ManagedCloudModel {
+  id: string;
+  displayName: string;
+  provider: Provider;
+  providerDisplayName: string;
+  tier: 'hobby' | 'pro';
+  category: 'instant' | 'latest' | 'thinking';
+  contextWindow: number;
+  maxOutput: number;
+}
+
+const MANAGED_CLOUD_MODELS: ManagedCloudModel[] = [
+  {
+    id: 'claude-haiku-4-5',
+    displayName: 'Claude Haiku 4.5',
+    provider: 'anthropic',
+    providerDisplayName: 'Anthropic',
+    tier: 'hobby',
+    category: 'instant',
+    contextWindow: 200000,
+    maxOutput: 8192,
+  },
+  {
+    id: 'gpt-4o-mini',
+    displayName: 'GPT-4o Mini',
+    provider: 'openai',
+    providerDisplayName: 'OpenAI',
+    tier: 'hobby',
+    category: 'instant',
+    contextWindow: 128000,
+    maxOutput: 16384,
+  },
+  {
+    id: 'gemini-2.5-flash',
+    displayName: 'Gemini 2.5 Flash',
+    provider: 'google',
+    providerDisplayName: 'Google',
+    tier: 'hobby',
+    category: 'instant',
+    contextWindow: 1000000,
+    maxOutput: 8192,
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    displayName: 'Claude Sonnet 4.6',
+    provider: 'anthropic',
+    providerDisplayName: 'Anthropic',
+    tier: 'pro',
+    category: 'latest',
+    contextWindow: 200000,
+    maxOutput: 8192,
+  },
+  {
+    id: 'gpt-4o',
+    displayName: 'GPT-4o',
+    provider: 'openai',
+    providerDisplayName: 'OpenAI',
+    tier: 'pro',
+    category: 'latest',
+    contextWindow: 128000,
+    maxOutput: 16384,
+  },
+  {
+    id: 'gemini-2.5-pro',
+    displayName: 'Gemini 2.5 Pro',
+    provider: 'google',
+    providerDisplayName: 'Google',
+    tier: 'pro',
+    category: 'thinking',
+    contextWindow: 1000000,
+    maxOutput: 65536,
+  },
+];
+
+/**
+ * Returns the managed cloud models available for the given plan tier.
+ * hobby/free: hobby-tier models only
+ * pro/max/enterprise: hobby + pro-tier models
+ */
+export function getManagedCloudModelsForTier(tier: PlanTier | string): ManagedCloudModel[] {
+  const isPro = tier === 'pro' || tier === 'max' || tier === 'enterprise';
+  return MANAGED_CLOUD_MODELS.filter((m) => isPro || m.tier === 'hobby');
+}
 
 export interface ProviderStatus {
   provider: Provider;
@@ -169,6 +259,19 @@ interface ModelState {
 
   loading: boolean;
   error: string | null;
+
+  /**
+   * Managed cloud models available for the current plan tier.
+   * Populated when app is in cloud mode; empty in local mode.
+   */
+  cloudModels: ManagedCloudModel[];
+
+  /**
+   * Reload the model list when the app mode or plan tier changes.
+   * In cloud mode: loads MANAGED_CLOUD_MODELS filtered by tier.
+   * In local mode: clears cloudModels (BYOK models come from getAllModels()).
+   */
+  loadModelsForMode: (mode: AppMode, planTier: PlanTier) => void;
 
   selectModel: (modelId: string, provider: Provider) => Promise<void>;
   toggleFavorite: (modelId: string) => void;
@@ -370,6 +473,17 @@ export const useModelStore = create<ModelState>()(
 
         loading: false,
         error: null,
+
+        cloudModels: [],
+
+        loadModelsForMode: (mode: AppMode, planTier: PlanTier) => {
+          if (mode === 'cloud') {
+            const models = getManagedCloudModelsForTier(planTier);
+            set({ cloudModels: models }, undefined, 'model/loadModelsForMode/cloud');
+          } else {
+            set({ cloudModels: [] }, undefined, 'model/loadModelsForMode/local');
+          }
+        },
 
         selectModel: async (modelId: string, provider: Provider) => {
           try {
@@ -936,6 +1050,7 @@ export const useModelStore = create<ModelState>()(
               speedQualityMode: 'balanced' as SpeedQualityMode,
               loading: false,
               error: null,
+              cloudModels: [],
             },
             undefined,
             'model/reset',
@@ -1228,5 +1343,37 @@ if (typeof window !== 'undefined') {
     })
     .catch((err) => {
       console.warn('[ModelStore] Failed to load auth for plan subscription:', err);
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Subscribe to app mode + plan tier changes to reload the model list.
+// When switching to cloud mode: populate cloudModels with managed models.
+// When switching to local mode: clear cloudModels (BYOK list used instead).
+// Module-level ref prevents subscription accumulation on HMR reload.
+// ---------------------------------------------------------------------------
+
+let _unsubscribeAppMode: (() => void) | null = null;
+
+if (typeof window !== 'undefined') {
+  import('./appModeStore')
+    .then(({ useAppModeStore }) => {
+      _unsubscribeAppMode?.();
+      // Initial load
+      const { mode, planTier } = useAppModeStore.getState();
+      useModelStore.getState().loadModelsForMode(mode, planTier);
+
+      // Subscribe to both mode and planTier changes
+      _unsubscribeAppMode = useAppModeStore.subscribe(
+        (state) => ({ mode: state.mode, planTier: state.planTier }),
+        ({ mode: newMode, planTier: newTier }) => {
+          console.debug(`[ModelStore] App mode/tier changed: mode=${newMode} tier=${newTier}`);
+          useModelStore.getState().loadModelsForMode(newMode, newTier);
+        },
+        { equalityFn: (a, b) => a.mode === b.mode && a.planTier === b.planTier },
+      );
+    })
+    .catch((err) => {
+      console.warn('[ModelStore] Failed to subscribe to app mode changes:', err);
     });
 }
