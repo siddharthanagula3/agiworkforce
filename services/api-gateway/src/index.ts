@@ -23,6 +23,7 @@ import { mobileRouter } from './routes/mobile';
 import { providerHealthRouter } from './services/providerHealth';
 import { modelCatalogRouter } from './routes/models';
 import { cloudChatRouter } from './routes/cloudChat';
+import { llmRouter } from './routes/llm';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { validateContentType, validateSecurityHeaders } from './middleware/requestValidation';
 import { createRateLimiter } from './middleware/rateLimit';
@@ -89,6 +90,7 @@ app.use('/api/credits', creditsRouter);
 app.use('/api/providers', providerHealthRouter);
 app.use('/api/models', modelCatalogRouter);
 app.use('/api/cloud-chat', cloudChatRouter);
+app.use('/api/llm/v1', llmRouter);
 
 // SECURITY: Rate limited to 100/min for monitoring endpoints
 app.get('/health', createRateLimiter('health'), (_req: Request, res: Response) => {
