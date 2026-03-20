@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { toast } from 'sonner';
 import type { UnlistenFn } from '../lib/tauri-mock';
 import {
   browserInit,
@@ -309,6 +310,7 @@ export const useBrowserStore = create<BrowserState>()(
             set({ initialized: true }, undefined, 'browser/initialize');
           } catch (error) {
             console.error('Failed to initialize browser:', error);
+            toast.error('Failed to initialize browser');
             set({ initialized: false }, undefined, 'browser/initialize/error');
             throw error;
           }
@@ -347,6 +349,7 @@ export const useBrowserStore = create<BrowserState>()(
             return sessionId;
           } catch (error) {
             console.error('Failed to launch browser:', error);
+            toast.error('Failed to launch browser');
             throw error;
           }
         },
@@ -456,9 +459,11 @@ export const useBrowserStore = create<BrowserState>()(
             set(
               (state) => {
                 for (const session of state.sessions) {
+                  if (!session.tabs.some((t) => t.id === tabId)) continue;
                   for (const tab of session.tabs) {
                     tab.active = tab.id === tabId;
                   }
+                  break;
                 }
               },
               undefined,
@@ -789,11 +794,7 @@ export const useBrowserStore = create<BrowserState>()(
           try {
             const result = await browserHighlightElement(selector, tabId);
             if (result.bounds) {
-              set(
-                { highlightedElement: result.bounds },
-                undefined,
-                'browser/highlightElement',
-              );
+              set({ highlightedElement: result.bounds }, undefined, 'browser/highlightElement');
             }
           } catch (error) {
             console.error('Failed to highlight element:', error);
