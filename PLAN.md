@@ -1,5 +1,7 @@
 # Execution Plan — 2026-03-17
 
+> This file is a dated execution snapshot. For the canonical all-program planning document, use `docs/MASTER_PROGRAM_PLAN.md`.
+
 ## Vision: Open Multi-Model AI Platform — Beat Claude, No Lock-In
 
 **Positioning**: AGI Workforce is the open, model-agnostic alternative to Anthropic's entire product suite (Claude Desktop, Claude Code, Claude.ai, Claude Mobile). Users can connect ANY LLM — cloud or local — and get full desktop autonomy, mobile companion, and 140+ non-coding skills.
