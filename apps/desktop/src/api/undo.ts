@@ -91,7 +91,7 @@ export interface FormUndoStats {
 export const undoGetSummary = async (taskId?: string): Promise<UndoSummary> => {
   try {
     return await invoke<UndoSummary>('undo_get_summary', {
-      taskId: taskId ?? null,
+      task_id: taskId ?? null,
     });
   } catch (error) {
     console.error('Failed to get undo summary:', error);
@@ -107,7 +107,7 @@ export const undoGetChanges = async (
 ): Promise<UndoableChange[]> => {
   try {
     return await invoke<UndoableChange[]>('undo_get_changes', {
-      taskId: taskId ?? null,
+      task_id: taskId ?? null,
       limit: limit ?? null,
     });
   } catch (error) {
@@ -120,7 +120,7 @@ export const undoGetChanges = async (
 /** Undo a specific change by its ID */
 export const undoChange = async (changeId: string): Promise<UndoResult> => {
   try {
-    return await invoke<UndoResult>('undo_change', { changeId });
+    return await invoke<UndoResult>('undo_change', { change_id: changeId });
   } catch (error) {
     console.error('Failed to undo change:', error);
     toast.error('Failed to undo change');
@@ -132,7 +132,7 @@ export const undoChange = async (changeId: string): Promise<UndoResult> => {
 export const undoLast = async (taskId?: string): Promise<UndoResult> => {
   try {
     return await invoke<UndoResult>('undo_last', {
-      taskId: taskId ?? null,
+      task_id: taskId ?? null,
     });
   } catch (error) {
     console.error('Failed to undo last change:', error);
@@ -144,9 +144,10 @@ export const undoLast = async (taskId?: string): Promise<UndoResult> => {
 /** Undo all changes for a specific task */
 export const undoTask = async (taskId: string): Promise<UndoResult[]> => {
   try {
-    return await invoke<UndoResult[]>('undo_task', { taskId });
+    return await invoke<UndoResult[]>('undo_task', { task_id: taskId });
   } catch (error) {
     console.error('Failed to undo task:', error);
+    toast.error('Failed to undo task');
     throw error;
   }
 };
@@ -155,7 +156,7 @@ export const undoTask = async (taskId: string): Promise<UndoResult[]> => {
 export const undoCanUndo = async (taskId?: string): Promise<boolean> => {
   try {
     return await invoke<boolean>('undo_can_undo', {
-      taskId: taskId ?? null,
+      task_id: taskId ?? null,
     });
   } catch (error) {
     console.error('Failed to check undo availability:', error);
@@ -214,12 +215,12 @@ export const formUndoRecord = async (params: {
   try {
     return await invoke<FormSubmission>('form_undo_record', {
       url: params.url,
-      formSelector: params.formSelector,
-      fieldValues: params.fieldValues,
-      canUndo: params.canUndo ?? null,
-      taskId: params.taskId ?? null,
+      form_selector: params.formSelector,
+      field_values: params.fieldValues,
+      can_undo: params.canUndo ?? null,
+      task_id: params.taskId ?? null,
       method: params.method ?? null,
-      actionUrl: params.actionUrl ?? null,
+      action_url: params.actionUrl ?? null,
     });
   } catch (error) {
     console.error('Failed to record form submission:', error);
@@ -230,7 +231,7 @@ export const formUndoRecord = async (params: {
 /** Attempt to undo a form submission. Returns instructions for the caller. */
 export const formUndoAttempt = async (submissionId: string): Promise<FormUndoResult> => {
   try {
-    return await invoke<FormUndoResult>('form_undo_attempt', { submissionId });
+    return await invoke<FormUndoResult>('form_undo_attempt', { submission_id: submissionId });
   } catch (error) {
     console.error('Failed to attempt form undo:', error);
     throw error;
@@ -240,7 +241,7 @@ export const formUndoAttempt = async (submissionId: string): Promise<FormUndoRes
 /** Check if a specific form submission can be undone */
 export const formUndoCanUndo = async (submissionId: string): Promise<boolean> => {
   try {
-    return await invoke<boolean>('form_undo_can_undo', { submissionId });
+    return await invoke<boolean>('form_undo_can_undo', { submission_id: submissionId });
   } catch (error) {
     console.error('Failed to check form undo availability:', error);
     throw error;
@@ -252,7 +253,7 @@ export const formUndoList = async (limit?: number, taskId?: string): Promise<For
   try {
     return await invoke<FormSubmission[]>('form_undo_list', {
       limit: limit ?? null,
-      taskId: taskId ?? null,
+      task_id: taskId ?? null,
     });
   } catch (error) {
     console.error('Failed to list form submissions:', error);
@@ -273,7 +274,7 @@ export const formUndoListUndoable = async (): Promise<FormSubmission[]> => {
 /** Get a specific form submission by ID */
 export const formUndoGet = async (submissionId: string): Promise<FormSubmission | null> => {
   try {
-    return await invoke<FormSubmission | null>('form_undo_get', { submissionId });
+    return await invoke<FormSubmission | null>('form_undo_get', { submission_id: submissionId });
   } catch (error) {
     console.error('Failed to get form submission:', error);
     throw error;
@@ -293,7 +294,7 @@ export const formUndoClear = async (): Promise<void> => {
 /** Clear old form submissions (older than specified hours) */
 export const formUndoClearOld = async (maxAgeHours: number): Promise<void> => {
   try {
-    await invoke<void>('form_undo_clear_old', { maxAgeHours });
+    await invoke<void>('form_undo_clear_old', { max_age_hours: maxAgeHours });
   } catch (error) {
     console.error('Failed to clear old form submissions:', error);
     throw error;

@@ -161,7 +161,8 @@ export async function searchSymbols(query: WorkspaceSearchQuery): Promise<Worksp
   try {
     const result = await invoke<WorkspaceSearchResult[]>('workspace_search_symbols', { query });
     return result;
-  } catch {
+  } catch (error) {
+    console.warn('[workspace] searchSymbols failed:', error);
     return [];
   }
 }
@@ -182,7 +183,8 @@ export async function findDefinition(symbolName: string): Promise<WorkspaceSymbo
       symbolName,
     });
     return result;
-  } catch {
+  } catch (error) {
+    console.warn('[workspace] findDefinition failed:', error);
     return null;
   }
 }
@@ -201,7 +203,8 @@ export async function findReferences(symbolName: string): Promise<WorkspaceSymbo
   try {
     const result = await invoke<WorkspaceSymbol[]>('workspace_find_references', { symbolName });
     return result;
-  } catch {
+  } catch (error) {
+    console.warn('[workspace] findReferences failed:', error);
     return [];
   }
 }
@@ -219,7 +222,8 @@ export async function getDependencies(): Promise<DependencyGraph> {
   try {
     const result = await invoke<DependencyGraph>('workspace_get_dependencies');
     return result;
-  } catch {
+  } catch (error) {
+    console.warn('[workspace] getDependencies failed:', error);
     return { nodes: [], edges: [] };
   }
 }
@@ -238,7 +242,8 @@ export async function getFileSymbols(filePath: string): Promise<WorkspaceSymbol[
   try {
     const result = await invoke<WorkspaceSymbol[]>('workspace_get_file_symbols', { filePath });
     return result;
-  } catch {
+  } catch (error) {
+    console.warn('[workspace] getFileSymbols failed:', error);
     return [];
   }
 }
@@ -256,7 +261,8 @@ export async function getWorkspaceStats(): Promise<WorkspaceStats | null> {
   try {
     const result = await invoke<WorkspaceStats>('workspace_get_stats');
     return result;
-  } catch {
+  } catch (error) {
+    console.warn('[workspace] getWorkspaceStats failed:', error);
     return null;
   }
 }

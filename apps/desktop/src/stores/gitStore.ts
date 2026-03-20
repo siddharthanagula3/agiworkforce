@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
+import { storageFallback } from '../lib/storageFallback';
 import {
   gitInit,
   gitStatus,
@@ -447,7 +448,7 @@ export const useGitStore = create<GitState>()(
       {
         name: 'agiworkforce-git',
         storage: createJSONStorage(() =>
-          typeof window === 'undefined' ? localStorage : window.localStorage,
+          typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
         partialize: (state) => ({
           repoPath: state.repoPath,
