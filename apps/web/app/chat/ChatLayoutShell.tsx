@@ -14,6 +14,8 @@ import { HelpTour } from '@features/chat/components/HelpTour';
 import { useKeyboardShortcuts } from '@features/chat/hooks/use-keyboard-shortcuts';
 import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { SectionErrorBoundary } from '@/components/ui/SectionErrorBoundary';
+import { OnboardingDialog } from '@features/chat/components/OnboardingDialog';
+import { PlanBadge } from '@/components/chat/PlanBadge';
 
 const SIDEBAR_WIDTH_KEY = 'chat-sidebar-width';
 const SIDEBAR_MIN_WIDTH = 200;
@@ -258,6 +260,14 @@ export default function ChatLayoutShell({ children, className }: ChatLayoutShell
             </svg>
           </button>
           <span className="text-sm font-semibold text-foreground">AGI Workforce</span>
+          <div className="ml-auto">
+            <PlanBadge />
+          </div>
+        </div>
+
+        {/* Desktop plan badge strip — visible only on lg+ */}
+        <div className="hidden lg:flex items-center justify-end px-4 py-1.5 border-b border-border/50 shrink-0">
+          <PlanBadge />
         </div>
 
         <SectionErrorBoundary sectionName="Chat Content">{children}</SectionErrorBoundary>
@@ -272,6 +282,19 @@ export default function ChatLayoutShell({ children, className }: ChatLayoutShell
 
       {/* Help tour overlay — self-managing; renders nothing when inactive */}
       <HelpTour />
+
+      {/* Onboarding dialog — shows on first visit, auto-hides after completion */}
+      <OnboardingDialog
+        onPromptSelect={(text) => {
+          const id = createSession(user?.id);
+          router.push(`/chat/${id}`);
+          // Defer adding the message until the session page mounts
+          setTimeout(() => {
+            const store = useChatStore.getState();
+            store.addMessage(id, { role: 'user', content: text });
+          }, 100);
+        }}
+      />
 
       {/* Budget tracker — side-effect-only component; tracks token usage */}
       <BudgetTracker />

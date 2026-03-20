@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useChatStore, type ChatMessage } from '@features/chat/stores/chat-store';
 import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
+import { useConversationRealtime } from '@/hooks/useConversationRealtime';
 import { ChatComposerNew } from '@features/chat/components/Composer/ChatComposerNew';
 import { ChatMessageList } from '@features/chat/components/messages/ChatMessageList';
 import { ChatLoadingState } from '@features/chat/components/messages/ChatLoadingState';
@@ -44,8 +45,12 @@ export default function ChatSessionPage() {
 
   const { extractArtifactsFromContent, clearArtifacts } = useArtifactsStore();
 
+  // Subscribe to realtime conversation updates from other surfaces (desktop, mobile)
+  useConversationRealtime();
+
   const [mounted, setMounted] = useState(false);
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
+  const [isUserTyping, setIsUserTyping] = useState(false);
 
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
@@ -220,6 +225,10 @@ export default function ChatSessionPage() {
     [sessionId, deleteMessage],
   );
 
+  const handleTypingChange = useCallback((typing: boolean) => {
+    setIsUserTyping(typing);
+  }, []);
+
   if (!mounted) {
     return <div className="flex h-full items-center justify-center bg-background" />;
   }
@@ -271,11 +280,17 @@ export default function ChatSessionPage() {
               messages={messages}
               isLoading={isLoading}
               onDelete={handleDeleteMessage}
+              onSendMessage={handleSend}
+              isUserTyping={isUserTyping}
             />
           </div>
 
           {/* Composer */}
-          <ChatComposerNew onSend={handleSend} isLoading={isLoading} />
+          <ChatComposerNew
+            onSend={handleSend}
+            isLoading={isLoading}
+            onTypingChange={handleTypingChange}
+          />
         </>
       ) : (
         <>

@@ -6,17 +6,11 @@ import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { Sparkles } from 'lucide-react';
 import { useChatStore } from '@features/chat/stores/chat-store';
 import { ChatComposerNew } from '@features/chat/components/Composer/ChatComposerNew';
+import { SuggestedPrompts } from '@features/chat/components/SuggestedPrompts';
+import { ConnectorDiscoveryBar } from '@features/chat/components/ConnectorDiscoveryBar';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { ChatAIService } from '@features/chat/services/chat-ai-service';
-
-const SUGGESTED_PROMPTS = [
-  { title: 'Explain a concept', text: 'Explain quantum computing in simple terms' },
-  { title: 'Write code', text: 'Write a Python script to scrape a website' },
-  { title: 'Research a topic', text: 'What are the latest developments in AI agents?' },
-  { title: 'Analyze data', text: 'Help me analyze this CSV data and find trends' },
-  { title: 'Draft content', text: 'Write a professional email declining a meeting' },
-  { title: 'Debug an issue', text: 'My React component re-renders too many times, help me fix it' },
-];
+import { GreetingBanner } from '@features/chat/components/GreetingBanner/GreetingBanner';
 
 /**
  * Inner component that reads ?skill= search params.
@@ -103,22 +97,13 @@ function ChatPageInner() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500/20 to-emerald-600/20 border border-teal-500/20">
             <Sparkles className="h-8 w-8 text-teal-500" />
           </div>
-          <h1 className="text-2xl font-semibold text-foreground">What can I help you with?</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Ask anything — I can write, code, research, analyze, and more.
-          </p>
+          <GreetingBanner visible={mounted} />
         </div>
-        <div className="grid w-full max-w-2xl grid-cols-2 gap-2 sm:grid-cols-2">
-          {SUGGESTED_PROMPTS.map((prompt) => (
-            <button
-              key={prompt.text}
-              onClick={() => handleSend(prompt.text)}
-              className="rounded-xl border border-border/60 bg-muted/30 p-4 text-left text-sm hover:bg-muted/60 hover:border-border transition-colors"
-            >
-              <div className="font-medium text-foreground">{prompt.title}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">{prompt.text}</div>
-            </button>
-          ))}
+        <div className="w-full max-w-2xl">
+          <SuggestedPrompts onSelect={handleSend} />
+          <div className="mt-6 flex justify-center">
+            <ConnectorDiscoveryBar />
+          </div>
         </div>
       </div>
 
