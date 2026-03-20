@@ -608,15 +608,23 @@ const router = Router();
  *
  * Returns the full model catalog with provider health status.
  * Optional query params:
- *   ?provider=openai  — filter by provider
- *   ?tier=fast        — filter by quality tier (fast, balanced, best)
- *   ?status=active    — filter by status (default: active only)
+ *   ?provider=openai    — filter by provider
+ *   ?tier=fast          — filter by quality tier (fast, balanced, best)
+ *   ?status=active      — filter by status (default: active only)
+ *   ?planTier=pro       — filter by plan tier (pro, max) — shows models available for that subscription tier
+ *
+ * Plan tier mapping:
+ *   - pro: economy models + pro_additions (standard tier models)
+ *   - max: economy + pro_additions + flagship_additions (all models including expensive)
+ *   - If planTier not provided, returns full catalog (for admins/internal use)
  */
 router.get('/', createRateLimiter('default'), async (req: Request, res: Response) => {
   const providerFilter =
     typeof req.query['provider'] === 'string' ? req.query['provider'] : undefined;
   const tierFilter = typeof req.query['tier'] === 'string' ? req.query['tier'] : undefined;
   const statusFilter = typeof req.query['status'] === 'string' ? req.query['status'] : 'active';
+  const planTierFilter =
+    typeof req.query['planTier'] === 'string' ? req.query['planTier'] : undefined;
 
   let models = MODEL_CATALOG;
 
@@ -630,13 +638,99 @@ router.get('/', createRateLimiter('default'), async (req: Request, res: Response
     models = models.filter((m) => m.status === statusFilter);
   }
 
+  // Plan tier filtering: pro gets standard models, max gets all
+  if (planTierFilter === 'pro') {
+    const allowedModelIds = new Set<string>([
+      // Economy models available to all tiers
+      'gemini-3.1-flash-lite',
+      'glm-4.7',
+      'deepseek-chat',
+      'glm-4.6v',
+      'glm-4.6v-flash',
+      'grok-4-1-fast-reasoning',
+      'grok-4-fast-reasoning',
+      'claude-haiku-4.5',
+      'grok-4-fast-non-reasoning',
+      'qwen-flash',
+      'qwen-turbo',
+      'qwen-coder-flash',
+      'grok-4-mini',
+      'gpt-5.4-nano',
+      'sonar',
+      'codestral-2',
+      // Pro tier additions
+      'gpt-5.4',
+      'gpt-5.4-codex-low',
+      'gpt-5.4-codex-medium',
+      'claude-sonnet-4.6',
+      'claude-sonnet-4.5',
+      'gemini-3.1-pro-preview',
+      'qwen-max',
+      'kimi-k2.5',
+      'sonar-pro',
+      'sonar-reasoning',
+      'sonar-deep-research',
+      'mistral-large-3',
+      'mistral-medium-3',
+    ]);
+    models = models.filter((m) => allowedModelIds.has(m.id));
+  } else if (planTierFilter === 'max') {
+    const allowedModelIds = new Set<string>([
+      // Economy models
+      'gemini-3.1-flash-lite',
+      'glm-4.7',
+      'deepseek-chat',
+      'glm-4.6v',
+      'glm-4.6v-flash',
+      'grok-4-1-fast-reasoning',
+      'grok-4-fast-reasoning',
+      'claude-haiku-4.5',
+      'grok-4-fast-non-reasoning',
+      'qwen-flash',
+      'qwen-turbo',
+      'qwen-coder-flash',
+      'grok-4-mini',
+      'gpt-5.4-nano',
+      'sonar',
+      'codestral-2',
+      // Pro additions
+      'gpt-5.4',
+      'gpt-5.4-codex-low',
+      'gpt-5.4-codex-medium',
+      'claude-sonnet-4.6',
+      'claude-sonnet-4.5',
+      'gemini-3.1-pro-preview',
+      'qwen-max',
+      'kimi-k2.5',
+      'sonar-pro',
+      'sonar-reasoning',
+      'sonar-deep-research',
+      'mistral-large-3',
+      'mistral-medium-3',
+      // Flagship additions (Max tier only)
+      'claude-opus-4.6',
+      'gpt-5.4-pro',
+      'o3',
+      'grok-4',
+      'deepseek-r1',
+      'kimi-k2.5-thinking',
+      'gpt-5.4-codex-xhigh',
+      'gpt-5.4-codex-high',
+    ]);
+    models = models.filter((m) => allowedModelIds.has(m.id));
+  } else if (planTierFilter && planTierFilter !== 'pro' && planTierFilter !== 'max') {
+    // Invalid plan tier value
+    res.status(400).json({ error: 'Invalid planTier value; must be "pro" or "max"' });
+    return;
+  }
+
   const healthMap = await buildHealthMap();
   const enriched = models.map((m) => enrichModelWithHealth(m, healthMap));
 
   res.json({
     models: enriched,
     total: enriched.length,
-    providers: [...new Set(enriched.map((m) => m.provider))],
+    providers: Array.from(new Set(enriched.map((m) => m.provider))),
   });
 });
 
