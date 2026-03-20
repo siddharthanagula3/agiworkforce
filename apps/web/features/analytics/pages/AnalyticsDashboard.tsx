@@ -63,7 +63,9 @@ function buildMockData(range: DateRange) {
   const activeUsers = Math.round(42 + multiplier * 3);
 
   const prevMultiplier = multiplier * 0.85; // previous period was 15% less
-  const execChange = ((totalExecutions - Math.round(3241 * prevMultiplier)) / Math.round(3241 * prevMultiplier)) * 100;
+  const execChange =
+    ((totalExecutions - Math.round(3241 * prevMultiplier)) / Math.round(3241 * prevMultiplier)) *
+    100;
   const tokenChange = 18.4;
   const costChange = -6.2;
   const userChange = 8.7;
@@ -75,7 +77,7 @@ function buildMockData(range: DateRange) {
   const modelDistribution = [
     { label: 'claude-sonnet-4', value: Math.round(1120 * multiplier), color: 'bg-indigo-500' },
     { label: 'gpt-5.4-turbo', value: Math.round(890 * multiplier), color: 'bg-emerald-500' },
-    { label: 'gemini-2.5-pro', value: Math.round(620 * multiplier), color: 'bg-blue-500' },
+    { label: 'gemini-3.1-pro-preview', value: Math.round(620 * multiplier), color: 'bg-blue-500' },
     { label: 'claude-haiku-4', value: Math.round(410 * multiplier), color: 'bg-violet-500' },
     { label: 'deepseek-r2', value: Math.round(201 * multiplier), color: 'bg-amber-500' },
   ];
@@ -92,8 +94,15 @@ function buildMockData(range: DateRange) {
 
   // Recent activity
   const agents = ['Research Bot', 'Code Assistant', 'Data Analyst', 'Email Writer', 'SEO Agent'];
-  const models = ['claude-sonnet-4', 'gpt-5.4-turbo', 'gemini-2.5-pro', 'claude-haiku-4'];
-  const statuses: ActivityRow['status'][] = ['success', 'success', 'success', 'failed', 'running', 'queued'];
+  const models = ['claude-sonnet-4', 'gpt-5.4-turbo', 'gemini-3.1-pro-preview', 'claude-haiku-4'];
+  const statuses: ActivityRow['status'][] = [
+    'success',
+    'success',
+    'success',
+    'failed',
+    'running',
+    'queued',
+  ];
   const taskNames = [
     'Summarize Q1 earnings report',
     'Build React component',
@@ -127,13 +136,48 @@ function buildMockData(range: DateRange) {
 
   // Team leaderboard
   const leaderboard = [
-    { name: 'Priya S.', executions: Math.round(820 * multiplier), tokens: Math.round(12_400_000 * multiplier), cost: parseFloat((98.4 * multiplier).toFixed(2)) },
-    { name: 'Marcus T.', executions: Math.round(640 * multiplier), tokens: Math.round(9_800_000 * multiplier), cost: parseFloat((76.2 * multiplier).toFixed(2)) },
-    { name: 'Elena K.', executions: Math.round(510 * multiplier), tokens: Math.round(7_200_000 * multiplier), cost: parseFloat((57.8 * multiplier).toFixed(2)) },
-    { name: 'James R.', executions: Math.round(390 * multiplier), tokens: Math.round(5_900_000 * multiplier), cost: parseFloat((44.1 * multiplier).toFixed(2)) },
-    { name: 'Aisha M.', executions: Math.round(310 * multiplier), tokens: Math.round(4_600_000 * multiplier), cost: parseFloat((33.5 * multiplier).toFixed(2)) },
-    { name: 'Lena W.', executions: Math.round(240 * multiplier), tokens: Math.round(3_300_000 * multiplier), cost: parseFloat((24.9 * multiplier).toFixed(2)) },
-    { name: 'David C.', executions: Math.round(180 * multiplier), tokens: Math.round(2_100_000 * multiplier), cost: parseFloat((16.7 * multiplier).toFixed(2)) },
+    {
+      name: 'Priya S.',
+      executions: Math.round(820 * multiplier),
+      tokens: Math.round(12_400_000 * multiplier),
+      cost: parseFloat((98.4 * multiplier).toFixed(2)),
+    },
+    {
+      name: 'Marcus T.',
+      executions: Math.round(640 * multiplier),
+      tokens: Math.round(9_800_000 * multiplier),
+      cost: parseFloat((76.2 * multiplier).toFixed(2)),
+    },
+    {
+      name: 'Elena K.',
+      executions: Math.round(510 * multiplier),
+      tokens: Math.round(7_200_000 * multiplier),
+      cost: parseFloat((57.8 * multiplier).toFixed(2)),
+    },
+    {
+      name: 'James R.',
+      executions: Math.round(390 * multiplier),
+      tokens: Math.round(5_900_000 * multiplier),
+      cost: parseFloat((44.1 * multiplier).toFixed(2)),
+    },
+    {
+      name: 'Aisha M.',
+      executions: Math.round(310 * multiplier),
+      tokens: Math.round(4_600_000 * multiplier),
+      cost: parseFloat((33.5 * multiplier).toFixed(2)),
+    },
+    {
+      name: 'Lena W.',
+      executions: Math.round(240 * multiplier),
+      tokens: Math.round(3_300_000 * multiplier),
+      cost: parseFloat((24.9 * multiplier).toFixed(2)),
+    },
+    {
+      name: 'David C.',
+      executions: Math.round(180 * multiplier),
+      tokens: Math.round(2_100_000 * multiplier),
+      cost: parseFloat((16.7 * multiplier).toFixed(2)),
+    },
   ];
 
   return {
@@ -203,7 +247,9 @@ const AnalyticsDashboard: React.FC = () => {
   };
 
   const handleExport = () => {
-    toast.info('Export is coming soon — analytics CSV export will be available in the next release.');
+    toast.info(
+      'Export is coming soon — analytics CSV export will be available in the next release.',
+    );
   };
 
   const formatTokens = (n: number) => {

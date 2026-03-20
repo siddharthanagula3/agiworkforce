@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Keyboard, RotateCcw, Search, AlertTriangle, X } from 'lucide-react';
+import { Keyboard, RotateCcw, Search, AlertTriangle, X, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -23,7 +23,9 @@ import {
   type ShortcutModifiers,
 } from '../../constants/shortcuts';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useShortcutStore } from '../../stores/shortcutStore';
 import { Button } from '../ui/Button';
+import { KeyboardShortcutsOverlay } from '../UnifiedAgenticChat/KeyboardShortcutsOverlay';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -133,7 +135,10 @@ function ShortcutRow({
         )}
 
         {conflict && (
-          <span className="flex items-center gap-1 text-xs text-yellow-600" title={`Conflicts with: ${conflict}`}>
+          <span
+            className="flex items-center gap-1 text-xs text-yellow-600"
+            title={`Conflicts with: ${conflict}`}
+          >
             <AlertTriangle className="h-3 w-3" />
           </span>
         )}
@@ -175,8 +180,22 @@ export function KeybindingsSettings() {
   const resetCustomKeybinding = useSettingsStore((state) => state.resetCustomKeybinding);
   const resetAllCustomKeybindings = useSettingsStore((state) => state.resetAllCustomKeybindings);
 
+  // Initialize the Rust-side shortcut store on mount to sync backend state
+  const shortcutStoreInit = useShortcutStore((s) => s.init);
+  const shortcutStoreCleanup = useShortcutStore((s) => s.cleanup);
+  const shortcutStoreUpdate = useShortcutStore((s) => s.update);
+  const shortcutStoreReset = useShortcutStore((s) => s.reset);
+
+  useEffect(() => {
+    void shortcutStoreInit();
+    return () => {
+      shortcutStoreCleanup();
+    };
+  }, [shortcutStoreInit, shortcutStoreCleanup]);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [overlayOpen, setOverlayOpen] = useState(false);
 
   // Build a set of all currently active combos for conflict detection
   const activeCombos = React.useMemo(() => {
@@ -211,10 +230,14 @@ export function KeybindingsSettings() {
       }
 
       setCustomKeybinding(id, combo);
+      // Sync to Rust backend
+      void shortcutStoreUpdate(id, combo).catch((err: unknown) => {
+        console.warn('[KeybindingsSettings] Failed to sync shortcut to backend:', err);
+      });
       toast.success('Shortcut updated');
       setEditingId(null);
     },
-    [activeCombos, setCustomKeybinding],
+    [activeCombos, setCustomKeybinding, shortcutStoreUpdate],
   );
 
   const handleReset = useCallback(
@@ -227,8 +250,12 @@ export function KeybindingsSettings() {
 
   const handleResetAll = useCallback(() => {
     resetAllCustomKeybindings();
+    // Sync reset to Rust backend
+    void shortcutStoreReset().catch((err: unknown) => {
+      console.warn('[KeybindingsSettings] Failed to sync shortcut reset to backend:', err);
+    });
     toast.success('All shortcuts reset to defaults');
-  }, [resetAllCustomKeybindings]);
+  }, [resetAllCustomKeybindings, shortcutStoreReset]);
 
   // Filter and group shortcuts
   const query = searchQuery.toLowerCase();
@@ -276,17 +303,24 @@ export function KeybindingsSettings() {
             <Keyboard className="h-5 w-5 text-muted-foreground" />
             <h3 className="text-lg font-semibold">Keyboard Shortcuts</h3>
           </div>
-          {customizedCount > 0 && (
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={handleResetAll}
+              onClick={() => setOverlayOpen(true)}
               className="text-xs"
+              title="View all shortcuts as a cheatsheet (Cmd+/)"
             >
-              <RotateCcw className="h-3 w-3 mr-1.5" />
-              Reset all to defaults
+              <Eye className="h-3 w-3 mr-1.5" />
+              View all shortcuts
             </Button>
-          )}
+            {customizedCount > 0 && (
+              <Button variant="outline" size="sm" onClick={handleResetAll} className="text-xs">
+                <RotateCcw className="h-3 w-3 mr-1.5" />
+                Reset all to defaults
+              </Button>
+            )}
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">
           Click Edit next to any shortcut and press a new key combination to rebind it.
@@ -320,13 +354,18 @@ export function KeybindingsSettings() {
 
       {/* Shortcut groups */}
       {filteredShortcuts.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4 text-center">No shortcuts match your search.</p>
+        <p className="text-sm text-muted-foreground py-4 text-center">
+          No shortcuts match your search.
+        </p>
       ) : (
         <div className="space-y-4">
           {categories.map((category) => {
             const shortcuts = filteredShortcuts.filter((s) => s.category === category);
             return (
-              <div key={category} className="rounded-lg border border-border bg-card overflow-hidden">
+              <div
+                key={category}
+                className="rounded-lg border border-border bg-card overflow-hidden"
+              >
                 {/* Category header */}
                 <div className="px-4 py-2 bg-muted/40 border-b border-border">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -337,7 +376,9 @@ export function KeybindingsSettings() {
                 {/* Column headers */}
                 <div className="flex items-center gap-3 px-4 py-2 border-b border-border/50">
                   <span className="flex-1 text-xs font-medium text-muted-foreground">Action</span>
-                  <span className="text-xs font-medium text-muted-foreground mr-[68px]">Shortcut</span>
+                  <span className="text-xs font-medium text-muted-foreground mr-[68px]">
+                    Shortcut
+                  </span>
                 </div>
 
                 {/* Rows */}
@@ -365,10 +406,29 @@ export function KeybindingsSettings() {
       {/* Legend */}
       <div className="rounded-lg border border-border bg-muted/20 p-4 text-xs text-muted-foreground space-y-1">
         <p className="font-medium text-foreground mb-2">Tips</p>
-        <p>Press <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">Esc</kbd> while editing to cancel.</p>
-        <p>Conflicting shortcuts are marked with a warning icon. The most recently bound shortcut takes precedence.</p>
+        <p>
+          Press{' '}
+          <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">
+            Esc
+          </kbd>{' '}
+          while editing to cancel.
+        </p>
+        <p>
+          Conflicting shortcuts are marked with a warning icon. The most recently bound shortcut
+          takes precedence.
+        </p>
         <p>Leader-key sequences (Ctrl+Space, then a key) are independent of these shortcuts.</p>
+        <p>
+          Press{' '}
+          <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">
+            Cmd+/
+          </kbd>{' '}
+          anywhere in the app to open the shortcuts cheatsheet.
+        </p>
       </div>
+
+      {/* Shortcuts cheatsheet overlay */}
+      <KeyboardShortcutsOverlay open={overlayOpen} onClose={() => setOverlayOpen(false)} />
     </div>
   );
 }

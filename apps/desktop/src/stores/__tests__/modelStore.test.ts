@@ -70,11 +70,11 @@ describe('modelStore', () => {
     });
 
     it('adds model to recent models', async () => {
-      // Use gpt-5.2 which is in the pro/max allowed list
-      await useModelStore.getState().selectModel('gpt-5.2', 'openai');
+      // Use gpt-5.4 which is in the pro/max allowed list
+      await useModelStore.getState().selectModel('gpt-5.4', 'openai');
 
       const state = useModelStore.getState();
-      expect(state.recentModels).toContain('gpt-5.2');
+      expect(state.recentModels).toContain('gpt-5.4');
     });
   });
 
@@ -87,13 +87,13 @@ describe('modelStore', () => {
     });
 
     it('removes a model from favorites when already present', () => {
-      useModelStore.setState({ favorites: ['claude-sonnet-4-6', 'gpt-4o'] });
+      useModelStore.setState({ favorites: ['claude-sonnet-4-6', 'gpt-5.4'] });
 
       useModelStore.getState().toggleFavorite('claude-sonnet-4-6');
 
       const state = useModelStore.getState();
       expect(state.favorites).not.toContain('claude-sonnet-4-6');
-      expect(state.favorites).toContain('gpt-4o');
+      expect(state.favorites).toContain('gpt-5.4');
     });
   });
 
@@ -193,7 +193,7 @@ describe('modelStore', () => {
   describe('reset', () => {
     it('resets all state to defaults', () => {
       useModelStore.setState({
-        selectedModel: 'gpt-4o',
+        selectedModel: 'gpt-5.4',
         selectedProvider: 'openai',
         favorites: ['model-a', 'model-b'],
         recentModels: ['model-a'],

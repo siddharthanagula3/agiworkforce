@@ -5,6 +5,7 @@
  * Handles: Global Hotkey, Theme, Language, Voice, System Resources,
  * Agent Permissions, and Update settings.
  */
+import { useState } from 'react';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Switch } from '../ui/Switch';
@@ -12,6 +13,7 @@ import { ResourceMonitor } from '../ResourceMonitor';
 import { AutomationPermissionsSettings } from './AutomationPermissionsSettings';
 import { UpdateSettings } from './UpdateSettings';
 import { VoiceSettings } from './VoiceSettings';
+import { FontSelector } from './FontSelector';
 import { SUPPORTED_LANGUAGES } from '../../i18n';
 import type { Language, GlobalHotkeyPreferences } from '../../stores/settingsStore';
 
@@ -34,6 +36,17 @@ export function GeneralSettings({
   onThemeChange,
   onLanguageChange,
 }: GeneralSettingsProps) {
+  const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+
+  const handleHotkeyBlur = (value: string) => {
+    const hotkeyPattern = /^(ctrl|cmd|alt|shift)(\+(ctrl|cmd|alt|shift))*\+\w+$/i;
+    if (value && !hotkeyPattern.test(value)) {
+      setHotkeyError('Invalid shortcut format. Example: Ctrl+Shift+Space');
+    } else {
+      setHotkeyError(null);
+    }
+  };
+
   return (
     <>
       <div>
@@ -65,9 +78,11 @@ export function GeneralSettings({
                   type="text"
                   value={resolvedGlobalHotkeyPreferences.combo}
                   onChange={(e) => onGlobalHotkeyComboChange(e.target.value)}
+                  onBlur={(e) => handleHotkeyBlur(e.target.value)}
                   placeholder={defaultGlobalHotkeyCombo}
                   className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
+                {hotkeyError && <p className="text-destructive text-xs mt-1">{hotkeyError}</p>}
                 <p className="text-xs text-muted-foreground">
                   Use Tauri accelerator format, e.g.{' '}
                   <code className="rounded bg-muted px-1 py-0.5">{defaultGlobalHotkeyCombo}</code>
@@ -112,6 +127,10 @@ export function GeneralSettings({
             </Select>
           </div>
         </div>
+      </div>
+
+      <div className="pt-6 border-t border-border">
+        <FontSelector />
       </div>
 
       <div className="pt-6 border-t border-border">

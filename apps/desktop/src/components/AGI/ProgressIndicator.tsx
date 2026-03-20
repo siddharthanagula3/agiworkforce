@@ -64,13 +64,15 @@ export function ProgressIndicator({
         if (isMounted) {
           handler(payload);
         }
-      }).then((unlisten) => {
-        if (isMounted) {
-          unlisteners.push(unlisten);
-        } else {
-          unlisten();
-        }
-      });
+      })
+        .then((unlisten) => {
+          if (isMounted) {
+            unlisteners.push(unlisten);
+          } else {
+            unlisten();
+          }
+        })
+        .catch(console.error);
     };
 
     addListener<{ goal_id: string; description: string }>('agi:goal:submitted', (payload) => {
@@ -293,7 +295,7 @@ export function ProgressIndicator({
               statusConfig.borderColor,
             )}
           >
-            {}
+            {/* Goal Header */}
             <div className="flex items-center gap-3 p-4">
               <div
                 className={cn(
@@ -339,7 +341,7 @@ export function ProgressIndicator({
               </div>
             </div>
 
-            {}
+            {/* Progress Bar */}
             {goal.status === 'executing' && (
               <div className="px-4 pb-3">
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -351,7 +353,7 @@ export function ProgressIndicator({
               </div>
             )}
 
-            {}
+            {/* Steps List */}
             {isExpanded && goal.steps.length > 0 && (
               <div className="border-t border-border px-4 py-3">
                 <div className="space-y-2">
@@ -362,12 +364,12 @@ export function ProgressIndicator({
 
                     return (
                       <div key={step.id} className="relative flex gap-3">
-                        {}
+                        {/* Connector Line */}
                         {!isLastStep && (
                           <div className="absolute left-3 top-6 h-full w-0.5 bg-border" />
                         )}
 
-                        {}
+                        {/* Step Icon */}
                         <div className="relative shrink-0">
                           <div
                             className={cn(
@@ -381,7 +383,7 @@ export function ProgressIndicator({
                           </div>
                         </div>
 
-                        {}
+                        {/* Step Content */}
                         <div className="min-w-0 flex-1 pb-2">
                           <div className="flex items-start justify-between gap-2">
                             <p className={cn('text-sm', stepConfig.textColor)}>

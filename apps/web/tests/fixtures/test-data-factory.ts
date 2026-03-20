@@ -55,7 +55,7 @@ export function createMockEmployee(
     tools: overrides.tools ?? ['Read', 'Grep'],
     systemPrompt: overrides.systemPrompt ?? 'You are a helpful assistant.',
     expertise: [],
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
   };
 }
 
@@ -82,7 +82,7 @@ export function createMockLLMResponse(content: string): {
 } {
   return {
     content,
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
     tokens: { input: 100, output: 200, total: 300 },
   };
 }

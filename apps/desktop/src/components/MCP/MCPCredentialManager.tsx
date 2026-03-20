@@ -20,6 +20,7 @@ import {
 import type { McpServerInfo } from '../../types/mcp';
 import { openUrl } from '../../lib/tauri-mock';
 import { McpClient } from '../../api/mcp';
+import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import type { McpOAuthConnectionStatus, McpOAuthProvider } from '../../types/mcp';
@@ -65,9 +66,12 @@ interface OAuthState {
 }
 
 export default function MCPCredentialManager({ servers }: MCPCredentialManagerProps) {
-  const { storeCredential } = useMcpStore();
+  const { storeCredential } = useMcpStore(
+    useShallow((s) => ({
+      storeCredential: s.storeCredential,
+    })),
+  );
 
-  // OAuth state
   const [oauthState, setOauthState] = useState<OAuthState>({
     status: {
       github: { connected: false, userInfo: null, expiresAt: null },
@@ -151,12 +155,13 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
       // Keep loading state until callback completes
     } catch (error) {
       console.error(`Failed to start OAuth for ${provider}:`, error);
+      const errorMessage = getSimpleErrorMessage(error);
       setOauthState((prev) => ({
         ...prev,
         loading: { ...prev.loading, [provider]: false },
         error: {
           ...prev.error,
-          [provider]: getSimpleErrorMessage(error),
+          [provider]: errorMessage,
         },
       }));
     }
@@ -182,12 +187,13 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
       }));
     } catch (error) {
       console.error(`Failed to disconnect OAuth for ${provider}:`, error);
+      const errorMessage = getSimpleErrorMessage(error);
       setOauthState((prev) => ({
         ...prev,
         loading: { ...prev.loading, [provider]: false },
         error: {
           ...prev.error,
-          [provider]: getSimpleErrorMessage(error),
+          [provider]: errorMessage,
         },
       }));
     }
@@ -200,12 +206,13 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
       const storedState = sessionStorage.getItem(`oauth_state_${provider}`);
       if (storedState !== state) {
         console.error(`OAuth state mismatch for ${provider}`);
+        const mismatchMessage = 'OAuth state mismatch. Please try again.';
         setOauthState((prev) => ({
           ...prev,
           loading: { ...prev.loading, [provider]: false },
           error: {
             ...prev.error,
-            [provider]: 'OAuth state mismatch. Please try again.',
+            [provider]: mismatchMessage,
           },
         }));
         return;
@@ -225,12 +232,13 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
         }));
       } catch (error) {
         console.error(`Failed to complete OAuth for ${provider}:`, error);
+        const errorMessage = getSimpleErrorMessage(error);
         setOauthState((prev) => ({
           ...prev,
           loading: { ...prev.loading, [provider]: false },
           error: {
             ...prev.error,
-            [provider]: getSimpleErrorMessage(error),
+            [provider]: errorMessage,
           },
         }));
       }
@@ -380,7 +388,22 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
                   {error && (
                     <Alert variant="destructive" className="mb-3">
                       <AlertCircle className="w-4 h-4" />
-                      <AlertDescription>{error}</AlertDescription>
+                      <AlertDescription className="flex items-center justify-between">
+                        <span>{error}</span>
+                        <button
+                          type="button"
+                          aria-label="Dismiss error"
+                          onClick={() =>
+                            setOauthState((prev) => ({
+                              ...prev,
+                              error: { ...prev.error, [providerKey]: null },
+                            }))
+                          }
+                          className="ml-2 flex-shrink-0 text-destructive hover:text-destructive/70"
+                        >
+                          ×
+                        </button>
+                      </AlertDescription>
                     </Alert>
                   )}
 

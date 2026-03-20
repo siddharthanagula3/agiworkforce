@@ -5,7 +5,7 @@
  * Supports zoom, download, and OCR text extraction display.
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Download, ZoomIn, ZoomOut, Maximize2, X, Copy, Check } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
@@ -33,9 +33,13 @@ export function ImagePreview({
   const [copied, setCopied] = useState(false);
 
   // Get image source (either data URL or regular URL)
-  const imageSrc = artifact.data
-    ? `data:${artifact.mime_type ?? 'image/png'};base64,${artifact.data}`
-    : artifact.url;
+  const imageSrc = useMemo(
+    () =>
+      artifact.data
+        ? `data:${artifact.mime_type ?? 'image/png'};base64,${artifact.data}`
+        : artifact.url,
+    [artifact.data, artifact.mime_type, artifact.url],
+  );
 
   if (!imageSrc) {
     return (

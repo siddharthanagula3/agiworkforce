@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Terminal } from './Terminal';
+import { TerminalAIAssistant } from './TerminalAIAssistant';
 import { useTerminalStore, type ShellTypeLiteral } from '../../stores/terminalStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
@@ -11,6 +12,7 @@ import {
   History,
   RotateCcw,
   Play,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -42,6 +44,7 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
 
   const [isCreating, setIsCreating] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<string[]>([]);
   const [initialSessionSpawned, setInitialSessionSpawned] = useState(false);
@@ -152,6 +155,14 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
     };
   }, [availableShells, handleCreateSession, initialSessionSpawned, isCreating, sessions.length]);
 
+  const historyListRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isHistoryOpen && historyListRef.current) {
+      historyListRef.current.focus();
+    }
+  }, [isHistoryOpen]);
+
   // WRK-007 fix: Memoize handlers to prevent unnecessary re-renders
   const handleToggleHistory = useCallback(() => {
     if (!activeSessionId) {
@@ -195,7 +206,6 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
       role="region"
       aria-label="Terminal workspace"
     >
-      {}
       <div
         className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/10"
         // WRK-008 fix: ARIA labels for accessibility
@@ -213,6 +223,15 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant={isAIAssistantOpen ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setIsAIAssistantOpen((prev) => !prev)}
+            disabled={!activeSession}
+          >
+            <Sparkles className="mr-1 h-4 w-4" />
+            AI Assist
+          </Button>
           <Button
             variant={isHistoryOpen ? 'default' : 'ghost'}
             size="sm"
@@ -278,7 +297,6 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
         </div>
       </div>
 
-      {}
       {sessions.length > 0 && (
         <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-muted/5 px-2 py-1">
           {sessions.map((session) => {
@@ -298,7 +316,8 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
                   {session.title}
                 </span>
 
-                <button type="button"
+                <button
+                  type="button"
                   onClick={(e) => handleCloseSession(session.id, e)}
                   className={cn(
                     'text-muted-foreground transition-colors hover:text-foreground',
@@ -314,7 +333,6 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
         </div>
       )}
 
-      {}
       <div className="relative flex-1 overflow-hidden">
         {activeSession ? (
           <div className="flex h-full">
@@ -324,7 +342,11 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
               className={cn('h-full flex-1', isHistoryOpen ? 'pr-0' : 'w-full')}
             />
             {isHistoryOpen && (
-              <aside className="flex w-80 flex-col border-l border-border bg-muted/10">
+              <aside
+                ref={historyListRef}
+                tabIndex={-1}
+                className="flex w-80 flex-col border-l border-border bg-muted/10"
+              >
                 <div className="flex items-center justify-between border-b border-border px-3 py-2">
                   <div>
                     <p className="text-sm font-medium">Command History</p>
@@ -410,7 +432,20 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
         )}
       </div>
 
-      {}
+      {isAIAssistantOpen && activeSession && (
+        <div className="border-t border-border max-h-[40%] overflow-auto">
+          <TerminalAIAssistant
+            sessionId={activeSession.id}
+            shellType={activeSession.shellType}
+            cwd={activeSession.cwd}
+            onCommandSelect={(command) => {
+              void sendInput(activeSession.id, `${command}\n`);
+              toast.success(`Executed: ${command}`);
+            }}
+          />
+        </div>
+      )}
+
       {activeSession && (
         <div className="flex items-center justify-between border-t border-border bg-muted/10 px-3 py-1 text-xs text-muted-foreground">
           <div className="flex items-center gap-3">

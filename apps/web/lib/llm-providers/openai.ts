@@ -77,7 +77,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
     if (request.max_tokens !== undefined) {
       // Use max_completion_tokens for reasoning models (GPT-5 series, o-series)
-      // Use max_tokens for legacy models (GPT-4o, GPT-4o-mini, etc.)
+      // Use max_tokens for legacy models (GPT-5.4, GPT-5.4-mini, etc.)
       if (requiresMaxCompletionTokens(request.model)) {
         body['max_completion_tokens'] = request.max_tokens;
       } else {
@@ -231,7 +231,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     if (request.temperature !== undefined) body['temperature'] = request.temperature;
     if (request.max_tokens !== undefined) {
       // Use max_completion_tokens for reasoning models (GPT-5 series, o-series)
-      // Use max_tokens for legacy models (GPT-4o, GPT-4o-mini, etc.)
+      // Use max_tokens for legacy models (GPT-5.4, GPT-5.4-mini, etc.)
       if (requiresMaxCompletionTokens(request.model)) {
         body['max_completion_tokens'] = request.max_tokens;
       } else {

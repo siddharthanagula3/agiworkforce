@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Clock,
   Play,
@@ -89,7 +90,12 @@ function mapGoalStatus(status: ActiveGoal['status']): AutomationRun['status'] {
 }
 
 export function AutomationHistory({ className }: AutomationHistoryProps) {
-  const { activeGoal, steps } = useExecutionStore();
+  const { activeGoal, steps } = useExecutionStore(
+    useShallow((s) => ({
+      activeGoal: s.activeGoal,
+      steps: s.steps,
+    })),
+  );
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -194,7 +200,8 @@ export function AutomationHistory({ className }: AutomationHistoryProps) {
             return (
               <div key={run.id} className={cn('group', isActive && 'bg-primary/5')}>
                 {/* Run Header */}
-                <button type="button"
+                <button
+                  type="button"
                   onClick={() => toggleExpanded(run.id)}
                   className="w-full px-4 py-3 flex items-start gap-3 hover:bg-muted/50 transition-colors text-left"
                 >

@@ -51,7 +51,7 @@ export function ExecutionSidecar() {
   if (isCollapsed) {
     return (
       <div
-        className="bg-[#0b0c14] border-l border-white/10 flex flex-col items-center py-3 gap-2 shrink-0 transition-all duration-300 ease-in-out"
+        className="bg-surface-base border-l border-white/10 flex flex-col items-center py-3 gap-2 shrink-0 transition-all duration-300 ease-in-out"
         style={{ width: COLLAPSED_WIDTH }}
       >
         <button
@@ -65,7 +65,7 @@ export function ExecutionSidecar() {
         </button>
         {/* Vertical label */}
         <span
-          className="text-[9px] font-medium text-muted-foreground/60 writing-mode-vertical"
+          className="text-[10px] font-medium text-muted-foreground/60 writing-mode-vertical"
           style={{ writingMode: 'vertical-lr', textOrientation: 'mixed' }}
         >
           Execution
@@ -78,7 +78,7 @@ export function ExecutionSidecar() {
   return (
     <div
       className={cn(
-        'bg-[#0b0c14] border-l border-white/10 shadow-2xl flex flex-col shrink-0',
+        'bg-surface-base border-l border-white/10 shadow-2xl flex flex-col shrink-0',
         'transition-all duration-300 ease-in-out',
       )}
       style={{ width }}

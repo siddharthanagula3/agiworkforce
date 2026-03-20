@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { AgentTemplate } from '../../types/templates';
 import { CATEGORY_INFO, DIFFICULTY_INFO, formatDuration } from '../../types/templates';
 import { useTemplateStore } from '../../stores/templateStore';
@@ -15,7 +16,13 @@ export const TemplateDetails: React.FC<TemplateDetailsProps> = ({
   isInstalled,
   onClose,
 }) => {
-  const { installTemplate, uninstallTemplate, isLoading } = useTemplateStore();
+  const { installTemplate, uninstallTemplate, isLoading } = useTemplateStore(
+    useShallow((s) => ({
+      installTemplate: s.installTemplate,
+      uninstallTemplate: s.uninstallTemplate,
+      isLoading: s.isLoading,
+    })),
+  );
   const [showInstaller, setShowInstaller] = useState(false);
   const [installing, setInstalling] = React.useState(false);
 
@@ -57,7 +64,8 @@ export const TemplateDetails: React.FC<TemplateDetailsProps> = ({
               </p>
             </div>
           </div>
-          <button type="button"
+          <button
+            type="button"
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
@@ -67,7 +75,8 @@ export const TemplateDetails: React.FC<TemplateDetailsProps> = ({
 
         {/* Action Buttons */}
         <div className="flex gap-2">
-          <button type="button"
+          <button
+            type="button"
             onClick={handleInstall}
             disabled={installing || isLoading}
             className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -79,7 +88,8 @@ export const TemplateDetails: React.FC<TemplateDetailsProps> = ({
             {installing ? 'Processing...' : isInstalled ? 'Uninstall' : 'Install'}
           </button>
           {isInstalled && (
-            <button type="button"
+            <button
+              type="button"
               onClick={handleExecute}
               className="flex-1 px-4 py-2 rounded-md font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
             >

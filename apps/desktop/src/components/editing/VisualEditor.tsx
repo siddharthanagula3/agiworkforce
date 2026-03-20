@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useEditingStore } from '../../stores/editingStore';
 import { cn } from '../../lib/utils';
 import { FileTreeWithChanges } from './FileTreeWithChanges';
@@ -18,7 +19,18 @@ interface VisualEditorProps {
 
 export function VisualEditor({ rootPath, className }: VisualEditorProps) {
   const { selectedFile, setSelectedFile, canUndo, canRedo, undo, redo, pendingChanges, conflicts } =
-    useEditingStore();
+    useEditingStore(
+      useShallow((s) => ({
+        selectedFile: s.selectedFile,
+        setSelectedFile: s.setSelectedFile,
+        canUndo: s.canUndo,
+        canRedo: s.canRedo,
+        undo: s.undo,
+        redo: s.redo,
+        pendingChanges: s.pendingChanges,
+        conflicts: s.conflicts,
+      })),
+    );
 
   // Detect platform for keyboard shortcut labels (Cmd on Mac, Ctrl on Windows/Linux)
   const modKey = useMemo(

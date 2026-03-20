@@ -35,6 +35,8 @@ export type Provider =
   | 'fireworks'
   | 'cerebras'
   | 'deepinfra'
+  | 'nvidia_nim'
+  | 'open_router'
   | 'cohere'
   | 'ai21'
   | 'sambanova'
@@ -96,6 +98,9 @@ export interface ModelBenchmarks {
   tau2Telecom?: number;
 }
 
+/** Lifecycle status of a model. */
+export type ModelStatus = 'active' | 'beta' | 'deprecated';
+
 /** Full model metadata entry as defined in models.json. */
 export interface ModelMetadata {
   id: string;
@@ -105,6 +110,8 @@ export interface ModelMetadata {
   provider: Provider;
   modelType: ModelType;
   contextWindow: number;
+  /** Maximum output tokens the model can generate per request. */
+  maxOutputTokens?: number;
   /** Cost per million input tokens (USD). */
   inputCost: number;
   /** Cost per million output tokens (USD). */
@@ -115,8 +122,41 @@ export interface ModelMetadata {
   quality: ModelQuality;
   qualityTier: ModelQualityTier;
   bestFor: string[];
+  /** Release date string (e.g., "2026-03"). */
   released?: string;
   deprecated?: boolean;
+  /** Lifecycle status. Defaults to 'active' if omitted. */
+  status?: ModelStatus;
+}
+
+/**
+ * Provider health status used by provider management UIs and health checks.
+ *
+ * @example
+ * ```typescript
+ * const status: ProviderHealthStatus = {
+ *   provider: 'anthropic',
+ *   available: true,
+ *   configured: true,
+ *   healthCheckedAt: Date.now(),
+ * };
+ * ```
+ */
+export interface ProviderHealthStatus {
+  /** Provider identifier. */
+  provider: Provider | string;
+  /** Whether the provider API is currently reachable. */
+  available: boolean;
+  /** Whether an API key has been configured. */
+  configured: boolean;
+  /** Error message if the provider is unhealthy. */
+  error?: string;
+  /** Remaining rate limit quota (if reported by the provider). */
+  rateLimitRemaining?: number;
+  /** ISO 8601 timestamp when rate limit resets. */
+  rateLimitReset?: string;
+  /** Timestamp (ms since epoch) of the last health check. */
+  healthCheckedAt?: number;
 }
 
 /** Per-provider pricing defaults. */

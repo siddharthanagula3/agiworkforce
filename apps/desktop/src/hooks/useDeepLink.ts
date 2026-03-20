@@ -60,6 +60,27 @@ function handleDeepLink(url: string) {
 
     const allParams = { ...queryParams, ...hashParams };
 
+    // Check for Supabase auth callback (OAuth2 PKCE flow)
+    // Pattern: agiworkforce://auth/callback?code=AUTH_CODE_HERE
+    // Tauri deep links may produce double slashes: agiworkforce://auth/callback → pathname = //auth/callback
+    const normalizedPathname = parsed.pathname.replace(/^\/\//, '/');
+    if (normalizedPathname === '/auth/callback') {
+      const code = parsed.searchParams.get('code');
+      if (code) {
+        (async () => {
+          try {
+            const { supabaseAuth } = await import('../services/supabaseAuth');
+            await supabaseAuth.exchangeCodeForSession(code);
+          } catch (error) {
+            console.error('[DeepLink] Auth callback exchange failed:', error);
+          }
+        })();
+      } else {
+        console.warn('[DeepLink] Auth callback received without code param');
+      }
+      return; // Auth callback handled, don't process as other deep link types
+    }
+
     // Check for MCP OAuth callback URLs
     // Pattern: agiworkforce://oauth/mcp/{provider}?code={code}&state={state}
     // Or error: agiworkforce://oauth/mcp/{provider}?error={error}&error_description={description}

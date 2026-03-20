@@ -1,4 +1,5 @@
 import { ArrowRight, CheckCircle, Play, Settings, Share2, Sparkles } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { invoke } from '../../../lib/tauri-mock';
 import { Badge } from '../../../components/ui/Badge';
@@ -14,7 +15,14 @@ import { useMarketplaceStore } from '../marketplaceStore';
 
 export function CloneSuccessModal() {
   const { clonedWorkflow, showCloneSuccessModal, closeCloneSuccess, openShareModal } =
-    useMarketplaceStore();
+    useMarketplaceStore(
+      useShallow((s) => ({
+        clonedWorkflow: s.clonedWorkflow,
+        showCloneSuccessModal: s.showCloneSuccessModal,
+        closeCloneSuccess: s.closeCloneSuccess,
+        openShareModal: s.openShareModal,
+      })),
+    );
 
   if (!clonedWorkflow) return null;
 

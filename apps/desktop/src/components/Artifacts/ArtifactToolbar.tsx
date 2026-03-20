@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { ArtifactTypeIcon, getArtifactFileExtension } from '@/lib/artifactUtils';
 import { Button } from '@/components/ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
+import { useShallow } from 'zustand/react/shallow';
 import { useArtifactStore, type ArtifactType } from '@/stores/artifactStore';
 import { shareArtifact } from '@/services/artifactSharing';
 
@@ -29,7 +30,9 @@ export function ArtifactToolbar({
   content,
   className,
 }: ArtifactToolbarProps) {
-  const { setActiveArtifact, openPanel } = useArtifactStore();
+  const { setActiveArtifact, openPanel } = useArtifactStore(
+    useShallow((s) => ({ setActiveArtifact: s.setActiveArtifact, openPanel: s.openPanel })),
+  );
   const [copied, setCopied] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
 

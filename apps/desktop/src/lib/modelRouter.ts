@@ -167,7 +167,7 @@ const ECONOMY_MODELS: readonly string[] = [
 
   // === LOWER BENCHMARK (Fast/cheap fallbacks) ===
   'qwen-flash', // 25% SWE-bench, 75% MMLU - T✓ (128K ctx)
-  'gpt-5-nano', // 18% SWE-bench, 78% MMLU - V✓ T✓ E✓ (128K ctx)
+  'gpt-5.4-nano', // 18% SWE-bench, 78% MMLU - V✓ T✓ E✓ (128K ctx)
 
   // === SEARCH MODELS ===
   'sonar', // Web search - V✗ T✗ (128K ctx)
@@ -178,7 +178,7 @@ const ECONOMY_MODELS: readonly string[] = [
 // =========================================================================
 const BALANCED_ADDITIONS: readonly string[] = [
   // === TOP BENCHMARK (Pro-tier additions) ===
-  'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU - V✓ T✓ Th✓ C✓ A✓ E✓ (400K ctx)
+  'gpt-5.4', // 80.0% SWE-bench, 93.2% MMLU - V✓ T✓ Th✓ C✓ A✓ E✓ (400K ctx)
   'claude-sonnet-4.6', // 78.5% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx) - CURRENT
   'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx)
   'gemini-3-pro-preview', // 74.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ A✓ E✓ (2M ctx)
@@ -197,7 +197,7 @@ const BALANCED_ADDITIONS: readonly string[] = [
 const PREMIUM_ADDITIONS: readonly string[] = [
   // === FLAGSHIP BENCHMARK (Best of the best) ===
   'claude-opus-4.6', // 80.9% SWE-bench - BEST CODING MODEL
-  'gpt-5.2-pro', // Latest GPT-5.2 flagship - PREMIUM REASONING
+  'gpt-5.4-pro', // Latest GPT-5.2 flagship - PREMIUM REASONING
   'gpt-5-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
   'o3', // 65% SWE-bench - REASONING SPECIALIST
 
@@ -507,7 +507,7 @@ export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
     'deepseek-chat', // 68.8% SWE-bench, 85% MMLU - BEST benchmark in budget tier
     'glm-4.6v-flash', // ~65% SWE-bench - FREE with vision + tools
     'qwen-flash', // ~60% SWE-bench - Ultra-cheap fallback
-    'gpt-5-nano', // ~50% SWE-bench - OpenAI budget option
+    'gpt-5.4-nano', // ~50% SWE-bench - OpenAI budget option
   ],
   // 20% of traffic - mid-tier models ordered by benchmark
   moderate: [
@@ -518,7 +518,7 @@ export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
   ],
   // 10% of traffic - best benchmarks available in economy pool
   complex: [
-    'gpt-5.2', // 80.0% SWE-bench, 93.2% MMLU - BEST overall benchmark
+    'gpt-5.4', // 80.0% SWE-bench, 93.2% MMLU - BEST overall benchmark
     'claude-sonnet-4.6', // 78.5% SWE-bench - Current best Sonnet
     'claude-sonnet-4.5', // 77.2% SWE-bench - Excellent orchestration fallback
     'gemini-3-pro-preview', // ~75% SWE-bench - 2M context window
@@ -535,7 +535,7 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
   // Coding: Claude Opus 4.6 (80.9%), GPT-5.2 (80.0%), GLM-4.7 (73.8%)
   coding: [
     'claude-opus-4.6', // 80.9% SWE-bench - PUBLIC #1 for coding
-    'gpt-5.2', // 80.0% SWE-bench - #2, best tool integration
+    'gpt-5.4', // 80.0% SWE-bench - #2, best tool integration
     'claude-sonnet-4.6', // 78.5% SWE-bench - #3, current best Sonnet
     'glm-4.7', // 73.8% SWE-bench - #4, best open-weight
     'claude-sonnet-4.5', // Great coding, more affordable fallback
@@ -543,7 +543,7 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
   ],
   // Reasoning: GPT-5.2 for math, Claude for complex analysis
   reasoning: [
-    'gpt-5.2', // 100% AIME 2025 - PUBLIC #1 for math
+    'gpt-5.4', // 100% AIME 2025 - PUBLIC #1 for math
     'claude-opus-4.6', // Best for nuanced reasoning
     'o3', // OpenAI reasoning specialist
     'gemini-3-pro-preview', // Deep Think for exam-style
@@ -551,7 +551,7 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
   ],
   // General: ChatGPT versatile, Claude for writing, DeepSeek for budget
   general: [
-    'gpt-5.2', // PUBLIC #1 for versatility
+    'gpt-5.4', // PUBLIC #1 for versatility
     'claude-sonnet-4.6', // Current best Sonnet - writing/creative
     'claude-sonnet-4.5', // Fallback Sonnet
     'deepseek-chat', // Budget champion
@@ -560,7 +560,7 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
   ],
   // Agentic: GPT-5.2 for tool-calling (97% τ²-bench), Claude for orchestration
   agentic: [
-    'gpt-5.2', // 97% τ²-bench - PUBLIC #1 for tool-calling
+    'gpt-5.4', // 97% τ²-bench - PUBLIC #1 for tool-calling
     'claude-opus-4.6', // Best multi-step orchestration
     'claude-sonnet-4.6', // Current best Sonnet for agentic
     'claude-sonnet-4.5', // More affordable agentic fallback
@@ -569,7 +569,7 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
   ],
   // Multimodal: Gemini for best vision, Claude for analysis
   multimodal: [
-    'gpt-5.2', // Excellent vision + tools
+    'gpt-5.4', // Excellent vision + tools
     'gemini-3-pro-preview', // Best multimodal (native video, 2M context)
     'claude-opus-4.6', // Best visual analysis
     'claude-sonnet-4.6', // Current best Sonnet vision
@@ -1081,7 +1081,7 @@ export function routeMessage(
  * Returns true if the model was manually selected from QuickModelSelector
  *
  * A manual selection is when the user explicitly chose a specific model
- * (like 'claude-sonnet-4.5' or 'gpt-5.2'), NOT an auto mode.
+ * (like 'claude-sonnet-4.5' or 'gpt-5.4'), NOT an auto mode.
  *
  * Auto modes that trigger routing:
  * - 'auto' (legacy)

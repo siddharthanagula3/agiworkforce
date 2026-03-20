@@ -26,7 +26,9 @@ import { cn } from '../../lib/utils';
 import { useAccountStore, selectIsTierLoading } from '../../stores/auth';
 import { useModelStore, selectLastRoutingDecision } from '../../stores/modelStore';
 import type { Provider } from '../../stores/settingsStore';
+import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import { Button } from '../ui/Button';
+import { ModelTierSelector, type ModelTier } from './ModelTierSelector';
 
 type QuickModelSelectorProps = {
   className?: string;
@@ -80,6 +82,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       isTierLoading: selectIsTierLoading(state),
     })),
   );
+
+  const openSettings = useSettingsDialogStore((s) => s.openSettings);
 
   // Get user's plan tier - when loading/unknown, use 'hobby' as a safe default
   // This ensures users can see some models while we confirm their actual tier
@@ -208,6 +212,61 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     selectedModel === AUTO_BALANCED_ID ||
     selectedModel === AUTO_PREMIUM_ID;
 
+  // --- Tier selector helpers ---
+
+  /**
+   * Returns the first available model for a given qualityTier.
+   * Prefers models already in availableModels; falls back to getAllModels().
+   */
+  const tierModelMap = useMemo((): Record<ModelTier, string | null> => {
+    const tier = (userPlanTier as SubscriptionTier) || 'hobby';
+
+    const findModel = (qualityTier: 'fast' | 'balanced' | 'best'): string | null => {
+      // Prefer models the user has configured that are in their plan
+      const configured = availableModels.find((m) => {
+        const meta = getModelMetadata(m.id);
+        return (
+          meta?.qualityTier === qualityTier &&
+          (m.provider === 'ollama' || isModelAllowedForTier(m.id, tier))
+        );
+      });
+      if (configured) return configured.id;
+      return null;
+    };
+
+    return {
+      instant: findModel('fast'),
+      latest: findModel('balanced'),
+      thinking: findModel('best'),
+    };
+  }, [availableModels, userPlanTier]);
+
+  /**
+   * Derives the active tier from the currently selected model.
+   * Returns null when an auto mode or no-metadata model is active.
+   */
+  const activeTier = useMemo((): ModelTier | null => {
+    if (!selectedModel || isAutoMode) return null;
+    const meta = getModelMetadata(selectedModel);
+    if (!meta) return null;
+    switch (meta.qualityTier) {
+      case 'fast':
+        return 'instant';
+      case 'balanced':
+        return 'latest';
+      case 'best':
+        return 'thinking';
+      default:
+        return null;
+    }
+  }, [selectedModel, isAutoMode]);
+
+  const handleTierSelect = (tier: ModelTier) => {
+    const modelId = tierModelMap[tier];
+    if (!modelId) return;
+    handleModelChange(modelId);
+  };
+
   // Get last routing decision for feedback
   const lastRoutingDecision = useModelStore(selectLastRoutingDecision);
 
@@ -282,6 +341,15 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
           Models
         </p>
         <span className="text-[10px] text-gray-400 dark:text-gray-500">Choose a provider</span>
+      </div>
+
+      {/* Quick tier picker — Instant / Latest / Thinking */}
+      <div className="mb-2">
+        <ModelTierSelector
+          activeTier={activeTier}
+          onTierSelect={handleTierSelect}
+          className="w-full justify-between"
+        />
       </div>
 
       {/* Search Input */}
@@ -438,16 +506,17 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                       key={model.id}
                       onClick={() => {
                         if (isLocked) {
-                          // Don't select, show upgrade hint
+                          openSettings('account');
+                          onClose?.();
                           return;
                         }
                         handleModelChange(model.id);
                       }}
-                      title={isLocked ? `Requires PRO subscription or higher` : model.name}
+                      title={isLocked ? 'Requires PRO — click to upgrade' : model.name}
                       className={cn(
                         'flex w-full items-center justify-between rounded-lg border px-3 py-1.5 text-xs transition-colors',
                         isLocked
-                          ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] opacity-60 cursor-not-allowed'
+                          ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] opacity-60 cursor-pointer hover:opacity-80 hover:border-amber-500/50'
                           : isActive
                             ? 'border-primary bg-primary/10 text-primary shadow-xs dark:border-primary/50 dark:bg-primary/20 dark:text-primary-foreground'
                             : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:border-primary/50 hover:bg-[hsl(var(--accent))]',
@@ -455,6 +524,9 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
                     >
                       <span className="flex items-center gap-1 truncate">
                         <span className="truncate">{model.name}</span>
+                        {isLocked && (
+                          <span className="text-[10px] text-amber-500 font-medium ml-1">PRO</span>
+                        )}
                         {isLocked && <Lock size={10} className="text-amber-500 shrink-0" />}
                         {/* Capability badges */}
                         <span className="flex items-center gap-0.5 shrink-0">

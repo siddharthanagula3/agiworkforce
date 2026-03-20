@@ -690,7 +690,6 @@ function CodeArtifact({ artifact, isDark: _isDark }: { artifact: Artifact; isDar
 
   return (
     <div className="overflow-x-auto bg-gray-950">
-      {}
       <SyntaxHighlighter
         language={artifact.language || 'text'}
         style={oneDark}
@@ -1175,7 +1174,8 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
     border-radius: 6px;
   }
   input:focus, textarea:focus, select:focus {
-    outline: none;
+    outline: 2px solid #60a5fa;
+    outline-offset: 1px;
     border-color: #60a5fa;
   }
 </style>`;
@@ -1216,6 +1216,7 @@ ${content}
     const handleMessage = (event: MessageEvent) => {
       // Validate the message is from our sandbox
       if (event.data?.channelId !== channelId.current) return;
+      if (!isMountedRef.current) return;
 
       if (event.data.type === 'sandbox-console') {
         setConsoleOutput((prev) => [

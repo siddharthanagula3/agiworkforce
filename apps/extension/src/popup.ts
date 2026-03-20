@@ -1,4 +1,9 @@
-import type { PopupState, ConnectionStatusResponse, CaptureScreenshotResponse } from './types';
+import type {
+  PopupState,
+  ConnectionStatusResponse,
+  CaptureScreenshotResponse,
+  ConnectionStatus,
+} from './types';
 import { logger, storageUtils } from './utils';
 
 // UI feedback durations
@@ -27,6 +32,7 @@ function setupEventListeners(): void {
   const refreshBtn = document.getElementById('refreshBtn') as HTMLButtonElement | null;
   const sidePanelBtn = document.getElementById('sidePanelBtn') as HTMLButtonElement | null;
   const groupBtn = document.getElementById('groupBtn') as HTMLButtonElement | null;
+  const reconnectBtn = document.getElementById('reconnectBtn') as HTMLButtonElement | null;
 
   if (captureBtn) {
     captureBtn.addEventListener('click', handleCapturePage);
@@ -50,9 +56,9 @@ function setupEventListeners(): void {
         (response: { success?: boolean } | undefined) => {
           if (chrome.runtime.lastError) return;
           if (groupBtn && response?.success) {
-            groupBtn.textContent = '✓ Grouped';
+            groupBtn.textContent = 'Grouped';
             setTimeout(() => {
-              groupBtn.textContent = '📂 Group Tab';
+              groupBtn.textContent = 'Group Tab';
             }, 1500);
           }
         },
@@ -60,63 +66,124 @@ function setupEventListeners(): void {
     });
   }
 
+  if (reconnectBtn) {
+    reconnectBtn.addEventListener('click', handleManualReconnect);
+  }
+
   const versionEl = document.getElementById('extVersion');
   if (versionEl) {
     versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
   }
 
+  // Listen for connection status changes broadcast from background
+  chrome.runtime.onMessage.addListener((message: unknown) => {
+    const msg = message as { type?: string; status?: ConnectionStatus; connected?: boolean };
+    if (msg?.type === 'CONNECTION_STATUS_CHANGED') {
+      applyConnectionStatus(msg.status ?? (msg.connected ? 'connected' : 'disconnected'));
+    }
+  });
+
   chrome.storage.onChanged.addListener((changes) => {
     if (changes['connectedToDesktop']) {
-      updateStatus();
+      void updateStatus();
     }
 
     if (changes['stats']) {
       const stats = changes['stats'].newValue || {};
       popupState.actionCount = (stats as { actionCount?: number }).actionCount || 0;
-      updateStats();
+      void updateStats();
     }
   });
 
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
       e.preventDefault();
-      handleRefresh();
+      void handleRefresh();
     }
   });
 }
 
+/**
+ * Apply visual state for a given connection status.
+ * Handles connected / disconnected / connecting (reconnecting) states.
+ */
+function applyConnectionStatus(status: ConnectionStatus): void {
+  const statusCard = document.getElementById('statusCard');
+  const statusTitle = document.getElementById('statusTitle');
+  const statusSubtitle = document.getElementById('statusSubtitle');
+  const reconnectBtn = document.getElementById('reconnectBtn');
+
+  if (!statusCard || !statusTitle || !statusSubtitle) return;
+
+  // Reset all state classes
+  statusCard.classList.remove('connected', 'reconnecting');
+
+  switch (status) {
+    case 'connected':
+      statusCard.classList.add('connected');
+      statusTitle.textContent = 'Connected';
+      statusSubtitle.textContent = 'Desktop app is active';
+      reconnectBtn?.classList.remove('visible');
+      popupState.isConnected = true;
+      break;
+
+    case 'connecting':
+      statusCard.classList.add('reconnecting');
+      statusTitle.textContent = 'Reconnecting...';
+      statusSubtitle.textContent = 'Attempting to reach desktop app';
+      reconnectBtn?.classList.remove('visible');
+      popupState.isConnected = false;
+      break;
+
+    case 'disconnected':
+    case 'error':
+    default:
+      statusTitle.textContent = 'Disconnected';
+      statusSubtitle.textContent = 'Desktop app not detected';
+      reconnectBtn?.classList.add('visible');
+      popupState.isConnected = false;
+      break;
+  }
+
+  void storageUtils.setItem('connectedToDesktop', status === 'connected');
+}
+
+async function handleManualReconnect(): Promise<void> {
+  const btn = document.getElementById('reconnectBtn') as HTMLButtonElement | null;
+  if (btn) {
+    btn.textContent = 'Connecting...';
+    btn.disabled = true;
+  }
+  applyConnectionStatus('connecting');
+
+  try {
+    // Ask background to trigger a fresh connection attempt
+    const result = (await chrome.runtime.sendMessage({
+      type: 'GET_CONNECTION_STATUS',
+    })) as ConnectionStatusResponse;
+
+    const status: ConnectionStatus =
+      result.connectionStatus ?? (result.nativeConnected ? 'connected' : 'disconnected');
+    applyConnectionStatus(status);
+  } catch {
+    applyConnectionStatus('disconnected');
+  } finally {
+    if (btn) {
+      btn.textContent = 'Reconnect';
+      btn.disabled = false;
+    }
+  }
+}
+
 async function updateStatus(): Promise<void> {
   try {
-    const result = await chrome.runtime.sendMessage({
+    const result = (await chrome.runtime.sendMessage({
       type: 'GET_CONNECTION_STATUS',
-    });
+    })) as ConnectionStatusResponse;
 
-    const isConnected = (result as ConnectionStatusResponse).nativeConnected ?? false;
-    popupState.isConnected = isConnected;
-
-    const statusCard = document.getElementById('statusCard') as HTMLElement | null;
-    const statusTitle = document.getElementById('statusTitle') as HTMLElement | null;
-    const statusSubtitle = document.getElementById('statusSubtitle') as HTMLElement | null;
-
-    if (statusCard) {
-      if (isConnected) {
-        statusCard.classList.add('connected');
-      } else {
-        statusCard.classList.remove('connected');
-      }
-    }
-
-    if (statusTitle) {
-      statusTitle.textContent = isConnected ? 'Connected' : 'Disconnected';
-    }
-
-    if (statusSubtitle) {
-      statusSubtitle.textContent = isConnected
-        ? 'Desktop app is active'
-        : 'Desktop app not detected';
-    }
-
-    await storageUtils.setItem('connectedToDesktop', isConnected);
+    const status: ConnectionStatus =
+      result.connectionStatus ?? (result.nativeConnected ? 'connected' : 'disconnected');
+    applyConnectionStatus(status);
   } catch (error) {
     logger.error('Failed to update status', error);
 

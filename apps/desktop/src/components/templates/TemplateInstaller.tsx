@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { AgentTemplate } from '../../types/templates';
 import { useTemplateStore } from '../../stores/templateStore';
 
@@ -8,7 +9,11 @@ interface TemplateInstallerProps {
 }
 
 export const TemplateInstaller: React.FC<TemplateInstallerProps> = ({ template, onClose }) => {
-  const { executeTemplate } = useTemplateStore();
+  const { executeTemplate } = useTemplateStore(
+    useShallow((s) => ({
+      executeTemplate: s.executeTemplate,
+    })),
+  );
   const [params, setParams] = useState<Record<string, string>>({});
   const [executing, setExecuting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -65,7 +70,8 @@ export const TemplateInstaller: React.FC<TemplateInstallerProps> = ({ template, 
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Configure Template</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{template.name}</p>
           </div>
-          <button type="button"
+          <button
+            type="button"
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
@@ -88,7 +94,8 @@ export const TemplateInstaller: React.FC<TemplateInstallerProps> = ({ template, 
               </pre>
             </div>
             <div className="mt-4 flex gap-2">
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => {
                   setResult(null);
                   setParams({});
@@ -97,7 +104,8 @@ export const TemplateInstaller: React.FC<TemplateInstallerProps> = ({ template, 
               >
                 Run Again
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={onClose}
                 className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
               >

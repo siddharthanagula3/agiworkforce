@@ -212,7 +212,8 @@ export function ProjectsView() {
           {/* Filter tabs */}
           <div className="flex gap-1 mt-3">
             {(['active', 'archived', 'all'] as FilterMode[]).map((mode) => (
-              <button type="button"
+              <button
+                type="button"
                 key={mode}
                 onClick={() => setFilterMode(mode)}
                 className={cn(
@@ -339,7 +340,7 @@ function ProjectListItem({
         {/* Project Icon */}
         <div
           className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-          style={{ backgroundColor: project.color || '#3b82f6' }}
+          style={{ backgroundColor: project.color || 'var(--color-teal-500)' }}
         >
           <Layers className="w-5 h-5 text-white" />
         </div>
@@ -429,7 +430,7 @@ function ProjectDetails({ project, onEdit, onOpen }: ProjectDetailsProps) {
           <div className="flex items-center gap-4">
             <div
               className="w-16 h-16 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: project.color || '#3b82f6' }}
+              style={{ backgroundColor: project.color || 'var(--color-teal-500)' }}
             >
               <Layers className="w-8 h-8 text-white" />
             </div>

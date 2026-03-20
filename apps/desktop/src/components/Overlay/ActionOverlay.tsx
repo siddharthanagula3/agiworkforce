@@ -57,7 +57,7 @@ function ClickRipple({ effect }: { effect: ClickEffect }) {
       style={{
         left: x,
         top: y,
-        boxShadow: '0 0 25px rgba(59,130,246,0.35)',
+        boxShadow: '0 0 25px hsl(var(--primary) / 0.35)',
       }}
     />
   );
@@ -85,7 +85,7 @@ function TypingOverlay({ effect }: { effect: TypingEffect }) {
 
 export function ActionOverlay({ clicks, typing }: ActionOverlayProps) {
   return (
-    <div className="pointer-events-none fixed inset-0 z-[999]">
+    <div className="pointer-events-none fixed inset-0 z-[var(--z-fullscreen)]">
       {clicks.map((effect) => (
         <ClickRipple key={effect.id} effect={effect} />
       ))}

@@ -43,7 +43,7 @@ export function VibeTopNav() {
                 <span className="font-medium">Claude Sonnet 4.6</span>
               </div>
             </SelectItem>
-            <SelectItem value="gpt-4o">
+            <SelectItem value="gpt-5.4">
               <div className="flex items-center gap-2">
                 <span className="font-medium">GPT-5.4</span>
               </div>

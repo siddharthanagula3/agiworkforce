@@ -43,9 +43,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   o3: { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 8.0 },
   'o3-pro': { inputCostPer1MTokens: 4.0, outputCostPer1MTokens: 16.0 },
   'o4-mini': { inputCostPer1MTokens: 1.1, outputCostPer1MTokens: 4.4 },
-  // Legacy OpenAI
-  'gpt-4o': { inputCostPer1MTokens: 2.5, outputCostPer1MTokens: 10.0 },
-  'gpt-4o-mini': { inputCostPer1MTokens: 0.15, outputCostPer1MTokens: 0.6 },
+  // Legacy OpenAI (removed — duplicates of gpt-5.4 family above)
   // Image Generation
   'dall-e-3': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 40.0 },
   'gpt-image-1': { inputCostPer1MTokens: 0.0, outputCostPer1MTokens: 40.0 },
@@ -87,9 +85,9 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-3-pro-preview': { inputCostPer1MTokens: 2.0, outputCostPer1MTokens: 12.0 },
   'gemini-3-flash-preview': { inputCostPer1MTokens: 0.5, outputCostPer1MTokens: 3.0 },
   // Gemini 2.5 Series
-  'gemini-2.5-pro': { inputCostPer1MTokens: 1.25, outputCostPer1MTokens: 10.0 },
-  'gemini-2.5-flash': { inputCostPer1MTokens: 0.3, outputCostPer1MTokens: 2.5 },
-  'gemini-2.5-flash-lite': { inputCostPer1MTokens: 0.15, outputCostPer1MTokens: 1.0 },
+  'gemini-3.1-pro-preview': { inputCostPer1MTokens: 1.25, outputCostPer1MTokens: 10.0 },
+  'gemini-3-flash': { inputCostPer1MTokens: 0.3, outputCostPer1MTokens: 2.5 },
+  'gemini-3-flash-lite': { inputCostPer1MTokens: 0.15, outputCostPer1MTokens: 1.0 },
   // Legacy Gemini 2.0
   'gemini-2.0-flash': { inputCostPer1MTokens: 0.1, outputCostPer1MTokens: 0.4 },
   // Image Generation (Imagen 4)

@@ -90,10 +90,13 @@ interface ComputerUseState {
   reset: () => void;
 
   // Newly wired actions
+  click: (x: number, y: number) => Promise<void>;
+  moveMouse: (x: number, y: number) => Promise<void>;
   typeText: (text: string) => Promise<void>;
   getSession: (sessionId: string) => Promise<ComputerUseSession | null>;
   listSessions: () => Promise<ComputerUseSession[]>;
   executeTool: (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
+  zoomRegion: (request: ZoomRegionRequest) => Promise<ZoomRegionResponse | null>;
   zoomAtPoint: (
     x: number,
     y: number,
@@ -245,6 +248,48 @@ export const useComputerUseStore = create<ComputerUseState>()(
       // Newly wired commands
       // -----------------------------------------------------------------------
 
+      click: async (x, y) => {
+        try {
+          await invoke('computer_use_click', { x, y });
+          get().logAction({
+            action_type: 'click',
+            coordinates: [x, y],
+            text: null,
+            key: null,
+            timestamp: Math.floor(Date.now() / 1000),
+          });
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'computerUse/click/error',
+          );
+        }
+      },
+
+      moveMouse: async (x, y) => {
+        try {
+          await invoke('computer_use_move_mouse', { x, y });
+          get().logAction({
+            action_type: 'move_mouse',
+            coordinates: [x, y],
+            text: null,
+            key: null,
+            timestamp: Math.floor(Date.now() / 1000),
+          });
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'computerUse/moveMouse/error',
+          );
+        }
+      },
+
       typeText: async (text) => {
         try {
           await invoke('computer_use_type_text', { text });
@@ -317,6 +362,33 @@ export const useComputerUseStore = create<ComputerUseState>()(
             },
             undefined,
             'computerUse/executeTool/error',
+          );
+          return null;
+        }
+      },
+
+      zoomRegion: async (request) => {
+        try {
+          const result = await invoke<ZoomRegionResponse>('computer_use_zoom_region', {
+            request,
+          });
+          set(
+            (state) => {
+              state.currentScreenshot = result.image_data;
+              state.screenWidth = result.width;
+              state.screenHeight = result.height;
+            },
+            undefined,
+            'computerUse/zoomRegion',
+          );
+          return result;
+        } catch (err) {
+          set(
+            (state) => {
+              state.error = String(err);
+            },
+            undefined,
+            'computerUse/zoomRegion/error',
           );
           return null;
         }

@@ -245,6 +245,8 @@ impl TeamManager {
     }
 
     /// Print a formatted summary of the team state to stderr.
+    /// Will be wired into the /team REPL command for team status display.
+    #[allow(dead_code)]
     pub async fn print_team_status(&self) {
         let teammates = self.list_teammates().await;
         let tasks = self.get_tasks().await;

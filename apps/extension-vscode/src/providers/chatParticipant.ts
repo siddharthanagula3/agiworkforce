@@ -189,10 +189,10 @@ async function streamVscodeLmFallback(
   token: vscode.CancellationToken,
 ): Promise<void> {
   try {
-    // Select the best available model — prefer GPT-4o family
+    // Select the best available model — prefer GPT-5.4 family
     const [model] = await vscode.lm.selectChatModels({
       vendor: 'copilot',
-      family: 'gpt-4o',
+      family: 'gpt-5.4',
     });
 
     if (model === undefined) {

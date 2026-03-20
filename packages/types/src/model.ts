@@ -83,7 +83,7 @@ export interface ModelProvider {
  * ```
  */
 export interface ModelConfig {
-  /** Model identifier (e.g., `"claude-opus-4-6"`, `"gpt-4o"`). */
+  /** Model identifier (e.g., `"claude-opus-4-6"`, `"gpt-5.4"`). */
   modelId: string;
 
   /** Provider identifier. */

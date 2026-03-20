@@ -48,3 +48,4 @@ export * from './ResizeHandle';
 export * from './ResponsiveContainer';
 export * from './SectionErrorBoundary';
 export * from './Skeleton';
+export * from './EmptyState';

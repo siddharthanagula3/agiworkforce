@@ -153,7 +153,7 @@ export const useChat = (sessionId?: string) => {
       content,
       attachments,
       mode = 'team',
-      model = selectedModel || 'gpt-4o', // Use user's selected model or default to gpt-4o
+      model = selectedModel || 'gpt-5.4', // Use user's selected model or default to gpt-5.4
       temperature = 0.7,
       tools = [],
     }: SendMessageParams) => {

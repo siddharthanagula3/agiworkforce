@@ -13,7 +13,7 @@ import {
 import { ToolExecution } from '../../../stores/unifiedChatStore';
 import { CodeBlock } from '../Visualizations/CodeBlock';
 import { getFriendlyError } from '@agiworkforce/utils';
-import { toast } from '../../../hooks/useToast';
+import { toast } from 'sonner';
 
 export interface ToolExecutionCardProps {
   execution: ToolExecution;
@@ -48,11 +48,11 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
     try {
       await navigator.clipboard.writeText(content);
       // AUDIT-005-012 fix: Show success toast on copy
-      toast({ title: 'Copied to clipboard' });
+      toast.success('Copied to clipboard');
     } catch (err) {
       console.error('Failed to copy:', err);
       // AUDIT-005-012 fix: Show toast notification on copy failure
-      toast({ variant: 'destructive', title: 'Failed to copy to clipboard' });
+      toast.error('Failed to copy to clipboard');
     }
   };
 
@@ -138,7 +138,8 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
         {}
         <div className="flex items-center gap-1 shrink-0 ml-2">
           {enableRetry && onRetry && (
-            <button type="button"
+            <button
+              type="button"
               onClick={onRetry}
               className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
               title="Retry execution"
@@ -157,7 +158,8 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
           typeof execution.input === 'object' &&
           Object.keys(execution.input).length > 0 ? (
             <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setShowInput(!showInput)}
                 className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-gray-100"
               >
@@ -166,7 +168,8 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
               </button>
               {showInput && (
                 <div className="relative">
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={() => handleCopy(inputJson)}
                     className="absolute top-2 right-2 p-1.5 hover:bg-gray-700 rounded transition-colors z-10"
                     title="Copy input"
@@ -187,7 +190,8 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
           {}
           {execution.success && execution.output !== undefined ? (
             <div className="p-4">
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setShowOutput(!showOutput)}
                 className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-gray-100"
               >
@@ -196,7 +200,8 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
               </button>
               {showOutput && (
                 <div className="relative">
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={() => handleCopy(outputJson)}
                     className="absolute top-2 right-2 p-1.5 hover:bg-gray-700 rounded transition-colors z-10"
                     title="Copy output"

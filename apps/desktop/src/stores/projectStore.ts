@@ -64,6 +64,30 @@ export interface ProjectSettings {
   autoSaveMemories?: boolean;
 }
 
+/** Mirrors the Rust ProjectContext struct (camelCase via serde rename_all) */
+export interface ProjectContext {
+  folder: string | null;
+  name: string | null;
+  isValid: boolean;
+}
+
+/** Mirrors the Rust ProjectFileInfo struct (camelCase via serde rename_all) */
+export interface ProjectFileInfo {
+  path: string;
+  name: string;
+  isDirectory: boolean;
+  size: number | null;
+  extension: string | null;
+}
+
+/** Mirrors the Rust ProjectInstructionFile struct (camelCase via serde rename_all) */
+export interface ProjectInstructionFile {
+  path: string;
+  filename: string;
+  content: string;
+  scope: string;
+}
+
 interface ProjectState {
   // Data
   projects: Project[];
@@ -119,6 +143,14 @@ interface ProjectState {
   removeRecentFolder: (path: string) => void;
   clearRecentFolders: () => void;
   getCurrentFolderDisplayName: () => string | null;
+
+  // Project context (Rust backend)
+  getProjectContext: () => Promise<ProjectContext>;
+  getProjectSummary: () => Promise<string>;
+  listProjectFiles: (maxDepth?: number, includeHidden?: boolean) => Promise<ProjectFileInfo[]>;
+  validateProjectPath: (path: string) => Promise<boolean>;
+  loadProjectInstructions: () => Promise<ProjectInstructionFile[]>;
+  hasProjectInstructions: () => Promise<boolean>;
 
   // Utilities
   clearError: () => void;
@@ -472,6 +504,76 @@ export const useProjectStore = create<ProjectState>()(
           const { currentFolder } = get();
           if (!currentFolder) return null;
           return formatFolderPath(currentFolder);
+        },
+
+        // Project context — Rust backend commands
+        getProjectContext: async () => {
+          try {
+            return await invoke<ProjectContext>('project_context_get_folder');
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('[ProjectStore] Failed to get project context:', errorMessage);
+            set({ error: errorMessage });
+            throw error;
+          }
+        },
+
+        getProjectSummary: async () => {
+          try {
+            return await invoke<string>('project_context_get_summary');
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('[ProjectStore] Failed to get project summary:', errorMessage);
+            set({ error: errorMessage });
+            throw error;
+          }
+        },
+
+        listProjectFiles: async (maxDepth?: number, includeHidden?: boolean) => {
+          try {
+            return await invoke<ProjectFileInfo[]>('project_context_list_files', {
+              maxDepth: maxDepth ?? null,
+              includeHidden: includeHidden ?? null,
+            });
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('[ProjectStore] Failed to list project files:', errorMessage);
+            set({ error: errorMessage });
+            throw error;
+          }
+        },
+
+        validateProjectPath: async (path: string) => {
+          try {
+            return await invoke<boolean>('project_context_validate_path', { path });
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('[ProjectStore] Failed to validate project path:', errorMessage);
+            set({ error: errorMessage });
+            throw error;
+          }
+        },
+
+        loadProjectInstructions: async () => {
+          try {
+            return await invoke<ProjectInstructionFile[]>('project_load_instructions');
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('[ProjectStore] Failed to load project instructions:', errorMessage);
+            set({ error: errorMessage });
+            throw error;
+          }
+        },
+
+        hasProjectInstructions: async () => {
+          try {
+            return await invoke<boolean>('project_has_instructions');
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('[ProjectStore] Failed to check project instructions:', errorMessage);
+            set({ error: errorMessage });
+            throw error;
+          }
         },
 
         // Clear error
