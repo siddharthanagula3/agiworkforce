@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
+import { toast } from 'sonner';
 import { VoiceInputOverlay } from './components/Voice/VoiceInputOverlay';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
@@ -41,6 +42,7 @@ import { errorReportingService } from './services/errorReporting';
 import { useAuthStore, useAccountStore } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import useErrorStore, { useSimpleModeStore, selectOnboardingCompleted } from './stores/ui';
+import { useAppModeStore } from './stores/appModeStore';
 import { useSettingsDialogStore } from './stores/settingsDialogStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { OnboardingWelcome } from './components/Onboarding';
@@ -512,6 +514,31 @@ const DesktopShell = () => {
         unlistenFn();
         unlistenFn = null;
       }
+    };
+  }, []);
+
+  // Listen for online/offline events and update appModeStore
+  useEffect(() => {
+    const handleOnline = () => {
+      useAppModeStore.getState().setOnline(true);
+    };
+
+    const handleOffline = () => {
+      useAppModeStore.getState().setOnline(false);
+
+      // Show toast warning if user is in Cloud Mode
+      const isCloudMode = useAppModeStore.getState().mode === 'cloud';
+      if (isCloudMode) {
+        toast.error("You're offline. Switch to Local Mode or reconnect.");
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
