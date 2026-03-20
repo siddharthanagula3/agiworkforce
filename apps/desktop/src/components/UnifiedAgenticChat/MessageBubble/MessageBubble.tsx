@@ -37,6 +37,7 @@ import { useMcpAppStore } from '../../../stores/mcpAppStore';
 import type { McpAppContent } from '../../../stores/mcpAppStore';
 import { hasInlineRenderer } from '../InlineToolResults';
 import { ThinkingMessageBlock } from './ThinkingMessageBlock';
+import { TimelinePhase, TimelineStep } from '../Timeline';
 import { InlinePanelList } from './InlinePanelList';
 import { WidgetList, WidgetData } from './WidgetList';
 import { getMessageWidgets } from './messageRuntime';
@@ -234,6 +235,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const openSidecar = useUnifiedChatStore((state) => state.openSidecar);
   const sidecar = useUnifiedChatStore((state) => state.sidecar);
   const researchTasks = useExecutionStore((state) => state.researchTasks);
+
+  // Timeline data for this message
+  const messageToolTimeline = useChatStore(
+    useCallback((state) => state.toolTimelineByMessage[message.id] ?? [], [message.id]),
+  );
+  const messageThinkingContent = useChatStore(
+    useCallback((state) => state.thinkingByMessage[message.id] ?? '', [message.id]),
+  );
 
   // Reactive settings (replaces getState() inside render functions)
   const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
@@ -488,6 +497,78 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       </div>
     );
   }
+
+  // Claude-style vertical timeline: thinking + tool calls grouped into a collapsible phase
+  const renderTimeline = (embedded = false) => {
+    const hasTimelineData = messageToolTimeline.length > 0 || messageThinkingContent;
+    if (!hasTimelineData) {
+      return renderToolCall(embedded);
+    }
+
+    const isStreaming = Boolean(message.metadata?.streaming);
+
+    // Phase title: first sentence of thinking, or tool name, or fallback
+    const phaseTitle = (() => {
+      const thinking = messageThinkingContent || thinkingMatch?.content || '';
+      if (thinking) {
+        const firstSentence = thinking.split(/[.!?]\s+/)[0]?.trim();
+        if (firstSentence && firstSentence.length > 0) {
+          return firstSentence.length > 80 ? firstSentence.slice(0, 77) + '...' : firstSentence;
+        }
+      }
+      if (toolName) {
+        return `Used ${String(toolName)}`;
+      }
+      return 'Agent activity';
+    })();
+
+    const totalSteps = (messageThinkingContent ? 1 : 0) + messageToolTimeline.length + 1; // +1 for done
+    let stepIndex = 0;
+
+    return (
+      <div className={cn('px-4 py-2', embedded && 'pl-14')}>
+        <TimelinePhase title={phaseTitle} defaultExpanded={isStreaming}>
+          {/* Thinking step */}
+          {messageThinkingContent && (
+            <TimelineStep
+              key="thinking"
+              variant="thinking"
+              label={messageThinkingContent.slice(0, 200)}
+              isRunning={isStreaming && messageToolTimeline.length === 0}
+              isLast={++stepIndex >= totalSteps}
+            />
+          )}
+
+          {/* Tool steps */}
+          {messageToolTimeline.map((entry) => {
+            stepIndex++;
+            const isLastStep = stepIndex >= totalSteps;
+            return (
+              <TimelineStep
+                key={entry.id}
+                variant="tool"
+                label={
+                  entry.displayArgs
+                    ? `${entry.displayName} — ${entry.displayArgs}`
+                    : entry.displayName
+                }
+                result={entry.resultPreview}
+                isError={entry.status === 'error'}
+                isRunning={entry.status === 'running'}
+                isLast={isLastStep}
+                duration={entry.durationMs}
+              />
+            );
+          })}
+
+          {/* Done step — only shown when not streaming */}
+          {!isStreaming && messageToolTimeline.length > 0 && (
+            <TimelineStep variant="done" label="Done" isLast />
+          )}
+        </TimelinePhase>
+      </div>
+    );
+  };
 
   // Pre-render tool call content to share between standalone and dual-mode (thinking + tool)
   const renderToolCall = (embedded = false) => {
@@ -815,14 +896,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
           />
         </>
         {/* If this message also has a tool call, render it below the thinking block */}
-        {isToolCall && renderToolCall(true)}
+        {isToolCall && renderTimeline(true)}
       </div>
     );
   }
 
   // Render standalone tool call
   if (isToolCall) {
-    return renderToolCall(false);
+    return renderTimeline(false);
   }
 
   // Render standard message

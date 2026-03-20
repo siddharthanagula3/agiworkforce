@@ -74,6 +74,14 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
   const thinkingBlock = thinkingMatch.content;
   const widgets = getMessageWidgets(message);
 
+  // Use first sentence of thinking as summary when no explicit one is set (Claude pattern)
+  const derivedSummary = (() => {
+    if (summary) return summary;
+    const firstSentence = thinkingBlock.split(/[.!?]\s+/)[0]?.trim();
+    if (!firstSentence || firstSentence.length === 0) return undefined;
+    return firstSentence.length > 80 ? firstSentence.slice(0, 77) + '...' : firstSentence;
+  })();
+
   // Remove all thinking-related tags from the remaining content
   const remainingContent = message.content
     .replace(/<thinking>[\s\S]*?(?:<\/thinking>|$)/gi, '')
@@ -101,7 +109,7 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
         {/* Reasoning Accordion */}
         <ReasoningAccordion
           content={thinkingBlock}
-          summary={summary}
+          summary={derivedSummary}
           metadata={{ duration, steps, thinkingPattern: thinkingMatch.pattern }}
           isStreaming={isStreaming}
         />
