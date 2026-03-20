@@ -1,15 +1,32 @@
 /**
  * Team operations hook for AGI Workforce.
  *
- * Provides a convenient interface to Team operations via Tauri commands.
+ * Provides a convenient interface to Team operations via teamsApi wrappers.
  * Handles loading states, error handling, and automatic data refresh.
  *
  * @module useTeam
  */
 
-import { invoke } from '../lib/tauri-mock';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
+import {
+  createTeam as apiCreateTeam,
+  getTeam as apiGetTeam,
+  updateTeam as apiUpdateTeam,
+  updateTeamSettings as apiUpdateTeamSettings,
+  deleteTeam as apiDeleteTeam,
+  getUserTeams as apiGetUserTeams,
+  inviteMember as apiInviteMember,
+  acceptInvitation as apiAcceptInvitation,
+  removeMember as apiRemoveMember,
+  updateMemberRole as apiUpdateMemberRole,
+  getTeamMembers as apiGetTeamMembers,
+  getTeamInvitations as apiGetTeamInvitations,
+  shareResource as apiShareResource,
+  unshareResource as apiUnshareResource,
+  getTeamResources as apiGetTeamResources,
+  transferTeamOwnership as apiTransferTeamOwnership,
+} from '../api/teamsApi';
 import type {
   Team,
   TeamMember,
@@ -132,7 +149,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        const members = await invoke<TeamMember[]>('get_team_members', { teamId });
+        const members = await apiGetTeamMembers(teamId);
         return members;
       } catch (err) {
         handleError(err, 'list members');
@@ -155,14 +172,8 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        // TeamRole enum values are already strings, so we can safely cast
         const roleStr = String(role);
-        const token = await invoke<string>('invite_member', {
-          teamId,
-          email,
-          role: roleStr,
-          invitedBy,
-        });
+        const token = await apiInviteMember(teamId, email, roleStr, invitedBy);
         toast.success(`Invitation sent to ${email}`);
         return token;
       } catch (err) {
@@ -181,7 +192,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        await invoke('remove_member', { teamId, userId, removedBy });
+        await apiRemoveMember(teamId, userId, removedBy);
         toast.success('Member removed from team');
       } catch (err) {
         handleError(err, 'remove member');
@@ -203,14 +214,8 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        // TeamRole enum values are already strings, so we can safely cast
         const roleStr = String(role);
-        await invoke('update_member_role', {
-          teamId,
-          userId,
-          role: roleStr,
-          updatedBy,
-        });
+        await apiUpdateMemberRole(teamId, userId, roleStr, updatedBy);
         toast.success('Member role updated');
       } catch (err) {
         handleError(err, 'update role');
@@ -227,7 +232,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        const team = await invoke<Team | null>('get_team', { teamId });
+        const team = await apiGetTeam(teamId);
         return team?.settings ?? null;
       } catch (err) {
         handleError(err, 'get settings');
@@ -252,16 +257,12 @@ export function useTeam(): UseTeamReturn {
       try {
         // Update basic team info (name, description) if provided
         if (name !== undefined || description !== undefined) {
-          await invoke('update_team', {
-            teamId,
-            name: name ?? null,
-            description: description ?? null,
-          });
+          await apiUpdateTeam(teamId, name ?? null, description ?? null);
         }
 
         // Update team settings if provided
         if (settings) {
-          await invoke('update_team_settings', {
+          await apiUpdateTeamSettings({
             teamId,
             defaultMemberRole: settings.defaultMemberRole ?? null,
             allowResourceSharing: settings.allowResourceSharing ?? null,
@@ -287,7 +288,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        const resources = await invoke<TeamResource[]>('get_team_resources', { teamId });
+        const resources = await apiGetTeamResources(teamId);
         return resources;
       } catch (err) {
         handleError(err, 'list shared resources');
@@ -312,16 +313,15 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        // ResourceType enum values are already strings, so we can safely cast
         const resourceTypeStr = String(resourceType);
-        await invoke('share_resource', {
+        await apiShareResource(
           teamId,
-          resourceType: resourceTypeStr,
+          resourceTypeStr,
           resourceId,
           resourceName,
           resourceDescription,
           sharedBy,
-        });
+        );
         toast.success(`${resourceName} shared with team`);
       } catch (err) {
         handleError(err, 'share resource');
@@ -343,14 +343,8 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        // ResourceType enum values are already strings, so we can safely cast
         const resourceTypeStr = String(resourceType);
-        await invoke('unshare_resource', {
-          teamId,
-          resourceType: resourceTypeStr,
-          resourceId,
-          unsharedBy,
-        });
+        await apiUnshareResource(teamId, resourceTypeStr, resourceId, unsharedBy);
         toast.success('Resource unshared from team');
       } catch (err) {
         handleError(err, 'unshare resource');
@@ -367,7 +361,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        const invitations = await invoke<TeamInvitation[]>('get_team_invitations', { teamId });
+        const invitations = await apiGetTeamInvitations(teamId);
         return invitations;
       } catch (err) {
         handleError(err, 'get invitations');
@@ -385,7 +379,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        const team = await invoke<Team>('accept_invitation', { token, userId });
+        const team = await apiAcceptInvitation(token, userId);
         toast.success(`Joined team: ${team.name}`);
         return team;
       } catch (err) {
@@ -404,7 +398,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        const team = await invoke<Team | null>('get_team', { teamId });
+        const team = await apiGetTeam(teamId);
         return team;
       } catch (err) {
         handleError(err, 'get team');
@@ -422,7 +416,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        const teams = await invoke<Team[]>('get_user_teams', { userId });
+        const teams = await apiGetUserTeams(userId);
         return teams;
       } catch (err) {
         handleError(err, 'get user teams');
@@ -440,7 +434,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        const team = await invoke<Team>('create_team', { name, description, ownerId });
+        const team = await apiCreateTeam(name, description, ownerId);
         toast.success(`Team "${name}" created`);
         return team;
       } catch (err) {
@@ -459,7 +453,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        await invoke('delete_team', { teamId });
+        await apiDeleteTeam(teamId);
         toast.success('Team deleted');
       } catch (err) {
         handleError(err, 'delete team');
@@ -476,7 +470,7 @@ export function useTeam(): UseTeamReturn {
       setError(null);
 
       try {
-        await invoke('transfer_team_ownership', { teamId, newOwnerId, transferredBy });
+        await apiTransferTeamOwnership(teamId, newOwnerId, transferredBy);
         toast.success('Team ownership transferred');
       } catch (err) {
         handleError(err, 'transfer ownership');

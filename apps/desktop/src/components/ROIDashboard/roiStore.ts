@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
+import { acknowledgeMilestone as apiAcknowledgeMilestone } from '../../api/analytics';
 import type {
   ActivityItem,
   AllTimeStats,
@@ -235,7 +236,7 @@ export const useROIStore = create<ROIState>()(
 
     acknowledgeMilestone: async (milestoneId: string) => {
       try {
-        await invoke('acknowledge_milestone', { milestoneId });
+        await apiAcknowledgeMilestone(milestoneId);
 
         set((state) => {
           const milestone = state.milestones.find((m) => m.id === milestoneId);

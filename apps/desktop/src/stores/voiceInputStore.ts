@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
+import { voiceTranscribeBlob } from '../api/voice';
 import { storageFallback } from '../lib/storageFallback';
 
 type VoiceMode = 'idle' | 'listening' | 'transcribing' | 'processing' | 'preview';
@@ -224,12 +225,7 @@ export const useVoiceInputStore = create<VoiceInputState>()(
             const format = (blob.type.includes('mp4') ? 'mp4' : 'webm') as string;
             const { provider, language } = get();
 
-            const result = await invoke<{
-              text: string;
-              language?: string;
-              duration?: number;
-              confidence?: number;
-            }>('voice_transcribe_blob', { audioData, format, provider, language });
+            const result = await voiceTranscribeBlob(audioData, format, provider, language);
 
             const rawText = result?.text?.trim() ?? '';
             if (!rawText) {

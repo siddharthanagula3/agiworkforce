@@ -7,11 +7,72 @@
  * Orchestrates recording (via MediaRecorder), transcription (via Rust backend),
  * LLM response generation, and TTS playback to create a hands-free
  * conversational experience similar to ChatGPT voice mode.
+ *
+ * Wires 15+ critical Rust voice commands:
+ *   - Transcription: voice_transcribe_blob
+ *   - TTS: voice_tts_speak, voice_tts_speak_with_barge_in, voice_tts_stop, voice_tts_is_playing,
+ *          voice_tts_list_voices, voice_tts_configure, voice_tts_speak_local
+ *   - Capabilities: voice_get_capabilities
+ *   - Wake word: voice_wake_enable, voice_wake_disable, voice_wake_status, voice_wake_configure
+ *   - PTT: voice_ptt_configure, voice_ptt_state, voice_ptt_key_down, voice_ptt_key_up
+ *   - Global PTT: voice_start_global_ptt, voice_stop_global_ptt, voice_inject_text
+ *   - Deepgram: voice_deepgram_configure, voice_start_deepgram_stream, voice_stop_deepgram_stream,
+ *              voice_deepgram_send_audio, voice_deepgram_status
+ *   - Barge-in: voice_enable_barge_in, voice_get_barge_in_status, voice_configure_barge_in,
+ *              voice_start_barge_in_monitoring, voice_stop_barge_in_monitoring
+ *   - Speech recording: speech_start_recording, speech_stop_and_transcribe
+ *   - Settings: voice_get_settings, voice_configure
+ *   - Local models: voice_list_local_models, voice_download_whisper_model, voice_list_whisper_models,
+ *                   voice_set_whisper_model, voice_download_piper_voice, voice_list_piper_voices,
+ *                   voice_set_piper_voice
  */
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
+import {
+  voiceGetCapabilities,
+  voiceGetSettings,
+  voiceConfigure,
+  voiceTtsSpeak,
+  voiceTtsSpeakWithBargeIn,
+  voiceTtsStop,
+  voiceTtsIsPlaying,
+  voiceTtsListVoices,
+  voiceTtsConfigure,
+  voiceTtsSpeakLocal,
+  voiceWakeEnable,
+  voiceWakeDisable,
+  voiceWakeStatus,
+  voiceWakeConfigure,
+  voicePttConfigure,
+  voicePttState,
+  voicePttKeyDown,
+  voicePttKeyUp,
+  voiceStartGlobalPtt,
+  voiceStopGlobalPtt,
+  voiceInjectText,
+  voiceDeepgramConfigure,
+  voiceStartDeepgramStream,
+  voiceStopDeepgramStream,
+  voiceDeepgramSendAudio,
+  voiceDeepgramStatus,
+  voiceEnableBargeIn,
+  voiceGetBargeInStatus,
+  voiceConfigureBargeIn,
+  voiceStartBargeInMonitoring,
+  voiceStopBargeInMonitoring,
+  speechStartRecording,
+  speechStopAndTranscribe,
+  voiceListLocalModels,
+  voiceDownloadWhisperModel,
+  voiceListWhisperModels,
+  voiceSetWhisperModel,
+  voiceDownloadPiperVoice,
+  voiceListPiperVoices,
+  voiceSetPiperVoice,
+  voiceTranscribeBlob,
+} from '../api/voice';
 
 /**
  * Voice mode lifecycle phases:
@@ -34,6 +95,127 @@ interface LLMResponse {
   content: string;
 }
 
+// -- Types matching Rust command return types --
+
+export interface VoiceCapabilities {
+  ttsAvailable: boolean;
+  ttsProvider: string;
+  ttsPlaying: boolean;
+  wakeWordEnabled: boolean;
+  pttEnabled: boolean;
+  pttHotkey: string;
+  bargeInEnabled: boolean;
+  bargeInSensitivity: number;
+  vadAvailable: boolean;
+  localSttAvailable: boolean;
+  localSttModel: string | null;
+  localTtsAvailable: boolean;
+  localTtsVoice: string | null;
+}
+
+export interface VoiceSettingsBackend {
+  provider: 'cloud' | 'webspeech' | 'local';
+  model: string;
+  language: string | null;
+}
+
+export interface TtsVoice {
+  id: string;
+  name: string;
+  language: string;
+}
+
+export interface WakeWordConfig {
+  enabled: boolean;
+  wakePhrase?: string;
+  sensitivity?: number;
+}
+
+export interface PttConfig {
+  enabled: boolean;
+  hotkey: string;
+}
+
+export interface DeepgramConfig {
+  apiKey: string;
+  model: string;
+  language: string;
+  sampleRate: number;
+  channels: number;
+  interim: boolean;
+  punctuation: boolean;
+  smartFormatting: boolean;
+}
+
+export interface DeepgramStreamStatus {
+  isStreaming: boolean;
+  connectionState: string;
+  stats: DeepgramStreamingStats | null;
+}
+
+export interface DeepgramStreamingStats {
+  state: string;
+  totalAudioBytes: number;
+  totalTranscripts: number;
+  startedAt: number;
+}
+
+export interface BargeInStatus {
+  enabled: boolean;
+  monitoringActive: boolean;
+  sensitivity: number;
+  minSpeechMs: number;
+  stats: BargeInStats;
+}
+
+export interface BargeInStats {
+  totalDetections: number;
+  avgLatencyMs: number;
+}
+
+export interface BargeInConfig {
+  sensitivity: number;
+  minSpeechMs: number;
+  consecutiveFramesThreshold: number;
+}
+
+export interface SpeechTranscriptResult {
+  text: string;
+  confidence: number;
+  language: string;
+}
+
+export interface WhisperModelInfo {
+  size: string;
+  downloaded: boolean;
+  sizeBytes: number;
+  modelPath: string | null;
+}
+
+export interface PiperVoiceInfo {
+  id: string;
+  name: string;
+  language: string;
+  isDownloaded: boolean;
+  modelPath: string | null;
+}
+
+export interface LocalModelsInfo {
+  whisperModels: WhisperModelInfo[];
+  piperVoices: PiperVoiceInfo[];
+  whisperModelsDir: string;
+  piperModelsDir: string;
+  piperBinaryAvailable: boolean;
+}
+
+export interface TtsConfig {
+  provider: string;
+  apiKey?: string;
+  voice?: string;
+  speed?: number;
+  pitch?: number;
+}
+
 interface VoiceModeState {
   /** Whether the full-screen voice overlay is open */
   isOpen: boolean;
@@ -49,6 +231,16 @@ interface VoiceModeState {
   turns: VoiceTurn[];
   /** Audio level (0-1) for waveform visualization */
   audioLevel: number;
+  /** Voice capabilities fetched from backend */
+  capabilities: VoiceCapabilities | null;
+  /** Wake word listening status */
+  wakeWordActive: boolean;
+  /** Global PTT active */
+  globalPttActive: boolean;
+  /** Deepgram streaming status */
+  deepgramStreaming: boolean;
+  /** Barge-in enabled */
+  bargeInEnabled: boolean;
 
   // -- Internal runtime refs (not persisted) --
   _mediaStream: MediaStream | null;
@@ -59,13 +251,117 @@ interface VoiceModeState {
   _animFrameId: number | null;
   _isSpeaking: boolean;
 
-  // -- Actions --
+  // -- Core voice loop actions --
   open: () => void;
   close: () => void;
   startListening: () => Promise<void>;
   stopListeningAndProcess: (onSend?: (text: string) => void) => Promise<void>;
-  stopSpeaking: () => void;
+  stopSpeaking: () => Promise<void>;
   reset: () => void;
+
+  // -- Backend voice command wrappers --
+
+  /** Fetch voice capabilities from Rust backend */
+  fetchCapabilities: () => Promise<VoiceCapabilities | null>;
+  /** Get voice settings from Rust backend */
+  getBackendSettings: () => Promise<VoiceSettingsBackend | null>;
+  /** Configure voice settings on Rust backend */
+  configureBackend: (provider?: string, model?: string, language?: string) => Promise<void>;
+
+  // TTS commands
+  /** Speak text using backend TTS with barge-in support */
+  speakWithBargeIn: (text: string) => Promise<void>;
+  /** Stop TTS playback via backend */
+  stopTts: () => Promise<boolean>;
+  /** Check if TTS is currently playing */
+  isTtsPlaying: () => Promise<boolean>;
+  /** List available TTS voices */
+  listTtsVoices: () => Promise<TtsVoice[]>;
+  /** Configure TTS settings */
+  configureTts: (config: TtsConfig) => Promise<void>;
+  /** Speak text using local Piper TTS */
+  speakLocal: (text: string, rate?: number, volume?: number) => Promise<void>;
+
+  // Wake word commands
+  /** Enable wake word detection */
+  enableWakeWord: (config?: WakeWordConfig) => Promise<void>;
+  /** Disable wake word detection */
+  disableWakeWord: () => Promise<void>;
+  /** Get wake word status */
+  getWakeWordStatus: () => Promise<boolean>;
+  /** Configure wake word */
+  configureWakeWord: (config: WakeWordConfig) => Promise<void>;
+
+  // PTT commands
+  /** Configure push-to-talk */
+  configurePtt: (config: PttConfig) => Promise<void>;
+  /** Get PTT state */
+  getPttState: () => Promise<string>;
+  /** Simulate PTT key down */
+  pttKeyDown: () => Promise<void>;
+  /** Simulate PTT key up */
+  pttKeyUp: () => Promise<number | null>;
+
+  // Global PTT commands
+  /** Start global fn-key PTT listener */
+  startGlobalPtt: () => Promise<void>;
+  /** Stop global PTT listener */
+  stopGlobalPtt: () => Promise<void>;
+  /** Inject text into focused field via OS input */
+  injectText: (text: string) => Promise<void>;
+
+  // Deepgram streaming commands
+  /** Configure Deepgram streaming settings */
+  configureDeepgram: (config: DeepgramConfig) => Promise<void>;
+  /** Start Deepgram streaming transcription */
+  startDeepgramStream: () => Promise<void>;
+  /** Stop Deepgram streaming transcription */
+  stopDeepgramStream: () => Promise<DeepgramStreamingStats | null>;
+  /** Send audio data to active Deepgram stream */
+  sendDeepgramAudio: (audioData: number[]) => Promise<void>;
+  /** Get Deepgram streaming status */
+  getDeepgramStatus: () => Promise<DeepgramStreamStatus | null>;
+
+  // Barge-in commands
+  /** Enable or disable barge-in detection */
+  enableBargeIn: (enabled: boolean) => Promise<boolean>;
+  /** Get barge-in status */
+  getBargeInStatus: () => Promise<BargeInStatus | null>;
+  /** Configure barge-in parameters */
+  configureBargeIn: (
+    sensitivity?: number,
+    minSpeechMs?: number,
+    consecutiveFramesThreshold?: number,
+  ) => Promise<BargeInConfig | null>;
+  /** Start barge-in monitoring */
+  startBargeInMonitoring: () => Promise<boolean>;
+  /** Stop barge-in monitoring */
+  stopBargeInMonitoring: () => Promise<boolean>;
+
+  // Native speech recording commands (Wispr Flow)
+  /** Start native audio recording via cpal */
+  startNativeRecording: (provider?: string) => Promise<void>;
+  /** Stop native recording and get transcription */
+  stopNativeRecordingAndTranscribe: (
+    provider?: string,
+    language?: string,
+  ) => Promise<SpeechTranscriptResult | null>;
+
+  // Local model management
+  /** List all local voice models (Whisper + Piper) */
+  listLocalModels: () => Promise<LocalModelsInfo | null>;
+  /** Download a Whisper model */
+  downloadWhisperModel: (modelSize: string) => Promise<string | null>;
+  /** List available Whisper models */
+  listWhisperModels: () => Promise<WhisperModelInfo[]>;
+  /** Set active Whisper model */
+  setWhisperModel: (modelSize: string) => Promise<void>;
+  /** Download a Piper voice */
+  downloadPiperVoice: (voiceId: string) => Promise<string | null>;
+  /** List available Piper voices */
+  listPiperVoices: () => Promise<PiperVoiceInfo[]>;
+  /** Set active Piper voice */
+  setPiperVoice: (voiceId: string) => Promise<void>;
 }
 
 /** Generate a simple unique ID */
@@ -83,6 +379,11 @@ export const useVoiceModeStore = create<VoiceModeState>()(
       error: null,
       turns: [],
       audioLevel: 0,
+      capabilities: null,
+      wakeWordActive: false,
+      globalPttActive: false,
+      deepgramStreaming: false,
+      bargeInEnabled: false,
 
       _mediaStream: null,
       _recorder: null,
@@ -94,10 +395,19 @@ export const useVoiceModeStore = create<VoiceModeState>()(
 
       open: () => {
         set({ isOpen: true, phase: 'idle', error: null, userTranscript: '', aiResponse: '' });
+        // Fetch capabilities on open
+        get()
+          .fetchCapabilities()
+          .catch(() => {});
       },
 
       close: () => {
         const { _mediaStream, _recorder, _audioContext, _animFrameId } = get();
+
+        // Stop backend TTS if speaking
+        if (get()._isSpeaking) {
+          voiceTtsStop().catch(() => {});
+        }
 
         // Clean up any active recording
         if (_recorder && _recorder.state !== 'inactive') {
@@ -158,31 +468,41 @@ export const useVoiceModeStore = create<VoiceModeState>()(
           });
 
           // Set up audio analysis for waveform visualization
-          const audioContext = new AudioContext();
-          const source = audioContext.createMediaStreamSource(stream);
-          const analyser = audioContext.createAnalyser();
-          analyser.fftSize = 256;
-          analyser.smoothingTimeConstant = 0.8;
-          source.connect(analyser);
+          let audioContext: AudioContext | null = null;
+          let analyser: AnalyserNode | null = null;
+          let frameId: number | null = null;
 
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          try {
+            audioContext = new AudioContext();
+            const source = audioContext.createMediaStreamSource(stream);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.8;
+            source.connect(analyser);
 
-          const updateLevel = () => {
-            if (get().phase !== 'listening') return;
-            analyser.getByteFrequencyData(dataArray);
-            // Compute RMS volume
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-              const val = dataArray[i] ?? 0;
-              sum += val * val;
-            }
-            const rms = Math.sqrt(sum / dataArray.length) / 255;
-            set({ audioLevel: Math.min(1, rms * 2.5) });
-            const frameId = requestAnimationFrame(updateLevel);
-            set({ _animFrameId: frameId });
-          };
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-          const frameId = requestAnimationFrame(updateLevel);
+            const updateLevel = () => {
+              if (get().phase !== 'listening') return;
+              analyser!.getByteFrequencyData(dataArray);
+              // Compute RMS volume
+              let sum = 0;
+              for (let i = 0; i < dataArray.length; i++) {
+                const val = dataArray[i] ?? 0;
+                sum += val * val;
+              }
+              const rms = Math.sqrt(sum / dataArray.length) / 255;
+              set({ audioLevel: Math.min(1, rms * 2.5) });
+              const id = requestAnimationFrame(updateLevel);
+              set({ _animFrameId: id });
+            };
+
+            frameId = requestAnimationFrame(updateLevel);
+          } catch {
+            // AudioContext creation can fail in restricted environments
+            audioContext = null;
+            analyser = null;
+          }
 
           // Set up MediaRecorder
           const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -272,17 +592,12 @@ export const useVoiceModeStore = create<VoiceModeState>()(
           const format = blob.type.includes('mp4') ? 'mp4' : 'webm';
 
           // Step 1: Transcribe the audio via Rust backend
-          const transcriptionResult = await invoke<{
-            text: string;
-            language?: string;
-            duration?: number;
-            confidence?: number;
-          }>('voice_transcribe_blob', {
+          const transcriptionResult = await voiceTranscribeBlob(
             audioData,
             format,
-            provider: 'local_whisper',
-            language: 'en',
-          });
+            'local_whisper',
+            'en',
+          );
 
           const userText = transcriptionResult?.text?.trim() ?? '';
 
@@ -363,17 +678,24 @@ export const useVoiceModeStore = create<VoiceModeState>()(
             turns: [...s.turns, newTurn],
           }));
 
-          // Step 3: Speak the response via TTS
+          // Step 3: Speak the response via TTS (with barge-in if enabled)
           set({ phase: 'speaking', _isSpeaking: true });
 
           try {
-            await invoke('voice_tts_speak', { text: aiText });
+            if (get().bargeInEnabled) {
+              await voiceTtsSpeakWithBargeIn(aiText);
+            } else {
+              await voiceTtsSpeak(aiText);
+            }
           } catch {
             // TTS failed -- still show the response, just don't speak
           }
 
-          // After speaking completes, return to idle
-          if (get().phase === 'speaking') {
+          // After speaking completes, return to idle -- but only if still in
+          // the speaking phase and the overlay is still open. The user may have
+          // closed the overlay or interrupted while TTS was playing.
+          const postTtsState = get();
+          if (postTtsState.phase === 'speaking' && postTtsState.isOpen) {
             set({
               phase: 'idle',
               _isSpeaking: false,
@@ -397,7 +719,13 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         }
       },
 
-      stopSpeaking: () => {
+      stopSpeaking: async () => {
+        // Stop backend TTS playback
+        try {
+          await voiceTtsStop();
+        } catch {
+          // Fallback: just update local state
+        }
         set({
           phase: 'idle',
           _isSpeaking: false,
@@ -405,7 +733,13 @@ export const useVoiceModeStore = create<VoiceModeState>()(
       },
 
       reset: () => {
-        const { _mediaStream, _recorder, _audioContext, _animFrameId } = get();
+        const { _mediaStream, _recorder, _audioContext, _animFrameId, _isSpeaking } = get();
+
+        // Stop backend TTS if speaking
+        if (_isSpeaking) {
+          voiceTtsStop().catch(() => {});
+        }
+
         if (_recorder && _recorder.state !== 'inactive') {
           try {
             _recorder.stop();
@@ -440,6 +774,391 @@ export const useVoiceModeStore = create<VoiceModeState>()(
           _animFrameId: null,
           _isSpeaking: false,
         });
+      },
+
+      // =====================================================================
+      // Backend voice command wrappers
+      // =====================================================================
+
+      fetchCapabilities: async () => {
+        try {
+          const caps = await voiceGetCapabilities();
+          set({
+            capabilities: caps,
+            wakeWordActive: caps?.wakeWordEnabled ?? false,
+            bargeInEnabled: caps?.bargeInEnabled ?? false,
+          });
+          return caps;
+        } catch {
+          return null;
+        }
+      },
+
+      getBackendSettings: async () => {
+        try {
+          return await voiceGetSettings();
+        } catch {
+          return null;
+        }
+      },
+
+      configureBackend: async (provider?: string, model?: string, language?: string) => {
+        try {
+          await voiceConfigure(provider, model, language);
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      // -- TTS commands --
+
+      speakWithBargeIn: async (text: string) => {
+        set({ phase: 'speaking', _isSpeaking: true });
+        try {
+          await voiceTtsSpeakWithBargeIn(text);
+        } catch {
+          // Fallback to regular TTS
+          try {
+            await voiceTtsSpeak(text);
+          } catch {
+            // Both failed
+          }
+        }
+        if (get().phase === 'speaking') {
+          set({ phase: 'idle', _isSpeaking: false });
+        }
+      },
+
+      stopTts: async () => {
+        try {
+          const stopped = await voiceTtsStop();
+          set({ _isSpeaking: false });
+          if (get().phase === 'speaking') {
+            set({ phase: 'idle' });
+          }
+          return stopped;
+        } catch {
+          set({ _isSpeaking: false });
+          return false;
+        }
+      },
+
+      isTtsPlaying: async () => {
+        try {
+          return await voiceTtsIsPlaying();
+        } catch {
+          return false;
+        }
+      },
+
+      listTtsVoices: async () => {
+        try {
+          return await voiceTtsListVoices();
+        } catch {
+          return [];
+        }
+      },
+
+      configureTts: async (config: TtsConfig) => {
+        try {
+          await voiceTtsConfigure(config);
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      speakLocal: async (text: string, rate?: number, volume?: number) => {
+        try {
+          await voiceTtsSpeakLocal(text, rate, volume);
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      // -- Wake word commands --
+
+      enableWakeWord: async (config?: WakeWordConfig) => {
+        try {
+          await voiceWakeEnable(config);
+          set({ wakeWordActive: true });
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      disableWakeWord: async () => {
+        try {
+          await voiceWakeDisable();
+          set({ wakeWordActive: false });
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      getWakeWordStatus: async () => {
+        try {
+          const active = await voiceWakeStatus();
+          set({ wakeWordActive: active });
+          return active;
+        } catch {
+          return false;
+        }
+      },
+
+      configureWakeWord: async (config: WakeWordConfig) => {
+        try {
+          await voiceWakeConfigure(config);
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      // -- PTT commands --
+
+      configurePtt: async (config: PttConfig) => {
+        try {
+          await voicePttConfigure(config);
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      getPttState: async () => {
+        try {
+          return await voicePttState();
+        } catch {
+          return 'idle';
+        }
+      },
+
+      pttKeyDown: async () => {
+        try {
+          await voicePttKeyDown();
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      pttKeyUp: async () => {
+        try {
+          return await voicePttKeyUp();
+        } catch {
+          return null;
+        }
+      },
+
+      // -- Global PTT commands --
+
+      startGlobalPtt: async () => {
+        try {
+          await voiceStartGlobalPtt();
+          set({ globalPttActive: true });
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      stopGlobalPtt: async () => {
+        try {
+          await voiceStopGlobalPtt();
+          set({ globalPttActive: false });
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      injectText: async (text: string) => {
+        try {
+          await voiceInjectText(text);
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      // -- Deepgram streaming commands --
+
+      configureDeepgram: async (config: DeepgramConfig) => {
+        try {
+          await voiceDeepgramConfigure(config);
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      startDeepgramStream: async () => {
+        try {
+          await voiceStartDeepgramStream();
+          set({ deepgramStreaming: true });
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      stopDeepgramStream: async () => {
+        try {
+          const stats = await voiceStopDeepgramStream();
+          set({ deepgramStreaming: false });
+          return stats;
+        } catch {
+          set({ deepgramStreaming: false });
+          return null;
+        }
+      },
+
+      sendDeepgramAudio: async (audioData: number[]) => {
+        try {
+          await voiceDeepgramSendAudio(audioData);
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      getDeepgramStatus: async () => {
+        try {
+          const status = await voiceDeepgramStatus();
+          if (status) {
+            set({ deepgramStreaming: status.isStreaming });
+          }
+          return status;
+        } catch {
+          return null;
+        }
+      },
+
+      // -- Barge-in commands --
+
+      enableBargeIn: async (enabled: boolean) => {
+        try {
+          const result = await voiceEnableBargeIn(enabled);
+          set({ bargeInEnabled: result });
+          return result;
+        } catch (e) {
+          set({ error: String(e) });
+          return false;
+        }
+      },
+
+      getBargeInStatus: async () => {
+        try {
+          const status = await voiceGetBargeInStatus();
+          if (status) {
+            set({ bargeInEnabled: status.enabled });
+          }
+          return status;
+        } catch {
+          return null;
+        }
+      },
+
+      configureBargeIn: async (
+        sensitivity?: number,
+        minSpeechMs?: number,
+        consecutiveFramesThreshold?: number,
+      ) => {
+        try {
+          return await voiceConfigureBargeIn(sensitivity, minSpeechMs, consecutiveFramesThreshold);
+        } catch (e) {
+          set({ error: String(e) });
+          return null;
+        }
+      },
+
+      startBargeInMonitoring: async () => {
+        try {
+          return await voiceStartBargeInMonitoring();
+        } catch (e) {
+          set({ error: String(e) });
+          return false;
+        }
+      },
+
+      stopBargeInMonitoring: async () => {
+        try {
+          return await voiceStopBargeInMonitoring();
+        } catch {
+          return false;
+        }
+      },
+
+      // -- Native speech recording commands (Wispr Flow) --
+
+      startNativeRecording: async (provider?: string) => {
+        try {
+          await speechStartRecording(provider ?? 'cloud');
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      stopNativeRecordingAndTranscribe: async (provider?: string, language?: string) => {
+        try {
+          return await speechStopAndTranscribe(provider ?? 'cloud', language ?? 'en');
+        } catch (e) {
+          set({ error: String(e) });
+          return null;
+        }
+      },
+
+      // -- Local model management --
+
+      listLocalModels: async () => {
+        try {
+          return await voiceListLocalModels();
+        } catch {
+          return null;
+        }
+      },
+
+      downloadWhisperModel: async (modelSize: string) => {
+        try {
+          const path = await voiceDownloadWhisperModel(modelSize);
+          return path || null;
+        } catch (e) {
+          set({ error: String(e) });
+          return null;
+        }
+      },
+
+      listWhisperModels: async () => {
+        try {
+          return await voiceListWhisperModels();
+        } catch {
+          return [];
+        }
+      },
+
+      setWhisperModel: async (modelSize: string) => {
+        try {
+          await voiceSetWhisperModel(modelSize);
+        } catch (e) {
+          set({ error: String(e) });
+        }
+      },
+
+      downloadPiperVoice: async (voiceId: string) => {
+        try {
+          const path = await voiceDownloadPiperVoice(voiceId);
+          return path || null;
+        } catch (e) {
+          set({ error: String(e) });
+          return null;
+        }
+      },
+
+      listPiperVoices: async () => {
+        try {
+          return await voiceListPiperVoices();
+        } catch {
+          return [];
+        }
+      },
+
+      setPiperVoice: async (voiceId: string) => {
+        try {
+          await voiceSetPiperVoice(voiceId);
+        } catch (e) {
+          set({ error: String(e) });
+        }
       },
     }),
     { name: 'voice-mode-store' },
