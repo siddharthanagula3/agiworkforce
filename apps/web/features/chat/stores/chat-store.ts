@@ -2,10 +2,30 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { persist } from 'zustand/middleware';
 import { supabase } from '@shared/lib/supabase-client';
+import {
+  ConversationSyncService,
+  type SyncedConversation,
+  type SyncStatus,
+} from '@/lib/conversationSync';
 
 // ============================================================================
 // Types
 // ============================================================================
+
+export interface ThinkingSegment {
+  /** Stable React key */
+  id: string;
+  /** Raw thinking text accumulated from streaming deltas */
+  content: string;
+  /** True while this segment is actively receiving tokens */
+  isStreaming: boolean;
+  /** ISO timestamp when this segment's thinking started */
+  startedAt: string;
+  /** ISO timestamp when this segment's thinking completed (null while streaming) */
+  completedAt: string | null;
+  /** Duration in seconds, derived from start/complete timestamps */
+  durationSeconds?: number;
+}
 
 export interface ChatMessage {
   id: string;
@@ -24,6 +44,18 @@ export interface ChatMessage {
       durationMs?: number;
       args?: string;
     }>;
+    /** Raw extended thinking text accumulated from streaming deltas */
+    thinkingContent?: string;
+    /** True while thinking tokens are actively being received */
+    isThinkingStreaming?: boolean;
+    /** ISO timestamp when thinking started (first thinking token received) */
+    thinkingStartedAt?: string;
+    /** ISO timestamp when thinking completed (thinking block closed) */
+    thinkingCompletedAt?: string;
+    /** Duration of thinking phase in seconds */
+    thinkingDurationSeconds?: number;
+    /** Multi-segment thinking blocks (interleaved reasoning) */
+    thinkingSegments?: ThinkingSegment[];
   };
 }
 
@@ -48,6 +80,8 @@ interface ChatState {
   isGenerating: boolean;
   sidebarOpen: boolean;
   dbLoaded: boolean;
+  /** Cross-device sync status: idle | syncing | synced | error */
+  syncStatus: SyncStatus;
 }
 
 interface ChatActions {
@@ -67,6 +101,12 @@ interface ChatActions {
   deleteMessage: (sessionId: string, messageId: string) => void;
   setStreaming: (sessionId: string, messageId: string, streaming: boolean) => void;
   appendToMessage: (sessionId: string, messageId: string, chunk: string) => void;
+  /** Mark thinking as started for a message, recording the start timestamp */
+  startThinking: (sessionId: string, messageId: string) => void;
+  /** Append a thinking content delta to the specified message */
+  appendThinkingContent: (sessionId: string, messageId: string, delta: string) => void;
+  /** Mark thinking as completed, recording end timestamp and computing duration */
+  completeThinking: (sessionId: string, messageId: string) => void;
   setLoading: (loading: boolean) => void;
   /** Set whether an SSE stream is actively generating output. */
   setGenerating: (generating: boolean) => void;
@@ -77,6 +117,8 @@ interface ChatActions {
   loadMessagesFromDb: (sessionId: string) => Promise<void>;
   saveMessageToDb: (message: ChatMessage, userId: string) => Promise<void>;
   saveSessionToDb: (session: ChatSession, userId: string) => Promise<void>;
+  /** Perform cross-device conversation sync via ConversationSyncService */
+  syncWithRemote: (userId: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -94,6 +136,9 @@ function getGreetingTime(): string {
   if (hour < 17) return 'afternoon';
   return 'evening';
 }
+
+// Singleton sync service for cross-device conversation sync
+const conversationSync = new ConversationSyncService(supabase, 'web');
 
 // ============================================================================
 // Store
@@ -114,6 +159,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
       isGenerating: false,
       sidebarOpen: true,
       dbLoaded: false,
+      syncStatus: 'idle' as SyncStatus,
 
       // Actions
       createSession: (userId?: string) => {
@@ -286,6 +332,55 @@ export const useChatStore = create<ChatState & ChatActions>()(
         });
       },
 
+      startThinking: (sessionId, messageId) => {
+        set((state) => {
+          const msgs = state.messages[sessionId];
+          if (msgs) {
+            const msg = msgs.find((m) => m.id === messageId);
+            if (msg) {
+              if (!msg.metadata) msg.metadata = {};
+              msg.metadata.isThinkingStreaming = true;
+              msg.metadata.thinkingStartedAt = new Date().toISOString();
+              msg.metadata.thinkingContent = msg.metadata.thinkingContent ?? '';
+            }
+          }
+        });
+      },
+
+      appendThinkingContent: (sessionId, messageId, delta) => {
+        set((state) => {
+          const msgs = state.messages[sessionId];
+          if (msgs) {
+            const msg = msgs.find((m) => m.id === messageId);
+            if (msg) {
+              if (!msg.metadata) msg.metadata = {};
+              msg.metadata.thinkingContent = (msg.metadata.thinkingContent ?? '') + delta;
+            }
+          }
+        });
+      },
+
+      completeThinking: (sessionId, messageId) => {
+        set((state) => {
+          const msgs = state.messages[sessionId];
+          if (msgs) {
+            const msg = msgs.find((m) => m.id === messageId);
+            if (msg) {
+              if (!msg.metadata) msg.metadata = {};
+              const completedAt = new Date().toISOString();
+              msg.metadata.isThinkingStreaming = false;
+              msg.metadata.thinkingCompletedAt = completedAt;
+              if (msg.metadata.thinkingStartedAt) {
+                const durationMs =
+                  new Date(completedAt).getTime() -
+                  new Date(msg.metadata.thinkingStartedAt).getTime();
+                msg.metadata.thinkingDurationSeconds = Math.round(durationMs / 1000);
+              }
+            }
+          }
+        });
+      },
+
       setLoading: (loading) => {
         set((state) => {
           state.isLoading = loading;
@@ -319,6 +414,59 @@ export const useChatStore = create<ChatState & ChatActions>()(
         });
       },
 
+      syncWithRemote: async (userId: string) => {
+        set((state) => {
+          state.syncStatus = 'syncing';
+        });
+        try {
+          const localSessions = get().sessions;
+          const localAsSynced: SyncedConversation[] = localSessions.map((s) => ({
+            id: s.id,
+            user_id: userId,
+            title: s.title,
+            model: null,
+            is_active: !s.isArchived,
+            synced_from: 'web' as const,
+            metadata: null,
+            created_at:
+              s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
+            updated_at:
+              s.updatedAt instanceof Date ? s.updatedAt.toISOString() : String(s.updatedAt),
+            deleted_at: null,
+          }));
+
+          const merged = await conversationSync.fullSync(localAsSynced);
+
+          set((state) => {
+            // Merge remote-only sessions into local state
+            const localIds = new Set(state.sessions.map((s) => s.id));
+            for (const remote of merged) {
+              if (!localIds.has(remote.id)) {
+                state.sessions.push({
+                  id: remote.id,
+                  title: remote.title || 'Synced Chat',
+                  createdAt: new Date(remote.created_at),
+                  updatedAt: new Date(remote.updated_at || remote.created_at),
+                  preview: '',
+                  messageCount: 0,
+                  userId: remote.user_id,
+                  isPinned: false,
+                  isArchived: remote.is_active === false,
+                });
+              }
+            }
+            state.sessions.sort(
+              (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+            );
+            state.syncStatus = 'synced';
+          });
+        } catch {
+          set((state) => {
+            state.syncStatus = 'error';
+          });
+        }
+      },
+
       reset: () => {
         set((state) => {
           state.sessions = [];
@@ -328,6 +476,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
           state.isGenerating = false;
           state.sidebarOpen = true;
           state.dbLoaded = false;
+          state.syncStatus = 'idle';
         });
       },
 
@@ -466,6 +615,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
         messages: state.messages,
         sidebarOpen: state.sidebarOpen,
         dbLoaded: false, // Always reset on rehydration so we re-fetch
+        syncStatus: 'idle' as SyncStatus, // Always reset on rehydration
       }),
     },
   ),

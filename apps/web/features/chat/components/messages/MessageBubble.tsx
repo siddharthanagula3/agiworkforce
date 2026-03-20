@@ -127,6 +127,12 @@ interface Message {
     thinkingContent?: string;
     /** True while the thinking content is still streaming */
     isThinkingStreaming?: boolean;
+    /** ISO timestamp when thinking started */
+    thinkingStartedAt?: string;
+    /** ISO timestamp when thinking completed */
+    thinkingCompletedAt?: string;
+    /** Duration of thinking phase in seconds */
+    thinkingDurationSeconds?: number;
     isThinking?: boolean;
     isStreaming?: boolean;
     isCollaboration?: boolean;
@@ -391,6 +397,9 @@ const MessageBubbleComponent = function MessageBubble({
               <ThinkingBlock
                 content={message.metadata.thinkingContent}
                 isStreaming={message.metadata.isThinkingStreaming ?? false}
+                startedAt={message.metadata.thinkingStartedAt}
+                completedAt={message.metadata.thinkingCompletedAt}
+                durationSeconds={message.metadata.thinkingDurationSeconds}
                 defaultExpanded={message.metadata.isThinkingStreaming ?? false}
               />
             </div>
