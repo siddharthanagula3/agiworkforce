@@ -1,46 +1,82 @@
 import { create } from 'zustand';
-import { invoke } from '../lib/tauri-mock';
+import {
+  dbCreatePool,
+  dbExecuteQuery,
+  dbExecutePrepared,
+  dbExecuteBatch,
+  dbClosePool,
+  dbListPools,
+  dbGetPoolStats,
+  dbValidateQuery,
+  dbBuildSelect,
+  dbBuildInsert,
+  dbBuildUpdate,
+  dbBuildDelete,
+  dbMongoConnect,
+  dbMongoFind,
+  dbMongoFindOne,
+  dbMongoInsertOne,
+  dbMongoInsertMany,
+  dbMongoUpdateMany,
+  dbMongoDeleteMany,
+  dbMongoDisconnect,
+  dbRedisConnect,
+  dbRedisGet,
+  dbRedisSet,
+  dbRedisDel,
+  dbRedisExists,
+  dbRedisExpire,
+  dbRedisHGet,
+  dbRedisHSet,
+  dbRedisHGetAll,
+  dbRedisDisconnect,
+  dbStorePassword,
+  dbHasStoredPassword,
+  dbGetStoredPassword,
+  dbDeleteStoredPassword,
+  dbMysqlTestConnection,
+  dbMysqlListTables,
+  dbMysqlDescribeTable,
+  dbMysqlListIndexes,
+  dbMysqlCallProcedure,
+  dbMysqlBulkInsert,
+  type ConnectionConfig,
+  type PoolConfig,
+  type QueryResult,
+  type SqlRowValue,
+  type QueryValidation,
+  type PoolStats,
+  type MongoDocument,
+  type MongoFilter,
+  type MongoUpdate,
+  type MongoResult,
+  type MySqlColumnInfo,
+  type MySqlIndexInfo,
+  type SelectQuery,
+  type InsertQuery,
+  type UpdateQuery,
+  type DeleteQuery,
+} from '../api/database';
 
-/**
- * MongoDB document type.
- */
-export type MongoDocument = Record<string, unknown>;
-
-/**
- * MongoDB query filter.
- */
-export type MongoFilter = Record<string, unknown>;
-
-/**
- * MongoDB update operations.
- */
-export type MongoUpdate = Record<string, unknown>;
-
-/**
- * MongoDB operation result.
- */
-export interface MongoResult {
-  matched_count?: number;
-  modified_count?: number;
-  upserted_id?: string;
-}
-
-export interface ConnectionConfig {
-  database_type: 'Postgres' | 'MySql' | 'Sqlite' | 'MongoDB' | 'Redis';
-  host?: string;
-  port?: number;
-  username?: string;
-  password?: string;
-  database?: string;
-  file_path?: string;
-  connection_string?: string;
-}
-
-export interface PoolConfig {
-  max_size: number;
-  min_idle: number;
-  connection_timeout_seconds: number;
-}
+// Re-export types for consumers
+export type {
+  ConnectionConfig,
+  PoolConfig,
+  QueryResult,
+  SqlRowValue,
+  QueryValidation,
+  PoolStats,
+  MongoDocument,
+  MongoFilter,
+  MongoUpdate,
+  MongoResult,
+  MySqlColumnInfo,
+  MySqlIndexInfo,
+  SelectQuery,
+  InsertQuery,
+  UpdateQuery,
+  DeleteQuery,
+};
 
 export interface DatabaseConnection {
   id: string;
@@ -48,18 +84,6 @@ export interface DatabaseConnection {
   config: ConnectionConfig;
   type: 'SQL' | 'MongoDB' | 'Redis';
   connected: boolean;
-}
-
-/**
- * SQL row value types.
- */
-export type SqlRowValue = string | number | boolean | null;
-
-export interface QueryResult {
-  columns?: string[];
-  rows?: SqlRowValue[][];
-  affected_rows?: number;
-  execution_time_ms?: number;
 }
 
 interface DatabaseState {
@@ -113,6 +137,33 @@ interface DatabaseState {
   redisHSet: (key: string, field: string, value: string) => Promise<boolean>;
   redisHGetAll: (key: string) => Promise<Record<string, string>>;
 
+  // SQL validation & pool management
+  validateQuery: (sql: string) => Promise<QueryValidation>;
+  getPoolStats: (connectionId: string) => Promise<PoolStats>;
+
+  // Secure password storage
+  storePassword: (connectionId: string, password: string) => Promise<void>;
+  hasStoredPassword: (connectionId: string) => Promise<boolean>;
+  getStoredPassword: (connectionId: string) => Promise<string | null>;
+  deleteStoredPassword: (connectionId: string) => Promise<void>;
+
+  // MySQL-specific operations
+  mysqlTestConnection: (connectionId: string) => Promise<boolean>;
+  mysqlListTables: (connectionId: string) => Promise<string[]>;
+  mysqlDescribeTable: (connectionId: string, tableName: string) => Promise<MySqlColumnInfo[]>;
+  mysqlListIndexes: (connectionId: string, tableName: string) => Promise<MySqlIndexInfo[]>;
+  mysqlCallProcedure: (
+    connectionId: string,
+    procedureName: string,
+    params: unknown[],
+  ) => Promise<unknown[]>;
+  mysqlBulkInsert: (
+    connectionId: string,
+    tableName: string,
+    columns: string[],
+    rows: unknown[][],
+  ) => Promise<number>;
+
   setCurrentQuery: (query: string) => void;
   addToHistory: (query: string) => void;
   clearResults: () => void;
@@ -120,31 +171,6 @@ interface DatabaseState {
 
   // AUDIT-006-022: Cleanup function for logout
   resetOnLogout: () => void;
-}
-
-export interface SelectQuery {
-  table: string;
-  columns: string[];
-  where_clause?: string;
-  limit?: number;
-  offset?: number;
-}
-
-export interface InsertQuery {
-  table: string;
-  columns: string[];
-  values: string[][];
-}
-
-export interface UpdateQuery {
-  table: string;
-  set_values: Record<string, string>;
-  where_clause?: string;
-}
-
-export interface DeleteQuery {
-  table: string;
-  where_clause?: string;
 }
 
 export const useDatabaseStore = create<DatabaseState>((set, get) => ({
@@ -164,11 +190,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   ) => {
     set({ loading: true, error: null });
     try {
-      await invoke('db_create_pool', {
-        connectionId: id,
-        config,
-        poolConfig,
-      });
+      await dbCreatePool(id, config, poolConfig);
 
       const newConnection: DatabaseConnection = {
         id,
@@ -192,10 +214,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   createMongoConnection: async (id: string, name: string, config: ConnectionConfig) => {
     set({ loading: true, error: null });
     try {
-      await invoke('db_mongo_connect', {
-        connectionId: id,
-        config,
-      });
+      await dbMongoConnect(id, config);
 
       const newConnection: DatabaseConnection = {
         id,
@@ -219,10 +238,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   createRedisConnection: async (id: string, name: string, config: ConnectionConfig) => {
     set({ loading: true, error: null });
     try {
-      await invoke('db_redis_connect', {
-        connectionId: id,
-        config,
-      });
+      await dbRedisConnect(id, config);
 
       const newConnection: DatabaseConnection = {
         id,
@@ -250,11 +266,11 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       if (connection.type === 'SQL') {
-        await invoke('db_close_pool', { connectionId });
+        await dbClosePool(connectionId);
       } else if (connection.type === 'MongoDB') {
-        await invoke('db_mongo_disconnect', { connectionId });
+        await dbMongoDisconnect(connectionId);
       } else if (connection.type === 'Redis') {
-        await invoke('db_redis_disconnect', { connectionId });
+        await dbRedisDisconnect(connectionId);
       }
 
       set((state) => ({
@@ -275,8 +291,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
   listPools: async () => {
     try {
-      const pools = await invoke<string[]>('db_list_pools');
-      return pools;
+      return await dbListPools();
     } catch (error) {
       throw error;
     }
@@ -290,10 +305,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<QueryResult>('db_execute_query', {
-        connectionId: activeConnectionId,
-        sql,
-      });
+      const result = await dbExecuteQuery(activeConnectionId, sql);
 
       const queryResult: QueryResult = {
         columns: result.columns || [],
@@ -319,11 +331,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<QueryResult>('db_execute_prepared', {
-        connectionId: activeConnectionId,
-        sql,
-        params,
-      });
+      const result = await dbExecutePrepared(activeConnectionId, sql, params);
 
       const queryResult: QueryResult = {
         columns: result.columns || [],
@@ -349,10 +357,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const results = await invoke<QueryResult[]>('db_execute_batch', {
-        connectionId: activeConnectionId,
-        queries,
-      });
+      const results = await dbExecuteBatch(activeConnectionId, queries);
 
       const queryResults: QueryResult[] = results.map((result) => ({
         columns: result.columns || [],
@@ -372,8 +377,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
   buildSelectQuery: async (query: SelectQuery) => {
     try {
-      const sql = await invoke<string>('db_build_select', { query });
-      return sql;
+      return await dbBuildSelect(query);
     } catch (error) {
       throw error;
     }
@@ -381,8 +385,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
   buildInsertQuery: async (query: InsertQuery) => {
     try {
-      const sql = await invoke<string>('db_build_insert', { query });
-      return sql;
+      return await dbBuildInsert(query);
     } catch (error) {
       throw error;
     }
@@ -390,8 +393,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
   buildUpdateQuery: async (query: UpdateQuery) => {
     try {
-      const sql = await invoke<string>('db_build_update', { query });
-      return sql;
+      return await dbBuildUpdate(query);
     } catch (error) {
       throw error;
     }
@@ -399,8 +401,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
   buildDeleteQuery: async (query: DeleteQuery) => {
     try {
-      const sql = await invoke<string>('db_build_delete', { query });
-      return sql;
+      return await dbBuildDelete(query);
     } catch (error) {
       throw error;
     }
@@ -414,13 +415,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<MongoDocument[]>('db_mongo_find', {
-        connectionId: activeConnectionId,
-        collection,
-        filter,
-        limit,
-      });
-
+      const result = await dbMongoFind(activeConnectionId, collection, filter, limit);
       set({ loading: false });
       return result;
     } catch (error) {
@@ -437,12 +432,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<MongoDocument | null>('db_mongo_find_one', {
-        connectionId: activeConnectionId,
-        collection,
-        filter,
-      });
-
+      const result = await dbMongoFindOne(activeConnectionId, collection, filter);
       set({ loading: false });
       return result;
     } catch (error) {
@@ -459,12 +449,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<string>('db_mongo_insert_one', {
-        connectionId: activeConnectionId,
-        collection,
-        document,
-      });
-
+      const result = await dbMongoInsertOne(activeConnectionId, collection, document);
       set({ loading: false });
       return result;
     } catch (error) {
@@ -481,12 +466,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<string[]>('db_mongo_insert_many', {
-        connectionId: activeConnectionId,
-        collection,
-        documents,
-      });
-
+      const result = await dbMongoInsertMany(activeConnectionId, collection, documents);
       set({ loading: false });
       return result;
     } catch (error) {
@@ -503,13 +483,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<MongoResult>('db_mongo_update_many', {
-        connectionId: activeConnectionId,
-        collection,
-        filter,
-        update,
-      });
-
+      const result = await dbMongoUpdateMany(activeConnectionId, collection, filter, update);
       set({ loading: false });
       return result;
     } catch (error) {
@@ -526,12 +500,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<number>('db_mongo_delete_many', {
-        connectionId: activeConnectionId,
-        collection,
-        filter,
-      });
-
+      const result = await dbMongoDeleteMany(activeConnectionId, collection, filter);
       set({ loading: false });
       return result;
     } catch (error) {
@@ -548,11 +517,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<string | null>('db_redis_get', {
-        connectionId: activeConnectionId,
-        key,
-      });
-
+      const result = await dbRedisGet(activeConnectionId, key);
       set({ loading: false });
       return result;
     } catch (error) {
@@ -569,13 +534,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      await invoke('db_redis_set', {
-        connectionId: activeConnectionId,
-        key,
-        value,
-        expirationSeconds: expiration,
-      });
-
+      await dbRedisSet(activeConnectionId, key, value, expiration);
       set({ loading: false });
     } catch (error) {
       set({ loading: false, error: String(error) });
@@ -591,11 +550,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      const result = await invoke<number>('db_redis_del', {
-        connectionId: activeConnectionId,
-        keys,
-      });
-
+      const result = await dbRedisDel(activeConnectionId, keys);
       set({ loading: false });
       return result;
     } catch (error) {
@@ -611,12 +566,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
 
     try {
-      const result = await invoke<boolean>('db_redis_exists', {
-        connectionId: activeConnectionId,
-        key,
-      });
-
-      return result;
+      return await dbRedisExists(activeConnectionId, key);
     } catch (error) {
       throw error;
     }
@@ -629,13 +579,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
 
     try {
-      const result = await invoke<boolean>('db_redis_expire', {
-        connectionId: activeConnectionId,
-        key,
-        seconds,
-      });
-
-      return result;
+      return await dbRedisExpire(activeConnectionId, key, seconds);
     } catch (error) {
       throw error;
     }
@@ -648,13 +592,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
 
     try {
-      const result = await invoke<string | null>('db_redis_hget', {
-        connectionId: activeConnectionId,
-        key,
-        field,
-      });
-
-      return result;
+      return await dbRedisHGet(activeConnectionId, key, field);
     } catch (error) {
       throw error;
     }
@@ -667,14 +605,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
 
     try {
-      const result = await invoke<boolean>('db_redis_hset', {
-        connectionId: activeConnectionId,
-        key,
-        field,
-        value,
-      });
-
-      return result;
+      return await dbRedisHSet(activeConnectionId, key, field, value);
     } catch (error) {
       throw error;
     }
@@ -687,12 +618,114 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
 
     try {
-      const result = await invoke<Record<string, string>>('db_redis_hgetall', {
-        connectionId: activeConnectionId,
-        key,
-      });
+      return await dbRedisHGetAll(activeConnectionId, key);
+    } catch (error) {
+      throw error;
+    }
+  },
 
-      return result;
+  // --- SQL validation & pool management ---
+
+  validateQuery: async (sql: string) => {
+    try {
+      return await dbValidateQuery(sql);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getPoolStats: async (connectionId: string) => {
+    try {
+      return await dbGetPoolStats(connectionId);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // --- Secure password storage ---
+
+  storePassword: async (connectionId: string, password: string) => {
+    try {
+      await dbStorePassword(connectionId, password);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  hasStoredPassword: async (connectionId: string) => {
+    try {
+      return await dbHasStoredPassword(connectionId);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getStoredPassword: async (connectionId: string) => {
+    try {
+      return await dbGetStoredPassword(connectionId);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  deleteStoredPassword: async (connectionId: string) => {
+    try {
+      await dbDeleteStoredPassword(connectionId);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // --- MySQL-specific operations ---
+
+  mysqlTestConnection: async (connectionId: string) => {
+    try {
+      return await dbMysqlTestConnection(connectionId);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  mysqlListTables: async (connectionId: string) => {
+    try {
+      return await dbMysqlListTables(connectionId);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  mysqlDescribeTable: async (connectionId: string, tableName: string) => {
+    try {
+      return await dbMysqlDescribeTable(connectionId, tableName);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  mysqlListIndexes: async (connectionId: string, tableName: string) => {
+    try {
+      return await dbMysqlListIndexes(connectionId, tableName);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  mysqlCallProcedure: async (connectionId: string, procedureName: string, params: unknown[]) => {
+    try {
+      return await dbMysqlCallProcedure(connectionId, procedureName, params);
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  mysqlBulkInsert: async (
+    connectionId: string,
+    tableName: string,
+    columns: string[],
+    rows: unknown[][],
+  ) => {
+    try {
+      return await dbMysqlBulkInsert(connectionId, tableName, columns, rows);
     } catch (error) {
       throw error;
     }

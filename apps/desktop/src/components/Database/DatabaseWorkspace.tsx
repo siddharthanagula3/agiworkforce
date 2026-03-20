@@ -1,6 +1,18 @@
-import { invoke } from '../../lib/tauri-mock';
-import { Check, Database, History, Link, Link2Off, Play, Plus, Table } from 'lucide-react';
+import { dbStorePassword, dbDeleteStoredPassword, dbExecuteQuery } from '../../api/database';
+import {
+  Check,
+  Database,
+  History,
+  Link,
+  Link2Off,
+  Play,
+  Plus,
+  Table,
+  Shield,
+  BarChart3,
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import {
@@ -37,12 +49,43 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
     closeConnection,
     setActiveConnection,
     executeQuery,
+    // executePrepared,
+    // executeBatch,
     mongoFind,
     redisGet,
     redisSet,
+    redisDel,
     setCurrentQuery,
     clearError,
-  } = useDatabaseStore();
+    validateQuery,
+    getPoolStats,
+  } = useDatabaseStore(
+    useShallow((s) => ({
+      connections: s.connections,
+      activeConnectionId: s.activeConnectionId,
+      currentQuery: s.currentQuery,
+      queryResults: s.queryResults,
+      queryHistory: s.queryHistory,
+      loading: s.loading,
+      error: s.error,
+      createSqlConnection: s.createSqlConnection,
+      createMongoConnection: s.createMongoConnection,
+      createRedisConnection: s.createRedisConnection,
+      closeConnection: s.closeConnection,
+      setActiveConnection: s.setActiveConnection,
+      executeQuery: s.executeQuery,
+      executePrepared: s.executePrepared,
+      executeBatch: s.executeBatch,
+      mongoFind: s.mongoFind,
+      redisGet: s.redisGet,
+      redisSet: s.redisSet,
+      redisDel: s.redisDel,
+      setCurrentQuery: s.setCurrentQuery,
+      clearError: s.clearError,
+      validateQuery: s.validateQuery,
+      getPoolStats: s.getPoolStats,
+    })),
+  );
 
   const [showConnectionForm, setShowConnectionForm] = useState(false);
   const [connectionType, setConnectionType] = useState<'SQL' | 'MongoDB' | 'Redis'>('SQL');
@@ -86,10 +129,7 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
       if (connectionType === 'SQL') {
         // WRK-002 FIX: Store password securely in encrypted storage FIRST
         if (currentPassword) {
-          await invoke('db_store_password', {
-            connectionId,
-            password: currentPassword,
-          });
+          await dbStorePassword(connectionId, currentPassword);
         }
 
         const config: ConnectionConfig = {
@@ -134,7 +174,7 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
       // WRK-002 FIX: Clean up stored password if connection failed
       if (currentPassword && connectionType === 'SQL') {
         try {
-          await invoke('db_delete_stored_password', { connectionId });
+          await dbDeleteStoredPassword(connectionId);
         } catch {
           // Ignore cleanup errors
         }
@@ -162,7 +202,7 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
       await closeConnection(connectionId);
       // WRK-002 FIX: Clean up stored password when connection is closed
       try {
-        await invoke('db_delete_stored_password', { connectionId });
+        await dbDeleteStoredPassword(connectionId);
       } catch {
         // Ignore cleanup errors - password may not exist for non-SQL connections
       }
@@ -170,6 +210,30 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
     } catch (error) {
       console.error('[DatabaseWorkspace] Failed to close connection:', error);
       toast.error('Failed to close connection. Please try again.');
+    }
+  };
+
+  const handleValidateQuery = async () => {
+    if (!currentQuery.trim()) {
+      toast.error('Please enter a query to validate');
+      return;
+    }
+
+    try {
+      const validation = await validateQuery(currentQuery);
+      if (validation.is_valid) {
+        toast.success(
+          `Valid ${validation.query_type || 'SQL'} query (risk: ${validation.risk_level || 'low'})`,
+        );
+      } else {
+        toast.error(validation.error || 'Invalid query');
+      }
+      if (validation.warnings && validation.warnings.length > 0) {
+        validation.warnings.forEach((w) => toast.warning(w));
+      }
+    } catch (error) {
+      console.error('[DatabaseWorkspace] Validation failed:', error);
+      toast.error('Query validation failed');
     }
   };
 
@@ -190,6 +254,39 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
     } catch (error) {
       console.error('[DatabaseWorkspace] Query failed:', error);
       toast.error('Query failed. Check your syntax and try again.');
+    }
+  };
+
+  const handleViewPoolStats = async () => {
+    if (!activeConnectionId) {
+      toast.error('No active connection');
+      return;
+    }
+
+    try {
+      const stats = await getPoolStats(activeConnectionId);
+      toast.info(
+        `Pool: ${stats.active_connections} active, ${stats.idle_connections} idle, ` +
+          `${stats.max_connections} max, ${stats.total_queries} total queries`,
+      );
+    } catch (error) {
+      console.error('[DatabaseWorkspace] Pool stats failed:', error);
+      toast.error('Failed to get pool stats');
+    }
+  };
+
+  const handleRedisDel = async () => {
+    if (!redisKey.trim()) {
+      toast.error('Please enter a key to delete');
+      return;
+    }
+
+    try {
+      const count = await redisDel([redisKey]);
+      toast.success(count > 0 ? 'Key deleted' : 'Key not found');
+    } catch (error) {
+      console.error('[DatabaseWorkspace] Redis DEL failed:', error);
+      toast.error('Failed to delete Redis key');
     }
   };
 
@@ -392,7 +489,8 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
                 <span className={cn('text-sm', isActive && 'font-medium')}>{conn.name}</span>
                 <span className="text-xs text-muted-foreground">({conn.type})</span>
 
-                <button type="button"
+                <button
+                  type="button"
                   onClick={(e) => handleCloseConnection(conn.id, e)}
                   className={cn(
                     'text-muted-foreground hover:text-destructive',
@@ -446,6 +544,24 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
                   <Button onClick={handleExecuteQuery} disabled={loading}>
                     <Play className="h-4 w-4 mr-2" />
                     Execute
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleValidateQuery}
+                    disabled={loading}
+                  >
+                    <Shield className="h-4 w-4 mr-1" />
+                    Validate
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleViewPoolStats}
+                    disabled={loading}
+                  >
+                    <BarChart3 className="h-4 w-4 mr-1" />
+                    Pool Stats
                   </Button>
                   <div className="flex items-center gap-1 ml-auto">
                     <span className="text-xs text-muted-foreground mr-2">Transaction:</span>
@@ -521,6 +637,9 @@ export function DatabaseWorkspace({ className }: DatabaseWorkspaceProps) {
                   </Button>
                   <Button onClick={handleRedisSet} disabled={loading}>
                     SET
+                  </Button>
+                  <Button variant="outline" onClick={handleRedisDel} disabled={loading}>
+                    DEL
                   </Button>
                 </div>
               </div>
@@ -618,11 +737,6 @@ interface TableSchemaResult {
   columns?: string[];
 }
 
-interface QueryResult {
-  rows?: unknown[][];
-  columns?: string[];
-}
-
 // WRK-006 fix: Add pagination limit to prevent crashes with large databases
 const DEFAULT_TABLE_LIMIT = 500;
 const MAX_TABLE_LIMIT = 1000;
@@ -682,10 +796,7 @@ function SchemaExplorer({
       const dbType = activeConnection.config?.database_type;
       const sql = getListTablesQuery(dbType, DEFAULT_TABLE_LIMIT);
 
-      const result = await invoke<QueryResult>('db_execute_query', {
-        connectionId: activeConnection.id,
-        sql,
-      });
+      const result = await dbExecuteQuery(activeConnection.id, sql);
 
       // Extract table names from first column of results
       let tableNames =
@@ -722,11 +833,8 @@ function SchemaExplorer({
       const dbType = activeConnection?.config?.database_type;
       const sql = getDescribeTableQuery(tableName, dbType);
 
-      const result = await invoke<TableSchemaResult>('db_execute_query', {
-        connectionId: activeConnection!.id,
-        sql,
-      });
-      setTableSchema(result);
+      const result = await dbExecuteQuery(activeConnection!.id, sql);
+      setTableSchema(result as unknown as TableSchemaResult);
     } catch (error) {
       console.error('[DatabaseWorkspace] Failed to describe table:', error);
       toast.error('Failed to load table schema. Please try again.');
@@ -761,7 +869,8 @@ function SchemaExplorer({
           ) : (
             <div className="space-y-1 p-2">
               {tables.map((table) => (
-                <button type="button"
+                <button
+                  type="button"
                   key={table}
                   onClick={() => handleTableClick(table)}
                   className={cn(

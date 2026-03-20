@@ -1,6 +1,7 @@
 import { Share2, Trophy, X } from 'lucide-react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '../../../components/ui/Button';
 import type { Milestone } from '../../../types/roi';
 import { useROIStore } from '../roiStore';
@@ -50,7 +51,12 @@ function MilestoneToastContent({ milestone, onAcknowledge, onShare }: MilestoneT
 }
 
 export function MilestoneToast() {
-  const { unacknowledgedMilestones, acknowledgeMilestone } = useROIStore();
+  const { unacknowledgedMilestones, acknowledgeMilestone } = useROIStore(
+    useShallow((s) => ({
+      unacknowledgedMilestones: s.unacknowledgedMilestones,
+      acknowledgeMilestone: s.acknowledgeMilestone,
+    })),
+  );
 
   useEffect(() => {
     unacknowledgedMilestones.forEach((milestone) => {

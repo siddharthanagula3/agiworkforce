@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/Tabs';
 import { CloneSuccessModal } from './components/CloneSuccessModal';
 import { DiscoverTab } from './components/DiscoverTab';
@@ -15,21 +16,29 @@ export function MarketplacePage() {
   const {
     fetchFeatured,
     fetchTrending,
-    fetchMarketplaceStats,
     fetchCategoryCounts,
     fetchPopularTags,
     showDetailModal,
     showShareModal,
     showCloneSuccessModal,
-  } = useMarketplaceStore();
+  } = useMarketplaceStore(
+    useShallow((s) => ({
+      fetchFeatured: s.fetchFeatured,
+      fetchTrending: s.fetchTrending,
+      fetchCategoryCounts: s.fetchCategoryCounts,
+      fetchPopularTags: s.fetchPopularTags,
+      showDetailModal: s.showDetailModal,
+      showShareModal: s.showShareModal,
+      showCloneSuccessModal: s.showCloneSuccessModal,
+    })),
+  );
 
   useEffect(() => {
     fetchFeatured();
     fetchTrending();
-    fetchMarketplaceStats();
     fetchCategoryCounts();
     fetchPopularTags();
-  }, [fetchFeatured, fetchTrending, fetchMarketplaceStats, fetchCategoryCounts, fetchPopularTags]);
+  }, [fetchFeatured, fetchTrending, fetchCategoryCounts, fetchPopularTags]);
 
   return (
     <div className="flex h-full flex-col bg-background overflow-hidden">

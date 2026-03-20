@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { create } from 'zustand';
 import { createJSONStorage, devtools, persist } from 'zustand/middleware';
 
-import { invoke } from '../lib/tauri-mock';
+import * as memoryApi from '../api/memory';
 
 export type MemoryCategory = 'preference' | 'fact' | 'decision' | 'context';
 
@@ -65,6 +65,46 @@ export interface ImportResult {
   logs_imported: number;
   skipped: number;
   errors: string[];
+}
+
+export interface DecayCandidate {
+  id: number;
+  topic: string;
+  category: string;
+  importance: number;
+  last_accessed?: string;
+  days_since_access: number;
+}
+
+export interface CompactionConfig {
+  enabled: boolean;
+  days_before_compaction: number;
+  summary_prompt?: string;
+  delete_after_compaction: boolean;
+}
+
+export interface CompactionCandidate {
+  log_date: string;
+  entry_count: number;
+  days_old: number;
+  is_compacted: boolean;
+}
+
+export interface MemoryCompactionResult {
+  logs_processed: number;
+  dates_compacted: number;
+  memories_created: number;
+  facts_extracted: number;
+  decisions_extracted: number;
+  preferences_extracted: number;
+}
+
+export interface ExtractedMemory {
+  category: string;
+  topic: string;
+  content: string;
+  importance: number;
+  source: string;
 }
 
 interface MemoryState {
@@ -130,6 +170,27 @@ interface MemoryState {
   getProjectMemories: (projectName?: string, limit?: number) => Promise<MemoryEntry[]>;
   getUsageTrends: () => Promise<Record<string, unknown>>;
   suggestImportant: () => Promise<MemoryEntry[]>;
+
+  // Decay operations (additional)
+  getDecayCandidates: () => Promise<DecayCandidate[]>;
+  recallWithBoost: (category: MemoryCategory, topic: string) => Promise<MemoryEntry | null>;
+  decaySingle: (memoryId: number, decayAmount: number) => Promise<number>;
+
+  // Compaction operations
+  getCompactionCandidates: (config?: CompactionConfig) => Promise<CompactionCandidate[]>;
+  getLogsInRange: (startDate?: string, endDate?: string) => Promise<DailyLogEntry[]>;
+  compactOldLogs: (startDate?: string, endDate?: string) => Promise<MemoryCompactionResult>;
+  promoteExtracted: (memories: ExtractedMemory[]) => Promise<number>;
+  archiveCompactedLogs: (dates: string[], deleteCompacted?: boolean) => Promise<number>;
+  getExtractionPrompt: (
+    startDate?: string,
+    endDate?: string,
+    config?: CompactionConfig,
+  ) => Promise<string>;
+  getCompactionStats: () => Promise<Record<string, unknown>>;
+
+  // Import operations (additional)
+  importJsonString: (json: string, strategy?: string) => Promise<ImportResult>;
 }
 
 const storageFallback: Storage = {
@@ -208,12 +269,7 @@ export const useMemoryStore = create<MemoryState>()(
           set({ isLoading: true, error: null }, undefined, 'memory/remember/start');
 
           try {
-            const id = await invoke<number>('memory_remember', {
-              category,
-              topic,
-              content,
-              importance,
-            });
+            const id = await memoryApi.remember(category, topic, content, importance);
 
             // Refresh memories list after adding
             await get().loadAll();
@@ -233,10 +289,7 @@ export const useMemoryStore = create<MemoryState>()(
           set({ isLoading: true, error: null }, undefined, 'memory/recall/start');
 
           try {
-            const entry = await invoke<MemoryEntry | null>('memory_recall', {
-              category,
-              topic,
-            });
+            const entry = await memoryApi.recall(category, topic);
 
             set({ isLoading: false }, undefined, 'memory/recall/success');
             return entry;
@@ -252,10 +305,7 @@ export const useMemoryStore = create<MemoryState>()(
           set({ isLoading: true, error: null }, undefined, 'memory/search/start');
 
           try {
-            const results = await invoke<MemoryEntry[]>('memory_search', {
-              query,
-              limit,
-            });
+            const results = await memoryApi.search(query, limit);
 
             set({ isLoading: false }, undefined, 'memory/search/success');
             return results;
@@ -271,10 +321,7 @@ export const useMemoryStore = create<MemoryState>()(
           set({ isLoading: true, error: null }, undefined, 'memory/forget/start');
 
           try {
-            const deleted = await invoke<boolean>('memory_forget_topic', {
-              category,
-              topic,
-            });
+            const deleted = await memoryApi.forgetTopic(category, topic);
 
             if (deleted) {
               // Refresh memories list after deleting
@@ -297,9 +344,7 @@ export const useMemoryStore = create<MemoryState>()(
           set({ isLoading: true, error: null }, undefined, 'memory/getByCategory/start');
 
           try {
-            const entries = await invoke<MemoryEntry[]>('memory_get_by_category', {
-              category,
-            });
+            const entries = await memoryApi.getByCategory(category);
 
             set({ isLoading: false }, undefined, 'memory/getByCategory/success');
             return entries;
@@ -315,9 +360,7 @@ export const useMemoryStore = create<MemoryState>()(
           set({ isLoading: true, error: null }, undefined, 'memory/getImportant/start');
 
           try {
-            const entries = await invoke<MemoryEntry[]>('memory_get_important', {
-              minImportance,
-            });
+            const entries = await memoryApi.getImportant(minImportance);
 
             set({ isLoading: false }, undefined, 'memory/getImportant/success');
             return entries;
@@ -333,7 +376,7 @@ export const useMemoryStore = create<MemoryState>()(
           set({ isLoading: true, error: null }, undefined, 'memory/getSessionContext/start');
 
           try {
-            const context = await invoke<string>('memory_get_session_context');
+            const context = await memoryApi.getSessionContext();
 
             set({ isLoading: false }, undefined, 'memory/getSessionContext/success');
             return context;
@@ -349,7 +392,7 @@ export const useMemoryStore = create<MemoryState>()(
           set({ isLoading: true, error: null }, undefined, 'memory/loadAll/start');
 
           try {
-            const memories = await invoke<MemoryEntry[]>('memory_list_all');
+            const memories = await memoryApi.listAll();
 
             // AUDIT-006-024: Apply memory limits to prevent unbounded growth
             const prunedMemories = pruneMemories(memories);
@@ -384,13 +427,7 @@ export const useMemoryStore = create<MemoryState>()(
         ) => {
           set({ isLoading: true, error: null }, undefined, 'memory/store/start');
           try {
-            const id = await invoke<number>('memory_store', {
-              category,
-              topic,
-              content,
-              importance,
-              source,
-            });
+            const id = await memoryApi.storeMemory(category, topic, content, importance, source);
             await get().loadAll();
             set({ isLoading: false }, undefined, 'memory/store/success');
             return id;
@@ -405,7 +442,7 @@ export const useMemoryStore = create<MemoryState>()(
         deleteMemory: async (memoryId: number) => {
           set({ isLoading: true, error: null }, undefined, 'memory/delete/start');
           try {
-            const deleted = await invoke<boolean>('memory_delete', { memoryId });
+            const deleted = await memoryApi.deleteMemory(memoryId);
             if (deleted) {
               await get().loadAll();
               toast.success('Memory deleted');
@@ -424,7 +461,7 @@ export const useMemoryStore = create<MemoryState>()(
         forgetById: async (memoryId: number) => {
           set({ isLoading: true, error: null }, undefined, 'memory/forgetById/start');
           try {
-            const deleted = await invoke<boolean>('memory_forget', { memoryId });
+            const deleted = await memoryApi.forget(memoryId);
             if (deleted) {
               await get().loadAll();
               toast.success('Memory forgotten');
@@ -441,7 +478,7 @@ export const useMemoryStore = create<MemoryState>()(
 
         listCategories: async () => {
           try {
-            return await invoke<string[]>('memory_list_categories');
+            return await memoryApi.listCategories();
           } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error('[memoryStore] failed to list categories:', msg);
@@ -452,7 +489,7 @@ export const useMemoryStore = create<MemoryState>()(
         exportAll: async () => {
           set({ isLoading: true, error: null }, undefined, 'memory/exportAll/start');
           try {
-            const entries = await invoke<MemoryEntry[]>('memory_export_all');
+            const entries = await memoryApi.exportAll();
             set({ isLoading: false }, undefined, 'memory/exportAll/success');
             return entries;
           } catch (error) {
@@ -468,11 +505,7 @@ export const useMemoryStore = create<MemoryState>()(
         logContext: async (content: string, entryType?: string, metadata?: string) => {
           set({ isLoading: true, error: null }, undefined, 'memory/logContext/start');
           try {
-            const id = await invoke<number>('memory_log_context', {
-              content,
-              entryType,
-              metadata,
-            });
+            const id = await memoryApi.logContext(content, entryType, metadata);
             set({ isLoading: false }, undefined, 'memory/logContext/success');
             return id;
           } catch (error) {
@@ -486,7 +519,7 @@ export const useMemoryStore = create<MemoryState>()(
         getDailyLogs: async (date: string) => {
           set({ isLoading: true, error: null }, undefined, 'memory/getDailyLogs/start');
           try {
-            const logs = await invoke<DailyLogEntry[]>('memory_get_daily_logs', { date });
+            const logs = await memoryApi.getDailyLogs(date);
             set({ isLoading: false }, undefined, 'memory/getDailyLogs/success');
             return logs;
           } catch (error) {
@@ -500,7 +533,7 @@ export const useMemoryStore = create<MemoryState>()(
         cleanupLogs: async (keepDays?: number) => {
           set({ isLoading: true, error: null }, undefined, 'memory/cleanupLogs/start');
           try {
-            const removed = await invoke<number>('memory_cleanup_logs', { keepDays });
+            const removed = await memoryApi.cleanupLogs(keepDays);
             set({ isLoading: false }, undefined, 'memory/cleanupLogs/success');
             toast.success(`Cleaned up ${removed} old log entries`);
             return removed;
@@ -517,7 +550,7 @@ export const useMemoryStore = create<MemoryState>()(
         runDecay: async () => {
           set({ isLoading: true, error: null }, undefined, 'memory/runDecay/start');
           try {
-            const result = await invoke<DecayResult>('memory_run_decay');
+            const result = await memoryApi.runDecay();
             await get().loadAll();
             set({ isLoading: false }, undefined, 'memory/runDecay/success');
             return result;
@@ -531,7 +564,7 @@ export const useMemoryStore = create<MemoryState>()(
 
         getDecayConfig: async () => {
           try {
-            return await invoke<DecayConfig>('memory_get_decay_config');
+            return await memoryApi.getDecayConfig();
           } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error('[memoryStore] failed to get decay config:', msg);
@@ -542,13 +575,13 @@ export const useMemoryStore = create<MemoryState>()(
         setDecayConfig: async (config: DecayConfig) => {
           set({ isLoading: true, error: null }, undefined, 'memory/setDecayConfig/start');
           try {
-            await invoke<void>('memory_set_decay_config', {
-              enabled: config.enabled,
-              decayRate: config.decay_rate,
-              decayPeriodDays: config.decay_period_days,
-              minImportance: config.min_importance,
-              accessBoost: config.access_boost,
-            });
+            await memoryApi.setDecayConfig(
+              config.enabled,
+              config.decay_rate,
+              config.decay_period_days,
+              config.min_importance,
+              config.access_boost,
+            );
             set({ isLoading: false }, undefined, 'memory/setDecayConfig/success');
             toast.success('Decay config updated');
           } catch (error) {
@@ -561,7 +594,7 @@ export const useMemoryStore = create<MemoryState>()(
 
         boostOnAccess: async (memoryId: number) => {
           try {
-            return await invoke<number>('memory_boost_on_access', { memoryId });
+            return await memoryApi.boostOnAccess(memoryId);
           } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error('[memoryStore] failed to boost on access:', msg);
@@ -572,7 +605,7 @@ export const useMemoryStore = create<MemoryState>()(
         getStats: async () => {
           set({ isLoading: true, error: null }, undefined, 'memory/getStats/start');
           try {
-            const stats = await invoke<MemoryStats>('memory_get_stats');
+            const stats = await memoryApi.getStats();
             set({ isLoading: false }, undefined, 'memory/getStats/success');
             return stats;
           } catch (error) {
@@ -588,7 +621,7 @@ export const useMemoryStore = create<MemoryState>()(
         exportJson: async (path?: string) => {
           set({ isLoading: true, error: null }, undefined, 'memory/exportJson/start');
           try {
-            const result = await invoke<Record<string, unknown>>('memory_export_json', { path });
+            const result = await memoryApi.exportToJson(path);
             set({ isLoading: false }, undefined, 'memory/exportJson/success');
             toast.success('Memories exported to JSON');
             return result;
@@ -604,7 +637,7 @@ export const useMemoryStore = create<MemoryState>()(
         exportMarkdown: async (path?: string) => {
           set({ isLoading: true, error: null }, undefined, 'memory/exportMarkdown/start');
           try {
-            const result = await invoke<string>('memory_export_markdown', { path });
+            const result = await memoryApi.exportToMarkdown(path);
             set({ isLoading: false }, undefined, 'memory/exportMarkdown/success');
             toast.success('Memories exported to Markdown');
             return result;
@@ -620,7 +653,7 @@ export const useMemoryStore = create<MemoryState>()(
         importJson: async (path: string, strategy?: string) => {
           set({ isLoading: true, error: null }, undefined, 'memory/importJson/start');
           try {
-            const result = await invoke<ImportResult>('memory_import_json', { path, strategy });
+            const result = await memoryApi.importFromJson(path, strategy);
             await get().loadAll();
             set({ isLoading: false }, undefined, 'memory/importJson/success');
             toast.success(
@@ -641,7 +674,7 @@ export const useMemoryStore = create<MemoryState>()(
         getDashboardStats: async () => {
           set({ isLoading: true, error: null }, undefined, 'memory/getDashboardStats/start');
           try {
-            const stats = await invoke<Record<string, unknown>>('memory_get_dashboard_stats');
+            const stats = await memoryApi.getDashboardStats();
             set({ isLoading: false }, undefined, 'memory/getDashboardStats/success');
             return stats;
           } catch (error) {
@@ -655,10 +688,7 @@ export const useMemoryStore = create<MemoryState>()(
         getProjectMemories: async (projectName?: string, limit?: number) => {
           set({ isLoading: true, error: null }, undefined, 'memory/getProjectMemories/start');
           try {
-            const entries = await invoke<MemoryEntry[]>('memory_get_project_memories', {
-              projectName,
-              limit,
-            });
+            const entries = await memoryApi.getProjectMemories(projectName, limit);
             set({ isLoading: false }, undefined, 'memory/getProjectMemories/success');
             return entries;
           } catch (error) {
@@ -672,7 +702,7 @@ export const useMemoryStore = create<MemoryState>()(
         getUsageTrends: async () => {
           set({ isLoading: true, error: null }, undefined, 'memory/getUsageTrends/start');
           try {
-            const trends = await invoke<Record<string, unknown>>('memory_get_usage_trends');
+            const trends = await memoryApi.getUsageTrends();
             set({ isLoading: false }, undefined, 'memory/getUsageTrends/success');
             return trends;
           } catch (error) {
@@ -686,13 +716,202 @@ export const useMemoryStore = create<MemoryState>()(
         suggestImportant: async () => {
           set({ isLoading: true, error: null }, undefined, 'memory/suggestImportant/start');
           try {
-            const entries = await invoke<MemoryEntry[]>('memory_suggest_important');
+            const entries = await memoryApi.suggestImportantMemories();
             set({ isLoading: false }, undefined, 'memory/suggestImportant/success');
             return entries;
           } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error('[memoryStore] failed to suggest important:', msg);
             set({ error: msg, isLoading: false }, undefined, 'memory/suggestImportant/error');
+            throw error;
+          }
+        },
+
+        // ---------------------------------------------------------------
+        // Decay operations (additional)
+        // ---------------------------------------------------------------
+
+        getDecayCandidates: async () => {
+          set({ isLoading: true, error: null }, undefined, 'memory/getDecayCandidates/start');
+          try {
+            const candidates = await memoryApi.getDecayCandidates();
+            set({ isLoading: false }, undefined, 'memory/getDecayCandidates/success');
+            return candidates;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get decay candidates:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/getDecayCandidates/error');
+            throw error;
+          }
+        },
+
+        recallWithBoost: async (category: MemoryCategory, topic: string) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/recallWithBoost/start');
+          try {
+            const entry = await memoryApi.recallWithBoost(category, topic);
+            set({ isLoading: false }, undefined, 'memory/recallWithBoost/success');
+            return entry;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to recall with boost:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/recallWithBoost/error');
+            throw error;
+          }
+        },
+
+        decaySingle: async (memoryId: number, decayAmount: number) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/decaySingle/start');
+          try {
+            const newImportance = await memoryApi.decaySingle(memoryId, decayAmount);
+            await get().loadAll();
+            set({ isLoading: false }, undefined, 'memory/decaySingle/success');
+            return newImportance;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to decay single memory:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/decaySingle/error');
+            throw error;
+          }
+        },
+
+        // ---------------------------------------------------------------
+        // Compaction operations
+        // ---------------------------------------------------------------
+
+        getCompactionCandidates: async (config?: CompactionConfig) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/getCompactionCandidates/start');
+          try {
+            const candidates = await memoryApi.getCompactionCandidates(config);
+            set({ isLoading: false }, undefined, 'memory/getCompactionCandidates/success');
+            return candidates;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get compaction candidates:', msg);
+            set(
+              { error: msg, isLoading: false },
+              undefined,
+              'memory/getCompactionCandidates/error',
+            );
+            throw error;
+          }
+        },
+
+        getLogsInRange: async (startDate?: string, endDate?: string) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/getLogsInRange/start');
+          try {
+            const logs = await memoryApi.getLogsInRange(startDate, endDate);
+            set({ isLoading: false }, undefined, 'memory/getLogsInRange/success');
+            return logs;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get logs in range:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/getLogsInRange/error');
+            throw error;
+          }
+        },
+
+        compactOldLogs: async (startDate?: string, endDate?: string) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/compactOldLogs/start');
+          try {
+            const result = await memoryApi.compactOldLogs(startDate, endDate);
+            set({ isLoading: false }, undefined, 'memory/compactOldLogs/success');
+            toast.success(
+              `Compacted ${result.dates_compacted} dates (${result.logs_processed} logs)`,
+            );
+            return result;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to compact old logs:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/compactOldLogs/error');
+            toast.error(`Failed to compact logs: ${msg}`);
+            throw error;
+          }
+        },
+
+        promoteExtracted: async (memories: ExtractedMemory[]) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/promoteExtracted/start');
+          try {
+            const count = await memoryApi.promoteExtracted(memories);
+            await get().loadAll();
+            set({ isLoading: false }, undefined, 'memory/promoteExtracted/success');
+            toast.success(`Promoted ${count} memories to long-term storage`);
+            return count;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to promote extracted:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/promoteExtracted/error');
+            toast.error(`Failed to promote memories: ${msg}`);
+            throw error;
+          }
+        },
+
+        archiveCompactedLogs: async (dates: string[], deleteCompacted: boolean = false) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/archiveCompactedLogs/start');
+          try {
+            const count = await memoryApi.archiveCompactedLogs(dates, deleteCompacted);
+            set({ isLoading: false }, undefined, 'memory/archiveCompactedLogs/success');
+            toast.success(`Archived ${count} compacted log entries`);
+            return count;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to archive compacted logs:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/archiveCompactedLogs/error');
+            toast.error(`Failed to archive logs: ${msg}`);
+            throw error;
+          }
+        },
+
+        getExtractionPrompt: async (
+          startDate?: string,
+          endDate?: string,
+          config?: CompactionConfig,
+        ) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/getExtractionPrompt/start');
+          try {
+            const prompt = await memoryApi.getExtractionPrompt(startDate, endDate, config);
+            set({ isLoading: false }, undefined, 'memory/getExtractionPrompt/success');
+            return prompt;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get extraction prompt:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/getExtractionPrompt/error');
+            throw error;
+          }
+        },
+
+        getCompactionStats: async () => {
+          set({ isLoading: true, error: null }, undefined, 'memory/getCompactionStats/start');
+          try {
+            const stats = await memoryApi.getCompactionStats();
+            set({ isLoading: false }, undefined, 'memory/getCompactionStats/success');
+            return stats;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to get compaction stats:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/getCompactionStats/error');
+            throw error;
+          }
+        },
+
+        // ---------------------------------------------------------------
+        // Import operations (additional)
+        // ---------------------------------------------------------------
+
+        importJsonString: async (json: string, strategy?: string) => {
+          set({ isLoading: true, error: null }, undefined, 'memory/importJsonString/start');
+          try {
+            const result = await memoryApi.importFromJsonString(json, strategy);
+            await get().loadAll();
+            set({ isLoading: false }, undefined, 'memory/importJsonString/success');
+            toast.success(
+              `Imported ${result.memories_imported} memories and ${result.logs_imported} logs`,
+            );
+            return result;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[memoryStore] failed to import JSON string:', msg);
+            set({ error: msg, isLoading: false }, undefined, 'memory/importJsonString/error');
+            toast.error(`Failed to import: ${msg}`);
             throw error;
           }
         },

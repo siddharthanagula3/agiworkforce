@@ -1,23 +1,35 @@
 import { create } from 'zustand';
-import { invoke } from '../lib/tauri-mock';
+import {
+  fileRead,
+  fileReadBinary,
+  fileReadRange,
+  fileReadText,
+  fsReadFileContent,
+  fileWrite,
+  fileWriteText,
+  fileWriteBinary,
+  fileDelete,
+  fileRename,
+  fileCopy,
+  fileMove,
+  fileExists,
+  fileMetadata,
+  fileGetMetadata,
+  fileOpenWithDefaultApp,
+  undoFileOperation,
+  dirList,
+  dirCreate,
+  dirDelete,
+  dirTraverse,
+  fsGetWorkspaceFiles,
+  type FileMetadata,
+  type DirEntry,
+  type FileReadRangeResult,
+  type FileContextContent,
+  type WorkspaceFile,
+} from '../api/fileOps';
 
-export interface FileMetadata {
-  size: number;
-  is_file: boolean;
-  is_dir: boolean;
-  created: number;
-  modified: number;
-  readonly: boolean;
-}
-
-export interface DirEntry {
-  name: string;
-  path: string;
-  is_file: boolean;
-  is_dir: boolean;
-  size: number;
-  modified: number;
-}
+export type { FileMetadata, DirEntry, FileReadRangeResult, FileContextContent, WorkspaceFile };
 
 interface FilesystemState {
   currentPath: string | undefined;
@@ -37,18 +49,28 @@ interface FilesystemState {
   goUp: () => Promise<void>;
 
   readFile: (path: string) => Promise<string>;
+  readFileBinary: (filePath: string) => Promise<string>;
+  readFileRange: (path: string, offset?: number, limit?: number) => Promise<FileReadRangeResult>;
+  readFileText: (filePath: string) => Promise<string>;
+  readFileContent: (filePath: string) => Promise<FileContextContent>;
   writeFile: (path: string, content: string) => Promise<void>;
+  writeFileText: (filePath: string, content: string) => Promise<void>;
+  writeFileBinary: (filePath: string, base64Content: string) => Promise<void>;
   deleteFile: (path: string) => Promise<void>;
   renameFile: (oldPath: string, newPath: string) => Promise<void>;
   copyFile: (src: string, dest: string) => Promise<void>;
   moveFile: (src: string, dest: string) => Promise<void>;
   fileExists: (path: string) => Promise<boolean>;
   getMetadata: (path: string) => Promise<FileMetadata>;
+  getFileMetadata: (filePath: string) => Promise<FileMetadata>;
+  openWithDefaultApp: (path: string) => Promise<void>;
+  undoFileOperation: (operation: string, path: string, content?: string) => Promise<void>;
 
   listDirectory: (path: string) => Promise<DirEntry[]>;
   createDirectory: (path: string) => Promise<void>;
   deleteDirectory: (path: string, recursive: boolean) => Promise<void>;
   searchFiles: (path: string, pattern: string) => Promise<string[]>;
+  getWorkspaceFiles: (workspacePath: string) => Promise<WorkspaceFile[]>;
 
   selectPath: (path: string | null) => void;
   setFileContent: (content: string) => void;
@@ -72,7 +94,7 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   navigateTo: async (path: string) => {
     set({ loading: true, error: null });
     try {
-      const entries = await invoke<DirEntry[]>('dir_list', { path });
+      const entries = await dirList(path);
 
       const { history, historyIndex } = get();
       const newHistory = [...history.slice(0, historyIndex + 1), path];
@@ -101,7 +123,7 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
 
       set({ loading: true, error: null });
       try {
-        const entries = await invoke<DirEntry[]>('dir_list', { path });
+        const entries = await dirList(path);
         set({
           currentPath: path as string,
           entries,
@@ -125,7 +147,7 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
 
       set({ loading: true, error: null });
       try {
-        const entries = await invoke<DirEntry[]>('dir_list', { path });
+        const entries = await dirList(path);
         set({
           currentPath: path as string,
           entries,
@@ -152,9 +174,57 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   readFile: async (path: string) => {
     set({ loading: true, error: null });
     try {
-      const content = await invoke<string>('file_read', { path });
+      const content = await fileRead(path);
       set({ fileContent: content, selectedPath: path, loading: false });
       return content;
+    } catch (error) {
+      set({ loading: false, error: String(error) });
+      throw error;
+    }
+  },
+
+  readFileBinary: async (filePath: string) => {
+    set({ loading: true, error: null });
+    try {
+      const base64 = await fileReadBinary(filePath);
+      set({ loading: false });
+      return base64;
+    } catch (error) {
+      set({ loading: false, error: String(error) });
+      throw error;
+    }
+  },
+
+  readFileRange: async (path: string, offset?: number, limit?: number) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await fileReadRange(path, offset, limit);
+      set({ loading: false });
+      return result;
+    } catch (error) {
+      set({ loading: false, error: String(error) });
+      throw error;
+    }
+  },
+
+  readFileText: async (filePath: string) => {
+    set({ loading: true, error: null });
+    try {
+      const content = await fileReadText(filePath);
+      set({ loading: false });
+      return content;
+    } catch (error) {
+      set({ loading: false, error: String(error) });
+      throw error;
+    }
+  },
+
+  readFileContent: async (filePath: string) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await fsReadFileContent(filePath);
+      set({ loading: false });
+      return result;
     } catch (error) {
       set({ loading: false, error: String(error) });
       throw error;
@@ -164,7 +234,29 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   writeFile: async (path: string, content: string) => {
     set({ loading: true, error: null });
     try {
-      await invoke('file_write', { path, content });
+      await fileWrite(path, content);
+      set({ loading: false });
+    } catch (error) {
+      set({ loading: false, error: String(error) });
+      throw error;
+    }
+  },
+
+  writeFileText: async (filePath: string, content: string) => {
+    set({ loading: true, error: null });
+    try {
+      await fileWriteText(filePath, content);
+      set({ loading: false });
+    } catch (error) {
+      set({ loading: false, error: String(error) });
+      throw error;
+    }
+  },
+
+  writeFileBinary: async (filePath: string, base64Content: string) => {
+    set({ loading: true, error: null });
+    try {
+      await fileWriteBinary(filePath, base64Content);
       set({ loading: false });
     } catch (error) {
       set({ loading: false, error: String(error) });
@@ -175,11 +267,11 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   deleteFile: async (path: string) => {
     set({ loading: true, error: null });
     try {
-      await invoke('file_delete', { path });
+      await fileDelete(path);
 
       const { currentPath } = get();
       if (currentPath) {
-        const entries = await invoke<DirEntry[]>('dir_list', { path: currentPath });
+        const entries = await dirList(currentPath);
         set({ entries, loading: false });
       } else {
         set({ loading: false });
@@ -193,11 +285,11 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   renameFile: async (oldPath: string, newPath: string) => {
     set({ loading: true, error: null });
     try {
-      await invoke('file_rename', { oldPath, newPath });
+      await fileRename(oldPath, newPath);
 
       const { currentPath } = get();
       if (currentPath) {
-        const entries = await invoke<DirEntry[]>('dir_list', { path: currentPath });
+        const entries = await dirList(currentPath);
         set({ entries, loading: false });
       } else {
         set({ loading: false });
@@ -211,7 +303,7 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   copyFile: async (src: string, dest: string) => {
     set({ loading: true, error: null });
     try {
-      await invoke('file_copy', { src, dest });
+      await fileCopy(src, dest);
       set({ loading: false });
     } catch (error) {
       set({ loading: false, error: String(error) });
@@ -222,11 +314,11 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   moveFile: async (src: string, dest: string) => {
     set({ loading: true, error: null });
     try {
-      await invoke('file_move', { src, dest });
+      await fileMove(src, dest);
 
       const { currentPath } = get();
       if (currentPath) {
-        const entries = await invoke<DirEntry[]>('dir_list', { path: currentPath });
+        const entries = await dirList(currentPath);
         set({ entries, loading: false });
       } else {
         set({ loading: false });
@@ -239,7 +331,7 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
 
   fileExists: async (path: string) => {
     try {
-      const exists = await invoke<boolean>('file_exists', { path });
+      const exists = await fileExists(path);
       return exists;
     } catch (error) {
       throw error;
@@ -248,9 +340,40 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
 
   getMetadata: async (path: string) => {
     try {
-      const metadata = await invoke<FileMetadata>('file_metadata', { path });
+      const metadata = await fileMetadata(path);
       return metadata;
     } catch (error) {
+      throw error;
+    }
+  },
+
+  getFileMetadata: async (filePath: string) => {
+    try {
+      const metadata = await fileGetMetadata(filePath);
+      return metadata;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  openWithDefaultApp: async (path: string) => {
+    set({ loading: true, error: null });
+    try {
+      await fileOpenWithDefaultApp(path);
+      set({ loading: false });
+    } catch (error) {
+      set({ loading: false, error: String(error) });
+      throw error;
+    }
+  },
+
+  undoFileOperation: async (operation: string, path: string, content?: string) => {
+    set({ loading: true, error: null });
+    try {
+      await undoFileOperation(operation, path, content);
+      set({ loading: false });
+    } catch (error) {
+      set({ loading: false, error: String(error) });
       throw error;
     }
   },
@@ -258,7 +381,7 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   listDirectory: async (path: string) => {
     set({ loading: true, error: null });
     try {
-      const entries = await invoke<DirEntry[]>('dir_list', { path });
+      const entries = await dirList(path);
       set({ entries, currentPath: path, loading: false });
       return entries;
     } catch (error) {
@@ -270,11 +393,11 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   createDirectory: async (path: string) => {
     set({ loading: true, error: null });
     try {
-      await invoke('dir_create', { path });
+      await dirCreate(path);
 
       const { currentPath } = get();
       if (currentPath) {
-        const entries = await invoke<DirEntry[]>('dir_list', { path: currentPath });
+        const entries = await dirList(currentPath);
         set({ entries, loading: false });
       } else {
         set({ loading: false });
@@ -288,11 +411,11 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   deleteDirectory: async (path: string, recursive: boolean) => {
     set({ loading: true, error: null });
     try {
-      await invoke('dir_delete', { path, recursive });
+      await dirDelete(path, recursive);
 
       const { currentPath } = get();
       if (currentPath) {
-        const entries = await invoke<DirEntry[]>('dir_list', { path: currentPath });
+        const entries = await dirList(currentPath);
         set({ entries, loading: false });
       } else {
         set({ loading: false });
@@ -306,12 +429,21 @@ export const useFilesystemStore = create<FilesystemState>((set, get) => ({
   searchFiles: async (path: string, pattern: string) => {
     set({ loading: true, error: null });
     try {
-      const results = await invoke<string[]>('dir_traverse', {
-        path,
-        globPattern: pattern,
-      });
+      const results = await dirTraverse(path, pattern);
       set({ loading: false });
       return results;
+    } catch (error) {
+      set({ loading: false, error: String(error) });
+      throw error;
+    }
+  },
+
+  getWorkspaceFiles: async (workspacePath: string) => {
+    set({ loading: true, error: null });
+    try {
+      const files = await fsGetWorkspaceFiles(workspacePath);
+      set({ loading: false });
+      return files;
     } catch (error) {
       set({ loading: false, error: String(error) });
       throw error;
