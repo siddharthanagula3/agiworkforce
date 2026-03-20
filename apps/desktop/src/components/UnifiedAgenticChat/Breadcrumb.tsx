@@ -11,6 +11,10 @@ interface BreadcrumbProps {
     | 'rewind'
     | 'mcp-workspace'
     | 'mcp-bundles'
+    | 'images'
+    | 'skills'
+    | 'schedules'
+    | 'artifacts'
     | null;
   onNavigateHome: () => void;
 }
@@ -24,6 +28,10 @@ const VIEW_LABELS: Record<string, string> = {
   rewind: 'Rewind Timeline',
   'mcp-workspace': 'MCP Workspace',
   'mcp-bundles': 'Tool Registry',
+  images: 'Images',
+  skills: 'Skills',
+  schedules: 'Schedules',
+  artifacts: 'Artifacts Gallery',
 };
 
 export function Breadcrumb({ activeView, onNavigateHome }: BreadcrumbProps) {
