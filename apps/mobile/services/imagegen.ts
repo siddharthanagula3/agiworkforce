@@ -47,7 +47,7 @@ export async function generateImage(request: ImageGenRequest): Promise<ImageGenR
   if (!request.prompt.trim()) {
     throw new Error('Image generation requires a non-empty prompt');
   }
-  return api.post<ImageGenResponse>('/api/imagegen/generate', request);
+  return api.post<ImageGenResponse>('/api/media/image/generate', request);
 }
 
 /**
@@ -58,7 +58,7 @@ export async function getImageStatus(id: string): Promise<ImageGenProgress> {
   if (!id) {
     throw new Error('Image generation ID is required');
   }
-  return api.get<ImageGenProgress>(`/api/imagegen/status/${encodeURIComponent(id)}`);
+  return api.get<ImageGenProgress>(`/api/media/image/status/${encodeURIComponent(id)}`);
 }
 
 /**
@@ -69,7 +69,7 @@ export async function listGeneratedImages(conversationId: string): Promise<Image
   if (!conversationId) return [];
   try {
     return await api.get<ImageGenResponse[]>(
-      `/api/imagegen/list?conversationId=${encodeURIComponent(conversationId)}`,
+      `/api/media/image/list?conversationId=${encodeURIComponent(conversationId)}`,
     );
   } catch {
     return [];

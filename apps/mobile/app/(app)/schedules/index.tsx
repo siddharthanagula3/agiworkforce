@@ -9,6 +9,7 @@ import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScheduleCard } from '@/components/schedules/ScheduleCard';
+import { QuickSchedule } from '@/components/schedules/QuickSchedule';
 import { useScheduleStore } from '@/stores/scheduleStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
@@ -111,6 +112,11 @@ export default function SchedulesScreen() {
     <SafeAreaView className="flex-1 bg-surface-base">
       {/* Header */}
       <Header onBackPress={handleBack} onCreatePress={handleCreate} />
+
+      {/* Quick schedule button */}
+      <View className="px-4 mb-3">
+        <QuickSchedule onCreated={handleRefresh} />
+      </View>
 
       {/* Error banner */}
       {error && (

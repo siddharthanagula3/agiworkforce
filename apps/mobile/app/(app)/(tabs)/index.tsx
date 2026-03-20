@@ -3,24 +3,16 @@ import { View, ScrollView, Pressable, RefreshControl, ActivityIndicator } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import {
-  MessageSquarePlus,
-  Bot,
-  Smartphone,
-  ChevronRight,
-  Zap,
-  Clock,
-  QrCode,
-} from 'lucide-react-native';
+import { MessageSquarePlus, Bot, ChevronRight, Zap, Clock, QrCode } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ConnectionStatusBar } from '@/components/shared/ConnectionStatus';
+import { DesktopCompanionWidget } from '@/components/shared/DesktopCompanionWidget';
 import { AgentCard } from '@/components/agents/AgentCard';
 import { useChatStore } from '@/stores/chatStore';
 import { useAgentStore } from '@/stores/agentStore';
-import { useConnectionStore } from '@/stores/connectionStore';
 import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/lib/theme';
 
@@ -35,7 +27,6 @@ export default function HomeScreen() {
   const loadConversations = useChatStore((s) => s.loadConversations);
   const isLoadingConversations = useChatStore((s) => s.isLoadingConversations);
   const agents = useAgentStore((s) => s.agents);
-  const connectionStatus = useConnectionStore((s) => s.status);
   const user = useAuthStore((s) => s.user);
 
   const activeAgents = agents.filter((a) => a.status === 'running' || a.status === 'waiting');
@@ -277,27 +268,10 @@ export default function HomeScreen() {
           )}
         </Animated.View>
 
-        {/* Desktop connection prompt */}
-        {connectionStatus === 'disconnected' && (
-          <Animated.View entering={FadeInDown.duration(250).delay(240)}>
-            <Pressable onPress={handleOpenCompanion}>
-              <Card variant="outline" className="mt-5 border-teal-500/20">
-                <View className="flex-row items-center gap-3">
-                  <View className="w-10 h-10 rounded-xl bg-teal-500/15 items-center justify-center">
-                    <Smartphone size={20} color={colors.teal} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-medium text-white">Connect to Desktop</Text>
-                    <Text className="text-xs text-white/40 mt-0.5">
-                      Scan QR to control agents from your phone
-                    </Text>
-                  </View>
-                  <ChevronRight size={16} color={colors.textMuted} />
-                </View>
-              </Card>
-            </Pressable>
-          </Animated.View>
-        )}
+        {/* Desktop companion widget — connected or disconnected state */}
+        <Animated.View entering={FadeInDown.duration(250).delay(240)} style={{ marginTop: 20 }}>
+          <DesktopCompanionWidget compact />
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
