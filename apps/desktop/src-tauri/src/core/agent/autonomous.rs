@@ -374,7 +374,31 @@ impl AutonomousAgent {
             };
 
             if let Some(task) = task_clone {
-                if !self.approval.should_approve(&task).await? {
+                // ISSUE-08 fix: Timeout on should_approve to prevent indefinite hangs.
+                // On timeout, default to requiring explicit approval (false).
+                let should_auto = match tokio::time::timeout(
+                    Duration::from_secs(30),
+                    self.approval.should_approve(&task),
+                )
+                .await
+                {
+                    Ok(Ok(v)) => v,
+                    Ok(Err(e)) => {
+                        tracing::warn!(
+                            "[Agent] should_approve errored for task {}: {}, defaulting to require approval",
+                            task_id, e
+                        );
+                        false
+                    }
+                    Err(_) => {
+                        tracing::warn!(
+                            "[Agent] should_approve timed out (30s) for task {}, defaulting to require approval",
+                            task_id
+                        );
+                        false
+                    }
+                };
+                if !should_auto {
                     tracing::info!(
                         "[Agent] Task {} requires approval, escalating to ApprovalController",
                         task_id
@@ -681,7 +705,24 @@ impl AutonomousAgent {
         let mut step_outcomes: Vec<StepOutcome> = Vec::new();
 
         let mut step_index = 0usize;
+
+        // ISSUE-10 fix: Fail early if the planner produced zero steps.
+        if task.steps.is_empty() {
+            tracing::warn!("[Agent] Task {} has no steps after planning", task.id);
+            task.status = TaskStatus::Failed("Task has no steps after planning".to_string());
+            let mut queue = self.task_queue.lock();
+            if let Some(t) = queue.iter_mut().find(|t| t.id == task_id) {
+                *t = task.clone();
+            }
+            self.running_tasks.lock().retain(|id| id != &task_id);
+            self.task_notify.notify_waiters();
+            return Err(anyhow!("Task {} has no steps after planning", task_id));
+        }
+
         while step_index < task.steps.len() {
+            // ISSUE-02 fix: Fetch step at the top of the outer loop but ALSO
+            // re-fetch inside the attempt loop after replanning. We keep this
+            // initial clone for the pre-loop budget check and event emission.
             let step = task.steps[step_index].clone();
             let total_steps = task.steps.len();
             task.current_step = step_index;
@@ -745,6 +786,10 @@ impl AutonomousAgent {
             let mut step_succeeded = false;
             loop {
                 attempt += 1;
+                // ISSUE-02 fix: Re-fetch the step from task.steps each attempt
+                // so we always execute the current step, not a stale clone from
+                // before a replan modified task.steps.
+                let step = task.steps[step_index].clone();
                 let step_result = self.executor.execute_step(&step, &self.vision).await;
 
                 match step_result {
@@ -831,6 +876,20 @@ impl AutonomousAgent {
                                         task.steps.extend(new_steps);
                                         task.retry_count = 0;
                                         task.replan_count += 1;
+                                        // ISSUE-01 fix: Bounds check after replan —
+                                        // if new steps didn't actually add anything
+                                        // at step_index, fail instead of OOB access.
+                                        if task.steps.len() <= step_index {
+                                            tracing::error!(
+                                                "[Agent] Replan produced no executable steps at index {} (total {}), failing task",
+                                                step_index, task.steps.len()
+                                            );
+                                            task.status = TaskStatus::Failed(format!(
+                                                "Replan produced no executable steps at index {} (total steps: {})",
+                                                step_index, task.steps.len()
+                                            ));
+                                            break;
+                                        }
                                         // Break inner loop; outer while-loop will
                                         // pick up the first replanned step at step_index.
                                         break;
@@ -910,6 +969,18 @@ impl AutonomousAgent {
                                         task.steps.extend(new_steps);
                                         task.retry_count = 0;
                                         task.replan_count += 1;
+                                        // ISSUE-01 fix: Bounds check after replan
+                                        if task.steps.len() <= step_index {
+                                            tracing::error!(
+                                                "[Agent] Replan produced no executable steps at index {} (total {}), failing task",
+                                                step_index, task.steps.len()
+                                            );
+                                            task.status = TaskStatus::Failed(format!(
+                                                "Replan produced no executable steps at index {} (total steps: {})",
+                                                step_index, task.steps.len()
+                                            ));
+                                            break;
+                                        }
                                         break;
                                     }
                                     Err(replan_err) => {
@@ -1404,6 +1475,16 @@ Use the same action types: Screenshot, Click, Type, Navigate, WaitForElement, Ex
 
         {
             let mut queue = self.task_queue.lock();
+
+            // ISSUE-05 fix: Reject duplicate task IDs on resume to prevent
+            // the same checkpoint from being enqueued multiple times.
+            if queue.iter().any(|t| t.id == task_id) {
+                return Err(anyhow!(
+                    "Task {} already exists in the queue, refusing duplicate resume",
+                    task_id
+                ));
+            }
+
             let pending_count = queue
                 .iter()
                 .filter(|t| matches!(t.status, TaskStatus::Pending | TaskStatus::WaitingApproval))

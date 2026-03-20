@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { Bot, Clock, DollarSign, Target, TrendingUp, User } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/Card';
 import {
@@ -226,7 +227,14 @@ function BenchmarkComparison({ data }: { data: BenchmarkComparisonData }) {
 }
 
 export function ComparisonSection() {
-  const { comparisonMode, comparisonData, setComparisonMode, loading } = useROIStore();
+  const { comparisonMode, comparisonData, setComparisonMode, loading } = useROIStore(
+    useShallow((s) => ({
+      comparisonMode: s.comparisonMode,
+      comparisonData: s.comparisonData,
+      setComparisonMode: s.setComparisonMode,
+      loading: s.loading,
+    })),
+  );
 
   const handleModeChange = (value: string) => {
     setComparisonMode(value as ComparisonMode);

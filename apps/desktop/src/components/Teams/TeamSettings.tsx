@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useTeamStore } from '../../stores/teamStore';
 import { TeamRole, type Team } from '../../types/teams';
 import { Button } from '../ui/Button';
@@ -9,7 +10,13 @@ interface TeamSettingsProps {
 }
 
 export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
-  const { updateTeam, deleteTeam } = useTeamStore();
+  const { updateTeam, updateTeamSettings, deleteTeam } = useTeamStore(
+    useShallow((s) => ({
+      updateTeam: s.updateTeam,
+      updateTeamSettings: s.updateTeamSettings,
+      deleteTeam: s.deleteTeam,
+    })),
+  );
   const [name, setName] = useState(currentTeam.name);
   const [description, setDescription] = useState(currentTeam.description || '');
   const [defaultMemberRole, setDefaultMemberRole] = useState(
@@ -25,6 +32,7 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
     currentTeam.settings.enableActivityNotifications,
   );
   const [saving, setSaving] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +43,23 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
       console.error('Failed to update team:', error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      await updateTeamSettings({
+        teamId: currentTeam.id,
+        defaultMemberRole,
+        allowResourceSharing,
+        requireApprovalForAutomations,
+        enableActivityNotifications,
+      });
+    } catch (error) {
+      console.error('Failed to update team settings:', error);
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -181,6 +206,15 @@ export const TeamSettings: React.FC<TeamSettingsProps> = ({ currentTeam }) => {
               />
             </button>
           </div>
+
+          <Button
+            type="button"
+            disabled={savingSettings}
+            onClick={() => void handleSaveSettings()}
+          >
+            <Save className="mr-2 h-4 w-4" />
+            {savingSettings ? 'Saving Settings...' : 'Save Settings'}
+          </Button>
         </div>
       </div>
 

@@ -1,8 +1,22 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBrowserStore } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
-import { Play, Pause, Maximize2, Minimize2, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  Maximize2,
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
+  RefreshCw,
+  ArrowLeft,
+  ArrowRight,
+  Globe,
+  Copy,
+  Search,
+} from 'lucide-react';
 
 interface BrowserViewerProps {
   className?: string;
@@ -18,7 +32,29 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     stopStreaming,
     sessions,
     activeSessionId,
-  } = useBrowserStore();
+    goBack,
+    goForward,
+    reloadTab,
+    navigateTab,
+    getUrl,
+    getTitle,
+  } = useBrowserStore(
+    useShallow((s) => ({
+      screenshots: s.screenshots,
+      highlightedElement: s.highlightedElement,
+      isStreaming: s.isStreaming,
+      startStreaming: s.startStreaming,
+      stopStreaming: s.stopStreaming,
+      sessions: s.sessions,
+      activeSessionId: s.activeSessionId,
+      goBack: s.goBack,
+      goForward: s.goForward,
+      reloadTab: s.reloadTab,
+      navigateTab: s.navigateTab,
+      getUrl: s.getUrl,
+      getTitle: s.getTitle,
+    })),
+  );
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -31,9 +67,13 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     naturalWidth: number;
     naturalHeight: number;
   } | null>(null);
+  const [urlBarValue, setUrlBarValue] = useState('');
+  const [pageTitle, setPageTitle] = useState('');
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const activeTab = activeSession?.tabs.find((t) => t.active);
@@ -42,6 +82,35 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
   const latestScreenshot = screenshots
     .filter((s) => s.tabId === currentTabId)
     .sort((a, b) => b.timestamp - a.timestamp)[0];
+
+  // Sync URL bar with active tab
+  useEffect(() => {
+    if (activeTab) {
+      setUrlBarValue(activeTab.url);
+    }
+  }, [activeTab?.url, activeTab]);
+
+  // Fetch real title from backend when tab changes
+  useEffect(() => {
+    if (!currentTabId) return;
+    let cancelled = false;
+
+    async function fetchTitle() {
+      try {
+        const title = await getTitle(currentTabId);
+        if (!cancelled) {
+          setPageTitle(title);
+        }
+      } catch {
+        // Non-critical: title is cosmetic
+      }
+    }
+
+    fetchTitle();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTabId, getTitle]);
 
   const updateImageDims = useCallback(() => {
     if (imageRef.current) {
@@ -61,7 +130,8 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     }
 
     const observer = new ResizeObserver(updateImageDims);
-    if (containerRef.current) observer.observe(containerRef.current);
+    const containerEl = containerRef.current;
+    if (containerEl) observer.observe(containerEl);
 
     return () => {
       if (isStreaming) {
@@ -75,8 +145,6 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
   const scaledBounds = useMemo(() => {
     if (!highlightedElement || !imageDims || imageDims.naturalWidth === 0) return null;
 
-    // Use current zoomed/panned rendered image dimensions for scaling
-    // Since the overlay will be a sibling of the img in a relative container
     const scaleX = imageDims.width / imageDims.naturalWidth;
     const scaleY = imageDims.height / imageDims.naturalHeight;
 
@@ -139,6 +207,74 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     }
   };
 
+  const handleGoBack = async () => {
+    if (!currentTabId) return;
+    try {
+      await goBack(currentTabId);
+    } catch (error) {
+      console.error('Navigation back failed:', error);
+    }
+  };
+
+  const handleGoForward = async () => {
+    if (!currentTabId) return;
+    try {
+      await goForward(currentTabId);
+    } catch (error) {
+      console.error('Navigation forward failed:', error);
+    }
+  };
+
+  const handleReload = async () => {
+    if (!currentTabId) return;
+    try {
+      await reloadTab(currentTabId);
+    } catch (error) {
+      console.error('Reload failed:', error);
+    }
+  };
+
+  const handleNavigate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentTabId || !urlBarValue.trim() || isNavigating) return;
+
+    let targetUrl = urlBarValue.trim();
+    // Auto-prefix https:// if no protocol
+    if (!/^https?:\/\//i.test(targetUrl)) {
+      // If it looks like a domain (has a dot), add protocol
+      if (targetUrl.includes('.')) {
+        targetUrl = `https://${targetUrl}`;
+      } else {
+        // Otherwise treat as search (navigate to a search URL)
+        targetUrl = `https://www.google.com/search?q=${encodeURIComponent(targetUrl)}`;
+      }
+    }
+
+    setIsNavigating(true);
+    try {
+      await navigateTab(currentTabId, targetUrl);
+      setUrlBarValue(targetUrl);
+
+      // Refresh the URL from backend after navigation settles
+      try {
+        const realUrl = await getUrl(currentTabId);
+        setUrlBarValue(realUrl);
+      } catch {
+        // Non-critical
+      }
+    } catch (error) {
+      console.error('Navigation failed:', error);
+    } finally {
+      setIsNavigating(false);
+    }
+  };
+
+  const handleCopyUrl = () => {
+    if (urlBarValue) {
+      navigator.clipboard.writeText(urlBarValue);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -147,23 +283,94 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
         className,
       )}
     >
-      {}
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/10">
+      {/* Navigation bar */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border bg-muted/10">
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleGoBack}
+            disabled={!currentTabId}
+            className="h-7 w-7 p-0"
+            title="Back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleGoForward}
+            disabled={!currentTabId}
+            className="h-7 w-7 p-0"
+            title="Forward"
+          >
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleReload}
+            disabled={!currentTabId}
+            className="h-7 w-7 p-0"
+            title="Reload"
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', isNavigating && 'animate-spin')} />
+          </Button>
+        </div>
+
+        {/* URL bar */}
+        <form onSubmit={handleNavigate} className="flex-1 flex items-center gap-1">
+          <div className="flex-1 relative">
+            <Globe className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              ref={urlInputRef}
+              type="text"
+              value={urlBarValue}
+              onChange={(e) => setUrlBarValue(e.target.value)}
+              placeholder="Enter URL or search..."
+              disabled={!currentTabId}
+              className="w-full h-7 pl-7 pr-8 rounded-md border border-border bg-background text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+              onFocus={(e) => e.target.select()}
+            />
+            <button
+              type="button"
+              onClick={handleCopyUrl}
+              className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground"
+              title="Copy URL"
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          </div>
+          <Button
+            type="submit"
+            variant="ghost"
+            size="sm"
+            disabled={!currentTabId || isNavigating}
+            className="h-7 w-7 p-0"
+            title="Go"
+          >
+            <Search className="h-3.5 w-3.5" />
+          </Button>
+        </form>
+      </div>
+
+      {/* Viewer controls toolbar */}
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-border bg-muted/5">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
             onClick={toggleStreaming}
-            className={cn(isStreaming && 'text-green-600')}
+            className={cn('h-7', isStreaming && 'text-green-600')}
           >
             {isStreaming ? (
               <>
-                <Pause className="h-4 w-4 mr-1" />
+                <Pause className="h-3.5 w-3.5 mr-1" />
                 Pause
               </>
             ) : (
               <>
-                <Play className="h-4 w-4 mr-1" />
+                <Play className="h-3.5 w-3.5 mr-1" />
                 Resume
               </>
             )}
@@ -171,36 +378,42 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
 
           <div className="h-4 w-px bg-border" />
 
-          <Button variant="ghost" size="sm" onClick={handleZoomOut}>
-            <ZoomOut className="h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-7 w-7 p-0">
+            <ZoomOut className="h-3.5 w-3.5" />
           </Button>
-          <span className="text-xs text-muted-foreground min-w-[60px] text-center">
+          <span className="text-xs text-muted-foreground min-w-[48px] text-center">
             {Math.round(zoom * 100)}%
           </span>
-          <Button variant="ghost" size="sm" onClick={handleZoomIn}>
-            <ZoomIn className="h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={handleZoomIn} className="h-7 w-7 p-0">
+            <ZoomIn className="h-3.5 w-3.5" />
           </Button>
 
-          <Button variant="ghost" size="sm" onClick={handleResetView}>
-            <RefreshCw className="h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={handleResetView} className="h-7 w-7 p-0">
+            <RefreshCw className="h-3.5 w-3.5" />
           </Button>
         </div>
 
         <div className="flex items-center gap-2">
+          {pageTitle && (
+            <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={pageTitle}>
+              {pageTitle}
+            </span>
+          )}
+
           {isStreaming && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <div className="h-2 w-2 rounded-full bg-green-600 animate-pulse" />
               Live
             </div>
           )}
 
-          <Button variant="ghost" size="sm" onClick={toggleFullscreen}>
-            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          <Button variant="ghost" size="sm" onClick={toggleFullscreen} className="h-7 w-7 p-0">
+            {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           </Button>
         </div>
       </div>
 
-      {}
+      {/* Screenshot viewport */}
       <div
         className="flex-1 relative overflow-hidden bg-muted/5 cursor-move"
         onMouseDown={handleMouseDown}
@@ -260,7 +473,7 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
         )}
       </div>
 
-      {}
+      {/* Status bar */}
       <div className="flex items-center justify-between px-3 py-1 border-t border-border bg-muted/10 text-xs text-muted-foreground">
         <div>
           {latestScreenshot && (

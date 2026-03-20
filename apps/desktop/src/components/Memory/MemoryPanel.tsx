@@ -26,7 +26,8 @@ import { Separator } from '@/components/ui/Separator';
 import { Button } from '@/components/ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/utils';
-import { invoke, isTauri } from '@/lib/tauri-mock';
+import { isTauri } from '@/lib/tauri-mock';
+import { exportToJson, importFromJsonString } from '@/api/memory';
 import { MemoryManager } from './MemoryManager';
 
 // ---------------------------------------------------------------------------
@@ -104,7 +105,7 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
 
   const handleExport = useCallback(async () => {
     try {
-      const data = await invoke<unknown>('memory_export_json');
+      const data = await exportToJson();
       const json = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
 
       if (isTauri) {
@@ -146,7 +147,7 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
         const filePath = typeof selected === 'string' ? selected : (selected as string[])[0];
         if (!filePath) return;
         const content = await readTextFile(filePath);
-        await invoke('memory_import_json_string', { json: content });
+        await importFromJsonString(content);
         toast.success('Memories imported successfully');
       } else {
         // Web fallback: file input
@@ -163,7 +164,7 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
     if (!file) return;
     try {
       const content = await file.text();
-      await invoke('memory_import_json_string', { json: content });
+      await importFromJsonString(content);
       toast.success('Memories imported successfully');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Import failed';
