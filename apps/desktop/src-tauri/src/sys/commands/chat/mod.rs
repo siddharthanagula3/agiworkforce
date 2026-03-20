@@ -13,6 +13,7 @@ pub mod agent_mode;
 pub mod attachments;
 pub mod branching;
 pub mod cloud;
+pub mod transfer;
 pub mod browser_context;
 pub mod compaction;
 pub mod control;
@@ -48,6 +49,7 @@ pub use crate::sys::commands::chat::state::{
 pub use branching::*;
 pub use cloud::*;
 pub use compaction::*;
+pub use transfer::*;
 pub use control::*;
 pub use conversation::*;
 pub use cost::*;
