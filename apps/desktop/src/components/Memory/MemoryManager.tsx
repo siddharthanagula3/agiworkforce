@@ -14,7 +14,7 @@
  * - Import/export memories
  */
 import { memo, useCallback, useMemo, useState } from 'react';
-import { ArrowUpDown, Brain, Clock, Download, Plus, RefreshCw, Star } from 'lucide-react';
+import { ArrowUpDown, Brain, Clock, Download, Import, Plus, RefreshCw, Star } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { ScrollArea } from '@/components/ui/ScrollArea';
@@ -27,12 +27,14 @@ import {
 } from '@/components/ui/Select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { cn } from '@/lib/utils';
+import { useShallow } from 'zustand/react/shallow';
 import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 
 import { MemoryCard } from './MemoryCard';
 import { MemorySearch } from './MemorySearch';
 import { CreateMemoryDialog } from './CreateMemoryDialog';
+import { MemoryImport } from './MemoryImport';
 
 type SortOption = 'importance-desc' | 'importance-asc' | 'date-desc' | 'date-asc' | 'topic-asc';
 type TabValue = 'all' | MemoryCategory;
@@ -110,8 +112,16 @@ export const MemoryManager = memo(function MemoryManager({
   const [sortBy, setSortBy] = useState<SortOption>('importance-desc');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<MemoryEntry[]>([]);
+  const [importOpen, setImportOpen] = useState(false);
 
-  const { memories, isLoading, error, loadAll } = useMemoryStore();
+  const { memories, isLoading, error, loadAll } = useMemoryStore(
+    useShallow((s) => ({
+      memories: s.memories,
+      isLoading: s.isLoading,
+      error: s.error,
+      loadAll: s.loadAll,
+    })),
+  );
 
   // Process and display memories
   const displayedMemories = useMemo(() => {
@@ -209,6 +219,17 @@ export const MemoryManager = memo(function MemoryManager({
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => setImportOpen(true)}
+            className="h-8 text-muted-foreground hover:text-foreground"
+            title="Import memories from ChatGPT, Claude, or plain text"
+          >
+            <Import className="h-4 w-4 mr-1" />
+            Import
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleRefresh}
             disabled={isLoading}
             className="h-8 text-muted-foreground hover:text-foreground"
@@ -262,6 +283,9 @@ export const MemoryManager = memo(function MemoryManager({
           {error}
         </div>
       )}
+
+      {/* Memory Import Dialog */}
+      <MemoryImport open={importOpen} onOpenChange={setImportOpen} />
 
       {/* Tabs and Content */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">

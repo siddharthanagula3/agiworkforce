@@ -302,8 +302,10 @@ export const VoiceMode: React.FC = () => {
   const close = useVoiceModeStore((s) => s.close);
   const startListening = useVoiceModeStore((s) => s.startListening);
   const stopListeningAndProcess = useVoiceModeStore((s) => s.stopListeningAndProcess);
-  const stopSpeaking = useVoiceModeStore((s) => s.stopSpeaking);
+  const stopTts = useVoiceModeStore((s) => s.stopTts);
   const reset = useVoiceModeStore((s) => s.reset);
+  const bargeInEnabled = useVoiceModeStore((s) => s.bargeInEnabled);
+  const capabilities = useVoiceModeStore((s) => s.capabilities);
 
   const spaceHeldRef = useRef(false);
 
@@ -317,7 +319,13 @@ export const VoiceMode: React.FC = () => {
       if (e.code === 'Space' && !e.repeat && !spaceHeldRef.current) {
         e.preventDefault();
         spaceHeldRef.current = true;
-        startListening();
+
+        // If speaking, interrupt TTS via backend and start new recording
+        if (phase === 'speaking') {
+          stopTts().then(() => startListening());
+        } else {
+          startListening();
+        }
       }
 
       // Escape to close
@@ -325,7 +333,7 @@ export const VoiceMode: React.FC = () => {
         close();
       }
     },
-    [startListening, close],
+    [startListening, stopTts, close, phase],
   );
 
   const handleKeyUp = useCallback(
@@ -372,7 +380,7 @@ export const VoiceMode: React.FC = () => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
-      className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950"
+      className="fixed inset-0 z-[var(--z-overlay)] flex flex-col items-center justify-center bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950"
       role="dialog"
       aria-modal="true"
       aria-label="Voice mode"
@@ -388,7 +396,19 @@ export const VoiceMode: React.FC = () => {
         >
           <RotateCcw size={20} />
         </button>
-        <div className="text-sm text-white/40 font-medium select-none">Voice Mode</div>
+        <div className="flex items-center gap-2 text-sm text-white/40 font-medium select-none">
+          <span>Voice Mode</span>
+          {bargeInEnabled && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              Barge-in
+            </span>
+          )}
+          {capabilities?.localSttAvailable && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/20 text-green-300 border border-green-500/30">
+              Local STT
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={close}
@@ -496,13 +516,13 @@ export const VoiceMode: React.FC = () => {
             )}
           </button>
 
-          {/* Stop speaking button */}
+          {/* Stop speaking button -- uses backend voice_tts_stop */}
           {phase === 'speaking' && (
             <motion.button
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               type="button"
-              onClick={stopSpeaking}
+              onClick={() => void stopTts()}
               className="px-4 py-2 rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors text-sm"
               aria-label="Stop speaking"
             >

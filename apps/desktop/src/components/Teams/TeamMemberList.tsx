@@ -1,4 +1,5 @@
 import React, { useState, useCallback, memo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useTeamStore } from '../../stores/teamStore';
 import { useAuthStore } from '../../stores/auth';
 import type { TeamMember, Team, TeamRole } from '../../types/teams';
@@ -17,7 +18,12 @@ const TeamMemberListComponent: React.FC<TeamMemberListProps> = ({
   currentTeam,
   isLoading,
 }) => {
-  const { removeMember, updateMemberRole } = useTeamStore();
+  const { removeMember, updateMemberRole } = useTeamStore(
+    useShallow((s) => ({
+      removeMember: s.removeMember,
+      updateMemberRole: s.updateMemberRole,
+    })),
+  );
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
   const currentUserId = useAuthStore((state) => state.getCurrentUserId());

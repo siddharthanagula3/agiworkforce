@@ -1,7 +1,18 @@
-import { Globe2, ExternalLink, Loader2, Search, Clock, Zap } from 'lucide-react';
+import {
+  Globe2,
+  ExternalLink,
+  Loader2,
+  Search,
+  Clock,
+  Zap,
+  ChevronRight,
+  ChevronDown,
+} from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { ToolResultProps } from './index';
 import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
+import { cn } from '@/lib/utils';
 
 export interface SearchResult {
   title: string;
@@ -21,8 +32,55 @@ export interface SearchResultData {
   error?: string;
 }
 
+interface CollapsibleSearchHeaderProps {
+  siteCount: number;
+  query: string;
+  durationMs: number | undefined;
+  isCollapsed: boolean;
+  onToggle: () => void;
+}
+
+const CollapsibleSearchHeader: React.FC<CollapsibleSearchHeaderProps> = ({
+  siteCount,
+  query,
+  durationMs,
+  isCollapsed,
+  onToggle,
+}) => {
+  const ChevronIcon = isCollapsed ? ChevronRight : ChevronDown;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        'w-full flex items-center gap-2 px-3 py-2 rounded-lg',
+        'bg-surface-elevated border border-border/50',
+        'hover:bg-surface-hover hover:border-border/80 transition-all duration-150',
+        'text-left',
+      )}
+    >
+      <Globe2 className="h-4 w-4 shrink-0 text-blue-400" />
+      <span className="text-sm font-medium text-foreground">
+        Searched {siteCount} site{siteCount !== 1 ? 's' : ''}
+      </span>
+      {query && (
+        <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
+          &mdash; {query}
+        </span>
+      )}
+      {durationMs !== undefined && (
+        <span className="flex items-center gap-1 text-xs text-zinc-500 shrink-0">
+          <Clock className="h-3 w-3" />
+          {durationMs}ms
+        </span>
+      )}
+      <ChevronIcon className="h-4 w-4 shrink-0 text-muted-foreground ml-auto" />
+    </button>
+  );
+};
+
 export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   const data = result?.data as SearchResultData | undefined;
   const query = data?.query || '';
@@ -48,6 +106,13 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
 
   // Register search results as citations when results are available
   // This allows the AI's response to use [1], [2], etc. references
+  //
+  // addCitation and getCitationByIndex are Zustand store actions. Zustand
+  // guarantees that action references are stable across renders (they are
+  // defined once on the store object and never replaced), so including them
+  // in the deps array would cause the effect to re-run on every store change
+  // whenever the store returns a new selector function reference. Omitting
+  // them is safe and intentional.
   useEffect(() => {
     if (status === 'completed' && processedResults.length > 0) {
       processedResults.forEach((searchResult) => {
@@ -65,15 +130,16 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
         }
       });
     }
-  }, [status, processedResults, addCitation, getCitationByIndex]);
+    // addCitation + getCitationByIndex intentionally omitted — stable Zustand actions
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, processedResults]);
 
   if (status === 'running') {
     return (
-      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
-        <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-        <span className="text-sm text-muted-foreground">
-          Searching the web for &quot;{query}&quot;...
-        </span>
+      <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-elevated border border-border/50">
+        <Globe2 className="h-4 w-4 shrink-0 text-blue-400" />
+        <span className="text-sm text-muted-foreground flex-1">Searching the web...</span>
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -105,55 +171,51 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
     );
   }
 
-  const displayResults = expanded ? processedResults : processedResults.slice(0, 3);
-
   return (
     <div className="inline-search-results mt-3 space-y-2">
-      {/* Header with provider info */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Globe2 className="h-4 w-4 text-blue-400" />
-            <span className="font-medium">
-              {results.length} result{results.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-zinc-500">
-            <Zap className="h-3 w-3" />
-            <span>{provider}</span>
-          </div>
-          {durationMs !== undefined && (
-            <div className="flex items-center gap-1 text-zinc-500">
-              <Clock className="h-3 w-3" />
-              <span>{durationMs}ms</span>
-            </div>
-          )}
-        </div>
+      {/* Collapsible header — always visible when completed */}
+      <CollapsibleSearchHeader
+        siteCount={processedResults.length}
+        query={query}
+        durationMs={durationMs}
+        isCollapsed={isCollapsed}
+        onToggle={() => setIsCollapsed((prev) => !prev)}
+      />
 
-        {results.length > 3 && (
-          <button type="button"
-            onClick={() => setExpanded(!expanded)}
-            className="text-blue-400 hover:text-blue-300 transition text-xs font-medium"
+      {/* Animated results panel */}
+      <AnimatePresence initial={false}>
+        {!isCollapsed && (
+          <motion.div
+            key="search-results-panel"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            style={{ overflow: 'hidden' }}
           >
-            {expanded ? 'Show less' : `Show more (${results.length - 3})`}
-          </button>
+            <div className="space-y-2 pt-1">
+              {/* Provider + query meta row */}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground px-1">
+                <div className="flex items-center gap-1.5 text-zinc-500">
+                  <Zap className="h-3 w-3" />
+                  <span>{provider}</span>
+                </div>
+                {query && (
+                  <div className="flex items-center gap-1.5 bg-surface-base/50 rounded px-2 py-0.5">
+                    <Search className="h-3 w-3" />
+                    <span className="font-mono">{query}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Search result cards */}
+              {processedResults.map((searchResult, index) => (
+                <SearchResultCard key={index} result={searchResult} />
+              ))}
+            </div>
+          </motion.div>
         )}
-      </div>
-
-      {/* Query display */}
-      {query && (
-        <div className="text-xs text-muted-foreground bg-surface-base/50 rounded px-2 py-1 inline-flex items-center gap-1.5">
-          <Search className="h-3 w-3" />
-          <span className="font-mono">{query}</span>
-        </div>
-      )}
-
-      {/* Search Results List */}
-      <div className="space-y-2">
-        {displayResults.map((searchResult, index) => (
-          <SearchResultCard key={index} result={searchResult} />
-        ))}
-      </div>
+      </AnimatePresence>
     </div>
   );
 };

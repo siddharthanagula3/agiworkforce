@@ -375,7 +375,7 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
       if (activeTool === 'text') {
         setTextInputPosition(point);
         setTextInputValue('');
-        setTimeout(() => textInputRef.current?.focus(), 0);
+        requestAnimationFrame(() => textInputRef.current?.focus());
         return;
       }
 
@@ -999,7 +999,8 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
                   <p className="text-xs font-medium text-muted-foreground">Stroke Color</p>
                   <div className="grid grid-cols-5 gap-1">
                     {COLOR_PRESETS.map((color) => (
-                      <button type="button"
+                      <button
+                        type="button"
                         key={color}
                         className={cn(
                           'h-6 w-6 rounded-sm border-2',
@@ -1036,7 +1037,8 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">Fill Color</p>
                   <div className="grid grid-cols-5 gap-1">
-                    <button type="button"
+                    <button
+                      type="button"
                       className={cn(
                         'h-6 w-6 rounded-sm border-2',
                         fillColor === 'transparent' ? 'border-primary' : 'border-transparent',
@@ -1052,7 +1054,8 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
                       title="Transparent"
                     />
                     {COLOR_PRESETS.slice(0, 9).map((color) => (
-                      <button type="button"
+                      <button
+                        type="button"
                         key={color}
                         className={cn(
                           'h-6 w-6 rounded-sm border-2',

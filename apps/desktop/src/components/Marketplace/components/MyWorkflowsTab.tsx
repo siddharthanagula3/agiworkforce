@@ -1,6 +1,7 @@
 import { Copy, Edit, Eye, Share2, Star, Trash2, TrendingUp, Upload } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { toast } from '@/hooks/useToast';
+import { useShallow } from 'zustand/react/shallow';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +26,15 @@ import { useMarketplaceStore } from '../marketplaceStore';
 
 export function MyWorkflowsTab() {
   const { myPublishedWorkflows, isLoading, fetchMyWorkflows, openShareModal, unpublishWorkflow } =
-    useMarketplaceStore();
+    useMarketplaceStore(
+      useShallow((s) => ({
+        myPublishedWorkflows: s.myPublishedWorkflows,
+        isLoading: s.isLoading,
+        fetchMyWorkflows: s.fetchMyWorkflows,
+        openShareModal: s.openShareModal,
+        unpublishWorkflow: s.unpublishWorkflow,
+      })),
+    );
 
   const [selectedForDelete, setSelectedForDelete] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -44,10 +53,8 @@ export function MyWorkflowsTab() {
       setSelectedForDelete(null);
     } catch (error) {
       console.error('Failed to unpublish workflow:', error);
-      toast({
-        title: 'Unpublish failed',
+      toast.error('Unpublish failed', {
         description: 'Failed to unpublish workflow. Please try again.',
-        variant: 'destructive',
       });
     }
   };

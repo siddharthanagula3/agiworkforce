@@ -51,7 +51,7 @@ describe('Chat Completion Handler', () => {
       mockUnifiedLLMService.sendMessage.mockResolvedValueOnce({
         content: 'I am doing well, thank you!',
         usage: { promptTokens: 10, completionTokens: 15, totalTokens: 25 },
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
       });
 
       const result = await sendAIMessage('openai', mockMessages);
@@ -60,7 +60,7 @@ describe('Chat Completion Handler', () => {
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenCalledWith({
         provider: 'openai',
         messages: [{ role: 'user', content: 'Hello, how are you?' }],
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
         temperature: undefined,
         maxTokens: undefined,
         stream: false,
@@ -123,7 +123,7 @@ describe('Chat Completion Handler', () => {
         content: 'Custom response',
       });
 
-      await sendAIMessage('openai', mockMessages, 'gpt-4o', {
+      await sendAIMessage('openai', mockMessages, 'gpt-5.4', {
         temperature: 0.5,
         maxTokens: 1000,
         stream: true,
@@ -132,7 +132,7 @@ describe('Chat Completion Handler', () => {
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenCalledWith({
         provider: 'openai',
         messages: expect.any(Array),
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
         temperature: 0.5,
         maxTokens: 1000,
         stream: true,
@@ -210,7 +210,7 @@ describe('Chat Completion Handler', () => {
       // Test OpenAI default
       await sendAIMessage('openai', mockMessages);
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenLastCalledWith(
-        expect.objectContaining({ model: 'gpt-4o' }),
+        expect.objectContaining({ model: 'gpt-5.4' }),
       );
 
       // Test Anthropic default

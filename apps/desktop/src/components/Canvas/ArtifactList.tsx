@@ -10,6 +10,7 @@
 
 import { Code2, FileText, Globe, Plus, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import {
   useCanvasStore,
@@ -63,8 +64,15 @@ interface ArtifactListProps {
 }
 
 export function ArtifactList({ className }: ArtifactListProps) {
-  const { artifacts, activeArtifactId, deleteArtifact, openPanel, createArtifact } =
-    useCanvasStore();
+  const { artifacts, activeArtifactId, deleteArtifact, openPanel, createArtifact } = useCanvasStore(
+    useShallow((s) => ({
+      artifacts: s.artifacts,
+      activeArtifactId: s.activeArtifactId,
+      deleteArtifact: s.deleteArtifact,
+      openPanel: s.openPanel,
+      createArtifact: s.createArtifact,
+    })),
+  );
 
   const handleSelect = useCallback(
     (id: string) => {

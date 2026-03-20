@@ -1,4 +1,5 @@
 import React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { AgentTemplate } from '../../types/templates';
 import {
   CATEGORY_INFO,
@@ -15,7 +16,13 @@ interface TemplateCardProps {
 }
 
 export const TemplateCard: React.FC<TemplateCardProps> = ({ template, isInstalled, onSelect }) => {
-  const { installTemplate, uninstallTemplate, isLoading } = useTemplateStore();
+  const { installTemplate, uninstallTemplate, isLoading } = useTemplateStore(
+    useShallow((s) => ({
+      installTemplate: s.installTemplate,
+      uninstallTemplate: s.uninstallTemplate,
+      isLoading: s.isLoading,
+    })),
+  );
   const [installing, setInstalling] = React.useState(false);
 
   const handleInstall = async (e: React.MouseEvent) => {
@@ -95,7 +102,8 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({ template, isInstalle
           </span>
           <span title="Install count">📥 {template.install_count}</span>
         </div>
-        <button type="button"
+        <button
+          type="button"
           onClick={handleInstall}
           disabled={installing || isLoading}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${

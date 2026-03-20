@@ -11,7 +11,7 @@ import { invoke } from '../../lib/tauri-mock';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { cn } from '../../lib/utils';
-import { toast } from '../../hooks/useToast';
+import { toast } from 'sonner';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 
 export interface TimeoutWarningData {
@@ -126,8 +126,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
         additionalMinutes: 30,
       });
 
-      toast({
-        title: 'Timeout extended',
+      toast.success('Timeout extended', {
         description: 'Task timeout has been extended by 30 minutes.',
       });
 
@@ -136,9 +135,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
       const errorMessage = getSimpleErrorMessage(error);
       console.error('[TimeoutWarningDialog] Failed to extend timeout:', errorMessage);
 
-      toast({
-        variant: 'destructive',
-        title: 'Failed to extend timeout',
+      toast.error('Failed to extend timeout', {
         description: errorMessage,
       });
     } finally {
@@ -161,8 +158,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
         taskId: warning.taskId,
       });
 
-      toast({
-        title: 'Task paused',
+      toast.success('Task paused', {
         description: 'The task has been paused. You can resume it later.',
       });
 
@@ -171,9 +167,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
       const errorMessage = getSimpleErrorMessage(error);
       console.error('[TimeoutWarningDialog] Failed to pause task:', errorMessage);
 
-      toast({
-        variant: 'destructive',
-        title: 'Failed to pause task',
+      toast.error('Failed to pause task', {
         description: errorMessage,
       });
     } finally {
@@ -203,10 +197,8 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
         taskId: warning.taskId,
       });
 
-      toast({
-        title: 'Task aborted',
+      toast.error('Task aborted', {
         description: 'The task has been cancelled.',
-        variant: 'destructive',
       });
 
       onDismiss();
@@ -214,9 +206,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
       const errorMessage = getSimpleErrorMessage(error);
       console.error('[TimeoutWarningDialog] Failed to abort task:', errorMessage);
 
-      toast({
-        variant: 'destructive',
-        title: 'Failed to abort task',
+      toast.error('Failed to abort task', {
         description: errorMessage,
       });
     } finally {

@@ -17,7 +17,7 @@ function clampSize(value: number): number {
 
 export function ScreenshotOverlay({ region, flash }: ScreenshotOverlayProps) {
   return (
-    <div className="pointer-events-none fixed inset-0 z-[998]">
+    <div className="pointer-events-none fixed inset-0 z-[var(--z-fullscreen)]">
       {flash && (
         <div
           className="absolute inset-0 bg-white/80"

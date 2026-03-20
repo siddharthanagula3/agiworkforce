@@ -11,10 +11,11 @@
  */
 import { isTauri } from '../../lib/tauri-mock';
 import { invoke as ipcInvoke } from '../../utils/ipc';
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { EyeOff, Loader2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
+import { cn } from '../../lib/utils';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { sha256 } from '../../lib/hash';
@@ -26,7 +27,7 @@ import {
   resolveKnownModelCapabilities,
   toModelCapabilitiesDto,
 } from '../../lib/modelCapabilities';
-import { useBillingUsageStore, selectBudget } from '../../stores/billingUsage';
+import { useBillingUsageStore } from '../../stores/billingUsage';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { initializeExtensionEventListeners } from '../../stores/extensionEventsStore';
@@ -35,19 +36,22 @@ import {
   useChatStore,
   selectAgenticLoopStatus,
   selectPendingMessages,
+  selectTokenUsage,
 } from '../../stores/chat/chatStore';
 import type { PendingUserMessage } from '../../stores/chat/types';
 import { useBillingStore } from '../../stores/auth';
+import { selectIsSimpleMode, useSimpleModeStore } from '../../stores/ui';
 import { useCustomInstructionsStore } from '../../stores/customInstructionsStore';
 import { useMemoryStore, buildMemoryContext } from '../../stores/memoryStore';
 import { readMemoryPanelSettings } from '../Memory/MemoryPanel';
 import { useExecutionStore } from '../../stores/executionStore';
+import { useExecutionSidecarStore } from '../../stores/executionSidecarStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { supabaseAuth } from '../../services/supabaseAuth';
 import type { ResearchTask } from '../../types/chat';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
-import { toast } from '../../hooks/useToast';
+import { toast } from 'sonner';
 import { refreshCreditsAfterMessage } from '../../hooks/useCreditRefresh';
 import { NEW_CHAT_ABORT_EVENT } from '../../lib/newChatReset';
 import {
@@ -57,9 +61,31 @@ import {
 import { getSkillById } from '../../lib/skillLoader';
 import { CanvasWorkspace } from '../Canvas';
 import { InteractiveHelp } from '../Help/InteractiveHelp';
+import { CalendarWorkspace } from '../Calendar/CalendarWorkspace';
+import { DocumentWorkspace } from '../Document';
+import { DatabaseWorkspace } from '../Database/DatabaseWorkspace';
+import { CostDashboard } from '../Analytics/CostDashboard';
+import { RealtimeROIDashboard } from '../ROIDashboard/components';
+import { GitPanel } from '../Git';
+import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
+import { VisionWorkspace } from '../Vision/VisionWorkspace';
+import { MarketplacePage } from '../Marketplace/MarketplacePage';
+import { WorkflowPanel } from '../Workflows';
+import { ImagesGallery } from '../Images/ImagesGallery';
+import { SkillsMarketplace } from '../Skills/SkillsMarketplace';
+import { ScheduledTasksPage } from '../Schedules/ScheduledTasksPage';
+import { ArtifactsGallery } from '../Artifacts/ArtifactsGallery';
+import { DeepResearchPage } from '../Research/DeepResearchPage';
+import { ComputerUseMonitor } from '../ComputerUse';
+import { ActionRecorder } from '../Automation/ActionRecorder';
+import { GovernanceDashboard } from '../Governance/GovernanceDashboard';
+import { TeamDashboard } from '../Teams/TeamDashboard';
+import { CloudStoragePanel } from '../Cloud/CloudStoragePanel';
+import { MobileCompanionPanel } from '../Mobile/MobileCompanionPanel';
 import { ChatErrorBoundary } from '../ErrorBoundary';
 import { SectionErrorBoundary } from '../ui/SectionErrorBoundary';
 import { AppLayout } from './AppLayout';
+import { AgentProgressFooter } from './AgentProgressFooter';
 import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
@@ -69,7 +95,21 @@ import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationD
 import { BackgroundTaskIndicator } from '../BackgroundTasks';
 import { PlanPreview } from '../Planning/PlanPreview';
 import { usePlanningStore, selectPlanningOpen } from '../../stores/planningStore';
+import { useAppModeStore } from '../../stores/appModeStore';
 import { useTauriStreamListeners } from './useTauriStreamListeners';
+import { PromptSuggestionsDropdown } from './PromptSuggestionsDropdown';
+import { PromptSuggestions } from './PromptSuggestions';
+import { ConnectorDiscoveryBar } from './ConnectorDiscoveryBar';
+import { BrandedGreeting } from './BrandedGreeting';
+import { QuickStartPills } from './QuickStartPills';
+import { ArtifactsView } from './ArtifactsView';
+import { AgentStepTimeline, type AgentStep } from './AgentStepTimeline';
+import { TokenCounter } from './TokenCounter';
+import { DragDropOverlay } from './DragDropOverlay';
+import { CouncilView } from './CouncilView';
+import { ChatInputToolbar } from './ChatInputToolbar';
+import { BriefStatus, type BriefStatusState } from './BriefStatus';
+import { usePromptSuggestions } from '../../hooks/usePromptSuggestions';
 import {
   executeTerminalCommand,
   executeBrowserCommand,
@@ -216,14 +256,13 @@ const PlanPreviewPanel: React.FC = () => {
  * to prevent full-tree re-renders on every message update.
  */
 const BudgetTracker: React.FC = () => {
-  const budget = useBillingUsageStore(selectBudget);
-  // BUG-IX-05 fix: use useChatStore (canonical source) instead of useUnifiedChatStore for messages
+  const budgetEnabled = useBillingUsageStore((state) => state.budget.enabled);
   const messages = useChatStore((state) => state.messages);
   const addTokenUsage = useBillingUsageStore((state) => state.addTokenUsage);
   const countedMessageIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!budget.enabled) return;
+    if (!budgetEnabled) return;
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage) return;
     const messageId = String(lastMessage.id ?? crypto.randomUUID());
@@ -237,7 +276,7 @@ const BudgetTracker: React.FC = () => {
       lastMessage.metadata?.tokenCount ?? Math.ceil((lastMessage.content?.length ?? 0) * 0.25);
     addTokenUsage(tokens);
     countedMessageIdsRef.current.add(messageId);
-  }, [messages, budget.enabled, addTokenUsage]);
+  }, [messages, budgetEnabled, addTokenUsage]);
 
   return null;
 };
@@ -442,6 +481,13 @@ export const UnifiedAgenticChat: React.FC<{
     // watchdog finally-block can skip scheduling a 120s timeout for commands that never
     // start a stream (e.g. /terminal, /browser, or any other builtin/project command).
     let isSlashCommand = false;
+
+    // Mode guard: block chat when cloud mode is active (gateway LLM proxy not yet wired).
+    const appMode = useAppModeStore.getState().mode;
+    if (appMode === 'cloud') {
+      toast.error('Cloud mode chat is not yet available. Switch to Local mode to chat.');
+      return;
+    }
 
     // Handle slash commands
     const slashCommand = parseSlashCommand(content);
@@ -666,9 +712,7 @@ export const UnifiedAgenticChat: React.FC<{
       } catch (error) {
         console.error('[UnifiedAgenticChat] Failed to queue message:', error);
         const errorMessage = getSimpleErrorMessage(error);
-        toast({
-          variant: 'destructive',
-          title: 'Failed to queue message',
+        toast.error('Failed to queue message', {
           description: errorMessage,
           duration: 4000,
         });
@@ -795,8 +839,7 @@ export const UnifiedAgenticChat: React.FC<{
             focus: undefined,
             userId: autoCompactUserId,
           });
-          toast({
-            title: 'Context compacted',
+          toast.success('Context compacted', {
             description: 'Context compacted for continuous conversation',
             duration: 3000,
           });
@@ -1025,9 +1068,7 @@ export const UnifiedAgenticChat: React.FC<{
           const fileKeywords =
             /\b(file|folder|directory|read|write|edit|create|delete|save|open|path|code|project|src|component)\b/i;
           if (fileKeywords.test(content)) {
-            toast({
-              variant: 'default',
-              title: 'No project folder selected',
+            toast.message('No project folder selected', {
               description:
                 'Select a project folder (top-right folder icon) so the AI can access your files. Without it, file operations may fail.',
               duration: 8000,
@@ -1319,16 +1360,151 @@ export const UnifiedAgenticChat: React.FC<{
     openSidecarStore(panel, payload?.['contextId'] as string | undefined, payload);
   };
 
+  // ── Wired component state ───────────────────────────────────────────────
+
+  // TokenCounter: read live token usage from chat store
+  const tokenUsage = useChatStore(selectTokenUsage);
+  const showTokenCounter = useSettingsStore((s) => s.chatPreferences.compactMode !== true);
+
+  // PromptSuggestionsDropdown: surface suggestions when input is non-empty
+  const draftContent = useUnifiedChatStore((s) => s.draftContent);
+  const messages = useChatStore((s) => s.messages);
+  const promptSuggestions = usePromptSuggestions(draftContent);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const isEmptyConversation = messages.length === 0;
+  const showPromptSuggestions =
+    isEmptyConversation && promptSuggestions.length > 0 && draftContent.length >= 3;
+  const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
+  const showEmptyStateUI = isEmptyConversation && !isSimpleMode;
+
+  // ArtifactsView: toggleable side panel
+  const [artifactsPanelOpen, setArtifactsPanelOpen] = useState(false);
+
+  // AgentStepTimeline: derive steps from actionTrail
+  const actionTrail = useUnifiedChatStore((s) => s.actionTrail);
+  const agenticLoopStatus = useChatStore(selectAgenticLoopStatus);
+  const agentSteps: AgentStep[] = actionTrail.map((entry) => ({
+    id: entry.id,
+    agentType:
+      entry.type === 'thinking'
+        ? 'planner'
+        : entry.type === 'coding'
+          ? 'executor'
+          : entry.type === 'searching'
+            ? 'executor'
+            : entry.type === 'running'
+              ? 'executor'
+              : entry.type === 'completed'
+                ? 'reviewer'
+                : entry.type === 'error'
+                  ? 'executor'
+                  : 'coordinator',
+    label: entry.message,
+    status:
+      entry.type === 'completed'
+        ? 'complete'
+        : entry.type === 'error'
+          ? 'error'
+          : entry.type === 'running' || entry.type === 'searching' || entry.type === 'coding'
+            ? 'running'
+            : 'pending',
+    startedAt: entry.timestamp instanceof Date ? entry.timestamp.getTime() : undefined,
+    completedAt:
+      entry.type === 'completed' && entry.timestamp instanceof Date
+        ? entry.timestamp.getTime()
+        : undefined,
+    details: entry.metadata?.['details'] as string | undefined,
+  }));
+
+  // CouncilView: multi-model council panel
+  const [councilOpen, setCouncilOpen] = useState(false);
+
+  // BriefStatus: derive from action trail
+  const latestAction = actionTrail.length > 0 ? actionTrail[actionTrail.length - 1] : null;
+  const briefStatusState: BriefStatusState = latestAction
+    ? {
+        message: latestAction.message,
+        isComplete: latestAction.type === 'completed',
+        isError: latestAction.type === 'error',
+      }
+    : { message: null, isComplete: false, isError: false };
+
+  // DragDropOverlay: handle files dropped onto the chat
+  const handleDragDropFiles = useCallback((files: File[]) => {
+    const addContextItem = useUnifiedChatStore.getState().addContextItem;
+    for (const file of files) {
+      addContextItem({
+        id: crypto.randomUUID(),
+        type: 'file',
+        name: file.name,
+        path: (file as File & { path?: string }).path ?? file.name,
+        size: file.size,
+        icon: '📄',
+        timestamp: new Date(),
+      });
+    }
+    toast.success(`${files.length} file${files.length > 1 ? 's' : ''} attached`, {
+      description: 'Files added as context for your next message',
+      duration: 3000,
+    });
+  }, []);
+
+  // AgentProgressFooter: open execution sidecar on chevron click
+  const openExecutionSidecar = useCallback(() => {
+    useExecutionSidecarStore.getState().open();
+  }, []);
+
+  // Context compaction handler for TokenCounter
+  const handleCompactContext = useCallback(async () => {
+    try {
+      const activeConvId = useUnifiedChatStore.getState().activeConversationId;
+      const dbId = activeConvId ? uuidToDbId(activeConvId) : undefined;
+      const userId = supabaseAuth.getUser()?.id;
+      await ipcInvoke('chat_compact_context', {
+        conversationId: dbId,
+        focus: undefined,
+        userId,
+      });
+      toast.success('Context compacted', {
+        description: 'Freed up token space for continued conversation',
+        duration: 3000,
+      });
+    } catch {
+      toast.error('Compaction failed', {
+        description: 'Could not compact context. Try again later.',
+        duration: 4000,
+      });
+    }
+  }, []);
+
   // CHT-001 fix: Wrap entire chat interface with error boundary to prevent crashes
   return (
     <ChatErrorBoundary>
       <div
         className={`unified-agentic-chat relative flex h-full min-h-0 flex-col overflow-hidden bg-[#05060b] ${layoutClasses[layout]} ${className}`}
       >
+        {/* DragDropOverlay — full-window overlay when files are dragged over the chat */}
+        <DragDropOverlay
+          onDrop={handleDragDropFiles}
+          accept={[
+            'image/*',
+            'text/*',
+            'application/pdf',
+            'application/json',
+            '.md',
+            '.txt',
+            '.js',
+            '.ts',
+            '.py',
+            '.rs',
+          ]}
+          maxFiles={10}
+        />
+
         <AppLayout>
           {activeView === 'chat' ? (
             <>
-              {/* Header bar with background task indicator */}
+              {/* Header bar with token counter and background task indicator */}
               <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800/50">
                 {/* Incognito mode indicator */}
                 {isActiveConversationIncognito && (
@@ -1337,7 +1513,30 @@ export const UnifiedAgenticChat: React.FC<{
                     <span>Incognito — not saved to disk</span>
                   </div>
                 )}
-                <div className={!isActiveConversationIncognito ? 'ml-auto' : ''}>
+
+                {/* TokenCounter — compact inline display showing live token usage */}
+                {showTokenCounter && tokenUsage.max > 0 && (
+                  <TokenCounter
+                    currentTokens={tokenUsage.current}
+                    inputTokens={tokenUsage.inputTokens}
+                    outputTokens={tokenUsage.outputTokens}
+                    maxTokens={tokenUsage.max}
+                    estimatedCost={tokenUsage.estimatedCost}
+                    compact
+                    showDetails
+                    onCompact={handleCompactContext}
+                    className="mx-2"
+                  />
+                )}
+
+                <div
+                  className={cn(
+                    'flex items-center gap-3',
+                    !isActiveConversationIncognito &&
+                      !(showTokenCounter && tokenUsage.max > 0) &&
+                      'ml-auto',
+                  )}
+                >
                   <BackgroundTaskIndicator
                     popoverSide="bottom"
                     popoverAlign="end"
@@ -1345,38 +1544,139 @@ export const UnifiedAgenticChat: React.FC<{
                   />
                 </div>
               </div>
+
+              {/* FocusSelector removed — FocusModeButtons in ChatInputArea handles focus mode selection */}
+
               <BudgetAlertsPanel />
               <BudgetTracker />
-              <SectionErrorBoundary
-                sectionName="ChatStream"
-                fallback={
-                  <div className="flex-1 flex items-center justify-center p-8">
-                    <div className="text-center">
-                      <p className="text-zinc-400 mb-4">Failed to load chat messages</p>
+              {/* Main content area: chat stream + optional side panels */}
+              <div className="flex flex-1 min-h-0 overflow-hidden">
+                <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+                  <SectionErrorBoundary
+                    sectionName="ChatStream"
+                    fallback={
+                      <div className="flex-1 flex items-center justify-center p-8">
+                        <div className="text-center">
+                          <p className="text-zinc-400 mb-4">Failed to load chat messages</p>
+                          <button
+                            type="button"
+                            onClick={() => window.location.reload()}
+                            className="px-4 py-2 bg-zinc-700 text-white rounded-lg hover:bg-zinc-600"
+                          >
+                            Reload
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <ChatStream
+                      onOpenSidecar={openSidecar}
+                      onSuggestionClick={(prompt) => {
+                        useUnifiedChatStore.getState().setDraftContent(prompt + ' ');
+                      }}
+                    />
+                  </SectionErrorBoundary>
+
+                  {/* AgentStepTimeline — shows execution steps when the agentic loop is active */}
+                  {agenticLoopStatus?.active && agentSteps.length > 0 && (
+                    <div className="px-4 py-2 border-t border-gray-800/30 max-h-48 overflow-y-auto">
+                      <AgentStepTimeline steps={agentSteps} compact />
+                    </div>
+                  )}
+
+                  {/* BriefStatus — minimal one-line status indicator for current agent action */}
+                  {agenticLoopStatus?.active && briefStatusState.message && (
+                    <div className="flex justify-center px-4 py-1">
+                      <BriefStatus status={briefStatusState} />
+                    </div>
+                  )}
+                </div>
+
+                {/* ArtifactsView — toggleable side panel for generated artifacts */}
+                {artifactsPanelOpen && (
+                  <div className="w-[400px] border-l border-gray-800/50 overflow-hidden flex flex-col shrink-0">
+                    <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800/50">
+                      <span className="text-xs font-medium text-zinc-400">Artifacts</span>
                       <button
                         type="button"
-                        onClick={() => window.location.reload()}
-                        className="px-4 py-2 bg-zinc-700 text-white rounded-lg hover:bg-zinc-600"
+                        onClick={() => setArtifactsPanelOpen(false)}
+                        className="text-xs text-zinc-500 hover:text-zinc-300"
                       >
-                        Reload
+                        Close
                       </button>
                     </div>
+                    <div className="flex-1 overflow-auto">
+                      <ArtifactsView />
+                    </div>
                   </div>
-                }
-              >
-                <ChatStream
-                  onOpenSidecar={openSidecar}
-                  onSuggestionClick={(prompt) => {
-                    useUnifiedChatStore.getState().setDraftContent(prompt + ' ');
-                  }}
-                />
-              </SectionErrorBoundary>
+                )}
+
+                {/* CouncilView — multi-model council panel for debate mode */}
+                {councilOpen && (
+                  <div className="w-[400px] border-l border-gray-800/50 overflow-hidden flex flex-col shrink-0">
+                    <CouncilView
+                      onClose={() => setCouncilOpen(false)}
+                      onConsensusReady={(consensus) => {
+                        useUnifiedChatStore.getState().setDraftContent(consensus);
+                        setCouncilOpen(false);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
               {/* Pending queued messages — dimmed bubbles shown when agentic loop is active */}
               <PendingMessagesBubbles />
               {/* Interactive plan preview panel — shown when /plan triggered or Plan button clicked */}
               <PlanPreviewPanel />
               {/* Status bar: shown while agentic loop is running, hidden otherwise */}
               <AgenticLoopStatusBar />
+
+              {/* AgentProgressFooter — persistent 40px execution bar above input */}
+              <AgentProgressFooter onExpandSidecar={openExecutionSidecar} />
+
+              {/* PromptSuggestionsDropdown — shown above input when typing and conversation is empty */}
+              {showPromptSuggestions && (
+                <div className="relative px-4">
+                  <PromptSuggestionsDropdown
+                    suggestions={promptSuggestions}
+                    isVisible={showPromptSuggestions}
+                    selectedIndex={suggestionIndex}
+                    onSelectSuggestion={(suggestion) => {
+                      useUnifiedChatStore.getState().setDraftContent(suggestion.text + ' ');
+                      setSuggestionIndex(0);
+                    }}
+                    onMouseEnterSuggestion={setSuggestionIndex}
+                  />
+                </div>
+              )}
+
+              {/* Empty state UI — branded greeting, quick-start pills, prompt suggestions, connector bar */}
+              {showEmptyStateUI && (
+                <div className="flex flex-col items-center gap-4 px-4 pb-3">
+                  {/* Personalized branded greeting */}
+                  <BrandedGreeting className="mt-2" />
+
+                  {/* Quick-start action pills — populate input or trigger features */}
+                  <QuickStartPills
+                    onPillClick={(_action, prompt) => {
+                      useUnifiedChatStore.getState().setDraftContent(prompt);
+                    }}
+                  />
+
+                  {/* Category-based prompt suggestion pills */}
+                  <PromptSuggestions
+                    onSelectPrompt={(text) => {
+                      useUnifiedChatStore.getState().setDraftContent(text);
+                    }}
+                  />
+                  <ConnectorDiscoveryBar />
+                </div>
+              )}
+
+              {/* ChatInputToolbar — model selector, incognito toggle, auto/manual mode */}
+              <ChatInputToolbar />
+
               <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
             </>
           ) : activeView === 'projects' ? (
@@ -1390,6 +1690,90 @@ export const UnifiedAgenticChat: React.FC<{
           ) : activeView === 'help' ? (
             <div className="flex-1 overflow-auto p-4">
               <InteractiveHelp onClose={() => setActiveView('chat')} />
+            </div>
+          ) : activeView === 'calendar' ? (
+            <div className="flex-1 overflow-hidden">
+              <CalendarWorkspace className="h-full" />
+            </div>
+          ) : activeView === 'documents' ? (
+            <div className="flex-1 overflow-hidden">
+              <DocumentWorkspace className="h-full" />
+            </div>
+          ) : activeView === 'database' ? (
+            <div className="flex-1 overflow-hidden">
+              <DatabaseWorkspace className="h-full" />
+            </div>
+          ) : activeView === 'analytics' ? (
+            <div className="flex-1 overflow-hidden">
+              <CostDashboard />
+            </div>
+          ) : activeView === 'roi' ? (
+            <div className="flex-1 overflow-hidden">
+              <RealtimeROIDashboard />
+            </div>
+          ) : activeView === 'git' ? (
+            <div className="flex-1 overflow-hidden p-4">
+              <GitPanel repoPath="." className="h-full" />
+            </div>
+          ) : activeView === 'terminal' ? (
+            <div className="flex-1 overflow-hidden">
+              <TerminalWorkspace className="h-full" />
+            </div>
+          ) : activeView === 'vision' ? (
+            <div className="flex-1 overflow-hidden">
+              <VisionWorkspace />
+            </div>
+          ) : activeView === 'marketplace' ? (
+            <div className="flex-1 overflow-hidden">
+              <MarketplacePage />
+            </div>
+          ) : activeView === 'workflows' ? (
+            <div className="flex-1 overflow-hidden">
+              <WorkflowPanel className="h-full" />
+            </div>
+          ) : activeView === 'skills' ? (
+            <div className="flex-1 overflow-hidden">
+              <SkillsMarketplace />
+            </div>
+          ) : activeView === 'computer-use' ? (
+            <div className="flex-1 overflow-hidden">
+              <ComputerUseMonitor />
+            </div>
+          ) : activeView === 'automation' ? (
+            <div className="flex-1 overflow-auto p-4">
+              <ActionRecorder />
+            </div>
+          ) : activeView === 'governance' ? (
+            <div className="flex-1 overflow-hidden">
+              <GovernanceDashboard />
+            </div>
+          ) : activeView === 'teams' ? (
+            <div className="flex-1 overflow-hidden">
+              <TeamDashboard />
+            </div>
+          ) : activeView === 'cloud' ? (
+            <div className="flex-1 overflow-hidden">
+              <CloudStoragePanel />
+            </div>
+          ) : activeView === 'mobile' ? (
+            <div className="flex-1 overflow-hidden">
+              <MobileCompanionPanel />
+            </div>
+          ) : activeView === 'images' ? (
+            <div className="flex-1 overflow-hidden">
+              <ImagesGallery />
+            </div>
+          ) : activeView === 'schedules' ? (
+            <div className="flex-1 overflow-hidden">
+              <ScheduledTasksPage />
+            </div>
+          ) : activeView === 'artifacts-gallery' ? (
+            <div className="flex-1 overflow-hidden">
+              <ArtifactsGallery />
+            </div>
+          ) : activeView === 'deep-research' ? (
+            <div className="flex-1 overflow-hidden">
+              <DeepResearchPage />
             </div>
           ) : null}
         </AppLayout>
@@ -1406,5 +1790,3 @@ export const UnifiedAgenticChat: React.FC<{
     </ChatErrorBoundary>
   );
 };
-
-export default UnifiedAgenticChat;

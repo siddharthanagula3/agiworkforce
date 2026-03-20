@@ -10,6 +10,10 @@
 //! defaults: model, max_turns, permission_mode, tool filtering, and
 //! system prompt.
 
+// Module API surface is intentionally broad: used by the REPL /agents command
+// and will be wired into the --agent CLI flag. Tests exercise all public items.
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 

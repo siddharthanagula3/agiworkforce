@@ -5,6 +5,7 @@
  * to view summaries and reload previous research.
  */
 import { memo, useCallback, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { History, Clock, BookOpen, ChevronRight, Trash2, Search, ExternalLink } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
@@ -52,7 +53,12 @@ export const ResearchHistory = memo(function ResearchHistory({
   onSelectEntry,
 }: ResearchHistoryProps) {
   const history = useResearchStore(selectHistory);
-  const { clearHistory, removeFromHistory } = useResearchStore();
+  const { clearHistory, removeFromHistory } = useResearchStore(
+    useShallow((s) => ({
+      clearHistory: s.clearHistory,
+      removeFromHistory: s.removeFromHistory,
+    })),
+  );
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<ResearchHistoryEntry | null>(null);

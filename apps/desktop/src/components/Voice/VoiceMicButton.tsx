@@ -11,7 +11,7 @@
 import React, { useCallback } from 'react';
 import { Mic } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { toast } from '../../hooks/useToast';
+import { toast } from 'sonner';
 
 export interface VoiceMicButtonProps {
   /** Callback when transcription is complete */
@@ -44,11 +44,9 @@ export const VoiceMicButton: React.FC<VoiceMicButtonProps> = ({
   };
 
   const handleClick = useCallback(() => {
-    toast({
-      title: 'Voice Input Not Configured',
-      description: 'This component is deprecated. Use the useVoiceTranscription hook instead.',
-      variant: 'default',
-    });
+    toast.error(
+      'Voice Input Not Configured: This component is deprecated. Use the useVoiceTranscription hook instead.',
+    );
   }, []);
 
   return (

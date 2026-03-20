@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -57,7 +58,15 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
   const [localError, setLocalError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  const { signIn, signUp, signInWithMagicLink, resetPassword, error } = useAuthStore();
+  const { signIn, signUp, signInWithMagicLink, resetPassword, error } = useAuthStore(
+    useShallow((s) => ({
+      signIn: s.signIn,
+      signUp: s.signUp,
+      signInWithMagicLink: s.signInWithMagicLink,
+      resetPassword: s.resetPassword,
+      error: s.error,
+    })),
+  );
 
   // React 19: useTransition for async operations with pending state
   const [isPending, startTransition] = useTransition();

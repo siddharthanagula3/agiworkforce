@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -26,7 +27,23 @@ export default function MCPWorkspace() {
     searchTools,
     setSearchQuery,
     clearError,
-  } = useMcpStore();
+  } = useMcpStore(
+    useShallow((s) => ({
+      servers: s.servers,
+      tools: s.tools,
+      isInitialized: s.isInitialized,
+      isLoading: s.isLoading,
+      error: s.error,
+      searchQuery: s.searchQuery,
+      initialize: s.initialize,
+      refreshServers: s.refreshServers,
+      refreshTools: s.refreshTools,
+      refreshRuntimeTelemetry: s.refreshRuntimeTelemetry,
+      searchTools: s.searchTools,
+      setSearchQuery: s.setSearchQuery,
+      clearError: s.clearError,
+    })),
+  );
 
   useEffect(() => {
     if (!isInitialized) {
@@ -49,7 +66,6 @@ export default function MCPWorkspace() {
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {}
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
           <Server className="w-5 h-5 text-primary" />
@@ -64,7 +80,6 @@ export default function MCPWorkspace() {
         </div>
       </div>
 
-      {}
       {error && (
         <Alert variant="destructive" className="m-4">
           <AlertDescription className="flex items-center justify-between">
@@ -76,7 +91,6 @@ export default function MCPWorkspace() {
         </Alert>
       )}
 
-      {}
       <div className="flex items-center gap-4 p-4 bg-[#2a2a2a] border-b">
         <div className="flex items-center gap-2">
           <Server className="w-4 h-4 text-muted-foreground" />
@@ -91,7 +105,6 @@ export default function MCPWorkspace() {
         </div>
       </div>
 
-      {}
       <div className="flex-1 overflow-hidden">
         <Tabs defaultValue="servers" className="h-full flex flex-col">
           <TabsList className="w-full justify-start border-b rounded-none px-4">
@@ -113,7 +126,6 @@ export default function MCPWorkspace() {
             </TabsTrigger>
           </TabsList>
 
-          {}
           <TabsContent value="servers" className="flex-1 overflow-auto p-4">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -141,7 +153,6 @@ export default function MCPWorkspace() {
             </div>
           </TabsContent>
 
-          {}
           <TabsContent value="tools" className="flex-1 overflow-auto p-4">
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -162,12 +173,10 @@ export default function MCPWorkspace() {
             </div>
           </TabsContent>
 
-          {}
           <TabsContent value="credentials" className="flex-1 overflow-auto p-4">
             <MCPCredentialManager servers={servers} />
           </TabsContent>
 
-          {}
           <TabsContent value="config" className="flex-1 overflow-auto p-4">
             <MCPConfigEditor />
           </TabsContent>

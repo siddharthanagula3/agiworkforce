@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { toDataURL } from 'qrcode';
 import { RefreshCw, WifiOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -7,7 +8,17 @@ import { useConnectionStore } from '../../stores/connectionStore';
 
 export function QRPairingCard() {
   const { status, pairingCode, expiresAt, qrData, error, requestPairingCode, clearError } =
-    useConnectionStore();
+    useConnectionStore(
+      useShallow((s) => ({
+        status: s.status,
+        pairingCode: s.pairingCode,
+        expiresAt: s.expiresAt,
+        qrData: s.qrData,
+        error: s.error,
+        requestPairingCode: s.requestPairingCode,
+        clearError: s.clearError,
+      })),
+    );
 
   const [qrImage, setQrImage] = useState<string | null>(null);
 

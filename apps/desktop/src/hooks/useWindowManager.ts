@@ -75,47 +75,43 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
     let isMounted = true;
     const cleaners: Array<() => void> = [];
 
-    const setupListeners = async () => {
-      try {
-        const windowStateListener = await listen<BackendWindowState>('window:state', (event) => {
-          if (!isMounted) return;
-          const payload = event.payload;
-          setState((current) => ({
-            ...current,
-            pinned: payload.pinned,
-            alwaysOnTop: payload.alwaysOnTop,
-            dock: payload.dock ?? null,
-            maximized: payload.maximized,
-            fullscreen: payload.fullscreen,
-          }));
-        });
-
-        const focusListener = await listen<boolean>('window:focus', (event) => {
-          if (!isMounted) return;
-          setState((current) => ({ ...current, focused: event.payload }));
-        });
-
-        const previewListener = await listen<DockPreviewPayload>('window:preview', (event) => {
-          if (!isMounted) return;
-          setState((current) => ({ ...current, dockPreview: event.payload.preview }));
-        });
-
-        cleaners.push(windowStateListener, focusListener, previewListener);
-      } catch (error) {
-        console.error('[useWindowManager] Failed to setup event listeners:', error);
-      }
-    };
-
-    void setupListeners();
+    const listenerPromises = Promise.all([
+      listen<BackendWindowState>('window:state', (event) => {
+        if (!isMounted) return;
+        const payload = event.payload;
+        setState((current) => ({
+          ...current,
+          pinned: payload.pinned,
+          alwaysOnTop: payload.alwaysOnTop,
+          dock: payload.dock ?? null,
+          maximized: payload.maximized,
+          fullscreen: payload.fullscreen,
+        }));
+      }),
+      listen<boolean>('window:focus', (event) => {
+        if (!isMounted) return;
+        setState((current) => ({ ...current, focused: event.payload }));
+      }),
+      listen<DockPreviewPayload>('window:preview', (event) => {
+        if (!isMounted) return;
+        setState((current) => ({ ...current, dockPreview: event.payload.preview }));
+      }),
+    ]).catch((error) => {
+      console.error('[useWindowManager] Failed to setup event listeners:', error);
+      return [] as Array<() => void>;
+    });
 
     return () => {
       isMounted = false;
+      // Clean up listeners that already resolved
       while (cleaners.length > 0) {
         const unlisten = cleaners.pop();
         if (unlisten) {
           unlisten();
         }
       }
+      // Also clean up listeners that resolve after unmount
+      listenerPromises.then((fns) => fns.forEach((fn) => fn()));
     };
   }, []);
 

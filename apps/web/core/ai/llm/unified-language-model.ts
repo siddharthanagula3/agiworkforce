@@ -260,7 +260,7 @@ export class UnifiedLLMService {
   constructor(config: Partial<UnifiedConfig> = {}) {
     this.config = {
       provider: 'openai',
-      model: 'gpt-4o',
+      model: 'gpt-5.4',
       maxTokens: 4000,
       temperature: 0.7,
       systemPrompt: 'You are a helpful AI assistant.',

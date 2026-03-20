@@ -81,6 +81,9 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
   const [activeListeners] = useState<Map<string, UnlistenFn[]>>(() => new Map());
 
   // Cleanup listeners on unmount
+  // Note: activeListeners is a stable Map reference (initialized once via useState),
+  // so it must NOT be in the dependency array — Maps don't trigger re-renders.
+  // Using an empty dep array ensures cleanup runs exactly once on unmount.
   useEffect(() => {
     return () => {
       activeListeners.forEach((unlisteners) => {
@@ -94,7 +97,8 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       });
       activeListeners.clear();
     };
-  }, [activeListeners]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleError = useCallback(
     (err: unknown) => {

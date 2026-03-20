@@ -20,6 +20,9 @@ import { syncRouter } from './routes/sync';
 import { creditsRouter } from './routes/credits';
 import { setupWebSocket } from './websocket';
 import { mobileRouter } from './routes/mobile';
+import { providerHealthRouter } from './services/providerHealth';
+import { modelCatalogRouter } from './routes/models';
+import { cloudChatRouter } from './routes/cloudChat';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { validateContentType, validateSecurityHeaders } from './middleware/requestValidation';
 import { createRateLimiter } from './middleware/rateLimit';
@@ -49,7 +52,12 @@ if (process.env['TRUST_PROXY'] === 'true') {
 const corsOrigins = (() => {
   const configured = process.env['ALLOWED_ORIGINS'];
   if (!configured) {
-    return ['http://localhost:3000', 'http://localhost:3001'];
+    return [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'tauri://localhost',
+      'https://tauri.localhost',
+    ];
   }
   return configured
     .split(',')
@@ -78,6 +86,9 @@ app.use('/api/desktop', desktopRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/mobile', mobileRouter);
 app.use('/api/credits', creditsRouter);
+app.use('/api/providers', providerHealthRouter);
+app.use('/api/models', modelCatalogRouter);
+app.use('/api/cloud-chat', cloudChatRouter);
 
 // SECURITY: Rate limited to 100/min for monitoring endpoints
 app.get('/health', createRateLimiter('health'), (_req: Request, res: Response) => {

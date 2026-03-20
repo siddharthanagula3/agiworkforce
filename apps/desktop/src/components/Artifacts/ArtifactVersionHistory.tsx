@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ScrollArea } from '@/components/ui/ScrollArea';
+import { useShallow } from 'zustand/react/shallow';
 import { useArtifactStore, type ArtifactVersion, type VersionDiff } from '@/stores/artifactStore';
 
 interface Props {
@@ -30,7 +31,13 @@ export function ArtifactVersionHistory({
   className,
   onRollbackSuccess,
 }: Props) {
-  const { getVersionHistory, getVersionDiff, rollbackArtifact } = useArtifactStore();
+  const { getVersionHistory, getVersionDiff, rollbackArtifact } = useArtifactStore(
+    useShallow((s) => ({
+      getVersionHistory: s.getVersionHistory,
+      getVersionDiff: s.getVersionDiff,
+      rollbackArtifact: s.rollbackArtifact,
+    })),
+  );
 
   const [versions, setVersions] = useState<ArtifactVersion[]>([]);
   const [isLoading, setIsLoading] = useState(false);

@@ -58,6 +58,8 @@ import {
   Key,
   Bot,
   Play,
+  Download,
+  UserX,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@shared/lib/utils';
@@ -92,6 +94,7 @@ import {
   type SystemSettingsFormData,
   type CreateApiKeyFormData,
 } from '@features/settings/schemas/settings-validation';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 const SettingsPageContent: React.FC = () => {
   const params = useParams();
@@ -261,6 +264,64 @@ const SettingsPageContent: React.FC = () => {
   const [showAPIKeyDialog, setShowAPIKeyDialog] = useState(false);
   const [generatedAPIKey, setGeneratedAPIKey] = useState('');
   const [keyToDelete, setKeyToDelete] = useState<string | null>(null);
+
+  // GDPR states
+  const [isExporting, setIsExporting] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  const handleExportData = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const res = await fetch('/api/user/export?download=true', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`Export failed: ${res.statusText}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `user-data-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Data exported successfully');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
+  }, []);
+
+  const handleDeleteAccount = useCallback(async () => {
+    setIsDeleting(true);
+    try {
+      const csrfToken = await getCsrfToken();
+      const res = await fetch('/api/user/data', {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken,
+        },
+      });
+      if (!res.ok) throw new Error(`Deletion failed: ${res.statusText}`);
+      toast.success('Account data deleted. You will be signed out.');
+      setShowDeleteAccount(false);
+      setDeleteConfirmText('');
+      // Sign out after a short delay so the user sees the toast
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete account data');
+    } finally {
+      setIsDeleting(false);
+    }
+  }, []);
 
   // Update active section when URL changes
   useEffect(() => {
@@ -452,7 +513,7 @@ const SettingsPageContent: React.FC = () => {
           className="space-y-6"
         >
           {/* Glassmorphism Tabs with enhanced styling */}
-          <TabsList className="grid grid-cols-2 border border-border/50 bg-card/50 p-1 shadow-lg backdrop-blur-xl md:grid-cols-4">
+          <TabsList className="grid grid-cols-2 border border-border/50 bg-card/50 p-1 shadow-lg backdrop-blur-xl md:grid-cols-5">
             <TabsTrigger
               value="profile"
               className="text-xs transition-all duration-300 hover:bg-accent/40 data-[state=active]:bg-accent/80 data-[state=active]:backdrop-blur-sm md:text-sm"
@@ -480,6 +541,13 @@ const SettingsPageContent: React.FC = () => {
             >
               <Settings className="h-4 w-4 md:mr-2" />
               <span className="hidden sm:inline">System</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="account"
+              className="text-xs transition-all duration-300 hover:bg-accent/40 data-[state=active]:bg-accent/80 data-[state=active]:backdrop-blur-sm md:text-sm"
+            >
+              <UserX className="h-4 w-4 md:mr-2" />
+              <span className="hidden sm:inline">Account</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1380,8 +1448,115 @@ const SettingsPageContent: React.FC = () => {
               </form>
             </Form>
           </TabsContent>
+
+          {/* Account / GDPR Settings */}
+          <TabsContent value="account" className="space-y-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Export Data */}
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <CardTitle className="text-foreground">Export My Data</CardTitle>
+                  <CardDescription>
+                    Download a copy of all your personal data in JSON format (GDPR Article 20)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Your export will include your profile, subscription details, credit
+                    transactions, email preferences, device authorizations, and organization
+                    memberships.
+                  </p>
+                  <Button
+                    onClick={handleExportData}
+                    disabled={isExporting}
+                    variant="outline"
+                    className="w-full border-border"
+                  >
+                    {isExporting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" />
+                    )}
+                    {isExporting ? 'Exporting...' : 'Export My Data'}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Delete Account */}
+              <Card className="border-border border-destructive/30 bg-card">
+                <CardHeader>
+                  <CardTitle className="text-destructive">Delete My Account</CardTitle>
+                  <CardDescription>
+                    Permanently delete all your data from our systems (GDPR Article 17)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3">
+                    <p className="text-sm text-destructive">
+                      This action is irreversible. All your data including profile, subscriptions,
+                      credits, and device authorizations will be permanently deleted.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => setShowDeleteAccount(true)}
+                    variant="destructive"
+                    className="w-full"
+                  >
+                    <UserX className="mr-2 h-4 w-4" />
+                    Delete My Account
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
         </Tabs>
       </motion.div>
+
+      {/* Delete Account Confirmation Dialog */}
+      <AlertDialog open={showDeleteAccount} onOpenChange={setShowDeleteAccount}>
+        <AlertDialogContent className="border-border bg-popover">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              <div className="space-y-3">
+                <p>This will permanently delete all your data. This action cannot be undone.</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="delete-confirm" className="text-sm text-muted-foreground">
+                    Type <strong>DELETE</strong> to confirm
+                  </Label>
+                  <Input
+                    id="delete-confirm"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="DELETE"
+                    className="border-border bg-background text-foreground"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-border bg-secondary text-foreground hover:bg-secondary/80"
+              onClick={() => setDeleteConfirmText('')}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <UserX className="mr-2 h-4 w-4" />
+              )}
+              {isDeleting ? 'Deleting...' : 'Delete Everything'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* API Key Generation Dialog */}
       <AlertDialog open={showAPIKeyDialog} onOpenChange={setShowAPIKeyDialog}>

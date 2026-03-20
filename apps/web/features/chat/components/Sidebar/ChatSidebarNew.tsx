@@ -19,10 +19,12 @@ import {
   PinOff,
   Archive,
   ArchiveRestore,
+  Tag,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { ScrollArea } from '@shared/ui/scroll-area';
+import { ProjectSidebar } from '@features/projects/components/ProjectSidebar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +51,80 @@ import {
 } from '@shared/ui/context-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@shared/ui/collapsible';
 import type { ChatSession } from '../../stores/chat-store';
+
+// ---------------------------------------------------------------------------
+// Autotag types + helpers
+// ---------------------------------------------------------------------------
+
+type ConversationTag =
+  | 'coding'
+  | 'research'
+  | 'writing'
+  | 'brainstorm'
+  | 'analysis'
+  | 'debug'
+  | 'creative'
+  | 'general';
+
+const TAG_COLORS: Record<ConversationTag, string> = {
+  coding: 'bg-blue-500/15 text-blue-400',
+  research: 'bg-purple-500/15 text-purple-400',
+  writing: 'bg-emerald-500/15 text-emerald-400',
+  brainstorm: 'bg-amber-500/15 text-amber-400',
+  analysis: 'bg-cyan-500/15 text-cyan-400',
+  debug: 'bg-red-500/15 text-red-400',
+  creative: 'bg-pink-500/15 text-pink-400',
+  general: 'bg-zinc-500/15 text-zinc-400',
+};
+
+const ALL_TAGS: ConversationTag[] = [
+  'coding',
+  'research',
+  'writing',
+  'brainstorm',
+  'analysis',
+  'debug',
+  'creative',
+  'general',
+];
+
+function getAuthHeaders(): Record<string, string> {
+  const token =
+    typeof window !== 'undefined' ? localStorage.getItem('supabase_access_token') : null;
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function fetchBatchTags(conversationIds: string[]): Promise<Record<string, ConversationTag>> {
+  if (conversationIds.length === 0) return {};
+  try {
+    const res = await fetch('/api/autotag/batch', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ conversationIds }),
+    });
+    if (!res.ok) return {};
+    const data = (await res.json()) as { tags?: Record<string, string> };
+    return (data.tags ?? {}) as Record<string, ConversationTag>;
+  } catch {
+    return {};
+  }
+}
+
+async function fetchConversationsByTag(tag: ConversationTag): Promise<string[]> {
+  try {
+    const res = await fetch(`/api/autotag/conversations?tag=${encodeURIComponent(tag)}`, {
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { conversationIds?: string[] };
+    return data.conversationIds ?? [];
+  } catch {
+    return [];
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -119,6 +195,7 @@ function groupSessions(sessions: ChatSession[]): Map<string, ChatSession[]> {
 interface SessionItemProps {
   session: ChatSession;
   isActive: boolean;
+  tag?: ConversationTag;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
@@ -131,6 +208,7 @@ interface SessionItemProps {
 function SessionItem({
   session,
   isActive,
+  tag,
   onSelect,
   onDelete,
   onRename,
@@ -203,6 +281,18 @@ function SessionItem({
       ) : (
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
           {session.title || 'Untitled'}
+        </span>
+      )}
+
+      {/* Tag badge */}
+      {!isRenaming && tag && tag !== 'general' && (
+        <span
+          className={cn(
+            'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium capitalize',
+            TAG_COLORS[tag],
+          )}
+        >
+          {tag}
         </span>
       )}
 
@@ -466,23 +556,69 @@ export function ChatSidebarNew({
 }: ChatSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [tagFilter, setTagFilter] = useState<ConversationTag | null>(null);
+  const [tagMap, setTagMap] = useState<Record<string, ConversationTag>>({});
+  const [tagFilterIds, setTagFilterIds] = useState<Set<string> | null>(null);
+
+  // Batch-fetch tags for all visible sessions
+  useEffect(() => {
+    const ids = sessions.map((s) => s.id);
+    if (ids.length === 0) return;
+    // Only fetch tags for IDs we haven't fetched yet
+    const untaggedIds = ids.filter((id) => !(id in tagMap));
+    if (untaggedIds.length === 0) return;
+    void fetchBatchTags(untaggedIds).then((tags) => {
+      setTagMap((prev) => ({ ...prev, ...tags }));
+    });
+    // Re-run when sessions list changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions.length]);
+
+  // When tag filter changes, fetch matching conversation IDs from the server
+  useEffect(() => {
+    if (!tagFilter) {
+      setTagFilterIds(null);
+      return;
+    }
+    void fetchConversationsByTag(tagFilter).then((ids) => {
+      setTagFilterIds(new Set(ids));
+    });
+  }, [tagFilter]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSearchQuery('');
+      if (e.key === 'Escape') {
+        setSearchQuery('');
+        setTagFilter(null);
+      }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
   const filteredSessions = useMemo(() => {
-    if (!searchQuery.trim()) return sessions;
-    const q = searchQuery.toLowerCase();
-    return sessions.filter(
-      (s) =>
-        s.title.toLowerCase().includes(q) || (s.preview && s.preview.toLowerCase().includes(q)),
-    );
-  }, [sessions, searchQuery]);
+    let result = sessions;
+
+    // Filter by text search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.title.toLowerCase().includes(q) || (s.preview && s.preview.toLowerCase().includes(q)),
+      );
+    }
+
+    // Filter by tag (uses server-side IDs when available, falls back to local tagMap)
+    if (tagFilter) {
+      if (tagFilterIds) {
+        result = result.filter((s) => tagFilterIds.has(s.id));
+      } else {
+        result = result.filter((s) => tagMap[s.id] === tagFilter);
+      }
+    }
+
+    return result;
+  }, [sessions, searchQuery, tagFilter, tagFilterIds, tagMap]);
 
   const pinnedSessions = useMemo(
     () => filteredSessions.filter((s) => s.isPinned && !s.isArchived),
@@ -510,6 +646,7 @@ export function ChatSidebarNew({
       key={session.id}
       session={session}
       isActive={session.id === activeSessionId}
+      tag={tagMap[session.id] as ConversationTag | undefined}
       onSelect={onSelectSession}
       onDelete={onDeleteSession}
       onRename={onRenameSession}
@@ -566,6 +703,36 @@ export function ChatSidebarNew({
             <X className="h-3.5 w-3.5" />
           </button>
         )}
+      </div>
+
+      {/* Tag filter chips */}
+      <div className="mx-2 mb-1 flex items-center gap-1 overflow-x-auto no-scrollbar">
+        <button
+          onClick={() => setTagFilter(null)}
+          className={cn(
+            'shrink-0 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors',
+            !tagFilter
+              ? 'bg-primary/15 text-primary'
+              : 'bg-black/5 dark:bg-white/5 text-muted-foreground/60 hover:text-muted-foreground',
+          )}
+        >
+          All
+        </button>
+        {ALL_TAGS.filter((t) => t !== 'general').map((t) => (
+          <button
+            key={t}
+            onClick={() => setTagFilter(tagFilter === t ? null : t)}
+            className={cn(
+              'shrink-0 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize transition-colors',
+              tagFilter === t
+                ? TAG_COLORS[t]
+                : 'bg-black/5 dark:bg-white/5 text-muted-foreground/60 hover:text-muted-foreground',
+            )}
+          >
+            <Tag className="h-2.5 w-2.5" />
+            {t}
+          </button>
+        ))}
       </div>
 
       {/* Session list */}
@@ -626,6 +793,11 @@ export function ChatSidebarNew({
           </>
         )}
       </ScrollArea>
+
+      {/* Projects panel — create/switch projects for shared context */}
+      <div className="mx-2 border-t border-[var(--chat-border-subtle)]">
+        <ProjectSidebar />
+      </div>
 
       {/* User profile */}
       <UserProfileArea />

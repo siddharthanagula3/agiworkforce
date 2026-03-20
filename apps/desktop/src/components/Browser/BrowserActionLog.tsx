@@ -1,4 +1,5 @@
 import { useState, useMemo, type ComponentType } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBrowserStore, type BrowserAction, type ActionType } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
@@ -48,7 +49,12 @@ const ACTION_COLORS: Record<ActionType, string> = {
 };
 
 export function BrowserActionLog({ className, onActionClick }: BrowserActionLogProps) {
-  const { actions, clearActions } = useBrowserStore();
+  const { actions, clearActions } = useBrowserStore(
+    useShallow((s) => ({
+      actions: s.actions,
+      clearActions: s.clearActions,
+    })),
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<ActionType | 'all'>('all');
 

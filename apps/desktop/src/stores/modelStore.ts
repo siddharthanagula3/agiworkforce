@@ -47,6 +47,23 @@ export interface ProviderStatus {
   ollamaRunning?: boolean;
 }
 
+/** Router suggestion from the Rust LLM router */
+export interface RouterSuggestion {
+  provider: string;
+  model: string;
+  reason: string;
+}
+
+/** Model capability metadata from the Rust backend */
+export interface ModelCapabilities {
+  supportsTools: boolean;
+  supportsVision: boolean;
+  supportsStreaming: boolean;
+  supportsThinking: boolean;
+  contextLength: number;
+  toolMode: 'native' | 'prompt_injection';
+}
+
 export interface UsageStats {
   totalTokens: number;
   totalCost: number;
@@ -112,6 +129,9 @@ export interface OllamaModel {
   details: OllamaModelDetails;
 }
 
+/** Speed/quality tradeoff mode for each request. */
+export type SpeedQualityMode = 'fast' | 'balanced' | 'quality';
+
 interface ModelState {
   selectedModel: string | null;
   selectedProvider: Provider | null;
@@ -129,6 +149,9 @@ interface ModelState {
   thinkingModeEnabled: boolean;
   thinkingBudget: number;
 
+  /** Controls the speed/quality tradeoff for all requests. */
+  speedQualityMode: SpeedQualityMode;
+
   // Ollama-specific state
   ollamaModels: OllamaModel[];
   ollamaAvailable: boolean;
@@ -137,6 +160,12 @@ interface ModelState {
 
   // Intelligent routing state
   lastRoutingDecision: RoutingDecision | null;
+
+  // Router suggestion state
+  routerSuggestion: RouterSuggestion | null;
+
+  // Model capabilities cache
+  modelCapabilities: Record<string, ModelCapabilities>;
 
   loading: boolean;
   error: string | null;
@@ -151,6 +180,26 @@ interface ModelState {
   getUsageStats: () => Promise<UsageStats>;
   refreshUsageStats: () => Promise<void>;
   getAvailableModels: () => Promise<ModelInfo[]>;
+
+  // Router suggestions from the Rust LLM router
+  getRouterSuggestion: (context?: {
+    taskType?: string;
+    complexity?: string;
+    requiresVision?: boolean;
+  }) => Promise<RouterSuggestion>;
+
+  // Model capability detection (Ollama probing + cloud defaults)
+  getModelCapabilities: (
+    provider: string,
+    modelId: string,
+    baseUrl?: string,
+  ) => Promise<ModelCapabilities>;
+
+  // Clear cached Ollama capability data
+  clearModelCapabilityCache: () => Promise<void>;
+
+  // Reset the session cost accumulator in the LLM router
+  resetSessionCost: () => Promise<void>;
 
   // Ollama-specific actions
   checkOllamaStatus: () => Promise<boolean>;
@@ -198,6 +247,12 @@ interface ModelState {
    */
   cycleModelVariant: () => void;
 
+  /**
+   * Set the speed/quality mode that controls how requests are routed and how
+   * much extended thinking budget is applied.
+   */
+  setSpeedQualityMode: (mode: SpeedQualityMode) => void;
+
   reset: () => void;
 }
 
@@ -223,6 +278,8 @@ const defaultUsageStats: UsageStats = {
     fireworks: { tokens: 0, cost: 0, messages: 0 },
     cerebras: { tokens: 0, cost: 0, messages: 0 },
     deepinfra: { tokens: 0, cost: 0, messages: 0 },
+    nvidia_nim: { tokens: 0, cost: 0, messages: 0 },
+    open_router: { tokens: 0, cost: 0, messages: 0 },
     cohere: { tokens: 0, cost: 0, messages: 0 },
     ai21: { tokens: 0, cost: 0, messages: 0 },
     sambanova: { tokens: 0, cost: 0, messages: 0 },
@@ -282,6 +339,8 @@ export const useModelStore = create<ModelState>()(
           fireworks: null,
           cerebras: null,
           deepinfra: null,
+          nvidia_nim: null,
+          open_router: null,
           cohere: null,
           ai21: null,
           sambanova: null,
@@ -292,6 +351,7 @@ export const useModelStore = create<ModelState>()(
         usageStats: null,
         thinkingModeEnabled: false,
         thinkingBudget: 0,
+        speedQualityMode: 'balanced' as SpeedQualityMode,
 
         // Ollama-specific initial state
         ollamaModels: [],
@@ -301,6 +361,12 @@ export const useModelStore = create<ModelState>()(
 
         // Intelligent routing initial state
         lastRoutingDecision: null,
+
+        // Router suggestion initial state
+        routerSuggestion: null,
+
+        // Model capabilities cache
+        modelCapabilities: {},
 
         loading: false,
         error: null,
@@ -626,6 +692,112 @@ export const useModelStore = create<ModelState>()(
           }
         },
 
+        // Router suggestion from the Rust LLM router
+        getRouterSuggestion: async (context?: {
+          taskType?: string;
+          complexity?: string;
+          requiresVision?: boolean;
+        }): Promise<RouterSuggestion> => {
+          try {
+            const suggestion = await invoke<RouterSuggestion>('router_suggestions', {
+              context: context ?? null,
+            });
+            set({ routerSuggestion: suggestion }, undefined, 'model/getRouterSuggestion');
+            return suggestion;
+          } catch (error) {
+            console.error('Failed to get router suggestion:', error);
+            const fallback: RouterSuggestion = {
+              provider: 'managed_cloud',
+              model: 'auto',
+              reason: 'fallback',
+            };
+            set({ routerSuggestion: fallback }, undefined, 'model/getRouterSuggestion/error');
+            return fallback;
+          }
+        },
+
+        // Model capability detection
+        getModelCapabilities: async (
+          provider: string,
+          modelId: string,
+          baseUrl?: string,
+        ): Promise<ModelCapabilities> => {
+          // Check cache first
+          const cacheKey = `${provider}:${modelId}`;
+          const cached = get().modelCapabilities[cacheKey];
+          if (cached) return cached;
+
+          try {
+            const raw = await invoke<{
+              supports_tools: boolean;
+              supports_vision: boolean;
+              supports_streaming: boolean;
+              supports_thinking: boolean;
+              context_length: number;
+              tool_mode: string;
+            }>('get_model_capabilities', {
+              provider,
+              modelId,
+              baseUrl: baseUrl ?? null,
+            });
+
+            const capabilities: ModelCapabilities = {
+              supportsTools: raw.supports_tools,
+              supportsVision: raw.supports_vision,
+              supportsStreaming: raw.supports_streaming,
+              supportsThinking: raw.supports_thinking,
+              contextLength: raw.context_length,
+              toolMode: raw.tool_mode as 'native' | 'prompt_injection',
+            };
+
+            set(
+              (state) => ({
+                modelCapabilities: {
+                  ...state.modelCapabilities,
+                  [cacheKey]: capabilities,
+                },
+              }),
+              undefined,
+              'model/getModelCapabilities',
+            );
+
+            return capabilities;
+          } catch (error) {
+            console.error('Failed to get model capabilities:', error);
+            // Return cloud-like defaults on error
+            const defaults: ModelCapabilities = {
+              supportsTools: true,
+              supportsVision: true,
+              supportsStreaming: true,
+              supportsThinking: false,
+              contextLength: 128_000,
+              toolMode: 'native',
+            };
+            return defaults;
+          }
+        },
+
+        // Clear Ollama capability cache
+        clearModelCapabilityCache: async (): Promise<void> => {
+          try {
+            await invoke('clear_model_capability_cache');
+            // Also clear the local JS-side cache
+            set({ modelCapabilities: {} }, undefined, 'model/clearModelCapabilityCache');
+          } catch (error) {
+            console.error('Failed to clear model capability cache:', error);
+          }
+        },
+
+        // Reset session cost accumulator
+        resetSessionCost: async (): Promise<void> => {
+          try {
+            await invoke('reset_session_cost');
+          } catch (error) {
+            console.error('Failed to reset session cost:', error);
+            throw error;
+          }
+        },
+
         // Intelligent routing implementation
         getRoutedModel: (message: string, hasImages: boolean = false): RoutingDecision => {
           const { selectedModel } = get();
@@ -712,6 +884,10 @@ export const useModelStore = create<ModelState>()(
           toast.success(`Switched to ${variantId}`);
         },
 
+        setSpeedQualityMode: (mode: SpeedQualityMode) => {
+          set({ speedQualityMode: mode }, undefined, 'model/setSpeedQualityMode');
+        },
+
         reset: () => {
           set(
             {
@@ -737,6 +913,8 @@ export const useModelStore = create<ModelState>()(
                 fireworks: null,
                 cerebras: null,
                 deepinfra: null,
+                nvidia_nim: null,
+                open_router: null,
                 cohere: null,
                 ai21: null,
                 sambanova: null,
@@ -752,6 +930,10 @@ export const useModelStore = create<ModelState>()(
               ollamaError: null,
               // Reset routing state
               lastRoutingDecision: null,
+              // Reset router suggestion and capabilities cache
+              routerSuggestion: null,
+              modelCapabilities: {},
+              speedQualityMode: 'balanced' as SpeedQualityMode,
               loading: false,
               error: null,
             },
@@ -773,6 +955,7 @@ export const useModelStore = create<ModelState>()(
           recentModels: state.recentModels,
           thinkingModeEnabled: state.thinkingModeEnabled,
           thinkingBudget: state.thinkingBudget,
+          speedQualityMode: state.speedQualityMode,
         }),
         migrate: (persistedState: unknown, _version: number) => {
           // No schema changes yet — MODEL_STORE_VERSION started at 1.
@@ -835,8 +1018,15 @@ export const selectOllamaError = (state: ModelState) => state.ollamaError;
 
 // Routing selectors
 export const selectLastRoutingDecision = (state: ModelState) => state.lastRoutingDecision;
+export const selectSpeedQualityMode = (state: ModelState) => state.speedQualityMode;
 export const selectIsAutoMode = (state: ModelState) =>
   state.selectedModel?.startsWith('auto-') ?? false;
+
+// Router suggestion selectors
+export const selectRouterSuggestion = (state: ModelState) => state.routerSuggestion;
+export const selectModelCapabilities = (state: ModelState) => state.modelCapabilities;
+export const selectModelCapability = (provider: string, modelId: string) => (state: ModelState) =>
+  state.modelCapabilities[`${provider}:${modelId}`] ?? null;
 
 /**
  * Helper function to format Ollama model size for display
@@ -958,7 +1148,7 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
 
   // Check if user is in Simple Mode (dynamic import to avoid circular deps)
   import('./ui')
-    .then(({ useUIStore }) => {
+    .then(async ({ useUIStore }) => {
       const isSimpleMode = useUIStore.getState().mode === 'simple';
       const selectedMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
       const isAutoSelection = selectedModel === 'auto' || selectedModel?.startsWith('auto');
@@ -972,7 +1162,8 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
           console.debug(
             `[ModelStore] Simple Mode: Setting ${normalizedTier} tier to best auto mode: ${bestAutoMode}`,
           );
-          void selectModel(bestAutoMode, 'managed_cloud');
+          // Await selectModel so the reentrancy guard holds until selection completes
+          await selectModel(bestAutoMode, 'managed_cloud');
         }
       } else {
         // In Advanced Mode: Only downgrade if using an auto mode they shouldn't have
@@ -980,7 +1171,7 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
           console.debug(
             `[ModelStore] Enforcing tier restriction: ${normalizedTier} tier cannot use ${selectedModel}, switching to auto-economy`,
           );
-          void selectModel('auto-economy', 'managed_cloud');
+          await selectModel('auto-economy', 'managed_cloud');
         } else if (
           selectedModel &&
           !isAutoSelection &&
@@ -990,14 +1181,14 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
           console.debug(
             `[ModelStore] Enforcing tier restriction: ${normalizedTier} tier cannot use ${selectedModel}, switching to auto-economy`,
           );
-          void selectModel('auto-economy', 'managed_cloud');
+          await selectModel('auto-economy', 'managed_cloud');
         }
       }
     })
-    .catch((err) => {
+    .catch(async (err) => {
       console.error('[ModelStore] enforceModelTierRestriction failed:', err);
       // [C1 fix] Fail-safe: on error, fall back to the lowest tier model
-      void selectModel('auto-economy', 'managed_cloud');
+      await selectModel('auto-economy', 'managed_cloud');
     })
     .finally(() => {
       // [C1 fix] Always release the lock so future plan changes are processed

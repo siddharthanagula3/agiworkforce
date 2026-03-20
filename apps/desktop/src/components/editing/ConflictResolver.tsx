@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useEditingStore } from '../../stores/editingStore';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -14,7 +15,14 @@ interface ConflictResolverProps {
 }
 
 export function ConflictResolver({ filePath, className }: ConflictResolverProps) {
-  const { pendingChanges, conflicts, detectConflicts, resolveConflict } = useEditingStore();
+  const { pendingChanges, conflicts, detectConflicts, resolveConflict } = useEditingStore(
+    useShallow((s) => ({
+      pendingChanges: s.pendingChanges,
+      conflicts: s.conflicts,
+      detectConflicts: s.detectConflicts,
+      resolveConflict: s.resolveConflict,
+    })),
+  );
   const [expandedConflicts, setExpandedConflicts] = useState<Set<number>>(new Set());
 
   const diff = pendingChanges.get(filePath);

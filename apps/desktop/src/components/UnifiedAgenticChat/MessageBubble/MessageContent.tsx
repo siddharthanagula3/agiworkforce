@@ -6,18 +6,20 @@
  */
 
 import 'katex/dist/katex.min.css';
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { Code2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { EnhancedMessage } from '../../../stores/unifiedChatStore';
+import { EnhancedMessage, useUnifiedChatStore } from '../../../stores/unifiedChatStore';
 import { parseCitations } from '../CitationBadge';
 import { SourcesFooter } from '../SourcesFooter';
+import { SourcePillRow } from '../SourcePillRow';
 import { CodeBlock } from '../Visualizations/CodeBlock';
 import { InlineCodeOutput, CodeExecutionResult } from '../InlineCodeOutput';
+import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { useCanvasStore } from '../../../stores/canvasStore';
 import { invoke } from '../../../lib/tauri-mock';
@@ -78,15 +80,45 @@ export interface MessageContentProps {
   message: EnhancedMessage;
   isUser: boolean;
   isStreaming?: boolean;
+  /** When true, this is the last message in the list — source pills are shown for all qualifying messages regardless */
+  isLastMessage?: boolean;
 }
 
 const MessageContentComponent: React.FC<MessageContentProps> = ({
   message,
   isUser,
   isStreaming = false,
+  isLastMessage = false,
 }) => {
   const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
-  const { createArtifact, openPanel } = useCanvasStore();
+  const { createArtifact, openPanel } = useCanvasStore(
+    useShallow((s) => ({ createArtifact: s.createArtifact, openPanel: s.openPanel })),
+  );
+  const getCitationByIndex = useUnifiedChatStore((state) => state.getCitationByIndex);
+
+  /**
+   * Extract all [N] citation references from the message content and resolve
+   * them against the store. Only resolves for non-streaming assistant messages.
+   */
+  const sourcePillCitations = useMemo(() => {
+    if (isUser || isStreaming) return [];
+    const regex = /\[(\d+)\]/g;
+    const seen = new Set<number>();
+    const results: Array<{ url: string; title?: string; index: number }> = [];
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(message.content)) !== null) {
+      if (!match[1]) continue;
+      const index = parseInt(match[1], 10);
+      if (seen.has(index)) continue;
+      seen.add(index);
+      const citation = getCitationByIndex(index);
+      if (citation && /^https?:\/\//i.test(citation.url)) {
+        results.push({ url: citation.url, title: citation.title, index });
+      }
+    }
+    // Sort by citation index so pills appear in document order
+    return results.sort((a, b) => a.index - b.index);
+  }, [message.content, isUser, isStreaming, getCitationByIndex]);
 
   // Map from code-block index → execution result
   const [codeResults, setCodeResults] = useState<Map<string, CodeExecutionResult>>(new Map());
@@ -159,6 +191,17 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
       } ${message.error ? 'text-red-500' : ''}`}
     >
       <div className="prose prose-sm dark:prose-invert max-w-none">
+        {/* Source citation pills — shown above content for non-streaming assistant messages.
+            The last message in the list gets a higher maxVisible so more sources are
+            immediately visible without needing to expand. */}
+        {sourcePillCitations.length > 0 && (
+          <SourcePillRow
+            citations={sourcePillCitations}
+            maxVisible={isLastMessage ? 8 : 6}
+            className="not-prose mb-3"
+          />
+        )}
+
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[rehypeKatex]}

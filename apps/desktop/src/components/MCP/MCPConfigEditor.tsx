@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 import { Button } from '../ui/Button';
 import { Alert, AlertDescription } from '../ui/Alert';
@@ -11,7 +12,14 @@ import { Save, AlertCircle, FileJson, RotateCcw } from 'lucide-react';
 import type { McpServersConfig } from '../../types/mcp';
 
 export default function MCPConfigEditor() {
-  const { config, loadConfig, updateConfig, isLoading } = useMcpStore();
+  const { config, loadConfig, updateConfig, isLoading } = useMcpStore(
+    useShallow((s) => ({
+      config: s.config,
+      loadConfig: s.loadConfig,
+      updateConfig: s.updateConfig,
+      isLoading: s.isLoading,
+    })),
+  );
   const [localConfig, setLocalConfig] = useState(config);
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -79,7 +87,6 @@ export default function MCPConfigEditor() {
 
   return (
     <div className="space-y-6">
-      {}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Tool Configuration</h2>
@@ -93,7 +100,7 @@ export default function MCPConfigEditor() {
             </Button>
           )}
           <Button
-            variant={saveSuccess ? 'default' : 'default'}
+            variant="default"
             size="sm"
             onClick={handleSave}
             disabled={!hasChanges || isLoading}
@@ -110,7 +117,6 @@ export default function MCPConfigEditor() {
         </div>
       </div>
 
-      {}
       {hasChanges && (
         <Alert>
           <AlertCircle className="w-4 h-4" />
@@ -120,7 +126,6 @@ export default function MCPConfigEditor() {
         </Alert>
       )}
 
-      {}
       <div className="space-y-4">
         {serverNames.map((serverName) => {
           const server = localConfig.mcpServers[serverName];
@@ -161,7 +166,6 @@ export default function MCPConfigEditor() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {}
                   <div>
                     <p className="text-xs font-medium text-muted-foreground mb-1">Command</p>
                     <code className="text-xs bg-muted px-2 py-1 rounded block">
@@ -169,7 +173,6 @@ export default function MCPConfigEditor() {
                     </code>
                   </div>
 
-                  {}
                   {server.args.length > 0 && (
                     <div>
                       <p className="text-xs font-medium text-muted-foreground mb-1">Arguments</p>
@@ -183,7 +186,6 @@ export default function MCPConfigEditor() {
                     </div>
                   )}
 
-                  {}
                   {Object.keys(server.env).length > 0 && (
                     <div>
                       <p className="text-xs font-medium text-muted-foreground mb-1">
@@ -211,7 +213,6 @@ export default function MCPConfigEditor() {
         })}
       </div>
 
-      {}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">

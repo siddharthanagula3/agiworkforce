@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-03-03",
+  "lastUpdated": "2026-03-20",
   "providers": {
     "managed_cloud": {
       "label": "Managed Cloud",
@@ -55,10 +55,10 @@
         "gpt-5.4-codex-xhigh": "gpt-5.4-codex",
         "gpt-5.4-codex": "gpt-5.4-codex",
         "gpt-5-codex": "gpt-5.4-codex",
-        "gpt-5.3-codex-low": "gpt-5.3-codex",
-        "gpt-5.3-codex-medium": "gpt-5.3-codex",
-        "gpt-5.3-codex-high": "gpt-5.3-codex",
-        "gpt-5.3-codex-xhigh": "gpt-5.3-codex",
+        "gpt-5.4-low": "gpt-5.4",
+        "gpt-5.4-medium": "gpt-5.4",
+        "gpt-5.4-high": "gpt-5.4",
+        "gpt-5.4-xhigh": "gpt-5.4",
         "gpt-5-pro": "gpt-5.4-pro",
         "gpt-5-pro-2026-01": "gpt-5.4-pro"
       }
@@ -109,7 +109,7 @@
       "taskRouting": {
         "fast_completion": "gemini-3-flash-preview",
         "code_generation": "gemini-3-pro-preview",
-        "complex_reasoning": "gemini-2.5-pro",
+        "complex_reasoning": "gemini-3.1-pro-preview",
         "chat": "gemini-3-flash-preview",
         "vision": "gemini-3-pro-preview",
         "long_context": "gemini-3-pro-preview"
@@ -494,14 +494,14 @@
       },
       "modelPrefixes": [],
       "aliases": ["azure", "azure-openai", "azure_openai"],
-      "defaultModel": "gpt-4o",
+      "defaultModel": "gpt-5.4",
       "taskRouting": {
-        "fast_completion": "gpt-4o-mini",
-        "code_generation": "gpt-4o",
-        "complex_reasoning": "gpt-4o",
-        "chat": "gpt-4o",
-        "vision": "gpt-4o",
-        "long_context": "gpt-4o"
+        "fast_completion": "gpt-5.4-mini",
+        "code_generation": "gpt-5.4",
+        "complex_reasoning": "gpt-5.4",
+        "chat": "gpt-5.4",
+        "vision": "gpt-5.4",
+        "long_context": "gpt-5.4"
       },
       "canonicalization": {}
     },
@@ -518,14 +518,14 @@
       },
       "modelPrefixes": ["anthropic.", "amazon.", "meta.", "ai21.", "cohere.", "mistral."],
       "aliases": ["bedrock", "aws-bedrock", "aws_bedrock"],
-      "defaultModel": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      "defaultModel": "anthropic.claude-sonnet-4-6-v1:0",
       "taskRouting": {
-        "fast_completion": "anthropic.claude-3-haiku-20240307-v1:0",
-        "code_generation": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "complex_reasoning": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "chat": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "vision": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "long_context": "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        "fast_completion": "anthropic.claude-haiku-4-5-v1:0",
+        "code_generation": "anthropic.claude-sonnet-4-6-v1:0",
+        "complex_reasoning": "anthropic.claude-sonnet-4-6-v1:0",
+        "chat": "anthropic.claude-sonnet-4-6-v1:0",
+        "vision": "anthropic.claude-sonnet-4-6-v1:0",
+        "long_context": "anthropic.claude-sonnet-4-6-v1:0"
       },
       "canonicalization": {}
     },
@@ -715,9 +715,9 @@
       "bestFor": ["Maximum Performance", "Complex Tasks", "Research"],
       "released": "January 2026"
     },
-    "gpt-5.3-codex": {
-      "id": "gpt-5.3-codex",
-      "apiModelId": "gpt-5.3-codex",
+    "gpt-5.4": {
+      "id": "gpt-5.4",
+      "apiModelId": "gpt-5.4",
       "name": "GPT-5.3 Codex",
       "provider": "openai",
       "modelType": "code",
@@ -2987,7 +2987,7 @@
       "gpt-5.4",
       "gpt-5.4-codex-low",
       "gpt-5.4-codex-medium",
-      "gpt-5.3-codex",
+      "gpt-5.4",
       "claude-sonnet-4.6",
       "claude-sonnet-4.5",
       "gemini-3.1-pro-preview",

@@ -10,7 +10,7 @@ import { FeedbackDialog } from '../Feedback';
 import { ArtifactPanel } from '../Artifacts/ArtifactPanel';
 import { ResizeHandle } from '../ui/ResizeHandle';
 import { DynamicSidecar } from './DynamicSidecar';
-import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
+import { KeyboardShortcutsOverlay } from './KeyboardShortcutsOverlay';
 import { Sidebar } from './Sidebar';
 import { MemoryPanel } from '../MemoryPanel';
 import { AgentTaskPanel } from '../AGI/AgentTaskPanel';
@@ -20,6 +20,8 @@ import { ResearchPanel } from '../Research/ResearchPanel';
 import RewindTimeline from './RewindTimeline';
 import { toast } from 'sonner';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
+import MCPWorkspace from '../MCP/MCPWorkspace';
+import { MCPBundleBrowser } from '../MCP/MCPBundleBrowser';
 
 // Lazy load MediaLab for code splitting
 const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
@@ -60,12 +62,22 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
   const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
   // Unified right panel: only one can be open at a time (besides artifacts)
-  type RightPanel = 'memory' | 'tasks' | 'canvas' | 'mcp-apps' | 'research' | 'rewind' | null;
+  type RightPanel =
+    | 'memory'
+    | 'tasks'
+    | 'canvas'
+    | 'mcp-apps'
+    | 'research'
+    | 'rewind'
+    | 'mcp-workspace'
+    | 'mcp-bundles'
+    | null;
   const [activeRightPanel, setActiveRightPanel] = useState<RightPanel>(null);
   const RIGHT_PANEL_WIDTH = 420;
 
-  const subscription = useBillingStore((state) => state.subscription);
-  const planName = subscription?.plan_name?.toLowerCase() ?? 'free';
+  const planName = useBillingStore(
+    (state) => state.subscription?.plan_name?.toLowerCase() ?? 'free',
+  );
   const canAccessMediaLab = useMemo(
     () => ['pro', 'max', 'enterprise'].some((tier) => planName.includes(tier)),
     [planName],
@@ -258,6 +270,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         onResize={setSidebarWidth}
         onToggleArtifacts={() => setIsArtifactPanelOpen(!isArtifactPanelOpen)}
         artifactPanelOpen={isArtifactPanelOpen}
+        onOpenMcpWorkspace={() => openRightPanel('mcp-workspace')}
+        onOpenMcpBundles={() => openRightPanel('mcp-bundles')}
+        onOpenCanvas={() => openRightPanel('canvas')}
       />
 
       {}
@@ -310,9 +325,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Dialogs */}
       <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
-      <KeyboardShortcutsDialog
-        isOpen={shortcutsDialogOpen}
+      <KeyboardShortcutsOverlay
+        open={shortcutsDialogOpen}
         onClose={() => setShortcutsDialogOpen(false)}
+        onOpenSettings={() => useSettingsDialogStore.getState().openSettings('keybindings')}
       />
       <CustomInstructionsDialog
         open={customInstructionsOpen}
@@ -324,7 +340,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {isArtifactPanelOpen && (
         <div
           className={cn(
-            'bg-white dark:bg-[#0b0c14] border-l border-gray-200 dark:border-white/10 shadow-2xl z-20 flex flex-col ease-in-out',
+            'bg-white dark:bg-[#0b0c14] border-l border-gray-200 dark:border-white/10 shadow-2xl z-30 flex flex-col ease-in-out',
             !isResizing && 'transition-[width] duration-300',
           )}
           style={{
@@ -369,7 +385,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             width: RIGHT_PANEL_WIDTH,
             position: 'absolute',
             top: 0,
-            right: sidecarOpen ? sidecarWidth : 0,
+            right: (sidecarOpen ? sidecarWidth : 0) + artifactPanelWidth,
             bottom: 0,
           }}
         >
@@ -382,7 +398,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                   ? 'Deep Research'
                   : activeRightPanel === 'rewind'
                     ? 'Rewind Timeline'
-                    : activeRightPanel}
+                    : activeRightPanel === 'mcp-workspace'
+                      ? 'MCP Workspace'
+                      : activeRightPanel === 'mcp-bundles'
+                        ? 'Tool Registry'
+                        : activeRightPanel}
             </h2>
             <button
               type="button"
@@ -415,6 +435,8 @@ export function AppLayout({ children }: AppLayoutProps) {
             )}
             {activeRightPanel === 'research' && <ResearchPanel className="h-full" />}
             {activeRightPanel === 'rewind' && <RewindTimeline />}
+            {activeRightPanel === 'mcp-workspace' && <MCPWorkspace />}
+            {activeRightPanel === 'mcp-bundles' && <MCPBundleBrowser />}
           </div>
         </div>
       )}

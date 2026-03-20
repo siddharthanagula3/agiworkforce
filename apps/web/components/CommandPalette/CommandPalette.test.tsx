@@ -51,8 +51,8 @@ vi.mock('@/stores/chatStore', () => ({
 vi.mock('@/shared/stores/model-store', () => ({
   AVAILABLE_MODELS: [
     {
-      id: 'gpt-4o',
-      name: 'GPT-4o',
+      id: 'gpt-5.4',
+      name: 'GPT-5.4',
       provider: 'OpenAI',
       description: 'Most capable GPT model',
     },
@@ -282,7 +282,7 @@ describe('CommandPalette', () => {
       // Sub-menu title should appear
       expect(screen.getByText('Switch AI Model')).toBeInTheDocument();
       // Model options should appear
-      expect(screen.getByText('GPT-4o')).toBeInTheDocument();
+      expect(screen.getByText('GPT-5.4')).toBeInTheDocument();
       expect(screen.getByText('Claude Sonnet 4.6')).toBeInTheDocument();
     });
 
@@ -291,7 +291,7 @@ describe('CommandPalette', () => {
       renderPalette(true, onOpenChange);
 
       fireEvent.click(screen.getByText('Switch AI Model'));
-      fireEvent.click(screen.getByText('GPT-4o'));
+      fireEvent.click(screen.getByText('GPT-5.4'));
 
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
@@ -303,12 +303,12 @@ describe('CommandPalette', () => {
       fireEvent.click(screen.getByText('Switch AI Model'));
 
       // Now in sub-menu
-      expect(screen.getByText('GPT-4o')).toBeInTheDocument();
+      expect(screen.getByText('GPT-5.4')).toBeInTheDocument();
 
       fireEvent.keyDown(input, { key: 'Escape' });
 
-      // Back to main menu — GPT-4o should be gone
-      expect(screen.queryByText('GPT-4o')).not.toBeInTheDocument();
+      // Back to main menu — GPT-5.4 should be gone
+      expect(screen.queryByText('GPT-5.4')).not.toBeInTheDocument();
       // Main commands should be back
       expect(screen.getByText('New Chat')).toBeInTheDocument();
     });
@@ -325,7 +325,7 @@ describe('CommandPalette', () => {
 
       fireEvent.click(screen.getByLabelText('Back to main menu'));
 
-      expect(screen.queryByText('GPT-4o')).not.toBeInTheDocument();
+      expect(screen.queryByText('GPT-5.4')).not.toBeInTheDocument();
       expect(screen.getByText('New Chat')).toBeInTheDocument();
     });
   });

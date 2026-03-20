@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
+import { useShallow } from 'zustand/react/shallow';
 import { useEditingStore } from '../../stores/editingStore';
 import { cn } from '../../lib/utils';
 import { Card } from '../ui/Card';
@@ -17,7 +18,9 @@ interface LivePreviewProps {
 }
 
 export function LivePreview({ filePath, className }: LivePreviewProps) {
-  const { pendingChanges } = useEditingStore();
+  const { pendingChanges } = useEditingStore(
+    useShallow((s) => ({ pendingChanges: s.pendingChanges })),
+  );
   const [previewMode, setPreviewMode] = useState<'preview' | 'code'>('preview');
   const [error, setError] = useState<string | null>(null);
 

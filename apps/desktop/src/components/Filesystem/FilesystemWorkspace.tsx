@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useFilesystemStore, type DirEntry, type FileMetadata } from '../../stores/filesystemStore';
@@ -53,7 +54,32 @@ export function FilesystemWorkspace({ className }: FilesystemWorkspaceProps) {
     getMetadata,
     setFileContent,
     clearError,
-  } = useFilesystemStore();
+  } = useFilesystemStore(
+    useShallow((s) => ({
+      currentPath: s.currentPath,
+      entries: s.entries,
+      selectedPath: s.selectedPath,
+      fileContent: s.fileContent,
+      loading: s.loading,
+      error: s.error,
+      history: s.history,
+      historyIndex: s.historyIndex,
+      navigateTo: s.navigateTo,
+      goBack: s.goBack,
+      goForward: s.goForward,
+      goUp: s.goUp,
+      readFile: s.readFile,
+      writeFile: s.writeFile,
+      deleteFile: s.deleteFile,
+      renameFile: s.renameFile,
+      createDirectory: s.createDirectory,
+      deleteDirectory: s.deleteDirectory,
+      searchFiles: s.searchFiles,
+      getMetadata: s.getMetadata,
+      setFileContent: s.setFileContent,
+      clearError: s.clearError,
+    })),
+  );
 
   const [pathInput, setPathInput] = useState('/');
   const [newFolderName, setNewFolderName] = useState('');

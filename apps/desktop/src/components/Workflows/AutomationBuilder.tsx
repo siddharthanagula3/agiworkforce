@@ -7,6 +7,7 @@
  * All Tauri invoke() params are camelCase per IPC rules.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Calendar,
   ChevronDown,
@@ -651,8 +652,8 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                   <SelectItem value="claude-opus-4-5">Claude Opus 4.5</SelectItem>
                   <SelectItem value="claude-sonnet-4-5">Claude Sonnet 4.5</SelectItem>
                   <SelectItem value="claude-haiku-3-5">Claude Haiku 3.5</SelectItem>
-                  <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                  <SelectItem value="gpt-4o-mini">GPT-4o mini</SelectItem>
+                  <SelectItem value="gpt-5.4">GPT-5.4</SelectItem>
+                  <SelectItem value="gpt-5.4-mini">GPT-5.4 mini</SelectItem>
                   <SelectItem value="gemini-2.0-pro">Gemini 2.0 Pro</SelectItem>
                 </SelectContent>
               </Select>
@@ -746,7 +747,20 @@ export function AutomationBuilder() {
     deleteTrigger,
     toggleTrigger,
     fetchExecutions,
-  } = useTriggerStore();
+  } = useTriggerStore(
+    useShallow((s) => ({
+      triggers: s.triggers,
+      executions: s.executions,
+      loading: s.loading,
+      error: s.error,
+      fetchTriggers: s.fetchTriggers,
+      createTrigger: s.createTrigger,
+      updateTrigger: s.updateTrigger,
+      deleteTrigger: s.deleteTrigger,
+      toggleTrigger: s.toggleTrigger,
+      fetchExecutions: s.fetchExecutions,
+    })),
+  );
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);

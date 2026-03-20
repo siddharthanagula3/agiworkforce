@@ -1,5 +1,6 @@
 import { FileJson, Globe, History, Key, Plus, Save, Send, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useApiStore, type ApiRequest } from '../../stores/apiStore';
@@ -37,7 +38,24 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
     loadRequest,
     deleteRequest,
     clearError,
-  } = useApiStore();
+  } = useApiStore(
+    useShallow((s) => ({
+      currentRequest: s.currentRequest,
+      response: s.response,
+      loading: s.loading,
+      error: s.error,
+      savedRequests: s.savedRequests,
+      history: s.history,
+      executeRequest: s.executeRequest,
+      get: s.get,
+      post: s.post,
+      setCurrentRequest: s.setCurrentRequest,
+      saveRequest: s.saveRequest,
+      loadRequest: s.loadRequest,
+      deleteRequest: s.deleteRequest,
+      clearError: s.clearError,
+    })),
+  );
 
   const [requestName, setRequestName] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -521,7 +539,13 @@ export function APIWorkspace({ className }: APIWorkspaceProps) {
                   {}
                   <div className="flex-1 overflow-auto p-3">
                     <pre className="text-xs font-mono whitespace-pre-wrap">
-                      {JSON.stringify(JSON.parse(response.body || '{}'), null, 2)}
+                      {(() => {
+                        try {
+                          return JSON.stringify(JSON.parse(response.body || '{}'), null, 2);
+                        } catch {
+                          return response.body || '';
+                        }
+                      })()}
                     </pre>
                   </div>
                 </div>

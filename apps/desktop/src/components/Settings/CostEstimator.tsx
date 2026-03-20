@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   DollarSign,
   TrendingUp,
@@ -19,7 +20,13 @@ interface CostEstimatorProps {
 }
 
 export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
-  const { usageStats, refreshUsageStats, loading } = useModelStore();
+  const { usageStats, refreshUsageStats, loading } = useModelStore(
+    useShallow((s) => ({
+      usageStats: s.usageStats,
+      refreshUsageStats: s.refreshUsageStats,
+      loading: s.loading,
+    })),
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
@@ -77,7 +84,8 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
             <BarChart3 className="h-5 w-5" />
             Usage & Cost Tracking
           </h2>
-          <button type="button"
+          <button
+            type="button"
             onClick={handleRefresh}
             disabled={isRefreshing}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"

@@ -20,6 +20,20 @@ export interface ShellInfo {
   shell_type: ShellTypeLiteral;
 }
 
+export interface ExecuteResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  durationMs: number;
+  streamId: string | null;
+}
+
+export interface TerminalExecuteResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
 interface TerminalState {
   sessions: TerminalSession[];
   activeSessionId: string | null;
@@ -51,6 +65,39 @@ interface TerminalState {
   ) => Promise<string>;
   smartCommit: (sessionId: string) => Promise<string>;
   aiSuggestImprovements: (command: string, shellType: ShellTypeLiteral) => Promise<string | null>;
+
+  /** Execute a one-shot terminal command (full options) */
+  executeCommand: (
+    command: string,
+    options?: {
+      cwd?: string;
+      shell?: string;
+      streamId?: string;
+      emitEvents?: boolean;
+      timeoutMs?: number;
+    },
+  ) => Promise<ExecuteResult>;
+
+  /** Simplified terminal execution (command + optional working dir) */
+  executeSimple: (command: string, workingDir?: string) => Promise<TerminalExecuteResult>;
+
+  /** List all active session IDs from the backend */
+  listSessions: () => Promise<string[]>;
+
+  /** Clear command history for a session */
+  clearHistory: (sessionId: string) => Promise<void>;
+
+  /** Set an environment variable in a session */
+  setEnv: (sessionId: string, key: string, value: string) => Promise<void>;
+
+  /** Get an environment variable from a session */
+  getEnv: (sessionId: string, key: string) => Promise<string | null>;
+
+  /** List all environment variables in a session */
+  listEnv: (sessionId: string) => Promise<[string, string][]>;
+
+  /** Unset an environment variable in a session */
+  unsetEnv: (sessionId: string, key: string) => Promise<void>;
 }
 
 export const useTerminalStore = create<TerminalState>()(
@@ -393,6 +440,109 @@ export const useTerminalStore = create<TerminalState>()(
             return suggestions;
           } catch (error) {
             console.error('Failed to get AI command improvements:', error);
+            throw error;
+          }
+        },
+
+        // --- Newly wired commands from Rust backend ---
+
+        executeCommand: async (
+          command: string,
+          options?: {
+            cwd?: string;
+            shell?: string;
+            streamId?: string;
+            emitEvents?: boolean;
+            timeoutMs?: number;
+          },
+        ) => {
+          try {
+            const result = await invoke<ExecuteResult>('execute_terminal_command', {
+              command,
+              cwd: options?.cwd ?? null,
+              shell: options?.shell ?? null,
+              streamId: options?.streamId ?? null,
+              emitEvents: options?.emitEvents ?? false,
+              timeoutMs: options?.timeoutMs ?? null,
+            });
+            return result;
+          } catch (error) {
+            console.error('Failed to execute terminal command:', error);
+            throw error;
+          }
+        },
+
+        executeSimple: async (command: string, workingDir?: string) => {
+          try {
+            const result = await invoke<TerminalExecuteResult>('terminal_execute', {
+              command,
+              workingDir: workingDir ?? null,
+            });
+            return result;
+          } catch (error) {
+            console.error('Failed to execute simple terminal command:', error);
+            throw error;
+          }
+        },
+
+        listSessions: async () => {
+          try {
+            const sessionIds = await invoke<string[]>('terminal_list_sessions');
+            return sessionIds;
+          } catch (error) {
+            console.error('Failed to list terminal sessions:', error);
+            throw error;
+          }
+        },
+
+        clearHistory: async (sessionId: string) => {
+          try {
+            await invoke('terminal_clear_history', { sessionId });
+          } catch (error) {
+            console.error('Failed to clear terminal history:', error);
+            throw error;
+          }
+        },
+
+        setEnv: async (sessionId: string, key: string, value: string) => {
+          try {
+            await invoke('terminal_set_env', { sessionId, key, value });
+          } catch (error) {
+            console.error('Failed to set environment variable:', error);
+            throw error;
+          }
+        },
+
+        getEnv: async (sessionId: string, key: string) => {
+          try {
+            const value = await invoke<string | null>('terminal_get_env', {
+              sessionId,
+              key,
+            });
+            return value;
+          } catch (error) {
+            console.error('Failed to get environment variable:', error);
+            throw error;
+          }
+        },
+
+        listEnv: async (sessionId: string) => {
+          try {
+            const envVars = await invoke<[string, string][]>('terminal_list_env', {
+              sessionId,
+            });
+            return envVars;
+          } catch (error) {
+            console.error('Failed to list environment variables:', error);
+            throw error;
+          }
+        },
+
+        unsetEnv: async (sessionId: string, key: string) => {
+          try {
+            await invoke('terminal_unset_env', { sessionId, key });
+          } catch (error) {
+            console.error('Failed to unset environment variable:', error);
             throw error;
           }
         },

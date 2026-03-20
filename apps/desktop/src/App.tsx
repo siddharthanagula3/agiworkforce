@@ -6,6 +6,8 @@ import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
 
 import { CommandPalette, type CommandOption } from './components/UnifiedAgenticChat/CommandPalette';
+import { SearchModal } from './components/UnifiedAgenticChat/SearchModal';
+import { useSearchModal } from './hooks/useSearchModal';
 import { QuickQuery } from './components/QuickQuery';
 import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
@@ -38,9 +40,10 @@ import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
 import { useAuthStore, useAccountStore } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
-import useErrorStore from './stores/ui';
+import useErrorStore, { useSimpleModeStore, selectOnboardingCompleted } from './stores/ui';
 import { useSettingsDialogStore } from './stores/settingsDialogStore';
 import { useSettingsStore } from './stores/settingsStore';
+import { OnboardingWelcome } from './components/Onboarding';
 
 const VisualizationLayer = lazy(() =>
   import('./components/Overlay/VisualizationLayer').then((m) => ({
@@ -95,6 +98,17 @@ const DesktopShell = () => {
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
   const [subscriptionFetchFailed, setSubscriptionFetchFailed] = useState(false);
   const { theme, setTheme } = useThemeContext();
+
+  // Onboarding state - show welcome flow on first launch
+  const onboardingCompleted = useSimpleModeStore(selectOnboardingCompleted);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Show onboarding after auth is resolved and only if not completed
+  useEffect(() => {
+    if (!onboardingCompleted) {
+      setShowOnboarding(true);
+    }
+  }, [onboardingCompleted]);
 
   // Apply dyslexic font class from persisted settings on mount
   const dyslexicFont = useSettingsStore((s) => s.windowPreferences?.dyslexicFont ?? false);
@@ -377,6 +391,16 @@ const DesktopShell = () => {
               }
               if (disposed) return;
               await invoke('llm_ensure_managed_cloud');
+
+              // Start surface heartbeat — fires immediately then every 60 s
+              if (!disposed) {
+                const { startDesktopHeartbeat } = await import('./services/heartbeat');
+                const userId = supabaseAuth.getState().user?.id;
+                if (userId) {
+                  const stopHeartbeat = startDesktopHeartbeat(userId);
+                  registerCleanup(stopHeartbeat);
+                }
+              }
             },
             { notify: true },
           );
@@ -413,6 +437,12 @@ const DesktopShell = () => {
       const key = event.key?.toLowerCase();
       if (!key) return; // Guard against undefined event.key
       if ((event.metaKey || event.ctrlKey) && key === 'k') {
+        event.preventDefault();
+        // Cmd+K opens the unified Spotlight Search modal
+        useSearchModal.getState().toggle();
+      }
+      // Cmd+Shift+K retains the command palette for system commands
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === 'k') {
         event.preventDefault();
         setCommandPaletteOpen((open) => !open);
       }
@@ -713,9 +743,11 @@ const DesktopShell = () => {
   if (isAuthLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-950">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
-          <p className="text-zinc-400">Loading...</p>
+        {/* Skeleton layout — avoids raw spinner, matches the app's shell shape */}
+        <div className="flex w-full max-w-sm flex-col items-center gap-4 px-6">
+          <div className="h-10 w-10 animate-pulse rounded-xl bg-zinc-800" />
+          <div className="h-4 w-32 animate-pulse rounded bg-zinc-800" />
+          <div className="h-3 w-48 animate-pulse rounded bg-zinc-800" />
         </div>
       </div>
     );
@@ -738,31 +770,36 @@ const DesktopShell = () => {
           </div>
         )}
         <VoiceInputOverlay />
-        <StatusBanner />
-        <OfflineIndicator position="top" />
-        {subscriptionFetchFailed && (
-          <div className="bg-amber-500/15 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-sm text-amber-300">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              <span>Using cached account data. Subscription status may be outdated.</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setSubscriptionFetchFailed(false);
-                void useAccountStore
-                  .getState()
-                  .syncWithBackend?.()
-                  ?.catch(() => {
-                    setSubscriptionFetchFailed(true);
-                  });
-              }}
-              className="text-amber-200 underline hover:text-amber-100 text-xs"
-            >
-              Retry
-            </button>
-          </div>
+        {showOnboarding && !onboardingCompleted && (
+          <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
         )}
+        <div className="flex flex-col gap-1">
+          <StatusBanner />
+          <OfflineIndicator position="top" />
+          {subscriptionFetchFailed && (
+            <div className="bg-amber-500/15 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-sm text-amber-300">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Using cached account data. Subscription status may be outdated.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSubscriptionFetchFailed(false);
+                  void useAccountStore
+                    .getState()
+                    .syncWithBackend?.()
+                    ?.catch(() => {
+                      setSubscriptionFetchFailed(true);
+                    });
+                }}
+                className="text-amber-200 underline hover:text-amber-100 text-xs"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+        </div>
         <main className="flex flex-1 min-h-0 min-w-0 bg-surface-base">
           <div className="flex-1 overflow-hidden">
             <ErrorBoundary
@@ -793,6 +830,7 @@ const DesktopShell = () => {
             </ErrorBoundary>
           </div>
         </main>
+        <SearchModal />
         <CommandPalette
           isOpen={commandPaletteOpen}
           onClose={() => setCommandPaletteOpen(false)}

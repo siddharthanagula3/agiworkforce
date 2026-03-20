@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import {
   ClipboardCopy,
@@ -55,7 +56,29 @@ export function CloudStoragePanel() {
     createFolder,
     shareLink,
     clearError,
-  } = useCloudStore();
+  } = useCloudStore(
+    useShallow((s) => ({
+      accounts: s.accounts,
+      activeAccountId: s.activeAccountId,
+      files: s.files,
+      currentPath: s.currentPath,
+      loading: s.loading,
+      error: s.error,
+      pendingAuth: s.pendingAuth,
+      lastShareLink: s.lastShareLink,
+      refreshAccounts: s.refreshAccounts,
+      selectAccount: s.selectAccount,
+      listFiles: s.listFiles,
+      beginConnect: s.beginConnect,
+      completeConnect: s.completeConnect,
+      uploadFile: s.uploadFile,
+      downloadFile: s.downloadFile,
+      deleteEntry: s.deleteEntry,
+      createFolder: s.createFolder,
+      shareLink: s.shareLink,
+      clearError: s.clearError,
+    })),
+  );
 
   const [provider, setProvider] = useState<CloudProvider>('google_drive');
   const [clientId, setClientId] = useState('');

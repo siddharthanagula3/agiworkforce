@@ -7,6 +7,7 @@
  */
 
 import { Code2, X } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { ArtifactList } from './ArtifactList';
 import { CanvasPanel } from './CanvasPanel';
@@ -17,7 +18,13 @@ interface CanvasContainerProps {
 }
 
 export function CanvasContainer({ onClose, onFixBug }: CanvasContainerProps) {
-  const { artifacts, activeArtifactId, isPanelOpen } = useCanvasStore();
+  const { artifacts, activeArtifactId, isPanelOpen } = useCanvasStore(
+    useShallow((s) => ({
+      artifacts: s.artifacts,
+      activeArtifactId: s.activeArtifactId,
+      isPanelOpen: s.isPanelOpen,
+    })),
+  );
 
   const activeArtifact =
     activeArtifactId != null ? artifacts.find((a) => a.id === activeArtifactId) : undefined;

@@ -1,12 +1,18 @@
-import { useCallback } from 'react';
-import { EyeOff, Hand, Zap } from 'lucide-react';
+import { useCallback, useEffect } from 'react';
+import { Brain, EyeOff, Hand, Zap } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore, type ConversationMode } from '../../stores/unifiedChatStore';
 import { useChatStore } from '../../stores/chat/chatStore';
+import {
+  useThinkingStore,
+  selectIsThinkingEnabled,
+  selectThinkingBudget,
+} from '../../stores/thinkingStore';
 import { Button } from '../ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import { QuickModelSelector } from './QuickModelSelector';
+import { SpeedQualitySelector } from './SpeedQualitySelector';
 
 export const ChatInputToolbar = () => {
   const { conversationMode, setConversationMode, activeConversationId } = useUnifiedChatStore(
@@ -29,30 +35,71 @@ export const ChatInputToolbar = () => {
   }, [conversationMode, setConversationMode]);
 
   // BUG-CIT-01 fix: toggle incognito on the current conversation instead of
-  // creating a new one. Uses useChatStore.setState directly since there is no
-  // generic updateConversation action on the store.
   const handleIncognitoToggle = useCallback(() => {
     if (!activeConversationId) return;
-    useChatStore.setState((state) => {
-      const convo = state.conversations.find((c) => c.id === activeConversationId);
-      if (convo) {
-        convo.incognito = !convo.incognito;
-        convo.updatedAt = new Date();
-      }
-    });
+    useChatStore.setState((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === activeConversationId
+          ? { ...c, incognito: !c.incognito, updatedAt: new Date() }
+          : c,
+      ),
+    }));
   }, [activeConversationId]);
 
   const isAutoMode = conversationMode === 'auto';
 
+  // Thinking mode state from thinkingStore
+  const thinkingEnabled = useThinkingStore(selectIsThinkingEnabled);
+  const thinkingBudget = useThinkingStore(selectThinkingBudget);
+  const thinkingToggle = useThinkingStore((s) => s.toggle);
+  const thinkingInitialize = useThinkingStore((s) => s.initialize);
+
+  // Initialize thinking store on mount
+  useEffect(() => {
+    void thinkingInitialize();
+  }, [thinkingInitialize]);
+
+  const handleThinkingToggle = useCallback(() => {
+    void thinkingToggle();
+  }, [thinkingToggle]);
+
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-2 border-t border-border/50 bg-background/80 backdrop-blur-xs">
-      {/* Model selector */}
+      {/* Model selector and speed/quality selector */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">Model:</span>
         <QuickModelSelector className="shrink-0" />
+        <SpeedQualitySelector />
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Thinking mode toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={thinkingEnabled ? 'default' : 'ghost'}
+              size="sm"
+              onClick={handleThinkingToggle}
+              className={cn(
+                'gap-1.5 transition-colors h-7 px-2',
+                thinkingEnabled && 'bg-purple-600 hover:bg-purple-700 text-white',
+              )}
+              aria-label={
+                thinkingEnabled ? 'Disable extended thinking' : 'Enable extended thinking'
+              }
+              aria-pressed={thinkingEnabled}
+            >
+              <Brain className="h-3.5 w-3.5" />
+              {thinkingEnabled && <span className="text-xs font-medium">{thinkingBudget}</span>}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {thinkingEnabled
+              ? `Extended thinking enabled (${thinkingBudget} budget). Click to disable.`
+              : 'Enable extended thinking for deeper reasoning'}
+          </TooltipContent>
+        </Tooltip>
+
         {/* Incognito toggle */}
         <Tooltip>
           <TooltipTrigger asChild>

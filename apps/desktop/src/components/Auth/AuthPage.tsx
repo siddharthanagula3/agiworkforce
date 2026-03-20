@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Zap, Shield, Bot, CheckCircle2, Loader2 } from 'lucide-react';
 import { AuthForm } from './AuthForm';
@@ -33,8 +33,15 @@ const features = [
 export function AuthPage({ onAuthSuccess }: AuthPageProps) {
   const [pageState, setPageState] = useState<PageState>('auth');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const timeoutIdsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
+    const scheduleTimeout = (fn: () => void, ms: number) => {
+      const id = setTimeout(fn, ms);
+      timeoutIdsRef.current.push(id);
+      return id;
+    };
+
     const processAuthParams = (params: Record<string, string>) => {
       const type = params['type'];
       const accessToken = params['access_token'];
@@ -68,7 +75,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
           setPageState('verified');
           window.history.replaceState(null, '', window.location.pathname);
-          setTimeout(() => {
+          scheduleTimeout(() => {
             onAuthSuccess?.();
           }, 500);
         });
@@ -81,14 +88,14 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
       ) {
         setPageState('verifying');
 
-        setTimeout(() => {
+        scheduleTimeout(() => {
           const isAuth = supabaseAuth.isAuthenticated();
           if (isAuth) {
             setPageState('verified');
             // Clear URL hash
             window.history.replaceState(null, '', window.location.pathname);
 
-            setTimeout(() => {
+            scheduleTimeout(() => {
               onAuthSuccess?.();
             }, 2000);
           } else {
@@ -109,7 +116,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
       // Default case if just access token without specific type (e.g. OAuth implicit)
       if (accessToken) {
         setPageState('verifying');
-        setTimeout(() => {
+        scheduleTimeout(() => {
           if (supabaseAuth.isAuthenticated()) {
             setPageState('verified');
             onAuthSuccess?.();
@@ -147,6 +154,8 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
     return () => {
       window.removeEventListener('agi-deep-link', handleDeepLink);
+      timeoutIdsRef.current.forEach(clearTimeout);
+      timeoutIdsRef.current = [];
     };
   }, [onAuthSuccess]);
 

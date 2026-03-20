@@ -1,6 +1,19 @@
-import { Moon, Sun, Palette, Upload, Download, Trash2, Plus, Type } from 'lucide-react';
+import { Moon, Sun, Palette, Upload, Download, Trash2, Plus, Type, Check } from 'lucide-react';
 import { useMemo, useState, useCallback } from 'react';
 import { toast } from 'sonner';
+
+import { cn } from '../../lib/utils';
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/AlertDialog';
 
 import {
   BUILTIN_THEMES,
@@ -112,6 +125,169 @@ function exportThemeToFile(theme: ThemeDefinition): void {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast.success(`Exported "${theme.name}"`);
+}
+
+// ---------------------------------------------------------------------------
+// ThemePreviewCard
+// ---------------------------------------------------------------------------
+
+type BaseThemeMode = 'light' | 'dark' | 'system';
+
+interface ThemePreviewCardProps {
+  mode: BaseThemeMode;
+  isSelected: boolean;
+  onClick: () => void;
+}
+
+function LightMiniUI() {
+  return (
+    <div className="h-full w-full bg-white">
+      {/* Title bar */}
+      <div className="flex h-5 items-center gap-1 border-b border-gray-200 bg-gray-100 px-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+        <span className="h-1.5 w-1.5 rounded-full bg-yellow-400" />
+        <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+        <span className="ml-1 h-1.5 w-12 rounded-sm bg-gray-300" />
+      </div>
+      <div className="flex h-[calc(100%-20px)]">
+        {/* Sidebar */}
+        <div className="flex w-8 flex-col gap-1.5 border-r border-gray-200 bg-gray-50 px-1.5 py-2">
+          <span className="h-1.5 w-full rounded-sm bg-blue-400" />
+          <span className="h-1.5 w-full rounded-sm bg-gray-300" />
+          <span className="h-1.5 w-full rounded-sm bg-gray-300" />
+          <span className="h-1.5 w-full rounded-sm bg-gray-300" />
+        </div>
+        {/* Content */}
+        <div className="flex flex-1 flex-col gap-2 p-2">
+          <span className="h-1.5 w-3/4 rounded-sm bg-gray-700" />
+          <span className="h-1.5 w-1/2 rounded-sm bg-gray-400" />
+          <span className="h-1.5 w-5/6 rounded-sm bg-gray-400" />
+          <span className="mt-1 h-4 w-12 rounded bg-blue-500" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DarkMiniUI() {
+  return (
+    <div className="h-full w-full bg-gray-900">
+      {/* Title bar */}
+      <div className="flex h-5 items-center gap-1 border-b border-gray-700 bg-gray-800 px-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+        <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
+        <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+        <span className="ml-1 h-1.5 w-12 rounded-sm bg-gray-600" />
+      </div>
+      <div className="flex h-[calc(100%-20px)]">
+        {/* Sidebar */}
+        <div className="flex w-8 flex-col gap-1.5 border-r border-gray-700 bg-gray-800 px-1.5 py-2">
+          <span className="h-1.5 w-full rounded-sm bg-blue-400" />
+          <span className="h-1.5 w-full rounded-sm bg-gray-600" />
+          <span className="h-1.5 w-full rounded-sm bg-gray-600" />
+          <span className="h-1.5 w-full rounded-sm bg-gray-600" />
+        </div>
+        {/* Content */}
+        <div className="flex flex-1 flex-col gap-2 p-2">
+          <span className="h-1.5 w-3/4 rounded-sm bg-gray-200" />
+          <span className="h-1.5 w-1/2 rounded-sm bg-gray-500" />
+          <span className="h-1.5 w-5/6 rounded-sm bg-gray-500" />
+          <span className="mt-1 h-4 w-12 rounded bg-blue-500" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SystemMiniUI() {
+  return (
+    <div className="flex h-full w-full overflow-hidden">
+      {/* Left half — light */}
+      <div className="flex h-full w-1/2 flex-col bg-white">
+        <div className="flex h-5 items-center gap-1 border-b border-gray-200 bg-gray-100 px-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+          <span className="h-1.5 w-5 rounded-sm bg-gray-300" />
+        </div>
+        <div className="flex flex-1">
+          <div className="flex w-5 flex-col gap-1 border-r border-gray-200 bg-gray-50 px-1 py-1.5">
+            <span className="h-1 w-full rounded-sm bg-blue-400" />
+            <span className="h-1 w-full rounded-sm bg-gray-300" />
+            <span className="h-1 w-full rounded-sm bg-gray-300" />
+          </div>
+          <div className="flex flex-1 flex-col gap-1.5 p-1.5">
+            <span className="h-1 w-3/4 rounded-sm bg-gray-700" />
+            <span className="h-1 w-1/2 rounded-sm bg-gray-400" />
+            <span className="h-1 w-full rounded-sm bg-gray-400" />
+          </div>
+        </div>
+      </div>
+      {/* Divider line */}
+      <div className="w-px bg-gray-400/40" />
+      {/* Right half — dark */}
+      <div className="flex h-full w-1/2 flex-col bg-gray-900">
+        <div className="flex h-5 items-center gap-1 border-b border-gray-700 bg-gray-800 px-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+          <span className="h-1.5 w-5 rounded-sm bg-gray-600" />
+        </div>
+        <div className="flex flex-1">
+          <div className="flex w-5 flex-col gap-1 border-r border-gray-700 bg-gray-800 px-1 py-1.5">
+            <span className="h-1 w-full rounded-sm bg-blue-400" />
+            <span className="h-1 w-full rounded-sm bg-gray-600" />
+            <span className="h-1 w-full rounded-sm bg-gray-600" />
+          </div>
+          <div className="flex flex-1 flex-col gap-1.5 p-1.5">
+            <span className="h-1 w-3/4 rounded-sm bg-gray-200" />
+            <span className="h-1 w-1/2 rounded-sm bg-gray-500" />
+            <span className="h-1 w-full rounded-sm bg-gray-500" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const BASE_THEME_LABEL: Record<BaseThemeMode, string> = {
+  light: 'Light',
+  dark: 'Dark',
+  system: 'System',
+};
+
+function ThemePreviewCard({ mode, isSelected, onClick }: ThemePreviewCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={isSelected}
+      aria-label={`Select ${BASE_THEME_LABEL[mode]} theme`}
+      className={cn(
+        'group relative flex w-40 cursor-pointer flex-col items-center gap-2 rounded-xl border-2 p-1 transition-all duration-150',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        isSelected
+          ? 'border-blue-500 shadow-md shadow-blue-500/20'
+          : 'border-white/10 hover:border-white/20',
+      )}
+    >
+      {/* Mini UI preview */}
+      <div className="h-28 w-full overflow-hidden rounded-lg">
+        {mode === 'light' && <LightMiniUI />}
+        {mode === 'dark' && <DarkMiniUI />}
+        {mode === 'system' && <SystemMiniUI />}
+      </div>
+
+      {/* Selected checkmark badge */}
+      {isSelected && (
+        <span
+          className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 shadow"
+          aria-hidden
+        >
+          <Check className="h-3 w-3 text-white" strokeWidth={2.5} />
+        </span>
+      )}
+
+      {/* Label */}
+      <span className="pb-1 text-xs font-medium text-foreground">{BASE_THEME_LABEL[mode]}</span>
+    </button>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -288,12 +464,15 @@ function ThemeSwatch({ theme, isActive, isCustom, onClick, onExport, onDelete }:
 export function ThemeSettings() {
   const selectedTheme = useSettingsStore((s) => s.windowPreferences.selectedTheme);
   const setSelectedTheme = useSettingsStore((s) => s.setSelectedTheme);
+  const baseTheme = useSettingsStore((s) => s.windowPreferences.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
   const dyslexicFont = useSettingsStore((s) => s.windowPreferences.dyslexicFont ?? false);
   const setDyslexicFont = useSettingsStore((s) => s.setDyslexicFont);
 
   // Use a counter to force re-render after custom theme mutations
   const [customThemes, setCustomThemes] = useState<ThemeDefinition[]>(() => getCustomThemes());
   const [showEditor, setShowEditor] = useState(false);
+  const [deleteThemeId, setDeleteThemeId] = useState<string | null>(null);
 
   const darkThemes = useMemo(() => BUILTIN_THEMES.filter((t) => t.variant === 'dark'), []);
   const lightThemes = useMemo(() => BUILTIN_THEMES.filter((t) => t.variant === 'light'), []);
@@ -354,6 +533,21 @@ export function ThemeSettings() {
         </div>
       </div>
 
+      {/* Base theme mode selector */}
+      <section>
+        <h4 className="mb-3 text-sm font-medium">Mode</h4>
+        <div className="flex flex-wrap gap-4">
+          {(['light', 'dark', 'system'] as const).map((mode) => (
+            <ThemePreviewCard
+              key={mode}
+              mode={mode}
+              isSelected={baseTheme === mode}
+              onClick={() => setTheme(mode)}
+            />
+          ))}
+        </div>
+      </section>
+
       {/* Dark Themes */}
       <section>
         <div className="mb-3 flex items-center gap-2">
@@ -409,7 +603,7 @@ export function ThemeSettings() {
                 isCustom
                 onClick={() => handleSelect(theme.id)}
                 onExport={() => exportThemeToFile(theme)}
-                onDelete={() => handleDelete(theme.id, theme.name)}
+                onDelete={() => setDeleteThemeId(theme.id)}
               />
             ))}
           </div>
@@ -430,6 +624,35 @@ export function ThemeSettings() {
         </div>
       )}
 
+      <AlertDialog
+        open={deleteThemeId !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteThemeId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this theme?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteThemeId !== null) {
+                  const theme = customThemes.find((t) => t.id === deleteThemeId);
+                  handleDelete(deleteThemeId, theme?.name ?? deleteThemeId);
+                  setDeleteThemeId(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Accessibility */}
       <section>
         <div className="mb-3 flex items-center gap-2">
@@ -449,6 +672,7 @@ export function ThemeSettings() {
               type="button"
               role="switch"
               aria-checked={dyslexicFont}
+              aria-label="Toggle dyslexic friendly font"
               onClick={() => setDyslexicFont(!dyslexicFont)}
               className={[
                 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors',

@@ -243,6 +243,14 @@
 /* Base layer styles */
 @layer base {
   :root {
+    /* Z-index semantic scale */
+    --z-dropdown: 50;
+    --z-sticky: 100;
+    --z-overlay: 200;
+    --z-modal: 300;
+    --z-notification: 400;
+    --z-fullscreen: 9999;
+
     color-scheme: light;
     font-family:
       'FK Grotesk',
@@ -959,7 +967,7 @@
   flex-direction: column;
   padding: 6px;
   gap: 4px;
-  z-index: 1000;
+  z-index: var(--z-fullscreen);
 }
 
 .title-bar__menu button {
@@ -1135,4 +1143,23 @@
 
 .animate-shimmer {
   animation: shimmer-anim 2s infinite;
+}
+
+/* ReasoningAccordion scrollbar styles */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(39, 39, 42, 0.5);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.5);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(113, 113, 122, 0.8);
 }
