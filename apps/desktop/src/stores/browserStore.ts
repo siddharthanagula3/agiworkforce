@@ -1059,22 +1059,22 @@ test('recorded automation', async ({ page }) => {
           recordedSteps.forEach((step) => {
             switch (step.type) {
               case 'navigate':
-                code += `  await page.goto('${step.value}');\n`;
+                code += `  await page.goto(${JSON.stringify(step.value)});\n`;
                 break;
               case 'click':
-                code += `  await page.click('${step.selector}');\n`;
+                code += `  await page.click(${JSON.stringify(step.selector)});\n`;
                 break;
               case 'type':
-                code += `  await page.fill('${step.selector}', '${step.value}');\n`;
+                code += `  await page.fill(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});\n`;
                 break;
               case 'wait':
-                code += `  await page.waitForSelector('${step.selector}');\n`;
+                code += `  await page.waitForSelector(${JSON.stringify(step.selector)});\n`;
                 break;
               case 'screenshot':
                 code += `  await page.screenshot({ path: 'screenshot.png' });\n`;
                 break;
               case 'execute':
-                code += `  await page.evaluate(() => { ${step.value} });\n`;
+                code += `  // User script omitted for safety\n`;
                 break;
             }
           });

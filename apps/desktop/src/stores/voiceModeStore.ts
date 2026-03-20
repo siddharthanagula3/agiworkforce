@@ -29,6 +29,7 @@
 
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
+import { storageFallback } from '../lib/storageFallback';
 import { invoke } from '../lib/tauri-mock';
 import {
   voiceGetCapabilities,
@@ -74,6 +75,48 @@ import {
   voiceTranscribeBlob,
 } from '../api/voice';
 
+// Re-export types from the canonical API layer so existing consumers
+// (e.g. VoiceSettings.tsx, VoiceMode.tsx) can keep importing from this module.
+import type {
+  VoiceCapabilities,
+  VoiceSettings,
+  TtsVoice,
+  WakeWordConfig,
+  PttConfig,
+  DeepgramConfig,
+  DeepgramStreamStatus,
+  DeepgramStreamingStats,
+  BargeInStatus,
+  BargeInStats,
+  BargeInConfig,
+  SpeechTranscriptResult,
+  WhisperModelInfo,
+  PiperVoiceInfo,
+  LocalModelsInfo,
+  TtsConfig,
+} from '../api/voice';
+
+export type {
+  VoiceCapabilities,
+  TtsVoice,
+  WakeWordConfig,
+  PttConfig,
+  DeepgramConfig,
+  DeepgramStreamStatus,
+  DeepgramStreamingStats,
+  BargeInStatus,
+  BargeInStats,
+  BargeInConfig,
+  SpeechTranscriptResult,
+  WhisperModelInfo,
+  PiperVoiceInfo,
+  LocalModelsInfo,
+  TtsConfig,
+};
+
+/** VoiceSettings from the API layer, aliased for clarity in store method signatures. */
+export type VoiceSettingsBackend = VoiceSettings;
+
 /**
  * Voice mode lifecycle phases:
  *  - idle: Waiting for user to start speaking
@@ -93,127 +136,6 @@ export interface VoiceTurn {
 
 interface LLMResponse {
   content: string;
-}
-
-// -- Types matching Rust command return types --
-
-export interface VoiceCapabilities {
-  ttsAvailable: boolean;
-  ttsProvider: string;
-  ttsPlaying: boolean;
-  wakeWordEnabled: boolean;
-  pttEnabled: boolean;
-  pttHotkey: string;
-  bargeInEnabled: boolean;
-  bargeInSensitivity: number;
-  vadAvailable: boolean;
-  localSttAvailable: boolean;
-  localSttModel: string | null;
-  localTtsAvailable: boolean;
-  localTtsVoice: string | null;
-}
-
-export interface VoiceSettingsBackend {
-  provider: 'cloud' | 'webspeech' | 'local';
-  model: string;
-  language: string | null;
-}
-
-export interface TtsVoice {
-  id: string;
-  name: string;
-  language: string;
-}
-
-export interface WakeWordConfig {
-  enabled: boolean;
-  wakePhrase?: string;
-  sensitivity?: number;
-}
-
-export interface PttConfig {
-  enabled: boolean;
-  hotkey: string;
-}
-
-export interface DeepgramConfig {
-  apiKey: string;
-  model: string;
-  language: string;
-  sampleRate: number;
-  channels: number;
-  interim: boolean;
-  punctuation: boolean;
-  smartFormatting: boolean;
-}
-
-export interface DeepgramStreamStatus {
-  isStreaming: boolean;
-  connectionState: string;
-  stats: DeepgramStreamingStats | null;
-}
-
-export interface DeepgramStreamingStats {
-  state: string;
-  totalAudioBytes: number;
-  totalTranscripts: number;
-  startedAt: number;
-}
-
-export interface BargeInStatus {
-  enabled: boolean;
-  monitoringActive: boolean;
-  sensitivity: number;
-  minSpeechMs: number;
-  stats: BargeInStats;
-}
-
-export interface BargeInStats {
-  totalDetections: number;
-  avgLatencyMs: number;
-}
-
-export interface BargeInConfig {
-  sensitivity: number;
-  minSpeechMs: number;
-  consecutiveFramesThreshold: number;
-}
-
-export interface SpeechTranscriptResult {
-  text: string;
-  confidence: number;
-  language: string;
-}
-
-export interface WhisperModelInfo {
-  size: string;
-  downloaded: boolean;
-  sizeBytes: number;
-  modelPath: string | null;
-}
-
-export interface PiperVoiceInfo {
-  id: string;
-  name: string;
-  language: string;
-  isDownloaded: boolean;
-  modelPath: string | null;
-}
-
-export interface LocalModelsInfo {
-  whisperModels: WhisperModelInfo[];
-  piperVoices: PiperVoiceInfo[];
-  whisperModelsDir: string;
-  piperModelsDir: string;
-  piperBinaryAvailable: boolean;
-}
-
-export interface TtsConfig {
-  provider: string;
-  apiKey?: string;
-  voice?: string;
-  speed?: number;
-  pitch?: number;
 }
 
 interface VoiceModeState {
@@ -791,7 +713,8 @@ export const useVoiceModeStore = create<VoiceModeState>()(
               bargeInEnabled: caps?.bargeInEnabled ?? false,
             });
             return caps;
-          } catch {
+          } catch (error) {
+            console.warn('[voiceMode] fetchCapabilities failed:', error);
             return null;
           }
         },
@@ -799,7 +722,8 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         getBackendSettings: async () => {
           try {
             return await voiceGetSettings();
-          } catch {
+          } catch (error) {
+            console.warn('[voiceMode] getBackendSettings failed:', error);
             return null;
           }
         },
@@ -818,12 +742,16 @@ export const useVoiceModeStore = create<VoiceModeState>()(
           set({ phase: 'speaking', _isSpeaking: true });
           try {
             await voiceTtsSpeakWithBargeIn(text);
-          } catch {
+          } catch (error) {
+            console.warn('[voiceMode] speakWithBargeIn failed, trying regular TTS:', error);
             // Fallback to regular TTS
             try {
               await voiceTtsSpeak(text);
-            } catch {
-              // Both failed
+            } catch (fallbackError) {
+              console.warn(
+                '[voiceMode] speakWithBargeIn regular TTS fallback also failed:',
+                fallbackError,
+              );
             }
           }
           if (get().phase === 'speaking') {
@@ -1170,10 +1098,9 @@ export const useVoiceModeStore = create<VoiceModeState>()(
       {
         name: 'agiworkforce-voice-mode',
         storage: createJSONStorage(() =>
-          typeof window === 'undefined' ? localStorage : window.localStorage,
+          typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
         partialize: (state) => ({
-          turns: state.turns,
           wakeWordActive: state.wakeWordActive,
           bargeInEnabled: state.bargeInEnabled,
         }),

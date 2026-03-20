@@ -106,9 +106,8 @@ export const UsageDashboard: React.FC = () => {
     refreshAllMetrics,
   ]);
 
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 MB';
-    const mb = bytes;
+  const formatMb = (mb: number) => {
+    if (mb === 0) return '0 MB';
     return `${mb.toFixed(2)} MB`;
   };
 
@@ -241,7 +240,7 @@ export const UsageDashboard: React.FC = () => {
                       creditPercentage > 90
                         ? 'bg-red-500'
                         : creditPercentage > 75
-                          ? 'bg-amber-500'
+                          ? 'bg-yellow-500'
                           : 'bg-amber-500',
                     )}
                     style={{ width: `${Math.min(creditPercentage, 100)}%` }}
@@ -313,8 +312,8 @@ export const UsageDashboard: React.FC = () => {
           />
           <MetricCard
             title="Memory Used"
-            value={formatBytes(systemMetrics?.memoryUsedMb || 0)}
-            subtitle={`/ ${formatBytes(systemMetrics?.memoryTotalMb || 0)}`}
+            value={formatMb(systemMetrics?.memoryUsedMb || 0)}
+            subtitle={`/ ${formatMb(systemMetrics?.memoryTotalMb || 0)}`}
             trend=""
             trendUp={false}
           />
@@ -435,7 +434,7 @@ export const UsageDashboard: React.FC = () => {
                       {event.count}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      <span className="text-green-600">↑ {Math.floor(Math.random() * 20)}%</span>
+                      <span className="text-muted-foreground">—</span>
                     </td>
                   </tr>
                 ))}
@@ -488,5 +487,3 @@ const ChartCard: React.FC<ChartCardProps> = ({ title, children }) => {
     </div>
   );
 };
-
-export default UsageDashboard;
