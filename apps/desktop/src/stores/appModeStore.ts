@@ -49,6 +49,20 @@ export const useAppModeStore = create<AppModeState>()(
                 });
                 return;
               }
+              // Cloud mode requires authentication
+              if (mode === 'cloud') {
+                import('./auth').then(({ useAuthStore }) => {
+                  const isAuthenticated = useAuthStore.getState().isAuthenticated;
+                  if (!isAuthenticated) {
+                    import('sonner').then(({ toast }) => {
+                      toast.error('Sign in to use Cloud mode');
+                    });
+                    return;
+                  }
+                  set({ mode }, undefined, 'appMode/setMode');
+                });
+                return;
+              }
               set({ mode }, undefined, 'appMode/setMode');
             })
             .catch(() => {
