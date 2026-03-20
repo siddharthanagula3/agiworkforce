@@ -1070,6 +1070,14 @@ pub fn run() {
             crate::sys::commands::window_close_floating,
             crate::sys::commands::tray_set_unread_badge,
 
+            // Cloud CRUD commands (Supabase REST API)
+            crate::sys::commands::cloud_get_conversations,
+            crate::sys::commands::cloud_create_conversation,
+            crate::sys::commands::cloud_delete_conversation,
+            crate::sys::commands::cloud_get_messages,
+            crate::sys::commands::cloud_create_message,
+            crate::sys::commands::cloud_update_conversation_title,
+
             crate::sys::commands::chat_create_conversation,
             crate::sys::commands::chat_get_conversations,
             crate::sys::commands::chat_get_conversation,
