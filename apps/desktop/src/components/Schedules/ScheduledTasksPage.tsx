@@ -11,6 +11,7 @@
 import { Calendar, Clock, Edit3, Loader2, Pause, Play, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { EmptyState } from '../ui/EmptyState';
 import { cn } from '../../lib/utils';
 import {
   type ScheduledTask,
@@ -232,33 +233,28 @@ interface EmptyStateProps {
   onCreate: () => void;
 }
 
-function EmptyState({ filter, onCreate }: EmptyStateProps) {
+function SchedulesEmptyState({ filter, onCreate }: EmptyStateProps) {
   if (filter !== 'all') {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-sm text-slate-500">No {filter} schedules.</p>
-      </div>
+      <EmptyState
+        icon={Calendar}
+        title={`No ${filter} schedules`}
+        description={`You haven't created any ${filter} scheduled tasks yet.`}
+      />
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-500/10">
-        <Calendar className="h-7 w-7 text-teal-400" />
-      </div>
-      <h3 className="mb-2 text-base font-semibold text-white">No scheduled tasks yet</h3>
-      <p className="mb-6 max-w-sm text-sm text-slate-500">
-        Create one to automate recurring work — like ChatGPT Tasks, but for any AI model.
-      </p>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-teal-500"
-      >
-        <Plus className="h-4 w-4" />
-        Create your first schedule
-      </button>
-    </div>
+    <EmptyState
+      icon={Calendar}
+      title="No scheduled tasks yet"
+      description="Create one to automate recurring work — like ChatGPT Tasks, but for any AI model."
+      action={{
+        label: 'Create your first schedule',
+        icon: Plus,
+        onClick: onCreate,
+      }}
+    />
   );
 }
 
@@ -383,14 +379,31 @@ export function ScheduledTasksPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {isLoading && tasks.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-sm text-slate-500">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading schedules…
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={`skeleton-${i}`}
+                className="animate-pulse rounded-xl border border-white/8 bg-white/[0.03] p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="h-4 w-40 rounded bg-white/10" />
+                    <div className="h-3 w-full rounded bg-white/10" />
+                    <div className="h-3 w-32 rounded bg-white/10" />
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <div className="h-8 w-24 rounded-lg bg-white/10" />
+                    <div className="h-8 w-8 rounded-md bg-white/10" />
+                    <div className="h-8 w-8 rounded-md bg-white/10" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : tasks.length === 0 ? (
-          <EmptyState filter={filter} onCreate={handleOpenCreate} />
+          <SchedulesEmptyState filter={filter} onCreate={handleOpenCreate} />
         ) : filteredTasks.length === 0 ? (
-          <EmptyState filter={filter} onCreate={handleOpenCreate} />
+          <SchedulesEmptyState filter={filter} onCreate={handleOpenCreate} />
         ) : (
           <div className="space-y-3">
             {filteredTasks.map((task) => (

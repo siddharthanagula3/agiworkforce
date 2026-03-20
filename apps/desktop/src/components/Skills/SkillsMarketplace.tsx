@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Plus, Search, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 import { Button } from '../ui/Button';
+import { EmptyState } from '../ui/EmptyState';
 import { cn } from '../../lib/utils';
 import { useSkillsStore } from '../../stores/skillsStore';
 import type { SkillCategory, SkillFilter } from '../../stores/skillsStore';
@@ -42,45 +43,49 @@ const CATEGORY_OPTIONS: CategoryOption[] = [
 
 // ── Empty state per tab ───────────────────────────────────────────────────────
 
-interface EmptyStateProps {
+interface SkillsEmptyStateProps {
   filter: SkillFilter;
   hasSearch: boolean;
+  onCreateSkill: () => void;
 }
 
-function EmptyState({ filter, hasSearch }: EmptyStateProps) {
+function SkillsEmptyState({ filter, hasSearch, onCreateSkill }: SkillsEmptyStateProps) {
   if (hasSearch) {
     return (
-      <div className="col-span-3 flex flex-col items-center justify-center gap-3 py-16 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <Search className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium text-foreground">No skills match your search</p>
-        <p className="text-xs text-muted-foreground">Try a different keyword or clear the filter</p>
+      <div className="col-span-3">
+        <EmptyState
+          icon={Search}
+          title="No skills match your search"
+          description="Try a different keyword or clear the filter"
+        />
       </div>
     );
   }
 
   if (filter === 'mine') {
     return (
-      <div className="col-span-3 flex flex-col items-center justify-center gap-3 py-16 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <Sparkles className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium text-foreground">No skills created yet</p>
-        <p className="text-xs text-muted-foreground">
-          Create your first skill to teach the agent a new capability
-        </p>
+      <div className="col-span-3">
+        <EmptyState
+          icon={Sparkles}
+          title="No skills created yet"
+          description="Create your first skill to teach the agent a new capability"
+          action={{
+            label: 'Create Skill',
+            icon: Plus,
+            onClick: onCreateSkill,
+          }}
+        />
       </div>
     );
   }
 
   return (
-    <div className="col-span-3 flex flex-col items-center justify-center gap-3 py-16 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Sparkles className="h-5 w-5 text-muted-foreground" />
-      </div>
-      <p className="text-sm font-medium text-foreground">No skills found</p>
-      <p className="text-xs text-muted-foreground">Adjust your category filter to see more</p>
+    <div className="col-span-3">
+      <EmptyState
+        icon={Sparkles}
+        title="No skills found"
+        description="Adjust your category filter to see more"
+      />
     </div>
   );
 }
@@ -88,6 +93,14 @@ function EmptyState({ filter, hasSearch }: EmptyStateProps) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function SkillsMarketplace() {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate load time
+    const timer = setTimeout(() => setIsLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
+
   const { skills, filter, categoryFilter, searchQuery, setFilter, setCategoryFilter, setSearch } =
     useSkillsStore(
       useShallow((s) => ({
@@ -238,9 +251,30 @@ export function SkillsMarketplace() {
 
       {/* ── Skill grid ── */}
       <div className="flex-1 overflow-y-auto px-6 py-5">
-        {filteredSkills.length === 0 ? (
+        {isLoading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <EmptyState filter={filter} hasSearch={searchQuery.trim().length > 0} />
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={`skeleton-${i}`}
+                className="animate-pulse rounded-lg border border-input bg-background p-4"
+              >
+                <div className="h-4 w-24 rounded bg-muted mb-3" />
+                <div className="h-3 w-full rounded bg-muted mb-2" />
+                <div className="h-3 w-3/4 rounded bg-muted mb-3" />
+                <div className="flex gap-2">
+                  <div className="h-6 w-16 rounded-full bg-muted" />
+                  <div className="h-6 w-16 rounded-full bg-muted" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredSkills.length === 0 ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <SkillsEmptyState
+              filter={filter}
+              hasSearch={searchQuery.trim().length > 0}
+              onCreateSkill={handleCreateSkill}
+            />
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
