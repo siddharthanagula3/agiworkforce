@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bookmark, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { usePromptStashStore } from '../../stores/promptStashStore';
 import type { PromptStashEntry } from '../../stores/promptStashStore';
@@ -96,7 +97,9 @@ export function PromptStash({ currentText, onLoad, disabled = false }: PromptSta
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { entries, save, remove, clear } = usePromptStashStore();
+  const { entries, save, remove, clear } = usePromptStashStore(
+    useShallow((s) => ({ entries: s.entries, save: s.save, remove: s.remove, clear: s.clear })),
+  );
 
   // ── Close on outside click ──────────────────────────────────────────────
   useEffect(() => {

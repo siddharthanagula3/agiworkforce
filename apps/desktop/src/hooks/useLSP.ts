@@ -404,6 +404,16 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
     }
   }, [language, server]);
 
+  const listServers = useCallback(async (): Promise<string[]> => {
+    try {
+      const servers = await invoke<string[]>('lsp_list_servers');
+      return servers;
+    } catch (err) {
+      console.debug('[LSP] Failed to list servers:', err);
+      return [];
+    }
+  }, []);
+
   useEffect(() => {
     // HKS-003 fix: Reset mount state on effect setup
     isMountedRef.current = true;
@@ -445,5 +455,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
     getCodeActions,
     getDiagnostics,
     getAllDiagnostics,
+    listServers,
   };
 }

@@ -66,12 +66,30 @@ export const rateLimitConfigs = {
   // Mobile endpoints
   // SECURITY: Push token updates are infrequent, 30/min is sufficient
   'mobile-push-token': { windowMs: 60_000, max: 30 },
+  // SECURITY: Agent status is read-only polling, allow 60/min for responsive dashboard
+  'mobile-agent-status': { windowMs: 60_000, max: 60 },
+  // SECURITY: Feedback submission is infrequent, 10/min prevents spam
+  'mobile-feedback': { windowMs: 60_000, max: 10 },
 
   // MCP endpoints: moderate limits for tool interactions
   // SECURITY: Listing tools is read-only, allow 30/min
   'mcp-list': { windowMs: 60_000, max: 30 },
   // SECURITY: Calling tools can be resource-intensive, limit to 20/min
   'mcp-call': { windowMs: 60_000, max: 20 },
+
+  // Cloud chat endpoints
+  // SECURITY: Listing conversations is read-only, allow 60/min
+  'cloud-chat-list': { windowMs: 60_000, max: 60 },
+  // SECURITY: Creating conversations is a write operation, limit to 30/min
+  'cloud-chat-create': { windowMs: 60_000, max: 30 },
+  // SECURITY: Getting a single conversation is read-only, allow 60/min
+  'cloud-chat-get': { windowMs: 60_000, max: 60 },
+  // SECURITY: Deleting conversations is destructive, limit to 10/min
+  'cloud-chat-delete': { windowMs: 60_000, max: 10 },
+  // SECURITY: Patching conversation metadata is a moderate write, limit to 30/min
+  'cloud-chat-patch': { windowMs: 60_000, max: 30 },
+  // SECURITY: Sending messages is action-based, limit to 30/min
+  'cloud-chat-send': { windowMs: 60_000, max: 30 },
 
   // Health/default: lenient for monitoring
   // SECURITY: Health checks from monitoring systems, allow 100/min

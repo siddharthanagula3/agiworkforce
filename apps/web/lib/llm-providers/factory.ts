@@ -48,7 +48,6 @@ const MODEL_ID_TO_API_ID: Record<string, string> = {
   'gpt-5-pro': 'gpt-5.4-pro', // Legacy redirect → gpt-5.4-pro
   'gpt-5.4-mini': 'gpt-5.4-mini', // GPT-5.4 Mini
   'gpt-5.4-nano': 'gpt-5.4-nano', // GPT-5.4 Nano
-  'gpt-5-nano': 'gpt-5.4-nano', // Legacy redirect → gpt-5.4-nano
   o3: 'o3-2025-04-16', // o3 reasoning model
   // xAI Grok 4 models (per docs/llm-provider-reference.md)
   'grok-4': 'grok-4', // Grok 4 flagship

@@ -68,7 +68,7 @@ vi.mock('@/constants/llm', async () => {
         capabilities: { tools: true, vision: false, thinking: false, search: false },
       },
       {
-        id: 'gpt-5.2',
+        id: 'gpt-5.4',
         name: 'GPT-5.2',
         provider: 'openai',
         modelType: 'chat',
@@ -98,7 +98,7 @@ vi.mock('@/constants/llm', async () => {
       if (tier === 'free' || tier === 'hobby') return econModels.includes(modelId);
       if (tier === 'pro') return [...econModels, ...proModels].includes(modelId);
       if (tier === 'max' || tier === 'enterprise')
-        return [...econModels, ...proModels, 'gpt-5.2'].includes(modelId);
+        return [...econModels, ...proModels, 'gpt-5.4'].includes(modelId);
       return false;
     },
     getAllowedAutoModesForTier: (tier: string | null | undefined) => {
@@ -124,7 +124,7 @@ vi.mock('@/constants/llm', async () => {
           capabilities: { thinking: false },
           name: 'Claude Haiku 4.5',
         },
-        'gpt-5.2': { capabilities: { thinking: false }, name: 'GPT-5.2' },
+        'gpt-5.4': { capabilities: { thinking: false }, name: 'GPT-5.2' },
       };
       return map[id] ?? null;
     },

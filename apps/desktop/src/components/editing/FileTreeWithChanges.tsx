@@ -1,4 +1,5 @@
 import { FileTree } from '../Code/FileTree';
+import { useShallow } from 'zustand/react/shallow';
 import { useEditingStore } from '../../stores/editingStore';
 import { Badge } from '../ui/Badge';
 import { cn } from '../../lib/utils';
@@ -16,7 +17,9 @@ export function FileTreeWithChanges({
   selectedFile,
   className,
 }: FileTreeWithChangesProps) {
-  const { getChangedFiles } = useEditingStore();
+  const { getChangedFiles } = useEditingStore(
+    useShallow((s) => ({ getChangedFiles: s.getChangedFiles })),
+  );
   const changedFiles = getChangedFiles();
 
   return (

@@ -15,42 +15,42 @@ import { getCorsHeaders } from '@/lib/cors';
 
 // Available models with their metadata
 // Tier assignments must match TIER_ALLOWED_MODELS in desktop/src/constants/llm.ts
-// - hobby: Budget models (< $1/1M output) - gemini-flash, gpt-5-nano, claude-haiku, etc.
-// - pro: Mid-tier models ($1-15/1M) - gpt-5.2, claude-sonnet, gemini-pro, etc.
+// - hobby: Budget models (< $1/1M output) - gemini-flash, gpt-5.4-nano, claude-haiku, etc.
+// - pro: Mid-tier models ($1-15/1M) - gpt-5.4, claude-sonnet, gemini-pro, etc.
 // - max: Flagship models - claude-opus, gpt-5-pro, o3, etc.
 const MODELS = [
   // OpenAI Models
   {
-    id: 'gpt-5.2',
+    id: 'gpt-5.4',
     object: 'model',
     created: 1704067200,
     owned_by: 'openai',
     permission: [],
-    root: 'gpt-5.2',
+    root: 'gpt-5.4',
     parent: null,
     tier: 'pro', // Pro tier - mid-range model
     context_window: 128000,
     max_output: 16384,
   },
   {
-    id: 'gpt-5.2-pro',
+    id: 'gpt-5.4-pro',
     object: 'model',
     created: 1704067200,
     owned_by: 'openai',
     permission: [],
-    root: 'gpt-5.2-pro',
+    root: 'gpt-5.4-pro',
     parent: null,
     tier: 'pro',
     context_window: 256000,
     max_output: 32768,
   },
   {
-    id: 'gpt-5-nano',
+    id: 'gpt-5.4-nano',
     object: 'model',
     created: 1704067200,
     owned_by: 'openai',
     permission: [],
-    root: 'gpt-5-nano',
+    root: 'gpt-5.4-nano',
     parent: null,
     tier: 'hobby',
     context_window: 128000,
@@ -193,24 +193,24 @@ const MODELS = [
     max_output: 8192,
   },
   {
-    id: 'gemini-2.5-pro',
+    id: 'gemini-3.1-pro-preview',
     object: 'model',
     created: 1704067200,
     owned_by: 'google',
     permission: [],
-    root: 'gemini-2.5-pro',
+    root: 'gemini-3.1-pro-preview',
     parent: null,
     tier: 'max',
     context_window: 1000000,
     max_output: 65536,
   },
   {
-    id: 'gemini-2.5-flash',
+    id: 'gemini-3-flash',
     object: 'model',
     created: 1704067200,
     owned_by: 'google',
     permission: [],
-    root: 'gemini-2.5-flash',
+    root: 'gemini-3-flash',
     parent: null,
     tier: 'hobby',
     context_window: 1000000,

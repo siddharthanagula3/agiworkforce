@@ -6,7 +6,7 @@
  * Also provides a UI for creating, editing, and deleting custom agent files.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Label } from '../ui/Label';
@@ -50,6 +50,16 @@ export function AgentsSettings() {
     [setAutoApproveTools],
   );
 
+  // Derive which radio option is active; fall back to 'ask' if no option matches.
+  const selectedApprovalMode = useMemo<'ask' | 'auto-safe' | 'auto-all'>(() => {
+    if (chatPreferences.autoApproveTools) return 'auto-all';
+    if (chatPreferences.alwaysUseAgentMode && !chatPreferences.autoApproveTools) return 'auto-safe';
+    if (!chatPreferences.autoApproveTools && !chatPreferences.alwaysUseAgentMode) return 'ask';
+    // Fallback: no option matched — default to first
+    console.warn('AgentsSettings: no radio option matched current state, defaulting to first');
+    return 'ask';
+  }, [chatPreferences.autoApproveTools, chatPreferences.alwaysUseAgentMode]);
+
   return (
     <div className="space-y-6">
       {/* Agent Configuration */}
@@ -90,7 +100,7 @@ export function AgentsSettings() {
                   type="radio"
                   name="approvalMode"
                   className="mt-0.5"
-                  checked={!chatPreferences.autoApproveTools && !chatPreferences.alwaysUseAgentMode}
+                  checked={selectedApprovalMode === 'ask'}
                   onChange={() => {
                     void setAutoApproveTools(false);
                     setAlwaysUseAgentMode(false);
@@ -111,7 +121,7 @@ export function AgentsSettings() {
                   type="radio"
                   name="approvalMode"
                   className="mt-0.5"
-                  checked={chatPreferences.alwaysUseAgentMode && !chatPreferences.autoApproveTools}
+                  checked={selectedApprovalMode === 'auto-safe'}
                   onChange={() => {
                     setAlwaysUseAgentMode(true);
                     void setAutoApproveTools(false);
@@ -132,7 +142,7 @@ export function AgentsSettings() {
                   type="radio"
                   name="approvalMode"
                   className="mt-0.5"
-                  checked={chatPreferences.autoApproveTools}
+                  checked={selectedApprovalMode === 'auto-all'}
                   onChange={() => {
                     void setAutoApproveTools(true);
                     setAlwaysUseAgentMode(true);

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { TrendingUp, Wallet, PieChart, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
@@ -22,11 +23,13 @@ function formatCostAsCredits(value: number | null | undefined): string {
 }
 
 export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWidgetProps) {
-  const { overview, loadingOverview, loadOverview } = useBillingUsageStore((state) => ({
-    overview: state.costOverview,
-    loadingOverview: state.loadingCostOverview,
-    loadOverview: state.loadCostOverview,
-  }));
+  const { overview, loadingOverview, loadOverview } = useBillingUsageStore(
+    useShallow((state) => ({
+      overview: state.costOverview,
+      loadingOverview: state.loadingCostOverview,
+      loadOverview: state.loadCostOverview,
+    })),
+  );
 
   useEffect(() => {
     if (!overview && !loadingOverview) {

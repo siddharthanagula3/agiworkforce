@@ -39,8 +39,9 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
         isResizing?.(false);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-        document.removeEventListener('mousemove', handlersRef.current.move!);
-        document.removeEventListener('mouseup', handlersRef.current.up!);
+        if (handlersRef.current.move)
+          document.removeEventListener('mousemove', handlersRef.current.move);
+        if (handlersRef.current.up) document.removeEventListener('mouseup', handlersRef.current.up);
         handlersRef.current = {};
       };
 

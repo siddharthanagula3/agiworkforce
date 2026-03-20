@@ -25,6 +25,7 @@ import { MessageRuntimeInlineActivity } from '../MessageRuntimeActivity';
 import { MessageHeader } from './MessageHeader';
 import { MessageContent } from './MessageContent';
 import { MessageActions } from './MessageActions';
+import { FollowUpSuggestions } from './FollowUpSuggestions';
 import { MessageAttachments } from './MessageAttachments';
 import { MessageContextMenu } from './MessageContextMenu';
 import { MessageAvatar } from './MessageAvatar';
@@ -213,12 +214,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   showAvatar = true,
   showTimestamp = true,
   enableActions = true,
+  isLastMessage = false,
   onRegenerate,
   onEdit,
   onEditSave,
   onDelete,
   onCopy,
   onToggleSidecar,
+  onSuggestionClick,
 }) => {
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
@@ -868,6 +871,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             isAssistant={isAssistant}
             showTimestamp={showTimestamp}
             formattedTime={formattedTime}
+            onRetry={message.error ? handleRetry : undefined}
           />
 
           {/* Inline status trail for any assistant/system message activity */}
@@ -886,6 +890,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               message={message}
               isUser={isUser}
               isStreaming={Boolean(message.metadata?.streaming)}
+              isLastMessage={isLastMessage}
             />
           )}
 
@@ -959,6 +964,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               isSpeaking={isSpeaking}
               ttsSupported={ttsSupported}
               messageContent={isAssistant ? message.content : undefined}
+            />
+          )}
+
+          {/* Follow-up suggestion pills — shown only for the last assistant message when not streaming */}
+          {isLastMessage && isAssistant && !message.metadata?.streaming && onSuggestionClick && (
+            <FollowUpSuggestions
+              messageContent={message.content}
+              onSuggestionClick={onSuggestionClick}
             />
           )}
         </div>

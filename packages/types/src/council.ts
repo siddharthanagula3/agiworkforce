@@ -81,8 +81,8 @@ export interface ModelVote {
  *   context: 'We have a PostgreSQL database with 50M rows...',
  *   models: [
  *     { modelId: 'claude-opus-4-6', provider: 'anthropic' },
- *     { modelId: 'gpt-4o', provider: 'openai' },
- *     { modelId: 'gemini-2.5-pro', provider: 'google' },
+ *     { modelId: 'gpt-5.4', provider: 'openai' },
+ *     { modelId: 'gemini-3.1-pro-preview', provider: 'google' },
  *   ],
  *   consensusThreshold: 0.7,
  * };
@@ -137,7 +137,7 @@ export interface CouncilQuery {
  *   confidenceScore: 0.89,
  *   votes: [vote1, vote2, vote3],
  *   agreementLevel: 0.85,
- *   dissent: 'GPT-4o suggested a hash index instead, but was outvoted...',
+ *   dissent: 'GPT-5.4 suggested a hash index instead, but was outvoted...',
  *   status: 'completed',
  *   totalLatencyMs: 4200,
  *   totalCost: 0.092,

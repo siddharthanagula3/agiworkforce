@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -14,6 +14,7 @@ import { useWorkforceStore } from '@shared/stores/workforce-store';
 import { supabase } from '@shared/lib/supabase-client';
 import { Button } from '@shared/ui/button';
 import { Progress } from '@shared/ui/progress';
+import { Badge } from '@shared/ui/badge';
 import {
   MessageSquare,
   Sparkles,
@@ -27,7 +28,20 @@ import {
   Zap,
   Clock,
   TrendingUp,
+  Monitor,
+  Smartphone,
+  Chrome,
+  Terminal,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Bot,
+  RefreshCw,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
+import { WelcomeBanner } from '@shared/components/dashboard/WelcomeBanner';
+import { Skeleton } from '@shared/ui/skeleton';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -74,6 +88,280 @@ interface ConversationRow {
 interface TokenUsageRow {
   input_tokens: number | null;
   output_tokens: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Control-plane types
+// ---------------------------------------------------------------------------
+
+type SurfaceId = 'desktop' | 'mobile' | 'extension' | 'cli';
+type SurfaceStatus = 'online' | 'offline' | 'unknown';
+
+interface SurfaceState {
+  id: SurfaceId;
+  label: string;
+  icon: React.ElementType;
+  status: SurfaceStatus;
+  lastSeen: string | null;
+}
+
+interface AgentActivity {
+  running: number;
+  pendingApprovals: number;
+  completedToday: number;
+}
+
+interface ProviderHealth {
+  name: string;
+  status: 'up' | 'degraded' | 'down';
+  latencyMs: number | null;
+}
+
+interface RecentActivityItem {
+  id: string;
+  surface: SurfaceId;
+  action: string;
+  timestamp: string;
+}
+
+// ---------------------------------------------------------------------------
+// Control-plane hero section
+// ---------------------------------------------------------------------------
+
+const STATUS_DOT: Record<SurfaceStatus | 'up' | 'degraded' | 'down', string> = {
+  online: 'bg-emerald-400',
+  offline: 'bg-red-400',
+  unknown: 'bg-amber-400',
+  up: 'bg-emerald-400',
+  degraded: 'bg-amber-400',
+  down: 'bg-red-400',
+};
+
+const SURFACE_ICON: Record<SurfaceId, React.ElementType> = {
+  desktop: Monitor,
+  mobile: Smartphone,
+  extension: Chrome,
+  cli: Terminal,
+};
+
+const SURFACE_LABELS: Record<SurfaceId, string> = {
+  desktop: 'Desktop',
+  mobile: 'Mobile',
+  extension: 'Extension',
+  cli: 'CLI',
+};
+
+function SurfacePill({ surface }: { surface: SurfaceState }) {
+  const Icon = surface.icon;
+  const isOnline = surface.status === 'online';
+  const isUnknown = surface.status === 'unknown';
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+      <span
+        className={
+          'h-2 w-2 flex-shrink-0 rounded-full ' +
+          STATUS_DOT[surface.status] +
+          (isOnline ? ' animate-pulse' : '')
+        }
+      />
+      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      <span className="text-xs font-medium">{surface.label}</span>
+      {surface.lastSeen && !isOnline && (
+        <span className="ml-1 hidden text-[10px] text-muted-foreground/50 sm:inline">
+          {formatRelativeTime(surface.lastSeen)}
+        </span>
+      )}
+      {isUnknown && (
+        <span className="ml-1 hidden text-[10px] text-amber-400/70 sm:inline">checking…</span>
+      )}
+    </div>
+  );
+}
+
+interface ControlPanelHeroProps {
+  surfaces: SurfaceState[];
+  agentActivity: AgentActivity;
+  providers: ProviderHealth[];
+  recentActivity: RecentActivityItem[];
+  isRefreshing: boolean;
+  onRefresh: () => void;
+}
+
+function ControlPlaneHero({
+  surfaces,
+  agentActivity,
+  providers,
+  recentActivity,
+  isRefreshing,
+  onRefresh,
+}: ControlPanelHeroProps) {
+  const onlineSurfaces = surfaces.filter((s) => s.status === 'online').length;
+  const providersUp = providers.filter((p) => p.status === 'up').length;
+  const allProvidersUp = providersUp === providers.length;
+
+  return (
+    <section
+      aria-label="System control plane"
+      className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 backdrop-blur-xl sm:p-5"
+    >
+      {/* Header row */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+            <Activity className="h-3.5 w-3.5 text-primary" />
+          </div>
+          <h2 className="text-sm font-semibold">Control Plane</h2>
+          <Badge
+            variant="outline"
+            className={
+              'border-none px-1.5 py-0.5 text-[10px] font-medium ' +
+              (onlineSurfaces > 0
+                ? 'bg-emerald-500/10 text-emerald-400'
+                : 'bg-muted/60 text-muted-foreground')
+            }
+          >
+            {onlineSurfaces}/{surfaces.length} surfaces
+          </Badge>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className="flex items-center gap-1 text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+          aria-label="Refresh control plane status"
+        >
+          <RefreshCw className={'h-3 w-3 ' + (isRefreshing ? 'animate-spin' : '')} />
+          <span className="hidden sm:inline">Refresh</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Connected Surfaces */}
+        <div>
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+            Connected Surfaces
+          </p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {surfaces.map((s) => (
+              <SurfacePill key={s.id} surface={s} />
+            ))}
+          </div>
+        </div>
+
+        {/* Agent Activity */}
+        <div>
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+            Agent Activity
+          </p>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Bot className="h-3.5 w-3.5 text-blue-400" />
+                <span className="text-xs text-muted-foreground">Running</span>
+              </div>
+              <span className="text-sm font-semibold text-blue-400">{agentActivity.running}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
+                <span className="text-xs text-muted-foreground">Pending Approvals</span>
+              </div>
+              <span className="text-sm font-semibold text-amber-400">
+                {agentActivity.pendingApprovals}
+              </span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                <span className="text-xs text-muted-foreground">Completed Today</span>
+              </div>
+              <span className="text-sm font-semibold text-emerald-400">
+                {agentActivity.completedToday}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* System Health */}
+        <div>
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+            Model Provider Health
+          </p>
+          <div className="space-y-1.5">
+            {providers.length === 0 ? (
+              <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+                <span className="text-xs text-muted-foreground/60">No providers configured</span>
+              </div>
+            ) : (
+              providers.map((p) => (
+                <div
+                  key={p.name}
+                  className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5"
+                >
+                  <span
+                    className={
+                      'h-1.5 w-1.5 flex-shrink-0 rounded-full ' +
+                      STATUS_DOT[p.status] +
+                      (p.status === 'up' ? ' animate-pulse' : '')
+                    }
+                  />
+                  <span className="flex-1 truncate text-xs">{p.name}</span>
+                  {p.latencyMs !== null && (
+                    <span className="text-[10px] text-muted-foreground/50">{p.latencyMs}ms</span>
+                  )}
+                  {p.status === 'down' && (
+                    <XCircle className="h-3 w-3 flex-shrink-0 text-red-400" />
+                  )}
+                  {p.status === 'degraded' && (
+                    <AlertCircle className="h-3 w-3 flex-shrink-0 text-amber-400" />
+                  )}
+                </div>
+              ))
+            )}
+            <div
+              className={
+                'mt-1 flex items-center gap-1.5 px-1 text-[10px] ' +
+                (allProvidersUp ? 'text-emerald-400/70' : 'text-amber-400/70')
+              }
+            >
+              {allProvidersUp ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+              {allProvidersUp
+                ? 'All providers operational'
+                : `${providersUp}/${providers.length} operational`}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Activity Feed */}
+      {recentActivity.length > 0 && (
+        <div className="mt-4 border-t border-white/[0.04] pt-4">
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+            Recent Activity
+          </p>
+          <ul className="space-y-0.5">
+            {recentActivity.slice(0, 5).map((item) => {
+              const Icon = SURFACE_ICON[item.surface];
+              return (
+                <li
+                  key={item.id}
+                  className="flex items-center gap-2.5 rounded-md px-2 py-1 transition-colors hover:bg-white/[0.02]"
+                >
+                  <Icon className="h-3 w-3 flex-shrink-0 text-muted-foreground/40" />
+                  <span className="flex-1 truncate text-xs text-muted-foreground/80">
+                    {item.action}
+                  </span>
+                  <span className="flex-shrink-0 text-[10px] text-muted-foreground/40">
+                    {formatRelativeTime(item.timestamp)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
 }
 
 // --- Sub-components ---
@@ -248,6 +536,23 @@ const QuickActionCard: React.FC<QuickActionCardProps> = ({
   );
 };
 
+// ---------------------------------------------------------------------------
+// Default control-plane surface states (static while no real-time connection)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_SURFACES: SurfaceState[] = [
+  { id: 'desktop', label: 'Desktop', icon: Monitor, status: 'unknown', lastSeen: null },
+  { id: 'mobile', label: 'Mobile', icon: Smartphone, status: 'unknown', lastSeen: null },
+  { id: 'extension', label: 'Extension', icon: Chrome, status: 'unknown', lastSeen: null },
+  { id: 'cli', label: 'CLI', icon: Terminal, status: 'unknown', lastSeen: null },
+];
+
+const DEFAULT_PROVIDERS: ProviderHealth[] = [
+  { name: 'Anthropic', status: 'up', latencyMs: null },
+  { name: 'OpenAI', status: 'up', latencyMs: null },
+  { name: 'Google', status: 'up', latencyMs: null },
+];
+
 // --- Main Page ---
 
 export const DashboardHomePage: React.FC = () => {
@@ -268,13 +573,71 @@ export const DashboardHomePage: React.FC = () => {
   // Real: count of web_conversations created in last 7 days
   const [weeklySessionCount, setWeeklySessionCount] = useState<number>(0);
 
+  // Control-plane state
+  const [surfaces, setSurfaces] = useState<SurfaceState[]>(DEFAULT_SURFACES);
+  const [agentActivity, setAgentActivity] = useState<AgentActivity>({
+    running: 0,
+    pendingApprovals: 0,
+    completedToday: 0,
+  });
+  const [providers, setProviders] = useState<ProviderHealth[]>(DEFAULT_PROVIDERS);
+  const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const displayName = user?.name || user?.email?.split('@')[0] || 'there';
+
+  // Fetch control-plane status from the API gateway heartbeat endpoint
+  const fetchControlPlane = useCallback(async () => {
+    if (!user) return;
+    setIsRefreshing(true);
+    try {
+      const res = await fetch('/api/control-plane/status', {
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as {
+          surfaces?: Array<{
+            id: SurfaceId;
+            status: SurfaceStatus;
+            lastSeen: string | null;
+          }>;
+          agents?: { running: number; pendingApprovals: number; completedToday: number };
+          providers?: Array<{
+            name: string;
+            status: 'up' | 'degraded' | 'down';
+            latencyMs: number | null;
+          }>;
+          recentActivity?: RecentActivityItem[];
+        };
+        if (json.surfaces) {
+          setSurfaces(
+            json.surfaces.map((s) => ({
+              ...s,
+              label: SURFACE_LABELS[s.id] ?? s.id,
+              icon: SURFACE_ICON[s.id] ?? Monitor,
+            })),
+          );
+        }
+        if (json.agents) setAgentActivity(json.agents);
+        if (json.providers) setProviders(json.providers);
+        if (json.recentActivity) setRecentActivity(json.recentActivity);
+      }
+    } catch {
+      // API not available yet — keep default unknown states
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
 
     // Fetch hired employees for "Active Skills" stat
     fetchHiredEmployees();
+
+    // Fetch control plane status
+    fetchControlPlane();
 
     // web_conversations and token_credits are not in the generated Supabase types yet,
     // so we cast the client to an untyped SupabaseClient for these queries.
@@ -363,7 +726,35 @@ export const DashboardHomePage: React.FC = () => {
     fetchCredits();
     fetchTokens();
     fetchWeeklySessions();
-  }, [user, fetchHiredEmployees]);
+  }, [user, fetchHiredEmployees, fetchControlPlane]);
+
+  // Web surface heartbeat — upserts every 60 s while the dashboard is mounted
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const userId = user.id;
+    const HEARTBEAT_INTERVAL_MS = 60_000;
+
+    const sendHeartbeat = async () => {
+      try {
+        const untypedClient = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
+        await untypedClient.from('surface_heartbeats').upsert(
+          {
+            user_id: userId,
+            surface_id: 'web',
+            last_seen_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,surface_id' },
+        );
+      } catch {
+        // Non-fatal — table may not be migrated in all envs yet
+      }
+    };
+
+    void sendHeartbeat();
+    const intervalId = setInterval(() => void sendHeartbeat(), HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [user?.id]);
 
   // Derive credit display values
   const creditsRemainingDollars = tokenCredits
@@ -388,6 +779,19 @@ export const DashboardHomePage: React.FC = () => {
           Here&apos;s your workspace overview for today.
         </p>
       </div>
+
+      {/* First-run welcome banner — persisted in localStorage, auto-hides when done */}
+      <WelcomeBanner displayName={displayName} />
+
+      {/* Control-Plane Hero — cross-surface operational status */}
+      <ControlPlaneHero
+        surfaces={surfaces}
+        agentActivity={agentActivity}
+        providers={providers}
+        recentActivity={recentActivity}
+        isRefreshing={isRefreshing}
+        onRefresh={fetchControlPlane}
+      />
 
       {/* Stats Cards Grid */}
       <section aria-label="Usage statistics">
@@ -442,8 +846,21 @@ export const DashboardHomePage: React.FC = () => {
           </div>
           <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl">
             {convoLoading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
+              <div
+                className="divide-y divide-white/[0.04]"
+                aria-busy="true"
+                aria-label="Loading conversations"
+              >
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-5 py-3.5">
+                    <Skeleton className="h-4 w-4 flex-shrink-0 rounded bg-white/[0.06]" />
+                    <Skeleton
+                      className="h-3.5 flex-1 rounded bg-white/[0.06]"
+                      style={{ maxWidth: `${60 + (i % 3) * 15}%` }}
+                    />
+                    <Skeleton className="hidden h-3 w-14 rounded bg-white/[0.06] sm:block" />
+                  </div>
+                ))}
               </div>
             ) : recentConversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">

@@ -9,6 +9,7 @@ import { Search, X, Loader2 } from 'lucide-react';
 
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import type { MemoryEntry } from '@/stores/memoryStore';
 import { useMemoryStore } from '@/stores/memoryStore';
@@ -41,7 +42,13 @@ export const MemorySearch = memo(function MemorySearch({
   const inputRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { search: apiSearch, memories, isLoading: storeLoading } = useMemoryStore();
+  const {
+    search: apiSearch,
+    memories,
+    isLoading: storeLoading,
+  } = useMemoryStore(
+    useShallow((s) => ({ search: s.search, memories: s.memories, isLoading: s.isLoading })),
+  );
 
   // Perform search with debounce
   useEffect(() => {
@@ -171,7 +178,7 @@ export function useMemorySearch(initialQuery = '') {
   const [results, setResults] = useState<MemoryEntry[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  const { memories } = useMemoryStore();
+  const { memories } = useMemoryStore(useShallow((s) => ({ memories: s.memories })));
 
   // Update results when memories change and no active search
   useEffect(() => {

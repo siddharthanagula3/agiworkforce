@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { useEditingStore } from '../../stores/editingStore';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -12,7 +13,14 @@ interface ChangeSummaryProps {
 
 export function ChangeSummary({ className }: ChangeSummaryProps) {
   const { getChangesSummary, getChangedFiles, acceptAllChanges, rejectAllChanges } =
-    useEditingStore();
+    useEditingStore(
+      useShallow((s) => ({
+        getChangesSummary: s.getChangesSummary,
+        getChangedFiles: s.getChangedFiles,
+        acceptAllChanges: s.acceptAllChanges,
+        rejectAllChanges: s.rejectAllChanges,
+      })),
+    );
 
   const stats = getChangesSummary();
   const changedFiles = getChangedFiles();

@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/utils';
+import { useShallow } from 'zustand/react/shallow';
 import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';
 import {
   useMemoryStore,
@@ -106,7 +107,14 @@ export const MemoryViewer = memo(function MemoryViewer({
   const [activeTab, setActiveTab] = useState<TabValue>(initialTab);
   const [sortBy, setSortBy] = useState<SortOption>(initialSort);
 
-  const { memories, isLoading, error, loadAll } = useMemoryStore();
+  const { memories, isLoading, error, loadAll } = useMemoryStore(
+    useShallow((s) => ({
+      memories: s.memories,
+      isLoading: s.isLoading,
+      error: s.error,
+      loadAll: s.loadAll,
+    })),
+  );
 
   // Category selectors for tab counts
   const preferences = useMemoryStore(selectPreferences);

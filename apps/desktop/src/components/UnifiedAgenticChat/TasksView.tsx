@@ -94,6 +94,24 @@ const STATUS_CONFIG: Record<
     bgColor: 'bg-zinc-400/10',
     dotClass: 'bg-zinc-500',
   },
+  paused: {
+    label: 'Paused',
+    textColor: 'text-amber-400',
+    bgColor: 'bg-amber-400/10',
+    dotClass: 'bg-amber-400',
+  },
+  expired: {
+    label: 'Expired',
+    textColor: 'text-orange-400',
+    bgColor: 'bg-orange-400/10',
+    dotClass: 'bg-orange-400',
+  },
+  recovering: {
+    label: 'Recovering',
+    textColor: 'text-purple-400',
+    bgColor: 'bg-purple-400/10',
+    dotClass: 'bg-purple-400 animate-pulse',
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

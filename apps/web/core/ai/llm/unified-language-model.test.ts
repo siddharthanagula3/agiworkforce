@@ -34,7 +34,7 @@ vi.mock('./providers/openai-gpt', () => ({
     isConfigured: vi.fn().mockReturnValue(true),
   },
   OpenAIProvider: {
-    getAvailableModels: vi.fn().mockReturnValue(['gpt-4o', 'gpt-5.2', 'o3']),
+    getAvailableModels: vi.fn().mockReturnValue(['gpt-5.4', 'gpt-5.4', 'o3']),
   },
 }));
 
@@ -170,8 +170,8 @@ describe('UnifiedLLMService', () => {
       'claude-sonnet-4-5-20250929',
     ] as never);
     vi.mocked(OpenAIProvider.getAvailableModels).mockReturnValue([
-      'gpt-4o',
-      'gpt-5.2',
+      'gpt-5.4',
+      'gpt-5.4',
       'o3',
     ] as never);
     vi.mocked(GoogleProvider.getAvailableModels).mockReturnValue([
@@ -201,7 +201,7 @@ describe('UnifiedLLMService', () => {
       const config = service.getConfig();
 
       expect(config.provider).toBe('openai');
-      expect(config.model).toBe('gpt-4o');
+      expect(config.model).toBe('gpt-5.4');
       expect(config.maxTokens).toBe(4000);
       expect(config.temperature).toBe(0.7);
     });
@@ -255,8 +255,8 @@ describe('UnifiedLLMService', () => {
 
     it('should get available models for provider', () => {
       const openaiModels = service.getAvailableModels('openai');
-      expect(openaiModels).toContain('gpt-4o');
-      expect(openaiModels).toContain('gpt-5.2');
+      expect(openaiModels).toContain('gpt-5.4');
+      expect(openaiModels).toContain('gpt-5.4');
 
       const anthropicModels = service.getAvailableModels('anthropic');
       expect(anthropicModels).toContain('claude-opus-4-5-20251101');
@@ -293,7 +293,7 @@ describe('UnifiedLLMService', () => {
       vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
         content: 'Hello from OpenAI!',
         usage: { promptTokens: 5, completionTokens: 10, totalTokens: 15 },
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
       });
 
       const response = await service.sendMessage(mockMessages);
@@ -366,12 +366,12 @@ describe('UnifiedLLMService', () => {
     it('should update config from object API params', async () => {
       vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
         content: 'Response',
-        model: 'gpt-5.2',
+        model: 'gpt-5.4',
       });
 
       await service.sendMessage({
         messages: [{ role: 'user', content: 'Test' }],
-        model: 'gpt-5.2',
+        model: 'gpt-5.4',
         temperature: 0.3,
         maxTokens: 2000,
       });
@@ -517,7 +517,7 @@ describe('UnifiedLLMService', () => {
       vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
         content: 'Response',
         usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
       });
 
       await service.sendMessage(mockMessages, 'session-123', 'user-456', 'openai');
@@ -674,7 +674,7 @@ describe('UnifiedLLMService', () => {
       vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
         content: 'Response',
         usage: { promptTokens: 15, completionTokens: 25, totalTokens: 40 },
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
       });
 
       const response = await service.sendMessage(mockMessages, undefined, undefined, 'openai');
@@ -687,7 +687,7 @@ describe('UnifiedLLMService', () => {
     it('should handle response without usage', async () => {
       vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
         content: 'Response',
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
       });
 
       const response = await service.sendMessage(mockMessages);

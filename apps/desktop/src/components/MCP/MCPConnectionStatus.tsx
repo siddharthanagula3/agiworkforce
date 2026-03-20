@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getMcpToolDisplayName } from '../../hooks/agenticEventUtils';
+import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 import type {
   McpExecutionHistoryEntry,
@@ -33,6 +34,13 @@ function getResponseTimeColor(ms: number | null) {
   if (ms < 100) return 'text-green-600';
   if (ms < 500) return 'text-yellow-600';
   return 'text-red-600';
+}
+
+function getResponseTimeLabel(ms: number | null): string {
+  if (ms === null) return '';
+  if (ms < 100) return 'Fast';
+  if (ms < 500) return 'Slow';
+  return 'Critical';
 }
 
 function getStatusBadge(status: McpServerHealth['status']) {
@@ -135,7 +143,19 @@ export function MCPConnectionStatus() {
     refreshExecutionHistory,
     refreshToolExecutionStats,
     connectServer,
-  } = useMcpStore();
+  } = useMcpStore(
+    useShallow((s) => ({
+      health: s.health,
+      executionHistory: s.executionHistory,
+      toolExecutionStats: s.toolExecutionStats,
+      refreshServers: s.refreshServers,
+      refreshHealth: s.refreshHealth,
+      checkServerHealth: s.checkServerHealth,
+      refreshExecutionHistory: s.refreshExecutionHistory,
+      refreshToolExecutionStats: s.refreshToolExecutionStats,
+      connectServer: s.connectServer,
+    })),
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
@@ -174,8 +194,7 @@ export function MCPConnectionStatus() {
   const unhealthyCount = useMemo(
     () =>
       health.filter(
-        (serverHealth) =>
-          serverHealth.status === 'unhealthy' || serverHealth.status === 'degraded',
+        (serverHealth) => serverHealth.status === 'unhealthy' || serverHealth.status === 'degraded',
       ).length,
     [health],
   );
@@ -327,6 +346,9 @@ export function MCPConnectionStatus() {
                           className={`font-semibold ${getResponseTimeColor(serverHealth.response_time_ms)}`}
                         >
                           {formatResponseTime(serverHealth.response_time_ms)}
+                          {serverHealth.response_time_ms !== null && (
+                            <> · {getResponseTimeLabel(serverHealth.response_time_ms)}</>
+                          )}
                         </div>
                       </div>
 
@@ -361,7 +383,8 @@ export function MCPConnectionStatus() {
                       </div>
                     </div>
 
-                    {(serverHealth.status === 'unhealthy' || serverHealth.status === 'degraded') && (
+                    {(serverHealth.status === 'unhealthy' ||
+                      serverHealth.status === 'degraded') && (
                       <div className="flex gap-2">
                         <Button
                           size="sm"
@@ -437,7 +460,9 @@ export function MCPConnectionStatus() {
                         </div>
                         <div>
                           <div className="text-muted-foreground">Executed</div>
-                          <div className="font-semibold">{formatExecutionTime(entry.timestamp)}</div>
+                          <div className="font-semibold">
+                            {formatExecutionTime(entry.timestamp)}
+                          </div>
                         </div>
                       </div>
 

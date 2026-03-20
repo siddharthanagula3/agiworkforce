@@ -12,6 +12,7 @@ import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/Tabs';
+import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 
 export function MCPToolsSettings() {
@@ -31,7 +32,25 @@ export function MCPToolsSettings() {
     searchTools,
     setSearchQuery,
     clearError,
-  } = useMcpStore();
+  } = useMcpStore(
+    useShallow((s) => ({
+      servers: s.servers,
+      tools: s.tools,
+      configLocation: s.configLocation,
+      isInitialized: s.isInitialized,
+      isLoading: s.isLoading,
+      error: s.error,
+      searchQuery: s.searchQuery,
+      initialize: s.initialize,
+      refreshServers: s.refreshServers,
+      refreshTools: s.refreshTools,
+      refreshRuntimeTelemetry: s.refreshRuntimeTelemetry,
+      refreshConfigLocation: s.refreshConfigLocation,
+      searchTools: s.searchTools,
+      setSearchQuery: s.setSearchQuery,
+      clearError: s.clearError,
+    })),
+  );
 
   useEffect(() => {
     if (!isInitialized) {

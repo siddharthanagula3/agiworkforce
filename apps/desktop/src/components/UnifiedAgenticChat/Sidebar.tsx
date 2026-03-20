@@ -2,35 +2,32 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Archive,
   ArchiveRestore,
-  BarChart3,
-  BookOpen,
   Calendar,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
-  Coins,
   Download,
   FileText,
+  FlaskConical,
   FolderOpen,
-  HelpCircle,
-  History,
+  Image,
   Layers,
   Link2,
   MessageSquare,
+  PenTool,
   Pin,
   PinOff,
   Plus,
   Search,
   Sparkles,
+  TerminalSquare,
   Trash2,
-  Users,
-  Wand2,
+  Wrench,
   X,
-  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useCallback, useEffect, useMemo, useState, memo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import {
@@ -67,9 +64,15 @@ import {
 } from '../ui/AlertDialog';
 import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleModeToggle } from '../SimpleMode';
+import { NotificationCenter } from '../Notifications';
 import { ShareConversationDialog } from './ShareConversationDialog';
+import { SidebarFeaturesPopover } from './SidebarFeaturesPopover';
+import { IncognitoToggle } from './IncognitoToggle';
 import { save } from '@tauri-apps/plugin-dialog';
 import { invoke } from '../../lib/tauri-mock';
+import { useBillingUsageStore, selectBudgetPercentage } from '../../stores/billingUsage';
+import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
+import { useAppModeStore, selectMode } from '../../stores/appModeStore';
 
 interface SidebarProps {
   className?: string;
@@ -88,6 +91,9 @@ interface SidebarProps {
   canAccessMediaLab?: boolean;
   onToggleArtifacts?: () => void;
   artifactPanelOpen?: boolean;
+  onOpenMcpWorkspace?: () => void;
+  onOpenMcpBundles?: () => void;
+  onOpenCanvas?: () => void;
 }
 
 type TemporalGroup = 'today' | 'yesterday' | 'thisWeek' | 'last7Days' | 'last30Days' | 'older';
@@ -106,6 +112,8 @@ interface ConversationItemProps {
   showArchived: boolean;
   editingId: string | null;
   editingTitle: string;
+  /** Project name for attribution badge — undefined when no project assigned */
+  projectName?: string;
   onSelect: (id: string) => void;
   onStartEdit: (conv: ConversationSummary) => void;
   onEditTitleChange: (title: string) => void;
@@ -130,6 +138,7 @@ const ConversationItem = memo<ConversationItemProps>(
     showArchived,
     editingId,
     editingTitle,
+    projectName,
     onSelect,
     onStartEdit,
     onEditTitleChange,
@@ -152,6 +161,7 @@ const ConversationItem = memo<ConversationItemProps>(
           'group relative rounded-lg transition-all mb-1',
           isActive ? 'bg-teal-100 dark:bg-teal-900/30' : 'hover:bg-[hsl(var(--accent))]',
           isKeyboardFocused && 'ring-2 ring-teal-500 ring-offset-2',
+          conv.incognito && 'ring-1 ring-purple-500/20',
         )}
       >
         {isEditing ? (
@@ -172,6 +182,7 @@ const ConversationItem = memo<ConversationItemProps>(
               type="button"
               onClick={() => onSelect(conv.id)}
               onDoubleClick={() => onStartEdit(conv)}
+              aria-current={isActive ? 'page' : undefined}
               className="flex-1 text-left px-3 py-2 overflow-hidden"
             >
               <div className="font-medium text-sm truncate">{conv.title || 'Untitled'}</div>
@@ -180,10 +191,19 @@ const ConversationItem = memo<ConversationItemProps>(
                   {conv.lastMessage}
                 </div>
               )}
+              {/* Project attribution badge — shown when conversation belongs to a project */}
+              {projectName && (
+                <div className="mt-0.5 text-[10px] text-[hsl(var(--muted-foreground))] truncate">
+                  in{' '}
+                  <span className="font-medium text-[hsl(var(--foreground))]/60">
+                    {projectName}
+                  </span>
+                </div>
+              )}
             </button>
 
             {/* Conversation action buttons - simplified in simple mode */}
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 pr-2">
+            <div className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex items-center gap-0.5 pr-2">
               {/* Only show delete in simple mode, show all actions in advanced mode */}
               {!isSimpleMode && (
                 <>
@@ -360,10 +380,23 @@ export function Sidebar({
   canAccessMediaLab,
   onToggleArtifacts,
   artifactPanelOpen = false,
+  onOpenMcpWorkspace,
+  onOpenMcpBundles,
+  onOpenCanvas,
 }: SidebarProps) {
   // Platform-aware modifier key: ⌘ on Mac, Ctrl on Windows/Linux
   const modKeySymbol =
     typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
+
+  // Local/Cloud mode — drives the indicator pill in the footer
+  const mode = useAppModeStore(selectMode);
+
+  // Usage data for the sidebar widget (only shown when > 50%)
+  const budgetPct = useBillingUsageStore(selectBudgetPercentage);
+  const budgetEnabled = useBillingUsageStore((s) => s.budget.enabled);
+  const openSettings = useSettingsDialogStore((s) => s.openSettings);
+  const clampedBudgetPct = Math.min(Math.max(budgetPct, 0), 100);
+  const showUsageWidget = budgetEnabled && clampedBudgetPct > 50;
 
   // Migration: All store hooks now use useChatStore (modular store) instead of useUnifiedChatStore
   // Using exported selectors for optimal re-render performance
@@ -385,17 +418,9 @@ export function Sidebar({
   const createConversation = useChatStore((state) => state.createConversation);
   const setActiveView = useChatStore((state) => state.setActiveView);
   const ensureActiveConversation = useChatStore((state) => state.ensureActiveConversation);
-  const getConversationStats = useChatStore((state) => state.getConversationStats);
-
   // Message loading functions
   const messagesByConversation = useChatStore((state) => state.messagesByConversation);
   const loadConversationMessages = useChatStore((state) => state.loadConversationMessages);
-
-  // Get stats for active conversation
-  const stats = useMemo(() => {
-    if (!activeConversationId) return null;
-    return getConversationStats(activeConversationId);
-  }, [activeConversationId, getConversationStats]);
 
   const handleExportConversation = useCallback(
     (id: string, title: string) => {
@@ -443,6 +468,7 @@ export function Sidebar({
     }
   }, []);
 
+  const [isIncognito, setIsIncognito] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -463,6 +489,8 @@ export function Sidebar({
     conversationId: string;
     conversationTitle: string;
   }>({ open: false, conversationId: '', conversationTitle: '' });
+
+  const [featuresPopoverOpen, setFeaturesPopoverOpen] = useState(false);
 
   // Get projects for filtering - use useShallow to prevent re-renders from array reference changes
   const projects = useProjectStore(useShallow(selectActiveProjects));
@@ -512,6 +540,13 @@ export function Sidebar({
     [projects, selectedProjectFilter],
   );
 
+  // Build a lookup map: projectId → project name, for O(1) attribution badge lookup
+  const projectNameById = useMemo<Map<string, string>>(() => {
+    const map = new Map<string, string>();
+    projects.forEach((p) => map.set(p.id, p.name));
+    return map;
+  }, [projects]);
+
   const pinnedConversations = useMemo(
     () =>
       filtered
@@ -557,16 +592,25 @@ export function Sidebar({
       await onNewChat();
     } else {
       await resetInFlightChatState();
-      createConversation('New chat');
+      createConversation('New chat', isIncognito ? { incognito: true } : undefined);
     }
     setActiveView('chat');
     if (isMobile && onCollapsedChange) {
       onCollapsedChange(true);
     }
-  }, [createConversation, isMobile, onCollapsedChange, onNewChat, setActiveView]);
+  }, [createConversation, isIncognito, isMobile, onCollapsedChange, onNewChat, setActiveView]);
+
+  // Track the latest conversation selection to avoid race conditions when
+  // the user rapidly clicks different conversations.  Only the most recent
+  // selection should apply its loaded messages.
+  const latestSelectionRef = useRef<string | null>(null);
 
   const handleSelectConversation = useCallback(
     (id: string) => {
+      // Mark this as the latest selection — any in-flight load for a
+      // previously-selected conversation will bail out via the stale check.
+      latestSelectionRef.current = id;
+
       selectConversationFn(id);
       setActiveView('chat');
       if (isMobile && onCollapsedChange) {
@@ -581,10 +625,20 @@ export function Sidebar({
         const userId = supabaseAuth.getUser()?.id;
         if (userId) {
           // Load messages from backend asynchronously
-          loadConversationMessages(id, userId).catch((error) => {
-            console.error('[Sidebar] Failed to load conversation messages:', error);
-            toast.error('Failed to load conversation messages');
-          });
+          loadConversationMessages(id, userId)
+            .then(() => {
+              // If the user clicked a different conversation while this was
+              // loading, discard the result to prevent stale data overwriting
+              // the newer selection.
+              if (latestSelectionRef.current !== id) {
+                return; // stale — a newer selection superseded this one
+              }
+            })
+            .catch((error) => {
+              if (latestSelectionRef.current !== id) return; // stale
+              console.error('[Sidebar] Failed to load conversation messages:', error);
+              toast.error('Failed to load conversation messages');
+            });
         } else {
           // BUG-342: Surface an error instead of silently skipping
           console.warn('[Sidebar] Cannot load messages: user not authenticated');
@@ -730,6 +784,7 @@ export function Sidebar({
         showArchived={showArchived}
         editingId={editingId}
         editingTitle={editingTitle}
+        projectName={conv.projectId ? projectNameById.get(conv.projectId) : undefined}
         onSelect={handleSelectConversation}
         onStartEdit={startEditing}
         onEditTitleChange={setEditingTitle}
@@ -751,6 +806,7 @@ export function Sidebar({
       showArchived,
       editingId,
       editingTitle,
+      projectNameById,
       handleSelectConversation,
       startEditing,
       handleRename,
@@ -774,6 +830,7 @@ export function Sidebar({
             onClick={onToggleCollapse}
             variant="ghost"
             size="icon"
+            aria-label="Expand sidebar"
             className="text-[hsl(var(--muted-foreground))]"
           >
             <ChevronRight className="h-4 w-4" />
@@ -782,6 +839,7 @@ export function Sidebar({
             onClick={handleNewChat}
             variant="ghost"
             size="icon"
+            aria-label="New chat"
             className="text-[hsl(var(--muted-foreground))]"
           >
             <Plus className="h-4 w-4" />
@@ -793,10 +851,19 @@ export function Sidebar({
             }}
             variant="ghost"
             size="icon"
+            aria-label="Search conversations"
             className="text-[hsl(var(--muted-foreground))]"
           >
             <Search className="h-4 w-4" />
           </Button>
+          {/* Mode dot — collapsed state shows only the colored dot */}
+          <div
+            title={mode === 'local' ? 'Local mode' : 'Cloud mode'}
+            className={cn(
+              'w-2 h-2 rounded-full',
+              mode === 'local' ? 'bg-emerald-400' : 'bg-blue-400',
+            )}
+          />
         </div>
       </div>
     );
@@ -862,7 +929,7 @@ export function Sidebar({
                     placeholder="Search conversations..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="flex-1 border-0 bg-transparent focus:ring-0"
+                    className="flex-1 border-0 bg-transparent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
                   />
                   <kbd className="px-2 py-1 text-xs bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded">
                     ESC
@@ -906,10 +973,15 @@ export function Sidebar({
       <div
         className={cn(
           'flex flex-col bg-[hsl(var(--card))] border-r border-[hsl(var(--border))] transition-all duration-300 ease-in-out relative',
+          isIncognito && 'border-purple-500/30',
           className,
         )}
         style={{ width: width }}
       >
+        {/* Incognito mode subtle top stripe */}
+        {isIncognito && (
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-purple-500/60 to-transparent pointer-events-none z-10" />
+        )}
         {onResize && !collapsed && (
           <ResizeHandle
             width={width}
@@ -930,13 +1002,24 @@ export function Sidebar({
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button
-              onClick={handleNewChat}
-              className="flex items-center gap-2 bg-[hsl(var(--muted))] hover:bg-[hsl(var(--accent))] text-[hsl(var(--foreground))] transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              New Chat
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <IncognitoToggle
+                isIncognito={isIncognito}
+                onToggle={() => setIsIncognito((prev) => !prev)}
+              />
+              <Button
+                onClick={handleNewChat}
+                className={cn(
+                  'flex items-center gap-2 transition-colors',
+                  isIncognito
+                    ? 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 dark:text-purple-400 ring-1 ring-purple-500/30'
+                    : 'bg-[hsl(var(--muted))] hover:bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]',
+                )}
+              >
+                <Plus className="h-4 w-4" />
+                New Chat
+              </Button>
+            </div>
           </div>
           <button
             type="button"
@@ -954,119 +1037,98 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Navigation - hide projects section in simple mode */}
+        {/* Features section: 4 promoted direct links + More popover */}
         {!collapsed && !isSimpleMode && (
-          <div className="px-3 py-2 space-y-1 overflow-y-auto max-h-[40vh] scrollbar-thin">
-            <button
-              type="button"
-              onClick={() => onOpenResearch?.()}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-blue-400/20 text-blue-400">
-                <BookOpen className="w-3.5 h-3.5" />
-              </span>
-              Deep Research
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onOpenRewind?.()}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-violet-400/20 text-violet-400">
-                <History className="w-3.5 h-3.5" />
-              </span>
-              Rewind Timeline
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onOpenCollaboration?.()}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-purple-400/20 text-purple-400">
-                <Users className="w-3.5 h-3.5" />
-              </span>
-              Agent Swarm
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onToggleArtifacts?.()}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                artifactPanelOpen
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-orange-400/20 text-orange-400">
-                <FileText className="w-3.5 h-3.5" />
-              </span>
-              Artifacts
-            </button>
-
-            {canAccessMediaLab && (
+          <div className="px-2 py-1.5 border-b border-[hsl(var(--border))]">
+            {[
+              {
+                id: 'research',
+                label: 'Research',
+                icon: FlaskConical,
+                onClick: onOpenResearch,
+                isActive: false,
+              },
+              {
+                id: 'terminal',
+                label: 'Terminal',
+                icon: TerminalSquare,
+                onClick: () => setActiveView('terminal'),
+                isActive: activeView === 'terminal',
+              },
+              {
+                id: 'canvas',
+                label: 'Canvas',
+                icon: PenTool,
+                onClick: onOpenCanvas,
+                isActive: false,
+              },
+              {
+                id: 'mcp-tools',
+                label: 'MCP Tools',
+                icon: Wrench,
+                onClick: onOpenMcpWorkspace,
+                isActive: false,
+              },
+              {
+                id: 'images',
+                label: 'Images',
+                icon: Image,
+                onClick: () => setActiveView('images'),
+                isActive: activeView === 'images',
+              },
+              {
+                id: 'skills',
+                label: 'Skills',
+                icon: Sparkles,
+                onClick: () => setActiveView('skills'),
+                isActive: activeView === 'skills',
+              },
+              {
+                id: 'schedules',
+                label: 'Schedules',
+                icon: Clock,
+                onClick: () => setActiveView('schedules'),
+                isActive: activeView === 'schedules',
+              },
+            ].map(({ id, label, icon: Icon, onClick, isActive }) => (
               <button
+                key={id}
                 type="button"
-                onClick={() => onToggleMediaLab?.()}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-surface-hover"
+                onClick={onClick}
+                className={cn(
+                  'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden',
+                  isActive
+                    ? 'bg-white/10 text-[hsl(var(--foreground))]'
+                    : 'text-[hsl(var(--muted-foreground))] hover:bg-white/5 hover:text-[hsl(var(--foreground))]',
+                )}
               >
-                <span className="w-5 h-5 flex items-center justify-center rounded bg-amber-400/20 text-amber-400">
-                  <Wand2 className="w-3.5 h-3.5" />
-                </span>
-                Media Lab Pro+
+                <Icon className="h-4 w-4 shrink-0" />
+                <span>{label}</span>
               </button>
-            )}
+            ))}
+            <SidebarFeaturesPopover
+              activeView={activeView}
+              artifactPanelOpen={artifactPanelOpen}
+              canAccessMediaLab={canAccessMediaLab ?? false}
+              onSetActiveView={setActiveView}
+              onOpenResearch={onOpenResearch}
+              onOpenRewind={onOpenRewind}
+              onOpenCollaboration={onOpenCollaboration}
+              onToggleMediaLab={onToggleMediaLab}
+              onToggleArtifacts={onToggleArtifacts}
+              onOpenMcpWorkspace={onOpenMcpWorkspace}
+              onOpenMcpBundles={onOpenMcpBundles}
+              open={featuresPopoverOpen}
+              onOpenChange={setFeaturesPopoverOpen}
+              triggerAsRow
+            />
+          </div>
+        )}
 
-            <button
-              type="button"
-              onClick={() => setActiveView('projects')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'projects'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-teal-400/20 text-teal-400">
-                <Layers className="w-3.5 h-3.5" />
-              </span>
-              Projects
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveView('tasks')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'tasks'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-orange-400/20 text-orange-400">
-                <Zap className="w-3.5 h-3.5" />
-              </span>
-              Tasks
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveView('help')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                activeView === 'help'
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span className="w-5 h-5 flex items-center justify-center rounded bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
-                <HelpCircle className="w-3.5 h-3.5" />
-              </span>
-              Help
-            </button>
-
+        {/* Compact filter bar: project filter + archive toggle */}
+        {!collapsed && !isSimpleMode && (
+          <div className="px-3 py-2 flex items-center gap-1">
             {/* Project filter dropdown */}
             {projects.length > 0 && (
               <DropdownMenu>
@@ -1074,7 +1136,7 @@ export function Sidebar({
                   <button
                     type="button"
                     className={cn(
-                      'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                      'flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors',
                       selectedProjectFilter
                         ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                         : 'text-muted-foreground hover:bg-surface-hover',
@@ -1082,7 +1144,7 @@ export function Sidebar({
                   >
                     <span
                       className={cn(
-                        'w-5 h-5 flex items-center justify-center rounded',
+                        'w-4 h-4 flex items-center justify-center rounded',
                         selectedProjectFilter
                           ? 'text-blue-500'
                           : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]',
@@ -1096,12 +1158,10 @@ export function Sidebar({
                           : undefined
                       }
                     >
-                      <FolderOpen className="w-3.5 h-3.5" />
+                      <FolderOpen className="w-3 h-3" />
                     </span>
-                    <span className="flex-1 text-left truncate">
-                      {selectedProject?.name || 'Filter by Project'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
+                    <span className="truncate max-w-[100px]">{selectedProject?.name || 'All'}</span>
+                    <ChevronDown className="w-3 h-3 text-[hsl(var(--muted-foreground))]" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -1144,48 +1204,39 @@ export function Sidebar({
               </DropdownMenu>
             )}
 
-            {/* Clear project filter indicator */}
+            {/* Clear project filter */}
             {selectedProjectFilter && (
-              <button
-                type="button"
+              <Button
                 onClick={() => setSelectedProjectFilter(null)}
-                className="w-full flex items-center justify-center gap-1 px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                title="Clear filter"
               >
                 <X className="w-3 h-3" />
-                Clear filter
-              </button>
+              </Button>
             )}
-          </div>
-        )}
 
-        {/* Archive toggle - hidden in simple mode */}
-        {!collapsed && !isSimpleMode && archivedConversations.length > 0 && (
-          <div className="px-3 py-1">
-            <button
-              type="button"
-              onClick={() => setShowArchived(!showArchived)}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                showArchived
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                  : 'text-muted-foreground hover:bg-surface-hover',
-              )}
-            >
-              <span
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Archive toggle (icon button) */}
+            {archivedConversations.length > 0 && (
+              <Button
+                onClick={() => setShowArchived(!showArchived)}
+                variant="ghost"
+                size="icon"
                 className={cn(
-                  'w-5 h-5 flex items-center justify-center rounded',
+                  'h-7 w-7',
                   showArchived
-                    ? 'bg-amber-400/20 text-amber-500'
-                    : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]',
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-[hsl(var(--muted-foreground))]',
                 )}
+                title={showArchived ? 'Show active' : `Archived (${archivedConversations.length})`}
               >
                 <Archive className="w-3.5 h-3.5" />
-              </span>
-              <span>Archived</span>
-              <span className="ml-auto text-xs bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] px-1.5 py-0.5 rounded-full">
-                {archivedConversations.length}
-              </span>
-            </button>
+              </Button>
+            )}
           </div>
         )}
 
@@ -1253,50 +1304,56 @@ export function Sidebar({
           </div>
         </ScrollArea>
 
-        {/* Conversation Stats - hidden in simple mode */}
-        {!collapsed && !isSimpleMode && stats && stats.messageCount > 0 && (
-          <div className="border-t border-[hsl(var(--border))] px-4 py-3">
-            <div className="flex items-center gap-2 mb-2">
-              <BarChart3 className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-              <span className="text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
-                Stats
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center gap-1.5 text-[hsl(var(--muted-foreground))]">
-                <MessageSquare className="h-3 w-3" />
-                <span>{stats.messageCount} messages</span>
+        {/* Bottom bar: usage widget (when > 50%) + SimpleModeToggle + UserProfile + NotificationCenter */}
+        <div className="mt-auto border-t border-[hsl(var(--border))] px-3 py-2.5 space-y-2">
+          {/* Sidebar usage widget — only visible when budget is enabled and > 50% used */}
+          {!collapsed && showUsageWidget && (
+            <button
+              type="button"
+              onClick={() => openSettings('account')}
+              title={`${Math.round(clampedBudgetPct)}% of token budget used — click to manage`}
+              className="w-full group flex items-center gap-2 px-1 py-1 rounded-md hover:bg-white/5 transition-colors"
+            >
+              <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all duration-300',
+                    clampedBudgetPct >= 95
+                      ? 'bg-red-500'
+                      : clampedBudgetPct >= 80
+                        ? 'bg-amber-500'
+                        : 'bg-blue-500',
+                  )}
+                  style={{ width: `${clampedBudgetPct}%` }}
+                />
               </div>
-              {stats.totalTokens > 0 && (
-                <div className="flex items-center gap-1.5 text-[hsl(var(--muted-foreground))]">
-                  <Zap className="h-3 w-3" />
-                  <span>{(stats.totalTokens / 1000).toFixed(1)}k tokens</span>
-                </div>
-              )}
-              {stats.totalCost > 0 && (
-                <div className="flex items-center gap-1.5 text-[hsl(var(--muted-foreground))] col-span-2">
-                  <Coins className="h-3 w-3" />
-                  <span>${stats.totalCost.toFixed(4)}</span>
-                </div>
-              )}
+              <span className="text-[10px] tabular-nums text-muted-foreground group-hover:text-foreground transition-colors shrink-0">
+                {Math.round(clampedBudgetPct)}%
+              </span>
+            </button>
+          )}
+          <div className="flex items-center gap-1.5">
+            {!collapsed && <SimpleModeToggle compact />}
+            <div className="flex-1 min-w-0">
+              <UserProfile collapsed={collapsed} />
             </div>
+            {/* Mode indicator pill — expanded state */}
+            {!collapsed && (
+              <div
+                className={cn(
+                  'px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider shrink-0',
+                  mode === 'local'
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'bg-blue-500/20 text-blue-400',
+                )}
+              >
+                {mode === 'local' ? 'Local' : 'Cloud'}
+              </div>
+            )}
+            {!collapsed && <NotificationCenter className="shrink-0" />}
           </div>
-        )}
-
-        {/* Simple Mode Toggle - shown at the bottom */}
-        {!collapsed && (
-          <div className="border-t border-[hsl(var(--border))] px-4 py-3">
-            <SimpleModeToggle />
-          </div>
-        )}
-
-        {}
-        <div className="mt-auto border-t border-[hsl(var(--border))] p-4">
-          <UserProfile collapsed={collapsed} />
         </div>
       </div>
     </>
   );
 }
-
-export default Sidebar;

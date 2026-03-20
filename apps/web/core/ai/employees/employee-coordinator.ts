@@ -240,7 +240,7 @@ class OpenAIService {
             Authorization: `Bearer ${authToken}`,
           },
           body: JSON.stringify({
-            model: 'gpt-4o',
+            model: 'gpt-5.4',
             messages: [
               {
                 role: 'system',
@@ -275,7 +275,7 @@ class OpenAIService {
         content,
         tokensUsed,
         cost,
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
         provider: 'openai',
       };
     } catch (error) {

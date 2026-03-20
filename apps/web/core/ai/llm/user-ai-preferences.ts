@@ -24,7 +24,7 @@ export async function loadUserAIPreferences(): Promise<{
       // Return defaults if settings can't be loaded
       return {
         provider: 'openai',
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
         temperature: 0.7,
         maxTokens: 4000,
       };
@@ -32,7 +32,7 @@ export async function loadUserAIPreferences(): Promise<{
 
     // Extract AI preferences with fallbacks
     const provider = (data.default_ai_provider || 'openai') as LLMProvider;
-    const model = data.default_ai_model || 'gpt-4o';
+    const model = data.default_ai_model || 'gpt-5.4';
     const temperature = data.ai_temperature ?? 0.7;
     const maxTokens = data.ai_max_tokens ?? 4000;
 
@@ -56,7 +56,7 @@ export async function loadUserAIPreferences(): Promise<{
     // Return defaults on error
     return {
       provider: 'openai',
-      model: 'gpt-4o',
+      model: 'gpt-5.4',
       temperature: 0.7,
       maxTokens: 4000,
     };
@@ -90,7 +90,7 @@ export function getProviderForTaskType(
       // Google Veo for video generation
       return {
         provider: 'google',
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash',
       };
     case 'code':
     case 'chat':
@@ -99,7 +99,7 @@ export function getProviderForTaskType(
       // These will be loaded by loadUserAIPreferences()
       return {
         provider: 'openai',
-        model: 'gpt-4o',
+        model: 'gpt-5.4',
       };
   }
 }

@@ -51,7 +51,7 @@ const initialStreamState = (): CompareStreamState => ({
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MODEL_A = 'claude-sonnet-4.6';
-const DEFAULT_MODEL_B = 'gpt-5.2';
+const DEFAULT_MODEL_B = 'gpt-5.4';
 
 // ---------------------------------------------------------------------------
 // Main Screen

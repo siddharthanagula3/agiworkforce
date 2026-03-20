@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Loader2, KeyRound } from 'lucide-react';
 import { McpClient } from '@/api/mcp';
-import { toast } from '@/hooks/useToast';
+import { toast } from 'sonner';
 import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';
 import { Badge } from '../ui/Badge';
@@ -191,10 +191,8 @@ export function OAuthCredentialsPanel() {
     async (id: OAuthCredentialProvider) => {
       const { clientId, clientSecret } = state[id];
       if (!clientId.trim() || !clientSecret.trim()) {
-        toast({
-          title: 'Both fields required',
+        toast.error('Both fields required', {
           description: 'Enter a Client ID and Client Secret before saving.',
-          variant: 'destructive',
         });
         return;
       }
@@ -216,8 +214,7 @@ export function OAuthCredentialsPanel() {
             clientSecret: '', // Clear secret from memory after save
           },
         }));
-        toast({
-          title: 'Credentials saved',
+        toast.success('Credentials saved', {
           description: `${PROVIDERS.find((p) => p.id === id)?.name} credentials stored securely.`,
         });
       } catch (err) {
@@ -226,10 +223,8 @@ export function OAuthCredentialsPanel() {
           ...prev,
           [id]: { ...prev[id], saving: false },
         }));
-        toast({
-          title: 'Failed to save credentials',
+        toast.error('Failed to save credentials', {
           description: message,
-          variant: 'destructive',
         });
       }
     },

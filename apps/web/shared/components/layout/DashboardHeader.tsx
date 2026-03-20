@@ -26,6 +26,9 @@ import {
   Check,
 } from 'lucide-react';
 import { useModelStore, AVAILABLE_MODELS } from '@shared/stores/model-store';
+import { TeamSwitcher } from '@features/teams/components/TeamSwitcher';
+import { CreditMonitor } from '@/components/dashboard/CreditMonitor';
+import { useBillingData } from '@features/billing/hooks/use-billing-queries';
 
 interface DashboardHeaderProps {
   onMenuClick?: () => void;
@@ -36,6 +39,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, classNam
   const { setTheme, actualTheme } = useThemeContext();
   const { user, logout } = useAuthStore();
   const { selectedModelId, setSelectedModelId, getSelectedModel } = useModelStore();
+  const { data: billingData } = useBillingData();
   const router = useRouter();
   const selectedModel = getSelectedModel();
 
@@ -72,6 +76,9 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, classNam
             <Menu className="h-5 w-5" aria-hidden="true" />
           </Button>
 
+          {/* Team Switcher */}
+          <TeamSwitcher className="hidden sm:flex" />
+
           {/* Model Selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -103,8 +110,30 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, classNam
           </DropdownMenu>
         </div>
 
-        {/* Right: Theme toggle + User dropdown */}
+        {/* Right: Credit monitor + Theme toggle + User dropdown */}
         <div className="flex items-center gap-1.5">
+          {/* Credit Monitor — shows alerts when usage is high */}
+          {user && billingData && (
+            <CreditMonitor
+              userId={user.id}
+              currentPlan={billingData.plan || 'free'}
+              remainingCents={Math.max(
+                0,
+                ((billingData.usage?.totalLimit ?? 1000000) -
+                  (billingData.usage?.totalTokens ?? 0)) /
+                  100,
+              )}
+              allocatedCents={(billingData.usage?.totalLimit ?? 1000000) / 100}
+              usagePercentage={
+                billingData.usage?.totalLimit
+                  ? Math.round(
+                      ((billingData.usage.totalTokens ?? 0) / billingData.usage.totalLimit) * 100,
+                    )
+                  : 0
+              }
+            />
+          )}
+
           {/* Theme Toggle */}
           <Button
             variant="ghost"

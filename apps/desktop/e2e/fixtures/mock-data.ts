@@ -141,7 +141,7 @@ export function calculateEstimatedCost(
 ): number {
   // Pricing per 1M tokens (simplified)
   const pricing: Record<string, { input: number; output: number }> = {
-    'gpt-5.2': { input: 1.75, output: 14.0 },
+    'gpt-5.4': { input: 1.75, output: 14.0 },
     'gpt-4': { input: 0.03, output: 0.06 },
     'gpt-3.5': { input: 0.0005, output: 0.0015 },
     'claude-opus': { input: 5.0, output: 25.0 },
@@ -220,7 +220,7 @@ export interface ModelInfo {
 
 export const MOCK_MODELS: ModelInfo[] = [
   {
-    id: 'gpt-5.2',
+    id: 'gpt-5.4',
     name: 'GPT-5.2',
     provider: 'openai',
     contextWindow: 400000,
