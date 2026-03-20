@@ -16,6 +16,13 @@ import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../../lib/tauri-mock';
 import { getModelContextWindow } from '../../constants/llm';
 import { safeGetJSON, safeSetJSON, storageFallback } from '../../utils/localStorage';
+import { useAppModeStore } from '../appModeStore';
+import {
+  getCloudConversations,
+  createCloudConversation,
+  deleteCloudConversation,
+  getCloudMessages,
+} from '../../services/cloudChat';
 import type {
   EnhancedMessage,
   ConversationSummary,
@@ -51,6 +58,10 @@ export type {
   SlashCommandMetadata,
   BranchSummary,
 } from './types';
+
+function isCloudMode(): boolean {
+  return useAppModeStore.getState().mode === 'cloud';
+}
 
 /**
  * Backend Conversation type from Tauri/SQLite
@@ -657,6 +668,48 @@ export const useChatStore = create<ChatState>()(
                   ...(options?.incognito ? { incognito: true } : {}),
                 };
                 state.conversations.unshift(convo);
+
+                if (isCloudMode()) {
+                  // Async: create in cloud, remap temp ID to real cloud ID on success
+                  createCloudConversation(title)
+                    .then((cloudConvo) => {
+                      set(
+                        (s) => {
+                          const idx = s.conversations.findIndex((c) => c.id === id);
+                          if (idx !== -1) {
+                            s.conversations[idx]!.id = cloudConvo.id;
+                          }
+                          // Remap messagesByConversation key
+                          if (s.messagesByConversation[id]) {
+                            s.messagesByConversation[cloudConvo.id] = s.messagesByConversation[id]!;
+                            delete s.messagesByConversation[id];
+                          }
+                          if (s.activeConversationId === id) {
+                            s.activeConversationId = cloudConvo.id;
+                          }
+                        },
+                        undefined,
+                        'chat/createConversation/cloud/remap',
+                      );
+                    })
+                    .catch((error) => {
+                      console.error('[ChatStore] Failed to create cloud conversation:', error);
+                      // Rollback: remove optimistic entry
+                      set(
+                        (s) => {
+                          s.conversations = s.conversations.filter((c) => c.id !== id);
+                          delete s.messagesByConversation[id];
+                          if (s.activeConversationId === id) {
+                            const next = s.conversations[0];
+                            s.activeConversationId = next ? next.id : null;
+                            s.messages = next ? (s.messagesByConversation[next.id] ?? []) : [];
+                          }
+                        },
+                        undefined,
+                        'chat/createConversation/cloud/rollback',
+                      );
+                    });
+                }
                 // AUDIT-006-012 fix: Cap active conversations at 500
                 if (state.conversations.length > 500) {
                   // Remove oldest non-pinned, non-active conversations.
@@ -714,6 +767,34 @@ export const useChatStore = create<ChatState>()(
               return;
             }
 
+            if (isCloudMode()) {
+              try {
+                const cloudConversations = await getCloudConversations();
+                const converted: ConversationSummary[] = cloudConversations.map((c) => ({
+                  id: c.id,
+                  title: c.title ?? 'Untitled',
+                  pinned: false,
+                  lastMessage: '',
+                  updatedAt: new Date(c.updated_at),
+                  createdAt: new Date(c.created_at),
+                  messageCount: c.message_count ?? 0,
+                }));
+                set(
+                  (state) => {
+                    state.conversations = converted;
+                    if (!state.activeConversationId && converted.length > 0) {
+                      state.activeConversationId = converted[0]!.id;
+                    }
+                  },
+                  undefined,
+                  'chat/loadConversations/cloud/success',
+                );
+              } catch (error) {
+                console.error('[ChatStore] Failed to load cloud conversations:', error);
+              }
+              return;
+            }
+
             try {
               const backendConversations = await invoke<BackendConversation[]>(
                 'chat_get_conversations',
@@ -743,6 +824,54 @@ export const useChatStore = create<ChatState>()(
           },
 
           loadConversationMessages: async (id: string, userId: string) => {
+            if (isCloudMode()) {
+              set(
+                (s) => {
+                  s.isLoadingMessages = true;
+                },
+                undefined,
+                'chat/loadConversationMessages/cloud/start',
+              );
+
+              try {
+                const cloudMessages = await getCloudMessages(id);
+                const enhancedMessages: EnhancedMessage[] = cloudMessages.map((m) => ({
+                  id: m.id,
+                  role: m.role as 'user' | 'assistant' | 'system',
+                  content: m.content,
+                  timestamp: new Date(m.created_at),
+                  metadata: {
+                    model: m.model ?? undefined,
+                    provider: m.provider ?? undefined,
+                    tokenCount: m.token_count ?? undefined,
+                    cost: m.cost ?? undefined,
+                  },
+                }));
+
+                set(
+                  (s) => {
+                    s.messagesByConversation[id] = enhancedMessages;
+                    if (s.activeConversationId === id) {
+                      s.messages = enhancedMessages;
+                    }
+                    s.isLoadingMessages = false;
+                  },
+                  undefined,
+                  'chat/loadConversationMessages/cloud/success',
+                );
+              } catch (error) {
+                console.error('[ChatStore] Failed to load cloud messages:', error);
+                set(
+                  (s) => {
+                    s.isLoadingMessages = false;
+                  },
+                  undefined,
+                  'chat/loadConversationMessages/cloud/error',
+                );
+              }
+              return;
+            }
+
             // Get the database ID from the UUID mapping
             const dbId = uuidToDbId(id);
             if (!dbId) {
@@ -867,6 +996,13 @@ export const useChatStore = create<ChatState>()(
               undefined,
               'chat/deleteConversation',
             );
+
+            if (isCloudMode()) {
+              deleteCloudConversation(id).catch((error) => {
+                console.error('[ChatStore] Failed to delete cloud conversation:', error);
+              });
+              return;
+            }
 
             // Persist deletion to the backend if a database record exists for this conversation
             const dbId = uuidToDbId(id);
