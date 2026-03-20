@@ -13,7 +13,7 @@
  * - GET /:id: 60/min - read single, lightweight
  * - DELETE /:id: 10/min - destructive operation
  * - PATCH /:id: 30/min - metadata write
- * - POST /send: 30/min - action-based (future LLM proxy)
+ * - POST /send: 30/min - SSE streaming LLM proxy (Anthropic, OpenAI, Google)
  */
 
 import { Router, type Request, type Response } from 'express';
@@ -80,6 +80,143 @@ async function verifyConversationOwnership(conversationId: string, userId: strin
   // Mask ownership as 404 to prevent enumeration attacks
   if (conversation.user_id !== userId) {
     throw new AppError('Conversation not found', 404);
+  }
+}
+
+// =============================================================================
+// HELPERS: LLM Provider Resolution & Streaming
+// =============================================================================
+
+type Provider = 'anthropic' | 'openai' | 'google';
+
+function resolveProvider(model: string): Provider {
+  if (model.startsWith('claude-')) return 'anthropic';
+  if (
+    model.startsWith('gpt-') ||
+    model.startsWith('o1-') ||
+    model.startsWith('o3-') ||
+    model.startsWith('o4-')
+  )
+    return 'openai';
+  if (model.startsWith('gemini-')) return 'google';
+  return 'anthropic'; // default
+}
+
+async function callUpstreamLLM(
+  provider: Provider,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+): Promise<globalThis.Response> {
+  switch (provider) {
+    case 'anthropic': {
+      const apiKey = process.env['ANTHROPIC_API_KEY'];
+      if (!apiKey) throw new AppError('Anthropic API key not configured', 500);
+
+      // Convert to Anthropic format: extract system, rest are messages
+      const systemMsg = messages.find((m) => m.role === 'system');
+      const nonSystemMsgs = messages.filter((m) => m.role !== 'system');
+
+      const body: Record<string, unknown> = {
+        model,
+        messages: nonSystemMsgs.map((m) => ({ role: m.role, content: m.content })),
+        max_tokens: 4096,
+        stream: true,
+      };
+      if (systemMsg) {
+        body['system'] = systemMsg.content;
+      }
+
+      return fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(body),
+      });
+    }
+
+    case 'openai': {
+      const apiKey = process.env['OPENAI_API_KEY'];
+      if (!apiKey) throw new AppError('OpenAI API key not configured', 500);
+
+      return fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: true,
+        }),
+      });
+    }
+
+    case 'google': {
+      const apiKey = process.env['GOOGLE_AI_API_KEY'];
+      if (!apiKey) throw new AppError('Google AI API key not configured', 500);
+
+      // Convert to Gemini format
+      const contents = messages
+        .filter((m) => m.role !== 'system')
+        .map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }],
+        }));
+
+      const systemInstruction = messages.find((m) => m.role === 'system');
+
+      const body: Record<string, unknown> = { contents };
+      if (systemInstruction) {
+        body['systemInstruction'] = { parts: [{ text: systemInstruction.content }] };
+      }
+
+      return fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
+    }
+  }
+}
+
+function extractTextFromChunk(parsed: unknown, provider: Provider): string | null {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const obj = parsed as Record<string, unknown>;
+
+  switch (provider) {
+    case 'anthropic': {
+      if (obj['type'] === 'content_block_delta') {
+        const delta = obj['delta'] as Record<string, unknown> | undefined;
+        if (delta && typeof delta['text'] === 'string') return delta['text'];
+      }
+      return null;
+    }
+
+    case 'openai': {
+      const choices = obj['choices'] as Array<Record<string, unknown>> | undefined;
+      if (choices?.[0]) {
+        const delta = choices[0]['delta'] as Record<string, unknown> | undefined;
+        if (delta && typeof delta['content'] === 'string') return delta['content'];
+      }
+      return null;
+    }
+
+    case 'google': {
+      const candidates = obj['candidates'] as Array<Record<string, unknown>> | undefined;
+      if (candidates?.[0]) {
+        const content = candidates[0]['content'] as Record<string, unknown> | undefined;
+        const parts = content?.['parts'] as Array<Record<string, unknown>> | undefined;
+        if (parts?.[0] && typeof parts[0]['text'] === 'string') return parts[0]['text'];
+      }
+      return null;
+    }
   }
 }
 
@@ -290,7 +427,14 @@ router.patch('/:id', createRateLimiter('cloud-chat-patch'), async (req: Request,
 
 /**
  * POST /api/cloud-chat/send
- * Send a message (placeholder — LLM proxying is implemented in a separate task).
+ * Send a message and stream the LLM response via SSE.
+ * Supports Anthropic, OpenAI, and Google providers.
+ *
+ * SSE protocol:
+ * - First event: { conversation_id: string }
+ * - Content events: { text: string }
+ * - Error events: { error: string }
+ * - Terminal event: [DONE]
  *
  * SECURITY: Rate limited to 30/min as it is an action-based operation.
  */
@@ -302,19 +446,151 @@ router.post('/send', createRateLimiter('cloud-chat-send'), async (req: Request, 
 
   const { conversation_id, message, model } = sendMessageSchema.parse(req.body);
 
-  logger.info(
-    { userId: user.userId, conversationId: conversation_id ?? null, model: model ?? null },
-    'Cloud chat send placeholder called',
-  );
+  // Auto-create conversation if none provided
+  let conversationId = conversation_id;
+  if (!conversationId) {
+    const newId = randomUUID();
+    const now = new Date().toISOString();
+    const { error: createErr } = await supabase.from('conversations').insert({
+      id: newId,
+      user_id: user.userId,
+      title: message.slice(0, 100),
+      model: model ?? null,
+      is_archived: false,
+      is_deleted: false,
+      created_at: now,
+      updated_at: now,
+    });
+    if (createErr) {
+      logger.error({ error: createErr }, 'Failed to auto-create conversation');
+      throw new AppError('Failed to create conversation', 500);
+    }
+    conversationId = newId;
+  } else {
+    await verifyConversationOwnership(conversationId, user.userId);
+  }
 
-  // Placeholder response — full LLM proxying is Task 6.
-  res.status(202).json({
-    status: 'accepted',
-    message: 'LLM proxying not yet implemented. This endpoint will stream responses in Task 6.',
-    conversation_id: conversation_id ?? null,
-    echo: message,
-    plan_tier: req.planTier,
+  // Persist user message
+  const userMsgId = randomUUID();
+  const { error: userMsgErr } = await supabase.from('messages').insert({
+    id: userMsgId,
+    conversation_id: conversationId,
+    role: 'user',
+    content: message,
+    model: null,
+    created_at: new Date().toISOString(),
   });
+  if (userMsgErr) {
+    logger.error({ error: userMsgErr }, 'Failed to persist user message');
+    throw new AppError('Failed to save message', 500);
+  }
+
+  // Fetch conversation history for context
+  const { data: history } = await supabase
+    .from('messages')
+    .select('role, content')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true })
+    .limit(50);
+
+  const messages = (history ?? []).map((m: { role: string; content: string }) => ({
+    role: m.role as 'user' | 'assistant' | 'system',
+    content: m.content,
+  }));
+
+  // Resolve provider and call upstream LLM
+  const resolvedModel = model ?? 'claude-haiku-4-5-20251001';
+  const provider = resolveProvider(resolvedModel);
+
+  // Set SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  let fullContent = '';
+
+  try {
+    // Send conversation_id as first event
+    res.write(`data: ${JSON.stringify({ conversation_id: conversationId })}\n\n`);
+
+    const upstreamRes = await callUpstreamLLM(provider, resolvedModel, messages);
+
+    if (!upstreamRes.body) {
+      res.write(`data: ${JSON.stringify({ error: 'No response body from upstream' })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+      return;
+    }
+
+    const reader = upstreamRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith(':')) continue;
+
+        if (trimmed === 'data: [DONE]') {
+          continue;
+        }
+
+        if (trimmed.startsWith('data: ')) {
+          const jsonStr = trimmed.slice(6);
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const text = extractTextFromChunk(parsed, provider);
+            if (text) {
+              fullContent += text;
+              res.write(`data: ${JSON.stringify({ text })}\n\n`);
+            }
+          } catch {
+            // Skip unparseable lines
+          }
+        }
+      }
+    }
+
+    // Persist assistant message
+    const { error: assistantMsgErr } = await supabase.from('messages').insert({
+      id: randomUUID(),
+      conversation_id: conversationId,
+      role: 'assistant',
+      content: fullContent,
+      model: resolvedModel,
+      created_at: new Date().toISOString(),
+    });
+    if (assistantMsgErr) {
+      logger.error({ error: assistantMsgErr }, 'Failed to persist assistant message');
+    }
+
+    // Update conversation timestamp
+    await supabase
+      .from('conversations')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', conversationId);
+
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (err) {
+    logger.error({ error: err }, 'SSE stream error');
+    try {
+      res.write(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } catch {
+      // Response already ended
+    }
+  }
 });
 
 export { router as cloudChatRouter };
