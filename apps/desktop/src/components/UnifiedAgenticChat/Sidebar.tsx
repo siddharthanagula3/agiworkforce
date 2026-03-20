@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Cloud,
   Download,
   FileText,
   FlaskConical,
@@ -67,6 +68,7 @@ import { SimpleModeToggle } from '../SimpleMode';
 import { NotificationCenter } from '../Notifications';
 import { ShareConversationDialog } from './ShareConversationDialog';
 import { SidebarFeaturesPopover } from './SidebarFeaturesPopover';
+import { TransferDialog } from './TransferDialog';
 import { IncognitoToggle } from './IncognitoToggle';
 import { save } from '@tauri-apps/plugin-dialog';
 import { invoke } from '../../lib/tauri-mock';
@@ -122,6 +124,7 @@ interface ConversationItemProps {
   onOpenCustomInstructions?: (id: string) => void;
   onTogglePin: (id: string) => void;
   onShare: (id: string, title: string) => void;
+  onTransfer: (id: string, title: string) => void;
   onExport: (id: string, title: string) => void;
   onExportPdf: (id: string, title: string) => void;
   onArchive: (id: string) => void;
@@ -147,6 +150,7 @@ const ConversationItem = memo<ConversationItemProps>(
     onOpenCustomInstructions,
     onTogglePin,
     onShare,
+    onTransfer,
     onExport,
     onExportPdf,
     onArchive,
@@ -249,6 +253,18 @@ const ConversationItem = memo<ConversationItemProps>(
                     title="Share conversation"
                   >
                     <Link2 className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTransfer(conv.id, conv.title || 'Untitled');
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-[hsl(var(--muted-foreground))] hover:text-blue-500"
+                    title="Transfer conversation"
+                  >
+                    <Cloud className="h-3 w-3" />
                   </Button>
                   <Button
                     onClick={(e) => {
@@ -390,6 +406,7 @@ export function Sidebar({
 
   // Local/Cloud mode — drives the indicator pill in the footer
   const mode = useAppModeStore(selectMode);
+  const setMode = useAppModeStore((s) => s.setMode);
 
   // Usage data for the sidebar widget (only shown when > 50%)
   const budgetPct = useBillingUsageStore(selectBudgetPercentage);
@@ -491,6 +508,11 @@ export function Sidebar({
   }>({ open: false, conversationId: '', conversationTitle: '' });
 
   const [featuresPopoverOpen, setFeaturesPopoverOpen] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<{
+    id: string;
+    title: string;
+    localDbId?: number;
+  } | null>(null);
 
   // Get projects for filtering - use useShallow to prevent re-renders from array reference changes
   const projects = useProjectStore(useShallow(selectActiveProjects));
@@ -710,6 +732,10 @@ export function Sidebar({
     setShareDialog({ open: true, conversationId: id, conversationTitle: title });
   }, []);
 
+  const handleTransfer = useCallback((id: string, title: string) => {
+    setTransferTarget({ id, title });
+  }, []);
+
   const handleArchive = useCallback(
     (id: string) => {
       archiveConversation(id);
@@ -793,6 +819,7 @@ export function Sidebar({
         onOpenCustomInstructions={onOpenCustomInstructions}
         onTogglePin={togglePinnedConversation}
         onShare={handleShare}
+        onTransfer={handleTransfer}
         onExport={handleExportConversation}
         onExportPdf={handleExportPdf}
         onArchive={handleArchive}
@@ -814,6 +841,7 @@ export function Sidebar({
       onOpenCustomInstructions,
       togglePinnedConversation,
       handleShare,
+      handleTransfer,
       handleExportConversation,
       handleExportPdf,
       handleArchive,
@@ -903,6 +931,17 @@ export function Sidebar({
         isOpen={shareDialog.open}
         onClose={() => setShareDialog((prev) => ({ ...prev, open: false }))}
       />
+
+      {/* Transfer Conversation Dialog */}
+      {transferTarget && (
+        <TransferDialog
+          conversationId={transferTarget.id}
+          conversationTitle={transferTarget.title}
+          direction={mode === 'local' ? 'local_to_cloud' : 'cloud_to_local'}
+          localDbId={transferTarget.localDbId}
+          onClose={() => setTransferTarget(null)}
+        />
+      )}
 
       {}
       <AnimatePresence>
@@ -1337,18 +1376,21 @@ export function Sidebar({
             <div className="flex-1 min-w-0">
               <UserProfile collapsed={collapsed} />
             </div>
-            {/* Mode indicator pill — expanded state */}
+            {/* Mode toggle pill — expanded state */}
             {!collapsed && (
-              <div
+              <button
+                type="button"
+                onClick={() => setMode(mode === 'local' ? 'cloud' : 'local')}
+                title={mode === 'local' ? 'Switch to Cloud mode' : 'Switch to Local mode'}
                 className={cn(
-                  'px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider shrink-0',
+                  'px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider shrink-0 transition-colors cursor-pointer',
                   mode === 'local'
-                    ? 'bg-emerald-500/20 text-emerald-400'
-                    : 'bg-blue-500/20 text-blue-400',
+                    ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                    : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30',
                 )}
               >
                 {mode === 'local' ? 'Local' : 'Cloud'}
-              </div>
+              </button>
             )}
             {!collapsed && <NotificationCenter className="shrink-0" />}
           </div>
