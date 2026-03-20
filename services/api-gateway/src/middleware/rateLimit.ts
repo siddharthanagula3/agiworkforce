@@ -91,6 +91,10 @@ export const rateLimitConfigs = {
   // SECURITY: Sending messages is action-based, limit to 30/min
   'cloud-chat-send': { windowMs: 60_000, max: 30 },
 
+  // LLM proxy: tier-aware limit (enforced at 30/min baseline; pro users get higher via plan gate)
+  // SECURITY: 30/min prevents runaway API cost from compromised tokens
+  'llm-completions': { windowMs: 60_000, max: 30 },
+
   // Health/default: lenient for monitoring
   // SECURITY: Health checks from monitoring systems, allow 100/min
   health: { windowMs: 60_000, max: 100 },
