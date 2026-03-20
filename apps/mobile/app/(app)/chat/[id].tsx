@@ -2,10 +2,11 @@ import { useEffect, useCallback, useRef, useState } from 'react';
 import { View, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Share2 } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/components/chat/MessageList';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { ConversationExportSheet } from '@/components/chat/ConversationExportSheet';
 import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/components/voice/VoiceConversationScreen';
 import { NetworkBadge } from '@/components/ui/NetworkBadge';
@@ -14,6 +15,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { useVoicePlayback } from '@/hooks/useVoicePlayback';
+import { generateImage } from '@/services/imagegen';
 import { colors } from '@/lib/theme';
 
 /**
@@ -26,6 +28,7 @@ export default function ChatScreen() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const modelPickerRef = useRef<BottomSheet>(null);
+  const exportSheetRef = useRef<BottomSheet>(null);
 
   const conversationMessages = useChatStore((s) => (id ? (s.messages[id] ?? []) : []));
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -97,6 +100,20 @@ export default function ChatScreen() {
     (text: string, attachments?: import('@/components/chat/AttachmentPreview').Attachment[]) => {
       if (!id) return;
       stopSpeaking();
+
+      // Handle /image command — generate an image and add result to conversation
+      if (text.startsWith('/image ')) {
+        const prompt = text.slice(7).trim();
+        if (prompt) {
+          // Add user message immediately, then kick off generation
+          sendMessage(id, text, selectedModel, attachments);
+          generateImage({ prompt }).catch((err) => {
+            console.warn('[ChatScreen] Image generation failed:', err);
+          });
+          return;
+        }
+      }
+
       sendMessage(id, text, selectedModel, attachments);
     },
     [id, selectedModel, sendMessage, stopSpeaking],
@@ -222,6 +239,16 @@ export default function ChatScreen() {
             {title}
           </Text>
 
+          {/* Export conversation button */}
+          <Pressable
+            onPress={() => exportSheetRef.current?.snapToIndex(0)}
+            className="p-2 rounded-lg active:bg-white/5"
+            accessibilityLabel="Export conversation"
+            accessibilityRole="button"
+          >
+            <Share2 size={18} color={colors.textSecondary} />
+          </Pressable>
+
           {/* Network badge */}
           <NetworkBadge />
         </View>
@@ -262,6 +289,13 @@ export default function ChatScreen() {
           visible={voiceModeVisible}
           onClose={handleCloseVoiceMode}
           onSendMessage={handleVoiceSendMessage}
+        />
+
+        {/* Conversation export bottom sheet */}
+        <ConversationExportSheet
+          sheetRef={exportSheetRef}
+          messages={conversationMessages}
+          title={title}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

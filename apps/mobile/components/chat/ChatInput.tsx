@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback } from 'react';
 import { View, TextInput, Pressable } from 'react-native';
-import { Send, Square } from 'lucide-react-native';
 import { AutoApproveToggle } from './AutoApproveToggle';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
+import { SendButton } from './SendButton';
+import { CommandPalette } from './CommandPalette';
+import { TemporaryChatToggle } from './TemporaryChatToggle';
 import { VoiceInputButton } from '@/components/voice/VoiceInputButton';
 import { RecordingOverlay } from '@/components/voice/RecordingOverlay';
 import * as VoiceService from '@/services/voice';
@@ -36,13 +38,13 @@ export function ChatInput({
   const recordingStartTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed && attachments.length === 0) return;
     onSend(trimmed, attachments.length > 0 ? attachments : undefined);
     setText('');
     setAttachments([]);
-  };
+  }, [text, attachments, onSend]);
 
   const handleAttach = useCallback((newAttachments: Attachment[]) => {
     setAttachments((prev) => [...prev, ...newAttachments]);
@@ -120,6 +122,23 @@ export function ChatInput({
 
   const hasContent = text.trim().length > 0 || attachments.length > 0;
 
+  const showCommandPalette = text.startsWith('/') && !isStreaming;
+
+  const handleSelectCommand = useCallback((command: string) => {
+    setText(command + ' ');
+    inputRef.current?.focus();
+  }, []);
+
+  const sendButtonState = isStreaming ? ('streaming' as const) : ('idle' as const);
+
+  const handleSendButtonPress = useCallback(() => {
+    if (isStreaming) {
+      onStop?.();
+    } else {
+      handleSend();
+    }
+  }, [isStreaming, onStop, handleSend]);
+
   return (
     <View className="px-4 pb-4 pt-2">
       {/* Recording overlay — shown while recording is active */}
@@ -134,12 +153,22 @@ export function ChatInput({
       {/* Attachment preview strip */}
       <AttachmentPreview attachments={attachments} onRemove={handleRemoveAttachment} />
 
+      {/* Command palette — shown when input starts with "/" */}
+      <CommandPalette
+        visible={showCommandPalette}
+        query={text}
+        onSelectCommand={handleSelectCommand}
+      />
+
       <View className="flex-row items-end gap-2 bg-surface-elevated rounded-2xl border border-white/8 px-3 py-2">
         {/* Attachment button */}
         <AttachmentButton onAttach={handleAttach} disabled={isStreaming} />
 
         {/* Auto-approve shield */}
         <AutoApproveToggle />
+
+        {/* Temporary chat toggle */}
+        <TemporaryChatToggle />
 
         {/* Model selector */}
         <ModelSelectorButton onPress={onOpenModelPicker ?? (() => {})} />
@@ -173,29 +202,11 @@ export function ChatInput({
         />
 
         {/* Send / Stop button */}
-        {isStreaming ? (
-          <Pressable
-            onPress={onStop}
-            className="p-2 rounded-xl bg-red-500"
-            accessible={true}
-            accessibilityLabel="Stop generating"
-            accessibilityRole="button"
-          >
-            <Square size={16} color="#fff" fill="#fff" />
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={handleSend}
-            className={`p-2 rounded-xl ${hasContent ? 'bg-terra-cotta-500' : 'bg-white/10'}`}
-            disabled={!hasContent}
-            accessible={true}
-            accessibilityLabel="Send message"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !hasContent }}
-          >
-            <Send size={16} color={hasContent ? '#fff' : colors.textMuted} />
-          </Pressable>
-        )}
+        <SendButton
+          state={sendButtonState}
+          onPress={handleSendButtonPress}
+          disabled={!hasContent && !isStreaming}
+        />
       </View>
     </View>
   );

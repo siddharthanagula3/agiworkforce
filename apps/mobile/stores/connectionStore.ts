@@ -24,8 +24,19 @@ interface RTCIceCandidateInit {
 import { WS_URL } from '@/lib/constants';
 import { useAgentStore } from './agentStore';
 import type { Agent } from './agentStore';
+import { notifyCompanionMessage } from '@/services/companionNotifications';
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type ConnectionStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'error'
+  | 'stale'
+  | 'reconnecting'
+  | 'session_expired';
+
+/** Qualitative indicator of connection health based on heartbeat latency */
+export type ConnectionQuality = 'strong' | 'weak' | 'disconnected';
 
 export interface DesktopMetadata {
   deviceName?: string;
@@ -48,16 +59,61 @@ interface ConnectionState {
   error: string | null;
   /** Session expiry timestamp (ms since epoch) */
   sessionExpiresAt: number | null;
+  /** Timestamp of last successful heartbeat pong from desktop (ms) */
+  lastHeartbeatAt: number | null;
+  /** Latency of the last heartbeat round-trip in ms (null if no pong received) */
+  lastHeartbeatLatencyMs: number | null;
+  /** How many consecutive heartbeats have been missed */
+  missedHeartbeats: number;
+  /** Countdown (seconds) until next reconnect attempt when reconnecting */
+  reconnectCountdown: number;
+  /** Qualitative connection quality derived from heartbeat latency */
+  connectionQuality: ConnectionQuality;
+  /** Telemetry: total reconnect attempts in this session */
+  reconnectAttempts: number;
+  /** Telemetry: number of successful reconnects */
+  reconnectSuccesses: number;
+  /** Telemetry: ms from reconnect start to connected (most recent) */
+  lastReconnectDurationMs: number | null;
+  /** Timestamp when the current reconnect attempt started (ms) */
+  reconnectStartedAt: number | null;
 
   // --- Actions ---
   connect: (code: string) => void;
   disconnect: () => void;
   sendControl: (action: string, payload?: unknown) => void;
+  /** Queue a control message to send once reconnected */
+  queueControl: (action: string, payload?: unknown) => void;
   clearError: () => void;
+  /** Record a heartbeat pong received from the desktop */
+  recordHeartbeat: (latencyMs?: number) => void;
+  /** Mark the status as stale after a missed heartbeat */
+  markStale: () => void;
+  /** Begin reconnecting countdown */
+  beginReconnecting: (countdownSeconds: number) => void;
+  /** Decrement reconnect countdown by 1 */
+  tickReconnectCountdown: () => void;
+  /** Mark session as expired */
+  markSessionExpired: () => void;
 }
 
 /** Signaling client instance — kept outside state to avoid serialization */
 let signalingClient: SignalingClient | null = null;
+
+/** Queue of control messages to flush once reconnected */
+const pendingControlQueue: Array<{ action: string; payload: unknown }> = [];
+
+/** Drain and send all queued control messages */
+function flushPendingControlQueue(): void {
+  if (pendingControlQueue.length === 0) return;
+  const store = useConnectionStore.getState();
+  while (pendingControlQueue.length > 0) {
+    const msg = pendingControlQueue.shift();
+    if (msg) {
+      store.sendControl(msg.action, msg.payload);
+    }
+  }
+}
 
 /** WebRTC peer connection for low-latency data channel */
 let peerConnection: RTCPeerConnection | null = null;
@@ -115,6 +171,23 @@ function handleControlMessage(payload: unknown): void {
       if (agentId) {
         useAgentStore.getState().removeAgent(agentId);
       }
+      break;
+    }
+    case 'pong': {
+      // Heartbeat pong received from desktop — record it with round-trip latency
+      const pingTimestamp = msg['timestamp'] as number | undefined;
+      const latencyMs = pingTimestamp != null ? Date.now() - pingTimestamp : undefined;
+      useConnectionStore.getState().recordHeartbeat(latencyMs);
+      break;
+    }
+    case 'approval_request':
+    case 'agent_failed':
+    case 'emergency_stop':
+    case 'task_completed':
+    case 'agent_paused':
+    case 'heartbeat_lost': {
+      // Notify the companion notification bridge — fires local push notification
+      notifyCompanionMessage(msg as { action: string; [key: string]: unknown });
       break;
     }
     default:
@@ -259,6 +332,22 @@ function cleanupPeerConnection(): void {
   }
 }
 
+/** Derive connection quality from heartbeat latency and missed heartbeats */
+function deriveConnectionQuality(
+  latencyMs: number | null,
+  missedHeartbeats: number,
+  status: ConnectionStatus,
+): ConnectionQuality {
+  if (status === 'disconnected' || status === 'error' || status === 'session_expired') {
+    return 'disconnected';
+  }
+  if (missedHeartbeats >= 2 || status === 'stale') return 'disconnected';
+  if (latencyMs === null) return 'weak'; // connected but no pong yet
+  if (latencyMs < 200) return 'strong';
+  if (latencyMs < 800) return 'weak';
+  return 'disconnected';
+}
+
 export const useConnectionStore = create<ConnectionState>()(
   persist(
     (set, get) => ({
@@ -268,23 +357,36 @@ export const useConnectionStore = create<ConnectionState>()(
       desktopMetadata: null,
       error: null,
       sessionExpiresAt: null,
+      lastHeartbeatAt: null,
+      lastHeartbeatLatencyMs: null,
+      missedHeartbeats: 0,
+      reconnectCountdown: 0,
+      connectionQuality: 'disconnected',
+      reconnectAttempts: 0,
+      reconnectSuccesses: 0,
+      lastReconnectDurationMs: null,
+      reconnectStartedAt: null,
 
       connect: (rawCode: string) => {
         // Clean up any existing connection
         const currentState = get();
+        const isReconnect =
+          currentState.status === 'stale' || currentState.status === 'reconnecting';
         if (currentState.status === 'connecting' || currentState.status === 'connected') {
           get().disconnect();
         }
 
         const code = parsePairingCode(rawCode);
-        set({
+        set((state) => ({
           status: 'connecting',
           pairingCode: code,
           error: null,
           desktopName: null,
           desktopMetadata: null,
           sessionExpiresAt: null,
-        });
+          reconnectAttempts: isReconnect ? state.reconnectAttempts + 1 : state.reconnectAttempts,
+          reconnectStartedAt: isReconnect ? Date.now() : state.reconnectStartedAt,
+        }));
 
         // Set up WebRTC
         setupPeerConnection();
@@ -316,12 +418,35 @@ export const useConnectionStore = create<ConnectionState>()(
 
               case 'peer_ready': {
                 const metadata = (event.metadata ?? {}) as DesktopMetadata;
-                set({
+                const wasReconnecting =
+                  get().status === 'reconnecting' ||
+                  get().status === 'stale' ||
+                  get().status === 'connecting';
+                const reconnectStart = get().reconnectStartedAt;
+                const reconnectDuration =
+                  wasReconnecting && reconnectStart != null
+                    ? Date.now() - reconnectStart
+                    : get().lastReconnectDurationMs;
+
+                set((state) => ({
                   status: 'connected',
                   desktopName: (metadata.deviceName as string) ?? 'Desktop',
                   desktopMetadata: metadata,
                   error: null,
-                });
+                  lastHeartbeatAt: Date.now(),
+                  missedHeartbeats: 0,
+                  connectionQuality: 'weak', // will be updated on first pong with latency
+                  reconnectSuccesses: wasReconnecting
+                    ? state.reconnectSuccesses + 1
+                    : state.reconnectSuccesses,
+                  lastReconnectDurationMs: reconnectDuration,
+                  reconnectStartedAt: null,
+                }));
+
+                // Flush any queued control messages now that we're reconnected
+                flushPendingControlQueue();
+                // Request a fresh agent state from desktop (don't assume stale state is current)
+                useAgentStore.getState().setAgents([]);
                 break;
               }
 
@@ -349,13 +474,7 @@ export const useConnectionStore = create<ConnectionState>()(
                 break;
 
               case 'session_expired':
-                set({
-                  status: 'error',
-                  error: 'Pairing session expired. Please scan a new QR code.',
-                  pairingCode: null,
-                });
-                cleanupPeerConnection();
-                signalingClient = null;
+                get().markSessionExpired();
                 break;
 
               case 'terminated':
@@ -389,12 +508,89 @@ export const useConnectionStore = create<ConnectionState>()(
         });
       },
 
+      recordHeartbeat: (latencyMs?: number) => {
+        const currentStatus = get().status;
+        const missed = 0;
+        const quality = deriveConnectionQuality(
+          latencyMs ?? get().lastHeartbeatLatencyMs,
+          missed,
+          currentStatus === 'stale' || currentStatus === 'reconnecting'
+            ? 'connected'
+            : currentStatus,
+        );
+        set({
+          lastHeartbeatAt: Date.now(),
+          missedHeartbeats: 0,
+          lastHeartbeatLatencyMs: latencyMs ?? get().lastHeartbeatLatencyMs,
+          connectionQuality: quality,
+        });
+        // If we were stale/reconnecting but got a heartbeat, restore connected
+        if (currentStatus === 'stale' || currentStatus === 'reconnecting') {
+          set({ status: 'connected' });
+          // Flush queued control messages that piled up during disconnect
+          flushPendingControlQueue();
+          // Re-sync agent state from desktop
+          useAgentStore.getState().setAgents([]);
+        }
+      },
+
+      markStale: () => {
+        const current = get();
+        if (current.status !== 'connected' && current.status !== 'stale') return;
+        const missed = current.missedHeartbeats + 1;
+        set({
+          missedHeartbeats: missed,
+          connectionQuality: missed >= 1 ? 'weak' : current.connectionQuality,
+        });
+        if (missed >= 2) {
+          set({ status: 'stale', connectionQuality: 'disconnected' });
+        }
+      },
+
+      queueControl: (action: string, payload?: unknown) => {
+        pendingControlQueue.push({ action, payload: payload ?? {} });
+      },
+
+      beginReconnecting: (countdownSeconds: number) => {
+        set((state) => ({
+          status: 'reconnecting',
+          reconnectCountdown: countdownSeconds,
+          connectionQuality: 'disconnected',
+          reconnectStartedAt: state.reconnectStartedAt ?? Date.now(),
+        }));
+      },
+
+      tickReconnectCountdown: () => {
+        const current = get();
+        if (current.reconnectCountdown <= 1) {
+          set({ reconnectCountdown: 0 });
+        } else {
+          set({ reconnectCountdown: current.reconnectCountdown - 1 });
+        }
+      },
+
+      markSessionExpired: () => {
+        // Clear any queued messages — session is gone
+        pendingControlQueue.length = 0;
+        set({
+          status: 'session_expired',
+          error: 'Pairing session expired. Please scan a new QR code.',
+          pairingCode: null,
+          connectionQuality: 'disconnected',
+          reconnectStartedAt: null,
+        });
+        cleanupPeerConnection();
+        signalingClient = null;
+      },
+
       disconnect: () => {
         if (signalingClient) {
           signalingClient.close();
           signalingClient = null;
         }
         cleanupPeerConnection();
+        // Clear pending queue on intentional disconnect
+        pendingControlQueue.length = 0;
         set({
           status: 'disconnected',
           pairingCode: null,
@@ -402,13 +598,26 @@ export const useConnectionStore = create<ConnectionState>()(
           desktopMetadata: null,
           error: null,
           sessionExpiresAt: null,
+          lastHeartbeatAt: null,
+          lastHeartbeatLatencyMs: null,
+          missedHeartbeats: 0,
+          reconnectCountdown: 0,
+          connectionQuality: 'disconnected',
+          reconnectStartedAt: null,
         });
         // Clear agents on disconnect
         useAgentStore.getState().setAgents([]);
       },
 
       sendControl: (action: string, payload?: unknown) => {
+        const { status } = get();
         const message = { action, payload: payload ?? {} };
+
+        // If disconnecting or reconnecting, queue for later delivery instead of dropping
+        if (status === 'reconnecting' || status === 'stale') {
+          pendingControlQueue.push({ action, payload: payload ?? {} });
+          return;
+        }
 
         // Prefer data channel for low latency
         if (dataChannel && dataChannel.readyState === 'open') {

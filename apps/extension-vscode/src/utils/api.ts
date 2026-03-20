@@ -22,7 +22,7 @@ export interface ChatMessage {
   content: string;
 }
 
-export interface ChatCompletionRequest {
+interface ChatCompletionRequest {
   model: string;
   messages: ChatMessage[];
   stream?: boolean;
@@ -31,7 +31,7 @@ export interface ChatCompletionRequest {
   metadata?: Record<string, string | number | boolean>;
 }
 
-export interface ChatCompletionChunk {
+interface ChatCompletionChunk {
   id: string;
   object: 'chat.completion.chunk';
   created: number;
@@ -46,7 +46,7 @@ export interface ChatCompletionChunk {
   }>;
 }
 
-export interface ChatCompletionResponse {
+interface ChatCompletionResponse {
   id: string;
   object: 'chat.completion';
   created: number;
@@ -136,7 +136,7 @@ function getCloudApiEndpoint(): string {
  * Returns the desktop bridge base URL for bridge-specific (non-AI) operations.
  * Returns undefined if the bridge is not enabled.
  */
-export function getBridgeEndpoint(): string | undefined {
+function _getBridgeEndpoint(): string | undefined {
   const config = vscode.workspace.getConfiguration('agiWorkforce');
   const enabled = config.get<boolean>('desktopBridge.enabled') ?? false;
   if (!enabled) return undefined;
@@ -384,7 +384,7 @@ function httpsPostStream(
 
 // ─── Public API client ────────────────────────────────────────────────────────
 
-export interface StreamCallbacks {
+interface StreamCallbacks {
   onToken: (token: string) => void;
   onDone: () => void;
   onError: (err: Error) => void;
@@ -525,7 +525,7 @@ export async function chatCompletion(
  * API key is valid. Returns false on any error.
  * Always uses the cloud API endpoint (not the bridge) for the health check.
  */
-export async function pingApi(secrets: vscode.SecretStorage): Promise<boolean> {
+async function _pingApi(secrets: vscode.SecretStorage): Promise<boolean> {
   try {
     const apiKey = await getApiKey(secrets);
     if (apiKey === undefined || apiKey === '') {

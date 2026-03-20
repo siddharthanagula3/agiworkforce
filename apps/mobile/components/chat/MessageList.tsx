@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback } from 'react';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { View, RefreshControl, Text } from 'react-native';
 import { MessageBubble } from './MessageBubble';
+import { ConversationStarters } from './ConversationStarters';
 import type { ChatMessage } from '@/types/chat';
 
 interface MessageListProps {
@@ -95,17 +96,8 @@ export function MessageList({
 
   if (messages.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center px-8">
-        <Text
-          style={{
-            fontSize: 15,
-            color: 'rgba(255,255,255,0.4)',
-            textAlign: 'center',
-            lineHeight: 22,
-          }}
-        >
-          Start the conversation.{'\n'}Type a message below.
-        </Text>
+      <View className="flex-1 justify-center px-6">
+        <ConversationStarters title="Start a conversation" />
       </View>
     );
   }

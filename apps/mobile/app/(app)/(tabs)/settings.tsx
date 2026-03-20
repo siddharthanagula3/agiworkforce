@@ -23,8 +23,10 @@ import {
   Monitor,
   Volume2,
   Link2,
+  HelpCircle,
   type LucideIcon,
 } from 'lucide-react-native';
+import { useDemoStore } from '@/components/companion/CompanionDemoWalkthrough';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import type { ThemeMode } from '@/stores/settingsStore';
 import { Text } from '@/components/ui/text';
@@ -112,6 +114,35 @@ const AUTO_APPROVE_OPTIONS: { mode: AutoApproveMode; label: string; description:
   { mode: 'full', label: 'Full Auto', description: 'Auto-approve all actions' },
 ];
 
+function CompanionWalkthroughRow() {
+  const resetDemo = useDemoStore((s) => s.resetDemo);
+  const hasSeenDemo = useDemoStore((s) => s.hasSeenDemo);
+  const router = useRouter();
+
+  const handlePress = () => {
+    resetDemo();
+    router.push('/(app)/companion' as Parameters<typeof router.push>[0]);
+  };
+
+  return (
+    <Pressable
+      className="flex-row items-center justify-between py-3 px-1 active:bg-white/5 rounded-lg"
+      onPress={handlePress}
+      accessibilityLabel="Companion walkthrough tutorial"
+      accessibilityRole="button"
+    >
+      <View className="flex-row items-center gap-3">
+        <HelpCircle size={18} color={colors.textSecondary} />
+        <Text className="text-sm text-white">Companion Walkthrough</Text>
+      </View>
+      <View className="flex-row items-center gap-2">
+        {hasSeenDemo && <Text className="text-[10px] text-white/30">Seen</Text>}
+        <ChevronRight size={14} color={colors.textMuted} />
+      </View>
+    </Pressable>
+  );
+}
+
 function AutoApproveSelector() {
   const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
   const setAutoApproveMode = useSettingsStore((s) => s.setAutoApproveMode);
@@ -195,7 +226,7 @@ export default function SettingsTabScreen() {
 
   const handleManageSubscription = async () => {
     try {
-      const data = await api.post<{ url: string }>('/api/billing/portal');
+      const data = await api.post<{ url: string }>('/api/portal');
       if (data.url) {
         await Linking.openURL(data.url);
         return;
@@ -266,6 +297,8 @@ export default function SettingsTabScreen() {
             value={connectionStatus === 'connected' ? 'Connected' : 'Not connected'}
             onPress={() => router.push('/(app)/companion' as Parameters<typeof router.push>[0])}
           />
+          <Separator />
+          <CompanionWalkthroughRow />
         </Card>
 
         {/* Preferences */}
@@ -285,6 +318,14 @@ export default function SettingsTabScreen() {
             label="Push Notifications"
             value={notificationsEnabled}
             onValueChange={setNotificationsEnabled}
+          />
+          <Separator />
+          <SettingRow
+            icon={Bell}
+            label="Notification Preferences"
+            onPress={() =>
+              router.push('/(app)/settings/notifications' as Parameters<typeof router.push>[0])
+            }
           />
           <Separator />
           <SettingToggle

@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AgiWorkforceApiError, getApiKey, setApiKey, clearApiKey, pingApi } from '../utils/api';
+import { AgiWorkforceApiError, getApiKey, setApiKey, clearApiKey } from '../utils/api';
 import { ExtensionContext } from './__mocks__/vscode';
 
 describe('AgiWorkforceApiError', () => {
@@ -94,56 +94,6 @@ describe('getApiKey / setApiKey / clearApiKey round-trip', () => {
     // Should not throw even when nothing is stored
     await expect(clearApiKey(secrets)).resolves.toBeUndefined();
     expect(await getApiKey(secrets)).toBeUndefined();
-  });
-});
-
-describe('pingApi — uses GET not POST', () => {
-  let ctx: InstanceType<typeof ExtensionContext>;
-
-  beforeEach(() => {
-    ctx = new ExtensionContext();
-  });
-
-  it('returns false when no API key is stored', async () => {
-    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
-    // No key stored → should return false without making a network call
-    const result = await pingApi(secrets);
-    expect(result).toBe(false);
-  });
-
-  it('pingApi always resolves to a boolean (never throws)', async () => {
-    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
-    await setApiKey(secrets, 'sk-ping-test');
-    // pingApi uses httpsGet (HTTP GET method) internally — it catches all
-    // errors and resolves to a boolean. In a test environment this may
-    // resolve true or false depending on network; we only assert it is a boolean.
-    const result = await pingApi(secrets);
-    expect(typeof result).toBe('boolean');
-  });
-
-  it('pingApi does not reject even when network is unavailable', async () => {
-    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
-    await setApiKey(secrets, 'sk-network-fail');
-    // Should resolve (not reject) regardless of network state
-    await expect(pingApi(secrets)).resolves.toSatisfy((v: unknown) => typeof v === 'boolean');
-  });
-
-  it('uses GET not POST — httpsGet endpoint path is /models', async () => {
-    // Verify at code-structure level: pingApi calls httpsGet which uses
-    // method: 'GET'. We inspect the api.ts source to confirm this invariant.
-    // This is a documentation test — it will fail if someone changes the method.
-    const { readFileSync } = await import('fs');
-    const { resolve } = await import('path');
-    const src = readFileSync(resolve(__dirname, '../utils/api.ts'), 'utf8');
-    // pingApi should use httpsGet (not httpsPost) and hit /models endpoint
-    expect(src).toContain('httpsGet');
-    expect(src).toContain('/models');
-    // Confirm there is no httpsPost call inside pingApi function body
-    const pingApiFn = src.slice(src.indexOf('export async function pingApi'));
-    const nextFnIndex = pingApiFn.indexOf('\nexport ');
-    const pingApiBody = nextFnIndex > 0 ? pingApiFn.slice(0, nextFnIndex) : pingApiFn;
-    expect(pingApiBody).not.toContain('httpsPost');
-    expect(pingApiBody).toContain('httpsGet');
   });
 });
 
