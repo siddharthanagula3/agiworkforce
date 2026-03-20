@@ -8,7 +8,8 @@
  * All invoke() params use camelCase per Tauri IPC rules.
  */
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { devtools, persist, createJSONStorage } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import {
   cloneMarketplaceWorkflow as apiCloneWorkflow,
   commentOnWorkflow as apiCommentOnWorkflow,
@@ -147,7 +148,11 @@ interface MarketplaceState {
     userName: string;
     comment: string;
   }) => Promise<string>;
-  getWorkflowComments: (workflowId: string, limit: number, offset: number) => Promise<WorkflowComment[]>;
+  getWorkflowComments: (
+    workflowId: string,
+    limit: number,
+    offset: number,
+  ) => Promise<WorkflowComment[]>;
   deleteWorkflowComment: (commentId: string, userId: string) => Promise<void>;
 
   favoriteWorkflow: (workflowId: string, userId: string) => Promise<void>;
@@ -173,249 +178,273 @@ interface MarketplaceState {
 
 export const useMarketplaceStore = create<MarketplaceState>()(
   devtools(
-    (set) => ({
-      featured: [],
-      trending: [],
-      searchResults: [],
-      templates: [],
-      categoryCounts: [],
-      popularTags: [],
-      isLoading: false,
-      error: null,
+    persist(
+      immer((set) => ({
+        featured: [],
+        trending: [],
+        searchResults: [],
+        templates: [],
+        categoryCounts: [],
+        popularTags: [],
+        isLoading: false,
+        error: null,
 
-      // ── Publishing ──────────────────────────────────────────────────────
+        // ── Publishing ──────────────────────────────────────────────────────
 
-      publishWorkflow: async (request) => {
-        return apiPublishWorkflow(request);
+        publishWorkflow: async (request) => {
+          return apiPublishWorkflow(request);
+        },
+
+        publishWorkflowToMarketplace: async (params) => {
+          return apiPublishToMarketplace({
+            workflowId: params.workflowId,
+            category: params.category,
+            tags: params.tags,
+            estimatedTimeSaved: params.estimatedTimeSaved,
+            estimatedCostSaved: params.estimatedCostSaved,
+            thumbnailUrl: params.thumbnailUrl,
+            userId: params.userId,
+            userName: params.userName,
+          });
+        },
+
+        unpublishWorkflow: async (workflowId, userId) => {
+          await apiUnpublishWorkflow(workflowId, userId);
+        },
+
+        getMyPublishedWorkflows: async (userId) => {
+          return apiGetMyPublished(userId);
+        },
+
+        // ── Browsing ────────────────────────────────────────────────────────
+
+        fetchFeatured: async (limit = 10) => {
+          set({ isLoading: true, error: null });
+          try {
+            const featured = await apiGetFeatured(limit);
+            set({ featured, isLoading: false });
+          } catch (err) {
+            set({
+              error: err instanceof Error ? err.message : 'Failed to fetch featured',
+              isLoading: false,
+            });
+          }
+        },
+
+        fetchTrending: async (limit = 10) => {
+          set({ isLoading: true, error: null });
+          try {
+            const trending = await apiGetTrending(limit);
+            set({ trending, isLoading: false });
+          } catch (err) {
+            set({
+              error: err instanceof Error ? err.message : 'Failed to fetch trending',
+              isLoading: false,
+            });
+          }
+        },
+
+        getPublishedWorkflows: async (params) => {
+          return apiGetPublishedWorkflows({
+            category: params.category,
+            sortBy: params.sortBy,
+            limit: params.limit,
+            offset: params.offset,
+          });
+        },
+
+        searchMarketplaceWorkflows: async (params) => {
+          const results = await apiSearchWorkflows({
+            searchQuery: params.searchQuery,
+            category: params.category,
+            minRating: params.minRating,
+            tags: params.tags,
+            verifiedOnly: params.verifiedOnly,
+            featuredOnly: params.featuredOnly,
+            sortBy: params.sortBy,
+            limit: params.limit,
+            offset: params.offset,
+          });
+          set({ searchResults: results });
+          return results;
+        },
+
+        getWorkflowById: async (workflowId) => {
+          try {
+            return await apiGetWorkflowById(workflowId);
+          } catch {
+            return null;
+          }
+        },
+
+        getWorkflowByShareUrl: async (shareUrl) => {
+          try {
+            return await apiGetWorkflowByShareUrl(shareUrl);
+          } catch {
+            return null;
+          }
+        },
+
+        getCreatorWorkflows: async (creatorId) => {
+          return apiGetCreatorWorkflows(creatorId);
+        },
+
+        getWorkflowsByCategory: async (category, limit) => {
+          return apiGetWorkflowsByCategory(category, limit);
+        },
+
+        fetchCategoryCounts: async () => {
+          try {
+            const categoryCounts = await apiGetCategoryCounts();
+            set({ categoryCounts });
+          } catch {
+            // non-fatal
+          }
+        },
+
+        fetchPopularTags: async (limit = 20) => {
+          try {
+            const popularTags = await apiGetPopularTags(limit);
+            set({ popularTags });
+          } catch {
+            // non-fatal
+          }
+        },
+
+        // ── Cloning / Forking ───────────────────────────────────────────────
+
+        cloneMarketplaceWorkflow: async (request) => {
+          return apiCloneWorkflow(request);
+        },
+
+        forkMarketplaceWorkflow: async (params) => {
+          return apiForkWorkflow({
+            workflowId: params.workflowId,
+            userId: params.userId,
+            userName: params.userName,
+          });
+        },
+
+        getUserClones: async (userId) => {
+          return apiGetUserClones(userId);
+        },
+
+        // ── Social ──────────────────────────────────────────────────────────
+
+        rateWorkflow: async (request) => {
+          await apiRateWorkflow(request);
+        },
+
+        getUserWorkflowRating: async (workflowId, userId) => {
+          return apiGetUserRating(workflowId, userId);
+        },
+
+        getWorkflowReviews: async (workflowId) => {
+          return apiGetReviews(workflowId);
+        },
+
+        commentOnWorkflow: async (params) => {
+          return apiCommentOnWorkflow({
+            workflowId: params.workflowId,
+            userId: params.userId,
+            userName: params.userName,
+            comment: params.comment,
+          });
+        },
+
+        getWorkflowComments: async (workflowId, limit, offset) => {
+          return apiGetComments(workflowId, limit, offset);
+        },
+
+        deleteWorkflowComment: async (commentId, userId) => {
+          await apiDeleteComment(commentId, userId);
+        },
+
+        favoriteWorkflow: async (workflowId, userId) => {
+          await apiFavoriteWorkflow(workflowId, userId);
+        },
+
+        unfavoriteWorkflow: async (workflowId, userId) => {
+          await apiUnfavoriteWorkflow(workflowId, userId);
+        },
+
+        isWorkflowFavorited: async (workflowId, userId) => {
+          try {
+            return await apiIsFavorited(workflowId, userId);
+          } catch {
+            return false;
+          }
+        },
+
+        getUserFavorites: async (userId) => {
+          return apiGetUserFavorites(userId);
+        },
+
+        // ── Sharing ─────────────────────────────────────────────────────────
+
+        shareWorkflow: async (workflowId, platform) => {
+          return apiShareWorkflow(workflowId, platform);
+        },
+
+        getWorkflowShareUrl: async (workflowId) => {
+          return apiGetShareUrl(workflowId);
+        },
+
+        getWorkflowEmbedCode: async (workflowId) => {
+          return apiGetEmbedCode(workflowId);
+        },
+
+        // ── Analytics / Stats ───────────────────────────────────────────────
+
+        getWorkflowStats: async (workflowId) => {
+          return apiGetStats(workflowId);
+        },
+
+        getWorkflowAnalytics: async (workflowId) => {
+          return apiGetAnalytics(workflowId);
+        },
+
+        incrementWorkflowViewCount: async (workflowId) => {
+          await apiTrackView(workflowId);
+        },
+
+        // ── Templates ───────────────────────────────────────────────────────
+
+        fetchTemplates: async () => {
+          set({ isLoading: true, error: null });
+          try {
+            const templates = await apiGetTemplates();
+            set({ templates, isLoading: false });
+          } catch (err) {
+            set({
+              error: err instanceof Error ? err.message : 'Failed to fetch templates',
+              isLoading: false,
+            });
+          }
+        },
+
+        getWorkflowTemplatesByCategory: async (category) => {
+          return apiGetTemplatesByCategory(category);
+        },
+
+        searchWorkflowTemplates: async (query) => {
+          return apiSearchTemplates(query);
+        },
+      })),
+      {
+        name: 'agiworkforce-marketplace',
+        storage: createJSONStorage(() =>
+          typeof window === 'undefined' ? localStorage : window.localStorage,
+        ),
+        partialize: (state) => ({
+          featured: state.featured,
+          trending: state.trending,
+          templates: state.templates,
+          categoryCounts: state.categoryCounts,
+          popularTags: state.popularTags,
+        }),
       },
-
-      publishWorkflowToMarketplace: async (params) => {
-        return apiPublishToMarketplace({
-          workflowId: params.workflowId,
-          category: params.category,
-          tags: params.tags,
-          estimatedTimeSaved: params.estimatedTimeSaved,
-          estimatedCostSaved: params.estimatedCostSaved,
-          thumbnailUrl: params.thumbnailUrl,
-          userId: params.userId,
-          userName: params.userName,
-        });
-      },
-
-      unpublishWorkflow: async (workflowId, userId) => {
-        await apiUnpublishWorkflow(workflowId, userId);
-      },
-
-      getMyPublishedWorkflows: async (userId) => {
-        return apiGetMyPublished(userId);
-      },
-
-      // ── Browsing ────────────────────────────────────────────────────────
-
-      fetchFeatured: async (limit = 10) => {
-        set({ isLoading: true, error: null });
-        try {
-          const featured = await apiGetFeatured(limit);
-          set({ featured, isLoading: false });
-        } catch (err) {
-          set({ error: err instanceof Error ? err.message : 'Failed to fetch featured', isLoading: false });
-        }
-      },
-
-      fetchTrending: async (limit = 10) => {
-        set({ isLoading: true, error: null });
-        try {
-          const trending = await apiGetTrending(limit);
-          set({ trending, isLoading: false });
-        } catch (err) {
-          set({ error: err instanceof Error ? err.message : 'Failed to fetch trending', isLoading: false });
-        }
-      },
-
-      getPublishedWorkflows: async (params) => {
-        return apiGetPublishedWorkflows({
-          category: params.category,
-          sortBy: params.sortBy,
-          limit: params.limit,
-          offset: params.offset,
-        });
-      },
-
-      searchMarketplaceWorkflows: async (params) => {
-        const results = await apiSearchWorkflows({
-          searchQuery: params.searchQuery,
-          category: params.category,
-          minRating: params.minRating,
-          tags: params.tags,
-          verifiedOnly: params.verifiedOnly,
-          featuredOnly: params.featuredOnly,
-          sortBy: params.sortBy,
-          limit: params.limit,
-          offset: params.offset,
-        });
-        set({ searchResults: results });
-        return results;
-      },
-
-      getWorkflowById: async (workflowId) => {
-        try {
-          return await apiGetWorkflowById(workflowId);
-        } catch {
-          return null;
-        }
-      },
-
-      getWorkflowByShareUrl: async (shareUrl) => {
-        try {
-          return await apiGetWorkflowByShareUrl(shareUrl);
-        } catch {
-          return null;
-        }
-      },
-
-      getCreatorWorkflows: async (creatorId) => {
-        return apiGetCreatorWorkflows(creatorId);
-      },
-
-      getWorkflowsByCategory: async (category, limit) => {
-        return apiGetWorkflowsByCategory(category, limit);
-      },
-
-      fetchCategoryCounts: async () => {
-        try {
-          const categoryCounts = await apiGetCategoryCounts();
-          set({ categoryCounts });
-        } catch {
-          // non-fatal
-        }
-      },
-
-      fetchPopularTags: async (limit = 20) => {
-        try {
-          const popularTags = await apiGetPopularTags(limit);
-          set({ popularTags });
-        } catch {
-          // non-fatal
-        }
-      },
-
-      // ── Cloning / Forking ───────────────────────────────────────────────
-
-      cloneMarketplaceWorkflow: async (request) => {
-        return apiCloneWorkflow(request);
-      },
-
-      forkMarketplaceWorkflow: async (params) => {
-        return apiForkWorkflow({
-          workflowId: params.workflowId,
-          userId: params.userId,
-          userName: params.userName,
-        });
-      },
-
-      getUserClones: async (userId) => {
-        return apiGetUserClones(userId);
-      },
-
-      // ── Social ──────────────────────────────────────────────────────────
-
-      rateWorkflow: async (request) => {
-        await apiRateWorkflow(request);
-      },
-
-      getUserWorkflowRating: async (workflowId, userId) => {
-        return apiGetUserRating(workflowId, userId);
-      },
-
-      getWorkflowReviews: async (workflowId) => {
-        return apiGetReviews(workflowId);
-      },
-
-      commentOnWorkflow: async (params) => {
-        return apiCommentOnWorkflow({
-          workflowId: params.workflowId,
-          userId: params.userId,
-          userName: params.userName,
-          comment: params.comment,
-        });
-      },
-
-      getWorkflowComments: async (workflowId, limit, offset) => {
-        return apiGetComments(workflowId, limit, offset);
-      },
-
-      deleteWorkflowComment: async (commentId, userId) => {
-        await apiDeleteComment(commentId, userId);
-      },
-
-      favoriteWorkflow: async (workflowId, userId) => {
-        await apiFavoriteWorkflow(workflowId, userId);
-      },
-
-      unfavoriteWorkflow: async (workflowId, userId) => {
-        await apiUnfavoriteWorkflow(workflowId, userId);
-      },
-
-      isWorkflowFavorited: async (workflowId, userId) => {
-        try {
-          return await apiIsFavorited(workflowId, userId);
-        } catch {
-          return false;
-        }
-      },
-
-      getUserFavorites: async (userId) => {
-        return apiGetUserFavorites(userId);
-      },
-
-      // ── Sharing ─────────────────────────────────────────────────────────
-
-      shareWorkflow: async (workflowId, platform) => {
-        return apiShareWorkflow(workflowId, platform);
-      },
-
-      getWorkflowShareUrl: async (workflowId) => {
-        return apiGetShareUrl(workflowId);
-      },
-
-      getWorkflowEmbedCode: async (workflowId) => {
-        return apiGetEmbedCode(workflowId);
-      },
-
-      // ── Analytics / Stats ───────────────────────────────────────────────
-
-      getWorkflowStats: async (workflowId) => {
-        return apiGetStats(workflowId);
-      },
-
-      getWorkflowAnalytics: async (workflowId) => {
-        return apiGetAnalytics(workflowId);
-      },
-
-      incrementWorkflowViewCount: async (workflowId) => {
-        await apiTrackView(workflowId);
-      },
-
-      // ── Templates ───────────────────────────────────────────────────────
-
-      fetchTemplates: async () => {
-        set({ isLoading: true, error: null });
-        try {
-          const templates = await apiGetTemplates();
-          set({ templates, isLoading: false });
-        } catch (err) {
-          set({ error: err instanceof Error ? err.message : 'Failed to fetch templates', isLoading: false });
-        }
-      },
-
-      getWorkflowTemplatesByCategory: async (category) => {
-        return apiGetTemplatesByCategory(category);
-      },
-
-      searchWorkflowTemplates: async (query) => {
-        return apiSearchTemplates(query);
-      },
-    }),
-    { name: 'marketplace' },
+    ),
+    { name: 'MarketplaceStore', enabled: import.meta.env.DEV },
   ),
 );

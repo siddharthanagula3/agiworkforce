@@ -1,11 +1,10 @@
-import { metricsGetSystem, metricsGetApp } from '../api/analytics';
 import {
-  AppMetrics,
-  PerformanceMark,
-  PerformanceMeasure,
-  PerformanceMetrics,
-  SystemMetrics,
-} from '../types/analytics';
+  metricsGetSystem,
+  metricsGetApp,
+  SystemMetrics as ApiSystemMetrics,
+  AppMetrics as ApiAppMetrics,
+} from '../api/analytics';
+import { PerformanceMark, PerformanceMeasure, PerformanceMetrics } from '../types/analytics';
 import { analytics } from './analytics';
 
 /**
@@ -266,43 +265,43 @@ class PerformanceMonitoringService {
     return {
       marks: Array.from(this.marks.values()),
       measures: this.measures,
-      memory_used_mb: systemMetrics.memory_used_mb,
-      cpu_usage_percent: systemMetrics.cpu_usage,
+      memory_used_mb: systemMetrics.memoryUsedMb,
+      cpu_usage_percent: systemMetrics.cpuUsage,
     };
   }
 
-  public async getSystemMetrics(): Promise<SystemMetrics> {
+  public async getSystemMetrics(): Promise<ApiSystemMetrics> {
     try {
-      return (await metricsGetSystem()) as unknown as SystemMetrics;
+      return await metricsGetSystem();
     } catch (error) {
       console.error('Failed to get system metrics:', error);
       return {
-        cpu_usage: 0,
-        memory_used_mb: 0,
-        memory_total_mb: 0,
-        disk_used_gb: 0,
-        disk_total_gb: 0,
-        network_rx_bytes: 0,
-        network_tx_bytes: 0,
-        uptime_seconds: 0,
+        cpuUsage: 0,
+        memoryUsedMb: 0,
+        memoryTotalMb: 0,
+        diskUsedGb: 0,
+        diskTotalGb: 0,
+        networkRxBytes: 0,
+        networkTxBytes: 0,
+        uptimeSeconds: 0,
       };
     }
   }
 
-  public async getAppMetrics(): Promise<AppMetrics> {
+  public async getAppMetrics(): Promise<ApiAppMetrics> {
     try {
-      return (await metricsGetApp()) as unknown as AppMetrics;
+      return await metricsGetApp();
     } catch (error) {
       console.error('Failed to get app metrics:', error);
       return {
-        automations_count: 0,
-        goals_count: 0,
-        mcp_servers_count: 0,
-        cache_hit_rate: 0,
-        avg_goal_duration_ms: 0,
-        active_sessions: 0,
-        total_api_calls: 0,
-        failed_operations: 0,
+        automationsCount: 0,
+        goalsCount: 0,
+        mcpServersCount: 0,
+        cacheHitRate: 0,
+        avgGoalDurationMs: 0,
+        activeSessions: 0,
+        totalApiCalls: 0,
+        failedOperations: 0,
       };
     }
   }
@@ -314,7 +313,7 @@ class PerformanceMonitoringService {
     this.memoryMonitorInterval = setInterval(async () => {
       try {
         const metrics = await this.getSystemMetrics();
-        const memoryUsagePercent = (metrics.memory_used_mb / metrics.memory_total_mb) * 100;
+        const memoryUsagePercent = (metrics.memoryUsedMb / metrics.memoryTotalMb) * 100;
 
         if (memoryUsagePercent > 80) {
           console.warn(`High memory usage: ${memoryUsagePercent.toFixed(2)}%`);
