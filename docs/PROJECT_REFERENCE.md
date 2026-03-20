@@ -1,5 +1,7 @@
 # AGI Workforce -- Project Reference
 
+> **STALE (2026-03-16)**: This consolidation predates the current folder structure and is no longer maintained. Prefer individual docs in `docs/architecture/`, `docs/applications/`, `docs/competitive/`, and `docs/planning/`.
+
 Consolidated from all `docs/*.md` and `docs/features/*.md` files on 2026-03-16.
 This is the single reference document for the project's architecture, release gates, execution plan, feature specifications, and skill prompt template.
 
