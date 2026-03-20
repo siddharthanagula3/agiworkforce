@@ -19,6 +19,7 @@ import { SourcesFooter } from '../SourcesFooter';
 import { SourcePillRow } from '../SourcePillRow';
 import { CodeBlock } from '../Visualizations/CodeBlock';
 import { InlineCodeOutput, CodeExecutionResult } from '../InlineCodeOutput';
+import { GenerativeWidget } from '../GenerativeWidget';
 import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { useCanvasStore } from '../../../stores/canvasStore';
@@ -218,6 +219,15 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               const language: string = match?.[1] ?? 'text';
               const code = String(children).replace(/\n$/, '');
               const isBlockCode = inline !== true;
+
+              // Render widget blocks as sandboxed GenerativeWidget iframes
+              if (isBlockCode && language === 'widget') {
+                // Extract optional title from className meta, e.g. language-widget:title="..."
+                const titleMatch = /title="([^"]*)"/.exec(className || '');
+                const widgetTitle = titleMatch?.[1];
+                return <GenerativeWidget html={code} title={widgetTitle} />;
+              }
+
               // Use a stable key from code content + language as block index substitute
               const blockKey = `${language}:${code.length}:${code.slice(0, 40)}`;
 
