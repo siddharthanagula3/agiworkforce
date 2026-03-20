@@ -364,7 +364,7 @@ async fn run_cron_scheduler(
             let window_start = now - chrono::Duration::minutes(1);
             if let Some(next) = schedule.after(&window_start).next() {
                 // Convert to local for comparison
-                let next_local: chrono::DateTime<Local> = next.into();
+                let next_local: chrono::DateTime<Local> = next;
 
                 if next_local <= now {
                     // Check if we already fired for this minute
@@ -749,7 +749,7 @@ async fn execute_trigger(
     event: TriggerEvent,
     config: &CliConfig,
     hooks_config: &HooksConfig,
-    log_dir: &PathBuf,
+    log_dir: &std::path::Path,
 ) {
     let start = std::time::Instant::now();
     let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
