@@ -15,7 +15,7 @@ cd apps/desktop && pnpm dev:vite     # Frontend only (no Rust rebuild)
 - **Rust backend**: `src-tauri/src/` — core/, sys/, automation/, features/, data/, integrations/
 - **React frontend**: `src/` — components/, stores/, hooks/, services/, api/
 - **IPC**: `invoke()` with camelCase params (Tauri auto-converts to snake_case)
-- **State**: Zustand v5 + Immer + Persist (55+ stores)
+- **State**: Zustand v5 + Immer + Persist (109 stores)
 - **UI**: Radix UI + Tailwind 4 + Lucide icons
 
 ## Key Commands
