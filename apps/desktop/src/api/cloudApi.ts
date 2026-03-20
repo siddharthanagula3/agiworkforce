@@ -177,6 +177,79 @@ export async function getCloudUsage(): Promise<CloudUsage> {
 }
 
 // ============================================================================
+// Models (Cloud Mode Model Picker)
+// ============================================================================
+
+/**
+ * Cloud model metadata for Cloud Mode model picker.
+ * This is a subset of the full ModelMetadata with only essential fields.
+ */
+export interface CloudModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  speed: 'very-fast' | 'fast' | 'medium' | 'slow';
+  quality: 'excellent' | 'good' | 'fair';
+  qualityTier: 'fast' | 'balanced' | 'best';
+  contextWindow: number;
+  inputCost: number;
+  outputCost: number;
+}
+
+/**
+ * Response format from GET /api/models endpoint.
+ */
+export interface CloudModelsResponse {
+  models: CloudModelInfo[];
+  total: number;
+  providers: string[];
+}
+
+/**
+ * Fetches available models for Cloud Mode, optionally filtered by subscription plan tier.
+ *
+ * @param planTier - Optional subscription tier filter ('pro' or 'max'). If not provided,
+ *                   returns the full catalog (only available to internal/admin endpoints).
+ * @returns Array of available models for the specified plan tier
+ * @throws {Error} If the API call fails
+ *
+ * @example
+ * // Get models available to Pro tier users
+ * const models = await getCloudModels('pro');
+ *
+ * @example
+ * // Get models available to Max tier users
+ * const models = await getCloudModels('max');
+ */
+export async function getCloudModels(planTier?: 'pro' | 'max'): Promise<CloudModelInfo[]> {
+  const url = new URL(`${CLOUD_API_BASE_URL}/api/models`);
+
+  if (planTier) {
+    url.searchParams.set('planTier', planTier);
+  }
+
+  try {
+    const res = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch cloud models: HTTP ${res.status}`);
+    }
+
+    const data = (await res.json()) as CloudModelsResponse;
+    return data.models;
+  } catch (err) {
+    throw new Error(
+      `Failed to fetch cloud models: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+// ============================================================================
 // SSE Streaming
 // ============================================================================
 
