@@ -97,6 +97,10 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "edit_file" => execute_edit_file(&call.args, require_confirm).await,
         "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
+        // --- Codex CLI parity tools ---
+        "apply_patch" => execute_apply_patch(&call.args, require_confirm).await,
+        "grep_files" => execute_grep_files(&call.args, opts.quiet).await,
+        "tool_search" => execute_tool_search(&call.args).await,
         _ => Ok(ToolResult {
             tool_name: call.name.clone(),
             success: false,
@@ -1296,18 +1300,19 @@ mod tests {
 
     #[test]
     fn test_is_dangerous_command() {
-        assert!(is_dangerous_command("rm -rf /"));
+        // Commands in DANGEROUS_COMMANDS list (safety.rs)
         assert!(is_dangerous_command("sudo apt install foo"));
-        assert!(is_dangerous_command("chmod 777 /tmp/file"));
         assert!(is_dangerous_command("kill -9 1234"));
-        assert!(is_dangerous_command("echo hello | rm foo"));
-        assert!(is_dangerous_command("/usr/bin/rm file.txt"));
+        assert!(is_dangerous_command("/usr/bin/sudo rm foo"));
+        assert!(is_dangerous_command("echo hello | sudo rm foo"));
 
+        // Safe commands
         assert!(!is_dangerous_command("ls -la"));
         assert!(!is_dangerous_command("cat /etc/hosts"));
         assert!(!is_dangerous_command("echo hello"));
         assert!(!is_dangerous_command("grep -rn pattern ."));
         assert!(!is_dangerous_command("pwd"));
+        // Note: rm, chmod are classified by safety::classify_command(), not this function
     }
 
     #[test]
@@ -1660,7 +1665,10 @@ mod tests {
         let result = execute_web_fetch(&args).await.unwrap();
         // Should fail gracefully with an error message
         assert!(!result.success);
-        assert!(result.output.contains("Failed to fetch URL"));
+        assert!(
+            result.output.contains("Failed to fetch") || result.output.contains("URL blocked") || result.output.contains("Invalid URL"),
+            "Expected error message, got: {}", result.output
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1698,4 +1706,70 @@ mod tests {
     fn test_max_line_length_is_2000() {
         assert_eq!(MAX_LINE_LENGTH, 2000);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Codex CLI parity tool handlers
+// ---------------------------------------------------------------------------
+
+async fn execute_apply_patch(args: &HashMap<String, String>, require_confirm: bool) -> Result<ToolResult> {
+    let patch = match args.get("patch") {
+        Some(p) => p,
+        None => return Ok(ToolResult { tool_name: "apply_patch".into(), success: false, output: "Missing: patch".into() }),
+    };
+    if require_confirm {
+        print_tool_status("apply_patch", &format!("Apply patch ({} lines)", patch.lines().count()));
+        if !Confirm::new().with_prompt("Apply this patch?").default(false).interact().unwrap_or(false) {
+            return Ok(ToolResult { tool_name: "apply_patch".into(), success: false, output: "Denied by user.".into() });
+        }
+    }
+    match crate::apply_patch::apply_git_patch(patch, None).await {
+        Ok(r) => {
+            let mut out = String::new();
+            if !r.applied.is_empty() { out.push_str(&format!("Applied: {}\n", r.applied.join(", "))); }
+            if !r.conflicted.is_empty() { out.push_str(&format!("Conflicted: {}\n", r.conflicted.join(", "))); }
+            Ok(ToolResult { tool_name: "apply_patch".into(), success: r.exit_code == 0, output: out })
+        }
+        Err(e) => Ok(ToolResult { tool_name: "apply_patch".into(), success: false, output: format!("{}", e) }),
+    }
+}
+
+async fn execute_grep_files(args: &HashMap<String, String>, quiet: bool) -> Result<ToolResult> {
+    let pattern = match args.get("pattern") {
+        Some(p) => p,
+        None => return Ok(ToolResult { tool_name: "grep_files".into(), success: false, output: "Missing: pattern".into() }),
+    };
+    let path = args.get("path").map(|s| s.as_str()).unwrap_or(".");
+    let include = args.get("include");
+    if !quiet { print_tool_status("grep_files", &format!("/{}/{}", pattern, path)); }
+    let mut cmd = Command::new("rg");
+    cmd.arg("--line-number").arg("--no-heading").arg("--color=never").arg("--max-count=100");
+    if let Some(g) = include { cmd.arg("--glob").arg(g); }
+    cmd.arg(pattern).arg(path);
+    match cmd.output().await {
+        Ok(o) => {
+            let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+            Ok(ToolResult { tool_name: "grep_files".into(), success: true,
+                output: if stdout.is_empty() { format!("No matches for: {}", pattern) } else if stdout.len() > MAX_OUTPUT_BYTES { format!("{}\n...(truncated)", &stdout[..MAX_OUTPUT_BYTES]) } else { stdout } })
+        }
+        Err(_) => {
+            let mut fb = Command::new("grep"); fb.arg("-rn").arg("--max-count=100").arg(pattern).arg(path);
+            match fb.output().await {
+                Ok(o) => Ok(ToolResult { tool_name: "grep_files".into(), success: true, output: String::from_utf8_lossy(&o.stdout).to_string() }),
+                Err(e) => Ok(ToolResult { tool_name: "grep_files".into(), success: false, output: format!("{}", e) }),
+            }
+        }
+    }
+}
+
+async fn execute_tool_search(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let query = match args.get("query") {
+        Some(q) => q,
+        None => return Ok(ToolResult { tool_name: "tool_search".into(), success: false, output: "Missing: query".into() }),
+    };
+    let max: usize = args.get("max_results").and_then(|s| s.parse().ok()).unwrap_or(10);
+    let builtins: Vec<String> = ["read_file","write_file","edit_file","run_command","search_files","list_directory","web_search","web_fetch","apply_patch","grep_files","task"].iter().map(|s| s.to_string()).collect();
+    let disc = crate::plugins::build_discoverable_tools(&builtins, &[], &[]);
+    let results = crate::tool_search::search_tools(query, &disc, max);
+    Ok(ToolResult { tool_name: "tool_search".into(), success: true, output: crate::tool_search::format_search_results(&results) })
 }

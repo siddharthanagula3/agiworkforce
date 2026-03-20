@@ -24,10 +24,21 @@ mod skills;
 mod subagent;
 mod teams;
 mod tools;
+mod tui;
 mod voice;
+// --- Codex CLI parity modules ---
+mod app_server;
+mod apply_patch;
+mod cloud;
+mod model_catalog;
+mod exec_policy;
+mod plugins;
+mod review;
+mod sandbox;
+mod tool_search;
 
 use anyhow::Result;
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use std::io::{self, IsTerminal, Read};
 
@@ -41,11 +52,15 @@ use std::io::{self, IsTerminal, Read};
                   Connects to Anthropic, OpenAI, Google, Ollama, and more."
 )]
 struct Cli {
+    /// Subcommand (exec, review, apply, sandbox, cloud, etc.)
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// One-shot prompt (if omitted, starts interactive REPL)
     #[arg(value_name = "PROMPT")]
     prompt: Option<String>,
 
-    /// Model to use (e.g. claude-opus-4-6, gpt-4o, gemini-2.0-flash, llama3.1:8b)
+    /// Model to use (e.g. claude-opus-4-6, gpt-4o, gemini-3-flash-preview, llama3.1:8b)
     #[arg(short, long, value_name = "MODEL")]
     model: Option<String>,
 
@@ -196,6 +211,10 @@ struct Cli {
     /// (cron schedules, webhooks, file watchers).
     #[arg(long)]
     daemon: bool,
+
+    /// Disable full-screen TUI and use the classic line-based REPL instead.
+    #[arg(long)]
+    no_tui: bool,
 }
 
 /// Effort level presets that bundle max_turns + max_tokens + temperature.
@@ -228,6 +247,102 @@ enum ShellType {
     Fish,
 }
 
+// ---------------------------------------------------------------------------
+// Subcommands — Codex CLI parity
+// ---------------------------------------------------------------------------
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Run non-interactively (alias: e).
+    #[command(alias = "e")]
+    Exec {
+        prompt: String,
+        #[arg(short, long)]
+        model: Option<String>,
+        #[arg(long)]
+        full_auto: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Non-interactive code review.
+    Review {
+        #[arg(long)]
+        base: Option<String>,
+        #[arg(long)]
+        commit: Option<String>,
+        prompt: Option<String>,
+        #[arg(short, long)]
+        model: Option<String>,
+    },
+    /// Apply latest diff as git patch (alias: a).
+    #[command(alias = "a")]
+    Apply {
+        session_id: Option<String>,
+        #[arg(long)]
+        file: Option<String>,
+    },
+    /// Run commands inside a sandbox.
+    Sandbox {
+        #[arg(long)]
+        full_auto: bool,
+        command: Vec<String>,
+    },
+    /// Run as MCP server (stdio).
+    McpServer,
+    /// Run app server for IDE integration.
+    AppServer {
+        #[arg(long, default_value = "stdio")]
+        listen: String,
+    },
+    /// Continue previous session.
+    Resume { session_id: Option<String> },
+    /// Fork a previous session.
+    Fork { session_id: String },
+    /// Cloud tasks (BYOK, top models only).
+    Cloud {
+        #[command(subcommand)]
+        action: CloudSubcommand,
+    },
+    /// Manage plugins.
+    Plugin {
+        #[command(subcommand)]
+        action: PluginSubcommand,
+    },
+    /// Inspect feature flags.
+    Features,
+    /// Show execution policy rules.
+    Execpolicy,
+}
+
+#[derive(Subcommand, Debug)]
+enum CloudSubcommand {
+    /// Submit a task (BYOK).
+    Exec {
+        prompt: String,
+        #[arg(short, long)]
+        model: Option<String>,
+    },
+    /// List cloud tasks.
+    List {
+        #[arg(long, default_value = "10")]
+        limit: usize,
+    },
+    /// Show cloud models & BYOK status.
+    Models,
+}
+
+#[derive(Subcommand, Debug)]
+enum PluginSubcommand {
+    /// List installed plugins.
+    List,
+    /// Install a plugin.
+    Install {
+        source: String,
+        #[arg(long)]
+        name: Option<String>,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -250,6 +365,143 @@ async fn main() -> Result<()> {
     // Validate configuration — warn but continue with defaults on failure
     if let Err(e) = app_config.validate() {
         eprintln!("Warning: config validation failed: {}. Continuing with defaults.", e);
+    }
+
+    // --- Subcommand dispatch (Codex CLI parity) ---
+    if let Some(ref command) = cli.command {
+        let sys_ctx = context::gather_system_context();
+        return match command {
+            Command::Exec { prompt, model, full_auto, json } => {
+                let m = model.as_deref().unwrap_or(&app_config.default.model).to_string();
+                let mut session = agent::AgentSession::new(&m, &sys_ctx, None);
+                if *full_auto { session.skip_permissions = true; session.auto_approve_safe = true; }
+                session.quiet = true;
+                let is_json = *json;
+                let result = session.send(&app_config, prompt, Box::new(move |chunk| {
+                    if !is_json { output::print_assistant_chunk(chunk); }
+                })).await;
+                match result {
+                    Ok(turn) => {
+                        if *json {
+                            println!("{}", serde_json::to_string_pretty(&serde_json::json!({
+                                "response": turn.response, "input_tokens": turn.input_tokens,
+                                "output_tokens": turn.output_tokens,
+                            }))?);
+                        } else { println!(); }
+                        Ok(())
+                    }
+                    Err(e) => { eprintln!("{}", e); std::process::exit(1); }
+                }
+            }
+            Command::Resume { session_id } => {
+                let conn = sessions::open_db()?;
+                let sid = match session_id {
+                    Some(id) => id.clone(),
+                    None => sessions::list_sessions(&conn, 1)?
+                        .first().map(|s| s.id.clone())
+                        .ok_or_else(|| anyhow::anyhow!("No sessions found"))?,
+                };
+                let msgs = sessions::load_session(&conn, &sid)?;
+                let model = app_config.default.model.clone();
+                repl::run_repl(&mut app_config, &model, &sys_ctx, None, Some(msgs), None, false, None, None, false, false, false).await
+            }
+            Command::Fork { session_id } => {
+                let conn = sessions::open_db()?;
+                let msgs = sessions::load_session(&conn, session_id)?;
+                eprintln!("{} Forked session '{}' ({} messages)", "fork:".cyan().bold(), session_id, msgs.len());
+                let model = app_config.default.model.clone();
+                repl::run_repl(&mut app_config, &model, &sys_ctx, None, Some(msgs), None, false, None, None, false, false, false).await
+            }
+            Command::Review { base, commit, prompt, model, .. } => {
+                let opts = review::ReviewOptions {
+                    uncommitted: base.is_none() && commit.is_none(),
+                    base_branch: base.clone(), commit: commit.clone(),
+                    instructions: prompt.clone(), model: model.clone(),
+                };
+                review::run_review(&app_config, &sys_ctx, &opts).await?;
+                Ok(())
+            }
+            Command::Apply { session_id, file } => {
+                if let Some(fp) = file {
+                    let r = apply_patch::apply_from_file(std::path::Path::new(fp)).await?;
+                    apply_patch::print_patch_result(&r);
+                } else if let Some(sid) = session_id {
+                    let r = apply_patch::apply_from_session(sid).await?;
+                    apply_patch::print_patch_result(&r);
+                } else {
+                    let conn = sessions::open_db()?;
+                    if let Some(s) = sessions::list_sessions(&conn, 1)?.first() {
+                        let r = apply_patch::apply_from_session(&s.id).await?;
+                        apply_patch::print_patch_result(&r);
+                    } else { eprintln!("No sessions found."); }
+                }
+                Ok(())
+            }
+            Command::Sandbox { full_auto, command } => {
+                let cmd_str = command.join(" ");
+                let cwd = std::env::current_dir().unwrap_or_default();
+                let mgr = if *full_auto { sandbox::SandboxManager::full_auto(cwd.clone()) }
+                    else { sandbox::SandboxManager::new(sandbox::SandboxPolicy::default(), cwd.clone()) };
+                eprintln!("Sandbox [{}]: {}", mgr.sandbox_type.name(), cmd_str);
+                let out = sandbox::execute_sandboxed(&mgr, &cmd_str, Some(&cwd)).await?;
+                io::Write::write_all(&mut io::stdout(), &out.stdout)?;
+                io::Write::write_all(&mut io::stderr(), &out.stderr)?;
+                std::process::exit(out.status.code().unwrap_or(1));
+            }
+            Command::McpServer => app_server::run_mcp_server().await,
+            Command::AppServer { listen } => {
+                let cfg = if listen == "stdio" { app_server::AppServerConfig::default() }
+                    else { app_server::AppServerConfig { transport: app_server::AppServerTransport::WebSocket {
+                        addr: listen.trim_start_matches("ws://").parse().unwrap_or_else(|_| "127.0.0.1:8787".parse().unwrap()),
+                    }, ..Default::default() } };
+                app_server::run_app_server(cfg).await
+            }
+            Command::Cloud { action } => {
+                let cc = cloud::CloudConfig::default();
+                match action {
+                    CloudSubcommand::Exec { prompt, model } => { cloud::cloud_exec(&cc, prompt, model.as_deref()).await?; Ok(()) }
+                    CloudSubcommand::List { .. } => { println!("Cloud tasks: connect to cloud backend to list"); Ok(()) }
+                    CloudSubcommand::Models => { println!("{}", cloud::format_cloud_models()); cloud::print_cloud_status(&cc); Ok(()) }
+                }
+            }
+            Command::Plugin { action } => {
+                let mut mgr = plugins::PluginsManager::new();
+                match action {
+                    PluginSubcommand::List => {
+                        mgr.load_all(std::env::current_dir().ok().as_deref())?;
+                        for p in mgr.plugins() {
+                            let st = if p.enabled { "enabled".green() } else { "disabled".red() };
+                            println!("  {} [{}] {}", p.config_name, st, p.root.display());
+                        }
+                        Ok(())
+                    }
+                    PluginSubcommand::Install { source, name } => {
+                        let pname = name.clone().unwrap_or_else(|| source.rsplit('/').next().unwrap_or("plugin").to_string());
+                        let psrc = if source.starts_with("http") || source.contains("git") {
+                            plugins::PluginSource::Git { url: source.clone(), branch: None }
+                        } else { plugins::PluginSource::Local(std::path::PathBuf::from(source)) };
+                        match mgr.install(plugins::PluginInstallRequest { source: psrc, name: pname }) {
+                            plugins::PluginInstallOutcome::Installed { path } => println!("Installed to {}", path.display()),
+                            plugins::PluginInstallOutcome::AlreadyInstalled { path } => println!("Already at {}", path.display()),
+                            plugins::PluginInstallOutcome::Failed { error } => eprintln!("Failed: {}", error),
+                        }
+                        Ok(())
+                    }
+                }
+            }
+            Command::Features => {
+                let f = tool_search::FeatureFlags::standard();
+                println!("Feature Flags:\n  shell_tool: {}\n  code_mode: {}\n  tool_suggest: {}\n  web_search: {}\n  apply_patch: {}",
+                    f.shell_tool, f.code_mode, f.tool_suggest, f.web_search, f.apply_patch_freeform);
+                Ok(())
+            }
+            Command::Execpolicy => {
+                let policy = exec_policy::ExecPolicy::load()?;
+                if policy.rules.is_empty() { println!("No rules. Add .rules files to ~/.agiworkforce/rules/"); }
+                else { println!("{} rule(s):", policy.rules.len()); for r in &policy.rules { println!("  {:?} — {}", r.effect, r.source); } }
+                Ok(())
+            }
+        };
     }
 
     // --completions: generate shell completions and exit
@@ -589,22 +841,40 @@ async fn main() -> Result<()> {
     // Resolve team mode from --team flag or AGI_TEAM env var
     let team_mode = cli.team || std::env::var("AGI_TEAM").is_ok_and(|v| v == "1" || v == "true");
 
-    // Interactive REPL mode
-    repl::run_repl(
-        &mut app_config,
-        &model,
-        &sys_context,
-        effective_system_prompt.as_deref(),
-        resume_messages,
-        effective_max_turns,
-        cli.dangerously_skip_permissions,
-        cli.fallback_model,
-        cli.name,
-        team_mode,
-        cli.yes,
-        cli.quiet,
-    )
-    .await
+    // Interactive mode: TUI (default) or classic REPL (--no-tui)
+    if cli.no_tui {
+        repl::run_repl(
+            &mut app_config,
+            &model,
+            &sys_context,
+            effective_system_prompt.as_deref(),
+            resume_messages,
+            effective_max_turns,
+            cli.dangerously_skip_permissions,
+            cli.fallback_model,
+            cli.name,
+            team_mode,
+            cli.yes,
+            cli.quiet,
+        )
+        .await
+    } else {
+        tui::run(
+            &mut app_config,
+            &model,
+            &sys_context,
+            effective_system_prompt.as_deref(),
+            resume_messages,
+            effective_max_turns,
+            cli.dangerously_skip_permissions,
+            cli.fallback_model,
+            cli.name,
+            team_mode,
+            cli.yes,
+            cli.quiet,
+        )
+        .await
+    }
 }
 
 /// Read file contents for the -f flag, returning formatted file context.

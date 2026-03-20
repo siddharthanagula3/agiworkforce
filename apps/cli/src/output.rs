@@ -249,7 +249,7 @@ pub fn model_pricing(model: &str) -> (f64, f64) {
         (1.10, 4.40)
     } else if m.contains("o3") {
         (10.0, 40.0)
-    } else if m.contains("gemini-2.0-flash") {
+    } else if m.contains("gemini-3") {
         (0.10, 0.40)
     } else if m.contains("gemini-1.5-pro") {
         (1.25, 5.0)
@@ -261,7 +261,7 @@ pub fn model_pricing(model: &str) -> (f64, f64) {
         (0.3, 0.9)
     } else if m.contains("grok-beta") {
         (5.0, 15.0)
-    } else if m.contains("grok-2") {
+    } else if m.contains("grok-4") {
         (2.0, 10.0)
     } else if m.contains("deepseek-reasoner") {
         (0.55, 2.19)
@@ -619,13 +619,13 @@ mod tests {
             "gpt-4-turbo",
             "o3-mini",
             "o3",
-            "gemini-2.0-flash",
+            "gemini-3-flash-preview",
             "gemini-1.5-pro",
             "mistral-large-latest",
             "mistral-small-latest",
             "codestral-latest",
             "grok-beta",
-            "grok-2",
+            "grok-4",
             "deepseek-reasoner",
             "deepseek-chat",
             "deepseek-v3",
