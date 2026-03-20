@@ -11,16 +11,25 @@
  *  - The last message is from the assistant
  *  - The assistant is NOT currently generating/streaming
  *  - There is meaningful content to derive suggestions from
+ *
+ * v2 improvements:
+ *  - Type-aware suggestions (deeper, alternative, apply, discover)
+ *  - Per-type Lucide icons on each pill
+ *  - 15 topic categories (up from 9)
+ *  - Capability discovery pills that surface platform features
+ *  - Fade-out when user starts typing (isUserTyping prop)
  */
 
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, X } from 'lucide-react';
+import { ArrowRight, ChevronDown, GitFork, Play, Sparkles, X } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export type FollowUpType = 'deeper' | 'alternative' | 'apply' | 'discover';
 
 export interface FollowUpSuggestionsProps {
   /** The content of the last assistant message */
@@ -29,14 +38,30 @@ export interface FollowUpSuggestionsProps {
   onSelect: (prompt: string) => void;
   /** Whether the assistant is currently generating a response */
   isGenerating?: boolean;
+  /** When true, suggestions fade out (user is typing in the composer) */
+  isUserTyping?: boolean;
+  /** Total message count in the conversation (enables turn-aware suggestions) */
+  messageCount?: number;
   /** Optional className for the container */
   className?: string;
 }
 
-interface FollowUp {
+export interface FollowUp {
   id: string;
   text: string;
+  type: FollowUpType;
 }
+
+// ---------------------------------------------------------------------------
+// Icon map
+// ---------------------------------------------------------------------------
+
+const TYPE_ICONS: Record<FollowUpType, typeof ChevronDown> = {
+  deeper: ChevronDown,
+  alternative: GitFork,
+  apply: Play,
+  discover: Sparkles,
+};
 
 // ---------------------------------------------------------------------------
 // Follow-up generation logic
@@ -45,140 +70,233 @@ interface FollowUp {
 // No LLM call required -- keeps the UI instant.
 // ---------------------------------------------------------------------------
 
-/** Topic patterns: regex -> array of follow-up templates */
-const TOPIC_FOLLOW_UPS: Array<{ pattern: RegExp; followUps: string[] }> = [
+interface TopicEntry {
+  pattern: RegExp;
+  followUps: Array<{ text: string; type: FollowUpType }>;
+}
+
+/** Topic patterns: regex -> array of typed follow-up templates */
+const TOPIC_FOLLOW_UPS: TopicEntry[] = [
   // Code-related
   {
-    pattern: /\b(function|class|component|module|api|endpoint|interface|type|struct)\b/i,
+    pattern: /\b(function|class|component|module|interface|type|struct)\b/i,
     followUps: [
-      'Can you add unit tests for this?',
-      'How would you handle error cases?',
-      'Can you optimize this for performance?',
+      { text: 'Can you add unit tests for this?', type: 'apply' },
+      { text: 'How would you handle error cases?', type: 'deeper' },
+      { text: 'Can you optimize this for performance?', type: 'alternative' },
     ],
   },
   // Bug / error
   {
     pattern: /\b(error|bug|issue|fix|debug|crash|exception|fail)\b/i,
     followUps: [
-      'What could cause this to happen again?',
-      'Are there any related issues I should check?',
-      'How can I prevent this in the future?',
+      { text: 'What could cause this to happen again?', type: 'deeper' },
+      { text: 'Are there any related issues I should check?', type: 'discover' },
+      { text: 'How can I prevent this in the future?', type: 'alternative' },
     ],
   },
   // Lists / steps
   {
     pattern: /(?:^|\n)\s*(?:\d+[.):]|[-*])\s/m,
     followUps: [
-      'Can you go deeper on one of these points?',
-      'Which of these should I prioritize?',
-      'Can you give a concrete example?',
+      { text: 'Can you go deeper on one of these points?', type: 'deeper' },
+      { text: 'Which of these should I prioritize?', type: 'alternative' },
+      { text: 'Can you give a concrete example?', type: 'apply' },
     ],
   },
   // Strategy / plan
   {
     pattern: /\b(strategy|plan|roadmap|approach|framework|methodology)\b/i,
     followUps: [
-      'What are the potential risks?',
-      'How long would this take to implement?',
-      'What resources would be needed?',
+      { text: 'What are the potential risks?', type: 'deeper' },
+      { text: 'How long would this take to implement?', type: 'apply' },
+      { text: 'What resources would be needed?', type: 'discover' },
     ],
   },
   // Comparison
   {
     pattern: /\b(vs\.?|versus|compared|comparison|difference|pros\s+and\s+cons|trade-?off)\b/i,
     followUps: [
-      'Which would you recommend for my use case?',
-      'Are there other alternatives to consider?',
-      'What are the long-term implications?',
+      { text: 'Which would you recommend for my use case?', type: 'alternative' },
+      { text: 'Are there other alternatives to consider?', type: 'discover' },
+      { text: 'What are the long-term implications?', type: 'deeper' },
     ],
   },
   // Explanation / concept
   {
     pattern: /\b(means?|concept|definition|refers?\s+to|in\s+other\s+words|simply\s+put)\b/i,
     followUps: [
-      'Can you give a real-world example?',
-      'How does this relate to other concepts?',
-      'What are common misconceptions about this?',
+      { text: 'Can you give a real-world example?', type: 'apply' },
+      { text: 'How does this relate to other concepts?', type: 'deeper' },
+      { text: 'What are common misconceptions about this?', type: 'alternative' },
     ],
   },
   // Health / fitness
   {
     pattern: /\b(exercise|workout|diet|nutrition|calorie|health|wellness|sleep)\b/i,
     followUps: [
-      'Can you adjust this for a beginner?',
-      'What should I avoid while doing this?',
-      'How long until I see results?',
+      { text: 'Can you adjust this for a beginner?', type: 'alternative' },
+      { text: 'What should I avoid while doing this?', type: 'deeper' },
+      { text: 'How long until I see results?', type: 'discover' },
     ],
   },
   // Finance
   {
     pattern: /\b(invest|budget|savings?|tax|portfolio|income|expense|financial)\b/i,
     followUps: [
-      'What is the risk level of this approach?',
-      'How should I adjust this based on my income?',
-      'Are there any tax implications?',
+      { text: 'What is the risk level of this approach?', type: 'deeper' },
+      { text: 'How should I adjust this based on my income?', type: 'alternative' },
+      { text: 'Are there any tax implications?', type: 'discover' },
     ],
   },
   // Writing
   {
     pattern: /\b(draft|article|blog|email|letter|essay|copy|content)\b/i,
     followUps: [
-      'Can you make this more concise?',
-      'Can you adjust the tone to be more formal?',
-      'Can you add a call-to-action?',
+      { text: 'Can you make this more concise?', type: 'apply' },
+      { text: 'Can you adjust the tone to be more formal?', type: 'alternative' },
+      { text: 'Can you add a call-to-action?', type: 'apply' },
+    ],
+  },
+  // ---------- NEW CATEGORIES (v2) ----------
+  // Database / SQL
+  {
+    pattern: /\b(database|sql|query|table|schema|migration|index|join|postgres|mysql|sqlite)\b/i,
+    followUps: [
+      { text: 'How can I optimize this query?', type: 'apply' },
+      { text: 'What indexes would improve performance?', type: 'deeper' },
+      { text: 'Are there any data integrity risks?', type: 'discover' },
+    ],
+  },
+  // DevOps / deployment
+  {
+    pattern:
+      /\b(deploy|docker|kubernetes|ci[\s/]?cd|pipeline|terraform|ansible|nginx|container|infrastructure)\b/i,
+    followUps: [
+      { text: 'How would I set up monitoring for this?', type: 'apply' },
+      { text: 'What is the rollback strategy?', type: 'alternative' },
+      { text: 'How would this scale under high load?', type: 'deeper' },
+    ],
+  },
+  // Security
+  {
+    pattern:
+      /\b(security|vulnerability|auth|authentication|authorization|encrypt|xss|csrf|injection|oauth|jwt)\b/i,
+    followUps: [
+      { text: 'What other attack vectors should I consider?', type: 'deeper' },
+      { text: 'Can you provide a security checklist?', type: 'apply' },
+      { text: 'How would an attacker try to bypass this?', type: 'alternative' },
+    ],
+  },
+  // Testing
+  {
+    pattern:
+      /\b(test|spec|assertion|mock|stub|coverage|e2e|integration\s+test|unit\s+test|vitest|jest|cypress)\b/i,
+    followUps: [
+      { text: 'What edge cases should I add tests for?', type: 'deeper' },
+      { text: 'Can you add a negative test case?', type: 'alternative' },
+      { text: 'How can I improve test coverage?', type: 'apply' },
+    ],
+  },
+  // API / REST
+  {
+    pattern:
+      /\b(api|endpoint|rest|graphql|webhook|http|request|response|payload|route|middleware)\b/i,
+    followUps: [
+      { text: 'How should I handle rate limiting?', type: 'deeper' },
+      { text: 'What error responses should this return?', type: 'alternative' },
+      { text: 'Can you generate the API documentation?', type: 'apply' },
+    ],
+  },
+  // Data science / ML
+  {
+    pattern:
+      /\b(model|training|dataset|accuracy|precision|recall|neural|regression|classification|embedding|tensor|gradient)\b/i,
+    followUps: [
+      { text: 'How can I reduce overfitting?', type: 'deeper' },
+      { text: 'What alternative models should I try?', type: 'alternative' },
+      { text: 'How should I evaluate performance?', type: 'apply' },
     ],
   },
 ];
 
 /** Generic fallbacks when no topic pattern matches */
-const GENERIC_FOLLOW_UPS: string[] = [
-  'Tell me more about this',
-  'Can you give an example?',
-  'What are the next steps?',
-  'How can I apply this?',
-  'What should I watch out for?',
-  'Can you summarize the key points?',
+const GENERIC_FOLLOW_UPS: Array<{ text: string; type: FollowUpType }> = [
+  { text: 'Tell me more about this', type: 'deeper' },
+  { text: 'Can you give an example?', type: 'apply' },
+  { text: 'What are the next steps?', type: 'apply' },
+  { text: 'How can I apply this?', type: 'apply' },
+  { text: 'What should I watch out for?', type: 'deeper' },
+  { text: 'Can you summarize the key points?', type: 'alternative' },
 ];
 
 /**
  * Derive 2-3 contextual follow-up questions from assistant content.
+ * Returns typed suggestions with per-type icons for the UI.
  */
-function deriveFollowUps(content: string): FollowUp[] {
+function deriveFollowUps(content: string, messageCount: number): FollowUp[] {
   if (!content || content.trim().length < 20) return [];
 
-  const matched = new Set<string>();
+  const matched: Array<{ text: string; type: FollowUpType }> = [];
+  const seenTexts = new Set<string>();
+
+  const addUnique = (item: { text: string; type: FollowUpType }) => {
+    if (!seenTexts.has(item.text) && matched.length < 5) {
+      seenTexts.add(item.text);
+      matched.push(item);
+    }
+  };
 
   // Collect follow-ups from matching topic patterns
   for (const { pattern, followUps } of TOPIC_FOLLOW_UPS) {
     if (pattern.test(content)) {
       for (const fu of followUps) {
-        matched.add(fu);
-        if (matched.size >= 5) break;
+        addUnique(fu);
+        if (matched.length >= 5) break;
       }
     }
-    if (matched.size >= 5) break;
+    if (matched.length >= 5) break;
+  }
+
+  // --- Capability discovery: surface platform features based on content ---
+
+  // When the response contains code blocks, offer to run it
+  if (/```[\s\S]{10,}```/.test(content)) {
+    addUnique({ text: 'Run this code', type: 'apply' });
+  }
+
+  // When the response makes factual claims, offer web verification
+  if (
+    /\b(according to|studies show|research indicates|data suggests|as of \d{4})\b/i.test(content)
+  ) {
+    addUnique({ text: 'Search the web to verify', type: 'discover' });
+  }
+
+  // After 5+ turns (10+ messages including user+assistant), offer summarization
+  if (messageCount >= 10) {
+    addUnique({ text: 'Summarize this conversation', type: 'apply' });
   }
 
   // If we have fewer than 2, supplement with generics
-  if (matched.size < 2) {
-    // Pick generics that feel relevant based on content length
+  if (matched.length < 2) {
     const contentIsLong = content.length > 500;
     const genericPool = contentIsLong
       ? GENERIC_FOLLOW_UPS.filter((_, i) => i < 3) // summary-style for long responses
       : GENERIC_FOLLOW_UPS.filter((_, i) => i >= 1 && i <= 4); // example/action-style
 
     for (const g of genericPool) {
-      matched.add(g);
-      if (matched.size >= 3) break;
+      addUnique(g);
+      if (matched.length >= 3) break;
     }
   }
 
   // Take up to 3
-  const selected = Array.from(matched).slice(0, 3);
+  const selected = matched.slice(0, 3);
 
-  return selected.map((text, i) => ({
+  return selected.map((item, i) => ({
     id: `followup-${i}`,
-    text,
+    text: item.text,
+    type: item.type,
   }));
 }
 
@@ -218,9 +336,14 @@ export function FollowUpSuggestions({
   lastAssistantContent,
   onSelect,
   isGenerating = false,
+  isUserTyping = false,
+  messageCount = 0,
   className,
 }: FollowUpSuggestionsProps) {
-  const followUps = useMemo(() => deriveFollowUps(lastAssistantContent), [lastAssistantContent]);
+  const followUps = useMemo(
+    () => deriveFollowUps(lastAssistantContent, messageCount),
+    [lastAssistantContent, messageCount],
+  );
   const [dismissed, setDismissed] = useState(false);
 
   // Don't render while generating or if there are no suggestions
@@ -235,29 +358,38 @@ export function FollowUpSuggestions({
         initial="hidden"
         animate="visible"
         exit={{ opacity: 0, y: -4, transition: { duration: 0.15 } }}
-        className={cn('flex flex-wrap items-center gap-2 pt-2 pb-1', className)}
+        className={cn(
+          'flex flex-wrap items-center gap-2 pt-2 pb-1',
+          'transition-opacity duration-200',
+          isUserTyping && 'pointer-events-none opacity-0',
+          className,
+        )}
         role="list"
         aria-label="Follow-up suggestions"
       >
-        {followUps.map((fu) => (
-          <motion.button
-            key={fu.id}
-            variants={pillVariants}
-            onClick={() => onSelect(fu.text)}
-            role="listitem"
-            className={cn(
-              'group/pill inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5',
-              'border border-border/40 bg-card/50 backdrop-blur-sm',
-              'text-xs font-medium text-muted-foreground',
-              'transition-all duration-150',
-              'hover:border-primary/30 hover:bg-primary/5 hover:text-foreground hover:shadow-sm',
-              'active:scale-[0.97]',
-            )}
-          >
-            <span>{fu.text}</span>
-            <ArrowRight className="h-3 w-3 opacity-0 transition-opacity duration-150 group-hover/pill:opacity-100" />
-          </motion.button>
-        ))}
+        {followUps.map((fu) => {
+          const Icon = TYPE_ICONS[fu.type];
+          return (
+            <motion.button
+              key={fu.id}
+              variants={pillVariants}
+              onClick={() => onSelect(fu.text)}
+              role="listitem"
+              className={cn(
+                'group/pill inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5',
+                'border border-border/40 bg-card/50 backdrop-blur-sm',
+                'text-xs font-medium text-muted-foreground',
+                'transition-all duration-150',
+                'hover:border-primary/30 hover:bg-primary/5 hover:text-foreground hover:shadow-sm',
+                'active:scale-[0.97]',
+              )}
+            >
+              <Icon className="h-3 w-3 shrink-0 opacity-60" />
+              <span>{fu.text}</span>
+              <ArrowRight className="h-3 w-3 opacity-0 transition-opacity duration-150 group-hover/pill:opacity-100" />
+            </motion.button>
+          );
+        })}
         <motion.button
           variants={pillVariants}
           onClick={() => setDismissed(true)}

@@ -1,9 +1,10 @@
-import { useState, useRef, KeyboardEvent } from 'react';
+import { useState, useRef, useCallback, useEffect, KeyboardEvent } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '@shared/ui/textarea';
 import { Badge } from '@/shared/components/ui/badge';
-import { Plus, Send, Mic, MicOff, Users, User, Loader2 } from 'lucide-react';
+import { Plus, Send, Mic, MicOff, Users, User, Loader2, Paperclip } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { useFileOperations } from '@/hooks/useFileOperations';
 
 interface ChatInputProps {
   onSubmit: (message: string) => void;
@@ -18,6 +19,8 @@ interface ChatInputProps {
   isStreaming?: boolean;
   onStop?: () => void;
   placeholder?: string;
+  /** Fires when the input transitions between empty and non-empty (debounced 500ms on clear). */
+  onTypingChange?: (isTyping: boolean) => void;
 }
 
 export function ChatInput({
@@ -29,16 +32,85 @@ export function ChatInput({
   isStreaming = false,
   onStop,
   placeholder = 'Ask anything',
+  onTypingChange,
 }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [showEmployeeSelector, setShowEmployeeSelector] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<
+    Array<{ name: string; path: string; size: number }>
+  >([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasTypingRef = useRef(false);
+
+  const { loading: fileLoading } = useFileOperations();
+
+  // Track empty <-> non-empty transitions with 500ms debounce on clearing
+  useEffect(() => {
+    const hasContent = message.trim().length > 0;
+
+    if (hasContent && !wasTypingRef.current) {
+      // Immediately signal typing start
+      wasTypingRef.current = true;
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+      onTypingChange?.(true);
+    } else if (!hasContent && wasTypingRef.current) {
+      // Debounce the "stopped typing" signal by 500ms
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+      }
+      typingTimerRef.current = setTimeout(() => {
+        wasTypingRef.current = false;
+        onTypingChange?.(false);
+        typingTimerRef.current = null;
+      }, 500);
+    }
+  }, [message, onTypingChange]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    const timer = typingTimerRef;
+    return () => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
+    };
+  }, []);
+
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    for (const file of Array.from(files)) {
+      setAttachedFiles((prev) => [
+        ...prev,
+        {
+          name: file.name,
+          path: file.name,
+          size: file.size,
+        },
+      ]);
+    }
+    // Reset input so the same file can be re-selected
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, []);
+
+  const removeAttachedFile = useCallback((index: number) => {
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleSubmit = () => {
     if (message.trim() && !isStreaming) {
       onSubmit(message.trim());
       setMessage('');
+      setAttachedFiles([]);
     }
   };
 
@@ -75,6 +147,25 @@ export function ChatInput({
         </div>
       )}
 
+      {/* Attached files */}
+      {attachedFiles.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {attachedFiles.map((file, idx) => (
+            <Badge key={`file-${idx}`} variant="secondary" className="text-xs gap-1 pr-1">
+              <Paperclip className="h-3 w-3" />
+              {file.name}
+              <button
+                onClick={() => removeAttachedFile(idx)}
+                className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+              >
+                <span className="sr-only">Remove</span>
+                &times;
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+
       {/* Input Area */}
       <div className="flex items-end gap-2">
         {/* Left Controls */}
@@ -86,6 +177,23 @@ export function ChatInput({
           >
             <Plus className="h-4 w-4" />
           </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={fileLoading}
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileSelect}
+          />
 
           <Button
             variant="ghost"
