@@ -855,7 +855,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
         } catch (err) {
           console.error('Failed to load settings:', err);
-          baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
+          toast.error('Failed to load settings');
+          baselineSnapshotRef.current = null;
         }
         await refreshOllamaState();
         setHasUnsavedChanges(false);

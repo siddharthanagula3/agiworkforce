@@ -28,7 +28,7 @@
  */
 
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import {
   getOnboardingStatus,
@@ -145,594 +145,606 @@ interface OnboardingStoreState {
 
 export const useOnboardingStore = create<OnboardingStoreState>()(
   devtools(
-    immer((set) => ({
-      status: null,
-      isLoading: false,
-      error: null,
-      session: null,
-      firstRunSession: null,
-      firstRunCompleted: false,
-      firstRunStats: null,
-      isOnline: true,
+    persist(
+      immer((set) => ({
+        status: null,
+        isLoading: false,
+        error: null,
+        session: null,
+        firstRunSession: null,
+        firstRunCompleted: false,
+        firstRunStats: null,
+        isOnline: true,
 
-      // =====================================================================
-      // Onboarding Progress
-      // =====================================================================
+        // =====================================================================
+        // Onboarding Progress
+        // =====================================================================
 
-      fetchOnboardingStatus: async () => {
-        set(
-          (state) => {
-            state.isLoading = true;
-            state.error = null;
-          },
-          undefined,
-          'onboarding/fetchStatus/start',
-        );
-        try {
-          const status = await getOnboardingStatus();
+        fetchOnboardingStatus: async () => {
           set(
             (state) => {
-              state.status = status;
-              state.isLoading = false;
+              state.isLoading = true;
+              state.error = null;
             },
             undefined,
-            'onboarding/fetchStatus/done',
+            'onboarding/fetchStatus/start',
           );
-          return status;
-        } catch (err) {
-          const msg = String(err);
-          set(
-            (state) => {
-              state.error = msg;
-              state.isLoading = false;
-            },
-            undefined,
-            'onboarding/fetchStatus/error',
-          );
-          return null;
-        }
-      },
+          try {
+            const status = await getOnboardingStatus();
+            set(
+              (state) => {
+                state.status = status;
+                state.isLoading = false;
+              },
+              undefined,
+              'onboarding/fetchStatus/done',
+            );
+            return status;
+          } catch (err) {
+            const msg = String(err);
+            set(
+              (state) => {
+                state.error = msg;
+                state.isLoading = false;
+              },
+              undefined,
+              'onboarding/fetchStatus/error',
+            );
+            return null;
+          }
+        },
 
-      completeStep: async (stepId, data) => {
-        try {
-          await completeOnboardingStep(stepId, data ?? undefined);
-          // Optimistically update local state
-          set(
-            (state) => {
-              if (state.status) {
-                const step = state.status.steps.find((s) => s.stepId === stepId);
-                if (step) {
-                  step.completed = true;
-                  step.completedAt = Date.now();
-                  if (data) step.data = data;
+        completeStep: async (stepId, data) => {
+          try {
+            await completeOnboardingStep(stepId, data ?? undefined);
+            // Optimistically update local state
+            set(
+              (state) => {
+                if (state.status) {
+                  const step = state.status.steps.find((s) => s.stepId === stepId);
+                  if (step) {
+                    step.completed = true;
+                    step.completedAt = Date.now();
+                    if (data) step.data = data;
+                  }
+                  state.status.completedSteps = state.status.steps.filter(
+                    (s) => s.completed || s.skipped,
+                  ).length;
+                  state.status.progressPercent =
+                    state.status.totalSteps > 0
+                      ? (state.status.completedSteps / state.status.totalSteps) * 100
+                      : 0;
+                  state.status.completed = state.status.completedSteps === state.status.totalSteps;
                 }
-                state.status.completedSteps = state.status.steps.filter(
-                  (s) => s.completed || s.skipped,
-                ).length;
-                state.status.progressPercent =
-                  state.status.totalSteps > 0
-                    ? (state.status.completedSteps / state.status.totalSteps) * 100
-                    : 0;
-                state.status.completed = state.status.completedSteps === state.status.totalSteps;
-              }
-            },
-            undefined,
-            'onboarding/completeStep/done',
-          );
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/completeStep/error',
-          );
-          return false;
-        }
-      },
+              },
+              undefined,
+              'onboarding/completeStep/done',
+            );
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/completeStep/error',
+            );
+            return false;
+          }
+        },
 
-      skipStep: async (stepId) => {
-        try {
-          await skipOnboardingStep(stepId);
-          set(
-            (state) => {
-              if (state.status) {
-                const step = state.status.steps.find((s) => s.stepId === stepId);
-                if (step) {
-                  step.skipped = true;
+        skipStep: async (stepId) => {
+          try {
+            await skipOnboardingStep(stepId);
+            set(
+              (state) => {
+                if (state.status) {
+                  const step = state.status.steps.find((s) => s.stepId === stepId);
+                  if (step) {
+                    step.skipped = true;
+                  }
+                  state.status.completedSteps = state.status.steps.filter(
+                    (s) => s.completed || s.skipped,
+                  ).length;
+                  state.status.progressPercent =
+                    state.status.totalSteps > 0
+                      ? (state.status.completedSteps / state.status.totalSteps) * 100
+                      : 0;
+                  state.status.completed = state.status.completedSteps === state.status.totalSteps;
                 }
-                state.status.completedSteps = state.status.steps.filter(
-                  (s) => s.completed || s.skipped,
-                ).length;
-                state.status.progressPercent =
-                  state.status.totalSteps > 0
-                    ? (state.status.completedSteps / state.status.totalSteps) * 100
-                    : 0;
-                state.status.completed = state.status.completedSteps === state.status.totalSteps;
-              }
-            },
-            undefined,
-            'onboarding/skipStep/done',
-          );
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/skipStep/error',
-          );
-          return false;
-        }
-      },
+              },
+              undefined,
+              'onboarding/skipStep/done',
+            );
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/skipStep/error',
+            );
+            return false;
+          }
+        },
 
-      resetOnboarding: async () => {
-        try {
-          await resetOnboardingApi();
-          set(
-            (state) => {
-              if (state.status) {
-                for (const step of state.status.steps) {
-                  step.completed = false;
-                  step.skipped = false;
-                  step.completedAt = null;
-                  step.data = null;
+        resetOnboarding: async () => {
+          try {
+            await resetOnboardingApi();
+            set(
+              (state) => {
+                if (state.status) {
+                  for (const step of state.status.steps) {
+                    step.completed = false;
+                    step.skipped = false;
+                    step.completedAt = null;
+                    step.data = null;
+                  }
+                  state.status.completedSteps = 0;
+                  state.status.progressPercent = 0;
+                  state.status.completed = false;
                 }
-                state.status.completedSteps = 0;
-                state.status.progressPercent = 0;
-                state.status.completed = false;
-              }
-            },
-            undefined,
-            'onboarding/reset/done',
-          );
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/reset/error',
-          );
-          return false;
-        }
-      },
+              },
+              undefined,
+              'onboarding/reset/done',
+            );
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/reset/error',
+            );
+            return false;
+          }
+        },
 
-      // =====================================================================
-      // Data Export
-      // =====================================================================
+        // =====================================================================
+        // Data Export
+        // =====================================================================
 
-      exportUserData: async () => {
-        set(
-          (state) => {
-            state.isLoading = true;
-          },
-          undefined,
-          'onboarding/export/start',
-        );
-        try {
-          const data = await exportUserData();
+        exportUserData: async () => {
           set(
             (state) => {
-              state.isLoading = false;
+              state.isLoading = true;
             },
             undefined,
-            'onboarding/export/done',
+            'onboarding/export/start',
           );
-          return data;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-              state.isLoading = false;
-            },
-            undefined,
-            'onboarding/export/error',
-          );
-          return null;
-        }
-      },
+          try {
+            const data = await exportUserData();
+            set(
+              (state) => {
+                state.isLoading = false;
+              },
+              undefined,
+              'onboarding/export/done',
+            );
+            return data;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+                state.isLoading = false;
+              },
+              undefined,
+              'onboarding/export/error',
+            );
+            return null;
+          }
+        },
 
-      // =====================================================================
-      // Connectivity
-      // =====================================================================
+        // =====================================================================
+        // Connectivity
+        // =====================================================================
 
-      checkConnectivity: async () => {
-        try {
-          const online = await checkConnectivity();
-          set(
-            (state) => {
-              state.isOnline = online;
-            },
-            undefined,
-            'onboarding/connectivity/done',
-          );
-          return online;
-        } catch (err) {
-          set(
-            (state) => {
-              state.isOnline = false;
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/connectivity/error',
-          );
-          return false;
-        }
-      },
+        checkConnectivity: async () => {
+          try {
+            const online = await checkConnectivity();
+            set(
+              (state) => {
+                state.isOnline = online;
+              },
+              undefined,
+              'onboarding/connectivity/done',
+            );
+            return online;
+          } catch (err) {
+            set(
+              (state) => {
+                state.isOnline = false;
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/connectivity/error',
+            );
+            return false;
+          }
+        },
 
-      // =====================================================================
-      // Session
-      // =====================================================================
+        // =====================================================================
+        // Session
+        // =====================================================================
 
-      fetchSessionInfo: async () => {
-        try {
-          const session = await getSessionInfo();
-          set(
-            (state) => {
-              state.session = session;
-            },
-            undefined,
-            'onboarding/session/done',
-          );
-          return session;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/session/error',
-          );
-          return null;
-        }
-      },
+        fetchSessionInfo: async () => {
+          try {
+            const session = await getSessionInfo();
+            set(
+              (state) => {
+                state.session = session;
+              },
+              undefined,
+              'onboarding/session/done',
+            );
+            return session;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/session/error',
+            );
+            return null;
+          }
+        },
 
-      updateSessionActivity: async (sessionId) => {
-        try {
-          await updateSessionActivityApi(sessionId);
-          set(
-            (state) => {
-              if (state.session && state.session.id === sessionId) {
-                state.session.lastActivity = Date.now();
-              }
-            },
-            undefined,
-            'onboarding/sessionActivity/done',
-          );
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/sessionActivity/error',
-          );
-          return false;
-        }
-      },
+        updateSessionActivity: async (sessionId) => {
+          try {
+            await updateSessionActivityApi(sessionId);
+            set(
+              (state) => {
+                if (state.session && state.session.id === sessionId) {
+                  state.session.lastActivity = Date.now();
+                }
+              },
+              undefined,
+              'onboarding/sessionActivity/done',
+            );
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/sessionActivity/error',
+            );
+            return false;
+          }
+        },
 
-      // =====================================================================
-      // User Preferences
-      // =====================================================================
+        // =====================================================================
+        // User Preferences
+        // =====================================================================
 
-      getUserPreference: async (key) => {
-        try {
-          const result = await getUserPreference(key);
-          return result;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/getPref/error',
-          );
-          return null;
-        }
-      },
+        getUserPreference: async (key) => {
+          try {
+            const result = await getUserPreference(key);
+            return result;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/getPref/error',
+            );
+            return null;
+          }
+        },
 
-      setUserPreference: async (key, value, category, dataType, description) => {
-        try {
-          await setUserPreference(key, value, category, dataType, description ?? undefined);
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/setPref/error',
-          );
-          return false;
-        }
-      },
+        setUserPreference: async (key, value, category, dataType, description) => {
+          try {
+            await setUserPreference(key, value, category, dataType, description ?? undefined);
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/setPref/error',
+            );
+            return false;
+          }
+        },
 
-      // =====================================================================
-      // First-Run Experience
-      // =====================================================================
+        // =====================================================================
+        // First-Run Experience
+        // =====================================================================
 
-      startFirstRun: async (userId, userRole) => {
-        set(
-          (state) => {
-            state.isLoading = true;
-            state.error = null;
-          },
-          undefined,
-          'onboarding/firstRun/start',
-        );
-        try {
-          const session = await startFirstRunExperience(userId, userRole ?? undefined);
+        startFirstRun: async (userId, userRole) => {
           set(
             (state) => {
-              state.firstRunSession = session;
-              state.isLoading = false;
+              state.isLoading = true;
+              state.error = null;
             },
             undefined,
-            'onboarding/firstRun/started',
+            'onboarding/firstRun/start',
           );
-          return session;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-              state.isLoading = false;
-            },
-            undefined,
-            'onboarding/firstRun/error',
-          );
-          return null;
-        }
-      },
+          try {
+            const session = await startFirstRunExperience(userId, userRole ?? undefined);
+            set(
+              (state) => {
+                state.firstRunSession = session;
+                state.isLoading = false;
+              },
+              undefined,
+              'onboarding/firstRun/started',
+            );
+            return session;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+                state.isLoading = false;
+              },
+              undefined,
+              'onboarding/firstRun/error',
+            );
+            return null;
+          }
+        },
 
-      hasCompletedFirstRun: async (userId) => {
-        try {
-          const completed = await hasCompletedFirstRun(userId);
-          set(
-            (state) => {
-              state.firstRunCompleted = completed;
-            },
-            undefined,
-            'onboarding/hasCompleted/done',
-          );
-          return completed;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/hasCompleted/error',
-          );
-          return false;
-        }
-      },
+        hasCompletedFirstRun: async (userId) => {
+          try {
+            const completed = await hasCompletedFirstRun(userId);
+            set(
+              (state) => {
+                state.firstRunCompleted = completed;
+              },
+              undefined,
+              'onboarding/hasCompleted/done',
+            );
+            return completed;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/hasCompleted/error',
+            );
+            return false;
+          }
+        },
 
-      runInstantDemo: async (employeeId, userId) => {
-        set(
-          (state) => {
-            state.isLoading = true;
-          },
-          undefined,
-          'onboarding/demo/start',
-        );
-        try {
-          const result = await runInstantDemo(employeeId, userId ?? undefined);
+        runInstantDemo: async (employeeId, userId) => {
           set(
             (state) => {
-              state.isLoading = false;
+              state.isLoading = true;
             },
             undefined,
-            'onboarding/demo/done',
+            'onboarding/demo/start',
           );
-          return result;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-              state.isLoading = false;
-            },
-            undefined,
-            'onboarding/demo/error',
-          );
-          return null;
-        }
-      },
+          try {
+            const result = await runInstantDemo(employeeId, userId ?? undefined);
+            set(
+              (state) => {
+                state.isLoading = false;
+              },
+              undefined,
+              'onboarding/demo/done',
+            );
+            return result;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+                state.isLoading = false;
+              },
+              undefined,
+              'onboarding/demo/error',
+            );
+            return null;
+          }
+        },
 
-      updateFirstRunStep: async (sessionId, step) => {
-        try {
-          await updateFirstRunStep(sessionId, step);
-          set(
-            (state) => {
-              if (state.firstRunSession && state.firstRunSession.id === sessionId) {
-                state.firstRunSession.step = step;
-              }
-            },
-            undefined,
-            'onboarding/firstRunStep/done',
-          );
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/firstRunStep/error',
-          );
-          return false;
-        }
-      },
+        updateFirstRunStep: async (sessionId, step) => {
+          try {
+            await updateFirstRunStep(sessionId, step);
+            set(
+              (state) => {
+                if (state.firstRunSession && state.firstRunSession.id === sessionId) {
+                  state.firstRunSession.step = step;
+                }
+              },
+              undefined,
+              'onboarding/firstRunStep/done',
+            );
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/firstRunStep/error',
+            );
+            return false;
+          }
+        },
 
-      selectDemo: async (sessionId, demoId) => {
-        try {
-          await selectDemo(sessionId, demoId);
-          set(
-            (state) => {
-              if (state.firstRunSession && state.firstRunSession.id === sessionId) {
-                state.firstRunSession.selected_demo_id = demoId;
-              }
-            },
-            undefined,
-            'onboarding/selectDemo/done',
-          );
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/selectDemo/error',
-          );
-          return false;
-        }
-      },
+        selectDemo: async (sessionId, demoId) => {
+          try {
+            await selectDemo(sessionId, demoId);
+            set(
+              (state) => {
+                if (state.firstRunSession && state.firstRunSession.id === sessionId) {
+                  state.firstRunSession.selected_demo_id = demoId;
+                }
+              },
+              undefined,
+              'onboarding/selectDemo/done',
+            );
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/selectDemo/error',
+            );
+            return false;
+          }
+        },
 
-      recordDemoResults: async (sessionId, results) => {
-        try {
-          await recordDemoResults(sessionId, results);
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/recordResults/error',
-          );
-          return false;
-        }
-      },
+        recordDemoResults: async (sessionId, results) => {
+          try {
+            await recordDemoResults(sessionId, results);
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/recordResults/error',
+            );
+            return false;
+          }
+        },
 
-      markSetupCompleted: async (sessionId) => {
-        try {
-          await markSetupCompleted(sessionId);
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/markSetup/error',
-          );
-          return false;
-        }
-      },
+        markSetupCompleted: async (sessionId) => {
+          try {
+            await markSetupCompleted(sessionId);
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/markSetup/error',
+            );
+            return false;
+          }
+        },
 
-      completeFirstRun: async (sessionId) => {
-        try {
-          await completeFirstRun(sessionId);
-          set(
-            (state) => {
-              state.firstRunCompleted = true;
-              if (state.firstRunSession && state.firstRunSession.id === sessionId) {
-                state.firstRunSession.step = 'completed';
-              }
-            },
-            undefined,
-            'onboarding/completeFirstRun/done',
-          );
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/completeFirstRun/error',
-          );
-          return false;
-        }
-      },
+        completeFirstRun: async (sessionId) => {
+          try {
+            await completeFirstRun(sessionId);
+            set(
+              (state) => {
+                state.firstRunCompleted = true;
+                if (state.firstRunSession && state.firstRunSession.id === sessionId) {
+                  state.firstRunSession.step = 'completed';
+                }
+              },
+              undefined,
+              'onboarding/completeFirstRun/done',
+            );
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/completeFirstRun/error',
+            );
+            return false;
+          }
+        },
 
-      getFirstRunSession: async (sessionId) => {
-        try {
-          const session = await getFirstRunSession(sessionId);
-          set(
-            (state) => {
-              state.firstRunSession = session;
-            },
-            undefined,
-            'onboarding/getSession/done',
-          );
-          return session;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/getSession/error',
-          );
-          return null;
-        }
-      },
+        getFirstRunSession: async (sessionId) => {
+          try {
+            const session = await getFirstRunSession(sessionId);
+            set(
+              (state) => {
+                state.firstRunSession = session;
+              },
+              undefined,
+              'onboarding/getSession/done',
+            );
+            return session;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/getSession/error',
+            );
+            return null;
+          }
+        },
 
-      fetchFirstRunStatistics: async () => {
-        try {
-          const stats = await getFirstRunStatistics();
-          set(
-            (state) => {
-              state.firstRunStats = stats;
-            },
-            undefined,
-            'onboarding/stats/done',
-          );
-          return stats;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/stats/error',
-          );
-          return null;
-        }
-      },
+        fetchFirstRunStatistics: async () => {
+          try {
+            const stats = await getFirstRunStatistics();
+            set(
+              (state) => {
+                state.firstRunStats = stats;
+              },
+              undefined,
+              'onboarding/stats/done',
+            );
+            return stats;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/stats/error',
+            );
+            return null;
+          }
+        },
 
-      skipFirstRun: async (sessionId) => {
-        try {
-          await skipFirstRun(sessionId);
+        skipFirstRun: async (sessionId) => {
+          try {
+            await skipFirstRun(sessionId);
+            set(
+              (state) => {
+                state.firstRunCompleted = true;
+              },
+              undefined,
+              'onboarding/skipFirstRun/done',
+            );
+            return true;
+          } catch (err) {
+            set(
+              (state) => {
+                state.error = String(err);
+              },
+              undefined,
+              'onboarding/skipFirstRun/error',
+            );
+            return false;
+          }
+        },
+
+        // =====================================================================
+        // Utility
+        // =====================================================================
+
+        clearError: () =>
           set(
             (state) => {
-              state.firstRunCompleted = true;
+              state.error = null;
             },
             undefined,
-            'onboarding/skipFirstRun/done',
-          );
-          return true;
-        } catch (err) {
-          set(
-            (state) => {
-              state.error = String(err);
-            },
-            undefined,
-            'onboarding/skipFirstRun/error',
-          );
-          return false;
-        }
-      },
-
-      // =====================================================================
-      // Utility
-      // =====================================================================
-
-      clearError: () =>
-        set(
-          (state) => {
-            state.error = null;
-          },
-          undefined,
-          'onboarding/clearError',
+            'onboarding/clearError',
+          ),
+      })),
+      {
+        name: 'agiworkforce-onboarding',
+        storage: createJSONStorage(() =>
+          typeof window === 'undefined' ? localStorage : window.localStorage,
         ),
-    })),
+        partialize: (state) => ({
+          firstRunCompleted: state.firstRunCompleted,
+          status: state.status,
+        }),
+      },
+    ),
     { name: 'OnboardingStore', enabled: import.meta.env.DEV },
   ),
 );

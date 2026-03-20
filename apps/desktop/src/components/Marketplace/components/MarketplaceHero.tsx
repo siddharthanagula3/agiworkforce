@@ -49,7 +49,7 @@ export function MarketplaceHero() {
           <StatCard
             icon={<Upload className="h-5 w-5" />}
             value={formatNumber(marketplaceStats?.ratingCount || 0)}
-            label="Total Workflows"
+            label="Ratings"
           />
           <StatCard
             icon={<Copy className="h-5 w-5" />}
@@ -59,7 +59,7 @@ export function MarketplaceHero() {
           <StatCard
             icon={<Users className="h-5 w-5" />}
             value={formatNumber(marketplaceStats?.commentCount || 0)}
-            label="Contributors"
+            label="Comments"
           />
           <StatCard
             icon={<TrendingUp className="h-5 w-5" />}
