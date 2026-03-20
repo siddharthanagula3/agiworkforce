@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { Search, X, Filter, Star, Clock, Grid, List } from 'lucide-react';
 import { useModelStore } from '../../stores/modelStore';
 import { useAccountStore } from '../../stores/auth';
+import { useAppModeStore } from '../../stores/appModeStore';
 import { ModelCard } from './ModelCard';
 import {
   getAllModels,
@@ -35,32 +36,74 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
 
-  const { selectedModel, favorites, recentModels, selectModel, toggleFavorite } = useModelStore(
-    useShallow((s) => ({
-      selectedModel: s.selectedModel,
-      favorites: s.favorites,
-      recentModels: s.recentModels,
-      selectModel: s.selectModel,
-      toggleFavorite: s.toggleFavorite,
-    })),
-  );
+  const { selectedModel, favorites, recentModels, selectModel, toggleFavorite, cloudModels } =
+    useModelStore(
+      useShallow((s) => ({
+        selectedModel: s.selectedModel,
+        favorites: s.favorites,
+        recentModels: s.recentModels,
+        selectModel: s.selectModel,
+        toggleFavorite: s.toggleFavorite,
+        cloudModels: s.cloudModels,
+      })),
+    );
   const account = useAccountStore((state) => state.account);
+  const appMode = useAppModeStore((state) => state.mode);
+  const isCloudMode = appMode === 'cloud';
   const planTier = normalizeSubscriptionTier(account.plan);
   const allowedAutoModes = useMemo(() => new Set(getAllowedAutoModesForTier(planTier)), [planTier]);
 
-  const allModels = useMemo(
-    () =>
-      getAllModels().filter((model) => {
-        if (model.id === 'auto') {
-          return true;
-        }
-        if (model.id.startsWith('auto')) {
-          return allowedAutoModes.has(model.id);
-        }
-        return model.provider === 'ollama' || isModelAllowedForTier(model.id, planTier);
-      }),
-    [allowedAutoModes, planTier],
-  );
+  // In cloud mode: show managed models (no API keys required).
+  // In local mode: show BYOK models filtered by subscription tier.
+  const allModels = useMemo(() => {
+    if (isCloudMode) {
+      return cloudModels.map(
+        (m): ModelMetadata => ({
+          id: m.id,
+          name: m.displayName,
+          provider: m.provider,
+          modelType: 'chat',
+          contextWindow: m.contextWindow,
+          inputCost: 0,
+          outputCost: 0,
+          capabilities: {
+            streaming: true,
+            tools: true,
+            vision: m.category !== 'instant',
+            json: true,
+            thinking: m.category === 'thinking',
+            computerUse: false,
+            agentic: true,
+            imageGen: false,
+            videoGen: false,
+            search: false,
+            research: false,
+            codeExecution: false,
+          },
+          speed: m.category === 'instant' ? 'very-fast' : 'fast',
+          quality: m.category === 'thinking' ? 'excellent' : 'good',
+          qualityTier:
+            m.category === 'thinking' ? 'best' : m.category === 'latest' ? 'balanced' : 'fast',
+          bestFor:
+            m.category === 'thinking'
+              ? ['reasoning', 'analysis', 'complex tasks']
+              : m.category === 'latest'
+                ? ['general purpose', 'coding', 'writing']
+                : ['fast responses', 'simple tasks'],
+        }),
+      );
+    }
+
+    return getAllModels().filter((model) => {
+      if (model.id === 'auto') {
+        return true;
+      }
+      if (model.id.startsWith('auto')) {
+        return allowedAutoModes.has(model.id);
+      }
+      return model.provider === 'ollama' || isModelAllowedForTier(model.id, planTier);
+    });
+  }, [isCloudMode, cloudModels, allowedAutoModes, planTier]);
 
   // Filter models based on search, provider filter, and mode
   const filteredModels = useMemo(() => {
