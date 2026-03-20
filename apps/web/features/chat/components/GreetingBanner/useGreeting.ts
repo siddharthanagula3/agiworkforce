@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { useAuthStore } from '@shared/stores/authentication-store';
 
 interface GreetingResult {
@@ -76,15 +77,24 @@ function getTimeBand(hour: number): TimeBand {
 
 export function useGreeting(): GreetingResult {
   const { user } = useAuthStore();
+  const userName = user?.name;
 
-  const now = new Date();
-  const hour = now.getHours();
-  const variantIndex = now.getDate() % 3;
+  // Memoize: greeting only changes when user name changes (time band is stable per page load)
+  const [snapshot] = React.useState(() => {
+    const now = new Date();
+    return { hour: now.getHours(), variantIndex: now.getDate() % 3 };
+  });
+
+  const hour = snapshot.hour;
+  const variantIndex = snapshot.variantIndex;
 
   const band = getTimeBand(hour);
   const config = TIME_BANDS[band];
 
-  const firstName = user?.name?.split(' ')[0]?.trim();
+  // Cap name length to prevent layout overflow; strip non-printable chars
+  const rawName = userName?.split(' ')[0]?.trim();
+  const firstName =
+    rawName && rawName.length <= 50 ? rawName.replace(/[\x00-\x1F\x7F]/g, '') : undefined;
 
   let headline: string;
   if (firstName) {
