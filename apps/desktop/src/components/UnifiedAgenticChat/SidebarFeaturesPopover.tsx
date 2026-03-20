@@ -35,6 +35,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { isTauri } from '../../lib/tauri-mock';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/Popover';
 import { Button } from '../ui/Button';
 import type { ActiveView } from '../../stores/chat/types';
@@ -109,6 +110,7 @@ function buildNavCategories(props: SidebarFeaturesPopoverProps): NavCategory[] {
           iconBg: 'bg-teal-400/20',
           iconColor: 'text-teal-400',
           view: 'computer-use',
+          visible: isTauri,
         },
         {
           id: 'automation',
@@ -117,6 +119,7 @@ function buildNavCategories(props: SidebarFeaturesPopoverProps): NavCategory[] {
           iconBg: 'bg-green-400/20',
           iconColor: 'text-green-400',
           view: 'automation',
+          visible: isTauri,
         },
         {
           id: 'vision',
@@ -125,6 +128,7 @@ function buildNavCategories(props: SidebarFeaturesPopoverProps): NavCategory[] {
           iconBg: 'bg-purple-400/20',
           iconColor: 'text-purple-400',
           view: 'vision',
+          visible: isTauri,
         },
         {
           id: 'skills',
@@ -240,6 +244,7 @@ function buildNavCategories(props: SidebarFeaturesPopoverProps): NavCategory[] {
           iconBg: 'bg-orange-400/20',
           iconColor: 'text-orange-400',
           view: 'git',
+          visible: isTauri,
         },
         {
           id: 'tool-registry',
@@ -261,6 +266,7 @@ function buildNavCategories(props: SidebarFeaturesPopoverProps): NavCategory[] {
           iconBg: 'bg-cyan-400/20',
           iconColor: 'text-cyan-400',
           view: 'database',
+          visible: isTauri,
         },
         {
           id: 'cloud',
@@ -269,6 +275,7 @@ function buildNavCategories(props: SidebarFeaturesPopoverProps): NavCategory[] {
           iconBg: 'bg-sky-400/20',
           iconColor: 'text-sky-400',
           view: 'cloud',
+          visible: isTauri,
         },
       ],
     },
@@ -322,6 +329,7 @@ function buildNavCategories(props: SidebarFeaturesPopoverProps): NavCategory[] {
           iconBg: 'bg-violet-400/20',
           iconColor: 'text-violet-400',
           view: 'mobile',
+          visible: isTauri,
         },
         {
           id: 'help',

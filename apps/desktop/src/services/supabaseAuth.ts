@@ -1393,4 +1393,51 @@ class SupabaseAuthService {
 
 export const supabaseAuth = SupabaseAuthService.getInstance();
 
+/**
+ * Initialize auth for web (non-Tauri) builds.
+ *
+ * Checks for an existing Supabase session in localStorage/cookies.
+ * If no session is found, redirects to the main site login page
+ * with a redirect parameter back to the chat app.
+ *
+ * @returns true if a valid session was found, false if redirecting to login
+ */
+export async function initializeWebAuth(): Promise<boolean> {
+  try {
+    const supabase = getSupabase();
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error('[WebAuth] Failed to get session:', error.message);
+    }
+
+    if (session?.access_token) {
+      // Valid session exists — sync with auth stores
+      console.debug('[WebAuth] Found existing session for user:', session.user?.email);
+      return true;
+    }
+
+    // No session — redirect to login
+    const currentUrl = window.location.href;
+    const loginBase =
+      (import.meta.env['VITE_LOGIN_URL'] as string | undefined) ?? 'https://agiworkforce.com/login';
+    const loginUrl = new URL(loginBase);
+    loginUrl.searchParams.set('redirect', currentUrl);
+
+    console.debug('[WebAuth] No session found, redirecting to login:', loginUrl.toString());
+    window.location.href = loginUrl.toString();
+    return false;
+  } catch (err) {
+    console.error('[WebAuth] Auth initialization failed:', err);
+    // On error, redirect to login as a safety measure
+    const loginUrl =
+      (import.meta.env['VITE_LOGIN_URL'] as string | undefined) ?? 'https://agiworkforce.com/login';
+    window.location.href = `${loginUrl}?redirect=${encodeURIComponent(window.location.href)}`;
+    return false;
+  }
+}
+
 export type { User, Session, Profile, Subscription, FeatureFlag };

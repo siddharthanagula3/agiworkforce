@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
+import { isTauri } from '../lib/tauri-mock';
 
 export type AppMode = 'local' | 'cloud';
 export type PlanTier = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
@@ -32,12 +33,19 @@ export const useAppModeStore = create<AppModeState>()(
   devtools(
     persist(
       subscribeWithSelector((set) => ({
-        mode: 'local',
+        mode: isTauri ? 'local' : 'cloud',
         planTier: 'free',
         hasOnboarded: false,
         isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
 
         setMode: (mode: AppMode) => {
+          // Web mode is always cloud — cannot switch to local
+          if (!isTauri && mode === 'local') {
+            import('sonner').then(({ toast }) => {
+              toast.info('Local mode requires the desktop app');
+            });
+            return;
+          }
           // Block mode switching while chat is actively streaming to avoid mid-stream state
           // inconsistencies. Use dynamic imports to avoid circular dependencies.
           import('./chat/chatStore')
@@ -95,7 +103,12 @@ export const useAppModeStore = create<AppModeState>()(
           hasOnboarded: state.hasOnboarded,
         }),
         migrate: (persistedState: unknown, _version: number) => {
-          return persistedState as AppModeState;
+          const state = persistedState as AppModeState;
+          // Web builds must always be in cloud mode
+          if (!isTauri && state.mode === 'local') {
+            return { ...state, mode: 'cloud' };
+          }
+          return state;
         },
       },
     ),
