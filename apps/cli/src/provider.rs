@@ -66,22 +66,6 @@ pub fn model_catalog() -> Vec<ModelInfo> {
             release_date: "2025-05",
         },
         ModelInfo {
-            id: "claude-3-5-sonnet-latest".into(),
-            provider: "anthropic",
-            context_window: 200_000,
-            input_price_per_1m: 3.0,
-            output_price_per_1m: 15.0,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: false,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: true,
-            max_output_tokens: 8_192,
-            status: "deprecated",
-            release_date: "2024-10",
-        },
-        ModelInfo {
             id: "claude-haiku-4-5".into(),
             provider: "anthropic",
             context_window: 200_000,
@@ -99,9 +83,9 @@ pub fn model_catalog() -> Vec<ModelInfo> {
         },
         // ── OpenAI ─────────────────────────────────────────────────
         ModelInfo {
-            id: "gpt-4o".into(),
+            id: "gpt-5.4".into(),
             provider: "openai",
-            context_window: 128_000,
+            context_window: 1_047_576,
             input_price_per_1m: 2.50,
             output_price_per_1m: 10.0,
             supports_tools: true,
@@ -112,12 +96,12 @@ pub fn model_catalog() -> Vec<ModelInfo> {
             supports_pdf: false,
             max_output_tokens: 16_384,
             status: "active",
-            release_date: "2024-05",
+            release_date: "2026-01",
         },
         ModelInfo {
-            id: "gpt-4o-mini".into(),
+            id: "gpt-5.4-mini".into(),
             provider: "openai",
-            context_window: 128_000,
+            context_window: 1_047_576,
             input_price_per_1m: 0.15,
             output_price_per_1m: 0.60,
             supports_tools: true,
@@ -128,7 +112,7 @@ pub fn model_catalog() -> Vec<ModelInfo> {
             supports_pdf: false,
             max_output_tokens: 16_384,
             status: "active",
-            release_date: "2024-07",
+            release_date: "2026-01",
         },
         ModelInfo {
             id: "gpt-4.1".into(),
@@ -164,9 +148,9 @@ pub fn model_catalog() -> Vec<ModelInfo> {
         },
         // ── Google ─────────────────────────────────────────────────
         ModelInfo {
-            id: "gemini-2.5-pro".into(),
+            id: "gemini-3.1-pro-preview".into(),
             provider: "google",
-            context_window: 1_000_000,
+            context_window: 1_048_576,
             input_price_per_1m: 1.25,
             output_price_per_1m: 10.0,
             supports_tools: true,
@@ -177,12 +161,12 @@ pub fn model_catalog() -> Vec<ModelInfo> {
             supports_pdf: true,
             max_output_tokens: 65_536,
             status: "active",
-            release_date: "2025-03",
+            release_date: "2026-02",
         },
         ModelInfo {
-            id: "gemini-2.0-flash".into(),
+            id: "gemini-3-flash-preview".into(),
             provider: "google",
-            context_window: 1_000_000,
+            context_window: 1_048_576,
             input_price_per_1m: 0.10,
             output_price_per_1m: 0.40,
             supports_tools: true,
@@ -193,29 +177,13 @@ pub fn model_catalog() -> Vec<ModelInfo> {
             supports_pdf: true,
             max_output_tokens: 8_192,
             status: "active",
-            release_date: "2025-02",
-        },
-        ModelInfo {
-            id: "gemini-1.5-pro".into(),
-            provider: "google",
-            context_window: 2_000_000,
-            input_price_per_1m: 1.25,
-            output_price_per_1m: 5.0,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: false,
-            supports_audio_input: true,
-            supports_audio_output: false,
-            supports_pdf: true,
-            max_output_tokens: 8_192,
-            status: "deprecated",
-            release_date: "2024-02",
+            release_date: "2026-01",
         },
         // ── Mistral ────────────────────────────────────────────────
         ModelInfo {
-            id: "mistral-large-latest".into(),
+            id: "mistral-large-2512".into(),
             provider: "mistral",
-            context_window: 128_000,
+            context_window: 256_000,
             input_price_per_1m: 2.0,
             output_price_per_1m: 6.0,
             supports_tools: true,
@@ -226,7 +194,7 @@ pub fn model_catalog() -> Vec<ModelInfo> {
             supports_pdf: false,
             max_output_tokens: 8_192,
             status: "active",
-            release_date: "2024-11",
+            release_date: "2025-12",
         },
         ModelInfo {
             id: "codestral-latest".into(),
@@ -246,9 +214,9 @@ pub fn model_catalog() -> Vec<ModelInfo> {
         },
         // ── xAI ────────────────────────────────────────────────────
         ModelInfo {
-            id: "grok-2".into(),
+            id: "grok-4.1".into(),
             provider: "xai",
-            context_window: 131_072,
+            context_window: 2_000_000,
             input_price_per_1m: 2.0,
             output_price_per_1m: 10.0,
             supports_tools: true,
@@ -259,7 +227,23 @@ pub fn model_catalog() -> Vec<ModelInfo> {
             supports_pdf: false,
             max_output_tokens: 8_192,
             status: "active",
-            release_date: "2024-08",
+            release_date: "2026-02",
+        },
+        ModelInfo {
+            id: "grok-4-1-fast-non-reasoning".into(),
+            provider: "xai",
+            context_window: 2_000_000,
+            input_price_per_1m: 0.60,
+            output_price_per_1m: 4.0,
+            supports_tools: true,
+            supports_vision: true,
+            supports_reasoning: false,
+            supports_audio_input: false,
+            supports_audio_output: false,
+            supports_pdf: false,
+            max_output_tokens: 8_192,
+            status: "active",
+            release_date: "2026-02",
         },
         // ── DeepSeek ───────────────────────────────────────────────
         ModelInfo {
@@ -330,10 +314,18 @@ pub fn model_catalog() -> Vec<ModelInfo> {
     ]
 }
 
-/// Look up a model by ID (case-insensitive prefix match).
+/// Look up a model by ID (case-insensitive, exact match preferred, then prefix match).
 pub fn find_model(model_id: &str) -> Option<ModelInfo> {
     let lower = model_id.to_lowercase();
-    model_catalog().into_iter().find(|m| {
+    let catalog = model_catalog();
+
+    // Prefer exact match first
+    if let Some(exact) = catalog.iter().find(|m| m.id.to_lowercase() == lower) {
+        return Some(exact.clone());
+    }
+
+    // Fall back to prefix match
+    catalog.into_iter().find(|m| {
         lower.starts_with(&m.id.to_lowercase()) || m.id.to_lowercase().starts_with(&lower)
     })
 }
@@ -426,22 +418,6 @@ pub fn supports_reasoning(model_id: &str) -> bool {
 /// Returns `false` for unknown models.
 pub fn is_deprecated(model_id: &str) -> bool {
     find_model(model_id).is_some_and(|m| m.status == "deprecated")
-}
-
-/// Suggest a replacement for a deprecated model.
-///
-/// Returns `None` if the model is not deprecated or not found.
-pub fn suggest_replacement(model_id: &str) -> Option<&'static str> {
-    let model = find_model(model_id)?;
-    if model.status != "deprecated" {
-        return None;
-    }
-
-    match model.id.as_str() {
-        "claude-3-5-sonnet-latest" => Some("claude-sonnet-4-6"),
-        "gemini-1.5-pro" => Some("gemini-2.5-pro"),
-        _ => None,
-    }
 }
 
 /// Format a verbose detail string for a single model.
@@ -619,9 +595,15 @@ mod tests {
     fn test_catalog_has_new_models() {
         let catalog = model_catalog();
         let ids: Vec<&str> = catalog.iter().map(|m| m.id.as_str()).collect();
-        assert!(ids.contains(&"claude-3-5-sonnet-latest"));
+        assert!(ids.contains(&"claude-opus-4-6"));
         assert!(ids.contains(&"gpt-4.1"));
-        assert!(ids.contains(&"gemini-2.5-pro"));
+        assert!(ids.contains(&"gpt-5.4"));
+        assert!(ids.contains(&"gpt-5.4-mini"));
+        assert!(ids.contains(&"gemini-3.1-pro-preview"));
+        assert!(ids.contains(&"gemini-3-flash-preview"));
+        assert!(ids.contains(&"grok-4.1"));
+        assert!(ids.contains(&"grok-4-1-fast-non-reasoning"));
+        assert!(ids.contains(&"mistral-large-2512"));
         assert!(ids.contains(&"llama3.1"));
         assert!(ids.contains(&"qwen2.5"));
     }
@@ -715,13 +697,13 @@ mod tests {
         assert!(reasoning_ids.contains(&"claude-opus-4-6"));
         assert!(reasoning_ids.contains(&"claude-sonnet-4-6"));
         assert!(reasoning_ids.contains(&"o3-mini"));
-        assert!(reasoning_ids.contains(&"gemini-2.5-pro"));
+        assert!(reasoning_ids.contains(&"gemini-3.1-pro-preview"));
         assert!(reasoning_ids.contains(&"deepseek-reasoner"));
     }
 
     #[test]
     fn test_non_reasoning_models_not_flagged() {
-        let model = find_model("gpt-4o").unwrap();
+        let model = find_model("gpt-5.4").unwrap();
         assert!(!model.supports_reasoning);
         let model = find_model("llama3.1").unwrap();
         assert!(!model.supports_reasoning);
@@ -729,11 +711,11 @@ mod tests {
 
     #[test]
     fn test_audio_capabilities() {
-        let gpt4o = find_model("gpt-4o").unwrap();
-        assert!(gpt4o.supports_audio_input);
-        assert!(gpt4o.supports_audio_output);
+        let gpt54 = find_model("gpt-5.4").unwrap();
+        assert!(gpt54.supports_audio_input);
+        assert!(gpt54.supports_audio_output);
 
-        let gemini_flash = find_model("gemini-2.0-flash").unwrap();
+        let gemini_flash = find_model("gemini-3-flash-preview").unwrap();
         assert!(gemini_flash.supports_audio_input);
         assert!(gemini_flash.supports_audio_output);
 
@@ -748,19 +730,19 @@ mod tests {
         let claude = find_model("claude-opus-4-6").unwrap();
         assert!(claude.supports_pdf);
 
-        let gemini = find_model("gemini-2.5-pro").unwrap();
+        let gemini = find_model("gemini-3.1-pro-preview").unwrap();
         assert!(gemini.supports_pdf);
 
-        // OpenAI GPT-4o does not support native PDF
-        let gpt4o = find_model("gpt-4o").unwrap();
-        assert!(!gpt4o.supports_pdf);
+        // OpenAI GPT-5.4 does not support native PDF
+        let gpt54 = find_model("gpt-5.4").unwrap();
+        assert!(!gpt54.supports_pdf);
     }
 
     // ── find_model ─────────────────────────────────────────────
 
     #[test]
     fn test_find_model_exact() {
-        let model = find_model("gpt-4o");
+        let model = find_model("gpt-5.4");
         assert!(model.is_some());
         assert_eq!(model.unwrap().provider, "openai");
     }
@@ -778,9 +760,14 @@ mod tests {
 
     #[test]
     fn test_find_model_new_entries() {
-        assert!(find_model("claude-3-5-sonnet-latest").is_some());
+        assert!(find_model("claude-opus-4-6").is_some());
         assert!(find_model("gpt-4.1").is_some());
-        assert!(find_model("gemini-2.5-pro").is_some());
+        assert!(find_model("gpt-5.4").is_some());
+        assert!(find_model("gpt-5.4-mini").is_some());
+        assert!(find_model("gemini-3.1-pro-preview").is_some());
+        assert!(find_model("gemini-3-flash-preview").is_some());
+        assert!(find_model("grok-4.1").is_some());
+        assert!(find_model("mistral-large-2512").is_some());
         assert!(find_model("llama3.1").is_some());
         assert!(find_model("qwen2.5").is_some());
     }
@@ -814,7 +801,7 @@ mod tests {
     fn test_provider_for_model_prefix_anthropic() {
         assert_eq!(provider_for_model("claude-opus-4-6"), Some("anthropic"));
         assert_eq!(
-            provider_for_model("claude-3-5-sonnet-latest"),
+            provider_for_model("claude-sonnet-4-6"),
             Some("anthropic")
         );
         assert_eq!(provider_for_model("claude-anything"), Some("anthropic"));
@@ -822,7 +809,8 @@ mod tests {
 
     #[test]
     fn test_provider_for_model_prefix_openai() {
-        assert_eq!(provider_for_model("gpt-4o"), Some("openai"));
+        assert_eq!(provider_for_model("gpt-5.4"), Some("openai"));
+        assert_eq!(provider_for_model("gpt-5.4-mini"), Some("openai"));
         assert_eq!(provider_for_model("gpt-4.1"), Some("openai"));
         assert_eq!(provider_for_model("o3-mini"), Some("openai"));
         assert_eq!(provider_for_model("o1-preview"), Some("openai"));
@@ -830,12 +818,19 @@ mod tests {
 
     #[test]
     fn test_provider_for_model_prefix_google() {
-        assert_eq!(provider_for_model("gemini-2.5-pro"), Some("google"));
-        assert_eq!(provider_for_model("gemini-2.0-flash"), Some("google"));
+        assert_eq!(provider_for_model("gemini-3.1-pro-preview"), Some("google"));
+        assert_eq!(provider_for_model("gemini-3-flash-preview"), Some("google"));
+        // Unrecognized Gemini IDs still resolve via prefix
+        assert_eq!(provider_for_model("gemini-future"), Some("google"));
     }
 
     #[test]
     fn test_provider_for_model_prefix_mistral() {
+        assert_eq!(
+            provider_for_model("mistral-large-2512"),
+            Some("mistral")
+        );
+        // Legacy name still resolves via prefix
         assert_eq!(
             provider_for_model("mistral-large-latest"),
             Some("mistral")
@@ -845,7 +840,10 @@ mod tests {
 
     #[test]
     fn test_provider_for_model_prefix_xai() {
-        assert_eq!(provider_for_model("grok-2"), Some("xai"));
+        assert_eq!(provider_for_model("grok-4.1"), Some("xai"));
+        assert_eq!(provider_for_model("grok-4-1-fast-non-reasoning"), Some("xai"));
+        // Unrecognized Grok IDs still resolve via prefix
+        assert_eq!(provider_for_model("grok-future"), Some("xai"));
     }
 
     #[test]
@@ -863,8 +861,8 @@ mod tests {
     #[test]
     fn test_provider_for_model_case_insensitive() {
         assert_eq!(provider_for_model("CLAUDE-OPUS-4-6"), Some("anthropic"));
-        assert_eq!(provider_for_model("GPT-4o"), Some("openai"));
-        assert_eq!(provider_for_model("Gemini-2.0-flash"), Some("google"));
+        assert_eq!(provider_for_model("GPT-5.4"), Some("openai"));
+        assert_eq!(provider_for_model("Gemini-3-flash-preview"), Some("google"));
     }
 
     #[test]
@@ -877,8 +875,9 @@ mod tests {
     #[test]
     fn test_supports_tool_use_true() {
         assert!(supports_tool_use("claude-opus-4-6"));
-        assert!(supports_tool_use("gpt-4o"));
-        assert!(supports_tool_use("gemini-2.5-pro"));
+        assert!(supports_tool_use("gpt-5.4"));
+        assert!(supports_tool_use("gemini-3.1-pro-preview"));
+        assert!(supports_tool_use("grok-4.1"));
         assert!(supports_tool_use("gpt-4.1"));
     }
 
@@ -905,8 +904,8 @@ mod tests {
 
     #[test]
     fn test_default_temperature_gemini() {
-        assert_eq!(default_temperature("gemini-2.5-pro"), Some(1.0));
-        assert_eq!(default_temperature("gemini-2.0-flash"), Some(1.0));
+        assert_eq!(default_temperature("gemini-3.1-pro-preview"), Some(1.0));
+        assert_eq!(default_temperature("gemini-3-flash-preview"), Some(1.0));
     }
 
     #[test]
@@ -917,8 +916,8 @@ mod tests {
 
     #[test]
     fn test_default_temperature_openai_non_reasoning_none() {
-        assert_eq!(default_temperature("gpt-4o"), None);
-        assert_eq!(default_temperature("gpt-4o-mini"), None);
+        assert_eq!(default_temperature("gpt-5.4"), None);
+        assert_eq!(default_temperature("gpt-5.4-mini"), None);
     }
 
     #[test]
@@ -939,16 +938,16 @@ mod tests {
         assert!(supports_reasoning("claude-opus-4-6"));
         assert!(supports_reasoning("claude-sonnet-4-6"));
         assert!(supports_reasoning("o3-mini"));
-        assert!(supports_reasoning("gemini-2.5-pro"));
+        assert!(supports_reasoning("gemini-3.1-pro-preview"));
         assert!(supports_reasoning("deepseek-reasoner"));
     }
 
     #[test]
     fn test_supports_reasoning_false() {
-        assert!(!supports_reasoning("gpt-4o"));
-        assert!(!supports_reasoning("gpt-4o-mini"));
+        assert!(!supports_reasoning("gpt-5.4"));
+        assert!(!supports_reasoning("gpt-5.4-mini"));
         assert!(!supports_reasoning("llama3.1"));
-        assert!(!supports_reasoning("mistral-large-latest"));
+        assert!(!supports_reasoning("mistral-large-2512"));
     }
 
     #[test]
@@ -959,46 +958,17 @@ mod tests {
     // ── is_deprecated ──────────────────────────────────────────
 
     #[test]
-    fn test_is_deprecated_true() {
-        assert!(is_deprecated("claude-3-5-sonnet-latest"));
-        assert!(is_deprecated("gemini-1.5-pro"));
-    }
-
-    #[test]
     fn test_is_deprecated_false() {
         assert!(!is_deprecated("claude-opus-4-6"));
-        assert!(!is_deprecated("gpt-4o"));
-        assert!(!is_deprecated("gemini-2.5-pro"));
+        assert!(!is_deprecated("gpt-5.4"));
+        assert!(!is_deprecated("gemini-3.1-pro-preview"));
+        assert!(!is_deprecated("grok-4.1"));
+        assert!(!is_deprecated("mistral-large-2512"));
     }
 
     #[test]
     fn test_is_deprecated_unknown_false() {
         assert!(!is_deprecated("nonexistent-model"));
-    }
-
-    // ── suggest_replacement ────────────────────────────────────
-
-    #[test]
-    fn test_suggest_replacement_deprecated() {
-        assert_eq!(
-            suggest_replacement("claude-3-5-sonnet-latest"),
-            Some("claude-sonnet-4-6")
-        );
-        assert_eq!(
-            suggest_replacement("gemini-1.5-pro"),
-            Some("gemini-2.5-pro")
-        );
-    }
-
-    #[test]
-    fn test_suggest_replacement_active_returns_none() {
-        assert_eq!(suggest_replacement("claude-opus-4-6"), None);
-        assert_eq!(suggest_replacement("gpt-4o"), None);
-    }
-
-    #[test]
-    fn test_suggest_replacement_unknown_returns_none() {
-        assert_eq!(suggest_replacement("nonexistent-model"), None);
     }
 
     // ── format_model_detail ────────────────────────────────────
@@ -1034,13 +1004,6 @@ mod tests {
     }
 
     #[test]
-    fn test_format_model_detail_deprecated_model() {
-        let model = find_model("claude-3-5-sonnet-latest").unwrap();
-        let detail = format_model_detail(&model);
-        assert!(detail.contains("[deprecated]"));
-    }
-
-    #[test]
     fn test_format_model_detail_no_tools_with_vision() {
         // deepseek-reasoner: no tools, no vision
         let model = find_model("deepseek-reasoner").unwrap();
@@ -1067,9 +1030,14 @@ mod tests {
     #[test]
     fn test_format_model_list_contains_new_models() {
         let list = format_model_list();
-        assert!(list.contains("claude-3-5-sonnet-latest"));
+        assert!(list.contains("claude-opus-4-6"));
+        assert!(list.contains("gpt-5.4"));
+        assert!(list.contains("gpt-5.4-mini"));
         assert!(list.contains("gpt-4.1"));
-        assert!(list.contains("gemini-2.5-pro"));
+        assert!(list.contains("gemini-3.1-pro-preview"));
+        assert!(list.contains("gemini-3-flash-preview"));
+        assert!(list.contains("grok-4.1"));
+        assert!(list.contains("mistral-large-2512"));
         assert!(list.contains("llama3.1"));
         assert!(list.contains("qwen2.5"));
     }
@@ -1096,22 +1064,6 @@ mod tests {
         let list = format_model_list();
         // Should contain "out" column for max output tokens
         assert!(list.contains("out"));
-    }
-
-    #[test]
-    fn test_format_model_list_deprecated_marker() {
-        let list = format_model_list();
-        // Deprecated models should have "!" prefix
-        // Find the line with claude-3-5-sonnet-latest and verify it starts with !
-        for line in list.lines() {
-            if line.contains("claude-3-5-sonnet-latest") {
-                assert!(
-                    line.trim_start().starts_with('!'),
-                    "Deprecated model should have ! prefix: {}",
-                    line
-                );
-            }
-        }
     }
 
     // ── format_context_size ────────────────────────────────────

@@ -190,6 +190,22 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["description", "prompt"]
             }),
         },
+        // --- Codex CLI parity tools ---
+        ToolDefinition {
+            name: "apply_patch".to_string(),
+            description: "Apply a unified diff/patch to the working directory.".to_string(),
+            input_schema: serde_json::json!({"type":"object","properties":{"patch":{"type":"string","description":"Unified diff content"}},"required":["patch"]}),
+        },
+        ToolDefinition {
+            name: "grep_files".to_string(),
+            description: "Search for a regex pattern across files using ripgrep. Supports glob filtering.".to_string(),
+            input_schema: serde_json::json!({"type":"object","properties":{"pattern":{"type":"string","description":"Regex pattern"},"path":{"type":"string","description":"Directory (default .)"},"include":{"type":"string","description":"Glob filter e.g. *.rs"}},"required":["pattern"]}),
+        },
+        ToolDefinition {
+            name: "tool_search".to_string(),
+            description: "Search available tools by keyword.".to_string(),
+            input_schema: serde_json::json!({"type":"object","properties":{"query":{"type":"string","description":"Search query"},"max_results":{"type":"integer","description":"Max results (default 10)"}},"required":["query"]}),
+        },
     ]
 }
 
@@ -1404,8 +1420,8 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        // 8 base tools + 1 task tool = 9
-        assert_eq!(defs.len(), 9);
+        // 8 base tools + 1 task tool + 3 parity tools (apply_patch, grep_files, tool_search) = 12
+        assert_eq!(defs.len(), 12);
     }
 
     #[test]

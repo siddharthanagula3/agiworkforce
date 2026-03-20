@@ -116,16 +116,16 @@ export const UsageDashboard: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-full overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900">
+    <div className="w-full h-full overflow-y-auto p-6 bg-background">
       <div className="max-w-7xl mx-auto space-y-6">
         {}
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Analytics Dashboard</h1>
+          <h1 className="text-3xl font-bold text-foreground">Analytics Dashboard</h1>
           <button
             type="button"
             onClick={refreshAllMetrics}
             disabled={isLoadingMetrics}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
           >
             {isLoadingMetrics ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -134,12 +134,12 @@ export const UsageDashboard: React.FC = () => {
         {}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           {subscription?.plan_name && (
-            <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Current Plan</h3>
+            <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
+              <h3 className="text-sm font-medium text-muted-foreground">Current Plan</h3>
               <p className="text-2xl font-bold mt-2 text-primary capitalize">
                 {subscription.plan_name}
               </p>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Renews:{' '}
                 {new Date((subscription.current_period_end || 0) * 1000).toLocaleDateString()}
               </p>
@@ -150,10 +150,8 @@ export const UsageDashboard: React.FC = () => {
             <>
               {/* Daily Credits Card */}
               {credits.daily_limit_cents !== undefined && credits.daily_limit_cents > 0 && (
-                <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Daily Credits
-                  </h3>
+                <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
+                  <h3 className="text-sm font-medium text-muted-foreground">Daily Credits</h3>
                   <p className="text-2xl font-bold mt-2 text-blue-500">
                     {getRemainingPercentage(
                       credits.daily_used_cents || 0,
@@ -161,13 +159,13 @@ export const UsageDashboard: React.FC = () => {
                     )}
                     % remaining
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     {credits.daily_limit_cents
                       ? `${getUsagePercentage(credits.daily_used_cents || 0, credits.daily_limit_cents)}% used`
                       : 'No daily limit'}
                   </p>
                   {credits.daily_limit_cents && credits.daily_limit_cents > 0 && (
-                    <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-charcoal-700 overflow-hidden">
+                    <div className="mt-2 h-2 w-full rounded-full bg-secondary overflow-hidden">
                       <div
                         className="h-full bg-blue-500 transition-all"
                         style={{
@@ -183,7 +181,7 @@ export const UsageDashboard: React.FC = () => {
                     </div>
                   )}
                   {credits.daily_reset_at && (
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Resets in{' '}
                       {Math.ceil(
                         (new Date(credits.daily_reset_at).getTime() - Date.now()) /
@@ -197,21 +195,19 @@ export const UsageDashboard: React.FC = () => {
 
               {/* Monthly Credits Card */}
               {credits.allocated_cents && credits.allocated_cents > 0 && (
-                <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Monthly Credits
-                  </h3>
+                <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
+                  <h3 className="text-sm font-medium text-muted-foreground">Monthly Credits</h3>
                   <p className="text-2xl font-bold mt-2 text-amber-500">
                     {getRemainingPercentage(credits.used_cents || 0, credits.allocated_cents)}%
                     remaining
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     {credits.allocated_cents
                       ? `${getUsagePercentage(credits.used_cents || 0, credits.allocated_cents)}% used`
                       : 'No credits allocated'}
                   </p>
                   {credits.allocated_cents && (
-                    <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-charcoal-700 overflow-hidden">
+                    <div className="mt-2 h-2 w-full rounded-full bg-secondary overflow-hidden">
                       <div
                         className="h-full bg-amber-500 transition-all"
                         style={{
@@ -225,15 +221,15 @@ export const UsageDashboard: React.FC = () => {
             </>
           )}
 
-          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Monthly Usage</h3>
+          <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
+            <h3 className="text-sm font-medium text-muted-foreground">Monthly Usage</h3>
             {monthlyLimit > 0 ? (
               <>
                 <p className="text-2xl font-bold mt-2 text-amber-500">
                   {creditPercentage.toFixed(1)}%
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Monthly credits used</p>
-                <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-charcoal-700 overflow-hidden">
+                <p className="text-xs text-muted-foreground mt-1">Monthly credits used</p>
+                <div className="mt-2 h-2 w-full rounded-full bg-secondary overflow-hidden">
                   <div
                     className={cn(
                       'h-full transition-all',
@@ -250,27 +246,25 @@ export const UsageDashboard: React.FC = () => {
             ) : (
               <>
                 <p className="text-2xl font-bold mt-2 text-amber-500">—</p>
-                <p className="text-xs text-gray-400 mt-1">No monthly limit</p>
+                <p className="text-xs text-muted-foreground mt-1">No monthly limit</p>
               </>
             )}
           </div>
 
-          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">LLM Tokens</h3>
+          <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
+            <h3 className="text-sm font-medium text-muted-foreground">LLM Tokens</h3>
             <p className="text-2xl font-bold mt-2 text-blue-500">
               {billingUsageStats?.llm_tokens_used.toLocaleString() ?? '0'}
             </p>
-            <p className="text-xs text-gray-400 mt-1">Total tokens processing</p>
+            <p className="text-xs text-muted-foreground mt-1">Total tokens processing</p>
           </div>
 
-          <div className="bg-white dark:bg-charcoal-800 p-4 rounded-lg shadow-xs border border-gray-100 dark:border-charcoal-600">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              Automations Run
-            </h3>
+          <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
+            <h3 className="text-sm font-medium text-muted-foreground">Automations Run</h3>
             <p className="text-2xl font-bold mt-2 text-green-500">
               {analyticsUsageStats?.total_events?.toLocaleString() ?? '0'}
             </p>
-            <p className="text-xs text-gray-400 mt-1">Lifetime total</p>
+            <p className="text-xs text-muted-foreground mt-1">Lifetime total</p>
           </div>
         </div>
 
@@ -405,35 +399,33 @@ export const UsageDashboard: React.FC = () => {
         </div>
 
         {}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-            Recent Activity
-          </h2>
+        <div className="bg-card rounded-lg shadow p-6 border border-border">
+          <h2 className="text-xl font-semibold mb-4 text-foreground">Recent Activity</h2>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-muted">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Event
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Count
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Trend
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-card divide-y divide-border">
                 {topEvents.map((event, index) => (
                   <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
                       {event.event_name}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                       {event.count}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                       <span className="text-muted-foreground">—</span>
                     </td>
                   </tr>
@@ -457,13 +449,11 @@ interface MetricCardProps {
 
 const MetricCard: React.FC<MetricCardProps> = ({ title, value, subtitle, trend, trendUp }) => {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <div className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</div>
+    <div className="bg-card rounded-lg shadow p-6 border border-border">
+      <div className="text-sm font-medium text-muted-foreground">{title}</div>
       <div className="mt-2 flex items-baseline">
-        <div className="text-2xl font-semibold text-gray-900 dark:text-white">{value}</div>
-        {subtitle && (
-          <div className="ml-2 text-sm text-gray-500 dark:text-gray-400">{subtitle}</div>
-        )}
+        <div className="text-2xl font-semibold text-foreground">{value}</div>
+        {subtitle && <div className="ml-2 text-sm text-muted-foreground">{subtitle}</div>}
       </div>
       {trend && (
         <div className={`mt-2 text-sm ${trendUp ? 'text-green-600' : 'text-red-600'}`}>
@@ -481,8 +471,8 @@ interface ChartCardProps {
 
 const ChartCard: React.FC<ChartCardProps> = ({ title, children }) => {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">{title}</h3>
+    <div className="bg-card rounded-lg shadow p-6 border border-border">
+      <h3 className="text-lg font-semibold mb-4 text-foreground">{title}</h3>
       {children}
     </div>
   );
