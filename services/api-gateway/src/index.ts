@@ -24,11 +24,13 @@ import { providerHealthRouter } from './services/providerHealth';
 import { modelCatalogRouter } from './routes/models';
 import { cloudChatRouter } from './routes/cloudChat';
 import { llmRouter } from './routes/llm';
+import { usageRouter } from './routes/usage';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { validateContentType, validateSecurityHeaders } from './middleware/requestValidation';
 import { createRateLimiter } from './middleware/rateLimit';
 import { logger } from './lib/logger';
 import { validateStartupEnv } from './env';
+import { supabase } from './lib/supabase';
 
 try {
   validateStartupEnv();
@@ -91,10 +93,35 @@ app.use('/api/providers', providerHealthRouter);
 app.use('/api/models', modelCatalogRouter);
 app.use('/api/cloud-chat', cloudChatRouter);
 app.use('/api/llm/v1', llmRouter);
+app.use('/api/v1/usage', usageRouter);
 
 // SECURITY: Rate limited to 100/min for monitoring endpoints
 app.get('/health', createRateLimiter('health'), (_req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+  res.json({
+    status: 'ok',
+    version: '1.1.5',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// SECURITY: Rate limited to 100/min for status checks
+app.get('/api/v1/status', createRateLimiter('status'), async (_req: Request, res: Response) => {
+  try {
+    // Check Supabase connectivity with a simple query
+    const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
+
+    res.json({
+      database: error ? 'error' : 'connected',
+      gateway: 'ok',
+    });
+  } catch (err) {
+    logger.error({ err }, 'Status check failed');
+    res.status(500).json({
+      database: 'error',
+      gateway: 'ok',
+    });
+  }
 });
 
 // 404 handler for undefined routes (must be before error handler)
