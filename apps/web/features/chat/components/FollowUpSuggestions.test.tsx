@@ -23,21 +23,10 @@
  * - Hide button sets dismissed state and removes the row
  */
 
-import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 import { deriveFollowUps, FollowUpSuggestions } from './FollowUpSuggestions';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function makeContent(keywords: string, length = 0): string {
-  const base = `This response talks about ${keywords}.`;
-  const padding = length > base.length ? ' '.repeat(length - base.length) : '';
-  return base + padding;
-}
 
 // ---------------------------------------------------------------------------
 // deriveFollowUps — guard clauses

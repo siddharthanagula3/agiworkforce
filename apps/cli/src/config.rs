@@ -50,6 +50,26 @@ pub struct DefaultConfig {
     /// Model to use in fast mode (cheaper/faster alternative).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fast_model: Option<String>,
+
+    /// Approval mode: suggest (default), auto-edit, full-auto. (Codex CLI parity)
+    #[serde(default = "default_approval_mode")]
+    pub approval_mode: String,
+
+    /// Sandbox mode: off, read-only, workspace, full-auto.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_mode: Option<String>,
+
+    /// Model for code review (defaults to main model).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_model: Option<String>,
+
+    /// Cloud mode default model (top agentic coding models only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cloud_model: Option<String>,
+}
+
+fn default_approval_mode() -> String {
+    "suggest".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +107,10 @@ impl DefaultConfig {
             temperature: None,
             fallback_chain: Vec::new(),
             fast_model: None,
+            approval_mode: default_approval_mode(),
+            sandbox_mode: None,
+            review_model: None,
+            cloud_model: None,
         }
     }
 }
