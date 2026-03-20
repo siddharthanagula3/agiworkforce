@@ -60,6 +60,9 @@ const corsOrigins = (() => {
       'http://localhost:3001',
       'tauri://localhost',
       'https://tauri.localhost',
+      'https://chat.agiworkforce.com',
+      'https://www.agiworkforce.com',
+      'https://agiworkforce.com',
     ];
   }
   return configured

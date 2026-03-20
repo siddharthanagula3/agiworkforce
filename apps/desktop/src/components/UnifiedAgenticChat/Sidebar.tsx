@@ -71,7 +71,7 @@ import { SidebarFeaturesPopover } from './SidebarFeaturesPopover';
 import { TransferDialog } from './TransferDialog';
 import { IncognitoToggle } from './IncognitoToggle';
 import { save } from '@tauri-apps/plugin-dialog';
-import { invoke } from '../../lib/tauri-mock';
+import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useBillingUsageStore, selectBudgetPercentage } from '../../stores/billingUsage';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import { useAppModeStore, selectMode } from '../../stores/appModeStore';
@@ -1087,13 +1087,18 @@ export function Sidebar({
                 onClick: onOpenResearch,
                 isActive: false,
               },
-              {
-                id: 'terminal',
-                label: 'Terminal',
-                icon: TerminalSquare,
-                onClick: () => setActiveView('terminal'),
-                isActive: activeView === 'terminal',
-              },
+              // Terminal only shown in desktop mode
+              ...(isTauri
+                ? [
+                    {
+                      id: 'terminal',
+                      label: 'Terminal',
+                      icon: TerminalSquare,
+                      onClick: () => setActiveView('terminal'),
+                      isActive: activeView === 'terminal',
+                    },
+                  ]
+                : []),
               {
                 id: 'canvas',
                 label: 'Canvas',
@@ -1101,13 +1106,18 @@ export function Sidebar({
                 onClick: onOpenCanvas,
                 isActive: false,
               },
-              {
-                id: 'mcp-tools',
-                label: 'MCP Tools',
-                icon: Wrench,
-                onClick: onOpenMcpWorkspace,
-                isActive: false,
-              },
+              // MCP Tools only shown in desktop mode (requires local MCP servers)
+              ...(isTauri
+                ? [
+                    {
+                      id: 'mcp-tools',
+                      label: 'MCP Tools',
+                      icon: Wrench,
+                      onClick: onOpenMcpWorkspace,
+                      isActive: false,
+                    },
+                  ]
+                : []),
               {
                 id: 'images',
                 label: 'Images',
@@ -1376,8 +1386,8 @@ export function Sidebar({
             <div className="flex-1 min-w-0">
               <UserProfile collapsed={collapsed} />
             </div>
-            {/* Mode toggle pill — expanded state */}
-            {!collapsed && (
+            {/* Mode toggle pill — expanded state (hidden in web mode, always cloud) */}
+            {!collapsed && isTauri && (
               <button
                 type="button"
                 onClick={() => setMode(mode === 'local' ? 'cloud' : 'local')}

@@ -482,13 +482,6 @@ export const UnifiedAgenticChat: React.FC<{
     // start a stream (e.g. /terminal, /browser, or any other builtin/project command).
     let isSlashCommand = false;
 
-    // Mode guard: block chat when cloud mode is active (gateway LLM proxy not yet wired).
-    const appMode = useAppModeStore.getState().mode;
-    if (appMode === 'cloud') {
-      toast.error('Cloud mode chat is not yet available. Switch to Local mode to chat.');
-      return;
-    }
-
     // Handle slash commands
     const slashCommand = parseSlashCommand(content);
     let customSlashInstructions: string | undefined;
