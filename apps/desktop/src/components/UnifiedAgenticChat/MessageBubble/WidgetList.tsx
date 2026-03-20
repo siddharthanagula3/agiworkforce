@@ -7,6 +7,7 @@
 import React, { memo, useCallback } from 'react';
 import { emit, isTauri } from '../../../lib/tauri-mock';
 import { WidgetRenderer, WidgetActionEvent } from '../Widgets';
+import { GenerativeWidget } from '../GenerativeWidget';
 
 export interface WidgetData {
   id: string;
@@ -47,15 +48,26 @@ const WidgetListComponent: React.FC<WidgetListProps> = ({
 
   return (
     <div className="mt-4 space-y-3">
-      {widgets.map((widget) => (
-        <WidgetRenderer
-          key={widget.id}
-          widget={widget}
-          messageId={messageId}
-          onAction={handleWidgetAction}
-          readOnly={!isAssistant || isStreaming}
-        />
-      ))}
+      {widgets.map((widget) => {
+        if (widget.type === 'html') {
+          return (
+            <GenerativeWidget
+              key={widget.id}
+              html={typeof widget['html'] === 'string' ? widget['html'] : ''}
+              title={typeof widget['title'] === 'string' ? widget['title'] : undefined}
+            />
+          );
+        }
+        return (
+          <WidgetRenderer
+            key={widget.id}
+            widget={widget}
+            messageId={messageId}
+            onAction={handleWidgetAction}
+            readOnly={!isAssistant || isStreaming}
+          />
+        );
+      })}
     </div>
   );
 };
