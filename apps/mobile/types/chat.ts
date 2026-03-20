@@ -70,6 +70,10 @@ export interface ConversationSummary {
   lastMessage?: string;
   model?: string;
   tags?: string[];
+  /** Optional project ID this conversation belongs to */
+  projectId?: string;
+  /** Whether this is a temporary (unsaved) conversation */
+  temporary?: boolean;
 }
 
 export interface Artifact {

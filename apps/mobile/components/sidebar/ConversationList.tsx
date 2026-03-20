@@ -59,6 +59,8 @@ function groupConversations(conversations: ConversationSummary[]): GroupedConver
 interface ConversationListProps {
   searchQuery?: string;
   searchResults?: Array<{ conversationId: string; messageId: string; snippet: string }>;
+  /** When set, only show conversations belonging to this project */
+  filterProjectId?: string | null;
 }
 
 /**
@@ -66,13 +68,24 @@ interface ConversationListProps {
  * Groups conversations by recency and renders ConversationItem rows.
  * Pull to refresh loads from server.
  * When searchResults is provided, renders a flat search results list with snippets.
+ * When filterProjectId is provided, only conversations in that project are shown.
  */
-export function ConversationList({ searchQuery, searchResults }: ConversationListProps) {
+export function ConversationList({
+  searchQuery,
+  searchResults,
+  filterProjectId,
+}: ConversationListProps) {
   const allConversations = useChatStore((s) => s.conversations);
+
+  // Apply project filter first, then search filter
+  const projectFiltered = filterProjectId
+    ? allConversations.filter((c) => c.projectId === filterProjectId)
+    : allConversations;
+
   const conversations =
     searchQuery && !searchResults
-      ? allConversations.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
-      : allConversations;
+      ? projectFiltered.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      : projectFiltered;
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const loadConversations = useChatStore((s) => s.loadConversations);
   const isLoadingConversations = useChatStore((s) => s.isLoadingConversations);

@@ -25,6 +25,8 @@ import {
   handleInitialNotification,
 } from '@/services/notifications';
 import { getMobileSyncService } from '@/services/conversationSync';
+import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
+import { subscribeToRealtime, unsubscribeFromRealtime } from '@/services/realtime';
 import { useChatStore } from '@/stores/chatStore';
 import '../global.css';
 
@@ -61,6 +63,38 @@ export default function RootLayout() {
     handleInitialNotification();
 
     return removeListeners;
+  }, [session]);
+
+  // Background fetch — register agent status polling on login
+  useEffect(() => {
+    if (!session) return;
+
+    registerBackgroundFetch().catch((err) => {
+      console.warn('[RootLayout] Background fetch registration failed:', err);
+    });
+
+    return () => {
+      unregisterBackgroundFetch().catch(() => {});
+    };
+  }, [session]);
+
+  // Supabase Realtime — cross-surface sync of conversations/messages
+  useEffect(() => {
+    if (!session) return;
+
+    let unsubscribe: (() => void) | undefined;
+    subscribeToRealtime()
+      .then((unsub) => {
+        unsubscribe = unsub;
+      })
+      .catch((err) => {
+        console.warn('[RootLayout] Realtime subscription failed:', err);
+      });
+
+    return () => {
+      unsubscribe?.();
+      unsubscribeFromRealtime();
+    };
   }, [session]);
 
   // 3-device conversation sync — sync on app resume

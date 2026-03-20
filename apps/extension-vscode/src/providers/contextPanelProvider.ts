@@ -203,3 +203,23 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
+
+// ─── Singleton ───────────────────────────────────────────────────────────────
+
+let _contextPanelInstance: ContextPanelProvider | undefined;
+
+/**
+ * Set the singleton ContextPanelProvider instance.
+ * Called once from extension.ts during activation.
+ */
+export function setContextPanelInstance(instance: ContextPanelProvider): void {
+  _contextPanelInstance = instance;
+}
+
+/**
+ * Get the singleton ContextPanelProvider instance.
+ * Returns undefined if not yet initialized.
+ */
+export function getContextPanelProvider(): ContextPanelProvider | undefined {
+  return _contextPanelInstance;
+}
