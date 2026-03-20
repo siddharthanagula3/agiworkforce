@@ -15,7 +15,7 @@
  * so they persist across sessions.
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Image as ImageIcon,
   Download,
@@ -200,10 +200,18 @@ function Lightbox({ image, onClose }: LightboxProps) {
 export function ImagesGallery() {
   const [prompt, setPrompt] = useState('');
   const [lightboxImage, setLightboxImage] = useState<ImageEntry | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { images, selectedStyle, isGenerating, addImage, removeImage, setGenerating } =
     useImageGalleryStore();
+
+  // Load images on mount
+  useEffect(() => {
+    // Simulate load time (images are usually from store)
+    const timer = setTimeout(() => setIsLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -369,17 +377,31 @@ export function ImagesGallery() {
               </p>
             </div>
 
-            {images.length === 0 ? (
+            {isLoading ? (
+              // ── Skeleton grid ──
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={`skeleton-${i}`} className="animate-pulse rounded-xl bg-white/5">
+                    <div className="aspect-square rounded-t-lg bg-white/10" />
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <div className="h-3 w-16 rounded-full bg-white/10" />
+                      <div className="h-3 w-12 rounded-full bg-white/10" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : images.length === 0 ? (
               // ── Empty state ──
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02] py-16 text-center">
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02] py-20 text-center">
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-500/10">
                   <ImageIcon className="h-8 w-8 text-teal-400 opacity-60" />
                 </div>
-                <h3 className="mb-1 text-base font-medium text-white">No images yet</h3>
-                <p className="mb-6 text-sm text-slate-500">
-                  Try creating one above or pick a sample prompt to get started.
+                <h3 className="mb-2 text-base font-semibold text-white">No images yet</h3>
+                <p className="mb-6 max-w-xs text-sm text-slate-500">
+                  Generate your first image using AI — try one of these sample prompts to get
+                  started.
                 </p>
-                <div className="flex flex-wrap justify-center gap-2">
+                <div className="flex flex-wrap justify-center gap-2 mb-4">
                   {SAMPLE_PROMPTS.slice(0, 3).map((sample) => (
                     <button
                       key={sample}
@@ -391,12 +413,20 @@ export function ImagesGallery() {
                           block: 'center',
                         });
                       }}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:border-teal-500/50 hover:text-white"
+                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:border-teal-500/50 hover:bg-teal-500/10 hover:text-white"
                     >
                       {sample.length > 45 ? `${sample.slice(0, 45)}…` : sample}
                     </button>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => textareaRef.current?.focus()}
+                  className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-500"
+                >
+                  <Wand2 className="h-4 w-4" />
+                  Generate Image
+                </button>
               </div>
             ) : (
               // ── Grid ──
