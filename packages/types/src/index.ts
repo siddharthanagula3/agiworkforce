@@ -107,3 +107,6 @@ export * from './cross-device';
 
 // Workspace analytics types (enterprise usage tracking)
 export * from './workspace-analytics';
+
+// Command capability types (runtime-aware dispatch)
+export * from './command-capabilities';
