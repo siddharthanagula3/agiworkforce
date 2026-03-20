@@ -12,6 +12,7 @@ use tracing::{debug, error, info, warn};
 pub mod agent_mode;
 pub mod attachments;
 pub mod branching;
+pub mod cloud;
 pub mod browser_context;
 pub mod compaction;
 pub mod control;
@@ -45,6 +46,7 @@ pub use crate::sys::commands::chat::state::{
     reset_stop_flag, should_stop_for_conversation, AppDatabase,
 };
 pub use branching::*;
+pub use cloud::*;
 pub use compaction::*;
 pub use control::*;
 pub use conversation::*;
