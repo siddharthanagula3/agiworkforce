@@ -6,14 +6,109 @@ export const isTauri =
 const isTestEnvironment =
   typeof process !== 'undefined' && (process.env['NODE_ENV'] === 'test' || process.env['VITEST']);
 
+export const isCloudWeb = !isTauri && !isTestEnvironment;
+
+const CLOUD_WEB_FALLTHROUGH = Symbol('CLOUD_WEB_FALLTHROUGH');
+
+async function handleCloudWebCommand<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T | typeof CLOUD_WEB_FALLTHROUGH> {
+  switch (command) {
+    // Chat CRUD — delegate to cloudApi
+    case 'chat_get_conversations': {
+      const { listCloudConversations } = await import('../api/cloudApi');
+      const res = await listCloudConversations();
+      return (res as unknown as { conversations: unknown[] }).conversations as T;
+    }
+
+    case 'chat_create_conversation': {
+      const { createCloudConversation } = await import('../api/cloudApi');
+      const req = args?.['request'] as Record<string, unknown> | undefined;
+      const conv = await createCloudConversation(
+        (req?.['title'] as string) ?? 'New Conversation',
+        (req?.['model'] as string) ?? '',
+      );
+      return (conv as unknown as { conversation: unknown }).conversation as T;
+    }
+
+    case 'chat_get_messages': {
+      const { getCloudConversation } = await import('../api/cloudApi');
+      const id = (args?.['conversationId'] ?? args?.['id']) as string;
+      if (!id) return [] as T;
+      const result = await getCloudConversation(id);
+      return ((result as unknown as { messages?: unknown[] }).messages ?? []) as T;
+    }
+
+    case 'chat_delete_conversation': {
+      const { deleteCloudConversation } = await import('../api/cloudApi');
+      const id = (args?.['conversationId'] ?? args?.['id']) as string;
+      if (id) await deleteCloudConversation(id);
+      return undefined as T;
+    }
+
+    case 'chat_send_message': {
+      // Streaming is handled via cloudChatStream.ts — this just returns a placeholder
+      // so the caller doesn't throw. The actual streaming is initiated separately.
+      return { status: 'streaming_via_cloud' } as T;
+    }
+
+    // LLM model listing — delegate to cloudApi
+    case 'llm_get_available_models': {
+      const { getCloudModels } = await import('../api/cloudApi');
+      try {
+        const models = await getCloudModels();
+        return models as T;
+      } catch {
+        return [] as T;
+      }
+    }
+
+    case 'llm_get_usage_stats': {
+      try {
+        const { getCloudUsage } = await import('../api/cloudApi');
+        const usage = await getCloudUsage();
+        return {
+          totalTokens: usage.token_count ?? 0,
+          totalCost: usage.cost_usd ?? 0,
+          messageCount: usage.message_count ?? 0,
+          byProvider: {},
+          byModel: {},
+        } as T;
+      } catch {
+        return {
+          totalTokens: 0,
+          totalCost: 0,
+          messageCount: 0,
+          byProvider: {},
+          byModel: {},
+        } as T;
+      }
+    }
+
+    default:
+      // Not a cloud command — fall through to mock values
+      return CLOUD_WEB_FALLTHROUGH as typeof CLOUD_WEB_FALLTHROUGH;
+  }
+}
+
 export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri) {
     const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
     return tauriInvoke<T>(command, args);
   }
 
-  // Production mode: Not in Tauri and not in test environment
-  if (!isTestEnvironment) {
+  // Cloud web mode: route chat commands to cloud API, mock desktop-only commands
+  if (isCloudWeb) {
+    const cloudResult = await handleCloudWebCommand<T>(command, args);
+    if (cloudResult !== CLOUD_WEB_FALLTHROUGH) {
+      return cloudResult;
+    }
+    // Fall through to test-mode mock values for desktop-only commands
+  }
+
+  // Test environment / cloud web fallthrough: return mock values
+  if (!isTestEnvironment && !isCloudWeb) {
     const errorMessage = `This feature requires the AGI Workforce desktop application. Please download it from https://agiworkforce.com/download`;
     console.error(`[Tauri] ${errorMessage}`, { command, args });
     throw new Error(errorMessage);
@@ -1501,6 +1596,19 @@ export async function listen<T>(event: string, handler: EventCallback<T>): Promi
     return tauriListen<T>(event, handler);
   }
 
+  // In cloud web mode, register the handler in a global event bus so cloudChatStream
+  // can dispatch synthetic events.
+  if (isCloudWeb) {
+    const eventKey = `__cloud_web_${event}`;
+    const wrappedHandler = (e: CustomEvent) => {
+      handler({ payload: e.detail as T, id: Math.random() });
+    };
+    window.addEventListener(eventKey, wrappedHandler as EventListener);
+    return () => {
+      window.removeEventListener(eventKey, wrappedHandler as EventListener);
+    };
+  }
+
   // Mock implementation for web
   console.debug(`[Tauri Mock] Registered listener for event: ${event}`);
 
@@ -1514,6 +1622,13 @@ export async function emit(event: string, payload?: unknown): Promise<void> {
   if (isTauri) {
     const { emit: tauriEmit } = await import('@tauri-apps/api/event');
     return tauriEmit(event, payload);
+  }
+
+  // In cloud web mode, dispatch to the global event bus
+  if (isCloudWeb) {
+    const eventKey = `__cloud_web_${event}`;
+    window.dispatchEvent(new CustomEvent(eventKey, { detail: payload }));
+    return;
   }
 
   console.debug(`[Tauri Mock] Emitted event: ${event}`, payload);
