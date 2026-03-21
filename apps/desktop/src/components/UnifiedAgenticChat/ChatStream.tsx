@@ -146,6 +146,14 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
           onSuggestionClick={onSuggestionClick}
         />
         {(() => {
+          // Skip inline artifact rendering when the message is a tool call —
+          // the tool timeline inside MessageBubble already renders these results.
+          // Rendering them again here causes ugly duplication (red "Code operation failed"
+          // cards below the clean timeline).
+          const msgMeta = (message.metadata ?? {}) as Record<string, unknown>;
+          const isToolCallMessage = Boolean(msgMeta['toolCall'] || msgMeta['toolName']);
+          if (isToolCallMessage) return null;
+
           const artifactList: MessageArtifact[] =
             (message.artifacts as MessageArtifact[] | undefined) ??
             (message.metadata as MessageMetadataWithArtifacts | undefined)?.artifacts ??
