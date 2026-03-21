@@ -73,7 +73,7 @@ export async function startCloudChatStream(
   model: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  const messageId = `cloud_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const messageId = `cloud_${crypto.randomUUID()}`;
   let fullContent = '';
 
   // Emit stream:start

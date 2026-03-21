@@ -80,7 +80,7 @@ export async function executeTemplate(
   templateId: string,
   params: Record<string, string>,
 ): Promise<string> {
-  return command<string>('execute_template', { templateId, _params: params });
+  return command<string>('execute_template', { templateId, params });
 }
 export async function uninstallTemplate(templateId: string): Promise<void> {
   return command<void>('uninstall_template', { templateId });

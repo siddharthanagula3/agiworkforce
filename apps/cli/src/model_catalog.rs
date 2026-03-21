@@ -159,7 +159,10 @@ fn read_cache() -> Option<Vec<Model>> {
 fn write_cache(models: &[Model]) {
     let path = cache_path();
     if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            eprintln!("[model_catalog] cache dir error: {e}");
+            return;
+        }
     }
     let envelope = CacheEnvelope {
         version: env!("CARGO_PKG_VERSION").to_string(),
@@ -169,8 +172,13 @@ fn write_cache(models: &[Model]) {
             .as_secs(),
         models: models.to_vec(),
     };
-    if let Ok(json) = serde_json::to_string(&envelope) {
-        let _ = std::fs::write(&path, json);
+    match serde_json::to_string(&envelope) {
+        Ok(json) => {
+            if let Err(e) = std::fs::write(&path, json) {
+                eprintln!("[model_catalog] cache write error: {e}");
+            }
+        }
+        Err(e) => eprintln!("[model_catalog] cache serialize error: {e}"),
     }
 }
 
@@ -251,8 +259,8 @@ async fn fetch_remote() -> Option<Vec<Model>> {
     let mut models = Vec::new();
 
     for (provider_key, provider_val) in providers {
-        let provider_obj = provider_val.as_object()?;
-        let models_obj = provider_obj.get("models")?.as_object()?;
+        let Some(provider_obj) = provider_val.as_object() else { continue };
+        let Some(models_obj) = provider_obj.get("models").and_then(|m| m.as_object()) else { continue };
         let our_provider = provider_map.get(provider_key.as_str()).copied()
             .unwrap_or(provider_key.as_str());
 
