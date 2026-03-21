@@ -78,7 +78,7 @@
       "endpoints": [
         "https://www.agiworkforce.com/api/releases/{{target}}/{{current_version}}"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxODAzNEI3NDk3MzIzODEKUldTQkkzTkp0elNBUVhkUzdsanZXek5CTGJqTkFVSUlWelJZa25ueWdnWktQZ0JwWjJjeVhsdlAK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEwQkFCQ0E2MTNFMjg2MUEKUldRYWh1SVRwcnk2b1Bla0pmOEpQNXhTb0F4TWlVVlVvaEw4NVUzVi92cTF3VmZMWXplakpaQ00K",
       "windows": {
         "installMode": "passive"
       }
