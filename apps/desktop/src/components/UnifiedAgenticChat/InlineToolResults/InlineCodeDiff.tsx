@@ -30,17 +30,26 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status }) =>
     );
   }
 
-  // Show error state if status indicates failure
+  // Show error state — subtle gray styling, not aggressive red
   if (status === 'failed' || status === 'error') {
+    // Extract a clean description from data instead of showing raw JSON
+    const errorData = result?.data as Record<string, unknown> | undefined;
+    const filePath = (errorData?.['filePath'] ??
+      errorData?.['input'] ??
+      errorData?.['path'] ??
+      '') as string;
+    const cleanLabel = filePath
+      ? `Failed — ${filePath.split('/').pop() || filePath}`
+      : 'Operation failed';
     return (
-      <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
-        <div className="flex items-start gap-2">
-          <div className="text-red-400">⚠</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-red-300 font-medium">Code operation failed</p>
-            {result?.error && <p className="text-xs text-muted-foreground mt-1">{result.error}</p>}
-          </div>
+      <div className="mt-3 p-2.5 rounded-lg bg-muted/30 border border-border/50">
+        <div className="flex items-center gap-2">
+          <div className="text-muted-foreground text-xs">⚠</div>
+          <p className="text-xs text-muted-foreground">{cleanLabel}</p>
         </div>
+        {result?.error && (
+          <p className="text-xs text-muted-foreground/70 mt-1 ml-5">{result.error}</p>
+        )}
       </div>
     );
   }
@@ -51,14 +60,14 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status }) =>
 
   if (!success || error) {
     return (
-      <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
-        <div className="flex items-start gap-2">
-          <div className="text-red-400">⚠</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-red-300">{filePath}</p>
-            <p className="text-xs text-muted-foreground mt-1">{error || 'Operation failed'}</p>
-          </div>
+      <div className="mt-3 p-2.5 rounded-lg bg-muted/30 border border-border/50">
+        <div className="flex items-center gap-2">
+          <div className="text-muted-foreground text-xs">⚠</div>
+          <p className="text-xs text-muted-foreground">
+            {filePath ? `Failed — ${filePath.split('/').pop() || filePath}` : 'Operation failed'}
+          </p>
         </div>
+        {error && <p className="text-xs text-muted-foreground/70 mt-1 ml-5">{error}</p>}
       </div>
     );
   }

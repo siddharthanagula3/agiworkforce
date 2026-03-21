@@ -220,6 +220,39 @@ pub fn build_coding_system_prompt(folder: &std::path::Path) -> String {
         project_type, folder_display
     );
 
+    // Add top-level directory listing so the LLM knows what files exist
+    if let Ok(entries) = std::fs::read_dir(folder) {
+        let mut files: Vec<String> = Vec::new();
+        let mut dirs: Vec<String> = Vec::new();
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            // Skip hidden files and common noise
+            if name.starts_with('.') || name == "node_modules" || name == "target" || name == "dist" || name == ".next" {
+                continue;
+            }
+            if entry.path().is_dir() {
+                dirs.push(format!("  {}/", name));
+            } else {
+                files.push(format!("  {}", name));
+            }
+        }
+        dirs.sort();
+        files.sort();
+        if !dirs.is_empty() || !files.is_empty() {
+            prompt.push_str("\n### Project structure (top-level)\n\n```\n");
+            for d in &dirs {
+                prompt.push_str(d);
+                prompt.push('\n');
+            }
+            for f in &files {
+                prompt.push_str(f);
+                prompt.push('\n');
+            }
+            prompt.push_str("```\n\n");
+            prompt.push_str("Use `file_list` to explore subdirectories before reading files. Always use full absolute paths.\n");
+        }
+    }
+
     if let Some(instructions) = load_project_instructions(folder) {
         prompt.push_str("\n### Project Instructions\n\n");
         prompt.push_str(&instructions);
