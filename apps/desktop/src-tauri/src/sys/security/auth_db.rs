@@ -125,7 +125,10 @@ impl AuthDatabaseManager {
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
                         .map(|dt| dt.with_timezone(&Utc))
                         .unwrap_or_else(|e| {
-                            warn!("Failed to parse created_at timestamp: {}, using current time", e);
+                            warn!(
+                                "Failed to parse created_at timestamp: {}, using current time",
+                                e
+                            );
                             Utc::now()
                         }),
                     last_login_at: row
@@ -161,7 +164,10 @@ impl AuthDatabaseManager {
                     created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
                         .map(|dt| dt.with_timezone(&Utc))
                         .unwrap_or_else(|e| {
-                            warn!("Failed to parse created_at timestamp: {}, using current time", e);
+                            warn!(
+                                "Failed to parse created_at timestamp: {}, using current time",
+                                e
+                            );
                             Utc::now()
                         }),
                     last_login_at: row
@@ -262,31 +268,38 @@ impl AuthDatabaseManager {
         let token_hash = hmac_token(access_token)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
 
-        let session = db
-            .query_row(
-                "SELECT session_id, user_id, access_token_encrypted, refresh_token_encrypted,
+        let session = db.query_row(
+            "SELECT session_id, user_id, access_token_encrypted, refresh_token_encrypted,
              created_at, expires_at, last_activity_at
              FROM auth_sessions WHERE access_token_hash = ?1",
-                [&token_hash],
-                |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
-                        row.get::<_, String>(4)?,
-                        row.get::<_, String>(5)?,
-                        row.get::<_, String>(6)?,
-                    ))
-                },
-            )?;
+            [&token_hash],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                ))
+            },
+        )?;
 
         let (session_id, user_id, access_enc, refresh_enc, created, expires, last_act) = session;
         let access = decrypt_token(&access_enc).map_err(|e| {
-            anyhow!("[AUTH] Access token decryption failed for session {}: {}", session_id, e)
+            anyhow!(
+                "[AUTH] Access token decryption failed for session {}: {}",
+                session_id,
+                e
+            )
         })?;
         let refresh = decrypt_token(&refresh_enc).map_err(|e| {
-            anyhow!("[AUTH] Refresh token decryption failed for session {}: {}", session_id, e)
+            anyhow!(
+                "[AUTH] Refresh token decryption failed for session {}: {}",
+                session_id,
+                e
+            )
         })?;
         let session = Session {
             session_id,
@@ -313,31 +326,38 @@ impl AuthDatabaseManager {
         let token_hash = hmac_token(refresh_token)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
 
-        let session = db
-            .query_row(
-                "SELECT session_id, user_id, access_token_encrypted, refresh_token_encrypted,
+        let session = db.query_row(
+            "SELECT session_id, user_id, access_token_encrypted, refresh_token_encrypted,
              created_at, expires_at, last_activity_at
              FROM auth_sessions WHERE refresh_token_hash = ?1",
-                [&token_hash],
-                |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
-                        row.get::<_, String>(4)?,
-                        row.get::<_, String>(5)?,
-                        row.get::<_, String>(6)?,
-                    ))
-                },
-            )?;
+            [&token_hash],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                ))
+            },
+        )?;
 
         let (session_id, user_id, access_enc, refresh_enc, created, expires, last_act) = session;
         let access = decrypt_token(&access_enc).map_err(|e| {
-            anyhow!("[AUTH] Access token decryption failed for session {}: {}", session_id, e)
+            anyhow!(
+                "[AUTH] Access token decryption failed for session {}: {}",
+                session_id,
+                e
+            )
         })?;
         let refresh = decrypt_token(&refresh_enc).map_err(|e| {
-            anyhow!("[AUTH] Refresh token decryption failed for session {}: {}", session_id, e)
+            anyhow!(
+                "[AUTH] Refresh token decryption failed for session {}: {}",
+                session_id,
+                e
+            )
         })?;
         let session = Session {
             session_id,

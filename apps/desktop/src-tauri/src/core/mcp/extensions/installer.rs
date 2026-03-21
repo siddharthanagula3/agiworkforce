@@ -513,10 +513,7 @@ impl ExtensionInstaller {
         if let Some(ref app_handle) = self.app_handle {
             use tauri::Emitter;
             if let Err(e) = app_handle.emit("extension:install-progress", &progress) {
-                tracing::warn!(
-                    "Failed to emit extension:install-progress event: {}",
-                    e
-                );
+                tracing::warn!("Failed to emit extension:install-progress event: {}", e);
             }
         }
 

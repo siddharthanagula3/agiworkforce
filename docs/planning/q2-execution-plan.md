@@ -83,28 +83,28 @@ Q2 is not complete unless all of the following are true:
 
 ## Pod-Level Q2 Deliverables
 
-| Pod | Q2 deliverable | Proof at end of quarter |
-| --- | --- | --- |
-| Desktop Shell | stable shell states, startup, session restore, auth/onboarding cleanup | desktop shell walkthrough without broken transitions |
-| Desktop Agents & Approvals | no hung approvals, action history, recovery states, takeover clarity | desktop-to-mobile approval demo with retries and timeout behavior |
-| Desktop Browser Automation | stable browser sessions, replay artifacts, debugging primitives | reproducible automation run with replay trace |
-| Desktop Workflows | usable minimum workflow builder, clearer run logs, schedule/trigger stability | workflow created in UI and executed with readable artifacts |
-| Mobile Chat & Projects | hardened attachments, search, edit/retry, schedules, stronger project-aware mobile chat | mobile demo covering attach, search, edit, retry, schedule |
-| Mobile Companion | reliable pairing, heartbeat, approvals, remote commands, push path | phone controls desktop agent away from desk |
-| VS Code Core UX | stable activation, better bridge UX, cleaner command and panel flows | extension demo with stable connect/use/recover flow |
-| VS Code Agent & Retrieval | patch-oriented edits, stronger retrieval, edit correctness benchmarks | coding task demo with accepted patch flow |
-| Web Chat & App Shell | coherent app shell, web chat entry, stable auth/loading states | web user can enter, navigate, and work without state confusion |
-| Web Workforce, Billing & Admin | reliable billing, projects, schedules, workforce/admin flows | admin demo from account to billing to workforce action |
-| CLI | credible beta for daily sessions, tools, permissions, session resume | terminal walkthrough of agent task from prompt to resume |
-| API Gateway, Auth & Sync | canonical auth/sync/upload contracts, reliability instrumentation | cross-surface sync/error behavior is documented and measurable |
-| Realtime, Pairing & Push | explicit state machine, reconnect handling, approval delivery metrics | pairing and reconnect demo with observability |
-| Model Platform | canonical model catalog, provider health and fallback basics | all surfaces read from one model truth source |
-| Memory & Knowledge | shared retrieval direction, stronger project/context behavior, instrumentation | context quality demo beats current baseline |
-| Integrations, MCP & Skills | inventory, packaging rules, trust/review flow, first marketplace-ready pipeline | one documented path from skill/integration definition to use |
-| Security & Enterprise | audit event contract, policy model, device trust and enterprise MVP control spec | admin/security review can trace critical actions |
-| Quality, Release & Observability | quality dashboard, release gates, golden-path smoke suite | weekly release readiness no longer depends on guesswork |
-| Design System & UX | shared terminology and common state patterns | desktop/mobile/web/extension states read as one product family |
-| Growth, Docs & Distribution | docs parity, launch checklists, surface-specific onboarding/distribution plan | product messaging and install/run docs match reality |
+| Pod                              | Q2 deliverable                                                                          | Proof at end of quarter                                           |
+| -------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Desktop Shell                    | stable shell states, startup, session restore, auth/onboarding cleanup                  | desktop shell walkthrough without broken transitions              |
+| Desktop Agents & Approvals       | no hung approvals, action history, recovery states, takeover clarity                    | desktop-to-mobile approval demo with retries and timeout behavior |
+| Desktop Browser Automation       | stable browser sessions, replay artifacts, debugging primitives                         | reproducible automation run with replay trace                     |
+| Desktop Workflows                | usable minimum workflow builder, clearer run logs, schedule/trigger stability           | workflow created in UI and executed with readable artifacts       |
+| Mobile Chat & Projects           | hardened attachments, search, edit/retry, schedules, stronger project-aware mobile chat | mobile demo covering attach, search, edit, retry, schedule        |
+| Mobile Companion                 | reliable pairing, heartbeat, approvals, remote commands, push path                      | phone controls desktop agent away from desk                       |
+| VS Code Core UX                  | stable activation, better bridge UX, cleaner command and panel flows                    | extension demo with stable connect/use/recover flow               |
+| VS Code Agent & Retrieval        | patch-oriented edits, stronger retrieval, edit correctness benchmarks                   | coding task demo with accepted patch flow                         |
+| Web Chat & App Shell             | coherent app shell, web chat entry, stable auth/loading states                          | web user can enter, navigate, and work without state confusion    |
+| Web Workforce, Billing & Admin   | reliable billing, projects, schedules, workforce/admin flows                            | admin demo from account to billing to workforce action            |
+| CLI                              | credible beta for daily sessions, tools, permissions, session resume                    | terminal walkthrough of agent task from prompt to resume          |
+| API Gateway, Auth & Sync         | canonical auth/sync/upload contracts, reliability instrumentation                       | cross-surface sync/error behavior is documented and measurable    |
+| Realtime, Pairing & Push         | explicit state machine, reconnect handling, approval delivery metrics                   | pairing and reconnect demo with observability                     |
+| Model Platform                   | canonical model catalog, provider health and fallback basics                            | all surfaces read from one model truth source                     |
+| Memory & Knowledge               | shared retrieval direction, stronger project/context behavior, instrumentation          | context quality demo beats current baseline                       |
+| Integrations, MCP & Skills       | inventory, packaging rules, trust/review flow, first marketplace-ready pipeline         | one documented path from skill/integration definition to use      |
+| Security & Enterprise            | audit event contract, policy model, device trust and enterprise MVP control spec        | admin/security review can trace critical actions                  |
+| Quality, Release & Observability | quality dashboard, release gates, golden-path smoke suite                               | weekly release readiness no longer depends on guesswork           |
+| Design System & UX               | shared terminology and common state patterns                                            | desktop/mobile/web/extension states read as one product family    |
+| Growth, Docs & Distribution      | docs parity, launch checklists, surface-specific onboarding/distribution plan           | product messaging and install/run docs match reality              |
 
 ## Pod Clusters Used In This Plan
 

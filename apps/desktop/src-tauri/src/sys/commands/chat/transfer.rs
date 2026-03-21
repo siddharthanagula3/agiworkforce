@@ -70,8 +70,9 @@ pub async fn transfer_local_to_cloud(
         let conn = db.connection()?;
         let conv = repository::get_conversation(&conn, local_conversation_id, &user_id)
             .map_err(|e| format!("Local conversation {local_conversation_id} not found: {e}"))?;
-        let msgs = repository::list_messages(&conn, local_conversation_id)
-            .map_err(|e| format!("Failed to list messages for conversation {local_conversation_id}: {e}"))?;
+        let msgs = repository::list_messages(&conn, local_conversation_id).map_err(|e| {
+            format!("Failed to list messages for conversation {local_conversation_id}: {e}")
+        })?;
         (conv, msgs)
     };
 
@@ -109,11 +110,7 @@ pub async fn transfer_local_to_cloud(
         {
             Ok(_) => transferred += 1,
             Err(e) => {
-                tracing::warn!(
-                    "transfer_local_to_cloud: message {} failed: {}",
-                    msg.id,
-                    e
-                );
+                tracing::warn!("transfer_local_to_cloud: message {} failed: {}", msg.id, e);
             }
         }
     }
@@ -121,8 +118,9 @@ pub async fn transfer_local_to_cloud(
     // 4. Optionally delete local source
     if delete_local.unwrap_or(false) {
         let conn = db.connection()?;
-        repository::delete_conversation(&conn, local_conversation_id, &user_id)
-            .map_err(|e| format!("Failed to delete local conversation {local_conversation_id}: {e}"))?;
+        repository::delete_conversation(&conn, local_conversation_id, &user_id).map_err(|e| {
+            format!("Failed to delete local conversation {local_conversation_id}: {e}")
+        })?;
         debug!("Deleted local conversation {local_conversation_id} after transfer");
     }
 

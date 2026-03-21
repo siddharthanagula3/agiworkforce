@@ -276,8 +276,7 @@ impl TriggerRegistry {
                     anyhow::anyhow!("Invalid cron expression '{}': {}", expression, e)
                 })?;
                 // Reject cron intervals shorter than 5 minutes to prevent abuse.
-                validate_cron_interval(expression)
-                    .map_err(|e| anyhow::anyhow!("{}", e))?;
+                validate_cron_interval(expression).map_err(|e| anyhow::anyhow!("{}", e))?;
             }
             TriggerConfig::Webhook { path, .. } => {
                 if path.is_empty() || !path.starts_with('/') {
@@ -361,7 +360,11 @@ impl TriggerRegistry {
     ///
     /// Only the fields present in `updates` are applied; others are left unchanged.
     /// Returns an error if the trigger does not exist.
-    pub async fn update(&self, id: &str, updates: serde_json::Value) -> anyhow::Result<RegisteredTrigger> {
+    pub async fn update(
+        &self,
+        id: &str,
+        updates: serde_json::Value,
+    ) -> anyhow::Result<RegisteredTrigger> {
         let mut map = self.triggers.write().await;
         let trigger = map
             .get_mut(id)
@@ -394,10 +397,7 @@ impl TriggerRegistry {
     /// Return the execution history for a trigger (most recent first, up to 100 entries).
     pub async fn get_executions(&self, trigger_id: &str) -> Vec<TriggerExecution> {
         let exec_map = self.executions.read().await;
-        exec_map
-            .get(trigger_id)
-            .cloned()
-            .unwrap_or_default()
+        exec_map.get(trigger_id).cloned().unwrap_or_default()
     }
 
     // ------------------------------------------------------------------
@@ -532,15 +532,16 @@ impl TriggerRegistry {
                 event_data: event_data.clone(),
             };
             if let Err(e) = app.emit("trigger:fired", &payload) {
-                tracing::warn!("[TriggerRegistry] Failed to emit trigger:fired event: {}", e);
+                tracing::warn!(
+                    "[TriggerRegistry] Failed to emit trigger:fired event: {}",
+                    e
+                );
             }
         }
 
         // Dispatch based on action_type and capture any error for the execution log.
         let dispatch_result: anyhow::Result<()> = match trigger.action.action_type.as_str() {
-            "agent" => {
-                Self::spawn_agent_from_trigger(&trigger, &event_data, app_handle).await
-            }
+            "agent" => Self::spawn_agent_from_trigger(&trigger, &event_data, app_handle).await,
             "notification" => {
                 Self::send_trigger_notification(&trigger, app_handle);
                 Ok(())
@@ -556,10 +557,7 @@ impl TriggerRegistry {
                         "prompt": trigger.action.prompt,
                     });
                     if let Err(e) = app.emit("trigger:workflow_requested", &payload) {
-                        tracing::warn!(
-                            "[TriggerRegistry] Failed to emit workflow request: {}",
-                            e
-                        );
+                        tracing::warn!("[TriggerRegistry] Failed to emit workflow request: {}", e);
                     }
                 }
                 Ok(())
@@ -587,9 +585,7 @@ impl TriggerRegistry {
             };
 
             let mut exec_map = executions.write().await;
-            let history = exec_map
-                .entry(trigger.id.clone())
-                .or_insert_with(Vec::new);
+            let history = exec_map.entry(trigger.id.clone()).or_insert_with(Vec::new);
             history.insert(0, execution);
             if history.len() > 100 {
                 history.truncate(100);
@@ -655,7 +651,13 @@ impl TriggerRegistry {
                 .clone()
                 .unwrap_or_else(|| format!("Trigger '{}' fired.", trigger.name));
 
-            if let Err(e) = app.notification().builder().title(&title).body(&body).show() {
+            if let Err(e) = app
+                .notification()
+                .builder()
+                .title(&title)
+                .body(&body)
+                .show()
+            {
                 tracing::warn!(
                     "[TriggerRegistry] Failed to show notification for trigger {}: {}",
                     trigger.id,
@@ -681,7 +683,12 @@ impl TriggerRegistry {
                 glob.clone(),
                 debounce_ms.unwrap_or(DEFAULT_DEBOUNCE_MS),
             ),
-            _ => return Err(anyhow::anyhow!("Trigger {} is not a FileWatcher", trigger.id)),
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Trigger {} is not a FileWatcher",
+                    trigger.id
+                ))
+            }
         };
 
         // Re-check the denylist at watcher start time (defense-in-depth).
@@ -702,54 +709,52 @@ impl TriggerRegistry {
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<std::path::PathBuf>>(64);
 
         let glob_pattern_clone = glob_pattern.clone();
-        let watcher = notify::recommended_watcher(move |res: Result<NotifyEvent, notify::Error>| {
-            if let Ok(event) = res {
-                // Only care about create/modify/remove.
-                if !matches!(
-                    event.kind,
-                    EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
-                ) {
-                    return;
-                }
+        let watcher =
+            notify::recommended_watcher(move |res: Result<NotifyEvent, notify::Error>| {
+                if let Ok(event) = res {
+                    // Only care about create/modify/remove.
+                    if !matches!(
+                        event.kind,
+                        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
+                    ) {
+                        return;
+                    }
 
-                // Optional glob filter.
-                let paths: Vec<_> = if let Some(ref pattern) = glob_pattern_clone {
-                    let glob_matcher = glob::Pattern::new(pattern).ok();
-                    event
-                        .paths
-                        .into_iter()
-                        .filter(|p| {
-                            glob_matcher
-                                .as_ref()
-                                .map(|g| {
-                                    g.matches(
-                                        p.file_name()
-                                            .unwrap_or_default()
-                                            .to_str()
-                                            .unwrap_or_default(),
-                                    )
-                                })
-                                .unwrap_or(true)
-                        })
-                        .collect()
-                } else {
-                    event.paths
-                };
+                    // Optional glob filter.
+                    let paths: Vec<_> = if let Some(ref pattern) = glob_pattern_clone {
+                        let glob_matcher = glob::Pattern::new(pattern).ok();
+                        event
+                            .paths
+                            .into_iter()
+                            .filter(|p| {
+                                glob_matcher
+                                    .as_ref()
+                                    .map(|g| {
+                                        g.matches(
+                                            p.file_name()
+                                                .unwrap_or_default()
+                                                .to_str()
+                                                .unwrap_or_default(),
+                                        )
+                                    })
+                                    .unwrap_or(true)
+                            })
+                            .collect()
+                    } else {
+                        event.paths
+                    };
 
-                if !paths.is_empty() {
-                    let _ = tx.try_send(paths);
+                    if !paths.is_empty() {
+                        let _ = tx.try_send(paths);
+                    }
                 }
-            }
-        })
-        .map_err(|e| anyhow::anyhow!("Failed to create file watcher: {}", e))?;
+            })
+            .map_err(|e| anyhow::anyhow!("Failed to create file watcher: {}", e))?;
 
         // Start watching.
         let mut watcher = watcher;
         watcher
-            .watch(
-                std::path::Path::new(&watch_path),
-                RecursiveMode::Recursive,
-            )
+            .watch(std::path::Path::new(&watch_path), RecursiveMode::Recursive)
             .map_err(|e| anyhow::anyhow!("Failed to watch path '{}': {}", watch_path, e))?;
 
         // Debounce task.
@@ -933,10 +938,7 @@ async fn webhook_server(
 
     let listener = match TcpListener::bind(&addr).await {
         Ok(l) => {
-            tracing::info!(
-                "[TriggerRegistry] Webhook server listening on {}",
-                addr
-            );
+            tracing::info!("[TriggerRegistry] Webhook server listening on {}", addr);
             l
         }
         Err(e) => {
@@ -1209,7 +1211,10 @@ pub async fn toggle_trigger(
 ) -> Result<(), String> {
     let registry = state.0.read().await;
     if enabled {
-        registry.enable(&trigger_id).await.map_err(|e| e.to_string())
+        registry
+            .enable(&trigger_id)
+            .await
+            .map_err(|e| e.to_string())
     } else {
         registry
             .disable(&trigger_id)
@@ -1501,7 +1506,10 @@ mod tests {
 
             let result = registry.register(trigger).await;
             assert!(result.is_err());
-            assert!(result.unwrap_err().to_string().contains("sensitive directory"));
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("sensitive directory"));
         }
     }
 
@@ -1548,6 +1556,9 @@ mod tests {
 
         let result = registry.register(trigger).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("minimum allowed interval"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("minimum allowed interval"));
     }
 }

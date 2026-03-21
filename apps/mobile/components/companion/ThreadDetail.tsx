@@ -132,10 +132,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
           borderBottomLeftRadius: isFromMobile ? 16 : 4,
         }}
       >
-        <Text
-          className="text-sm leading-5"
-          style={{ color: textColor }}
-        >
+        <Text className="text-sm leading-5" style={{ color: textColor }}>
           {message.content}
         </Text>
 
@@ -165,15 +162,13 @@ function ThreadStatusBanner({ status }: { status: 'active' | 'paused' | 'complet
   if (status === 'active') return null;
 
   const isPaused = status === 'paused';
-  const bgColor = isPaused
-    ? 'rgba(245,158,11,0.08)'
-    : 'rgba(16,185,129,0.08)';
-  const borderColor = isPaused
-    ? 'rgba(245,158,11,0.20)'
-    : 'rgba(16,185,129,0.20)';
-  const icon = isPaused
-    ? <Pause size={13} color={colors.agentWarning} />
-    : <CheckCircle2 size={13} color={colors.agentSuccess} />;
+  const bgColor = isPaused ? 'rgba(245,158,11,0.08)' : 'rgba(16,185,129,0.08)';
+  const borderColor = isPaused ? 'rgba(245,158,11,0.20)' : 'rgba(16,185,129,0.20)';
+  const icon = isPaused ? (
+    <Pause size={13} color={colors.agentWarning} />
+  ) : (
+    <CheckCircle2 size={13} color={colors.agentSuccess} />
+  );
   const label = isPaused ? 'Thread paused' : 'Thread completed';
   const labelColor = isPaused ? colors.agentWarning : colors.agentSuccess;
 
@@ -363,16 +358,12 @@ export function ThreadDetail({ threadId }: ThreadDetailProps) {
           disabled={!inputText.trim() || !canSend || isSending}
           className="w-9 h-9 rounded-xl items-center justify-center active:opacity-70"
           style={{
-            backgroundColor:
-              inputText.trim() && canSend ? colors.teal : 'rgba(255,255,255,0.06)',
+            backgroundColor: inputText.trim() && canSend ? colors.teal : 'rgba(255,255,255,0.06)',
           }}
           accessibilityLabel="Send message"
           accessibilityRole="button"
         >
-          <Send
-            size={15}
-            color={inputText.trim() && canSend ? '#fff' : colors.textMuted}
-          />
+          <Send size={15} color={inputText.trim() && canSend ? '#fff' : colors.textMuted} />
         </Pressable>
       </View>
     </KeyboardAvoidingView>

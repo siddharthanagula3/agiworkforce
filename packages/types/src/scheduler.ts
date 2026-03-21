@@ -145,6 +145,12 @@ export interface ScheduledTask {
   /** ISO 8601 timestamp of the next scheduled execution. Null if completed/paused. */
   nextExecutionAt?: string | null;
 
+  /** @deprecated Use `lastExecutedAt`. Kept for compatibility with legacy desktop payloads. */
+  lastRun?: string | null;
+
+  /** @deprecated Use `nextExecutionAt`. Kept for compatibility with legacy desktop payloads. */
+  nextRun?: string | null;
+
   /** Error message from the last failed execution. */
   lastError?: string;
 

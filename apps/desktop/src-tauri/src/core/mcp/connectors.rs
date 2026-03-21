@@ -130,8 +130,8 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-google-calendar"],
-                &[("GOOGLE_CALENDAR_OAUTH_TOKEN", "<from_oauth:google>")],
+                &["-y", "@cocal/google-calendar-mcp"],
+                &[("GOOGLE_OAUTH_CREDENTIALS", "<from_oauth:google>")],
             ),
             Some("https://console.cloud.google.com/apis/credentials"),
             Some("https://github.com/anthropics/mcp-server-google-calendar"),
@@ -160,8 +160,8 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-gmail"],
-                &[("GMAIL_OAUTH_TOKEN", "<from_oauth:google>")],
+                &["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
+                &[("GMAIL_OAUTH_PATH", "<from_oauth:google>")],
             ),
             Some("https://console.cloud.google.com/apis/credentials"),
             Some("https://github.com/anthropics/mcp-server-gmail"),
@@ -175,7 +175,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-google-docs"],
+                &["-y", "@shivaduke28/google-docs-mcp"],
                 &[("GOOGLE_DOCS_OAUTH_TOKEN", "<from_oauth:google>")],
             ),
             Some("https://console.cloud.google.com/apis/credentials"),
@@ -190,8 +190,11 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-outlook"],
-                &[("OUTLOOK_OAUTH_TOKEN", "<from_oauth:microsoft>")],
+                &["-y", "outlook-mcp-device-flow"],
+                &[
+                    ("OUTLOOK_CLIENT_ID", "<from_oauth:microsoft>"),
+                    ("OUTLOOK_TENANT_ID", "common"),
+                ],
             ),
             Some("https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps"),
             Some("https://github.com/anthropics/mcp-server-outlook"),
@@ -220,8 +223,8 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-todoist"],
-                &[("TODOIST_API_TOKEN", "YOUR_API_KEY")],
+                &["-y", "todoist-mcp"],
+                &[("API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://todoist.com/app/settings/integrations/developer"),
             Some("https://github.com/anthropics/mcp-server-todoist"),
@@ -235,7 +238,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-airtable"],
+                &["-y", "airtable-mcp-server"],
                 &[("AIRTABLE_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://airtable.com/account"),
@@ -250,8 +253,8 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-monday"],
-                &[("MONDAY_API_KEY", "YOUR_API_KEY")],
+                &["-y", "@mondaydotcomorg/monday-api-mcp"],
+                &[("monday_token", "YOUR_API_KEY")],
             ),
             Some("https://monday.com/developers/apps"),
             Some("https://github.com/anthropics/mcp-server-monday"),
@@ -404,7 +407,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@vercel/mcp"],
+                &["-y", "mcp-vercel"],
                 &[("VERCEL_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://vercel.com/account/tokens"),
@@ -419,7 +422,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-supabase"],
+                &["-y", "@supabase/mcp-server-supabase"],
                 &[
                     ("SUPABASE_URL", "YOUR_PROJECT_URL"),
                     ("SUPABASE_KEY", "YOUR_API_KEY"),
@@ -437,7 +440,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-postgres"],
+                &["-y", "@henkey/postgres-mcp-server"],
                 &[("DATABASE_URL", "YOUR_DATABASE_URL")],
             ),
             None,
@@ -452,7 +455,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-mongodb"],
+                &["-y", "mongodb-mcp-server"],
                 &[("MONGODB_URI", "YOUR_CONNECTION_URI")],
             ),
             Some("https://cloud.mongodb.com/"),
@@ -468,7 +471,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-jira"],
+                &["-y", "@caobing122/jira-mcp-server"],
                 &[("JIRA_OAUTH_TOKEN", "<from_oauth:atlassian>")],
             ),
             Some("https://id.atlassian.com/manage-profile/security/api-tokens"),
@@ -514,7 +517,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-teams"],
+                &["-y", "teams-mcp-server"],
                 &[("TEAMS_OAUTH_TOKEN", "<from_oauth:microsoft>")],
             ),
             Some("https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps"),
@@ -529,7 +532,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-twilio"],
+                &["-y", "twilio-mcp"],
                 &[
                     ("TWILIO_ACCOUNT_SID", "YOUR_ACCOUNT_SID"),
                     ("TWILIO_AUTH_TOKEN", "YOUR_AUTH_TOKEN"),
@@ -547,7 +550,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-sendgrid"],
+                &["-y", "sendgrid-mcp"],
                 &[("SENDGRID_API_KEY", "YOUR_API_KEY")],
             ),
             Some("https://app.sendgrid.com/settings/api_keys"),
@@ -608,8 +611,12 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-google-analytics"],
-                &[("GOOGLE_ANALYTICS_OAUTH_TOKEN", "<from_oauth:google>")],
+                &["-y", "@iflow-mcp/mcp-server-google-analytics"],
+                &[
+                    ("GOOGLE_CLIENT_EMAIL", "YOUR_CLIENT_EMAIL"),
+                    ("GOOGLE_PRIVATE_KEY", "YOUR_PRIVATE_KEY"),
+                    ("GA_PROPERTY_ID", "YOUR_PROPERTY_ID"),
+                ],
             ),
             Some("https://console.cloud.google.com/apis/credentials"),
             Some("https://github.com/anthropics/mcp-server-google-analytics"),
@@ -721,7 +728,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "@figma/mcp-server-figma"],
+                &["-y", "@sethdouglasford/mcp-figma"],
                 &[("FIGMA_ACCESS_TOKEN", "<from_oauth:figma>")],
             ),
             Some("https://www.figma.com/developers/api#access-tokens"),
@@ -843,8 +850,8 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-stripe"],
-                &[("STRIPE_API_KEY", "YOUR_API_KEY")],
+                &["-y", "@stripe/mcp"],
+                &[("STRIPE_SECRET_KEY", "YOUR_API_KEY")],
             ),
             Some("https://dashboard.stripe.com/apikeys"),
             Some("https://github.com/anthropics/mcp-server-stripe"),
@@ -858,10 +865,10 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-shopify"],
+                &["-y", "shopify-mcp-server"],
                 &[
                     ("SHOPIFY_ACCESS_TOKEN", "YOUR_API_KEY"),
-                    ("SHOPIFY_STORE_URL", "YOUR_STORE_URL"),
+                    ("MYSHOPIFY_DOMAIN", "YOUR_STORE_URL"),
                 ],
             ),
             Some("https://partners.shopify.com/"),
@@ -876,9 +883,10 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "@anthropic/mcp-server-zendesk"],
+                &["-y", "zd-mcp-server"],
                 &[
                     ("ZENDESK_SUBDOMAIN", "YOUR_SUBDOMAIN"),
+                    ("ZENDESK_EMAIL", "YOUR_EMAIL"),
                     ("ZENDESK_TOKEN", "YOUR_API_KEY"),
                 ],
             ),
@@ -1341,11 +1349,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             ConnectorCategory::Research,
             "microscope",
             AuthType::None,
-            stdio_config(
-                "npx",
-                &["-y", "mcp-pubmed"],
-                &[],
-            ),
+            stdio_config("npx", &["-y", "mcp-pubmed"], &[]),
             None,
             Some("https://pubmed.ncbi.nlm.nih.gov/"),
         ),
@@ -1356,11 +1360,7 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             ConnectorCategory::Research,
             "flask-conical",
             AuthType::None,
-            stdio_config(
-                "npx",
-                &["-y", "mcp-biorxiv"],
-                &[],
-            ),
+            stdio_config("npx", &["-y", "mcp-biorxiv"], &[]),
             None,
             Some("https://api.biorxiv.org/"),
         ),

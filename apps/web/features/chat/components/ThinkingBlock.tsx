@@ -116,9 +116,7 @@ export function ThinkingBlock({
   const resolvedDuration: number = (() => {
     if (durationSeconds !== undefined) return durationSeconds;
     if (!isStreaming && completedAt && startedAt) {
-      return Math.round(
-        (new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000,
-      );
+      return Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000);
     }
     return elapsedSeconds;
   })();
@@ -131,13 +129,10 @@ export function ThinkingBlock({
       .split('\n')
       .find((line) => line.trim().length > 0)
       ?.trim() ?? '';
-  const previewText =
-    previewLine.length > 80 ? previewLine.slice(0, 77) + '…' : previewLine;
+  const previewText = previewLine.length > 80 ? previewLine.slice(0, 77) + '…' : previewLine;
 
   // ── Computed label ────────────────────────────────────────────────────────
-  const headerLabel = isStreaming
-    ? `Thinking… ${durationLabel}`
-    : `Thought for ${durationLabel}`;
+  const headerLabel = isStreaming ? `Thinking… ${durationLabel}` : `Thought for ${durationLabel}`;
 
   // Don't render an empty completed block (edge case: <thinking></thinking>)
   if (!isStreaming && (!content || content.trim().length === 0)) {
@@ -167,10 +162,7 @@ export function ThinkingBlock({
           className={cn(
             'w-3.5 h-3.5 shrink-0',
             isStreaming
-              ? cn(
-                  'text-purple-400',
-                  !reducedMotion.current && 'animate-pulse',
-                )
+              ? cn('text-purple-400', !reducedMotion.current && 'animate-pulse')
               : 'text-zinc-400',
           )}
           aria-hidden="true"

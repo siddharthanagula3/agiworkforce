@@ -355,10 +355,7 @@ pub async fn login_copilot() -> Result<AuthEntry> {
     let resp = client
         .post("https://github.com/login/device/code")
         .header("Accept", "application/json")
-        .form(&[
-            ("client_id", GITHUB_CLIENT_ID),
-            ("scope", "read:user"),
-        ])
+        .form(&[("client_id", GITHUB_CLIENT_ID), ("scope", "read:user")])
         .send()
         .await
         .context("Failed to request GitHub device code")?;
@@ -395,7 +392,10 @@ pub async fn login_copilot() -> Result<AuthEntry> {
     loop {
         attempts += 1;
         if attempts > MAX_POLL_ATTEMPTS {
-            bail!("Authorization timed out after {} attempts", MAX_POLL_ATTEMPTS);
+            bail!(
+                "Authorization timed out after {} attempts",
+                MAX_POLL_ATTEMPTS
+            );
         }
 
         tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
@@ -497,7 +497,10 @@ pub async fn login_chatgpt() -> Result<AuthEntry> {
     let (authorization_code, code_verifier) = loop {
         attempts += 1;
         if attempts > MAX_POLL_ATTEMPTS {
-            bail!("Authorization timed out after {} attempts", MAX_POLL_ATTEMPTS);
+            bail!(
+                "Authorization timed out after {} attempts",
+                MAX_POLL_ATTEMPTS
+            );
         }
 
         tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
@@ -541,7 +544,10 @@ pub async fn login_chatgpt() -> Result<AuthEntry> {
         .form(&[
             ("grant_type", "authorization_code"),
             ("code", authorization_code.as_str()),
-            ("redirect_uri", "https://auth.openai.com/deviceauth/callback"),
+            (
+                "redirect_uri",
+                "https://auth.openai.com/deviceauth/callback",
+            ),
             ("client_id", CHATGPT_CLIENT_ID),
             ("code_verifier", code_verifier.as_str()),
         ])
@@ -633,9 +639,11 @@ pub async fn refresh_chatgpt_token(entry: &AuthEntry) -> Result<AuthEntry> {
             .into());
         }
 
-        return Err(
-            RefreshError::Unknown(format!("ChatGPT token refresh failed (HTTP {}): {}", status, body)).into(),
-        );
+        return Err(RefreshError::Unknown(format!(
+            "ChatGPT token refresh failed (HTTP {}): {}",
+            status, body
+        ))
+        .into());
     }
 
     let tokens: ChatGPTOAuthTokenResponse = resp
@@ -689,11 +697,7 @@ pub async fn get_copilot_api_token(github_token: &str) -> Result<(String, i64)> 
                 body,
             );
         }
-        bail!(
-            "Copilot token fetch failed (HTTP {}): {}",
-            status,
-            body
-        );
+        bail!("Copilot token fetch failed (HTTP {}): {}", status, body);
     }
 
     let token_resp: CopilotTokenResponse = resp
@@ -762,7 +766,9 @@ pub async fn resolve_auth(
                     if *expires > 0 && *expires < (now_ms + 30_000) =>
                 {
                     let refreshed = refresh_chatgpt_token(&entry).await?;
-                    store.entries.insert("chatgpt".to_string(), refreshed.clone());
+                    store
+                        .entries
+                        .insert("chatgpt".to_string(), refreshed.clone());
                     store.save()?;
                     refreshed
                 }
@@ -891,8 +897,8 @@ fn extract_chatgpt_account_id(jwt: &str) -> Result<String> {
         bail!("Invalid JWT: expected at least 2 parts separated by '.'");
     }
     let payload_bytes = base64url_decode(parts[1])?;
-    let payload: serde_json::Value = serde_json::from_slice(&payload_bytes)
-        .context("Failed to parse JWT payload as JSON")?;
+    let payload: serde_json::Value =
+        serde_json::from_slice(&payload_bytes).context("Failed to parse JWT payload as JSON")?;
     payload["chatgpt_account_id"]
         .as_str()
         .map(|s| s.to_string())
@@ -949,7 +955,11 @@ mod tests {
         // Should now show "expired 5m ago" instead of None
         assert!(results[0].expires_in.is_some());
         let display = results[0].expires_in.as_ref().unwrap();
-        assert!(display.contains("expired"), "should say expired: {}", display);
+        assert!(
+            display.contains("expired"),
+            "should say expired: {}",
+            display
+        );
         assert!(display.contains("ago"), "should say ago: {}", display);
         assert!(results[0].has_refresh_token);
         assert!(results[0].permissions_secure);
@@ -1216,8 +1226,7 @@ mod tests {
     #[test]
     fn test_refresh_error_is_std_error() {
         // Verify RefreshError implements std::error::Error (compiles = passes)
-        let err: Box<dyn std::error::Error> =
-            Box::new(RefreshError::InvalidGrant("test".into()));
+        let err: Box<dyn std::error::Error> = Box::new(RefreshError::InvalidGrant("test".into()));
         assert!(!err.to_string().is_empty());
     }
 

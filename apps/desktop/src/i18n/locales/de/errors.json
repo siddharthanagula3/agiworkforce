@@ -84,7 +84,10 @@
   "TOKEN_EXPIRED": {
     "title": "Sitzung abgelaufen",
     "message": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
-    "suggestions": ["Klicken Sie, um sich erneut zu authentifizieren", "Prüfen Sie, ob Ihre Anmeldedaten noch gültig sind"]
+    "suggestions": [
+      "Klicken Sie, um sich erneut zu authentifizieren",
+      "Prüfen Sie, ob Ihre Anmeldedaten noch gültig sind"
+    ]
   },
   "LLM_API_ERROR": {
     "title": "LLM-Anbieter-Fehler",

@@ -216,10 +216,7 @@ export async function skipTutorialStep(
 }
 
 /** Complete an entire tutorial and receive rewards. */
-export async function completeTutorial(
-  userId: string,
-  tutorialId: string,
-): Promise<Reward[]> {
+export async function completeTutorial(userId: string, tutorialId: string): Promise<Reward[]> {
   try {
     return await invoke<Reward[]>('complete_tutorial', { userId, tutorialId });
   } catch (error) {

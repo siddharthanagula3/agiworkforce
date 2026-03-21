@@ -6,22 +6,11 @@ import { Input } from '@shared/ui/input';
 import { Label } from '@shared/ui/label';
 import { Textarea } from '@shared/ui/textarea';
 import { Switch } from '@shared/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
 import { Separator } from '@shared/ui/separator';
 import { Clock, Loader2, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import {
-  TIMEZONES,
-  AVAILABLE_MODELS,
-  DAYS_OF_WEEK,
-  INITIAL_NOTIFICATION_SETTINGS,
-} from '../types';
+import { TIMEZONES, AVAILABLE_MODELS, DAYS_OF_WEEK, INITIAL_NOTIFICATION_SETTINGS } from '../types';
 import type { ScheduleFormData } from '../types';
 import { ScheduleNotificationSettings } from './ScheduleNotificationSettings';
 
@@ -206,9 +195,7 @@ export function ScheduleForm({
           <div className="space-y-1.5">
             <Label htmlFor="sf-cron">
               Cron expression
-              <span className="ml-1 text-muted-foreground">
-                (minute hour day month weekday)
-              </span>
+              <span className="ml-1 text-muted-foreground">(minute hour day month weekday)</span>
             </Label>
             <Input
               id="sf-cron"
@@ -268,10 +255,7 @@ export function ScheduleForm({
           <p className="text-sm font-medium">Active</p>
           <p className="text-xs text-muted-foreground">Enable or pause this schedule</p>
         </div>
-        <Switch
-          checked={form.isActive}
-          onCheckedChange={(checked) => set({ isActive: checked })}
-        />
+        <Switch checked={form.isActive} onCheckedChange={(checked) => set({ isActive: checked })} />
       </div>
 
       {/* Notifications collapsible */}

@@ -550,9 +550,7 @@ impl McpSession {
             }
             Err(_) => {
                 // Timeout expired — clean up and return a cancelled response
-                self.pending_elicitations
-                    .lock()
-                    .remove(&elicitation_id);
+                self.pending_elicitations.lock().remove(&elicitation_id);
                 tracing::warn!(
                     "[MCP Session] Elicitation '{}' timed out after {}s on server '{}'",
                     elicitation_id,
@@ -686,7 +684,10 @@ mod tests {
             timeout_seconds: None,
         };
         let json = serde_json::to_string(&req).unwrap();
-        assert!(!json.contains("schema"), "schema should be omitted when None");
+        assert!(
+            !json.contains("schema"),
+            "schema should be omitted when None"
+        );
         assert!(
             !json.contains("timeoutSeconds"),
             "timeoutSeconds should be omitted when None"
@@ -702,7 +703,10 @@ mod tests {
         };
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains("\"cancelled\":true"));
-        assert!(!json.contains("\"result\""), "result should be omitted when None");
+        assert!(
+            !json.contains("\"result\""),
+            "result should be omitted when None"
+        );
     }
 
     #[test]
@@ -732,7 +736,10 @@ mod tests {
         // Verify that removing a non-existent key yields None (the same path that
         // respond_elicitation() returns Err for).
         let removed = pending.lock().remove("nonexistent");
-        assert!(removed.is_none(), "Expected None for non-existent elicitation ID");
+        assert!(
+            removed.is_none(),
+            "Expected None for non-existent elicitation ID"
+        );
     }
 
     #[tokio::test]

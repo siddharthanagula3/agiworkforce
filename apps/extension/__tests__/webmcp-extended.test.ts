@@ -403,9 +403,7 @@ describe('error handling for malformed MCP responses', () => {
   it('handles modelContextTesting.listTools returning malformed schema JSON', () => {
     // This exercises discoverImperativeTools schema parsing
     stubModelContextTesting({
-      listTools: () => [
-        { name: 'broken', description: 'Bad schema', inputSchema: '{{{{not json' },
-      ],
+      listTools: () => [{ name: 'broken', description: 'Bad schema', inputSchema: '{{{{not json' }],
     });
 
     const result = discoverAllTools();
@@ -641,7 +639,10 @@ describe('discoverAllTools — deduplication edge cases', () => {
         {
           name: 'search',
           description: 'Imperative search with richer schema',
-          inputSchema: JSON.stringify({ type: 'object', properties: { query: { type: 'string' } } }),
+          inputSchema: JSON.stringify({
+            type: 'object',
+            properties: { query: { type: 'string' } },
+          }),
         },
       ],
     });

@@ -621,98 +621,100 @@ export default function MediaPage() {
 
   return (
     <ErrorBoundary componentName="MediaPage" compact>
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
-      {/* Header */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
-            <Film className="h-5 w-5 text-white" />
+      <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
+        {/* Header */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
+              <Film className="h-5 w-5 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-white">Media Studio</h1>
           </div>
-          <h1 className="text-2xl font-bold text-white">Media Studio</h1>
+          <p className="text-sm text-zinc-400 pl-12">
+            Generate images and videos with AI. Powered by DALL-E, Google Imagen, Stable Diffusion,
+            Runway, and Veo.
+          </p>
         </div>
-        <p className="text-sm text-zinc-400 pl-12">
-          Generate images and videos with AI. Powered by DALL-E, Google Imagen, Stable Diffusion,
-          Runway, and Veo.
-        </p>
+
+        {/* Main card */}
+        <Card className="border-zinc-800 bg-zinc-950">
+          <CardContent className="pt-6">
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as MediaTab)}
+              className="space-y-6"
+            >
+              <TabsList className="grid w-full grid-cols-2 bg-zinc-900">
+                <TabsTrigger
+                  value="image"
+                  disabled={videoGenerating}
+                  className="gap-2 data-[state=active]:bg-zinc-800"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                  Image
+                </TabsTrigger>
+                <TabsTrigger
+                  value="video"
+                  disabled={imageGenerating}
+                  className="gap-2 data-[state=active]:bg-zinc-800"
+                >
+                  <Film className="h-4 w-4" />
+                  Video
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="image" className="mt-0">
+                <ImagePanel
+                  generating={imageGenerating}
+                  results={imageResults}
+                  onGenerate={handleGenerateImage}
+                />
+              </TabsContent>
+
+              <TabsContent value="video" className="mt-0">
+                <VideoPanel
+                  generating={videoGenerating}
+                  videoUrl={videoUrl}
+                  videoProgress={videoProgress}
+                  onGenerate={handleGenerateVideo}
+                />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        {/* Info cards */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Card className="border-zinc-800 bg-zinc-950">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm font-medium text-zinc-300">Image providers</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xs text-zinc-500">
+                Google Imagen 4, OpenAI DALL-E 3, Stability AI Stable Image Core
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-zinc-800 bg-zinc-950">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm font-medium text-zinc-300">Video providers</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xs text-zinc-500">Runway Gen4 Turbo, Google Veo 3</p>
+            </CardContent>
+          </Card>
+          <Card className="border-zinc-800 bg-zinc-950">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm font-medium text-zinc-300">Requirements</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xs text-zinc-500">
+                Pro or higher subscription + available credits
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-
-      {/* Main card */}
-      <Card className="border-zinc-800 bg-zinc-950">
-        <CardContent className="pt-6">
-          <Tabs
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as MediaTab)}
-            className="space-y-6"
-          >
-            <TabsList className="grid w-full grid-cols-2 bg-zinc-900">
-              <TabsTrigger
-                value="image"
-                disabled={videoGenerating}
-                className="gap-2 data-[state=active]:bg-zinc-800"
-              >
-                <ImageIcon className="h-4 w-4" />
-                Image
-              </TabsTrigger>
-              <TabsTrigger
-                value="video"
-                disabled={imageGenerating}
-                className="gap-2 data-[state=active]:bg-zinc-800"
-              >
-                <Film className="h-4 w-4" />
-                Video
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="image" className="mt-0">
-              <ImagePanel
-                generating={imageGenerating}
-                results={imageResults}
-                onGenerate={handleGenerateImage}
-              />
-            </TabsContent>
-
-            <TabsContent value="video" className="mt-0">
-              <VideoPanel
-                generating={videoGenerating}
-                videoUrl={videoUrl}
-                videoProgress={videoProgress}
-                onGenerate={handleGenerateVideo}
-              />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Info cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card className="border-zinc-800 bg-zinc-950">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-zinc-300">Image providers</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <p className="text-xs text-zinc-500">
-              Google Imagen 4, OpenAI DALL-E 3, Stability AI Stable Image Core
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-zinc-800 bg-zinc-950">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-zinc-300">Video providers</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <p className="text-xs text-zinc-500">Runway Gen4 Turbo, Google Veo 3</p>
-          </CardContent>
-        </Card>
-        <Card className="border-zinc-800 bg-zinc-950">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-zinc-300">Requirements</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <p className="text-xs text-zinc-500">Pro or higher subscription + available credits</p>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
     </ErrorBoundary>
   );
 }

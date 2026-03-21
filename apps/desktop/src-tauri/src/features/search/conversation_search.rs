@@ -344,8 +344,7 @@ mod tests {
         insert_message(&conn, conv1, "user", "alpha beta gamma");
         insert_message(&conn, conv2, "user", "alpha delta epsilon");
 
-        let results =
-            search_past_conversations(&conn, "alpha", Some(5), Some(conv1)).unwrap();
+        let results = search_past_conversations(&conn, "alpha", Some(5), Some(conv1)).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].conversation_id, conv1);
     }

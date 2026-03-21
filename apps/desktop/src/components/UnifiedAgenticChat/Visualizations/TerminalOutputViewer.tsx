@@ -100,7 +100,8 @@ export const TerminalOutputViewer: React.FC<TerminalOutputViewerProps> = ({
           <span className="text-sm font-medium text-gray-200">Terminal Output</span>
           <div className="flex items-center gap-2">
             {stdout && (
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setShowStdout(!showStdout)}
                 className={`px-2 py-1 text-xs rounded transition-colors ${
                   showStdout ? 'bg-green-900/50 text-green-300' : 'bg-gray-700 text-gray-400'
@@ -110,7 +111,8 @@ export const TerminalOutputViewer: React.FC<TerminalOutputViewerProps> = ({
               </button>
             )}
             {stderr && (
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setShowStderr(!showStderr)}
                 className={`px-2 py-1 text-xs rounded transition-colors ${
                   showStderr ? 'bg-red-900/50 text-red-300' : 'bg-gray-700 text-gray-400'
@@ -124,7 +126,8 @@ export const TerminalOutputViewer: React.FC<TerminalOutputViewerProps> = ({
 
         <div className="flex items-center gap-2">
           {searchable && (
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setShowSearch(!showSearch)}
               className="p-1.5 hover:bg-gray-700 rounded transition-colors"
               title="Search output"
@@ -132,7 +135,8 @@ export const TerminalOutputViewer: React.FC<TerminalOutputViewerProps> = ({
               <Search size={14} className="text-gray-400" />
             </button>
           )}
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setWrapLines(!wrapLines)}
             className={`p-1.5 rounded transition-colors ${
               wrapLines ? 'bg-gray-700 text-gray-200' : 'text-gray-400 hover:bg-gray-700'
@@ -141,14 +145,16 @@ export const TerminalOutputViewer: React.FC<TerminalOutputViewerProps> = ({
           >
             <WrapText size={14} />
           </button>
-          <button type="button"
+          <button
+            type="button"
             onClick={handleCopy}
             className="p-1.5 hover:bg-gray-700 rounded transition-colors"
             title="Copy output"
           >
             <Copy size={14} className={copied ? 'text-green-400' : 'text-gray-400'} />
           </button>
-          <button type="button"
+          <button
+            type="button"
             onClick={handleDownload}
             className="p-1.5 hover:bg-gray-700 rounded transition-colors"
             title="Download output"

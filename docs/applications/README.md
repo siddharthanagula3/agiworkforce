@@ -59,14 +59,14 @@ Every application document should answer all of the following:
 
 AGI Workforce is one product expressed through six surfaces with different responsibilities.
 
-| Surface | Primary role | What it must optimize for |
-| --- | --- | --- |
-| CLI | Terminal-native agent runtime | Speed, scriptability, safety, coding workflows |
-| Desktop | Flagship local runtime | Full capability, local execution, approvals, connectors |
-| Browser Extension | Browser bridge | Page context, browser-side execution, desktop integration |
-| VS Code Extension | IDE-native coding assistant | Editor UX, diff workflows, code context, developer speed |
-| Mobile | Companion surface | Chat, voice, approvals, monitoring, notifications |
-| Web | Public and hosted control plane | Acquisition, account, billing, dashboard, APIs |
+| Surface           | Primary role                    | What it must optimize for                                 |
+| ----------------- | ------------------------------- | --------------------------------------------------------- |
+| CLI               | Terminal-native agent runtime   | Speed, scriptability, safety, coding workflows            |
+| Desktop           | Flagship local runtime          | Full capability, local execution, approvals, connectors   |
+| Browser Extension | Browser bridge                  | Page context, browser-side execution, desktop integration |
+| VS Code Extension | IDE-native coding assistant     | Editor UX, diff workflows, code context, developer speed  |
+| Mobile            | Companion surface               | Chat, voice, approvals, monitoring, notifications         |
+| Web               | Public and hosted control plane | Acquisition, account, billing, dashboard, APIs            |
 
 ## Cross-surface rules
 

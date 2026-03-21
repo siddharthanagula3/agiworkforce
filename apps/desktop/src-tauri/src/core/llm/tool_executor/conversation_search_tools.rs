@@ -27,9 +27,7 @@ impl ToolExecutor {
                 .and_then(|v| v.as_u64())
                 .map(|v| v as usize);
 
-            let conversation_id = args
-                .get("conversation_id")
-                .and_then(|v| v.as_i64());
+            let conversation_id = args.get("conversation_id").and_then(|v| v.as_i64());
 
             let conn = db_state.connection().map_err(|e| anyhow!("{}", e))?;
 

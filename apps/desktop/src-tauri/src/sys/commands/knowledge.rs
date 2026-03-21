@@ -11,9 +11,7 @@ use std::sync::Mutex;
 use tauri::State;
 use uuid::Uuid;
 
-use crate::features::projects::{
-    ChunkingConfig, KnowledgeBase, KnowledgeDocument, RAGEngine,
-};
+use crate::features::projects::{ChunkingConfig, KnowledgeBase, KnowledgeDocument, RAGEngine};
 
 /// Knowledge entry stored in the knowledge base
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -285,11 +283,7 @@ pub async fn project_add_knowledge_file(
                 chunk.embedding = Some(embedding);
             }
             Err(e) => {
-                tracing::warn!(
-                    "Failed to generate embedding for chunk {}: {}",
-                    chunk.id,
-                    e
-                );
+                tracing::warn!("Failed to generate embedding for chunk {}: {}", chunk.id, e);
                 // Store chunk without embedding -- text search still works
             }
         }

@@ -209,7 +209,10 @@ impl ToolExecutor {
 
         let start = Instant::now();
         let executor = SearchExecutor::new();
-        match executor.run_search(&query, search_type, num_results).await {
+        match executor
+            .run_search_with_app_handle(self.app_handle.as_ref(), &query, search_type, num_results)
+            .await
+        {
             Ok(raw) => {
                 let duration_ms = start.elapsed().as_millis() as u64;
                 let provider = raw

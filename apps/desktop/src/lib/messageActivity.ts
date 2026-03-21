@@ -66,10 +66,7 @@ export function selectMessageToolTimeline(
   return state.toolTimelineByMessage[messageId] ?? EMPTY_TOOL_TIMELINE;
 }
 
-export function selectMessageThinking(
-  state: MessageRuntimeChatState,
-  messageId: string,
-): string {
+export function selectMessageThinking(state: MessageRuntimeChatState, messageId: string): string {
   return state.thinkingByMessage[messageId] ?? '';
 }
 

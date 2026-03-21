@@ -162,10 +162,7 @@ export async function taskListByStatus(status: string): Promise<PersistedTask[]>
 }
 
 /** Mark a task as completed, optionally attaching a result payload. */
-export async function taskComplete(
-  taskId: string,
-  result?: unknown,
-): Promise<void> {
+export async function taskComplete(taskId: string, result?: unknown): Promise<void> {
   try {
     await invoke('task_complete', { taskId, result: result ?? null });
   } catch (error) {

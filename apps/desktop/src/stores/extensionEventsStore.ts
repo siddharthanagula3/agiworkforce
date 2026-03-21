@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 import { invoke, isTauri, listen } from '../lib/tauri-mock';
 import { EVENTS } from '../constants/event-names';
-import type { ExtensionPageContextEvent, ExtensionTaskResultEvent } from '../hooks/useAgenticEvents';
+import type {
+  ExtensionPageContextEvent,
+  ExtensionTaskResultEvent,
+} from '../hooks/useAgenticEvents';
 
 export type ExtensionAgentStatus = 'idle' | 'planning' | 'executing' | 'done' | 'error';
 

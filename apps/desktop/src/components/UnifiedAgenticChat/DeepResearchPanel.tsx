@@ -82,7 +82,8 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
               )}
             </div>
           </div>
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setIsExpanded(!isExpanded)}
             className="p-1 rounded hover:bg-white/5 transition-colors"
           >
@@ -122,7 +123,8 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
             transition={{ duration: 0.2 }}
           >
             <div className="border-b border-white/5 flex text-sm">
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setActiveTab('process')}
                 className={cn(
                   'flex-1 py-2 px-4 text-center border-b-2 transition-colors',
@@ -133,7 +135,8 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
               >
                 Process
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setActiveTab('findings')}
                 className={cn(
                   'flex-1 py-2 px-4 text-center border-b-2 transition-colors',
@@ -144,7 +147,8 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
               >
                 Findings ({task.findings.length})
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setActiveTab('sources')}
                 className={cn(
                   'flex-1 py-2 px-4 text-center border-b-2 transition-colors',
@@ -244,7 +248,8 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                 <div className="grid gap-2">
                   {task.sources.length > 0 ? (
                     task.sources.map((source, idx) => (
-                      <button type="button"
+                      <button
+                        type="button"
                         key={idx}
                         onClick={() => handleSourceClick(source.url)}
                         className="flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-left group"

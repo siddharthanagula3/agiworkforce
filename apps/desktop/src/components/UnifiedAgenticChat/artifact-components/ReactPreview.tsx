@@ -9,45 +9,22 @@ interface ReactPreviewProps {
   className?: string;
 }
 
-/**
- * Sandboxed iframe that loads React + ReactDOM + Babel standalone from CDN
- * and live-renders JSX/TSX component code.
- *
- * Security notes:
- * - sandbox="allow-scripts" only — no allow-same-origin, no allow-forms, no allow-popups
- * - CDN scripts loaded inside the iframe; no CSP token exposure
- * - User code is transpiled by Babel inside the sandbox, not on the host page
- */
-export function ReactPreview({ code, className }: ReactPreviewProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const channelId = useRef(crypto.randomUUID());
-  const isMountedRef = useRef(true);
-  const reloadKeyRef = useRef(0);
-  const [reloadKey, setReloadKey] = useState(0);
+function escapeCodeForTemplateLiteral(code: string): string {
+  return code.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+}
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
+export function buildReactPreviewDocument(
+  userCode: string,
+  channelId: string,
+  parentOrigin: string,
+): string {
+  const escapedCode = escapeCodeForTemplateLiteral(userCode);
 
-  const buildDocument = useCallback((userCode: string): string => {
-    const id = channelId.current;
-
-    // Escape backticks and backslashes in user code for safe template literal embedding
-    const escapedCode = userCode.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
-
-    return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -81,81 +58,124 @@ export function ReactPreview({ code, className }: ReactPreviewProps) {
   <div id="error-display" style="display:none"></div>
   <script>
     (function() {
-      const channelId = '${id}';
-      function sendMsg(type, payload) {
-        try { window.parent.postMessage({ channelId, type, ...payload }, '*'); } catch (_) {}
+      const channelId = ${JSON.stringify(channelId)};
+      const parentOrigin = ${JSON.stringify(parentOrigin)};
+
+      function displayError(message) {
+        const errorDisplay = document.getElementById('error-display');
+        errorDisplay.style.display = '';
+        errorDisplay.textContent = message;
       }
+
+      function sendMsg(type, payload) {
+        try {
+          window.parent.postMessage({ channelId, type, ...payload }, parentOrigin);
+        } catch (_) {}
+      }
+
+      window.__REACT_PREVIEW__ = { channelId, displayError, sendMsg };
 
       window.onerror = function(message, _src, lineno, colno) {
         const msg = message + ' (line ' + lineno + ':' + colno + ')';
-        document.getElementById('error-display').style.display = '';
-        document.getElementById('error-display').textContent = msg;
+        displayError(msg);
         sendMsg('react-preview-error', { message: msg });
         return true;
       };
+
       window.onunhandledrejection = function(ev) {
         const msg = 'Unhandled rejection: ' + (ev.reason?.message || ev.reason || 'Unknown');
-        document.getElementById('error-display').style.display = '';
-        document.getElementById('error-display').textContent = msg;
+        displayError(msg);
         sendMsg('react-preview-error', { message: msg });
       };
-
-      sendMsg('react-preview-ready', {});
     })();
   </script>
-  <script type="text/babel" data-presets="react">
-    (function() {
+  <script>
+    (async function() {
+      const reactUrl = 'https://esm.sh/react@18?dev';
+      const reactDomUrl = 'https://esm.sh/react-dom@18/client?dev';
+      const { displayError, sendMsg } = window.__REACT_PREVIEW__;
+
       try {
         const userCode = \`${escapedCode}\`;
+        const moduleSource = [
+          \`import React from "\${reactUrl}";\`,
+          \`import * as ReactModule from "\${reactUrl}";\`,
+          'const { useState, useEffect, useRef, useCallback, useMemo, useContext, createContext, Fragment } = ReactModule;',
+          userCode,
+        ].join('\\n');
 
-        // Evaluate the code in a function scope that has React in scope
-        const { useState, useEffect, useRef, useCallback, useMemo, useContext, createContext, Fragment } = React;
+        const compiled = Babel.transform(moduleSource, {
+          presets: [
+            ['react', { runtime: 'classic' }],
+            ['typescript', { allExtensions: true, isTSX: true }],
+          ],
+          sourceType: 'module',
+        }).code;
 
-        // Execute the user code — it should define a default export or a component
-        let UserComponent;
+        const moduleBlob = new Blob([compiled], { type: 'text/javascript' });
+        const moduleUrl = URL.createObjectURL(moduleBlob);
+
         try {
-          // Try module-style: look for default export
-          const mod = new Function(
-            'React', 'useState', 'useEffect', 'useRef', 'useCallback', 'useMemo',
-            'useContext', 'createContext', 'Fragment',
-            '"use strict";' +
-            userCode.replace(/export\\s+default\\s+/g, 'return ') +
-            '\\n;'
-          );
-          UserComponent = mod(
-            React, useState, useEffect, useRef, useCallback, useMemo,
-            useContext, createContext, Fragment
-          );
-        } catch (_firstErr) {
-          // Fallback: look for a named App component
-          const wrappedCode = userCode + '\\n; return typeof App !== "undefined" ? App : null;';
-          const mod2 = new Function(
-            'React', 'useState', 'useEffect', 'useRef', 'useCallback', 'useMemo',
-            'useContext', 'createContext', 'Fragment',
-            '"use strict";' + wrappedCode
-          );
-          UserComponent = mod2(
-            React, useState, useEffect, useRef, useCallback, useMemo,
-            useContext, createContext, Fragment
-          );
-        }
+          const [{ createRoot }, userModule] = await Promise.all([
+            import(reactDomUrl),
+            import(moduleUrl),
+          ]);
 
-        if (!UserComponent || typeof UserComponent !== 'function') {
-          throw new Error('No renderable component found. Export a default function or define an App component.');
-        }
+          const UserComponent = userModule.default ?? userModule.App ?? null;
+          if (!UserComponent || typeof UserComponent !== 'function') {
+            throw new Error(
+              'No renderable component found. Export a default function or define an App component.',
+            );
+          }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(UserComponent));
+          const ReactModule = await import(reactUrl);
+          const root = createRoot(document.getElementById('root'));
+          root.render(ReactModule.createElement(UserComponent));
+          sendMsg('react-preview-ready', {});
+        } finally {
+          URL.revokeObjectURL(moduleUrl);
+        }
       } catch (err) {
         const msg = err && err.message ? err.message : String(err);
-        document.getElementById('error-display').style.display = '';
-        document.getElementById('error-display').textContent = msg;
-        window.parent.postMessage({ channelId: '${id}', type: 'react-preview-error', message: msg }, '*');
+        displayError(msg);
+        sendMsg('react-preview-error', { message: msg });
       }
     })();
   </script>
 </body>
 </html>`;
+}
+
+/**
+ * Sandboxed iframe that loads React + ReactDOM + Babel standalone from CDN
+ * and live-renders JSX/TSX component code.
+ *
+ * Security notes:
+ * - sandbox="allow-scripts" only — no allow-same-origin, no allow-forms, no allow-popups
+ * - CDN scripts loaded inside the iframe; no CSP token exposure
+ * - User code is transpiled by Babel inside the sandbox, not on the host page
+ */
+export function ReactPreview({ code, className }: ReactPreviewProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const channelId = useRef(crypto.randomUUID());
+  const isMountedRef = useRef(true);
+  const reloadKeyRef = useRef(0);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const buildDocument = useCallback((userCode: string): string => {
+    const parentOrigin =
+      typeof window !== 'undefined' ? window.location.origin : 'tauri://localhost';
+    return buildReactPreviewDocument(userCode, channelId.current, parentOrigin);
   }, []);
 
   // Reset loading/error state whenever code or reloadKey changes
@@ -177,6 +197,8 @@ export function ReactPreview({ code, className }: ReactPreviewProps) {
   // Listen for messages from the iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      if (event.origin !== 'null') return;
       if (event.data?.channelId !== channelId.current) return;
       if (!isMountedRef.current) return;
 

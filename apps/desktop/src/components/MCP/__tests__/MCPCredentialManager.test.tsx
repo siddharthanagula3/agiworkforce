@@ -1,7 +1,11 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import MCPCredentialManager from '../MCPCredentialManager';
-import type { McpOAuthConnectionStatus, McpOAuthTokenResponse, McpServerInfo } from '../../../types/mcp';
+import type {
+  McpOAuthConnectionStatus,
+  McpOAuthTokenResponse,
+  McpServerInfo,
+} from '../../../types/mcp';
 
 vi.mock('../../../api/mcp', () => ({
   McpClient: {

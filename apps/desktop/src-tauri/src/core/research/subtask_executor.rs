@@ -17,7 +17,6 @@ use std::time::Instant;
 ///
 /// Returns a JSON value matching the contract expected by
 /// [`swarm_bridge::swarm_results_to_agent_results`].
-#[allow(dead_code)]
 pub async fn execute_research_subtask(subtask: &Subtask) -> Result<serde_json::Value> {
     let start = Instant::now();
 

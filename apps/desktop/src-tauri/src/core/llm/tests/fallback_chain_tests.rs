@@ -221,7 +221,11 @@ mod tests {
         let candidates = CandidateBuilder::new()
             .add(Provider::Anthropic, "claude-sonnet-4-5")
             .add_with_priority(Provider::OpenAI, "gpt-5.4", 1)
-            .add_with_reason(Provider::Google, "gemini-3-pro-preview", "multimodal fallback")
+            .add_with_reason(
+                Provider::Google,
+                "gemini-3-pro-preview",
+                "multimodal fallback",
+            )
             .build();
 
         assert_eq!(candidates.len(), 3);

@@ -45,7 +45,8 @@ export function ConnectorOAuthFlow({ state, onClose, onRetry }: ConnectorOAuthFl
               <p className="text-sm text-muted-foreground text-center">
                 You can now use {state.connectorName} in your chats.
               </p>
-              <button type="button"
+              <button
+                type="button"
                 onClick={onClose}
                 className="mt-2 px-4 py-2 text-sm font-medium rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-colors"
               >
@@ -61,13 +62,15 @@ export function ConnectorOAuthFlow({ state, onClose, onRetry }: ConnectorOAuthFl
               </div>
               <p className="text-sm text-destructive text-center">{state.message}</p>
               <div className="flex gap-2 mt-2">
-                <button type="button"
+                <button
+                  type="button"
                   onClick={onRetry}
                   className="px-4 py-2 text-sm font-medium rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-colors"
                 >
                   Retry
                 </button>
-                <button type="button"
+                <button
+                  type="button"
                   onClick={onClose}
                   className="px-4 py-2 text-sm font-medium rounded-lg border border-border hover:bg-[#383838] transition-colors"
                 >

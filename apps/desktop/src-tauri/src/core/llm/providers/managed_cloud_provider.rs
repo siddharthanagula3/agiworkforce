@@ -875,6 +875,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,

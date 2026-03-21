@@ -73,7 +73,8 @@ export class ErrorBoundary extends Component<Props, State> {
           </p>
 
           <div className="flex gap-3">
-            <button type="button"
+            <button
+              type="button"
               onClick={this.handleRetry}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
             >
@@ -81,7 +82,8 @@ export class ErrorBoundary extends Component<Props, State> {
               Try Again
             </button>
 
-            <button type="button"
+            <button
+              type="button"
               onClick={() => window.location.reload()}
               className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors"
             >
@@ -128,7 +130,8 @@ export class ChatErrorBoundary extends ErrorBoundary {
             to restart the chat.
           </p>
 
-          <button type="button"
+          <button
+            type="button"
             onClick={this.handleRetry}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
           >

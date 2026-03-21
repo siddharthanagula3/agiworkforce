@@ -380,11 +380,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           try {
             // Attempt the dedicated Tauri command first
             try {
-              const artifact = await artifactApplyDiff(
-                id,
-                diff.hunks,
-                diff.changeDescription,
-              );
+              const artifact = await artifactApplyDiff(id, diff.hunks, diff.changeDescription);
               set((state) => {
                 const newArtifacts = new Map(state.artifacts);
                 newArtifacts.set(artifact.id, artifact);

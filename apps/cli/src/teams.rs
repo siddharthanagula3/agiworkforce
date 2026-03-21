@@ -173,10 +173,7 @@ impl TeamManager {
         };
 
         let mut mailbox = self.mailbox.write().await;
-        mailbox
-            .entry(to.to_string())
-            .or_default()
-            .push(message);
+        mailbox.entry(to.to_string()).or_default().push(message);
 
         Ok(format!("Message sent from '{}' to '{}'", from, to))
     }
@@ -218,11 +215,7 @@ impl TeamManager {
     }
 
     /// Update the status of a task by its ID.
-    pub async fn update_task(
-        &self,
-        task_id: &str,
-        status: TaskStatus,
-    ) -> anyhow::Result<String> {
+    pub async fn update_task(&self, task_id: &str, status: TaskStatus) -> anyhow::Result<String> {
         let mut tasks = self.shared_tasks.write().await;
         if let Some(task) = tasks.iter_mut().find(|t| t.id == task_id) {
             task.status = status.clone();
@@ -284,10 +277,7 @@ impl TeamManager {
                     TaskStatus::Completed => task.status.to_string().green(),
                     TaskStatus::Blocked => task.status.to_string().red(),
                 };
-                let assignee = task
-                    .assignee
-                    .as_deref()
-                    .unwrap_or("unassigned");
+                let assignee = task.assignee.as_deref().unwrap_or("unassigned");
                 let deps = if task.dependencies.is_empty() {
                     String::new()
                 } else {
@@ -452,10 +442,7 @@ pub async fn execute_team_task(
         other => Ok(crate::tools::ToolResult {
             tool_name: "team_task".to_string(),
             success: false,
-            output: format!(
-                "Unknown action '{}'. Valid: create, update, list",
-                other
-            ),
+            output: format!("Unknown action '{}'. Valid: create, update, list", other),
         }),
     }
 }
@@ -570,9 +557,7 @@ mod tests {
     #[tokio::test]
     async fn test_send_and_read_messages() {
         let tm = TeamManager::new();
-        tm.spawn_teammate("alice", "engineer", "")
-            .await
-            .unwrap();
+        tm.spawn_teammate("alice", "engineer", "").await.unwrap();
         tm.spawn_teammate("bob", "tester", "").await.unwrap();
 
         tm.send_message("alice", "bob", "Please review the PR")
@@ -595,12 +580,8 @@ mod tests {
     #[tokio::test]
     async fn test_send_message_unknown_sender() {
         let tm = TeamManager::new();
-        tm.spawn_teammate("alice", "engineer", "")
-            .await
-            .unwrap();
-        let result = tm
-            .send_message("unknown", "alice", "hello")
-            .await;
+        tm.spawn_teammate("alice", "engineer", "").await.unwrap();
+        let result = tm.send_message("unknown", "alice", "hello").await;
         assert!(result.is_err());
     }
 
@@ -627,10 +608,7 @@ mod tests {
     #[tokio::test]
     async fn test_task_with_dependencies() {
         let tm = TeamManager::new();
-        let t1 = tm
-            .add_task("Setup DB", None, vec![])
-            .await
-            .unwrap();
+        let t1 = tm.add_task("Setup DB", None, vec![]).await.unwrap();
         let t2 = tm
             .add_task("Build API", Some("bob"), vec![t1.clone()])
             .await
@@ -645,9 +623,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_nonexistent_task() {
         let tm = TeamManager::new();
-        let result = tm
-            .update_task("task-999", TaskStatus::Completed)
-            .await;
+        let result = tm.update_task("task-999", TaskStatus::Completed).await;
         assert!(result.is_err());
     }
 

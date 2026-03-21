@@ -109,10 +109,7 @@ export const terminalDetectShells = async (): Promise<ShellInfo[]> => {
 // ============================================================================
 
 /** Create a new terminal session with specified shell type */
-export const terminalCreateSession = async (
-  shellType: string,
-  cwd?: string,
-): Promise<string> => {
+export const terminalCreateSession = async (shellType: string, cwd?: string): Promise<string> => {
   try {
     return await invoke<string>('terminal_create_session', {
       shellType,
@@ -125,10 +122,7 @@ export const terminalCreateSession = async (
 };
 
 /** Send input data to a terminal session */
-export const terminalSendInput = async (
-  sessionId: string,
-  data: string,
-): Promise<void> => {
+export const terminalSendInput = async (sessionId: string, data: string): Promise<void> => {
   try {
     await invoke<void>('terminal_send_input', { sessionId, data });
   } catch (error) {
@@ -172,10 +166,7 @@ export const terminalListSessions = async (): Promise<string[]> => {
 };
 
 /** Get command history for a session */
-export const terminalGetHistory = async (
-  sessionId: string,
-  limit?: number,
-): Promise<string[]> => {
+export const terminalGetHistory = async (sessionId: string, limit?: number): Promise<string[]> => {
   try {
     return await invoke<string[]>('terminal_get_history', {
       sessionId,
@@ -216,10 +207,7 @@ export const terminalSetEnv = async (
 };
 
 /** Get an environment variable from a terminal session */
-export const terminalGetEnv = async (
-  sessionId: string,
-  key: string,
-): Promise<string | null> => {
+export const terminalGetEnv = async (sessionId: string, key: string): Promise<string | null> => {
   try {
     return await invoke<string | null>('terminal_get_env', { sessionId, key });
   } catch (error) {
@@ -229,9 +217,7 @@ export const terminalGetEnv = async (
 };
 
 /** List all environment variables in a terminal session */
-export const terminalListEnv = async (
-  sessionId: string,
-): Promise<[string, string][]> => {
+export const terminalListEnv = async (sessionId: string): Promise<[string, string][]> => {
   try {
     return await invoke<[string, string][]>('terminal_list_env', { sessionId });
   } catch (error) {
@@ -241,10 +227,7 @@ export const terminalListEnv = async (
 };
 
 /** Unset an environment variable in a terminal session */
-export const terminalUnsetEnv = async (
-  sessionId: string,
-  key: string,
-): Promise<void> => {
+export const terminalUnsetEnv = async (sessionId: string, key: string): Promise<void> => {
   try {
     await invoke<void>('terminal_unset_env', { sessionId, key });
   } catch (error) {

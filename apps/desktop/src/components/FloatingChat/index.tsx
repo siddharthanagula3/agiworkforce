@@ -133,14 +133,16 @@ export const FloatingChat = () => {
           <span className="text-sm font-medium text-zinc-300">Quick Chat</span>
         </div>
         <div className="flex items-center gap-1">
-          <button type="button"
+          <button
+            type="button"
             onClick={handleOpenMain}
             className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
             title="Open main window"
           >
             <Maximize2 className="w-4 h-4" />
           </button>
-          <button type="button"
+          <button
+            type="button"
             onClick={handleClose}
             className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
             title="Close"

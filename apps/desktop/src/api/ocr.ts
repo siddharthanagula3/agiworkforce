@@ -159,9 +159,6 @@ export async function processMultiLanguage(
  * @param imagePath - Absolute path to the source image
  * @param outputPath - Optional path to write the result (otherwise a temp file is used)
  */
-export async function preprocessImage(
-  imagePath: string,
-  outputPath?: string,
-): Promise<string> {
+export async function preprocessImage(imagePath: string, outputPath?: string): Promise<string> {
   return invoke<string>('ocr_preprocess_image', { imagePath, outputPath });
 }

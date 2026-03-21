@@ -123,7 +123,8 @@ export function CommandSuggestion({
           )}
         </div>
         {onDismiss && (
-          <button type="button"
+          <button
+            type="button"
             onClick={onDismiss}
             className="p-1 rounded hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 transition-colors"
             aria-label="Dismiss"

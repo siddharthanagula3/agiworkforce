@@ -255,7 +255,8 @@ describe('useGreeting — name length cap', () => {
   });
 
   it('discards very long names', () => {
-    const longName = 'Wolfeschlegelsteinhausenbergerdorff the Great Senior III of the Fourth Estate';
+    const longName =
+      'Wolfeschlegelsteinhausenbergerdorff the Great Senior III of the Fourth Estate';
     const { result } = renderGreeting(10, 3, longName);
     // first token is 'Wolfeschlegelsteinhausenbergerdorff' (35 chars) → within limit
     expect(result.current.headline).toBe('Good morning, Wolfeschlegelsteinhausenbergerdorff');

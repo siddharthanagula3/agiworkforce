@@ -89,6 +89,14 @@ const webmcpToolsByTab = new Map<
     timestamp: number;
   }
 >();
+const nlwebByTab = new Map<
+  number,
+  {
+    nlweb: import('./nlweb').NLWebDetectionResult;
+    url: string;
+    timestamp: number;
+  }
+>();
 
 const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 const NATIVE_REQUEST_TIMEOUT_MS = 10000;
@@ -118,6 +126,39 @@ function clearNativeReconnectTimer(): void {
     clearTimeout(nativeReconnectTimer);
     nativeReconnectTimer = null;
   }
+}
+
+function resetNativeReconnectState(): void {
+  nativeReconnectAttempt = 0;
+  nativeReconnectGaveUp = false;
+  clearNativeReconnectTimer();
+}
+
+async function triggerManualReconnect(): Promise<ExtensionResponse> {
+  resetNativeReconnectState();
+
+  if (state.nativePort) {
+    try {
+      state.nativePort.disconnect();
+    } catch (error) {
+      logger.debug('Manual reconnect disconnect failed', error);
+    }
+  }
+
+  state.nativePort = null;
+  state.isNativeConnected = false;
+  state.lastNativeError = null;
+  state.connectionStatus = 'connecting';
+  void notifyConnectionStatusChange();
+
+  connectToNativeHost();
+  const connected = await waitForNativeConnection(NATIVE_CONNECT_MAX_WAIT_MS);
+
+  return {
+    success: true,
+    nativeConnected: connected,
+    connectionStatus: connected ? 'connected' : state.connectionStatus,
+  } as ExtensionResponse;
 }
 
 function scheduleNativeReconnect(trigger: string): void {
@@ -687,6 +728,9 @@ async function handleMessageAsync(
         connectionStatus: state.connectionStatus,
       } as ExtensionResponse;
 
+    case 'RECONNECT_NATIVE':
+      return triggerManualReconnect();
+
     case 'TAB_READY': {
       if (tabId) {
         void syncTabContextWithDesktop(tabId, 'tab_ready').catch((error) => {
@@ -936,6 +980,33 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'NLWEB_DETECTED': {
+      const nlwebMsg = message as import('./types').NLWebDetectedMessage;
+      const nlwebTabId = sender?.tab?.id;
+      if (nlwebTabId) {
+        nlwebByTab.set(nlwebTabId, {
+          nlweb: nlwebMsg.nlweb,
+          url: nlwebMsg.url || '',
+          timestamp: Date.now(),
+        });
+        logger.info('NLWeb detected on tab', {
+          tabId: nlwebTabId,
+          url: nlwebMsg.url,
+          endpoints: nlwebMsg.nlweb.endpoints.length,
+        });
+        chrome.runtime
+          .sendMessage({
+            type: 'NLWEB_DETECTED',
+            nlweb: nlwebMsg.nlweb,
+            url: nlwebMsg.url,
+          })
+          .catch(() => {
+            // Popup / side panel may not be open; ignore
+          });
+      }
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'ADD_TAB_TO_GROUP': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
@@ -1099,11 +1170,15 @@ async function handleGetCookies(
   message: import('./types').GetCookiesMessage,
 ): Promise<ExtensionResponse> {
   try {
-    const { url } = message;
+    let { url } = message;
+    if (!url) {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      url = activeTab?.url ?? '';
+    }
     if (!url) {
       return {
         success: false,
-        error: 'Must specify a URL. Getting all cookies is disabled for security.',
+        error: 'Could not resolve a URL for cookie access.',
       } as ExtensionResponse;
     }
     if (!isCookieDomainAllowed(url)) {
@@ -1164,11 +1239,15 @@ async function handleClearCookies(
   message: import('./types').ClearCookiesMessage,
 ): Promise<ExtensionResponse> {
   try {
-    const { url } = message;
+    let { url } = message;
+    if (!url) {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      url = activeTab?.url ?? '';
+    }
     if (!url) {
       return {
         success: false,
-        error: 'Must specify a URL. Clearing all cookies is disabled for security.',
+        error: 'Could not resolve a URL for cookie clearing.',
       } as ExtensionResponse;
     }
     if (!isCookieDomainAllowed(url)) {

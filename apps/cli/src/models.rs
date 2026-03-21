@@ -184,7 +184,10 @@ fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Option<String>
                     .unwrap_or("UNKNOWN");
                 return Err(CliError::auth(
                     name,
-                    format!("No API key found. Set the {} environment variable.", env_var),
+                    format!(
+                        "No API key found. Set the {} environment variable.",
+                        env_var
+                    ),
                 )
                 .into());
             }
@@ -229,15 +232,11 @@ async fn try_subscription_auth(
         if let Ok(Some((token, base_url_override))) =
             crate::auth::resolve_auth(&mut auth_store, sub_name).await
         {
-            let url = base_url_override
-                .unwrap_or_else(|| default_subscription_url(sub_name));
-            let account_id = auth_store
-                .entries
-                .get(sub_name)
-                .and_then(|e| match e {
-                    crate::auth::AuthEntry::OAuth { account_id, .. } => account_id.clone(),
-                    _ => None,
-                });
+            let url = base_url_override.unwrap_or_else(|| default_subscription_url(sub_name));
+            let account_id = auth_store.entries.get(sub_name).and_then(|e| match e {
+                crate::auth::AuthEntry::OAuth { account_id, .. } => account_id.clone(),
+                _ => None,
+            });
             // Persist any token refreshes that happened during resolve_auth
             let _ = crate::auth::save_auth(&auth_store);
             return Some((token, url, sub_name.to_string(), account_id));
@@ -277,28 +276,48 @@ pub async fn stream_completion(
     let temperature = config.default.temperature;
 
     // ---- Try subscription auth first (Copilot, ChatGPT Plus) ----
-    if let Some((token, url, sub_name, account_id)) =
-        try_subscription_auth(provider).await
-    {
+    if let Some((token, url, sub_name, account_id)) = try_subscription_auth(provider).await {
         let mut result = match sub_name.as_str() {
             "copilot" => {
                 stream_copilot_api(
-                    &client, &token, &url, model, messages, max_tokens,
-                    temperature, tools, &mut on_chunk,
+                    &client,
+                    &token,
+                    &url,
+                    model,
+                    messages,
+                    max_tokens,
+                    temperature,
+                    tools,
+                    &mut on_chunk,
                 )
                 .await?
             }
             "chatgpt" => {
                 stream_chatgpt_codex(
-                    &client, &token, &url, model, messages, max_tokens,
-                    temperature, tools, &mut on_chunk, account_id.as_deref(),
+                    &client,
+                    &token,
+                    &url,
+                    model,
+                    messages,
+                    max_tokens,
+                    temperature,
+                    tools,
+                    &mut on_chunk,
+                    account_id.as_deref(),
                 )
                 .await?
             }
             _ => {
                 stream_openai_compatible(
-                    &client, &token, &url, model, messages, max_tokens,
-                    temperature, tools, &mut on_chunk,
+                    &client,
+                    &token,
+                    &url,
+                    model,
+                    messages,
+                    max_tokens,
+                    temperature,
+                    tools,
+                    &mut on_chunk,
                 )
                 .await?
             }
@@ -312,28 +331,102 @@ pub async fn stream_completion(
 
     match provider {
         Provider::Anthropic => {
-            stream_anthropic(&client, api_key.as_deref().unwrap_or_default(), model, messages, max_tokens, temperature, tools, &mut on_chunk).await
+            stream_anthropic(
+                &client,
+                api_key.as_deref().unwrap_or_default(),
+                model,
+                messages,
+                max_tokens,
+                temperature,
+                tools,
+                &mut on_chunk,
+            )
+            .await
         }
         Provider::OpenAI => {
-            stream_openai_compatible(&client, api_key.as_deref().unwrap_or_default(), "https://api.openai.com/v1/chat/completions", model, messages, max_tokens, temperature, tools, &mut on_chunk).await
+            stream_openai_compatible(
+                &client,
+                api_key.as_deref().unwrap_or_default(),
+                "https://api.openai.com/v1/chat/completions",
+                model,
+                messages,
+                max_tokens,
+                temperature,
+                tools,
+                &mut on_chunk,
+            )
+            .await
         }
         Provider::Google => {
-            stream_google(&client, api_key.as_deref().unwrap_or_default(), model, messages, max_tokens, temperature, tools, &mut on_chunk).await
+            stream_google(
+                &client,
+                api_key.as_deref().unwrap_or_default(),
+                model,
+                messages,
+                max_tokens,
+                temperature,
+                tools,
+                &mut on_chunk,
+            )
+            .await
         }
         Provider::Ollama => {
             let base_url = config
                 .base_url("ollama")
                 .unwrap_or_else(|| "http://localhost:11434".to_string());
-            stream_ollama(&client, &base_url, model, messages, max_tokens, temperature, tools, &mut on_chunk).await
+            stream_ollama(
+                &client,
+                &base_url,
+                model,
+                messages,
+                max_tokens,
+                temperature,
+                tools,
+                &mut on_chunk,
+            )
+            .await
         }
         Provider::Mistral => {
-            stream_openai_compatible(&client, api_key.as_deref().unwrap_or_default(), "https://api.mistral.ai/v1/chat/completions", model, messages, max_tokens, temperature, tools, &mut on_chunk).await
+            stream_openai_compatible(
+                &client,
+                api_key.as_deref().unwrap_or_default(),
+                "https://api.mistral.ai/v1/chat/completions",
+                model,
+                messages,
+                max_tokens,
+                temperature,
+                tools,
+                &mut on_chunk,
+            )
+            .await
         }
         Provider::XAI => {
-            stream_openai_compatible(&client, api_key.as_deref().unwrap_or_default(), "https://api.x.ai/v1/chat/completions", model, messages, max_tokens, temperature, tools, &mut on_chunk).await
+            stream_openai_compatible(
+                &client,
+                api_key.as_deref().unwrap_or_default(),
+                "https://api.x.ai/v1/chat/completions",
+                model,
+                messages,
+                max_tokens,
+                temperature,
+                tools,
+                &mut on_chunk,
+            )
+            .await
         }
         Provider::DeepSeek => {
-            stream_openai_compatible(&client, api_key.as_deref().unwrap_or_default(), "https://api.deepseek.com/chat/completions", model, messages, max_tokens, temperature, tools, &mut on_chunk).await
+            stream_openai_compatible(
+                &client,
+                api_key.as_deref().unwrap_or_default(),
+                "https://api.deepseek.com/chat/completions",
+                model,
+                messages,
+                max_tokens,
+                temperature,
+                tools,
+                &mut on_chunk,
+            )
+            .await
         }
     }
 }
@@ -524,24 +617,37 @@ async fn stream_anthropic(
                             // Check if this is a tool_use block
                             if let Some(cb) = event.get("content_block") {
                                 if cb.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
-                                    current_tool_id = cb.get("id").and_then(|i| i.as_str()).unwrap_or("").to_string();
-                                    current_tool_name = cb.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
+                                    current_tool_id = cb
+                                        .get("id")
+                                        .and_then(|i| i.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    current_tool_name = cb
+                                        .get("name")
+                                        .and_then(|n| n.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
                                     current_tool_input.clear();
                                 }
                             }
                         }
                         "content_block_delta" => {
                             if let Some(delta) = event.get("delta") {
-                                let delta_type = delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                                let delta_type =
+                                    delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
                                 match delta_type {
                                     "text_delta" => {
-                                        if let Some(text) = delta.get("text").and_then(|t| t.as_str()) {
+                                        if let Some(text) =
+                                            delta.get("text").and_then(|t| t.as_str())
+                                        {
                                             full_text.push_str(text);
                                             on_chunk(text);
                                         }
                                     }
                                     "input_json_delta" => {
-                                        if let Some(json_chunk) = delta.get("partial_json").and_then(|p| p.as_str()) {
+                                        if let Some(json_chunk) =
+                                            delta.get("partial_json").and_then(|p| p.as_str())
+                                        {
                                             current_tool_input.push_str(json_chunk);
                                         }
                                     }
@@ -566,17 +672,27 @@ async fn stream_anthropic(
                         }
                         "message_start" => {
                             if let Some(usage) = event.get("message").and_then(|m| m.get("usage")) {
-                                input_tokens = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                                input_tokens = usage
+                                    .get("input_tokens")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0)
+                                    as u32;
                             }
                         }
                         "message_delta" => {
                             if let Some(delta) = event.get("delta") {
-                                if let Some(reason) = delta.get("stop_reason").and_then(|r| r.as_str()) {
+                                if let Some(reason) =
+                                    delta.get("stop_reason").and_then(|r| r.as_str())
+                                {
                                     stop_reason = Some(reason.to_string());
                                 }
                             }
                             if let Some(usage) = event.get("usage") {
-                                output_tokens = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                                output_tokens = usage
+                                    .get("output_tokens")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0)
+                                    as u32;
                             }
                         }
                         _ => {}
@@ -724,14 +840,11 @@ async fn stream_google(
         .map(convert_message_to_gemini)
         .collect();
 
-    let system_instruction = messages
-        .iter()
-        .find(|m| m.role == "system")
-        .map(|m| {
-            serde_json::json!({
-                "parts": [{ "text": m.text_content() }]
-            })
-        });
+    let system_instruction = messages.iter().find(|m| m.role == "system").map(|m| {
+        serde_json::json!({
+            "parts": [{ "text": m.text_content() }]
+        })
+    });
 
     let mut body = serde_json::json!({
         "contents": contents,
@@ -817,12 +930,12 @@ async fn stream_google(
             if let Some(data) = line.strip_prefix("data: ") {
                 if let Ok(event) = serde_json::from_str::<Value>(data) {
                     // Extract text and tool calls from candidates[0].content.parts
-                    if let Some(candidates) =
-                        event.get("candidates").and_then(|c| c.as_array())
-                    {
+                    if let Some(candidates) = event.get("candidates").and_then(|c| c.as_array()) {
                         if let Some(candidate) = candidates.first() {
                             // Check finish reason
-                            if let Some(reason) = candidate.get("finishReason").and_then(|r| r.as_str()) {
+                            if let Some(reason) =
+                                candidate.get("finishReason").and_then(|r| r.as_str())
+                            {
                                 stop_reason = Some(reason.to_string());
                             }
 
@@ -833,18 +946,26 @@ async fn stream_google(
                             {
                                 for part in parts {
                                     // Text content
-                                    if let Some(text) =
-                                        part.get("text").and_then(|t| t.as_str())
-                                    {
+                                    if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
                                         full_text.push_str(text);
                                         on_chunk(text);
                                     }
                                     // Function call
                                     if let Some(fc) = part.get("functionCall") {
-                                        let name = fc.get("name").and_then(|n| n.as_str()).unwrap_or_default().to_string();
-                                        let args = fc.get("args").cloned().unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                                        let name = fc
+                                            .get("name")
+                                            .and_then(|n| n.as_str())
+                                            .unwrap_or_default()
+                                            .to_string();
+                                        let args = fc.get("args").cloned().unwrap_or(
+                                            serde_json::Value::Object(serde_json::Map::new()),
+                                        );
                                         let id = format!("gemini_{}", tool_calls.len());
-                                        tool_calls.push(ToolCallResponse { id, name, arguments: args });
+                                        tool_calls.push(ToolCallResponse {
+                                            id,
+                                            name,
+                                            arguments: args,
+                                        });
                                     }
                                 }
                             }
@@ -855,13 +976,11 @@ async fn stream_google(
                         input_tokens = usage
                             .get("promptTokenCount")
                             .and_then(|v| v.as_u64())
-                            .unwrap_or(0)
-                            as u32;
+                            .unwrap_or(0) as u32;
                         output_tokens = usage
                             .get("candidatesTokenCount")
                             .and_then(|v| v.as_u64())
-                            .unwrap_or(0)
-                            as u32;
+                            .unwrap_or(0) as u32;
                     }
                 }
             }
@@ -880,7 +999,11 @@ async fn stream_google(
 
 /// Convert an internal Message to Gemini API JSON format.
 fn convert_message_to_gemini(m: &Message) -> Value {
-    let role = if m.role == "assistant" { "model" } else { "user" };
+    let role = if m.role == "assistant" {
+        "model"
+    } else {
+        "user"
+    };
     match &m.content {
         MessageContent::Text(t) => serde_json::json!({
             "role": role,
@@ -972,7 +1095,10 @@ async fn stream_ollama(
         .map_err(|e| {
             let msg = e.to_string();
             if msg.contains("Connection refused") || msg.contains("connection refused") {
-                CliError::network(&url, "Ollama server not running. Start it with: ollama serve")
+                CliError::network(
+                    &url,
+                    "Ollama server not running. Start it with: ollama serve",
+                )
             } else {
                 CliError::network(&url, msg)
             }
@@ -1036,7 +1162,11 @@ async fn stream_ollama(
                 {
                     for tc in tc_array {
                         if let Some(func) = tc.get("function") {
-                            let name = func.get("name").and_then(|n| n.as_str()).unwrap_or_default().to_string();
+                            let name = func
+                                .get("name")
+                                .and_then(|n| n.as_str())
+                                .unwrap_or_default()
+                                .to_string();
                             let args = func
                                 .get("arguments")
                                 .and_then(|a| {
@@ -1048,7 +1178,11 @@ async fn stream_ollama(
                                 })
                                 .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
                             let id = format!("ollama_{}", tool_calls.len());
-                            tool_calls.push(ToolCallResponse { id, name, arguments: args });
+                            tool_calls.push(ToolCallResponse {
+                                id,
+                                name,
+                                arguments: args,
+                            });
                         }
                     }
                     stop_reason = Some("tool_calls".to_string());
@@ -1136,7 +1270,10 @@ async fn stream_copilot_api(
         .post(url)
         .header("Authorization", format!("Bearer {}", token))
         .header("content-type", "application/json")
-        .header("User-Agent", concat!("agiworkforce-cli/", env!("CARGO_PKG_VERSION")))
+        .header(
+            "User-Agent",
+            concat!("agiworkforce-cli/", env!("CARGO_PKG_VERSION")),
+        )
         .header("Openai-Intent", "conversation-edits")
         .header("Copilot-Vision-Request", "true")
         .json(&body)
@@ -1296,19 +1433,26 @@ async fn parse_openai_sse_stream(
                                 .and_then(|t| t.as_array())
                             {
                                 for tc in tc_array {
-                                    let index = tc.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
-                                    let entry = tool_call_buffers
-                                        .entry(index)
-                                        .or_insert_with(|| (String::new(), String::new(), String::new()));
+                                    let index =
+                                        tc.get("index").and_then(|i| i.as_u64()).unwrap_or(0)
+                                            as usize;
+                                    let entry =
+                                        tool_call_buffers.entry(index).or_insert_with(|| {
+                                            (String::new(), String::new(), String::new())
+                                        });
 
                                     if let Some(id) = tc.get("id").and_then(|i| i.as_str()) {
                                         entry.0 = id.to_string();
                                     }
                                     if let Some(func) = tc.get("function") {
-                                        if let Some(name) = func.get("name").and_then(|n| n.as_str()) {
+                                        if let Some(name) =
+                                            func.get("name").and_then(|n| n.as_str())
+                                        {
                                             entry.1 = name.to_string();
                                         }
-                                        if let Some(args) = func.get("arguments").and_then(|a| a.as_str()) {
+                                        if let Some(args) =
+                                            func.get("arguments").and_then(|a| a.as_str())
+                                        {
                                             entry.2.push_str(args);
                                         }
                                     }
@@ -1316,7 +1460,9 @@ async fn parse_openai_sse_stream(
                             }
 
                             // Finish reason
-                            if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
+                            if let Some(reason) =
+                                choice.get("finish_reason").and_then(|r| r.as_str())
+                            {
                                 if !reason.is_empty() && reason != "null" {
                                     stop_reason = Some(reason.to_string());
                                 }
@@ -1347,7 +1493,11 @@ async fn parse_openai_sse_stream(
             if !name.is_empty() {
                 let arguments = serde_json::from_str(&args_json)
                     .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-                tool_calls.push(ToolCallResponse { id, name, arguments });
+                tool_calls.push(ToolCallResponse {
+                    id,
+                    name,
+                    arguments,
+                });
             }
         }
     }
@@ -1466,7 +1616,10 @@ mod tests {
     #[test]
     fn test_provider_detection() {
         assert_eq!(detect_provider("claude-opus-4-6"), Provider::Anthropic);
-        assert_eq!(detect_provider("claude-sonnet-4-20250514"), Provider::Anthropic);
+        assert_eq!(
+            detect_provider("claude-sonnet-4-20250514"),
+            Provider::Anthropic
+        );
         assert_eq!(detect_provider("gpt-4o"), Provider::OpenAI);
         assert_eq!(detect_provider("gpt-4-turbo"), Provider::OpenAI);
         assert_eq!(detect_provider("o3-mini"), Provider::OpenAI);

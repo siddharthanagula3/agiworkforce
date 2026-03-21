@@ -58,8 +58,7 @@ impl<'a> SigV4Signer<'a> {
 
     /// Compute HMAC-SHA256 of `data` using `key`.
     fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
-        let mut mac =
-            HmacSha256::new_from_slice(key).expect("HMAC accepts any key length");
+        let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts any key length");
         mac.update(data);
         mac.finalize().into_bytes().to_vec()
     }
@@ -118,8 +117,10 @@ impl<'a> SigV4Signer<'a> {
         );
 
         // 3. String to sign
-        let credential_scope =
-            format!("{}/{}/{}/aws4_request", date_stamp, self.region, self.service);
+        let credential_scope = format!(
+            "{}/{}/{}/aws4_request",
+            date_stamp, self.region, self.service
+        );
         let canonical_request_hash = Self::sha256_hex(canonical_request.as_bytes());
         let string_to_sign = format!(
             "AWS4-HMAC-SHA256\n{}\n{}\n{}",
@@ -128,10 +129,7 @@ impl<'a> SigV4Signer<'a> {
 
         // 4. Signing key + signature
         let signing_key = self.derive_signing_key(date_stamp);
-        let signature = hex::encode(Self::hmac_sha256(
-            &signing_key,
-            string_to_sign.as_bytes(),
-        ));
+        let signature = hex::encode(Self::hmac_sha256(&signing_key, string_to_sign.as_bytes()));
 
         // 5. Authorization header
         format!(
@@ -146,9 +144,7 @@ impl<'a> SigV4Signer<'a> {
 // ---------------------------------------------------------------------------
 
 /// Build a Bedrock Converse API request body (called by BedrockAdapter).
-pub fn build_converse_request_for_adapter(
-    request: &LLMRequest,
-) -> serde_json::Value {
+pub fn build_converse_request_for_adapter(request: &LLMRequest) -> serde_json::Value {
     build_converse_request(request)
 }
 
@@ -175,19 +171,13 @@ fn build_converse_request(request: &LLMRequest) -> serde_json::Value {
     // Inference configuration
     let mut inference_config = serde_json::Map::new();
     if let Some(max_tokens) = request.max_tokens {
-        inference_config.insert(
-            "maxTokens".to_string(),
-            serde_json::json!(max_tokens),
-        );
+        inference_config.insert("maxTokens".to_string(), serde_json::json!(max_tokens));
     } else {
         // Bedrock requires maxTokens; default to 4096.
         inference_config.insert("maxTokens".to_string(), serde_json::json!(4096));
     }
     if let Some(temp) = request.temperature {
-        inference_config.insert(
-            "temperature".to_string(),
-            serde_json::json!(temp),
-        );
+        inference_config.insert("temperature".to_string(), serde_json::json!(temp));
     }
     if let Some(top_p) = request.top_p {
         inference_config.insert("topP".to_string(), serde_json::json!(top_p));
@@ -225,12 +215,10 @@ fn build_converse_request(request: &LLMRequest) -> serde_json::Value {
                 use crate::core::llm::ToolChoice;
                 match tc {
                     ToolChoice::Auto => {
-                        body["toolConfig"]["toolChoice"] =
-                            serde_json::json!({"auto": {}});
+                        body["toolConfig"]["toolChoice"] = serde_json::json!({"auto": {}});
                     }
                     ToolChoice::Required => {
-                        body["toolConfig"]["toolChoice"] =
-                            serde_json::json!({"any": {}});
+                        body["toolConfig"]["toolChoice"] = serde_json::json!({"any": {}});
                     }
                     ToolChoice::Specific(name) => {
                         body["toolConfig"]["toolChoice"] =
@@ -262,10 +250,7 @@ fn build_converse_messages(request: &LLMRequest) -> Vec<serde_json::Value> {
     for msg in &request.messages {
         // Handle tool result messages (role = "tool" in OpenAI format)
         if msg.role == "tool" {
-            let tool_use_id = msg
-                .tool_call_id
-                .as_deref()
-                .unwrap_or("unknown");
+            let tool_use_id = msg.tool_call_id.as_deref().unwrap_or("unknown");
             messages.push(serde_json::json!({
                 "role": "user",
                 "content": [{
@@ -286,9 +271,8 @@ fn build_converse_messages(request: &LLMRequest) -> Vec<serde_json::Value> {
                     content_blocks.push(serde_json::json!({"text": msg.content}));
                 }
                 for tc in tool_calls {
-                    let input: serde_json::Value =
-                        serde_json::from_str(&tc.arguments)
-                            .unwrap_or_else(|_| serde_json::json!({}));
+                    let input: serde_json::Value = serde_json::from_str(&tc.arguments)
+                        .unwrap_or_else(|_| serde_json::json!({}));
                     content_blocks.push(serde_json::json!({
                         "toolUse": {
                             "toolUseId": tc.id,
@@ -313,8 +297,7 @@ fn build_converse_messages(request: &LLMRequest) -> Vec<serde_json::Value> {
             for part in parts {
                 match part {
                     crate::core::llm::ContentPart::Text { text } => {
-                        content_blocks
-                            .push(serde_json::json!({"text": text}));
+                        content_blocks.push(serde_json::json!({"text": text}));
                     }
                     crate::core::llm::ContentPart::Image { image } => {
                         use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -352,8 +335,7 @@ fn build_converse_messages(request: &LLMRequest) -> Vec<serde_json::Value> {
                             }
                         });
                         if let Some(name) = &document.name {
-                            doc_block["document"]["name"] =
-                                serde_json::json!(name);
+                            doc_block["document"]["name"] = serde_json::json!(name);
                         }
                         content_blocks.push(doc_block);
                     }
@@ -377,19 +359,13 @@ fn build_converse_messages(request: &LLMRequest) -> Vec<serde_json::Value> {
                         }));
                     }
                     _ => {
-                        tracing::warn!(
-                            "[Bedrock] Unsupported content part type, skipping"
-                        );
+                        tracing::warn!("[Bedrock] Unsupported content part type, skipping");
                     }
                 }
             }
 
             // Append plain text if no text block was added from parts
-            if !msg.content.is_empty()
-                && !content_blocks
-                    .iter()
-                    .any(|b| b.get("text").is_some())
-            {
+            if !msg.content.is_empty() && !content_blocks.iter().any(|b| b.get("text").is_some()) {
                 content_blocks.push(serde_json::json!({"text": msg.content}));
             }
 
@@ -515,9 +491,7 @@ fn parse_converse_response(
 /// - `{"contentBlockStop": {"contentBlockIndex": 0}}`
 /// - `{"messageStop": {"stopReason": "end_turn"}}`
 /// - `{"metadata": {"usage": {"inputTokens": N, "outputTokens": N}}}`
-pub fn parse_bedrock_stream_event(
-    event_json: &serde_json::Value,
-) -> Option<StreamChunk> {
+pub fn parse_bedrock_stream_event(event_json: &serde_json::Value) -> Option<StreamChunk> {
     // Text delta
     if let Some(delta) = event_json
         .pointer("/contentBlockDelta/delta/text")
@@ -537,9 +511,7 @@ pub fn parse_bedrock_stream_event(
     }
 
     // Tool use start (contentBlockStart with toolUse)
-    if let Some(tool_use) = event_json
-        .pointer("/contentBlockStart/start/toolUse")
-    {
+    if let Some(tool_use) = event_json.pointer("/contentBlockStart/start/toolUse") {
         let id = tool_use
             .get("toolUseId")
             .and_then(|v| v.as_str())
@@ -562,14 +534,12 @@ pub fn parse_bedrock_stream_event(
             model: None,
             usage: None,
             credits: None,
-            tool_calls: Some(vec![
-                crate::core::llm::sse_parser::StreamingToolCall {
-                    index,
-                    id,
-                    name,
-                    arguments: String::new(),
-                },
-            ]),
+            tool_calls: Some(vec![crate::core::llm::sse_parser::StreamingToolCall {
+                index,
+                id,
+                name,
+                arguments: String::new(),
+            }]),
             reasoning: None,
             keepalive: false,
         });
@@ -592,14 +562,12 @@ pub fn parse_bedrock_stream_event(
             model: None,
             usage: None,
             credits: None,
-            tool_calls: Some(vec![
-                crate::core::llm::sse_parser::StreamingToolCall {
-                    index,
-                    id: String::new(),
-                    name: String::new(),
-                    arguments: input_delta.to_string(),
-                },
-            ]),
+            tool_calls: Some(vec![crate::core::llm::sse_parser::StreamingToolCall {
+                index,
+                id: String::new(),
+                name: String::new(),
+                arguments: input_delta.to_string(),
+            }]),
             reasoning: None,
             keepalive: false,
         });
@@ -697,11 +665,10 @@ impl BedrockProvider {
     /// The provider is marked as configured if all credentials are non-empty.
     /// HTTP clients are created with default settings.
     pub fn new(access_key: String, secret_key: String, region: String) -> Self {
-        let configured =
-            !access_key.is_empty() && !secret_key.is_empty() && !region.is_empty();
+        let configured = !access_key.is_empty() && !secret_key.is_empty() && !region.is_empty();
 
-        let client = create_http_client(&HttpClientConfig::default())
-            .unwrap_or_else(|_| Client::new());
+        let client =
+            create_http_client(&HttpClientConfig::default()).unwrap_or_else(|_| Client::new());
         let streaming_client = create_http_client(&HttpClientConfig {
             read_timeout_secs: None, // No timeout for streaming
             ..Default::default()
@@ -720,7 +687,11 @@ impl BedrockProvider {
 
     /// Build the Bedrock runtime endpoint URL for a given model and action.
     fn endpoint(&self, model_id: &str, streaming: bool) -> String {
-        let action = if streaming { "converse-stream" } else { "converse" };
+        let action = if streaming {
+            "converse-stream"
+        } else {
+            "converse"
+        };
         // Model IDs may contain characters that need URL encoding (e.g. colons in
         // cross-region inference profile ARNs).  The path component of the URL
         // must be properly encoded for SigV4 canonical request computation.
@@ -743,9 +714,7 @@ impl BedrockProvider {
             .parse::<reqwest::Url>()
             .map_err(|e| format!("Invalid Bedrock URL: {e}"))?;
 
-        let host = parsed_url
-            .host_str()
-            .ok_or("Bedrock URL has no host")?;
+        let host = parsed_url.host_str().ok_or("Bedrock URL has no host")?;
         let uri_path = parsed_url.path();
 
         // Timestamps
@@ -765,13 +734,10 @@ impl BedrockProvider {
         ];
         headers.sort_by_key(|(k, _)| *k);
 
-        let header_refs: Vec<(&str, &str)> = headers
-            .iter()
-            .map(|(k, v)| (*k, v.as_str()))
-            .collect();
+        let header_refs: Vec<(&str, &str)> =
+            headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
 
-        let signer =
-            SigV4Signer::new(&self.access_key, &self.secret_key, &self.region);
+        let signer = SigV4Signer::new(&self.access_key, &self.secret_key, &self.region);
 
         let auth_header = signer.sign(
             "POST",
@@ -809,11 +775,7 @@ impl BedrockProvider {
             if let Some(msg) = value
                 .get("message")
                 .and_then(|v| v.as_str())
-                .or_else(|| {
-                    value
-                        .pointer("/error/message")
-                        .and_then(|v| v.as_str())
-                })
+                .or_else(|| value.pointer("/error/message").and_then(|v| v.as_str()))
             {
                 let trimmed = msg.trim();
                 if !trimmed.is_empty() {
@@ -833,13 +795,7 @@ fn url_encode_path_segment(input: &str) -> String {
     let mut encoded = String::with_capacity(input.len() * 2);
     for byte in input.bytes() {
         match byte {
-            b'A'..=b'Z'
-            | b'a'..=b'z'
-            | b'0'..=b'9'
-            | b'-'
-            | b'.'
-            | b'_'
-            | b'~' => {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
                 encoded.push(byte as char);
             }
             _ => {
@@ -881,9 +837,10 @@ impl LLMProvider for BedrockProvider {
             ))));
         }
 
-        let response_body: serde_json::Value = res.json().await.map_err(|e| {
-            format!("Failed to parse Bedrock response: {e}")
-        })?;
+        let response_body: serde_json::Value = res
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse Bedrock response: {e}"))?;
 
         parse_converse_response(&response_body, &request.model)
     }
@@ -992,16 +949,14 @@ fn try_parse_event_stream_message(buf: &[u8]) -> Option<(Vec<u8>, usize)> {
     }
 
     // Total byte length (first 4 bytes, big-endian)
-    let total_len =
-        u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
+    let total_len = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
 
     if total_len < MIN_EVENT_SIZE || buf.len() < total_len {
         return None;
     }
 
     // Headers byte length
-    let headers_len =
-        u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]) as usize;
+    let headers_len = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]) as usize;
 
     // Prelude is 8 bytes (total_len + headers_len) + 4 bytes prelude CRC = 12
     let prelude_size = 12;
@@ -1039,9 +994,7 @@ where
 
         loop {
             // Try to parse a complete event from the buffer
-            while let Some((payload, consumed)) =
-                try_parse_event_stream_message(&this.buffer)
-            {
+            while let Some((payload, consumed)) = try_parse_event_stream_message(&this.buffer) {
                 this.buffer.drain(..consumed);
 
                 if payload.is_empty() {
@@ -1051,9 +1004,7 @@ where
                 // Parse the JSON payload
                 match serde_json::from_slice::<serde_json::Value>(&payload) {
                     Ok(event_json) => {
-                        if let Some(mut chunk) =
-                            parse_bedrock_stream_event(&event_json)
-                        {
+                        if let Some(mut chunk) = parse_bedrock_stream_event(&event_json) {
                             if chunk.model.is_none() {
                                 chunk.model = Some(this.model.clone());
                             }
@@ -1065,9 +1016,7 @@ where
                         // Skip events we don't handle (messageStart, etc.)
                     }
                     Err(e) => {
-                        tracing::warn!(
-                            "[Bedrock] Failed to parse stream event JSON: {e}"
-                        );
+                        tracing::warn!("[Bedrock] Failed to parse stream event JSON: {e}");
                         // Continue to next event
                     }
                 }
@@ -1080,7 +1029,7 @@ where
                     if this.buffer.len() + bytes.len() > 4 * 1024 * 1024 {
                         this.done = true;
                         return Poll::Ready(Some(Err(
-                            "Bedrock stream buffer exceeded 4MB limit".into(),
+                            "Bedrock stream buffer exceeded 4MB limit".into()
                         )));
                     }
                     this.buffer.extend_from_slice(&bytes);
@@ -1114,8 +1063,7 @@ mod tests {
 
     #[test]
     fn bedrock_not_configured_when_empty() {
-        let provider =
-            BedrockProvider::new(String::new(), String::new(), String::new());
+        let provider = BedrockProvider::new(String::new(), String::new(), String::new());
         assert!(!provider.is_configured());
     }
 
@@ -1167,8 +1115,11 @@ mod tests {
 
     #[test]
     fn sigv4_sign_produces_auth_header() {
-        let signer =
-            SigV4Signer::new("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1");
+        let signer = SigV4Signer::new(
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            "us-east-1",
+        );
 
         let headers = [
             ("content-type", "application/json"),
@@ -1222,7 +1173,10 @@ mod tests {
         let temp = body["inferenceConfig"]["temperature"]
             .as_f64()
             .expect("temperature should be a number");
-        assert!((temp - 0.7).abs() < 0.001, "temperature should be ~0.7, got {temp}");
+        assert!(
+            (temp - 0.7).abs() < 0.001,
+            "temperature should be ~0.7, got {temp}"
+        );
 
         // Check system
         assert_eq!(body["system"][0]["text"], "You are helpful.");
@@ -1256,9 +1210,7 @@ mod tests {
 
         let body = build_converse_request(&request);
 
-        let tools = body["toolConfig"]["tools"]
-            .as_array()
-            .expect("tools array");
+        let tools = body["toolConfig"]["tools"].as_array().expect("tools array");
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0]["toolSpec"]["name"], "get_weather");
     }
@@ -1499,8 +1451,7 @@ mod tests {
 
     #[tokio::test]
     async fn bedrock_unconfigured_returns_error() {
-        let provider =
-            BedrockProvider::new(String::new(), String::new(), String::new());
+        let provider = BedrockProvider::new(String::new(), String::new(), String::new());
         let request = LLMRequest::default();
         let result = provider.send_message(&request).await;
         assert!(result.is_err());

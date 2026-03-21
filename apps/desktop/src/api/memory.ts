@@ -827,9 +827,7 @@ export async function loadProjectMemories(): Promise<LoadProjectMemoriesResponse
 /**
  * Detect if a message contains a decision and auto-save it (chat_detect_and_save_decision).
  */
-export async function detectAndSaveDecision(
-  message: string,
-): Promise<SaveDecisionResponse | null> {
+export async function detectAndSaveDecision(message: string): Promise<SaveDecisionResponse | null> {
   try {
     return await invoke<SaveDecisionResponse | null>('chat_detect_and_save_decision', { message });
   } catch (error) {

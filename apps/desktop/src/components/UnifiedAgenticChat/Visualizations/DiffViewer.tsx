@@ -133,7 +133,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
           <div className="flex items-center gap-2">
             {}
             {enableRevert && onRevert && (
-              <button type="button"
+              <button
+                type="button"
                 onClick={handleRevert}
                 disabled={isReverting}
                 className="flex items-center gap-1 px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -146,7 +147,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
             {}
             <div className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded p-1">
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setCurrentViewMode('split')}
                 className={`px-2 py-1 text-xs rounded transition-colors ${
                   currentViewMode === 'split'
@@ -156,7 +158,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
               >
                 Split
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setCurrentViewMode('unified')}
                 className={`px-2 py-1 text-xs rounded transition-colors ${
                   currentViewMode === 'unified'
@@ -169,7 +172,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             </div>
 
             {}
-            <button type="button"
+            <button
+              type="button"
               onClick={() => handleCopy(oldContent, 'old')}
               className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
               title="Copy old content"
@@ -179,7 +183,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
                 className={copied === 'old' ? 'text-green-500' : 'text-gray-600 dark:text-gray-400'}
               />
             </button>
-            <button type="button"
+            <button
+              type="button"
               onClick={() => handleCopy(newContent, 'new')}
               className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
               title="Copy new content"
@@ -191,7 +196,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             </button>
 
             {}
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setIsExpanded(!isExpanded)}
               className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
               title={isExpanded ? 'Collapse' : 'Expand'}
