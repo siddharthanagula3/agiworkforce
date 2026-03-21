@@ -42,9 +42,19 @@ pub enum PluginSource { Local(PathBuf), Git { url: String, branch: Option<String
 pub struct PluginInstallRequest { pub source: PluginSource, pub name: String }
 pub enum PluginInstallOutcome { Installed { path: PathBuf }, AlreadyInstalled { path: PathBuf }, Failed { error: String } }
 
+const AGIWORKFORCE_DIR: &str = ".agiworkforce";
+const PLUGINS_DIR: &str = "plugins";
+
 impl PluginsManager {
     pub fn new() -> Self {
-        Self { global_dir: dirs::home_dir().unwrap_or_default().join(".agiworkforce").join("plugins"), plugins: Vec::new() }
+        let global_dir = match dirs::home_dir() {
+            Some(home) => home.join(AGIWORKFORCE_DIR).join(PLUGINS_DIR),
+            None => {
+                eprintln!("[plugins] warning: could not determine home directory, using current dir");
+                PathBuf::from(".").join(AGIWORKFORCE_DIR).join(PLUGINS_DIR)
+            }
+        };
+        Self { global_dir, plugins: Vec::new() }
     }
     pub fn load_all(&mut self, project_dir: Option<&Path>) -> Result<&[LoadedPlugin]> {
         self.plugins.clear();

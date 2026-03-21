@@ -46,6 +46,7 @@ cd apps/desktop && pnpm test                    # Vitest (only when asked)
 cd apps/desktop && pnpm test -- src/__tests__/features.test.ts  # Single Vitest file
 cargo test                                      # Rust tests (only when asked)
 cargo test -p agiworkforce-cli -- test_name     # Single Rust test
+cd apps/desktop && pnpm test:e2e               # Playwright E2E (only when asked)
 ```
 
 Workspace targeting: `pnpm --filter @agiworkforce/desktop <cmd>` (desktop), `pnpm --filter @agiworkforce/web <cmd>` (web).
@@ -69,7 +70,7 @@ The #1 source of silent bugs. Tauri auto-converts param names at the boundary.
 
 ## Architecture
 
-- **Rust backend**: `core/` (LLM router, agents, swarm, MCP, embeddings, triggers), `sys/` (1415 commands, security), `automation/`, `features/`, `data/`, `integrations/`
+- **Rust backend**: `core/` (LLM router, agents, swarm, MCP, embeddings, triggers), `sys/` (1415 commands, security), `automation/` (screen, input, browser, OCR), `features/` (terminal, speech, calendar), `data/` (SQLite, settings, cache), `integrations/` (cloud sync, APIs), `ui/` (tray, windows, overlay), `models/` (shared structs)
 - **Rust entry**: `main.rs` → `lib.rs::run()` → Tauri setup with plugins + managed state
 - **Frontend**: Zustand v5 + Immer + Persist. 100+ component dirs. Radix UI + Tailwind 4 + Lucide + Sonner toasts
 - **Frontend↔Backend**: `invoke()` for commands, Tauri event channels for streaming (`tool:event`, `agentic:*`)
@@ -89,6 +90,7 @@ The #1 source of silent bugs. Tauri auto-converts param names at the boundary.
 - Use `State<'_, T>` for managed state access
 - Use degraded state constructors for optional features: `MemoryState::degraded()`
 - `clippy::await_holding_lock` is allowed
+- Feature flags: `default = ["shell", "updater"]`. Optional: `ocr`, `local-llm`, `vad`, `local-whisper`, `remote-databases`, `devtools`. Use `#[cfg(feature = "...")]` guards
 
 ## TypeScript Conventions
 
@@ -101,12 +103,15 @@ The #1 source of silent bugs. Tauri auto-converts param names at the boundary.
 - UI primitives: Radix UI — NOT headless UI or custom implementations
 - Timer/listener cleanup: always in useEffect return. Refs in cleanup: copy to local variable first
 - Every invoke() call must have try/catch error handling
+- Immutability: never mutate objects — use spread or Immer's `produce()` in Zustand stores
+- No `console.log` in production code — use toast notifications or proper logging
+- Validation: Zod schemas at system boundaries (API responses, user input, IPC params)
 
 ## Per-App Quick Reference
 
 - **Web** (`apps/web/`): Next.js 16 App Router. Auth: Supabase SSR. Billing: Stripe. Rate limiting: Upstash Redis. CSRF token required on state-changing calls. Server components by default.
 - **Mobile** (`apps/mobile/`): Expo 55 + expo-router. Styling: NativeWind. Storage: MMKV (fast) + SecureStore (sensitive). Desktop companion: WebRTC data channel + signaling server fallback.
-- **CLI** (`apps/cli/`): Binary `agiworkforce`, package `agiworkforce-cli`. Config: `~/.agiworkforce/config.toml`. Sessions: SQLite in `~/.agiworkforce/sessions.db`. Dead code lint: warn (not deny) — API surface is intentionally broad.
+- **CLI** (`apps/cli/`): Binary `agiworkforce`, package `agiworkforce-cli`. 12 subcommands (exec, review, apply, sandbox, mcp-server, app-server, resume, fork, cloud, plugin, features, execpolicy). 12 built-in tools + 4 team tools. Config: `~/.agiworkforce/config.toml`. Sessions: SQLite in `~/.agiworkforce/sessions.db`. Plugin system: `~/.agiworkforce/plugins/` with `.app.json`/`.mcp.json` manifests. OS sandboxing: macOS Seatbelt, Linux Bubblewrap/Landlock. Dead code lint: warn (not deny) — API surface is intentionally broad.
 - **Chrome Extension** (`apps/extension/`): MV3 service worker. Native messaging host: `com.agiworkforce.browser`. Side panel chat via HTTP bridge (localhost:8765). WebMCP tool discovery from page DOM.
 - **VS Code Extension** (`apps/extension-vscode/`): Chat participant `@agi` with /explain, /fix, /refactor, /tests, /docs. Agent mode: multi-file editing with diff preview. Desktop bridge: WebSocket ws://127.0.0.1:8787/ws.
 
@@ -173,9 +178,10 @@ The #1 source of silent bugs. Tauri auto-converts param names at the boundary.
 
 ## Core Principles
 
-- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
-- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
-- **Minimal Impact**: Only touch what's necessary. No side effects with new bugs.
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards
+- **Minimal Impact**: Only touch what's necessary. No side effects with new bugs
+- **File Size**: 200-400 lines typical, 800 max. Extract utilities from large modules
 
 ## Zone-Based File Ownership (Multi-Agent)
 
