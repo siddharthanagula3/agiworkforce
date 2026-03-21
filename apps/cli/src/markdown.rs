@@ -157,11 +157,7 @@ impl MarkdownRenderer {
 
         // Headers: # ## ### etc.
         if let Some(header) = parse_header(line) {
-            return format!(
-                "{} {}\n",
-                header.prefix.dimmed(),
-                header.text.cyan().bold()
-            );
+            return format!("{} {}\n", header.prefix.dimmed(), header.text.cyan().bold());
         }
 
         // Blockquote: > text
@@ -256,11 +252,7 @@ impl MarkdownRenderer {
         // Code content in green
         let content = self.code_content.trim_end_matches('\n');
         for code_line in content.split('\n') {
-            output.push_str(&format!(
-                "{} {}\n",
-                "\u{2502}".dimmed(),
-                code_line.green()
-            ));
+            output.push_str(&format!("{} {}\n", "\u{2502}".dimmed(), code_line.green()));
         }
 
         // Bottom border
@@ -302,7 +294,12 @@ impl MarkdownRenderer {
         let mut output = String::new();
 
         // Top border: ┌─────┬─────┐
-        output.push_str(&build_table_border(&col_widths, "\u{250c}", "\u{252c}", "\u{2510}"));
+        output.push_str(&build_table_border(
+            &col_widths,
+            "\u{250c}",
+            "\u{252c}",
+            "\u{2510}",
+        ));
 
         for (row_idx, row) in self.table_rows.iter().enumerate() {
             // Data row: │ cell │ cell │
@@ -322,12 +319,22 @@ impl MarkdownRenderer {
 
             // After header row (first row), draw separator: ├─────┼─────┤
             if row_idx == 0 && self.table_rows.len() > 1 {
-                output.push_str(&build_table_border(&col_widths, "\u{251c}", "\u{253c}", "\u{2524}"));
+                output.push_str(&build_table_border(
+                    &col_widths,
+                    "\u{251c}",
+                    "\u{253c}",
+                    "\u{2524}",
+                ));
             }
         }
 
         // Bottom border: └─────┴─────┘
-        output.push_str(&build_table_border(&col_widths, "\u{2514}", "\u{2534}", "\u{2518}"));
+        output.push_str(&build_table_border(
+            &col_widths,
+            "\u{2514}",
+            "\u{2534}",
+            "\u{2518}",
+        ));
 
         output
     }
@@ -447,7 +454,9 @@ fn is_table_separator(line: &str) -> bool {
         return false;
     }
     // Separator rows contain only |, -, :, and spaces
-    trimmed.chars().all(|c| c == '|' || c == '-' || c == ':' || c == ' ')
+    trimmed
+        .chars()
+        .all(|c| c == '|' || c == '-' || c == ':' || c == ' ')
 }
 
 /// Parse a table row into cells (strips leading/trailing |).
@@ -527,10 +536,10 @@ fn parse_nested_list(line: &str) -> Option<(usize, ListMarker, &str)> {
 /// Return the bullet marker for a given nesting depth.
 fn nested_bullet_marker(depth: usize) -> &'static str {
     match depth % 4 {
-        0 => "\u{2022}",   // bullet
-        1 => "\u{25e6}",   // open bullet
-        2 => "\u{25aa}",   // small filled square
-        _ => "\u{25ab}",   // small open square
+        0 => "\u{2022}", // bullet
+        1 => "\u{25e6}", // open bullet
+        2 => "\u{25aa}", // small filled square
+        _ => "\u{25ab}", // small open square
     }
 }
 
@@ -693,7 +702,12 @@ fn is_triple_backtick(chars: &[char], i: usize) -> bool {
 
 /// Extract text between single delimiter pairs: `code`, *italic*, _italic_
 /// Returns (extracted_text, index_after_closing_delimiter)
-fn extract_delimited(chars: &[char], start: usize, open: char, close: char) -> Option<(String, usize)> {
+fn extract_delimited(
+    chars: &[char],
+    start: usize,
+    open: char,
+    close: char,
+) -> Option<(String, usize)> {
     if chars[start] != open {
         return None;
     }
@@ -927,7 +941,8 @@ mod tests {
     #[test]
     fn test_table_rendering_basic() {
         let mut r = MarkdownRenderer::new();
-        let out = r.process_chunk("| Name | Age |\n| --- | --- |\n| Alice | 30 |\n| Bob | 25 |\n\n");
+        let out =
+            r.process_chunk("| Name | Age |\n| --- | --- |\n| Alice | 30 |\n| Bob | 25 |\n\n");
         // Should contain box-drawing borders
         assert!(out.contains("\u{250c}")); // top-left corner
         assert!(out.contains("\u{2502}")); // vertical bar
@@ -1046,7 +1061,9 @@ mod tests {
     #[test]
     fn test_nested_list_depth_markers() {
         let mut r = MarkdownRenderer::new();
-        let out = r.process_chunk("- top\n  - level 1\n    - level 2\n      - level 3\n        - level 4\n");
+        let out = r.process_chunk(
+            "- top\n  - level 1\n    - level 2\n      - level 3\n        - level 4\n",
+        );
         assert!(out.contains("\u{2022}")); // bullet (top + depth 0)
         assert!(out.contains("\u{25e6}")); // open bullet (depth 1)
         assert!(out.contains("\u{25aa}")); // small filled square (depth 2)

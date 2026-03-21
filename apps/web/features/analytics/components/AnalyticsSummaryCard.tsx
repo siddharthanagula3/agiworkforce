@@ -33,8 +33,7 @@ export function AnalyticsSummaryCard({
         ? 'text-red-600 dark:text-red-400'
         : 'text-muted-foreground';
 
-  const TrendIcon =
-    trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
+  const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
 
   return (
     <Card className="glass-strong card-hover">

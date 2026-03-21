@@ -245,10 +245,7 @@ export async function hasCompletedFirstRun(userId: string): Promise<boolean> {
 }
 
 /** Run an instant demo for a specific employee. */
-export async function runInstantDemo(
-  employeeId: string,
-  userId?: string,
-): Promise<DemoResult> {
+export async function runInstantDemo(employeeId: string, userId?: string): Promise<DemoResult> {
   try {
     return await invoke<DemoResult>('run_instant_demo', {
       employeeId,
@@ -260,10 +257,7 @@ export async function runInstantDemo(
 }
 
 /** Advance the first-run step to a new stage. */
-export async function updateFirstRunStep(
-  sessionId: string,
-  step: FirstRunStep,
-): Promise<void> {
+export async function updateFirstRunStep(sessionId: string, step: FirstRunStep): Promise<void> {
   try {
     await invoke('update_first_run_step', { sessionId, step });
   } catch (error) {
@@ -281,10 +275,7 @@ export async function selectDemo(sessionId: string, demoId: string): Promise<voi
 }
 
 /** Persist demo results for a first-run session. */
-export async function recordDemoResults(
-  sessionId: string,
-  results: DemoResult,
-): Promise<void> {
+export async function recordDemoResults(sessionId: string, results: DemoResult): Promise<void> {
   try {
     await invoke('record_demo_results', { sessionId, results });
   } catch (error) {

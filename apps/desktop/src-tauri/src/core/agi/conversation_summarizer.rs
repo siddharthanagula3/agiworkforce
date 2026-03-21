@@ -619,7 +619,10 @@ impl HttpSummaryLLM {
 
     /// Attempt memory extraction via Ollama local LLM.
     /// Returns the raw LLM response string on success.
-    async fn try_ollama_extraction(&self, full_prompt: &str) -> std::result::Result<String, String> {
+    async fn try_ollama_extraction(
+        &self,
+        full_prompt: &str,
+    ) -> std::result::Result<String, String> {
         let response = self
             .http_client
             .post(format!("{}/api/chat", self.ollama_url))
@@ -652,7 +655,10 @@ impl HttpSummaryLLM {
 
     /// Attempt memory extraction via OpenAI API.
     /// Returns the raw LLM response string on success.
-    async fn try_openai_extraction(&self, full_prompt: &str) -> std::result::Result<String, String> {
+    async fn try_openai_extraction(
+        &self,
+        full_prompt: &str,
+    ) -> std::result::Result<String, String> {
         let api_key = self
             .openai_api_key
             .as_ref()
@@ -785,10 +791,7 @@ impl SummaryLLM for HttpSummaryLLM {
              Ollama: {}. OpenAI: {}",
             ollama_error, openai_error
         );
-        tracing::warn!(
-            "Summarization failed after 2 attempts: {}",
-            final_error
-        );
+        tracing::warn!("Summarization failed after 2 attempts: {}", final_error);
         Err(Error::LLMError(LLMError::ApiError(final_error)))
     }
 
@@ -1463,10 +1466,7 @@ mod tests {
         // Bug #32: Invalid JSON from LLM must return Err, not Ok with empty memories
         let result = HttpSummaryLLM::parse_extraction_response("not valid json {{{");
 
-        assert!(
-            result.is_err(),
-            "Unparseable LLM response must return Err"
-        );
+        assert!(result.is_err(), "Unparseable LLM response must return Err");
         let err_str = result.unwrap_err().to_string();
         assert!(
             err_str.contains("unparseable"),

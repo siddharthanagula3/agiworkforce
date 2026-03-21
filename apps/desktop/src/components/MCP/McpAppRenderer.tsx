@@ -137,7 +137,13 @@ const McpAppRendererComponent: React.FC<McpAppRendererProps> = ({ app, className
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
     const msg: IframeInboundMessage = { type: 'mcp_update', data };
-    // Use '*' target — the iframe is sandboxed so it cannot act on our origin anyway
+    // Using '*' as the target origin is safe here because the iframe is sandboxed
+    // WITHOUT "allow-same-origin" (see IFRAME_SANDBOX constant). Without that flag,
+    // the iframe runs in an opaque origin and cannot navigate itself to a malicious
+    // page that would intercept our messages. A specific origin cannot be used
+    // because srcDoc iframes always have an opaque ("null") origin, and URL iframes
+    // may serve from any host. The message payload contains only non-sensitive UI
+    // update data — no credentials, tokens, or PII are transmitted.
     iframe.contentWindow.postMessage(msg, '*');
   }, []);
 

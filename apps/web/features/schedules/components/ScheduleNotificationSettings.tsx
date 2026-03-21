@@ -83,8 +83,7 @@ export function ScheduleNotificationSettings({
         <div className="flex items-center gap-2">
           <Webhook className="h-4 w-4 text-muted-foreground" />
           <Label htmlFor="notif-webhook" className="text-sm font-normal">
-            Webhook URL{' '}
-            <span className="text-muted-foreground">(optional)</span>
+            Webhook URL <span className="text-muted-foreground">(optional)</span>
           </Label>
         </div>
         <Input

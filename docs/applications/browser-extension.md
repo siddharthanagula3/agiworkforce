@@ -464,20 +464,20 @@ The extension is in the right state when:
 
 ## 24. Feature acceptance criteria
 
-| Feature | Acceptance criteria |
-| --- | --- |
-| Native connection lifecycle | Extension connects to native host reliably, exposes clear status, retries with bounded backoff, and stops before infinite permission/reconnect loops. |
-| Popup quick controls | Popup loads quickly, shows accurate connection and tab state, and lets the user trigger core actions with clear feedback. |
-| Side-panel chat | Side panel can display prior context, send requests, stream replies, and recover from refresh or reconnect without message corruption. |
-| Page context capture | Extension can capture URL, title, selection, and bounded page content reliably across common pages. |
-| Screenshot capture | User-triggered screenshots succeed on supported pages and failure states are surfaced clearly. |
-| Browser action execution | Browser actions route through validated messages, act on the right tab/page, and return structured success/failure output. |
-| Autofill/workflow helpers | Autofill and browser workflow helpers are deterministic, user-visible, and do not silently mutate pages without intent. |
-| Privacy and storage | Chat render output is sanitized, browser permissions are scoped, and any temporary credentials avoid insecure persistent storage. |
-| Workflow recording | User can record, save, and replay multi-step browser workflows reliably. Replayed workflows handle minor DOM changes gracefully and surface clear errors when a step cannot complete. |
-| Scheduled tasks | Browser-side scheduled tasks execute at configured intervals (daily/weekly/monthly), survive browser restarts via alarms API, and report success/failure results back to desktop. |
-| WebMCP tool discovery | Extension discovers page-registered WebMCP tools (both declarative and imperative) and exposes them to the desktop agent loop for invocation. Discovery updates on SPA navigation. |
-| MCP Apps rendering | Interactive tool UIs returned by MCP servers can render in the side panel. The extension sandboxes rendered content and prevents cross-origin data leakage. |
+| Feature                     | Acceptance criteria                                                                                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native connection lifecycle | Extension connects to native host reliably, exposes clear status, retries with bounded backoff, and stops before infinite permission/reconnect loops.                                 |
+| Popup quick controls        | Popup loads quickly, shows accurate connection and tab state, and lets the user trigger core actions with clear feedback.                                                             |
+| Side-panel chat             | Side panel can display prior context, send requests, stream replies, and recover from refresh or reconnect without message corruption.                                                |
+| Page context capture        | Extension can capture URL, title, selection, and bounded page content reliably across common pages.                                                                                   |
+| Screenshot capture          | User-triggered screenshots succeed on supported pages and failure states are surfaced clearly.                                                                                        |
+| Browser action execution    | Browser actions route through validated messages, act on the right tab/page, and return structured success/failure output.                                                            |
+| Autofill/workflow helpers   | Autofill and browser workflow helpers are deterministic, user-visible, and do not silently mutate pages without intent.                                                               |
+| Privacy and storage         | Chat render output is sanitized, browser permissions are scoped, and any temporary credentials avoid insecure persistent storage.                                                     |
+| Workflow recording          | User can record, save, and replay multi-step browser workflows reliably. Replayed workflows handle minor DOM changes gracefully and surface clear errors when a step cannot complete. |
+| Scheduled tasks             | Browser-side scheduled tasks execute at configured intervals (daily/weekly/monthly), survive browser restarts via alarms API, and report success/failure results back to desktop.     |
+| WebMCP tool discovery       | Extension discovers page-registered WebMCP tools (both declarative and imperative) and exposes them to the desktop agent loop for invocation. Discovery updates on SPA navigation.    |
+| MCP Apps rendering          | Interactive tool UIs returned by MCP servers can render in the side panel. The extension sandboxes rendered content and prevents cross-origin data leakage.                           |
 
 ## 25. Screen-by-screen implementation checklist
 

@@ -540,21 +540,21 @@ Dispatch offers persistent cross-device threads with a simple QR pairing flow. W
 
 ## 25. Feature acceptance criteria
 
-| Feature | Acceptance criteria |
-| --- | --- |
-| Auth and onboarding | App initializes encrypted storage correctly, routes unauthenticated users to auth, routes new users through onboarding, and reaches the app shell without dead ends. |
-| Chat experience | User can browse conversations, create a new conversation, send text or attachments, open full chat detail, and keep cross-surface state in sync. |
-| Model selection | User can inspect and change the active model from mobile-appropriate UI, and the selection affects subsequent requests predictably. |
-| Voice mode | Voice entry is easy to discover, starts quickly, and supports a reliable send/respond loop. |
-| Agent monitoring | Agents tab shows active state, pending approvals, and connection state in a way that is useful at a glance. |
-| Companion pairing | Deep links, QR pairing, and companion entry flows route users into the correct screen and preserve connection state cleanly. |
-| Notifications and background sync | Push notifications and background fetch wake the user appropriately without destabilizing the app or duplicating state. |
-| Offline and degraded behavior | Temporary network failures degrade gracefully; auth refresh, sync, and realtime failures surface clearly without forcing app reinstall-level recovery. |
-| Device-native capabilities | Camera/share/deep link/device interactions work behind explicit permissions and feel purposeful rather than bolted on. |
-| Cross-device orchestration | User can send a task from phone, desktop executes it, and results stream back to mobile in real-time with greater than 95% reliability. Persistent cross-device threads maintain state across sessions and network interruptions. |
-| On-device AI | App can run local inference using Apple Foundation Models on iOS and ExecuTorch on both platforms for privacy-sensitive tasks and offline scenarios. Fallback to cloud is seamless when local model cannot handle the request. |
-| Mobile commerce | User can initiate agentic commerce actions (research, compare, purchase) from mobile with appropriate safety confirmations. Purchases are never auto-confirmed; user always controls the final action. |
-| Push-based proactive insights | App proactively surfaces relevant notifications based on connected data sources without requiring explicit user queries. Notifications are actionable, dismissible, and respect user-configured frequency limits. |
+| Feature                           | Acceptance criteria                                                                                                                                                                                                               |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth and onboarding               | App initializes encrypted storage correctly, routes unauthenticated users to auth, routes new users through onboarding, and reaches the app shell without dead ends.                                                              |
+| Chat experience                   | User can browse conversations, create a new conversation, send text or attachments, open full chat detail, and keep cross-surface state in sync.                                                                                  |
+| Model selection                   | User can inspect and change the active model from mobile-appropriate UI, and the selection affects subsequent requests predictably.                                                                                               |
+| Voice mode                        | Voice entry is easy to discover, starts quickly, and supports a reliable send/respond loop.                                                                                                                                       |
+| Agent monitoring                  | Agents tab shows active state, pending approvals, and connection state in a way that is useful at a glance.                                                                                                                       |
+| Companion pairing                 | Deep links, QR pairing, and companion entry flows route users into the correct screen and preserve connection state cleanly.                                                                                                      |
+| Notifications and background sync | Push notifications and background fetch wake the user appropriately without destabilizing the app or duplicating state.                                                                                                           |
+| Offline and degraded behavior     | Temporary network failures degrade gracefully; auth refresh, sync, and realtime failures surface clearly without forcing app reinstall-level recovery.                                                                            |
+| Device-native capabilities        | Camera/share/deep link/device interactions work behind explicit permissions and feel purposeful rather than bolted on.                                                                                                            |
+| Cross-device orchestration        | User can send a task from phone, desktop executes it, and results stream back to mobile in real-time with greater than 95% reliability. Persistent cross-device threads maintain state across sessions and network interruptions. |
+| On-device AI                      | App can run local inference using Apple Foundation Models on iOS and ExecuTorch on both platforms for privacy-sensitive tasks and offline scenarios. Fallback to cloud is seamless when local model cannot handle the request.    |
+| Mobile commerce                   | User can initiate agentic commerce actions (research, compare, purchase) from mobile with appropriate safety confirmations. Purchases are never auto-confirmed; user always controls the final action.                            |
+| Push-based proactive insights     | App proactively surfaces relevant notifications based on connected data sources without requiring explicit user queries. Notifications are actionable, dismissible, and respect user-configured frequency limits.                 |
 
 ## 26. Screen-by-screen implementation checklist
 
@@ -756,10 +756,10 @@ Mobile is inherently an unreliable network environment. Cross-device orchestrati
 
 ### Pairing methods: trade-offs
 
-| Method | Convenience | Security | Implementation complexity |
-| --- | --- | --- | --- |
-| QR code scan | High (camera-based, no typing) | High (visual verification, short-lived token) | Medium |
-| Deep link | Medium (requires desktop browser step) | Medium (URL can be intercepted) | Low |
-| Session code | Low (manual entry) | High (user-verified, short-lived) | Low |
+| Method       | Convenience                            | Security                                      | Implementation complexity |
+| ------------ | -------------------------------------- | --------------------------------------------- | ------------------------- |
+| QR code scan | High (camera-based, no typing)         | High (visual verification, short-lived token) | Medium                    |
+| Deep link    | Medium (requires desktop browser step) | Medium (URL can be intercepted)               | Low                       |
+| Session code | Low (manual entry)                     | High (user-verified, short-lived)             | Low                       |
 
 AGI Workforce supports all three methods. QR pairing is the default and recommended flow, matching user expectations set by Claude Dispatch while offering a richer post-pairing experience.

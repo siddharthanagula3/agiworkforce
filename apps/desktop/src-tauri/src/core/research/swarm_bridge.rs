@@ -21,7 +21,6 @@ pub const RESEARCH_SUBTASK_PREFIX: &str = "[research_subtask]";
 /// Converts a list of [`SearchStrategy`] into a [`DependencyGraph`] where every
 /// strategy becomes an independent (no dependencies) subtask suitable for fully
 /// parallel execution by the swarm.
-#[allow(dead_code)]
 pub fn strategies_to_dependency_graph(
     strategies: &[SearchStrategy],
     query: &str,
@@ -87,7 +86,6 @@ pub fn strategies_to_dependency_graph(
 
 /// Converts swarm [`SubtaskResult`] values back into research
 /// [`SearchAgentResult`] values that the research orchestrator understands.
-#[allow(dead_code)]
 pub fn swarm_results_to_agent_results(results: Vec<SubtaskResult>) -> Vec<SearchAgentResult> {
     results
         .into_iter()
@@ -117,7 +115,6 @@ pub fn swarm_results_to_agent_results(results: Vec<SubtaskResult>) -> Vec<Search
 
 /// Formats a research query and mode into a goal description string
 /// suitable for the swarm orchestrator.
-#[allow(dead_code)]
 pub fn research_query_to_goal(query: &str, mode: &ResearchMode) -> String {
     let mode_label = match mode {
         ResearchMode::Quick => "quick",

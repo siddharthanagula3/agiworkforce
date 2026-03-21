@@ -62,7 +62,7 @@ export function parseToolResultData(
 
   try {
     const parsed = JSON.parse(result);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>;
     }
   } catch {

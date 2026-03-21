@@ -139,7 +139,10 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
         ("MultiEdit", edits_count.unwrap_or_default())
     } else if contains_any(&lower, &["apply_patch"]) {
         ("ApplyPatch", path.clone().unwrap_or_default())
-    } else if contains_any(&lower, &["read_file", "read_text", "read_media", "read_binary"]) {
+    } else if contains_any(
+        &lower,
+        &["read_file", "read_text", "read_media", "read_binary"],
+    ) {
         ("Read", path.unwrap_or_default())
     } else if contains_any(&lower, &["write_file", "write_text"]) {
         ("Write", path.unwrap_or_default())
@@ -175,10 +178,7 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
     } else if lower == "conversation_search" {
         ("SearchChats", query.unwrap_or_default())
     } else if lower == "recent_chats" {
-        let n = args
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(10);
+        let n = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10);
         ("RecentChats", format!("last {n}"))
     } else if contains_any(
         &lower,
@@ -379,8 +379,10 @@ mod tests {
 
     #[test]
     fn test_grep_search_with_path_display() {
-        let info =
-            get_tool_display_info("grep_search", r#"{"pattern": "error", "path": "src/lib.rs"}"#);
+        let info = get_tool_display_info(
+            "grep_search",
+            r#"{"pattern": "error", "path": "src/lib.rs"}"#,
+        );
         assert_eq!(info.display_name, "Grep");
         // query (pattern) is preferred over path
         assert_eq!(info.display_args, "error");

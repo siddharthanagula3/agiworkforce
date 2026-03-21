@@ -50,9 +50,15 @@ mod tests {
         // With the `ocr` feature, this should be true.
         // Either way, it must not panic.
         if cfg!(feature = "ocr") {
-            assert!(available, "is_ocr_available must be true when ocr feature is enabled");
+            assert!(
+                available,
+                "is_ocr_available must be true when ocr feature is enabled"
+            );
         } else {
-            assert!(!available, "is_ocr_available must be false when ocr feature is disabled");
+            assert!(
+                !available,
+                "is_ocr_available must be false when ocr feature is disabled"
+            );
         }
     }
 
@@ -183,7 +189,11 @@ mod tests {
         } else {
             assert!(result.is_err(), "TextMatch click must fail without OCR");
             let msg = result.unwrap_err().to_string();
-            assert!(msg.contains("OCR feature not enabled"), "Error should mention OCR: {}", msg);
+            assert!(
+                msg.contains("OCR feature not enabled"),
+                "Error should mention OCR: {}",
+                msg
+            );
         }
     }
 
@@ -410,15 +420,15 @@ mod tests {
     fn test_screen_region_various_resolutions() {
         // Verify that common screen resolutions can be represented
         let resolutions: Vec<(i32, i32)> = vec![
-            (1920, 1080),  // 1080p
-            (2560, 1440),  // 1440p / QHD
-            (3840, 2160),  // 4K UHD
-            (5120, 2880),  // 5K (iMac Retina)
-            (7680, 4320),  // 8K
-            (1366, 768),   // Common laptop
-            (1280, 720),   // 720p
-            (3024, 1964),  // MacBook Pro 14" native
-            (3456, 2234),  // MacBook Pro 16" native
+            (1920, 1080), // 1080p
+            (2560, 1440), // 1440p / QHD
+            (3840, 2160), // 4K UHD
+            (5120, 2880), // 5K (iMac Retina)
+            (7680, 4320), // 8K
+            (1366, 768),  // Common laptop
+            (1280, 720),  // 720p
+            (3024, 1964), // MacBook Pro 14" native
+            (3456, 2234), // MacBook Pro 16" native
         ];
         for (w, h) in resolutions {
             let r = ScreenRegion {

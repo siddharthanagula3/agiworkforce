@@ -93,7 +93,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             <Eye className="w-12 h-12 text-gray-400" />
             <p className="text-sm text-gray-500">{error}</p>
             {file && onDownload && (
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => onDownload(file)}
                 className="mt-2 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
@@ -187,7 +188,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           </div>
           <div className="flex items-center gap-2">
             {file && onDownload && (
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => onDownload(file)}
                 className="px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
@@ -195,7 +197,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 Download
               </button>
             )}
-            <button type="button"
+            <button
+              type="button"
               onClick={onClose}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
             >

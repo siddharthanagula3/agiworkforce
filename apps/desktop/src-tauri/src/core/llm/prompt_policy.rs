@@ -173,10 +173,7 @@ mod tests {
             ..Default::default()
         };
         let scan = scan_request(&req);
-        assert!(
-            scan.marker_found,
-            "marker in system field must be detected"
-        );
+        assert!(scan.marker_found, "marker in system field must be detected");
         // last_system_idx is irrelevant when marker_found is true.
     }
 
@@ -213,7 +210,11 @@ mod tests {
         };
         let scan = scan_request(&req);
         assert!(!scan.marker_found);
-        assert_eq!(scan.last_system_idx, Some(2), "must point to last system msg");
+        assert_eq!(
+            scan.last_system_idx,
+            Some(2),
+            "must point to last system msg"
+        );
     }
 
     #[test]
@@ -240,7 +241,11 @@ mod tests {
         apply_no_xml_rule(&mut req);
         // System field already contains the rule; should not be modified further.
         assert_eq!(
-            req.system.as_deref().unwrap().matches(NO_XML_RULE_MARKER).count(),
+            req.system
+                .as_deref()
+                .unwrap()
+                .matches(NO_XML_RULE_MARKER)
+                .count(),
             1,
             "marker must appear exactly once"
         );

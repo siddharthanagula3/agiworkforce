@@ -350,7 +350,7 @@ export const UnifiedAgenticChat: React.FC<{
     Map<
       string,
       {
-        conversationId: number;
+        conversationId: number | string;
         softTimeoutId: ReturnType<typeof setTimeout>;
         hardTimeoutId: ReturnType<typeof setTimeout>;
       }
@@ -358,7 +358,7 @@ export const UnifiedAgenticChat: React.FC<{
   >(new Map());
 
   // CHT-005 fix: Track active stream sessions to prevent race conditions
-  const activeStreamSessionsRef = useRef<Map<number, string>>(new Map());
+  const activeStreamSessionsRef = useRef<Map<number | string, string>>(new Map());
 
   // AUDIT-STREAM-059 fix: Track stream watchdog timeout
   const streamWatchdogTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1096,7 +1096,10 @@ export const UnifiedAgenticChat: React.FC<{
           request: {
             content,
             userId,
-            conversationId: conversationDbId,
+            conversationId:
+              useAppModeStore.getState().mode === 'cloud'
+                ? (useUnifiedChatStore.getState().activeConversationId ?? undefined)
+                : conversationDbId,
             attachments: enrichedOptions.attachments?.map((att) => ({
               id: att.id,
               type: att.type,

@@ -682,9 +682,7 @@ impl ToolExecutor {
                     success: false,
                     data: json!({ "error": error.clone(), "success": false }),
                     error: Some(error),
-                    metadata: HashMap::from([
-                        ("path".to_string(), json!(&validated_path_string)),
-                    ]),
+                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
                 });
             }
         };
@@ -698,9 +696,7 @@ impl ToolExecutor {
                 success: false,
                 data: json!({ "error": error.clone(), "success": false }),
                 error: Some(error),
-                metadata: HashMap::from([
-                    ("path".to_string(), json!(&validated_path_string)),
-                ]),
+                metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
             });
         }
 
@@ -742,7 +738,10 @@ impl ToolExecutor {
                 })
             }
             Err(e) => {
-                let error = format!("Failed to read binary file '{}': {}", validated_path_string, e);
+                let error = format!(
+                    "Failed to read binary file '{}': {}",
+                    validated_path_string, e
+                );
 
                 if let Some(app_handle) = &self.app_handle {
                     let file_op = create_file_read_event(
@@ -759,9 +758,7 @@ impl ToolExecutor {
                     success: false,
                     data: json!({ "error": error.clone(), "success": false }),
                     error: Some(error),
-                    metadata: HashMap::from([
-                        ("path".to_string(), json!(&validated_path_string)),
-                    ]),
+                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
                 })
             }
         }

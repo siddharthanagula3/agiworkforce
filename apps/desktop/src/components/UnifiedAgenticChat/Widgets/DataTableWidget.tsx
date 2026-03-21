@@ -276,7 +276,8 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
             {displayedTotal !== sortedRows.length && ` (${displayedTotal} total)`}
           </span>
           <div className="flex items-center gap-2">
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
               disabled={currentPage === 0}
               className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -287,7 +288,8 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
             <span>
               Page {currentPage + 1} of {totalPages}
             </span>
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={currentPage >= totalPages - 1}
               className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

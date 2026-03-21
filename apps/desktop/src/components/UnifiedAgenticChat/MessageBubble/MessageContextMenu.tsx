@@ -88,7 +88,8 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
       onClick={(e) => e.stopPropagation()}
     >
       {/* Copy */}
-      <button type="button"
+      <button
+        type="button"
         role="menuitem"
         onClick={() => handleAction(onCopy)}
         className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors"
@@ -98,7 +99,8 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
       </button>
 
       {/* Bookmark */}
-      <button type="button"
+      <button
+        type="button"
         role="menuitem"
         onClick={() => handleAction(onBookmark)}
         className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors"
@@ -109,7 +111,8 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
 
       {/* Edit (user messages only) */}
       {isUser && canEdit && !hasError && onEdit && (
-        <button type="button"
+        <button
+          type="button"
           role="menuitem"
           onClick={() => handleAction(onEdit)}
           className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors"
@@ -121,7 +124,8 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
 
       {/* Regenerate (assistant messages only) */}
       {isAssistant && onRegenerate && !hasError && (
-        <button type="button"
+        <button
+          type="button"
           role="menuitem"
           onClick={() => handleAction(onRegenerate)}
           className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors"
@@ -135,7 +139,8 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
       {onDelete && (
         <>
           <div role="separator" className="my-1 border-t border-zinc-700" />
-          <button type="button"
+          <button
+            type="button"
             role="menuitem"
             onClick={() => handleAction(onDelete)}
             className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"

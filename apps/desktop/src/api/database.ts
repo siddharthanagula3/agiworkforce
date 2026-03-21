@@ -164,10 +164,7 @@ export async function dbCreatePool(
  * Execute a read-only SQL query against a connection.
  * Only SELECT and WITH (CTE) statements are allowed.
  */
-export async function dbExecuteQuery(
-  connectionId: string,
-  sql: string,
-): Promise<QueryResult> {
+export async function dbExecuteQuery(connectionId: string, sql: string): Promise<QueryResult> {
   if (!isTauri) {
     console.info('[database] dbExecuteQuery (mock)', connectionId, sql);
     return { columns: [], rows: [] };
@@ -723,10 +720,7 @@ export async function dbRedisConnect(
 /**
  * Get a value from Redis by key.
  */
-export async function dbRedisGet(
-  connectionId: string,
-  key: string,
-): Promise<string | null> {
+export async function dbRedisGet(connectionId: string, key: string): Promise<string | null> {
   if (!isTauri) {
     console.info('[database] dbRedisGet (mock)', connectionId, key);
     return null;
@@ -773,10 +767,7 @@ export async function dbRedisSet(
  * Delete one or more keys from Redis.
  * Returns the count of keys deleted.
  */
-export async function dbRedisDel(
-  connectionId: string,
-  keys: string[],
-): Promise<number> {
+export async function dbRedisDel(connectionId: string, keys: string[]): Promise<number> {
   if (!isTauri) {
     console.info('[database] dbRedisDel (mock)', connectionId, keys.length);
     return 0;
@@ -795,10 +786,7 @@ export async function dbRedisDel(
 /**
  * Check if a key exists in Redis.
  */
-export async function dbRedisExists(
-  connectionId: string,
-  key: string,
-): Promise<boolean> {
+export async function dbRedisExists(connectionId: string, key: string): Promise<boolean> {
   if (!isTauri) {
     console.info('[database] dbRedisExists (mock)', connectionId, key);
     return false;
@@ -936,10 +924,7 @@ export async function dbRedisDisconnect(connectionId: string): Promise<void> {
  * Store a database connection password securely using encrypted storage.
  * Password is encrypted with machine-derived keys (Argon2id + AES-GCM).
  */
-export async function dbStorePassword(
-  connectionId: string,
-  password: string,
-): Promise<void> {
+export async function dbStorePassword(connectionId: string, password: string): Promise<void> {
   if (!isTauri) {
     console.info('[database] dbStorePassword (mock)', connectionId);
     return;

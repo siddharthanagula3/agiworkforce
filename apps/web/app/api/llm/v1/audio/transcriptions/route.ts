@@ -108,7 +108,9 @@ async function handleTranscriptions(request: NextRequest) {
   const ALLOWED_MODELS = ['whisper-1', 'whisper-large-v3'];
   const modelValue = formData.get('model');
   const model =
-    typeof modelValue === 'string' && ALLOWED_MODELS.includes(modelValue) ? modelValue : 'whisper-1';
+    typeof modelValue === 'string' && ALLOWED_MODELS.includes(modelValue)
+      ? modelValue
+      : 'whisper-1';
 
   const forwardForm = new FormData();
   forwardForm.append('file', file);

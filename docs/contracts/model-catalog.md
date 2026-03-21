@@ -18,19 +18,20 @@ to each surface.
 
 All surfaces MUST use the types defined in this file for model metadata:
 
-| Type | Purpose |
-|------|---------|
-| `Provider` | Union type of all provider identifiers (22 providers) |
-| `ModelMetadata` | Full model entry: id, name, provider, contextWindow, costs, capabilities, benchmarks, speed, quality |
+| Type                | Purpose                                                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `Provider`          | Union type of all provider identifiers (22 providers)                                                                              |
+| `ModelMetadata`     | Full model entry: id, name, provider, contextWindow, costs, capabilities, benchmarks, speed, quality                               |
 | `ModelCapabilities` | Boolean flags: streaming, tools, vision, json, thinking, computerUse, agentic, imageGen, videoGen, search, research, codeExecution |
-| `ProviderConfig` | Per-provider configuration: label, SSE delimiter, token multipliers, default pricing, task routing |
-| `ModelsCatalog` | Top-level schema for the `models.json` data file |
-| `ModelType` | Category: chat, code, reasoning, multimodal, image, video, search, tts, stt, music |
-| `ModelQualityTier` | Routing tier: fast, balanced, best |
+| `ProviderConfig`    | Per-provider configuration: label, SSE delimiter, token multipliers, default pricing, task routing                                 |
+| `ModelsCatalog`     | Top-level schema for the `models.json` data file                                                                                   |
+| `ModelType`         | Category: chat, code, reasoning, multimodal, image, video, search, tts, stt, music                                                 |
+| `ModelQualityTier`  | Routing tier: fast, balanced, best                                                                                                 |
 
 ### Canonical Data: `apps/web/constants/models.json`
 
 The raw model data is stored in a JSON file that is:
+
 - Consumed directly by the web app
 - Imported by the desktop app via `apps/desktop/src/constants/llm.ts`
 - Embedded in the Rust desktop binary via `include_str!`
@@ -38,10 +39,10 @@ The raw model data is stored in a JSON file that is:
 
 ### Supplementary Types
 
-| File | Purpose | Scope |
-|------|---------|-------|
-| `packages/types/src/model.ts` | Simplified types for UI components: `ModelProvider`, `ModelConfig`, `ModelPricing` | All surfaces |
-| `packages/types/src/pairing.ts` | Device info types used during model negotiation | Mobile + Desktop |
+| File                            | Purpose                                                                            | Scope            |
+| ------------------------------- | ---------------------------------------------------------------------------------- | ---------------- |
+| `packages/types/src/model.ts`   | Simplified types for UI components: `ModelProvider`, `ModelConfig`, `ModelPricing` | All surfaces     |
+| `packages/types/src/pairing.ts` | Device info types used during model negotiation                                    | Mobile + Desktop |
 
 ---
 
@@ -49,18 +50,18 @@ The raw model data is stored in a JSON file that is:
 
 ### Desktop (`apps/desktop/`)
 
-| File | Role |
-|------|------|
-| `src/constants/llm.ts` | Imports `models.json`, exports lookup functions (`getAllModels`, `getModelMetadata`, etc.) |
-| `src/constants/planModels.ts` | Subscription tier features and message limits (does NOT define models) |
-| `src/stores/modelStore.ts` | Zustand store: model selection, favorites, provider status, Ollama management, intelligent routing |
-| `src/types/provider.ts` | `Provider` type re-export for desktop-specific code |
+| File                                      | Role                                                                                                |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `src/constants/llm.ts`                    | Imports `models.json`, exports lookup functions (`getAllModels`, `getModelMetadata`, etc.)          |
+| `src/constants/planModels.ts`             | Subscription tier features and message limits (does NOT define models)                              |
+| `src/stores/modelStore.ts`                | Zustand store: model selection, favorites, provider status, Ollama management, intelligent routing  |
+| `src/types/provider.ts`                   | `Provider` type re-export for desktop-specific code                                                 |
 | `src-tauri/src/core/llm/models_config.rs` | Rust mirror: embeds `models.json` via `include_str!`, provides `model_catalog()` and `find_model()` |
 
 ### Mobile (`apps/mobile/`)
 
-| File | Role |
-|------|------|
+| File            | Role                                                             |
+| --------------- | ---------------------------------------------------------------- |
 | `lib/models.ts` | Standalone model catalog with `ModelDef` and `ProviderDef` types |
 
 **Migration note**: `apps/mobile/lib/models.ts` currently defines its own `ModelDef` interface.
@@ -70,8 +71,8 @@ no image/video-only models) of the canonical catalog.
 
 ### CLI (`apps/cli/`)
 
-| File | Role |
-|------|------|
+| File              | Role                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------- |
 | `src/provider.rs` | Rust `ModelInfo` struct with capabilities and pricing; `model_catalog()` returns all models |
 
 **Migration note**: The CLI's `ModelInfo` struct has a different field set than the canonical
@@ -81,9 +82,9 @@ type as optional fields.
 
 ### Web (`apps/web/`)
 
-| File | Role |
-|------|------|
-| `constants/models.json` | Raw data source (authoritative) |
+| File                          | Role                                     |
+| ----------------------------- | ---------------------------------------- |
+| `constants/models.json`       | Raw data source (authoritative)          |
 | Various store/component files | Consume types from `@agiworkforce/types` |
 
 ### API Gateway (`services/api-gateway/`)
@@ -96,29 +97,29 @@ Does not define model metadata directly. Forwards model selection from clients.
 
 Current providers (22 total, defined in `packages/types/src/model-catalog.ts`):
 
-| Provider ID | Name | Category |
-|-------------|------|----------|
-| `openai` | OpenAI | Cloud |
-| `anthropic` | Anthropic | Cloud |
-| `google` | Google | Cloud |
-| `xai` | xAI | Cloud |
-| `deepseek` | DeepSeek | Cloud |
-| `moonshot` | Moonshot | Cloud |
-| `qwen` | Qwen | Cloud |
-| `zhipu` | ZhipuAI | Cloud |
-| `perplexity` | Perplexity | Cloud |
-| `mistral` | Mistral | Cloud |
-| `groq` | Groq | Cloud (inference) |
-| `together` | Together | Cloud (inference) |
-| `fireworks` | Fireworks | Cloud (inference) |
-| `cerebras` | Cerebras | Cloud (inference) |
-| `deepinfra` | DeepInfra | Cloud (inference) |
-| `cohere` | Cohere | Cloud |
-| `ai21` | AI21 | Cloud |
-| `sambanova` | SambaNova | Cloud |
-| `azure` | Azure OpenAI | Cloud (enterprise) |
-| `bedrock` | AWS Bedrock | Cloud (enterprise) |
-| `ollama` | Ollama | Local |
+| Provider ID     | Name          | Category                |
+| --------------- | ------------- | ----------------------- |
+| `openai`        | OpenAI        | Cloud                   |
+| `anthropic`     | Anthropic     | Cloud                   |
+| `google`        | Google        | Cloud                   |
+| `xai`           | xAI           | Cloud                   |
+| `deepseek`      | DeepSeek      | Cloud                   |
+| `moonshot`      | Moonshot      | Cloud                   |
+| `qwen`          | Qwen          | Cloud                   |
+| `zhipu`         | ZhipuAI       | Cloud                   |
+| `perplexity`    | Perplexity    | Cloud                   |
+| `mistral`       | Mistral       | Cloud                   |
+| `groq`          | Groq          | Cloud (inference)       |
+| `together`      | Together      | Cloud (inference)       |
+| `fireworks`     | Fireworks     | Cloud (inference)       |
+| `cerebras`      | Cerebras      | Cloud (inference)       |
+| `deepinfra`     | DeepInfra     | Cloud (inference)       |
+| `cohere`        | Cohere        | Cloud                   |
+| `ai21`          | AI21          | Cloud                   |
+| `sambanova`     | SambaNova     | Cloud                   |
+| `azure`         | Azure OpenAI  | Cloud (enterprise)      |
+| `bedrock`       | AWS Bedrock   | Cloud (enterprise)      |
+| `ollama`        | Ollama        | Local                   |
 | `managed_cloud` | Managed Cloud | Platform (auto-routing) |
 
 ---
@@ -166,6 +167,7 @@ Add an entry to `apps/web/constants/models.json` under the `models` key:
 
 In the `tierAllowedModels` section of `models.json`, add the model ID to the
 appropriate tier array:
+
 - `economy`: Available to all tiers (free, hobby, pro, max, enterprise)
 - `pro_additions`: Available to pro, max, enterprise
 - `flagship_additions`: Available to max, enterprise only
@@ -244,21 +246,21 @@ in `apps/desktop/src/stores/modelStore.ts`.
 
 Each provider can be in one of these states:
 
-| Status | Meaning | Action |
-|--------|---------|--------|
-| `connected` | API key configured and validated; provider is responding | Use normally |
-| `error` | API key configured but provider is returning errors | Show error badge; allow retry |
-| `unchecked` | API key may or may not be configured; status unknown | Check on first use |
-| (null) | Never checked | Trigger health check |
+| Status      | Meaning                                                  | Action                        |
+| ----------- | -------------------------------------------------------- | ----------------------------- |
+| `connected` | API key configured and validated; provider is responding | Use normally                  |
+| `error`     | API key configured but provider is returning errors      | Show error badge; allow retry |
+| `unchecked` | API key may or may not be configured; status unknown     | Check on first use            |
+| (null)      | Never checked                                            | Trigger health check          |
 
 ### Model Availability
 
 Models have a lifecycle status:
 
-| Status | Meaning |
-|--------|---------|
-| `active` | Model is available for use |
-| `beta` | Model is in preview; may have limitations |
+| Status       | Meaning                                        |
+| ------------ | ---------------------------------------------- |
+| `active`     | Model is available for use                     |
+| `beta`       | Model is in preview; may have limitations      |
 | `deprecated` | Model is being phased out; prefer alternatives |
 
 ### Fallback Chain
@@ -278,13 +280,14 @@ When a selected model is unavailable:
 
 The desktop enforces tier restrictions in `modelStore.ts`:
 
-| Tier | Allowed Auto Modes | Allowed Models |
-|------|-------------------|----------------|
-| free / hobby | `auto-economy` only | Economy tier models only |
-| pro | `auto-economy`, `auto-balanced` | Economy + pro_additions |
-| max / enterprise | All auto modes | All models |
+| Tier             | Allowed Auto Modes              | Allowed Models           |
+| ---------------- | ------------------------------- | ------------------------ |
+| free / hobby     | `auto-economy` only             | Economy tier models only |
+| pro              | `auto-economy`, `auto-balanced` | Economy + pro_additions  |
+| max / enterprise | All auto modes                  | All models               |
 
 Enforcement is triggered on:
+
 - Model selection (guard in `selectModel`)
 - Plan change (subscription via `useUnifiedAuthStore`)
 - Simple mode toggle (auto-selects best allowed mode)
@@ -293,24 +296,24 @@ Enforcement is triggered on:
 
 ## Cross-Surface Field Mapping
 
-| Canonical (`ModelMetadata`) | Mobile (`ModelDef`) | CLI (`ModelInfo`) | Notes |
-|---------------------------|--------------------|--------------------|-------|
-| `id` | `id` | `id` | Exact match |
-| `name` | `name` | (derived from id) | CLI does not store display name |
-| `provider` | `provider` | `provider` | Same semantics |
-| `contextWindow` | `contextWindow` | `context_window` | snake_case in Rust |
-| `inputCost` | -- | `input_price_per_1m` | Mobile does not include pricing |
-| `outputCost` | -- | `output_price_per_1m` | Mobile does not include pricing |
-| `capabilities.vision` | `supportsVision` | `supports_vision` | Same semantics |
-| `capabilities.thinking` | `supportsThinking` | `supports_reasoning` | Different naming |
-| `capabilities.tools` | -- | `supports_tools` | Mobile does not expose |
-| -- | `maxOutput` | `max_output_tokens` | Not in canonical type; should be added |
-| -- | `tier` | -- | Mobile-only routing hint |
-| -- | -- | `status` | CLI-only lifecycle field |
-| -- | -- | `release_date` | CLI-only |
-| -- | -- | `supports_audio_input` | CLI-only |
-| -- | -- | `supports_audio_output` | CLI-only |
-| -- | -- | `supports_pdf` | CLI-only |
+| Canonical (`ModelMetadata`) | Mobile (`ModelDef`) | CLI (`ModelInfo`)       | Notes                                  |
+| --------------------------- | ------------------- | ----------------------- | -------------------------------------- |
+| `id`                        | `id`                | `id`                    | Exact match                            |
+| `name`                      | `name`              | (derived from id)       | CLI does not store display name        |
+| `provider`                  | `provider`          | `provider`              | Same semantics                         |
+| `contextWindow`             | `contextWindow`     | `context_window`        | snake_case in Rust                     |
+| `inputCost`                 | --                  | `input_price_per_1m`    | Mobile does not include pricing        |
+| `outputCost`                | --                  | `output_price_per_1m`   | Mobile does not include pricing        |
+| `capabilities.vision`       | `supportsVision`    | `supports_vision`       | Same semantics                         |
+| `capabilities.thinking`     | `supportsThinking`  | `supports_reasoning`    | Different naming                       |
+| `capabilities.tools`        | --                  | `supports_tools`        | Mobile does not expose                 |
+| --                          | `maxOutput`         | `max_output_tokens`     | Not in canonical type; should be added |
+| --                          | `tier`              | --                      | Mobile-only routing hint               |
+| --                          | --                  | `status`                | CLI-only lifecycle field               |
+| --                          | --                  | `release_date`          | CLI-only                               |
+| --                          | --                  | `supports_audio_input`  | CLI-only                               |
+| --                          | --                  | `supports_audio_output` | CLI-only                               |
+| --                          | --                  | `supports_pdf`          | CLI-only                               |
 
 ### Recommended Additions to `ModelMetadata`
 

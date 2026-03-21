@@ -83,9 +83,7 @@ export interface MarketplaceSearchParams {
 
 // ── Publishing ────────────────────────────────────────────────────────────────
 
-export async function publishWorkflow(
-  request: PublishWorkflowRequest,
-): Promise<PublishedWorkflow> {
+export async function publishWorkflow(request: PublishWorkflowRequest): Promise<PublishedWorkflow> {
   try {
     return await invoke<PublishedWorkflow>('publish_workflow', {
       workflowId: request.workflow_id,
@@ -131,10 +129,7 @@ export async function publishWorkflowToMarketplace(params: {
   }
 }
 
-export async function unpublishWorkflow(
-  workflowId: string,
-  userId: string,
-): Promise<void> {
+export async function unpublishWorkflow(workflowId: string, userId: string): Promise<void> {
   try {
     await invoke('unpublish_workflow', { workflowId, userId });
   } catch (error) {
@@ -143,9 +138,7 @@ export async function unpublishWorkflow(
   }
 }
 
-export async function getMyPublishedWorkflows(
-  userId: string,
-): Promise<PublishedWorkflow[]> {
+export async function getMyPublishedWorkflows(userId: string): Promise<PublishedWorkflow[]> {
   try {
     return await invoke<PublishedWorkflow[]>('get_my_published_workflows', {
       userId,
@@ -158,9 +151,7 @@ export async function getMyPublishedWorkflows(
 
 // ── Browsing ──────────────────────────────────────────────────────────────────
 
-export async function getFeaturedWorkflows(
-  limit: number = 10,
-): Promise<PublishedWorkflow[]> {
+export async function getFeaturedWorkflows(limit: number = 10): Promise<PublishedWorkflow[]> {
   try {
     return await invoke<PublishedWorkflow[]>('get_featured_workflows', {
       limit,
@@ -171,9 +162,7 @@ export async function getFeaturedWorkflows(
   }
 }
 
-export async function getTrendingWorkflows(
-  limit: number = 10,
-): Promise<PublishedWorkflow[]> {
+export async function getTrendingWorkflows(limit: number = 10): Promise<PublishedWorkflow[]> {
   try {
     return await invoke<PublishedWorkflow[]>('get_trending_workflows', {
       limit,
@@ -224,9 +213,7 @@ export async function searchMarketplaceWorkflows(
   }
 }
 
-export async function getWorkflowById(
-  workflowId: string,
-): Promise<PublishedWorkflow> {
+export async function getWorkflowById(workflowId: string): Promise<PublishedWorkflow> {
   try {
     return await invoke<PublishedWorkflow>('get_workflow_by_id', {
       workflowId,
@@ -237,9 +224,7 @@ export async function getWorkflowById(
   }
 }
 
-export async function getWorkflowByShareUrl(
-  shareUrl: string,
-): Promise<PublishedWorkflow> {
+export async function getWorkflowByShareUrl(shareUrl: string): Promise<PublishedWorkflow> {
   try {
     return await invoke<PublishedWorkflow>('get_workflow_by_share_url', {
       shareUrl,
@@ -250,9 +235,7 @@ export async function getWorkflowByShareUrl(
   }
 }
 
-export async function getCreatorWorkflows(
-  creatorId: string,
-): Promise<PublishedWorkflow[]> {
+export async function getCreatorWorkflows(creatorId: string): Promise<PublishedWorkflow[]> {
   try {
     return await invoke<PublishedWorkflow[]>('get_creator_workflows', {
       creatorId,
@@ -287,9 +270,7 @@ export async function getCategoryCounts(): Promise<[string, number][]> {
   }
 }
 
-export async function getPopularTags(
-  limit: number = 20,
-): Promise<[string, number][]> {
+export async function getPopularTags(limit: number = 20): Promise<[string, number][]> {
   try {
     return await invoke<[string, number][]>('get_popular_tags', { limit });
   } catch (error) {
@@ -300,9 +281,7 @@ export async function getPopularTags(
 
 // ── Cloning / Forking ─────────────────────────────────────────────────────────
 
-export async function cloneMarketplaceWorkflow(
-  request: CloneWorkflowRequest,
-): Promise<string> {
+export async function cloneMarketplaceWorkflow(request: CloneWorkflowRequest): Promise<string> {
   try {
     return await invoke<string>('clone_marketplace_workflow', {
       workflowId: request.workflow_id,
@@ -333,9 +312,7 @@ export async function forkMarketplaceWorkflow(params: {
   }
 }
 
-export async function getUserClones(
-  userId: string,
-): Promise<WorkflowClone[]> {
+export async function getUserClones(userId: string): Promise<WorkflowClone[]> {
   try {
     return await invoke<WorkflowClone[]>('get_user_clones', { userId });
   } catch (error) {
@@ -346,9 +323,7 @@ export async function getUserClones(
 
 // ── Social (ratings, comments, favorites) ─────────────────────────────────────
 
-export async function rateWorkflow(
-  request: RateWorkflowRequest,
-): Promise<void> {
+export async function rateWorkflow(request: RateWorkflowRequest): Promise<void> {
   try {
     await invoke('rate_workflow', {
       workflowId: request.workflow_id,
@@ -377,9 +352,7 @@ export async function getUserWorkflowRating(
   }
 }
 
-export async function getWorkflowReviews(
-  workflowId: string,
-): Promise<WorkflowReview[]> {
+export async function getWorkflowReviews(workflowId: string): Promise<WorkflowReview[]> {
   try {
     return await invoke<WorkflowReview[]>('get_workflow_reviews', {
       workflowId,
@@ -426,10 +399,7 @@ export async function getWorkflowComments(
   }
 }
 
-export async function deleteWorkflowComment(
-  commentId: string,
-  userId: string,
-): Promise<void> {
+export async function deleteWorkflowComment(commentId: string, userId: string): Promise<void> {
   try {
     await invoke('delete_workflow_comment', { commentId, userId });
   } catch (error) {
@@ -438,10 +408,7 @@ export async function deleteWorkflowComment(
   }
 }
 
-export async function favoriteWorkflow(
-  workflowId: string,
-  userId: string,
-): Promise<void> {
+export async function favoriteWorkflow(workflowId: string, userId: string): Promise<void> {
   try {
     await invoke('favorite_workflow', { workflowId, userId });
   } catch (error) {
@@ -450,10 +417,7 @@ export async function favoriteWorkflow(
   }
 }
 
-export async function unfavoriteWorkflow(
-  workflowId: string,
-  userId: string,
-): Promise<void> {
+export async function unfavoriteWorkflow(workflowId: string, userId: string): Promise<void> {
   try {
     await invoke('unfavorite_workflow', { workflowId, userId });
   } catch (error) {
@@ -462,10 +426,7 @@ export async function unfavoriteWorkflow(
   }
 }
 
-export async function isWorkflowFavorited(
-  workflowId: string,
-  userId: string,
-): Promise<boolean> {
+export async function isWorkflowFavorited(workflowId: string, userId: string): Promise<boolean> {
   try {
     return await invoke<boolean>('is_workflow_favorited', {
       workflowId,
@@ -477,9 +438,7 @@ export async function isWorkflowFavorited(
   }
 }
 
-export async function getUserFavorites(
-  userId: string,
-): Promise<PublishedWorkflow[]> {
+export async function getUserFavorites(userId: string): Promise<PublishedWorkflow[]> {
   try {
     return await invoke<PublishedWorkflow[]>('get_user_favorites', { userId });
   } catch (error) {
@@ -490,10 +449,7 @@ export async function getUserFavorites(
 
 // ── Sharing ───────────────────────────────────────────────────────────────────
 
-export async function shareWorkflow(
-  workflowId: string,
-  platform: string,
-): Promise<string> {
+export async function shareWorkflow(workflowId: string, platform: string): Promise<string> {
   try {
     return await invoke<string>('share_workflow', { workflowId, platform });
   } catch (error) {
@@ -502,9 +458,7 @@ export async function shareWorkflow(
   }
 }
 
-export async function getWorkflowShareUrl(
-  workflowId: string,
-): Promise<string> {
+export async function getWorkflowShareUrl(workflowId: string): Promise<string> {
   try {
     return await invoke<string>('get_workflow_share_url', { workflowId });
   } catch (error) {
@@ -513,9 +467,7 @@ export async function getWorkflowShareUrl(
   }
 }
 
-export async function getWorkflowEmbedCode(
-  workflowId: string,
-): Promise<string> {
+export async function getWorkflowEmbedCode(workflowId: string): Promise<string> {
   try {
     return await invoke<string>('get_workflow_embed_code', { workflowId });
   } catch (error) {
@@ -526,9 +478,7 @@ export async function getWorkflowEmbedCode(
 
 // ── Analytics / Stats ─────────────────────────────────────────────────────────
 
-export async function getWorkflowStats(
-  workflowId: string,
-): Promise<WorkflowStats> {
+export async function getWorkflowStats(workflowId: string): Promise<WorkflowStats> {
   try {
     return await invoke<WorkflowStats>('get_workflow_stats', { workflowId });
   } catch (error) {
@@ -537,9 +487,7 @@ export async function getWorkflowStats(
   }
 }
 
-export async function getWorkflowAnalytics(
-  workflowId: string,
-): Promise<WorkflowAnalytics> {
+export async function getWorkflowAnalytics(workflowId: string): Promise<WorkflowAnalytics> {
   try {
     return await invoke<WorkflowAnalytics>('get_workflow_analytics', {
       workflowId,
@@ -550,9 +498,7 @@ export async function getWorkflowAnalytics(
   }
 }
 
-export async function incrementWorkflowViewCount(
-  workflowId: string,
-): Promise<void> {
+export async function incrementWorkflowViewCount(workflowId: string): Promise<void> {
   try {
     await invoke('increment_workflow_view_count', { workflowId });
   } catch (error) {
@@ -576,19 +522,14 @@ export async function getWorkflowTemplatesByCategory(
   category: string,
 ): Promise<WorkflowTemplate[]> {
   try {
-    return await invoke<WorkflowTemplate[]>(
-      'get_workflow_templates_by_category',
-      { category },
-    );
+    return await invoke<WorkflowTemplate[]>('get_workflow_templates_by_category', { category });
   } catch (error) {
     console.error('marketplace.getWorkflowTemplatesByCategory failed:', error);
     throw error;
   }
 }
 
-export async function searchWorkflowTemplates(
-  query: string,
-): Promise<WorkflowTemplate[]> {
+export async function searchWorkflowTemplates(query: string): Promise<WorkflowTemplate[]> {
   try {
     return await invoke<WorkflowTemplate[]>('search_workflow_templates', {
       query,

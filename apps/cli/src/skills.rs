@@ -369,12 +369,20 @@ pub fn format_skills_by_category(skills: &[Skill]) -> String {
     for (category, members) in &groups {
         out.push_str(&format!("{}:\n", category));
         for skill in members {
-            let source = if skill.path.to_string_lossy().contains(".agiworkforce/skills") {
+            let source = if skill
+                .path
+                .to_string_lossy()
+                .contains(".agiworkforce/skills")
+            {
                 "project"
             } else {
                 "global"
             };
-            let implicit_tag = if skill.allow_implicit { "" } else { " (explicit-only)" };
+            let implicit_tag = if skill.allow_implicit {
+                ""
+            } else {
+                " (explicit-only)"
+            };
             out.push_str(&format!(
                 "  {:<25} {}{} [{}]\n",
                 skill.name,
@@ -401,7 +409,11 @@ pub fn format_skill_list(skills: &[Skill]) -> String {
 
     let mut out = String::new();
     for skill in skills {
-        let source = if skill.path.to_string_lossy().contains(".agiworkforce/skills") {
+        let source = if skill
+            .path
+            .to_string_lossy()
+            .contains(".agiworkforce/skills")
+        {
             "project"
         } else {
             "global"
@@ -449,9 +461,7 @@ mod tests {
             description: desc.to_string(),
             content: String::new(),
             body: format!("{name} tips..."),
-            path: PathBuf::from(format!(
-                "/home/user/.agiworkforce/skills/{name}.md"
-            )),
+            path: PathBuf::from(format!("/home/user/.agiworkforce/skills/{name}.md")),
             allow_implicit: implicit,
             category: cat.map(String::from),
         }
@@ -483,8 +493,7 @@ mod tests {
 
     #[test]
     fn test_parse_frontmatter_quoted_values() {
-        let content =
-            "---\nname: \"my skill\"\ndescription: 'helps with testing'\n---\n\nBody.";
+        let content = "---\nname: \"my skill\"\ndescription: 'helps with testing'\n---\n\nBody.";
         let fm = parse_frontmatter(content).unwrap();
         assert_eq!(fm.name, "my skill");
         assert_eq!(fm.description, "helps with testing");
@@ -509,7 +518,8 @@ mod tests {
 
     #[test]
     fn test_parse_frontmatter_category() {
-        let content = "---\nname: git-fix\ndescription: Git helpers\ncategory: DevOps\n---\n\nBody.";
+        let content =
+            "---\nname: git-fix\ndescription: Git helpers\ncategory: DevOps\n---\n\nBody.";
         let fm = parse_frontmatter(content).unwrap();
         assert_eq!(fm.category.as_deref(), Some("DevOps"));
     }
@@ -624,10 +634,7 @@ mod tests {
     fn test_score_no_match() {
         let s = skill("cooking", "Helps with Italian recipes");
         let score = score_skill(&s, "quantum physics");
-        assert!(
-            score.abs() < f64::EPSILON,
-            "expected 0.0, got {score}"
-        );
+        assert!(score.abs() < f64::EPSILON, "expected 0.0, got {score}");
     }
 
     #[test]
@@ -636,10 +643,7 @@ mod tests {
         s.allow_implicit = false;
         // Keyword overlap should yield 0 because allow_implicit = false
         let score = score_skill(&s, "deployment secrets");
-        assert!(
-            score.abs() < f64::EPSILON,
-            "expected 0.0, got {score}"
-        );
+        assert!(score.abs() < f64::EPSILON, "expected 0.0, got {score}");
     }
 
     #[test]

@@ -894,13 +894,19 @@ pub async fn git_reset(
             let file_list_clone = file_list.clone();
             return spawn_blocking(move || {
                 let mut cmd = std::process::Command::new("git");
-                cmd.current_dir(&path_clone).arg("reset").arg("HEAD").arg("--");
+                cmd.current_dir(&path_clone)
+                    .arg("reset")
+                    .arg("HEAD")
+                    .arg("--");
                 for f in &file_list_clone {
                     cmd.arg(f);
                 }
                 let output = cmd.output().map_err(|e| e.to_string())?;
                 if output.status.success() {
-                    Ok(format!("Reset {} file(s) successfully", file_list_clone.len()))
+                    Ok(format!(
+                        "Reset {} file(s) successfully",
+                        file_list_clone.len()
+                    ))
                 } else {
                     Err(String::from_utf8_lossy(&output.stderr).to_string())
                 }
@@ -984,7 +990,10 @@ pub async fn git_checkout_files(
         }
         let output = cmd.output().map_err(|e| e.to_string())?;
         if output.status.success() {
-            Ok(format!("Discarded changes in {} file(s)", files_clone.len()))
+            Ok(format!(
+                "Discarded changes in {} file(s)",
+                files_clone.len()
+            ))
         } else {
             Err(String::from_utf8_lossy(&output.stderr).to_string())
         }

@@ -10,8 +10,7 @@ import {
 
 type ToolTrailMutationState = Pick<UnifiedChatState, 'actionTrail' | 'removeActionTrailEntry'>;
 
-type ToolArtifactMutationState = MessageLookupSnapshot &
-  Pick<UnifiedChatState, 'updateMessage'>;
+type ToolArtifactMutationState = MessageLookupSnapshot & Pick<UnifiedChatState, 'updateMessage'>;
 
 export type ToolTerminalArtifactStatus = 'completed' | 'failed' | 'cancelled';
 export type ToolStreamStateUpdate = Partial<ToolStreamStateEntry>;
@@ -108,7 +107,9 @@ export function clearRunningToolTrailEntries(
     if (metadataToolCallId === toolId) return true;
     if (!toolName) return false;
 
-    return entry.message === `Executing ${toolName}...` || entry.message === `Calling ${toolName}...`;
+    return (
+      entry.message === `Executing ${toolName}...` || entry.message === `Calling ${toolName}...`
+    );
   });
 
   for (const entry of matches) {
@@ -143,11 +144,7 @@ export function reconcileToolArtifactTerminalState(
 
   state.updateMessage(
     artifactOwner.message.id,
-    buildMessageArtifactUpdate(
-      artifactOwner.message,
-      updatedArtifacts,
-      options.messageState,
-    ),
+    buildMessageArtifactUpdate(artifactOwner.message, updatedArtifacts, options.messageState),
   );
 
   return artifactOwner.message.id;

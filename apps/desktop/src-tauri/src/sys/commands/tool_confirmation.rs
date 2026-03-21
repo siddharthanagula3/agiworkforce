@@ -447,9 +447,7 @@ pub fn clear_remembered_tool_choice(
 /// Call this when starting a new session or when the user wants to revoke
 /// all session-level auto-approvals.
 #[tauri::command]
-pub fn clear_session_tool_approvals(
-    state: State<'_, ToolConfirmationState>,
-) -> Result<(), String> {
+pub fn clear_session_tool_approvals(state: State<'_, ToolConfirmationState>) -> Result<(), String> {
     state.clear_session_approvals();
     Ok(())
 }

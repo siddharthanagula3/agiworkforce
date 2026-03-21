@@ -78,17 +78,11 @@ pub enum CliError {
         message: String,
     },
     /// Authentication failures (missing key, expired token, revoked).
-    Auth {
-        provider: String,
-        message: String,
-    },
+    Auth { provider: String, message: String },
     /// Configuration errors (missing config, parse failure).
     Config { message: String },
     /// Tool execution errors (tool not found, execution failed).
-    Tool {
-        tool_name: String,
-        message: String,
-    },
+    Tool { tool_name: String, message: String },
     /// Network errors (connection refused, timeout, DNS).
     Network { url: String, message: String },
     /// Context window overflow (too many tokens for model).
@@ -121,11 +115,7 @@ impl fmt::Display for CliError {
                 provider,
                 status,
                 message,
-            } => write!(
-                f,
-                "[{}] API error (HTTP {}): {}",
-                provider, status, message
-            ),
+            } => write!(f, "[{}] API error (HTTP {}): {}", provider, status, message),
             CliError::Auth { provider, message } => {
                 write!(f, "[{}] Authentication failed: {}", provider, message)
             }
@@ -149,12 +139,12 @@ impl fmt::Display for CliError {
                 provider,
                 retry_after,
             } => match retry_after {
-                Some(secs) => write!(
+                Some(secs) => write!(f, "[{}] Rate limited — retry after {}s", provider, secs),
+                None => write!(
                     f,
-                    "[{}] Rate limited — retry after {}s",
-                    provider, secs
+                    "[{}] Rate limited — please wait before retrying",
+                    provider
                 ),
-                None => write!(f, "[{}] Rate limited — please wait before retrying", provider),
             },
             CliError::StreamError {
                 provider, message, ..
@@ -224,11 +214,7 @@ impl CliError {
     }
 
     /// Create a context overflow error.
-    pub fn context_overflow(
-        model: impl Into<String>,
-        token_count: usize,
-        limit: usize,
-    ) -> Self {
+    pub fn context_overflow(model: impl Into<String>, token_count: usize, limit: usize) -> Self {
         CliError::ContextOverflow {
             model: model.into(),
             token_count,
@@ -367,7 +353,10 @@ mod tests {
     #[test]
     fn display_config_error() {
         let err = CliError::config("missing default model");
-        assert_eq!(err.to_string(), "Configuration error: missing default model");
+        assert_eq!(
+            err.to_string(),
+            "Configuration error: missing default model"
+        );
     }
 
     #[test]
@@ -527,19 +516,28 @@ mod tests {
     #[test]
     fn retry_delay_rate_limit_no_header() {
         let err = CliError::rate_limited("openai", None);
-        assert_eq!(err.retry_delay(), Duration::from_secs(DEFAULT_RETRY_DELAY_SECS));
+        assert_eq!(
+            err.retry_delay(),
+            Duration::from_secs(DEFAULT_RETRY_DELAY_SECS)
+        );
     }
 
     #[test]
     fn retry_delay_network_uses_default() {
         let err = CliError::network("https://api.example.com", "dns failure");
-        assert_eq!(err.retry_delay(), Duration::from_secs(DEFAULT_RETRY_DELAY_SECS));
+        assert_eq!(
+            err.retry_delay(),
+            Duration::from_secs(DEFAULT_RETRY_DELAY_SECS)
+        );
     }
 
     #[test]
     fn retry_delay_api_uses_default() {
         let err = CliError::api("openai", 500, "internal error");
-        assert_eq!(err.retry_delay(), Duration::from_secs(DEFAULT_RETRY_DELAY_SECS));
+        assert_eq!(
+            err.retry_delay(),
+            Duration::from_secs(DEFAULT_RETRY_DELAY_SECS)
+        );
     }
 
     // -- retry_delay_with_backoff --
@@ -548,40 +546,28 @@ mod tests {
     fn backoff_attempt_0_returns_base() {
         let err = CliError::api("openai", 500, "error");
         // attempt 0: 2^(0-1 saturating) = 2^0 = 1 => 2000 * 1 = 2000ms
-        assert_eq!(
-            err.retry_delay_with_backoff(0),
-            Duration::from_millis(2000)
-        );
+        assert_eq!(err.retry_delay_with_backoff(0), Duration::from_millis(2000));
     }
 
     #[test]
     fn backoff_attempt_1_returns_base() {
         let err = CliError::api("openai", 500, "error");
         // attempt 1: 2^(1-1) = 2^0 = 1 => 2000 * 1 = 2000ms
-        assert_eq!(
-            err.retry_delay_with_backoff(1),
-            Duration::from_millis(2000)
-        );
+        assert_eq!(err.retry_delay_with_backoff(1), Duration::from_millis(2000));
     }
 
     #[test]
     fn backoff_attempt_2_doubles() {
         let err = CliError::api("openai", 500, "error");
         // attempt 2: 2^(2-1) = 2 => 2000 * 2 = 4000ms
-        assert_eq!(
-            err.retry_delay_with_backoff(2),
-            Duration::from_millis(4000)
-        );
+        assert_eq!(err.retry_delay_with_backoff(2), Duration::from_millis(4000));
     }
 
     #[test]
     fn backoff_attempt_3_quadruples() {
         let err = CliError::api("openai", 500, "error");
         // attempt 3: 2^(3-1) = 4 => 2000 * 4 = 8000ms
-        assert_eq!(
-            err.retry_delay_with_backoff(3),
-            Duration::from_millis(8000)
-        );
+        assert_eq!(err.retry_delay_with_backoff(3), Duration::from_millis(8000));
     }
 
     #[test]
@@ -674,13 +660,17 @@ mod tests {
     #[test]
     fn overflow_anthropic_prompt_too_long() {
         assert!(detect_context_overflow("prompt is too long"));
-        assert!(detect_context_overflow("Error: Prompt is too long for this model"));
+        assert!(detect_context_overflow(
+            "Error: Prompt is too long for this model"
+        ));
     }
 
     #[test]
     fn overflow_bedrock_input_too_long() {
         assert!(detect_context_overflow("input is too long"));
-        assert!(detect_context_overflow("The input is too long for the model."));
+        assert!(detect_context_overflow(
+            "The input is too long for the model."
+        ));
     }
 
     #[test]
@@ -789,7 +779,9 @@ mod tests {
     #[test]
     fn overflow_case_insensitive() {
         assert!(detect_context_overflow("PROMPT IS TOO LONG"));
-        assert!(detect_context_overflow("Maximum Context Length Is 8192 Tokens"));
+        assert!(detect_context_overflow(
+            "Maximum Context Length Is 8192 Tokens"
+        ));
         assert!(detect_context_overflow("CONTEXT_LENGTH_EXCEEDED"));
     }
 

@@ -219,8 +219,7 @@ pub fn load_triggers() -> Result<Option<TriggersConfig>> {
         return Ok(None);
     }
 
-    let contents =
-        std::fs::read_to_string(&path).context("Failed to read triggers.json")?;
+    let contents = std::fs::read_to_string(&path).context("Failed to read triggers.json")?;
 
     let config: TriggersConfig =
         serde_json::from_str(&contents).context("Failed to parse triggers.json")?;
@@ -349,8 +348,7 @@ pub fn load_hooks() -> Result<HooksConfig> {
         return Ok(HooksConfig::default());
     }
 
-    let contents =
-        std::fs::read_to_string(&path).context("Failed to read hooks.json")?;
+    let contents = std::fs::read_to_string(&path).context("Failed to read hooks.json")?;
 
     let config: HooksConfig =
         serde_json::from_str(&contents).context("Failed to parse hooks.json")?;
@@ -507,8 +505,7 @@ async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
 
     match result {
         Ok(Ok(output)) => {
-            let stdout =
-                String::from_utf8_lossy(&output.stdout).to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let (blocked, reason, should_stop) = parse_hook_output(&stdout);
             HookResult {
                 hook_command: hook.command.clone(),
@@ -687,8 +684,7 @@ mod tests {
             tool_execution: None,
         };
 
-        let results =
-            run_hooks(&config, HookEvent::SessionStart, &input).await;
+        let results = run_hooks(&config, HookEvent::SessionStart, &input).await;
         assert!(results.is_empty());
     }
 
@@ -861,8 +857,7 @@ mod tests {
             message: None,
             tool_execution: None,
         };
-        let results =
-            run_hooks(&config, HookEvent::AfterToolUse, &input).await;
+        let results = run_hooks(&config, HookEvent::AfterToolUse, &input).await;
         assert_eq!(results.len(), 1);
         assert!(results[0].stdout.contains("always"));
     }
@@ -887,8 +882,7 @@ mod tests {
 
     #[test]
     fn test_parse_hook_output_block_decision() {
-        let stdout =
-            r#"{"decision": "block", "reason": "unsafe command detected"}"#;
+        let stdout = r#"{"decision": "block", "reason": "unsafe command detected"}"#;
         let (blocked, reason, stop) = parse_hook_output(stdout);
         assert!(blocked);
         assert_eq!(reason.unwrap(), "unsafe command detected");
@@ -932,8 +926,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_single_hook_block_json() {
         let hook = Hook {
-            command: r#"echo '{"decision":"block","reason":"nope"}'"#
-                .to_string(),
+            command: r#"echo '{"decision":"block","reason":"nope"}'"#.to_string(),
             args: Vec::new(),
             timeout: 5,
             blocking: true,
@@ -1095,10 +1088,7 @@ mod tests {
 
     #[test]
     fn test_aggregate_empty_is_continue() {
-        assert_eq!(
-            aggregate_results(&[]),
-            HookAggregateOutcome::Continue
-        );
+        assert_eq!(aggregate_results(&[]), HookAggregateOutcome::Continue);
     }
 
     #[test]
@@ -1181,8 +1171,7 @@ mod tests {
     #[test]
     fn test_tool_execution_payload_deserialization() {
         let json = r#"{"tool_name":"mcp_fetch","tool_kind":"mcp","executed":true,"success":true,"duration_ms":350}"#;
-        let payload: ToolExecutionPayload =
-            serde_json::from_str(json).unwrap();
+        let payload: ToolExecutionPayload = serde_json::from_str(json).unwrap();
         assert_eq!(payload.tool_name, "mcp_fetch");
         assert_eq!(payload.tool_kind, "mcp");
         assert!(payload.executed);

@@ -46,7 +46,8 @@ export function resolveTranscriptMessageId(
   if (options.allowStreamingAssistantFallback) {
     const streamingAssistant = messages.find(
       (message) =>
-        message.role === 'assistant' && (message.metadata?.streaming === true || message.streaming === true),
+        message.role === 'assistant' &&
+        (message.metadata?.streaming === true || message.streaming === true),
     );
     if (streamingAssistant) {
       return streamingAssistant.id;

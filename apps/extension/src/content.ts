@@ -934,6 +934,15 @@ async function handleWaitForSelector(message: WaitForSelectorMessage): Promise<E
  * SECURITY: new Function() / eval() is not used. Only pre-defined operations are allowed.
  */
 const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown> = {
+  navigateTo: (...args: unknown[]) => {
+    const url = String(args[0] ?? '');
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error(`Only http/https URLs are allowed: ${url}`);
+    }
+    window.location.href = parsed.toString();
+    return parsed.toString();
+  },
   scrollTo: (...args: unknown[]) =>
     window.scrollTo((args[0] as number) ?? 0, (args[1] as number) ?? 0),
   scrollBy: (...args: unknown[]) =>
@@ -968,6 +977,23 @@ const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown>
     const el = document.querySelector(args[0] as string) as HTMLElement | null;
     el?.blur();
     return !!el;
+  },
+  getLocalStorage: (...args: unknown[]) => {
+    const key = args[0] as string | null | undefined;
+    if (!key) {
+      return { ...window.localStorage };
+    }
+    return window.localStorage.getItem(key);
+  },
+  setLocalStorage: (...args: unknown[]) => {
+    const key = String(args[0] ?? '');
+    const value = String(args[1] ?? '');
+    window.localStorage.setItem(key, value);
+    return true;
+  },
+  clearLocalStorage: () => {
+    window.localStorage.clear();
+    return true;
   },
 };
 

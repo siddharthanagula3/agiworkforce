@@ -108,7 +108,9 @@ export function buildToolStreamTerminalActivity(input: {
     metadata: {
       tool_name: input.toolName,
       duration_ms: input.durationMs,
-      ...(success ? { stream_completed_at: input.timestamp } : { stream_error_at: input.timestamp }),
+      ...(success
+        ? { stream_completed_at: input.timestamp }
+        : { stream_error_at: input.timestamp }),
       ...(typeof input.retryable === 'boolean' ? { retryable: input.retryable } : {}),
     },
     trail: {

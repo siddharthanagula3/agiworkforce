@@ -302,7 +302,6 @@ These features exist in AGI Workforce web but NOT in claude.ai:
 Category scores are the unweighted average of all feature rows in that category.
 Features marked as "Bonus" (present in AGI Workforce but absent from claude.ai) contribute positively to the raw score.
 
-
 ---
 
 # UI Parity Details

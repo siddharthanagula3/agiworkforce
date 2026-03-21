@@ -191,8 +191,7 @@ impl AGIExecutor {
     /// which will trigger a security warning but allow access.
     ///
     // Used by: fallback tools not yet migrated to ExecutorRegistry
-    #[allow(dead_code)]
-    fn get_allowed_directories(&self) -> Vec<std::path::PathBuf> {
+    fn _get_allowed_directories(&self) -> Vec<std::path::PathBuf> {
         // Try to get allowed directories from settings via app_handle
         if let Some(ref app) = self.app_handle {
             use tauri::Manager;

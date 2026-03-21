@@ -15,29 +15,32 @@
 ## File Map
 
 ### New Files
-| File | Responsibility |
-|------|---------------|
-| `apps/desktop/src/stores/appModeStore.ts` | Mode state (local/cloud), plan tier, persistence |
-| `apps/desktop/src/api/cloudApi.ts` | Cloud API client: conversations CRUD, message send (SSE), usage |
-| `services/api-gateway/src/routes/cloudChat.ts` | Express routes: `/api/v1/chat/send`, `/api/v1/conversations/*` |
-| `services/api-gateway/src/routes/usage.ts` | Express routes: `/api/v1/usage` |
-| `services/api-gateway/src/middleware/planGate.ts` | Middleware: check subscription tier before LLM proxy |
+
+| File                                              | Responsibility                                                  |
+| ------------------------------------------------- | --------------------------------------------------------------- |
+| `apps/desktop/src/stores/appModeStore.ts`         | Mode state (local/cloud), plan tier, persistence                |
+| `apps/desktop/src/api/cloudApi.ts`                | Cloud API client: conversations CRUD, message send (SSE), usage |
+| `services/api-gateway/src/routes/cloudChat.ts`    | Express routes: `/api/v1/chat/send`, `/api/v1/conversations/*`  |
+| `services/api-gateway/src/routes/usage.ts`        | Express routes: `/api/v1/usage`                                 |
+| `services/api-gateway/src/middleware/planGate.ts` | Middleware: check subscription tier before LLM proxy            |
 
 ### Modified Files
-| File | Change |
-|------|--------|
-| `apps/desktop/src/hooks/useDeepLink.ts` | Add `auth/callback` handler → `exchangeCodeForSession()` |
-| `apps/desktop/src/components/Onboarding/OnboardingWizard.tsx` | Add mode choice as new Step 0 |
-| `apps/desktop/src/stores/chat/index.ts` | Branch `sendMessage()` on mode (local invoke vs cloud fetch) |
-| `apps/desktop/src/components/Settings/SettingsPanel.tsx` | Add mode toggle section |
-| `apps/desktop/src/components/UnifiedAgenticChat/Sidebar.tsx` | Add mode indicator pill in footer |
-| `services/api-gateway/src/index.ts` | Mount `cloudChatRouter`, add Tauri CORS origins |
+
+| File                                                          | Change                                                       |
+| ------------------------------------------------------------- | ------------------------------------------------------------ |
+| `apps/desktop/src/hooks/useDeepLink.ts`                       | Add `auth/callback` handler → `exchangeCodeForSession()`     |
+| `apps/desktop/src/components/Onboarding/OnboardingWizard.tsx` | Add mode choice as new Step 0                                |
+| `apps/desktop/src/stores/chat/index.ts`                       | Branch `sendMessage()` on mode (local invoke vs cloud fetch) |
+| `apps/desktop/src/components/Settings/SettingsPanel.tsx`      | Add mode toggle section                                      |
+| `apps/desktop/src/components/UnifiedAgenticChat/Sidebar.tsx`  | Add mode indicator pill in footer                            |
+| `services/api-gateway/src/index.ts`                           | Mount `cloudChatRouter`, add Tauri CORS origins              |
 
 ---
 
 ## Task 1: Create `appModeStore.ts`
 
 **Files:**
+
 - Create: `apps/desktop/src/stores/appModeStore.ts`
 
 - [ ] **Step 1: Create the store**
@@ -114,6 +117,7 @@ git commit -m "feat(desktop): add appModeStore for local/cloud mode toggle"
 ## Task 2: Wire deep link auth callback
 
 **Files:**
+
 - Modify: `apps/desktop/src/hooks/useDeepLink.ts`
 
 - [ ] **Step 1: Read the full file**
@@ -156,6 +160,7 @@ git commit -m "feat(auth): handle OAuth PKCE callback via deep link"
 ## Task 3: Add mode choice to OnboardingWizard
 
 **Files:**
+
 - Modify: `apps/desktop/src/components/Onboarding/OnboardingWizard.tsx`
 
 - [ ] **Step 1: Read the full file** to understand step structure
@@ -170,6 +175,7 @@ Import `useAppModeStore` from stores.
 - [ ] **Step 3: Create the mode step content**
 
 Add a new step body for `id === 'mode'`:
+
 - Two cards side by side: "Local Mode" (Shield icon, free/private) and "Cloud Mode" (Cloud icon, synced/frontier)
 - Clicking a card sets `useAppModeStore.getState().setMode('local'|'cloud')` and auto-advances
 
@@ -189,6 +195,7 @@ git commit -m "feat(onboarding): add local/cloud mode choice as wizard step 1"
 ## Task 4: Create `cloudApi.ts`
 
 **Files:**
+
 - Create: `apps/desktop/src/api/cloudApi.ts`
 
 - [ ] **Step 1: Read existing API client pattern**
@@ -207,7 +214,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   const session = await supabaseAuth.getSession();
   if (!session?.access_token) throw new Error('Not authenticated');
   return {
-    'Authorization': `Bearer ${session.access_token}`,
+    Authorization: `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
   };
 }
@@ -238,7 +245,10 @@ export async function listCloudConversations(): Promise<CloudConversation[]> {
 }
 
 // Create conversation
-export async function createCloudConversation(title: string, model: string): Promise<CloudConversation> {
+export async function createCloudConversation(
+  title: string,
+  model: string,
+): Promise<CloudConversation> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/api/v1/conversations`, {
     method: 'POST',
@@ -250,7 +260,9 @@ export async function createCloudConversation(title: string, model: string): Pro
 }
 
 // Get conversation with messages
-export async function getCloudConversation(id: string): Promise<{ conversation: CloudConversation; messages: CloudMessage[] }> {
+export async function getCloudConversation(
+  id: string,
+): Promise<{ conversation: CloudConversation; messages: CloudMessage[] }> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/api/v1/conversations/${id}`, { headers });
   if (!res.ok) throw new Error(`Failed to get conversation: ${res.status}`);
@@ -282,7 +294,10 @@ export async function sendCloudMessage(
   }
 
   const reader = res.body?.getReader();
-  if (!reader) { onError(new Error('No response body')); return; }
+  if (!reader) {
+    onError(new Error('No response body'));
+    return;
+  }
 
   const decoder = new TextDecoder();
   while (true) {
@@ -292,11 +307,16 @@ export async function sendCloudMessage(
     for (const line of chunk.split('\n')) {
       if (line.startsWith('data: ')) {
         const data = line.slice(6);
-        if (data === '[DONE]') { onDone(); return; }
+        if (data === '[DONE]') {
+          onDone();
+          return;
+        }
         try {
           const parsed = JSON.parse(data);
           if (parsed.text) onChunk(parsed.text);
-        } catch { /* skip non-JSON lines */ }
+        } catch {
+          /* skip non-JSON lines */
+        }
       }
     }
   }
@@ -314,7 +334,11 @@ export async function deleteCloudConversation(id: string): Promise<void> {
 }
 
 // Get usage stats
-export async function getCloudUsage(): Promise<{ messagesUsed: number; messagesLimit: number; resetAt: string }> {
+export async function getCloudUsage(): Promise<{
+  messagesUsed: number;
+  messagesLimit: number;
+  resetAt: string;
+}> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_BASE}/api/v1/usage`, { headers });
   if (!res.ok) throw new Error(`Failed to get usage: ${res.status}`);
@@ -338,6 +362,7 @@ git commit -m "feat(cloud): add cloud API client for conversations and chat"
 ## Task 5: Create API gateway `cloudChat.ts` + `planGate.ts`
 
 **Files:**
+
 - Create: `services/api-gateway/src/routes/cloudChat.ts`
 - Create: `services/api-gateway/src/middleware/planGate.ts`
 
@@ -407,6 +432,7 @@ git commit -m "feat(gateway): add cloud chat routes with plan-tier enforcement"
 ## Task 6: Mount routes + CORS in gateway
 
 **Files:**
+
 - Modify: `services/api-gateway/src/index.ts`
 
 - [ ] **Step 1: Add imports and mount**
@@ -435,6 +461,7 @@ git commit -m "feat(gateway): mount cloud chat routes, add Tauri CORS origins"
 ## Task 7: Add mode-switch guard in chat store
 
 **Files:**
+
 - Modify: `apps/desktop/src/stores/chat/index.ts`
 
 - [ ] **Step 1: Read the chat store** to find `sendMessage` and streaming state
@@ -442,6 +469,7 @@ git commit -m "feat(gateway): mount cloud chat routes, add Tauri CORS origins"
 - [ ] **Step 2: Import appModeStore and add mode check**
 
 At the top of `sendMessage()`:
+
 ```typescript
 import { useAppModeStore } from '../appModeStore';
 
@@ -459,6 +487,7 @@ if (mode === 'cloud') {
 - [ ] **Step 3: Add mode-switch blocking**
 
 In `useAppModeStore.setMode()`, check streaming state:
+
 ```typescript
 setMode: (mode) => {
   const isStreaming = useChatStore.getState().isStreaming;
@@ -486,6 +515,7 @@ git commit -m "feat(chat): route messages through local or cloud based on app mo
 ## Task 8: Add Settings mode toggle
 
 **Files:**
+
 - Modify: `apps/desktop/src/components/Settings/SettingsPanel.tsx`
 
 - [ ] **Step 1: Read SettingsPanel to find insertion point**
@@ -522,11 +552,13 @@ git commit -m "feat(settings): add local/cloud mode toggle"
 ## Task 9: Add Sidebar mode indicator
 
 **Files:**
+
 - Modify: `apps/desktop/src/components/UnifiedAgenticChat/Sidebar.tsx`
 
 - [ ] **Step 1: Add mode pill in sidebar footer**
 
 Near the user profile area at the bottom of the sidebar, add:
+
 ```typescript
 const mode = useAppModeStore(selectMode);
 
@@ -590,9 +622,9 @@ git commit -m "feat(dual-mode): complete local/cloud mode architecture"
 
 Tasks that can run in parallel (no file conflicts):
 
-| Wave | Tasks | Why parallel |
-|------|-------|-------------|
+| Wave   | Tasks                    | Why parallel                  |
+| ------ | ------------------------ | ----------------------------- |
 | Wave 1 | Task 1 + Task 2 + Task 5 | Different apps/files entirely |
-| Wave 2 | Task 3 + Task 4 + Task 6 | After Wave 1, no overlaps |
+| Wave 2 | Task 3 + Task 4 + Task 6 | After Wave 1, no overlaps     |
 | Wave 3 | Task 7 + Task 8 + Task 9 | After Wave 2, different files |
-| Wave 4 | Task 10 | Integration verification |
+| Wave 4 | Task 10                  | Integration verification      |

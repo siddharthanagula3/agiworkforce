@@ -208,8 +208,7 @@ pub(super) async fn prepare_send_message(
     if let Some(ref folder) = effective_folder {
         let folder_path = std::path::Path::new(folder);
         if folder_path.is_dir() {
-            let coding_prompt =
-                super::prompt_context::build_coding_system_prompt(folder_path);
+            let coding_prompt = super::prompt_context::build_coding_system_prompt(folder_path);
             if !coding_prompt.is_empty() {
                 llm_messages.push(ChatMessage {
                     role: "system".to_string(),
@@ -699,13 +698,8 @@ mod tests {
 
     #[test]
     fn explicit_thinking_mode_true_returns_enabled() {
-        let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-5",
-            Some(true),
-            None,
-            false,
-            "write code",
-        );
+        let thinking =
+            resolve_thinking_parameter("claude-sonnet-4-5", Some(true), None, false, "write code");
         assert!(matches!(thinking, Some(ThinkingParameter::Enabled(true))));
     }
 
@@ -793,13 +787,8 @@ mod tests {
     #[test]
     fn auto_detect_skipped_for_unsupported_model() {
         // GPT-4 does not support thinking
-        let thinking = resolve_thinking_parameter(
-            "gpt-4",
-            None,
-            None,
-            false,
-            "ultrathink about this",
-        );
+        let thinking =
+            resolve_thinking_parameter("gpt-4", None, None, false, "ultrathink about this");
         assert!(thinking.is_none());
     }
 

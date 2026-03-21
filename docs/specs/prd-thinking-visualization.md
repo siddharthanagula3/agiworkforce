@@ -22,14 +22,14 @@ This creates three concrete problems:
 
 ## 2. User Stories
 
-| ID | As a... | I want to... | So that... |
-|----|---------|-------------|-----------|
-| US-1 | User waiting for a complex analysis | See a live indicator showing the model is actively thinking, with elapsed time | I know the system is working and can estimate when it will finish |
-| US-2 | User reviewing a completed response | Expand a collapsible block to read the full reasoning chain | I can verify the model's logic and catch errors before trusting the answer |
-| US-3 | Power user comparing models | See how long each model spent thinking and how many reasoning steps it used | I can evaluate cost/quality tradeoffs between models |
-| US-4 | User on a slow connection | See thinking text stream in real-time as it arrives | I am not staring at a spinner for 30 seconds with zero feedback |
-| US-5 | User who sent a simple prompt | NOT see a thinking block when the model answered without reasoning | My chat is not cluttered with unnecessary UI for trivial responses |
-| US-6 | Mobile-web user | See a compact thinking indicator that does not consume excessive vertical space | The experience is usable on small viewports |
+| ID   | As a...                             | I want to...                                                                    | So that...                                                                 |
+| ---- | ----------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| US-1 | User waiting for a complex analysis | See a live indicator showing the model is actively thinking, with elapsed time  | I know the system is working and can estimate when it will finish          |
+| US-2 | User reviewing a completed response | Expand a collapsible block to read the full reasoning chain                     | I can verify the model's logic and catch errors before trusting the answer |
+| US-3 | Power user comparing models         | See how long each model spent thinking and how many reasoning steps it used     | I can evaluate cost/quality tradeoffs between models                       |
+| US-4 | User on a slow connection           | See thinking text stream in real-time as it arrives                             | I am not staring at a spinner for 30 seconds with zero feedback            |
+| US-5 | User who sent a simple prompt       | NOT see a thinking block when the model answered without reasoning              | My chat is not cluttered with unnecessary UI for trivial responses         |
+| US-6 | Mobile-web user                     | See a compact thinking indicator that does not consume excessive vertical space | The experience is usable on small viewports                                |
 
 ---
 
@@ -60,15 +60,15 @@ This creates three concrete problems:
 
 ### 3.4 Summary and Our Position
 
-| Feature | Claude.ai | ChatGPT | Gemini | AGI Workforce (current) | AGI Workforce (target) |
-|---------|-----------|---------|--------|------------------------|----------------------|
-| Active indicator | Teal + timer | Text + ellipsis | Dots | Generic dot pulse | Brain icon + timer |
-| Elapsed duration | Live seconds | Post-hoc only | None | None | Live seconds |
-| Completion label | "Thought for Xs" | "Thought for Xs" | None | None | "Thought for Xs" |
-| Collapsible content | Yes (full text) | Yes (summary) | No | No | Yes (full text, streaming) |
-| Real-time streaming | Yes | No | No | No | Yes |
-| Multiple blocks | Yes | No | No | No | Yes |
-| Styling distinction | Teal tint | Subtle indent | N/A | N/A | Purple tint (brand) |
+| Feature             | Claude.ai        | ChatGPT          | Gemini | AGI Workforce (current) | AGI Workforce (target)     |
+| ------------------- | ---------------- | ---------------- | ------ | ----------------------- | -------------------------- |
+| Active indicator    | Teal + timer     | Text + ellipsis  | Dots   | Generic dot pulse       | Brain icon + timer         |
+| Elapsed duration    | Live seconds     | Post-hoc only    | None   | None                    | Live seconds               |
+| Completion label    | "Thought for Xs" | "Thought for Xs" | None   | None                    | "Thought for Xs"           |
+| Collapsible content | Yes (full text)  | Yes (summary)    | No     | No                      | Yes (full text, streaming) |
+| Real-time streaming | Yes              | No               | No     | No                      | Yes                        |
+| Multiple blocks     | Yes              | No               | No     | No                      | Yes                        |
+| Styling distinction | Teal tint        | Subtle indent    | N/A    | N/A                     | Purple tint (brand)        |
 
 **Target**: Match or exceed Claude.ai's implementation. Beat ChatGPT by streaming thinking content in real-time instead of showing only a post-hoc summary.
 
@@ -152,11 +152,7 @@ interface ChatActions {
   // ... existing actions ...
 
   /** Append a thinking content delta to the specified message */
-  appendThinkingContent: (
-    sessionId: string,
-    messageId: string,
-    delta: string,
-  ) => void;
+  appendThinkingContent: (sessionId: string, messageId: string, delta: string) => void;
 
   /** Mark thinking as started for a message */
   startThinking: (sessionId: string, messageId: string) => void;
@@ -232,15 +228,15 @@ The `metadata.thinkingSegments: ThinkingSegment[]` array replaces the single `th
 
 ### 5.1 New/Modified Files
 
-| File | Action | Description |
-|------|--------|-------------|
-| `apps/web/features/chat/components/ThinkingBlock.tsx` | **Rewrite** | Replace the minimal existing implementation with the full-featured version described in Section 4.1. Add duration timer, streaming content, auto-scroll, preview, accessibility. |
-| `apps/web/features/chat/stores/chat-store.ts` | **Modify** | Add `thinkingContent`, `isThinkingStreaming`, `thinkingStartedAt`, `thinkingCompletedAt`, `thinkingDurationSeconds`, `thinkingSegments` fields to `ChatMessage.metadata`. Add `appendThinkingContent`, `startThinking`, `completeThinking` actions. |
-| `apps/web/features/chat/components/messages/MessageBubble.tsx` | **Modify** | Already imports and renders `ThinkingBlock`. Verify it correctly passes the new metadata fields. Add support for rendering multiple `ThinkingSegment` blocks when `thinkingSegments` array is present. |
-| `apps/web/features/chat/hooks/use-chat-interface.ts` | **Modify** | Update the SSE stream consumer to detect `<thinking>` / `</thinking>` tags, separate thinking content from main content, and call the new store actions. |
-| `apps/web/features/chat/components/messages/ReasoningAccordion.tsx` | **No change** | Retained for the `thinkingSteps` (legacy string array) display. The new ThinkingBlock handles the extended thinking content use case. Both can coexist: ThinkingBlock for raw thinking streams, ReasoningAccordion for structured step arrays. |
-| `apps/web/features/chat/components/messages/ChatMessageList.tsx` | **Modify** | Update the memoization comparison to also track `metadata.isThinkingStreaming` and `metadata.thinkingContent` length changes so the list re-renders when thinking updates arrive. |
-| `apps/web/features/chat/stores/chat-preferences-store.ts` | **No change** | `thinkingEnabled` already exists. |
+| File                                                                | Action        | Description                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/features/chat/components/ThinkingBlock.tsx`               | **Rewrite**   | Replace the minimal existing implementation with the full-featured version described in Section 4.1. Add duration timer, streaming content, auto-scroll, preview, accessibility.                                                                    |
+| `apps/web/features/chat/stores/chat-store.ts`                       | **Modify**    | Add `thinkingContent`, `isThinkingStreaming`, `thinkingStartedAt`, `thinkingCompletedAt`, `thinkingDurationSeconds`, `thinkingSegments` fields to `ChatMessage.metadata`. Add `appendThinkingContent`, `startThinking`, `completeThinking` actions. |
+| `apps/web/features/chat/components/messages/MessageBubble.tsx`      | **Modify**    | Already imports and renders `ThinkingBlock`. Verify it correctly passes the new metadata fields. Add support for rendering multiple `ThinkingSegment` blocks when `thinkingSegments` array is present.                                              |
+| `apps/web/features/chat/hooks/use-chat-interface.ts`                | **Modify**    | Update the SSE stream consumer to detect `<thinking>` / `</thinking>` tags, separate thinking content from main content, and call the new store actions.                                                                                            |
+| `apps/web/features/chat/components/messages/ReasoningAccordion.tsx` | **No change** | Retained for the `thinkingSteps` (legacy string array) display. The new ThinkingBlock handles the extended thinking content use case. Both can coexist: ThinkingBlock for raw thinking streams, ReasoningAccordion for structured step arrays.      |
+| `apps/web/features/chat/components/messages/ChatMessageList.tsx`    | **Modify**    | Update the memoization comparison to also track `metadata.isThinkingStreaming` and `metadata.thinkingContent` length changes so the list re-renders when thinking updates arrive.                                                                   |
+| `apps/web/features/chat/stores/chat-preferences-store.ts`           | **No change** | `thinkingEnabled` already exists.                                                                                                                                                                                                                   |
 
 ### 5.2 Component Architecture
 
@@ -269,6 +265,7 @@ MessageBubble
 ```
 
 States:
+
 - **idle**: No thinking content. ThinkingBlock is not rendered.
 - **streaming**: `isThinkingStreaming === true`. Brain pulses, duration ticks, content streams.
 - **completed**: `isThinkingStreaming === false`, `thinkingContent` is non-empty. Brain static, "Thought for Xs", collapsed.
@@ -319,6 +316,7 @@ for each SSE delta:
 ```
 
 This handles:
+
 - Tags split across SSE chunks (partial `<think` in one delta, `ing>` in the next) -- requires buffering partial tags.
 - Multiple thinking blocks in one response.
 - Content interleaved between thinking blocks.
@@ -505,29 +503,29 @@ If the model does not support thinking (e.g., GPT-5.4-nano, Gemini Flash Lite), 
 
 ## 9. Test Matrix
 
-| Scenario | Model | Expected Behavior |
-|----------|-------|-------------------|
-| Simple prompt, no thinking | Any | No ThinkingBlock rendered |
-| Complex prompt, thinking enabled | Claude Sonnet 4.6 | ThinkingBlock streams content, shows duration, collapses on completion |
-| Complex prompt, thinking enabled | Claude Opus 4 | Same as above, potentially longer duration |
-| Thinking mode off, model reasons anyway | DeepSeek R1 | ThinkingBlock still renders (tag-based detection, independent of preference) |
-| Multiple thinking blocks | Claude with interleaved reasoning | Multiple ThinkingBlock components rendered in order |
-| Empty thinking block | Anthropic (edge case) | No ThinkingBlock rendered |
-| Stream interrupted mid-thinking | Any | ThinkingBlock shows partial content, completed_partial state |
-| Non-streaming response with thinking | Any | ThinkingBlock rendered in completed state immediately |
-| Page reload after thinking response | Any | ThinkingBlock rendered from persisted metadata |
-| Mobile viewport (320px-768px) | Any | Collapsed preview hidden, compact layout |
+| Scenario                                | Model                             | Expected Behavior                                                            |
+| --------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------- |
+| Simple prompt, no thinking              | Any                               | No ThinkingBlock rendered                                                    |
+| Complex prompt, thinking enabled        | Claude Sonnet 4.6                 | ThinkingBlock streams content, shows duration, collapses on completion       |
+| Complex prompt, thinking enabled        | Claude Opus 4                     | Same as above, potentially longer duration                                   |
+| Thinking mode off, model reasons anyway | DeepSeek R1                       | ThinkingBlock still renders (tag-based detection, independent of preference) |
+| Multiple thinking blocks                | Claude with interleaved reasoning | Multiple ThinkingBlock components rendered in order                          |
+| Empty thinking block                    | Anthropic (edge case)             | No ThinkingBlock rendered                                                    |
+| Stream interrupted mid-thinking         | Any                               | ThinkingBlock shows partial content, completed_partial state                 |
+| Non-streaming response with thinking    | Any                               | ThinkingBlock rendered in completed state immediately                        |
+| Page reload after thinking response     | Any                               | ThinkingBlock rendered from persisted metadata                               |
+| Mobile viewport (320px-768px)           | Any                               | Collapsed preview hidden, compact layout                                     |
 
 ---
 
 ## 10. Success Metrics
 
-| Metric | Current | Target | Measurement |
-|--------|---------|--------|-------------|
-| Users who abandon during thinking phase | Unknown (no tracking) | < 5% | Analytics event: "thinking_started" without subsequent "response_completed" |
-| ThinkingBlock expand rate | N/A | > 30% of thinking responses | Click tracking on ThinkingBlock toggle |
-| Time-to-first-byte perception | Poor (no feedback) | Good (immediate visual feedback) | User satisfaction survey |
-| Competitive parity score (thinking viz) | 0/5 | 5/5 | Internal audit against Claude.ai/ChatGPT |
+| Metric                                  | Current               | Target                           | Measurement                                                                 |
+| --------------------------------------- | --------------------- | -------------------------------- | --------------------------------------------------------------------------- |
+| Users who abandon during thinking phase | Unknown (no tracking) | < 5%                             | Analytics event: "thinking_started" without subsequent "response_completed" |
+| ThinkingBlock expand rate               | N/A                   | > 30% of thinking responses      | Click tracking on ThinkingBlock toggle                                      |
+| Time-to-first-byte perception           | Poor (no feedback)    | Good (immediate visual feedback) | User satisfaction survey                                                    |
+| Competitive parity score (thinking viz) | 0/5                   | 5/5                              | Internal audit against Claude.ai/ChatGPT                                    |
 
 ---
 
@@ -546,13 +544,13 @@ The following are explicitly NOT part of this PRD and should be tracked as follo
 
 ## 12. Dependencies
 
-| Dependency | Status | Risk |
-|------------|--------|------|
+| Dependency                                          | Status                                                                                   | Risk                                                                       |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | Server-side thinking tag transformation (API route) | Already implemented in `apps/web/app/api/llm/v1/chat/completions/route.ts` lines 776-868 | Low -- working for Anthropic. Other providers may need similar transforms. |
-| `framer-motion` for animations | Already in web app dependencies | None |
-| Lucide `Brain` icon | Already imported in `MessageBubble.tsx` | None |
-| Radix UI `Collapsible` | Already used in `MessageBubble.tsx` for thinking steps | None |
-| Zustand immer middleware | Already used in `chat-store.ts` | None |
+| `framer-motion` for animations                      | Already in web app dependencies                                                          | None                                                                       |
+| Lucide `Brain` icon                                 | Already imported in `MessageBubble.tsx`                                                  | None                                                                       |
+| Radix UI `Collapsible`                              | Already used in `MessageBubble.tsx` for thinking steps                                   | None                                                                       |
+| Zustand immer middleware                            | Already used in `chat-store.ts`                                                          | None                                                                       |
 
 ---
 

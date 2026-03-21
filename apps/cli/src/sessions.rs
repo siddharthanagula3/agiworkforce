@@ -29,8 +29,8 @@ pub fn open_db() -> Result<Connection> {
 }
 
 fn db_path() -> Result<PathBuf> {
-    let dir = crate::config::CliConfig::config_dir()
-        .context("Failed to locate config directory")?;
+    let dir =
+        crate::config::CliConfig::config_dir().context("Failed to locate config directory")?;
     Ok(dir.join("sessions.db"))
 }
 
@@ -305,10 +305,7 @@ pub fn search_session_messages(
                     let snippet = text[start..end].replace('\n', " ");
                     let prefix = if start > 0 { "..." } else { "" };
                     let suffix = if end < text.len() { "..." } else { "" };
-                    snippets.push(format!(
-                        "[{}] {}{}{}",
-                        msg.role, prefix, snippet, suffix
-                    ));
+                    snippets.push(format!("[{}] {}{}{}", msg.role, prefix, snippet, suffix));
                     if snippets.len() >= 3 {
                         break;
                     }
@@ -456,10 +453,8 @@ pub struct DbStats {
 
 /// Retrieve overall database statistics.
 pub fn db_stats(conn: &Connection) -> Result<DbStats> {
-    let session_count: i64 =
-        conn.query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))?;
-    let message_count: i64 =
-        conn.query_row("SELECT COUNT(*) FROM messages", [], |r| r.get(0))?;
+    let session_count: i64 = conn.query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))?;
+    let message_count: i64 = conn.query_row("SELECT COUNT(*) FROM messages", [], |r| r.get(0))?;
     let tool_call_count: i64 =
         conn.query_row("SELECT COUNT(*) FROM tool_calls", [], |r| r.get(0))?;
     let total_tokens: i64 = conn.query_row(
@@ -490,8 +485,8 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &std::path::Path)
         return Ok(0);
     }
 
-    let entries =
-        std::fs::read_dir(json_dir).with_context(|| format!("Cannot read {}", json_dir.display()))?;
+    let entries = std::fs::read_dir(json_dir)
+        .with_context(|| format!("Cannot read {}", json_dir.display()))?;
 
     let mut imported = 0usize;
 
@@ -593,7 +588,11 @@ pub fn format_session_list(sessions: &[SessionSummary]) -> String {
     for (label, group) in &groups {
         out.push_str(&format!("  {}:\n", label));
         for s in group {
-            let title = if s.title.is_empty() { "(untitled)" } else { &s.title };
+            let title = if s.title.is_empty() {
+                "(untitled)"
+            } else {
+                &s.title
+            };
             let short_id = &s.id[..s.id.len().min(8)];
             out.push_str(&format!(
                 "    {:<40} {:>4} msgs  {}\n",
@@ -799,8 +798,8 @@ mod tests {
     #[test]
     fn test_migrate_nonexistent_dir() {
         let conn = mem_db();
-        let n =
-            migrate_json_conversations(&conn, std::path::Path::new("/nonexistent-test-xyz")).unwrap();
+        let n = migrate_json_conversations(&conn, std::path::Path::new("/nonexistent-test-xyz"))
+            .unwrap();
         assert_eq!(n, 0);
     }
 
@@ -900,7 +899,11 @@ mod tests {
         let groups = date_group_sessions(&sessions);
 
         // Should have at least 2 distinct groups (today + something else)
-        assert!(groups.len() >= 2, "expected >=2 groups, got {}", groups.len());
+        assert!(
+            groups.len() >= 2,
+            "expected >=2 groups, got {}",
+            groups.len()
+        );
         assert_eq!(groups[0].0, "Today");
         assert_eq!(groups[0].1.len(), 1);
     }

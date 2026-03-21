@@ -123,7 +123,8 @@ export function ToolApprovalDialog({
           {/* Parameters */}
           {Object.keys(approval.parameters).length > 0 && (
             <div>
-              <button type="button"
+              <button
+                type="button"
                 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground mb-2 hover:text-foreground transition-colors"
                 onClick={() => setShowParameters(!showParameters)}
               >

@@ -20,7 +20,12 @@ const createMessage = (overrides: Partial<EnhancedMessage> = {}): EnhancedMessag
 
 describe('messageArtifacts', () => {
   it('merges top-level and metadata artifacts without duplicates', () => {
-    const sharedArtifact: Artifact = { id: 'shared', type: 'code', title: 'Shared', content: 'same' };
+    const sharedArtifact: Artifact = {
+      id: 'shared',
+      type: 'code',
+      title: 'Shared',
+      content: 'same',
+    };
     const metadataOnly: Artifact = {
       id: 'metadata-only',
       type: 'code',

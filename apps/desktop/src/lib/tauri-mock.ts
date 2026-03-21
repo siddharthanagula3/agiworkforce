@@ -18,18 +18,16 @@ async function handleCloudWebCommand<T>(
     // Chat CRUD — delegate to cloudApi
     case 'chat_get_conversations': {
       const { listCloudConversations } = await import('../api/cloudApi');
-      const res = await listCloudConversations();
-      return (res as unknown as { conversations: unknown[] }).conversations as T;
+      return (await listCloudConversations()) as T;
     }
 
     case 'chat_create_conversation': {
       const { createCloudConversation } = await import('../api/cloudApi');
       const req = args?.['request'] as Record<string, unknown> | undefined;
-      const conv = await createCloudConversation(
+      return (await createCloudConversation(
         (req?.['title'] as string) ?? 'New Conversation',
         (req?.['model'] as string) ?? '',
-      );
-      return (conv as unknown as { conversation: unknown }).conversation as T;
+      )) as T;
     }
 
     case 'chat_get_messages': {
@@ -37,7 +35,7 @@ async function handleCloudWebCommand<T>(
       const id = (args?.['conversationId'] ?? args?.['id']) as string;
       if (!id) return [] as T;
       const result = await getCloudConversation(id);
-      return ((result as unknown as { messages?: unknown[] }).messages ?? []) as T;
+      return (result.messages ?? []) as T;
     }
 
     case 'chat_delete_conversation': {
@@ -48,9 +46,72 @@ async function handleCloudWebCommand<T>(
     }
 
     case 'chat_send_message': {
-      // Streaming is handled via cloudChatStream.ts — this just returns a placeholder
-      // so the caller doesn't throw. The actual streaming is initiated separately.
-      return { status: 'streaming_via_cloud' } as T;
+      const { startCloudChatStream } = await import('./cloudChatStream');
+      const req = args?.['request'] as Record<string, unknown> | undefined;
+      const content = typeof req?.['content'] === 'string' ? req['content'] : '';
+      const frontendMessageId =
+        typeof req?.['frontendMessageId'] === 'string' ? req['frontendMessageId'] : undefined;
+      const conversationId =
+        typeof req?.['conversationId'] === 'string'
+          ? req['conversationId']
+          : typeof args?.['conversationId'] === 'string'
+            ? (args['conversationId'] as string)
+            : undefined;
+      const model =
+        typeof req?.['modelOverride'] === 'string' && req['modelOverride'].length > 0
+          ? req['modelOverride']
+          : 'claude-haiku-4-5-20251001';
+
+      void startCloudChatStream({
+        conversationId,
+        content,
+        model,
+        messageId: frontendMessageId,
+      });
+
+      return {
+        status: 'streaming_via_cloud',
+        message: frontendMessageId ? { id: frontendMessageId } : undefined,
+      } as T;
+    }
+
+    case 'cloud_get_conversations': {
+      const { listCloudConversations } = await import('../api/cloudApi');
+      return (await listCloudConversations()) as T;
+    }
+
+    case 'cloud_create_conversation': {
+      const { createCloudConversation } = await import('../api/cloudApi');
+      const req = args?.['request'] as Record<string, unknown> | undefined;
+      return (await createCloudConversation(
+        (req?.['title'] as string) ?? 'New Conversation',
+        (req?.['model'] as string) ?? '',
+      )) as T;
+    }
+
+    case 'cloud_get_messages': {
+      const { getCloudConversation } = await import('../api/cloudApi');
+      const id = args?.['conversationId'] as string | undefined;
+      if (!id) return [] as T;
+      const result = await getCloudConversation(id);
+      return (result.messages ?? []) as T;
+    }
+
+    case 'cloud_delete_conversation': {
+      const { deleteCloudConversation } = await import('../api/cloudApi');
+      const id = args?.['conversationId'] as string | undefined;
+      if (id) await deleteCloudConversation(id);
+      return undefined as T;
+    }
+
+    case 'cloud_update_conversation_title': {
+      const { updateCloudConversationTitle } = await import('../api/cloudApi');
+      const id = args?.['conversationId'] as string | undefined;
+      const title = args?.['title'] as string | undefined;
+      if (id && title) {
+        await updateCloudConversationTitle(id, title);
+      }
+      return undefined as T;
     }
 
     // LLM model listing — delegate to cloudApi
@@ -382,6 +443,61 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'mcp_delete_credential':
       return 'Credential deleted' as T;
 
+    // Core MCP management commands
+    case 'mcp_initialize':
+      return 'MCP initialized' as T;
+    case 'mcp_list_servers':
+      return [] as T;
+    case 'mcp_connect_server':
+      return 'connected' as T;
+    case 'mcp_disconnect_server':
+      return 'disconnected' as T;
+    case 'mcp_enable_server':
+      return 'enabled' as T;
+    case 'mcp_disable_server':
+      return 'disabled' as T;
+    case 'mcp_list_tools':
+      return [] as T;
+    case 'mcp_search_tools':
+      return [] as T;
+    case 'mcp_call_tool':
+      return { content: [{ type: 'text', text: 'mock tool result' }], isError: false } as T;
+    case 'mcp_get_config':
+      return { mcpServers: {} } as T;
+    case 'mcp_get_config_location':
+      return {
+        path: '/mock/.mcp.json',
+        source: 'global',
+        projectFolder: null,
+        exists: false,
+      } as T;
+    case 'mcp_update_config':
+      return 'Config updated' as T;
+    case 'mcp_get_stats':
+      return {} as T;
+    case 'mcp_get_tool_schemas':
+      return [] as T;
+    case 'mcp_store_credential':
+      return 'Credential stored' as T;
+
+    // MCP OAuth additional commands
+    case 'mcp_oauth_status':
+      return {
+        connected: false,
+        user_info: null,
+        expires_at: null,
+      } as T;
+    case 'mcp_oauth_refresh':
+      return {
+        provider: (args?.['provider'] as string | undefined) ?? 'mock-provider',
+        connected: false,
+        expires_at: null,
+      } as T;
+
+    // MCP connector manifests
+    case 'get_connector_manifests':
+      return [] as T;
+
     // Model capabilities command
     case 'get_model_capabilities':
       return {
@@ -409,6 +525,28 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'extension_disable':
       throw new Error('Extension management requires the desktop application');
 
+    case 'extension_get_config':
+      return {} as T;
+    case 'extension_set_config':
+      return 'Config saved' as T;
+    case 'extension_list_by_status':
+      return [] as T;
+    case 'extension_start_all':
+      return 'All extensions started' as T;
+    case 'extension_stop_all':
+      return 'All extensions stopped' as T;
+    case 'extension_get_directory':
+      return '/mock/extensions' as T;
+    case 'extension_validate':
+      return {
+        name: 'mock-extension',
+        version: '0.0.0',
+        description: 'Mock extension package',
+        author: null,
+        entry_point: 'index.js',
+        permissions: [],
+      } as T;
+
     // Scheduler commands (job-based naming to match Rust backend)
     case 'scheduler_list_jobs':
       return [] as T;
@@ -427,6 +565,96 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'scheduler_get_history':
     case 'scheduler_get_next_runs':
+      return [] as T;
+
+    // Analytics — telemetry write commands (fire-and-forget)
+    case 'analytics_track_event':
+    case 'analytics_flush_events':
+    case 'analytics_set_user_property':
+    case 'analytics_delete_all_data':
+      return undefined as T;
+
+    // Analytics — session ID
+    case 'analytics_get_session_id':
+      return 'mock-session-id' as T;
+
+    // Analytics — system metrics
+    case 'metrics_get_system':
+      return {
+        cpu_usage: 0,
+        memory_used_mb: 0,
+        memory_total_mb: 8192,
+        disk_used_gb: 0,
+        disk_total_gb: 256,
+        network_rx_bytes: 0,
+        network_tx_bytes: 0,
+        uptime_seconds: 0,
+      } as T;
+
+    // Analytics — app metrics
+    case 'metrics_get_app':
+      return {
+        automations_count: 0,
+        goals_count: 0,
+        mcp_servers_count: 0,
+        cache_hit_rate: 0,
+        avg_goal_duration_ms: 0,
+        active_sessions: 0,
+        total_api_calls: 0,
+        failed_operations: 0,
+      } as T;
+
+    // Analytics — feature flags
+    case 'feature_flag_get':
+      return false as T;
+
+    case 'feature_flag_get_all':
+      return {} as T;
+
+    // Analytics — usage stats
+    case 'analytics_get_usage_stats':
+      return {
+        dau: 0,
+        mau: 0,
+        total_users: 1,
+        new_users_today: 0,
+        new_users_this_week: 0,
+        new_users_this_month: 0,
+        avg_session_duration_ms: 0,
+        total_events: 0,
+        events_today: 0,
+        retention_rate: 0,
+      } as T;
+
+    // Analytics — feature usage
+    case 'analytics_get_feature_usage':
+      return [] as T;
+
+    // Analytics — ROI
+    case 'analytics_calculate_roi':
+      return {
+        time_saved_hours: 0,
+        cost_savings_usd: 0,
+        error_reduction_percent: 0,
+        productivity_gain_percent: 0,
+        total_automations: 0,
+        successful_executions: 0,
+        failed_executions: 0,
+        avg_execution_time_ms: 0,
+        total_llm_cost_usd: 0,
+        llm_cost_saved_usd: 0,
+        report_start_date: 0,
+        report_end_date: 0,
+      } as T;
+
+    // Analytics — aggregations
+    case 'analytics_get_process_metrics':
+    case 'analytics_get_user_metrics':
+    case 'analytics_get_tool_metrics':
+      return [] as T;
+
+    // Analytics — metric trends
+    case 'analytics_get_metric_trends':
       return [] as T;
 
     // Analytics trend commands
@@ -1045,6 +1273,78 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'voice_transcribe_local':
       return { text: '(mock transcript)', confidence: 0.95 } as T;
 
+    // ── AGI Checkpoint commands ─────────────────────────────────────
+    case 'agi_checkpoint_init':
+      return { success: true, data: undefined, error: undefined } as T;
+
+    case 'agi_checkpoint_save':
+      return {
+        success: true,
+        data: {
+          id: `ckpt_mock_${Date.now()}`,
+          task_id: (args?.['request'] as Record<string, unknown>)?.['task_id'] ?? 'task_mock',
+          goal: {
+            id: 'goal_mock',
+            description: 'Mock goal',
+            priority: 'High',
+            deadline: null,
+            constraints: [],
+            success_criteria: [],
+          },
+          current_step: 0,
+          completed_steps: [],
+          current_state: {},
+          tool_results: [],
+          context_memory: [],
+          available_resources: {
+            cpu_usage_percent: 0,
+            memory_usage_mb: 0,
+            network_usage_mbps: 0,
+            storage_usage_mb: 0,
+            available_tools: [],
+          },
+          created_at_ms: Date.now(),
+          reason: 'interval',
+          metadata: {
+            total_steps: 1,
+            progress_percent: 0,
+            elapsed_time_ms: 0,
+            estimated_remaining_ms: null,
+            tool_calls_executed: 0,
+            failure_count: 0,
+            last_error: null,
+            progress_summary: 'Mock checkpoint saved',
+          },
+          is_latest: true,
+          parent_checkpoint_id: null,
+        },
+        error: undefined,
+      } as T;
+
+    case 'agi_checkpoint_get_latest':
+    case 'agi_checkpoint_get':
+      return { success: true, data: null, error: undefined } as T;
+
+    case 'agi_checkpoint_list':
+      return {
+        success: true,
+        data: {
+          task_id: (args?.['request'] as Record<string, unknown>)?.['task_id'] ?? '',
+          checkpoints: [],
+        },
+        error: undefined,
+      } as T;
+
+    case 'agi_checkpoint_delete':
+    case 'agi_checkpoint_record_restore':
+      return { success: true, data: undefined, error: undefined } as T;
+
+    case 'agi_checkpoint_restore_history':
+      return { success: true, data: [], error: undefined } as T;
+
+    case 'agi_checkpoint_cleanup':
+      return { success: true, data: 0, error: undefined } as T;
+
     // ── Agent/AGI commands ──────────────────────────────────────────
     case 'agent_init':
     case 'agi_init':
@@ -1403,14 +1703,350 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_user_favorites':
       return [] as T;
 
-    // ── Misc/catch-all for remaining newly registered commands ──────
+    // Analytics — report generation (returns string content)
     case 'analytics_generate_weekly_report':
     case 'analytics_generate_monthly_report':
+      return '# Mock Report\n\nNo data available in development mode.' as T;
+
+    // Analytics — top processes (returns array of ProcessMetrics)
     case 'analytics_get_top_processes':
+      return [] as T;
+
+    // Analytics — save snapshot (returns snapshot ID string)
     case 'analytics_save_snapshot':
+      return `snapshot_mock_${Date.now()}` as T;
+
+    // ── Artifact commands ────────────────────────────────────────────
+    // All artifact invoke() calls return ArtifactResponse<T> wrappers.
+    // The api/artifacts.ts layer calls unwrap() which reads { success, data }.
+    case 'artifact_create':
+    case 'artifact_create_streaming':
+    case 'artifact_finalize_streaming':
+    case 'artifact_get':
+    case 'artifact_update':
+    case 'artifact_apply_diff':
+    case 'artifact_rollback': {
+      const mockTs = new Date().toISOString();
+      const mockId = (args?.['id'] as string | undefined) ?? `mock_artifact_${Date.now()}`;
+      return {
+        success: true,
+        data: {
+          id: mockId,
+          title: (args?.['title'] as string | undefined) ?? 'Mock Artifact',
+          artifact_type: (args?.['artifactType'] as string | undefined) ?? 'code',
+          content: (args?.['content'] as string | undefined) ?? '',
+          metadata: { Generic: {} },
+          status: 'complete',
+          versions: [],
+          current_version: 1,
+          created_at: mockTs,
+          updated_at: mockTs,
+          tags: [],
+          pinned: false,
+        },
+      } as T;
+    }
+
+    case 'artifact_get_rendered': {
+      const mockTs = new Date().toISOString();
+      const mockId = (args?.['id'] as string | undefined) ?? 'mock_artifact';
+      return {
+        success: true,
+        data: {
+          id: mockId,
+          title: 'Mock Artifact',
+          artifact_type: 'code',
+          rendered_content: {
+            type: 'Code',
+            data: {
+              source: '',
+              language: 'text',
+              highlight_lines: [],
+              executable: false,
+              line_count: 0,
+              file_extension: 'txt',
+            },
+          },
+          version_info: { current: 1, total: 1, created_at: mockTs, updated_at: mockTs },
+          status: 'complete',
+          available_actions: ['copy', 'download', 'edit', 'delete'],
+        },
+      } as T;
+    }
+
+    case 'artifact_append_streaming':
+    case 'artifact_delete':
+    case 'artifact_archive':
+    case 'artifact_unarchive':
+    case 'artifact_pin':
+    case 'artifact_add_tags':
+    case 'artifact_remove_tags':
     case 'artifact_clear_all':
+      return { success: true, data: null } as T;
+
+    case 'artifact_list':
+    case 'artifact_get_by_conversation':
+    case 'artifact_list_persisted':
+    case 'artifact_get_versions':
     case 'artifact_export_all':
+      return { success: true, data: [] } as T;
+
+    case 'artifact_get_diff': {
+      const mockTs = new Date().toISOString();
+      return {
+        success: true,
+        data: {
+          from_version: (args?.['fromVersion'] as number | undefined) ?? 1,
+          to_version: (args?.['toVersion'] as number | undefined) ?? 2,
+          from_content: '',
+          to_content: '',
+          from_timestamp: mockTs,
+          to_timestamp: mockTs,
+        },
+      } as T;
+    }
+
+    case 'artifact_get_stats':
+      return {
+        success: true,
+        data: {
+          total_artifacts: 0,
+          total_versions: 0,
+          total_size_bytes: 0,
+          by_type: {},
+          by_status: {},
+        },
+      } as T;
+
     case 'artifact_import_all':
+      return { success: true, data: 0 } as T;
+
+    // ── Core memory commands (memory_*) ────────────────────────────
+    case 'memory_remember':
+    case 'memory_store':
+      return 1 as T;
+
+    case 'memory_recall':
+      return null as T;
+
+    case 'memory_search':
+    case 'memory_get_by_category':
+    case 'memory_get_important':
+    case 'memory_export_all':
+    case 'memory_list_all':
+    case 'memory_get_decay_candidates':
+    case 'memory_get_compaction_candidates':
+    case 'memory_get_logs_in_range':
+    case 'memory_suggest_important':
+    case 'memory_get_project_memories':
+    case 'memory_get_daily_logs':
+      return [] as T;
+
+    case 'memory_forget':
+    case 'memory_forget_topic':
+    case 'memory_delete':
+      return true as T;
+
+    case 'memory_log_context':
+      return 1 as T;
+
+    case 'memory_get_session_context':
+    case 'memory_get_extraction_prompt':
+    case 'memory_export_markdown':
+      return '' as T;
+
+    case 'memory_list_categories':
+      return ['preference', 'fact', 'decision', 'context'] as T;
+
+    case 'memory_cleanup_logs':
+    case 'memory_archive_compacted_logs':
+    case 'memory_promote_extracted':
+      return 0 as T;
+
+    case 'memory_run_decay':
+      return { memories_decayed: 0, total_decay_applied: 0 } as T;
+
+    case 'memory_decay_single':
+      return 5 as T;
+
+    case 'memory_get_decay_config':
+      return {
+        enabled: true,
+        decay_rate: 0.1,
+        decay_period_days: 30,
+        min_importance: 1,
+        access_boost: 1,
+      } as T;
+
+    case 'memory_set_decay_config':
+      return undefined as T;
+
+    case 'memory_boost_on_access':
+      return 5 as T;
+
+    case 'memory_recall_with_boost':
+      return null as T;
+
+    case 'memory_get_stats':
+      return {
+        total_count: 0,
+        avg_importance: 0,
+        high_importance_count: 0,
+        low_importance_count: 0,
+      } as T;
+
+    case 'memory_get_compaction_stats':
+      return {
+        total_logs: 0,
+        compacted_logs: 0,
+        uncompacted_logs: 0,
+        unique_dates: 0,
+        compaction_rate: 0,
+      } as T;
+
+    case 'memory_compact_old_logs':
+      return {
+        logs_processed: 0,
+        dates_compacted: 0,
+        memories_created: 0,
+        facts_extracted: 0,
+        decisions_extracted: 0,
+        preferences_extracted: 0,
+      } as T;
+
+    case 'memory_export_json':
+      return {
+        version: '1.0',
+        exported_at: new Date().toISOString(),
+        memories: [],
+        daily_logs: [],
+      } as T;
+
+    case 'memory_import_json':
+    case 'memory_import_json_string':
+      return { memories_imported: 0, logs_imported: 0, skipped: 0, errors: [] } as T;
+
+    case 'memory_get_dashboard_stats':
+      return {
+        memory_stats: {
+          total_count: 0,
+          avg_importance: 0,
+          high_importance_count: 0,
+          low_importance_count: 0,
+        },
+        compaction_stats: {
+          total_logs: 0,
+          compacted_logs: 0,
+          uncompacted_logs: 0,
+          unique_dates: 0,
+          compaction_rate: 0,
+        },
+      } as T;
+
+    case 'memory_get_usage_trends':
+      return {
+        total_memories: 0,
+        average_importance: 0,
+        high_importance: 0,
+        low_importance: 0,
+        trend: 'stable',
+      } as T;
+
+    // ── Chat memory integration commands (chat_*) ───────────────────
+    case 'chat_load_project_memories':
+      return {
+        injection_result: {
+          memories_loaded: 0,
+          context: '',
+          has_relevant_memories: false,
+          summary: {
+            decisions: 0,
+            preferences: 0,
+            facts: 0,
+            context_entries: 0,
+            total_importance_weight: 0,
+          },
+        },
+        system_prompt_enhancement: '',
+        message: 'No memories found',
+      } as T;
+
+    case 'chat_detect_and_save_decision':
+    case 'chat_recall_memory':
+      return null as T;
+
+    case 'chat_save_decision':
+      return { memory_id: 1, topic: 'mock', importance: 5, message: 'Decision saved' } as T;
+
+    case 'chat_configure_memory_injection':
+      return undefined as T;
+
+    case 'chat_get_memory_dashboard':
+      return {
+        stats: {
+          total_count: 0,
+          avg_importance: 0,
+          high_importance_count: 0,
+          low_importance_count: 0,
+        },
+        compaction: {
+          total_logs: 0,
+          compacted_logs: 0,
+          uncompacted_logs: 0,
+          unique_dates: 0,
+          compaction_rate: 0,
+        },
+        trending_count: 0,
+        timestamp: new Date().toISOString(),
+      } as T;
+
+    case 'chat_suggest_memories_for_review':
+      return { critical_memories: [], high_importance: [] } as T;
+
+    case 'chat_prefetch_session_memories':
+      return '' as T;
+
+    case 'chat_log_milestone':
+    case 'chat_log_action':
+      return 1 as T;
+
+    case 'chat_search_memories':
+      return [] as T;
+
+    // ── Project memory commands (project_memory.rs) ─────────────────
+    case 'save_project_context':
+    case 'save_coding_style':
+    case 'save_architectural_decision':
+    case 'auto_save_decision':
+      return 1 as T;
+
+    case 'get_project_context':
+      return null as T;
+
+    case 'get_coding_styles':
+    case 'get_project_memories':
+    case 'search_project_memories':
+    case 'get_architectural_decisions':
+      return [] as T;
+
+    case 'update_memory_importance':
+      return undefined as T;
+
+    case 'clear_project_memories':
+      return 0 as T;
+
+    case 'delete_project_memory':
+      return true as T;
+
+    case 'get_project_memory_stats':
+      return {
+        total_memories: 0,
+        context_count: 0,
+        coding_styles_count: 0,
+        decisions_count: 0,
+      } as T;
+
+    // ── Misc/catch-all for remaining newly registered commands ──────
     case 'auth_store_session':
     case 'auth_retrieve_session':
     case 'auth_remove_session':
@@ -1477,17 +2113,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_suggested_provider':
     case 'llm_list_ollama_models':
     case 'route_to_best_api':
-    case 'memory_archive_compacted_logs':
-    case 'memory_compact_old_logs':
-    case 'memory_decay_single':
-    case 'memory_get_compaction_candidates':
-    case 'memory_get_compaction_stats':
-    case 'memory_get_decay_candidates':
-    case 'memory_get_extraction_prompt':
-    case 'memory_get_logs_in_range':
-    case 'memory_import_json_string':
-    case 'memory_promote_extracted':
-    case 'memory_recall_with_boost':
     case 'compare_to_industry_benchmark':
     case 'compare_to_manual':
     case 'compare_to_previous_period':
@@ -1515,16 +2140,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'project_context_validate_path':
     case 'project_has_instructions':
     case 'project_load_instructions':
-    case 'auto_save_decision':
-    case 'clear_project_memories':
-    case 'delete_project_memory':
-    case 'get_architectural_decisions':
-    case 'get_coding_styles':
-    case 'get_project_context':
-    case 'get_project_memory_stats':
-    case 'save_architectural_decision':
-    case 'save_coding_style':
-    case 'update_memory_importance':
     case 'get_prompt_enhancement_config':
     case 'set_prompt_enhancement_config':
     case 'research_get_modes':

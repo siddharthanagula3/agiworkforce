@@ -1,7 +1,7 @@
 use super::*;
-use base64::Engine as _;
 use crate::core::agi::tools::{ParameterType, ToolCapability, ToolParameter};
 use crate::core::agi::ResourceUsage;
+use base64::Engine as _;
 use std::sync::Arc;
 
 fn create_registry_with_file_list() -> Arc<ToolRegistry> {
@@ -748,7 +748,11 @@ async fn test_file_read_binary_returns_base64() {
     let executor = ToolExecutor::new(create_registry_with_file_read_binary());
     let result = executor.execute_tool_call(&tool_call).await.unwrap();
 
-    assert!(result.success, "file_read_binary should succeed, error: {:?}", result.error);
+    assert!(
+        result.success,
+        "file_read_binary should succeed, error: {:?}",
+        result.error
+    );
 
     // Decode the base64 and verify it matches the original binary data
     let encoded = result.data["base64_content"]
@@ -758,8 +762,14 @@ async fn test_file_read_binary_returns_base64() {
         .decode(encoded)
         .expect("should be valid base64");
     assert_eq!(decoded, binary_data, "decoded bytes should match original");
-    assert_eq!(result.data["size_bytes"].as_u64(), Some(binary_data.len() as u64));
-    assert_eq!(result.data["mime_type"].as_str(), Some("application/octet-stream"));
+    assert_eq!(
+        result.data["size_bytes"].as_u64(),
+        Some(binary_data.len() as u64)
+    );
+    assert_eq!(
+        result.data["mime_type"].as_str(),
+        Some("application/octet-stream")
+    );
 }
 
 #[tokio::test]
@@ -881,7 +891,10 @@ async fn test_file_read_binary_preserves_data_unchanged() {
     let decoded = base64::engine::general_purpose::STANDARD
         .decode(encoded)
         .unwrap();
-    assert_eq!(decoded, all_bytes, "all 256 byte values should round-trip through base64");
+    assert_eq!(
+        decoded, all_bytes,
+        "all 256 byte values should round-trip through base64"
+    );
     assert_eq!(result.data["size_bytes"].as_u64(), Some(256));
 }
 

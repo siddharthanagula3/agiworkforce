@@ -187,12 +187,7 @@ impl ExtensionManager {
         // Track running server
         {
             let mut running = self.running_servers.write();
-            running.insert(
-                id.to_string(),
-                ExtensionServerInfo {
-                    server_name,
-                },
-            );
+            running.insert(id.to_string(), ExtensionServerInfo { server_name });
         }
 
         tracing::info!("Extension {} enabled and running", id);
@@ -600,8 +595,8 @@ impl ExtensionManager {
     fn looks_like_api_key(value: &str) -> bool {
         let prefixes = [
             "sk-", "pk-", "sk_", "pk_", "api-", "api_", "token-", "token_", "secret-", "secret_",
-            "key-", "key_", "bearer ", "ghp_", "gho_", "ghs_", "ghr_", "glpat-", "xoxb-",
-            "xoxp-", "xapp-", "sl.", "eyj",
+            "key-", "key_", "bearer ", "ghp_", "gho_", "ghs_", "ghr_", "glpat-", "xoxb-", "xoxp-",
+            "xapp-", "sl.", "eyj",
         ];
         let lower = value.to_lowercase();
         prefixes.iter().any(|p| lower.starts_with(p))
@@ -657,10 +652,7 @@ impl ExtensionManager {
                     })?;
 
                     let stored = format!("{}{}", ENCRYPTED_VALUE_PREFIX, enc_json);
-                    tracing::debug!(
-                        "Encrypted sensitive config field '{}' for extension",
-                        key
-                    );
+                    tracing::debug!("Encrypted sensitive config field '{}' for extension", key);
                     result.insert(key, serde_json::Value::String(stored));
                     continue;
                 }
@@ -834,9 +826,7 @@ mod tests {
 
     /// Build a minimal ExtensionManifest with a config schema containing the
     /// given properties. Useful for encryption/decryption tests.
-    fn manifest_with_properties(
-        properties: HashMap<String, ConfigProperty>,
-    ) -> ExtensionManifest {
+    fn manifest_with_properties(properties: HashMap<String, ConfigProperty>) -> ExtensionManifest {
         ExtensionManifest {
             id: "test-ext".to_string(),
             name: "Test Extension".to_string(),
@@ -932,8 +922,7 @@ mod tests {
             serde_json::Value::String("sk-secret-12345".to_string()),
         );
 
-        let encrypted =
-            ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
+        let encrypted = ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
 
         let stored = encrypted.get("api_key").unwrap().as_str().unwrap();
         // Must be encrypted, not plaintext
@@ -960,8 +949,7 @@ mod tests {
             serde_json::Value::String("My Extension".to_string()),
         );
 
-        let encrypted =
-            ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
+        let encrypted = ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
 
         let stored = encrypted.get("display_name").unwrap().as_str().unwrap();
         assert_eq!(
@@ -987,8 +975,7 @@ mod tests {
             serde_json::Value::String("Test".to_string()),
         );
 
-        let encrypted =
-            ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
+        let encrypted = ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
         let decrypted = ExtensionManager::decrypt_sensitive_values(&manifest, encrypted);
 
         assert_eq!(
@@ -1014,13 +1001,11 @@ mod tests {
             "api_key".to_string(),
             serde_json::Value::String("sk-no-double".to_string()),
         );
-        let first_pass =
-            ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
+        let first_pass = ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
 
         // Second encryption pass on already-encrypted data
         let second_pass =
-            ExtensionManager::encrypt_sensitive_values(&manifest, first_pass.clone())
-                .unwrap();
+            ExtensionManager::encrypt_sensitive_values(&manifest, first_pass.clone()).unwrap();
 
         // The stored value should be identical (no double-encryption)
         assert_eq!(
@@ -1052,8 +1037,7 @@ mod tests {
                 serde_json::Value::String(key_value.to_string()),
             );
 
-            let encrypted =
-                ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
+            let encrypted = ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
             let stored = encrypted.get("token").unwrap().as_str().unwrap();
             assert!(
                 stored.starts_with(ENCRYPTED_VALUE_PREFIX),
@@ -1081,8 +1065,7 @@ mod tests {
         );
 
         // Encrypted value should NOT be detected
-        let encrypted =
-            ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
+        let encrypted = ExtensionManager::encrypt_sensitive_values(&manifest, config).unwrap();
         assert!(
             !ExtensionManager::has_plaintext_sensitive_values(&manifest, &encrypted),
             "Must not flag already-encrypted values"
@@ -1146,9 +1129,7 @@ mod tests {
         // End-to-end test: set_config -> repository -> get_config roundtrip
         // verifying that sensitive values are stored encrypted in the DB.
         let conn = Connection::open_in_memory().unwrap();
-        let repository = Arc::new(
-            ExtensionRepository::new(Arc::new(Mutex::new(conn))).unwrap(),
-        );
+        let repository = Arc::new(ExtensionRepository::new(Arc::new(Mutex::new(conn))).unwrap());
         let installer = Arc::new(ExtensionInstaller::default());
         let mcp_client = Arc::new(McpClient::new());
         let manager = ExtensionManager::new(repository.clone(), installer, mcp_client);
@@ -1244,9 +1225,7 @@ mod tests {
         // Simulate a legacy scenario: config was stored with plaintext API keys
         // before encryption was enforced. Verify that get_config migrates them.
         let conn = Connection::open_in_memory().unwrap();
-        let repository = Arc::new(
-            ExtensionRepository::new(Arc::new(Mutex::new(conn))).unwrap(),
-        );
+        let repository = Arc::new(ExtensionRepository::new(Arc::new(Mutex::new(conn))).unwrap());
         let installer = Arc::new(ExtensionInstaller::default());
         let mcp_client = Arc::new(McpClient::new());
         let manager = ExtensionManager::new(repository.clone(), installer, mcp_client);

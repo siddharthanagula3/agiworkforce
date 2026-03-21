@@ -95,7 +95,13 @@ export function CitationBadge({ index, className, onClick }: CitationBadgeProps)
                 className="text-xs text-teal hover:text-teal/80 flex items-center gap-1 break-all"
                 onClick={(e) => e.stopPropagation()}
               >
-                {(() => { try { return new URL(citation.url).hostname; } catch { return citation.url; } })()}
+                {(() => {
+                  try {
+                    return new URL(citation.url).hostname;
+                  } catch {
+                    return citation.url;
+                  }
+                })()}
                 <ExternalLink className="w-3 h-3 shrink-0" />
               </a>
             </div>

@@ -428,7 +428,8 @@ export function InteractiveTerminal({
           <span className="text-xs text-emerald-300">
             AI suggestion applied. Press Enter to execute.
           </span>
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setAiSuggestion(null)}
             className="ml-auto text-xs text-gray-500 hover:text-gray-300"
           >

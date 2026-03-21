@@ -5,6 +5,7 @@ _Updated: 2026-03-19 | Wave 5 Feature_
 ## Overview
 
 Event triggers enable automatic agent execution in response to external events. The system supports multiple trigger sources:
+
 - **Cron**: Scheduled recurring execution (standard 5-field or 6-field cron syntax)
 - **Webhooks**: Inbound HTTP endpoints (Slack, GitHub, Linear, custom)
 - **File Watchers**: Local filesystem changes with debouncing
@@ -14,12 +15,12 @@ Event triggers enable automatic agent execution in response to external events. 
 
 ### Core Components
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `TriggerRegistry` | `core/agent/triggers.rs` | Manages all active triggers in memory |
-| `TriggerType` | `packages/types/event-triggers.ts` | Discriminant enum (cron, webhook, slack, github, linear, file_watcher) |
-| `EventTriggerDefinition` | `packages/types/event-triggers.ts` | Full trigger configuration with metadata |
-| Tauri Commands | `core/agent/triggers.rs` (bottom) | register_trigger, unregister_trigger, list_triggers, toggle_trigger |
+| Component                | Location                           | Purpose                                                                |
+| ------------------------ | ---------------------------------- | ---------------------------------------------------------------------- |
+| `TriggerRegistry`        | `core/agent/triggers.rs`           | Manages all active triggers in memory                                  |
+| `TriggerType`            | `packages/types/event-triggers.ts` | Discriminant enum (cron, webhook, slack, github, linear, file_watcher) |
+| `EventTriggerDefinition` | `packages/types/event-triggers.ts` | Full trigger configuration with metadata                               |
+| Tauri Commands           | `core/agent/triggers.rs` (bottom)  | register_trigger, unregister_trigger, list_triggers, toggle_trigger    |
 
 ### Execution Flow
 
@@ -47,6 +48,7 @@ External Event → TriggerRegistry.execute_trigger()
 Each trigger type has a discriminant in `TriggerConfig` union:
 
 ### Cron Trigger
+
 ```typescript
 {
   type: 'cron',
@@ -58,6 +60,7 @@ Each trigger type has a discriminant in `TriggerConfig` union:
 ```
 
 ### Webhook Trigger
+
 ```typescript
 {
   type: 'webhook',
@@ -70,6 +73,7 @@ Each trigger type has a discriminant in `TriggerConfig` union:
 ```
 
 ### File Watcher Trigger
+
 ```typescript
 {
   type: 'file_watcher',
@@ -81,6 +85,7 @@ Each trigger type has a discriminant in `TriggerConfig` union:
 ```
 
 ### Slack / GitHub / Linear Triggers
+
 Similar structure with platform-specific config (channel ID, repository, etc.)
 
 ## Frontend Integration

@@ -29,8 +29,7 @@ impl PermissionStore {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let contents =
-            std::fs::read_to_string(&path).context("Failed to read permissions.toml")?;
+        let contents = std::fs::read_to_string(&path).context("Failed to read permissions.toml")?;
         let store: PermissionStore =
             toml::from_str(&contents).context("Failed to parse permissions.toml")?;
         Ok(store)

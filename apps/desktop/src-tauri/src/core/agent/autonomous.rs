@@ -451,10 +451,7 @@ impl AutonomousAgent {
                                         e
                                     );
                                     ApprovalResolution::Rejected {
-                                        reason: Some(format!(
-                                            "Approval request failed: {}",
-                                            e
-                                        )),
+                                        reason: Some(format!("Approval request failed: {}", e)),
                                     }
                                 }
                                 Err(_) => {
@@ -494,15 +491,12 @@ impl AutonomousAgent {
                                             approval_task_id,
                                             e
                                         );
-                                        running_tasks
-                                            .lock()
-                                            .retain(|id| id != &approval_task_id);
+                                        running_tasks.lock().retain(|id| id != &approval_task_id);
                                     }
                                 }
                                 ApprovalResolution::Rejected { reason } => {
-                                    let reason_msg = reason.unwrap_or_else(|| {
-                                        "User rejected the task".to_string()
-                                    });
+                                    let reason_msg = reason
+                                        .unwrap_or_else(|| "User rejected the task".to_string());
                                     tracing::info!(
                                         "[Agent] Task {} rejected: {}",
                                         approval_task_id,
@@ -519,9 +513,7 @@ impl AutonomousAgent {
                                             ));
                                         }
                                     }
-                                    running_tasks
-                                        .lock()
-                                        .retain(|id| id != &approval_task_id);
+                                    running_tasks.lock().retain(|id| id != &approval_task_id);
                                     task_notify.notify_waiters();
                                 }
                             }
@@ -1557,11 +1549,7 @@ pub(crate) fn build_approval_payload(task: &Task) -> ApprovalRequestPayload {
         "low"
     };
 
-    let step_descriptions: Vec<String> = task
-        .steps
-        .iter()
-        .map(|s| s.description.clone())
-        .collect();
+    let step_descriptions: Vec<String> = task.steps.iter().map(|s| s.description.clone()).collect();
 
     ApprovalRequestPayload {
         action_id: task.id.clone(),

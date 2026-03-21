@@ -11,7 +11,13 @@ import { createError, type AppError } from '@/lib/errors';
 /** Convert an AppError to a NextResponse with structured error body. */
 function errorResponse(err: AppError, headers?: Record<string, string>): NextResponse {
   return NextResponse.json(
-    { error: { code: err.code, message: err.message, ...(err.details ? { details: err.details } : {}) } },
+    {
+      error: {
+        code: err.code,
+        message: err.message,
+        ...(err.details ? { details: err.details } : {}),
+      },
+    },
     { status: err.statusCode, ...(headers ? { headers } : {}) },
   );
 }
@@ -120,7 +126,9 @@ export async function GET(request: NextRequest) {
           : null;
         if (rawSeverity && !severity) {
           return errorResponse(
-            createError.badRequest(`Invalid severity. Must be one of: ${validSeverities.join(', ')}`),
+            createError.badRequest(
+              `Invalid severity. Must be one of: ${validSeverities.join(', ')}`,
+            ),
           );
         }
         const eventType = searchParams.get('eventType') as string | null;
@@ -155,13 +163,17 @@ export async function GET(request: NextRequest) {
 
       default:
         return errorResponse(
-          createError.badRequest('Unknown action. Supported: dashboard, metrics, alerts, events, user, ips'),
+          createError.badRequest(
+            'Unknown action. Supported: dashboard, metrics, alerts, events, user, ips',
+          ),
         );
     }
   } catch (error) {
     logger.error({ error }, 'Error in security monitoring API');
     if (isDbUnavailableError(error)) {
-      return errorResponse(createError.serviceUnavailable('Database temporarily unavailable'), { 'Retry-After': '30' });
+      return errorResponse(createError.serviceUnavailable('Database temporarily unavailable'), {
+        'Retry-After': '30',
+      });
     }
     return errorResponse(createError.internal());
   }
@@ -371,13 +383,17 @@ export async function POST(request: NextRequest) {
 
       default:
         return errorResponse(
-          createError.badRequest('Unknown action. Supported: cleanup, suspend-user, ban-user, reactivate-user'),
+          createError.badRequest(
+            'Unknown action. Supported: cleanup, suspend-user, ban-user, reactivate-user',
+          ),
         );
     }
   } catch (error) {
     logger.error({ error }, 'Error in security admin action');
     if (isDbUnavailableError(error)) {
-      return errorResponse(createError.serviceUnavailable('Database temporarily unavailable'), { 'Retry-After': '30' });
+      return errorResponse(createError.serviceUnavailable('Database temporarily unavailable'), {
+        'Retry-After': '30',
+      });
     }
     return errorResponse(createError.internal());
   }

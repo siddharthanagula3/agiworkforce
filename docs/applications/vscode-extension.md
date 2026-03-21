@@ -485,23 +485,23 @@ The VS Code extension is in the right state when:
 
 ## 24. Feature acceptance criteria
 
-| Feature | Acceptance criteria |
-| --- | --- |
-| Extension activation | Extension activates cleanly on supported VS Code versions without blocking the editor on non-critical failures. |
-| Sidebar and chat participant | User can start a conversation from sidebar or `@agi`, stream replies, and preserve history coherently. |
-| Context panel | User can pin, remove, clear, and refresh context files; active context is visible and reflected in requests. |
-| Explain/fix/refactor/tests/docs | Core code-assistance commands gather relevant context and return useful coding output from editor entry points. |
-| Agent mode | Multi-file edits are reviewable, stateful, and allow accept/reject at the right granularity. |
-| Diff and patch review | Diff sessions can be accepted/rejected per diff, file, or batch without corrupting file state. |
-| Inline completions | Completion latency is low enough for typing, respects config, and does not overwhelm normal editing. |
-| Diagnostics/code review | Review output lands in the Problems panel with usable issue mapping. |
-| Terminal assistance | User can ask for run/explain/suggest command help and receive context-aware results. |
-| Desktop bridge | Bridge status is visible, reconnects are understandable, and local delegation works without becoming the primary LM path. |
-| Background/cloud agents | IDE can delegate tasks to cloud execution environments that return results/PRs without blocking the editor. Agent progress is visible in the sidebar, and completed work opens as reviewable diffs. |
-| MCP Apps | Interactive tool UIs (charts, diagrams, dashboards) render inline within agent chat in the IDE. UIs are sandboxed, theme-aware, and respond to user interaction without leaving the conversation thread. |
-| Event-triggered automation | IDE can configure automations triggered by Slack, GitHub, Linear, or cron events. Automation definitions are editable from the IDE, with run history and logs visible in a dedicated panel. |
-| Cross-surface skills | Skills created in CLI or desktop are discoverable and usable from the IDE. Skill catalog syncs across surfaces, and IDE-invoked skills produce the same output as their CLI/desktop equivalents. |
-| Security review automation | Automated code review runs on PRs with vulnerability detection and fix suggestions. Results integrate into the Problems panel with severity ratings, and one-click fix application is available for supported issue types. |
+| Feature                         | Acceptance criteria                                                                                                                                                                                                        |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extension activation            | Extension activates cleanly on supported VS Code versions without blocking the editor on non-critical failures.                                                                                                            |
+| Sidebar and chat participant    | User can start a conversation from sidebar or `@agi`, stream replies, and preserve history coherently.                                                                                                                     |
+| Context panel                   | User can pin, remove, clear, and refresh context files; active context is visible and reflected in requests.                                                                                                               |
+| Explain/fix/refactor/tests/docs | Core code-assistance commands gather relevant context and return useful coding output from editor entry points.                                                                                                            |
+| Agent mode                      | Multi-file edits are reviewable, stateful, and allow accept/reject at the right granularity.                                                                                                                               |
+| Diff and patch review           | Diff sessions can be accepted/rejected per diff, file, or batch without corrupting file state.                                                                                                                             |
+| Inline completions              | Completion latency is low enough for typing, respects config, and does not overwhelm normal editing.                                                                                                                       |
+| Diagnostics/code review         | Review output lands in the Problems panel with usable issue mapping.                                                                                                                                                       |
+| Terminal assistance             | User can ask for run/explain/suggest command help and receive context-aware results.                                                                                                                                       |
+| Desktop bridge                  | Bridge status is visible, reconnects are understandable, and local delegation works without becoming the primary LM path.                                                                                                  |
+| Background/cloud agents         | IDE can delegate tasks to cloud execution environments that return results/PRs without blocking the editor. Agent progress is visible in the sidebar, and completed work opens as reviewable diffs.                        |
+| MCP Apps                        | Interactive tool UIs (charts, diagrams, dashboards) render inline within agent chat in the IDE. UIs are sandboxed, theme-aware, and respond to user interaction without leaving the conversation thread.                   |
+| Event-triggered automation      | IDE can configure automations triggered by Slack, GitHub, Linear, or cron events. Automation definitions are editable from the IDE, with run history and logs visible in a dedicated panel.                                |
+| Cross-surface skills            | Skills created in CLI or desktop are discoverable and usable from the IDE. Skill catalog syncs across surfaces, and IDE-invoked skills produce the same output as their CLI/desktop equivalents.                           |
+| Security review automation      | Automated code review runs on PRs with vulnerability detection and fix suggestions. Results integrate into the Problems panel with severity ratings, and one-click fix application is available for supported issue types. |
 
 ## 25. Screen-by-screen and surface-by-surface implementation checklist
 

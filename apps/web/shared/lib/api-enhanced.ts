@@ -54,9 +54,7 @@ class DefaultErrorHandler implements ErrorHandler {
 class AuthErrorHandler implements ErrorHandler {
   handle(error: APIException): void {
     if (error.code === 'AUTH_FAILED' || error.code === 'REFRESH_FAILED') {
-      // Clear auth state and redirect to login
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('refresh_token');
+      // Auth is managed by Supabase SSR cookies — just redirect to login
       window.location.href = '/auth/login';
     } else {
       toast.error('Authentication error. Please log in again.');

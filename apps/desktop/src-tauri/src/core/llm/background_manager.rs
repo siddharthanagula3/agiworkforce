@@ -398,7 +398,10 @@ mod tests {
             .await
             .unwrap();
 
-        let status = manager.get_status(&submit_result.response_id).await.unwrap();
+        let status = manager
+            .get_status(&submit_result.response_id)
+            .await
+            .unwrap();
         assert_eq!(status.id, submit_result.response_id);
         assert_eq!(status.model, "claude-sonnet-4-20250514");
         assert!(matches!(status.status, BackgroundStatus::Queued));
@@ -434,7 +437,10 @@ mod tests {
             .await
             .unwrap();
 
-        let status = manager.get_status(&submit_result.response_id).await.unwrap();
+        let status = manager
+            .get_status(&submit_result.response_id)
+            .await
+            .unwrap();
         assert!(matches!(status.status, BackgroundStatus::Cancelled));
     }
 
@@ -513,7 +519,10 @@ mod tests {
         // Cancel one by getting its ID first
         let id = {
             let reqs = manager.requests.read().await;
-            reqs.keys().next().cloned().expect("should have at least one")
+            reqs.keys()
+                .next()
+                .cloned()
+                .expect("should have at least one")
         };
 
         manager.cancel_request(&id).await.unwrap();
@@ -745,7 +754,10 @@ mod tests {
             .await
             .unwrap();
 
-        let status = manager.get_status(&submit_result.response_id).await.unwrap();
+        let status = manager
+            .get_status(&submit_result.response_id)
+            .await
+            .unwrap();
         assert!(matches!(status.status, BackgroundStatus::Cancelled));
     }
 
@@ -763,7 +775,10 @@ mod tests {
             .await
             .unwrap();
 
-        let status = manager.get_status(&submit_result.response_id).await.unwrap();
+        let status = manager
+            .get_status(&submit_result.response_id)
+            .await
+            .unwrap();
         assert_eq!(status.provider, "Google");
     }
 

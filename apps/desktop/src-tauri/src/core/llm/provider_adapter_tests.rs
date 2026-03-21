@@ -4,8 +4,8 @@
 mod tests {
     use crate::core::llm::provider_adapter::{OpenAIServerTool, ProviderAdapterFactory};
     use crate::core::llm::{
-        AudioData, AudioFormat, AudioInput, ChatMessage, ContentPart, DocumentFormat, DocumentInput,
-        ImageDetail, ImageFormat, ImageInput, LLMRequest, Provider, ResponseFormat,
+        AudioData, AudioFormat, AudioInput, ChatMessage, ContentPart, DocumentFormat,
+        DocumentInput, ImageDetail, ImageFormat, ImageInput, LLMRequest, Provider, ResponseFormat,
         ThinkingParameter, ToolCall, ToolChoice, ToolDefinition, ToolResultInput, ToolUseInput,
         VideoData, VideoFormat, VideoInput,
     };
@@ -35,6 +35,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -83,6 +84,7 @@ mod tests {
             system: Some("You are a helpful assistant.".to_string()),
             thinking: Some(ThinkingParameter::Enabled(true)),
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -130,6 +132,7 @@ mod tests {
                 budget_tokens: 8000,
             }),
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -184,6 +187,7 @@ mod tests {
                 format_type: "json_schema".to_string(),
                 json_schema: Some(json_schema.clone()),
             }),
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -239,6 +243,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -295,6 +300,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -376,6 +382,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -444,6 +451,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -504,6 +512,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -868,6 +877,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -952,6 +962,7 @@ mod tests {
             system: Some("You are a helpful vision assistant".to_string()),
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1019,6 +1030,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1066,6 +1078,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1110,6 +1123,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1222,6 +1236,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1285,6 +1300,7 @@ mod tests {
             system: Some("You are a math tutor.".to_string()),
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1299,7 +1315,11 @@ mod tests {
 
         // System messages should be filtered from contents
         let contents = adapted["contents"].as_array().unwrap();
-        assert_eq!(contents.len(), 1, "system message should be filtered from contents");
+        assert_eq!(
+            contents.len(),
+            1,
+            "system message should be filtered from contents"
+        );
         assert_eq!(contents[0]["role"], "user");
 
         // System should be in systemInstruction
@@ -1342,6 +1362,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1385,6 +1406,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1428,6 +1450,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1472,6 +1495,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1517,6 +1541,7 @@ mod tests {
             system: None,
             thinking: Some(ThinkingParameter::Enabled(true)),
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1560,6 +1585,7 @@ mod tests {
             system: None,
             thinking: Some(ThinkingParameter::Enabled(false)),
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1601,6 +1627,7 @@ mod tests {
                 budget_tokens: 16384,
             }),
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1643,6 +1670,7 @@ mod tests {
                 max_thinking_tokens: None,
             }),
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1765,10 +1793,7 @@ mod tests {
         let response = result.unwrap();
         assert_eq!(response.content, "The answer is 42.");
         assert!(response.reasoning_content.is_some());
-        assert!(response
-            .reasoning_content
-            .unwrap()
-            .contains("step by step"));
+        assert!(response.reasoning_content.unwrap().contains("step by step"));
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -1872,6 +1897,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1945,6 +1971,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -1976,10 +2003,7 @@ mod tests {
         );
         assert_eq!(parts[1]["inlineData"]["mimeType"], "image/png");
         let data_str = parts[1]["inlineData"]["data"].as_str().unwrap();
-        assert!(
-            !data_str.is_empty(),
-            "base64 data must be non-empty"
-        );
+        assert!(!data_str.is_empty(), "base64 data must be non-empty");
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -2039,6 +2063,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2134,6 +2159,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2198,6 +2224,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2249,6 +2276,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2315,6 +2343,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2376,6 +2405,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2442,6 +2472,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2526,6 +2557,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2615,6 +2647,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2680,6 +2713,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2750,6 +2784,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2825,6 +2860,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2911,6 +2947,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
@@ -2995,6 +3032,7 @@ mod tests {
             system: None,
             thinking: None,
             response_format: None,
+            output_config: None,
             cache_control: None,
             effort: None,
             thinking_level: None,
