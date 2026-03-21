@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd ../.. && corepack enable && corepack prepare pnpm@9.15.3 --activate && VITE_BUILD_TARGET=web pnpm --filter @agiworkforce/desktop exec vite build --outDir dist-web --base /chat/ && cp -r apps/desktop/dist-web apps/web/public/chat && pnpm --filter web build",
+  "buildCommand": "cd ../.. && corepack enable && corepack prepare pnpm@9.15.3 --activate && bash apps/web/scripts/build-with-chat.sh",
   "devCommand": "pnpm dev",
   "installCommand": "cd ../.. && corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm install",
   "framework": "nextjs",
