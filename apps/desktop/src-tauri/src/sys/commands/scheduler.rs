@@ -42,25 +42,19 @@ const SHELL_COMMAND_TIMEOUT_SECS: u64 = 300;
 /// Commands not on this list are rejected at both creation and dispatch time.
 const ALLOWED_SHELL_COMMANDS: &[&str] = &[
     // File operations
-    "ls", "cat", "cp", "mv", "mkdir", "touch", "find", "head", "tail", "wc",
-    "sort", "uniq", "diff", "file", "stat", "du", "df",
-    // Text processing
-    "echo", "printf", "grep", "awk", "sed", "cut", "tr", "tee", "xargs",
-    // Compression
-    "tar", "zip", "unzip", "gzip", "gunzip", "bzip2",
-    // Network (non-destructive)
-    "curl", "wget", "ping", "dig", "nslookup", "host",
-    // System info
-    "date", "uptime", "whoami", "hostname", "uname", "env", "printenv", "id",
-    "ps", "top", "free", "lsof", "which", "whereis", "type",
-    // Development
-    "git", "node", "npm", "npx", "pnpm", "yarn", "python", "python3",
-    "pip", "pip3", "cargo", "rustc", "go", "java", "javac", "make", "cmake",
-    // Shell utilities
-    "test", "true", "false", "sleep", "basename", "dirname", "realpath",
-    "pwd", "cd", "export", "set",
-    // macOS specific (safe subset — docker, osascript removed for security)
-    "open", "pbcopy", "pbpaste", "say", "sw_vers",
+    "ls", "cat", "cp", "mv", "mkdir", "touch", "find", "head", "tail", "wc", "sort", "uniq", "diff",
+    "file", "stat", "du", "df", // Text processing
+    "echo", "printf", "grep", "awk", "sed", "cut", "tr", "tee", "xargs", // Compression
+    "tar", "zip", "unzip", "gzip", "gunzip", "bzip2", // Network (non-destructive)
+    "curl", "wget", "ping", "dig", "nslookup", "host", // System info
+    "date", "uptime", "whoami", "hostname", "uname", "env", "printenv", "id", "ps", "top", "free",
+    "lsof", "which", "whereis", "type", // Development
+    "git", "node", "npm", "npx", "pnpm", "yarn", "python", "python3", "pip", "pip3", "cargo",
+    "rustc", "go", "java", "javac", "make", "cmake", // Shell utilities
+    "test", "true", "false", "sleep", "basename", "dirname", "realpath", "pwd", "cd", "export",
+    "set", // macOS specific (safe subset — docker, osascript removed for security)
+    "open", "pbcopy", "pbpaste", "say",
+    "sw_vers",
     // Note: bash, sh, zsh intentionally excluded from ShellCommand allowlist.
     // Shell interpreters bypass the allowlist via -c flag (e.g., bash -c "nmap ...").
     // Scripts use the dedicated Script action type with separate validation.
@@ -407,11 +401,7 @@ impl SchedulerState {
                     );
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        "[Scheduler] Failed to register '{}': {}",
-                        decay_name,
-                        e
-                    );
+                    tracing::warn!("[Scheduler] Failed to register '{}': {}", decay_name, e);
                 }
             }
         }
@@ -588,10 +578,7 @@ pub async fn scheduler_add_job(
     // This prevents storing malicious payloads that could later execute when the job fires.
     match resolved_action_type {
         SchedulerActionType::ShellCommand => {
-            if let Some(command) = resolved_action_data
-                .get("command")
-                .and_then(|v| v.as_str())
-            {
+            if let Some(command) = resolved_action_data.get("command").and_then(|v| v.as_str()) {
                 validate_shell_command(command).map_err(|e| {
                     Error::Generic(format!("Shell command rejected at creation: {}", e))
                 })?;
@@ -603,9 +590,8 @@ pub async fn scheduler_add_job(
                 .or_else(|| resolved_action_data.get("command"))
                 .and_then(|v| v.as_str());
             if let Some(script_content) = script {
-                validate_shell_command(script_content).map_err(|e| {
-                    Error::Generic(format!("Script rejected at creation: {}", e))
-                })?;
+                validate_shell_command(script_content)
+                    .map_err(|e| Error::Generic(format!("Script rejected at creation: {}", e)))?;
             }
         }
         _ => {}
@@ -642,10 +628,7 @@ pub async fn scheduler_list_jobs(state: State<'_, SchedulerState>) -> Result<Vec
 /// # Returns
 /// `true` if the job was found and paused, `false` if not found or already paused
 #[tauri::command]
-pub async fn scheduler_pause_job(
-    job_id: String,
-    state: State<'_, SchedulerState>,
-) -> Result<bool> {
+pub async fn scheduler_pause_job(job_id: String, state: State<'_, SchedulerState>) -> Result<bool> {
     state.scheduler.pause_job(&job_id)
 }
 
@@ -860,12 +843,10 @@ fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
     // Newlines can inject additional commands since sh -c processes them
     if command.contains('\n') || command.contains('\r') {
         tracing::warn!("[SECURITY][Scheduler] Blocked command containing newline characters");
-        return Err(
-            "Command blocked: contains newline characters. \
+        return Err("Command blocked: contains newline characters. \
              Scheduled commands must be single-line. \
              If you need multi-line scripts, use the Script action type with a script file."
-                .to_string(),
-        );
+            .to_string());
     }
 
     let cmd_lower = command.to_lowercase();
@@ -991,9 +972,7 @@ fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
                 let prev = if i > 0 { chars[i - 1] } else { '\0' };
                 // Skip if this is part of || (already blocked above)
                 if next != '|' && prev != '|' {
-                    tracing::warn!(
-                        "[SECURITY][Scheduler] Blocked command with pipe operator"
-                    );
+                    tracing::warn!("[SECURITY][Scheduler] Blocked command with pipe operator");
                     return Err(
                         "Command blocked: contains pipe operator '|'. \
                          Scheduled commands must be single, simple commands without piping. \
@@ -1023,23 +1002,19 @@ fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
                     "[SECURITY][Scheduler] Blocked command with output redirect operator at position {}",
                     i
                 );
-                return Err(
-                    "Command blocked: contains output redirect operator '>'. \
+                return Err("Command blocked: contains output redirect operator '>'. \
                      Scheduled commands cannot redirect output to files. \
                      If you need to write output, handle it in your application logic."
-                        .to_string(),
-                );
+                    .to_string());
             }
             if ch == '<' {
                 tracing::warn!(
                     "[SECURITY][Scheduler] Blocked command with input redirect operator at position {}",
                     i
                 );
-                return Err(
-                    "Command blocked: contains input redirect operator '<'. \
+                return Err("Command blocked: contains input redirect operator '<'. \
                      Scheduled commands cannot use input redirection."
-                        .to_string(),
-                );
+                    .to_string());
             }
         }
     }
@@ -1056,13 +1031,15 @@ fn validate_shell_command(command: &str) -> std::result::Result<(), String> {
     }
 
     // Block hex/octal escape sequences that could hide payloads
-    if cmd_lower.contains("\\u00") || cmd_lower.contains("\\x0") || cmd_lower.contains("%0a") || cmd_lower.contains("%0d") {
+    if cmd_lower.contains("\\u00")
+        || cmd_lower.contains("\\x0")
+        || cmd_lower.contains("%0a")
+        || cmd_lower.contains("%0d")
+    {
         tracing::warn!("[SECURITY][Scheduler] Blocked command with Unicode/hex escape sequences");
-        return Err(
-            "Command blocked: contains encoded escape sequences. \
+        return Err("Command blocked: contains encoded escape sequences. \
              Use plain text commands only."
-                .to_string(),
-        );
+            .to_string());
     }
 
     Ok(())
@@ -1166,9 +1143,7 @@ fn validate_webhook_url(url: &str) -> std::result::Result<(), String> {
                     || v4.is_unspecified()         // 0.0.0.0
                     || v4.octets()[0] == 169 && v4.octets()[1] == 254 // metadata
             }
-            std::net::IpAddr::V6(v6) => {
-                v6.is_loopback() || v6.is_unspecified()
-            }
+            std::net::IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified(),
         };
 
         if is_private {
@@ -1196,9 +1171,7 @@ fn validate_webhook_url(url: &str) -> std::result::Result<(), String> {
                 "[SECURITY][Scheduler] Blocked webhook to cloud metadata endpoint: {}",
                 url
             );
-            return Err(
-                "Webhook URL blocked: cannot target cloud metadata endpoints.".to_string(),
-            );
+            return Err("Webhook URL blocked: cannot target cloud metadata endpoints.".to_string());
         }
     }
 
@@ -1565,7 +1538,9 @@ async fn dispatch_job_action(
             .map_err(|_| {
                 format!(
                     "Script timed out after {}s for job '{}'. Script length: {} chars",
-                    SHELL_COMMAND_TIMEOUT_SECS, job_name, script.len()
+                    SHELL_COMMAND_TIMEOUT_SECS,
+                    job_name,
+                    script.len()
                 )
             })?
             .map_err(|e| format!("Failed to execute script: {}", e))?;
@@ -1611,10 +1586,7 @@ async fn dispatch_job_action(
                     Ok(())
                 }
                 Err(e) => {
-                    tracing::error!(
-                        "[Scheduler] Daily memory summarization failed: {}",
-                        e
-                    );
+                    tracing::error!("[Scheduler] Daily memory summarization failed: {}", e);
                     Err(format!("Memory summarization failed: {}", e))
                 }
             }
@@ -1627,9 +1599,7 @@ async fn dispatch_job_action(
 
             let memory_state = app_handle
                 .try_state::<crate::sys::commands::memory::MemoryState>()
-                .ok_or_else(|| {
-                    "MemoryState not available. Memory decay skipped.".to_string()
-                })?;
+                .ok_or_else(|| "MemoryState not available. Memory decay skipped.".to_string())?;
 
             match memory_state.manager.decay_memories() {
                 Ok(result) => {
@@ -2154,11 +2124,15 @@ mod tests {
         // These are not in ALLOWED_SHELL_COMMANDS
         let result = validate_shell_command("nmap 127.0.0.1");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not in the scheduler's allowed command list"));
+        assert!(result
+            .unwrap_err()
+            .contains("not in the scheduler's allowed command list"));
 
         let result = validate_shell_command("nc -l 4444");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not in the scheduler's allowed command list"));
+        assert!(result
+            .unwrap_err()
+            .contains("not in the scheduler's allowed command list"));
 
         let result = validate_shell_command("telnet example.com 80");
         assert!(result.is_err());
@@ -2175,7 +2149,9 @@ mod tests {
     fn test_validate_blocks_path_prefixed_disallowed_commands() {
         let result = validate_shell_command("/usr/bin/nmap 127.0.0.1");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not in the scheduler's allowed command list"));
+        assert!(result
+            .unwrap_err()
+            .contains("not in the scheduler's allowed command list"));
     }
 
     #[test]

@@ -12,9 +12,8 @@ use tracing::{debug, error, info, warn};
 pub mod agent_mode;
 pub mod attachments;
 pub mod branching;
-pub mod cloud;
-pub mod transfer;
 pub mod browser_context;
+pub mod cloud;
 pub mod compaction;
 pub mod control;
 pub mod conversation;
@@ -40,6 +39,7 @@ pub mod tool_events;
 pub mod tool_execution;
 pub mod tool_timeouts;
 pub mod tools;
+pub mod transfer;
 pub mod types;
 #[cfg(test)]
 pub use crate::sys::commands::chat::state::should_stop_generation;
@@ -49,7 +49,6 @@ pub use crate::sys::commands::chat::state::{
 pub use branching::*;
 pub use cloud::*;
 pub use compaction::*;
-pub use transfer::*;
 pub use control::*;
 pub use conversation::*;
 pub use cost::*;
@@ -58,6 +57,7 @@ pub use intent::*;
 pub use maintenance::*;
 pub use search::*;
 pub use send_message::*;
+pub use transfer::*;
 pub use types::*;
 
 use crate::sys::commands::chat::agent_mode::{detect_agent_mode, is_explicit_model_selection};

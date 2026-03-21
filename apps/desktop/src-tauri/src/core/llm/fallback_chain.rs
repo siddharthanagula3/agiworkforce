@@ -661,11 +661,7 @@ impl FallbackChain {
                     .rate_limit_tracker
                     .cooldown_remaining(candidate.provider, Some(&candidate.model));
 
-                let provider_id = format!(
-                    "{}:{}",
-                    candidate.provider.as_string(),
-                    candidate.model
-                );
+                let provider_id = format!("{}:{}", candidate.provider.as_string(), candidate.model);
 
                 tracing::debug!(
                     provider = %candidate.provider.as_string(),
@@ -1354,11 +1350,9 @@ mod tests {
             Some("claude-sonnet"),
             None,
         );
-        chain.rate_limit_tracker().record_rate_limit(
-            Provider::OpenAI,
-            Some("gpt-5"),
-            None,
-        );
+        chain
+            .rate_limit_tracker()
+            .record_rate_limit(Provider::OpenAI, Some("gpt-5"), None);
 
         let candidates = vec![
             ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
@@ -1430,11 +1424,9 @@ mod tests {
             Some("claude-sonnet"),
             None,
         );
-        chain.rate_limit_tracker().record_rate_limit(
-            Provider::OpenAI,
-            Some("gpt-5"),
-            None,
-        );
+        chain
+            .rate_limit_tracker()
+            .record_rate_limit(Provider::OpenAI, Some("gpt-5"), None);
 
         let candidates = vec![
             ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
@@ -1474,11 +1466,9 @@ mod tests {
             Some("claude-sonnet"),
             None,
         );
-        chain.rate_limit_tracker().record_rate_limit(
-            Provider::OpenAI,
-            Some("gpt-5"),
-            None,
-        );
+        chain
+            .rate_limit_tracker()
+            .record_rate_limit(Provider::OpenAI, Some("gpt-5"), None);
 
         let candidates = vec![
             ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
@@ -1487,7 +1477,9 @@ mod tests {
 
         let result = chain
             .run_with_fallback(&candidates, |_candidate| async move {
-                Ok::<_, Box<dyn std::error::Error + Send + Sync>>("should not be called".to_string())
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>(
+                    "should not be called".to_string(),
+                )
             })
             .await;
 

@@ -46,7 +46,9 @@ impl BrowserExecutor {
     /// * `automation` - Shared automation service for cross-platform operations.
     ///   Reserved for future use as fallback when CDP is unavailable.
     pub fn new(automation: Arc<AutomationService>) -> Self {
-        Self { _automation: automation }
+        Self {
+            _automation: automation,
+        }
     }
 }
 

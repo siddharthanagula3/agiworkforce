@@ -188,6 +188,7 @@ impl Default for LLMProviderConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelConfig {
+    #[serde(rename = "modelId", alias = "modelName")]
     pub model_name: String,
     pub temperature: f64,
     pub max_tokens: u32,
@@ -382,5 +383,31 @@ mod tests {
         assert_eq!(SettingCategory::from_str("llm"), Some(SettingCategory::Llm));
         assert_eq!(SettingCategory::Llm.as_str(), "llm");
         assert_eq!(SettingCategory::from_str("invalid"), None);
+    }
+
+    #[test]
+    fn model_config_serializes_with_model_id() {
+        let config = ModelConfig {
+            model_name: "gpt-5.4".to_string(),
+            ..Default::default()
+        };
+
+        let value = serde_json::to_value(&config).expect("model config should serialize");
+        assert_eq!(value["modelId"], "gpt-5.4");
+        assert!(value.get("modelName").is_none());
+    }
+
+    #[test]
+    fn model_config_deserializes_legacy_model_name() {
+        let value = serde_json::json!({
+            "modelName": "claude-sonnet-4.6",
+            "temperature": 0.5,
+            "maxTokens": 1024
+        });
+
+        let config: ModelConfig =
+            serde_json::from_value(value).expect("legacy modelName payload should deserialize");
+        assert_eq!(config.model_name, "claude-sonnet-4.6");
+        assert_eq!(config.max_tokens, 1024);
     }
 }

@@ -106,14 +106,16 @@ export function ConnectorApiKeyDialog({
         </div>
 
         <DialogFooter>
-          <button type="button"
+          <button
+            type="button"
             onClick={handleClose}
             className="px-4 py-2 text-sm font-medium rounded-md border border-border
               hover:bg-[#383838] transition-colors"
           >
             Cancel
           </button>
-          <button type="button"
+          <button
+            type="button"
             onClick={handleConnect}
             disabled={!apiKey.trim()}
             className="px-4 py-2 text-sm font-medium rounded-md bg-teal-600 hover:bg-teal-500

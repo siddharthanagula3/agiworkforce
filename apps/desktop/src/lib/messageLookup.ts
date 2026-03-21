@@ -18,7 +18,10 @@ export interface ArtifactOwnerResult {
   artifactIndex: number;
 }
 
-function getConversationMessages(messagesByConversation: MessageGroups, conversationId: string): EnhancedMessage[] {
+function getConversationMessages(
+  messagesByConversation: MessageGroups,
+  conversationId: string,
+): EnhancedMessage[] {
   if (messagesByConversation instanceof Map) {
     return messagesByConversation.get(conversationId) ?? [];
   }
@@ -26,7 +29,9 @@ function getConversationMessages(messagesByConversation: MessageGroups, conversa
   return messagesByConversation?.[conversationId] ?? [];
 }
 
-function getConversationEntries(messagesByConversation: MessageGroups): Array<[string, EnhancedMessage[]]> {
+function getConversationEntries(
+  messagesByConversation: MessageGroups,
+): Array<[string, EnhancedMessage[]]> {
   if (messagesByConversation instanceof Map) {
     return Array.from(messagesByConversation.entries());
   }
@@ -74,7 +79,9 @@ export function findMessageOwningArtifact(
     candidateGroups.push(snapshot.messages);
   }
 
-  for (const [conversationId, messages] of getConversationEntries(snapshot.messagesByConversation)) {
+  for (const [conversationId, messages] of getConversationEntries(
+    snapshot.messagesByConversation,
+  )) {
     if (conversationId === snapshot.activeConversationId) {
       continue;
     }

@@ -22,12 +22,10 @@ describe('streamContentRuntime', () => {
   });
 
   it('parses tool-call arguments and builds a running artifact patch', () => {
-    expect(parseToolArguments('{"prompt":"Generate image","output_path":"/tmp/out.png"}')).toEqual(
-      {
-        prompt: 'Generate image',
-        output_path: '/tmp/out.png',
-      },
-    );
+    expect(parseToolArguments('{"prompt":"Generate image","output_path":"/tmp/out.png"}')).toEqual({
+      prompt: 'Generate image',
+      output_path: '/tmp/out.png',
+    });
 
     expect(
       buildRunningToolArtifactPatch('image.generate', '{"file_path":"src/app.ts"}'),

@@ -108,7 +108,9 @@ fn load_agent(path: &Path) -> Result<AgentDefinition> {
 pub fn find_agent(name: &str) -> Option<AgentDefinition> {
     let agents = discover_agents();
     let name_lower = name.to_lowercase();
-    agents.into_iter().find(|a| a.name.to_lowercase() == name_lower)
+    agents
+        .into_iter()
+        .find(|a| a.name.to_lowercase() == name_lower)
 }
 
 // ---------------------------------------------------------------------------
@@ -270,12 +272,20 @@ pub fn format_agent_list(agents: &[AgentDefinition]) -> String {
             .to_string_lossy()
             .contains(".agiworkforce/agents")
         {
-            if agent.path.to_string_lossy().contains("/.agiworkforce/agents") {
+            if agent
+                .path
+                .to_string_lossy()
+                .contains("/.agiworkforce/agents")
+            {
                 // Could be project or global — check if under home dir
                 let is_global = dirs::home_dir()
                     .map(|h| agent.path.starts_with(h.join(".agiworkforce")))
                     .unwrap_or(false);
-                if is_global { "global" } else { "project" }
+                if is_global {
+                    "global"
+                } else {
+                    "project"
+                }
             } else {
                 "project"
             }

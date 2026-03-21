@@ -619,7 +619,6 @@ Useful as benchmark for polish decisions:
 _Document maintained by AGI Workforce competitive intelligence team._
 _Next review: 2026-06-18 (quarterly) or when a major competitor ships a new feature._
 
-
 ---
 
 # Research Details

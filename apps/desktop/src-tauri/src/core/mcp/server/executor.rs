@@ -356,22 +356,16 @@ impl DesktopMcpServerExecutor {
         // MCP bash commands from external clients must go through the same
         // approval workflow that protects direct user interactions.
         {
-            if let Some(confirmation_state) = self
-                .app_handle
-                .try_state::<crate::sys::commands::tool_confirmation::ToolConfirmationState>(
-                )
+            if let Some(confirmation_state) =
+                self.app_handle
+                    .try_state::<crate::sys::commands::tool_confirmation::ToolConfirmationState>()
             {
                 let guard = confirmation_state.tool_guard();
                 let params = json!({"command": command});
                 if let Err(e) = guard.validate_tool_call("terminal_execute", &params).await {
-                    tracing::warn!(
-                        "[SECURITY][MCP] ToolGuard rejected bash command: {}",
-                        e
-                    );
-                    return Ok(self.outcome_from_error(format!(
-                        "Bash command rejected by ToolGuard: {}",
-                        e
-                    )));
+                    tracing::warn!("[SECURITY][MCP] ToolGuard rejected bash command: {}", e);
+                    return Ok(self
+                        .outcome_from_error(format!("Bash command rejected by ToolGuard: {}", e)));
                 }
             } else {
                 tracing::error!(

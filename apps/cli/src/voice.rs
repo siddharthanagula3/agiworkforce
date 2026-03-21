@@ -74,7 +74,10 @@ pub async fn run_voice_mode(
     voice_lang: &str,
 ) -> Result<()> {
     // Validate language
-    if !SUPPORTED_LANGUAGES.iter().any(|(code, _)| *code == voice_lang) {
+    if !SUPPORTED_LANGUAGES
+        .iter()
+        .any(|(code, _)| *code == voice_lang)
+    {
         let valid: Vec<&str> = SUPPORTED_LANGUAGES.iter().map(|(c, _)| *c).collect();
         bail!(
             "Unsupported voice language '{}'. Supported: {}",
@@ -111,10 +114,7 @@ pub async fn run_voice_mode(
     // Verify audio device availability
     if let Err(e) = check_audio_device() {
         output::print_error(&format!("Audio device error: {:#}", e));
-        eprintln!(
-            "  {}",
-            "Voice mode requires a working microphone.".dimmed()
-        );
+        eprintln!("  {}", "Voice mode requires a working microphone.".dimmed());
         return Ok(());
     }
 
@@ -177,11 +177,7 @@ pub async fn run_voice_mode(
         };
 
         // Show transcribed text and ask for confirmation
-        eprintln!(
-            "  {} {}",
-            "You said:".green().bold(),
-            text.trim()
-        );
+        eprintln!("  {} {}", "You said:".green().bold(), text.trim());
         eprintln!(
             "  {}",
             "[ENTER to send, 'r' to re-record, ESC to discard]".dimmed()
@@ -280,10 +276,7 @@ fn detect_backend() -> TranscriptionBackend {
     }
 
     // Check for local whisper binary
-    if let Ok(output) = std::process::Command::new("which")
-        .arg("whisper")
-        .output()
-    {
+    if let Ok(output) = std::process::Command::new("which").arg("whisper").output() {
         if output.status.success() {
             let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !path.is_empty() {
@@ -459,19 +452,21 @@ fn record_audio() -> Result<Option<AudioRecording>> {
     let err_flag = Arc::new(AtomicBool::new(false));
     let err_flag_cb = Arc::clone(&err_flag);
 
-    let stream = device.build_input_stream(
-        &stream_config,
-        move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            if let Ok(mut buf) = samples_writer.lock() {
-                buf.extend_from_slice(data);
-            }
-        },
-        move |err| {
-            eprintln!("  {}", format!("Audio stream error: {}", err).red());
-            err_flag_cb.store(true, Ordering::Relaxed);
-        },
-        None,
-    ).context("Failed to build audio input stream")?;
+    let stream = device
+        .build_input_stream(
+            &stream_config,
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                if let Ok(mut buf) = samples_writer.lock() {
+                    buf.extend_from_slice(data);
+                }
+            },
+            move |err| {
+                eprintln!("  {}", format!("Audio stream error: {}", err).red());
+                err_flag_cb.store(true, Ordering::Relaxed);
+            },
+            None,
+        )
+        .context("Failed to build audio input stream")?;
 
     stream.play().context("Failed to start audio capture")?;
 
@@ -649,8 +644,8 @@ fn encode_wav(recording: &AudioRecording) -> Result<PathBuf> {
         sample_format: hound::SampleFormat::Int,
     };
 
-    let mut writer = hound::WavWriter::create(&wav_path, spec)
-        .context("Failed to create WAV file")?;
+    let mut writer =
+        hound::WavWriter::create(&wav_path, spec).context("Failed to create WAV file")?;
 
     for &sample in &recording.samples {
         writer
@@ -677,9 +672,7 @@ async fn transcribe(
     let wav_path = encode_wav(recording)?;
 
     let result = match backend {
-        TranscriptionBackend::OpenAiApi => {
-            transcribe_openai_api(&wav_path, language).await
-        }
+        TranscriptionBackend::OpenAiApi => transcribe_openai_api(&wav_path, language).await,
         TranscriptionBackend::LocalBinary(binary_path) => {
             transcribe_local(&wav_path, binary_path, language).await
         }
@@ -696,11 +689,9 @@ async fn transcribe(
 
 /// Transcribe using the OpenAI Whisper API.
 async fn transcribe_openai_api(wav_path: &std::path::Path, language: &str) -> Result<String> {
-    let api_key = std::env::var("OPENAI_API_KEY")
-        .context("OPENAI_API_KEY not set")?;
+    let api_key = std::env::var("OPENAI_API_KEY").context("OPENAI_API_KEY not set")?;
 
-    let file_bytes = std::fs::read(wav_path)
-        .context("Failed to read WAV file for upload")?;
+    let file_bytes = std::fs::read(wav_path).context("Failed to read WAV file for upload")?;
 
     let file_name = wav_path
         .file_name()
@@ -781,8 +772,8 @@ async fn transcribe_local(
     // The local whisper binary writes output to a .txt file next to the .wav
     let txt_path = wav_path.with_extension("txt");
     if txt_path.exists() {
-        let text = std::fs::read_to_string(&txt_path)
-            .context("Failed to read whisper output file")?;
+        let text =
+            std::fs::read_to_string(&txt_path).context("Failed to read whisper output file")?;
         let _ = std::fs::remove_file(&txt_path);
         Ok(text.trim().to_string())
     } else {

@@ -435,8 +435,7 @@ mod tests {
         let calc = CostCalculator::new();
         // ManagedCloud should find gpt-5.4-nano pricing via OpenAI origin
         let cost = calc.calculate(Provider::ManagedCloud, "gpt-5.4-nano", 1_000_000, 1_000_000);
-        let direct_cost =
-            calc.calculate(Provider::OpenAI, "gpt-5.4-nano", 1_000_000, 1_000_000);
+        let direct_cost = calc.calculate(Provider::OpenAI, "gpt-5.4-nano", 1_000_000, 1_000_000);
         assert!(
             (cost - direct_cost).abs() < f64::EPSILON,
             "ManagedCloud cost ({}) must equal direct provider cost ({})",

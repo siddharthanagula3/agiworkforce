@@ -12,6 +12,7 @@
 **Layout**: Full-viewport dark background with centered content. Sidebar (collapsed=icon-only 48px, expanded=~280px) on left. Main area displays greeting + input box + quick action pills.
 
 ### Key Elements
+
 - **Greeting**: Dynamic time-of-day text (e.g., "Golden hour thinking") with an orange/coral starburst icon to the left. Large serif font, centered.
 - **Input Area**: Rounded rectangle container (~620px wide) with:
   - Placeholder text: "How can I help you today?"
@@ -29,7 +30,9 @@
 - **Incognito button**: Top-right corner, ghost/phantom icon. Navigates to `?incognito` mode.
 
 ### "+" Menu (Toggle Menu)
+
 Opens a vertical dropdown with:
+
 1. **Add files or photos** (paperclip icon)
 2. **Take a screenshot** (camera icon)
 3. **Add to project** (folder icon, has submenu arrow >)
@@ -50,22 +53,28 @@ Opens a vertical dropdown with:
 Tooltip on "+" hover: "Add files, connectors, and more"
 
 ### Model Selector Dropdown
+
 Primary models:
+
 - **Opus 4.6** -- "Most capable for ambitious work" (checkmark when selected)
 - **Sonnet 4.6** -- "Most efficient for everyday tasks"
 - **Haiku 4.5** -- "Fastest for quick answers"
 
 Toggle:
+
 - **Extended thinking** -- "Think longer for complex tasks" (blue toggle, ON by default for Opus)
 
 Expandable:
+
 - **More models >** -- reveals:
   - Opus 4.5
   - Opus 3
   - Sonnet 4.5
 
 ### Incognito Mode
+
 **URL**: `https://claude.ai/new?incognito`
+
 - Greeting changes to: "Greetings, whoever you are"
 - Input area has **dotted/dashed border** instead of solid
 - Below input: "Incognito chats aren't saved, added to memory, or used to train models."
@@ -74,6 +83,7 @@ Expandable:
 - Top banner: "Incognito chat" text
 
 ### Design Patterns
+
 - Background: Dark olive/green-brown (`#2a2a23` approximate)
 - Text: Off-white/cream
 - Input container: Semi-transparent dark overlay with subtle border
@@ -90,27 +100,29 @@ Expandable:
 
 ### Sidebar Items (top to bottom)
 
-| Order | Icon | Label | URL | Notes |
-|-------|------|-------|-----|-------|
-| 0 | Sidebar toggle | (top) | - | Squares icon to toggle expand/collapse |
-| 1 | + | New chat | `/new` | Circle with plus |
-| 2 | Magnifying glass | Search | `#` (modal) | Shows `Cmd+K` shortcut when expanded |
-| 3 | Briefcase | Customize | `/customize` | Briefcase with buckle |
-| --- | | | | Visual gap/separator |
-| 4 | Chat bubble | Chats | `/recents` | Speech bubble icon |
-| 5 | Folder | Projects | `/projects` | Folder icon |
-| 6 | Grid of shapes | Artifacts | `/artifacts` | 4-piece grid/puzzle icon |
-| 7 | `</>` | Code | `/code` | Code bracket icon |
-| --- | | | | Visual gap |
-| 8+ | (none) | Recent chats | `/chat/{id}` | List of recent chat titles (truncated) |
+| Order | Icon             | Label        | URL          | Notes                                  |
+| ----- | ---------------- | ------------ | ------------ | -------------------------------------- |
+| 0     | Sidebar toggle   | (top)        | -            | Squares icon to toggle expand/collapse |
+| 1     | +                | New chat     | `/new`       | Circle with plus                       |
+| 2     | Magnifying glass | Search       | `#` (modal)  | Shows `Cmd+K` shortcut when expanded   |
+| 3     | Briefcase        | Customize    | `/customize` | Briefcase with buckle                  |
+| ---   |                  |              |              | Visual gap/separator                   |
+| 4     | Chat bubble      | Chats        | `/recents`   | Speech bubble icon                     |
+| 5     | Folder           | Projects     | `/projects`  | Folder icon                            |
+| 6     | Grid of shapes   | Artifacts    | `/artifacts` | 4-piece grid/puzzle icon               |
+| 7     | `</>`            | Code         | `/code`      | Code bracket icon                      |
+| ---   |                  |              |              | Visual gap                             |
+| 8+    | (none)           | Recent chats | `/chat/{id}` | List of recent chat titles (truncated) |
 
 ### Bottom Section
+
 - **Downloads link**: Down-arrow icon, "Get apps and extensions" (`/downloads`)
 - **User avatar**: Circular avatar with initials "SN", shows name + plan when expanded
   - Expanded shows: "Siddhartha Nagula" + "Max plan"
   - Small up/down chevron arrows for the user menu
 
 ### Expanded Sidebar Sections
+
 - **Recents** header label above recent chat list
 - Recent chats show truncated titles (e.g., "Top AI desktop apps for developer...")
 
@@ -122,6 +134,7 @@ Expandable:
 **Layout**: Modal overlay centered on screen (~600px wide), light background
 
 ### Key Elements
+
 - **Search input**: "Search chats and projects" placeholder, magnifying glass icon, X close button
 - **Results list**: Mixed content types, each row shows:
   - Icon: Folder icon (for projects) or chat bubble icon (for chats)
@@ -132,6 +145,7 @@ Expandable:
 - **Keyboard navigation**: Arrow keys to navigate, Enter to select
 
 ### Design Patterns
+
 - Light/cream modal background (contrasts with dark page)
 - No separate tabs for filtering chats vs projects
 - Results appear instantly as you type (no separate search button)
@@ -144,6 +158,7 @@ Expandable:
 **Layout**: Full-width content area with search bar and card grid
 
 ### Key Elements
+
 - **Header**: "Projects" title + "+ New project" button (top-right)
 - **Search bar**: "Search projects..." placeholder, full-width, blue focus ring
 - **Sort control**: "Sort by: Activity v" dropdown (top-right, below search)
@@ -155,7 +170,9 @@ Expandable:
   - Card has subtle border, rounded corners, hover effect
 
 ### Project Detail View
+
 **URL**: `https://claude.ai/project/{uuid}`
+
 - **Back link**: "<- All projects" at top
 - **Project title**: Large text with "..." menu and star (favorite) icon
 - **Description**: Below title
@@ -176,6 +193,7 @@ Expandable:
 **Layout**: Full-width list view
 
 ### Key Elements
+
 - **Header**: "Chats" title + "+ New chat" button (top-right)
 - **Search bar**: "Search your chats..." placeholder, full-width, blue focus ring
 - **Subtitle**: "Your chats with Claude" + "Select" link (for bulk actions)
@@ -186,6 +204,7 @@ Expandable:
   - Full-width rows, clean divider between items
 
 ### Design Patterns
+
 - Simple, clean list without cards or thumbnails
 - Project attribution shown inline with timestamp
 - "Select" mode for bulk operations (delete, etc.)
@@ -198,6 +217,7 @@ Expandable:
 **Layout**: Gallery-style page with tabs and category filters
 
 ### Key Elements
+
 - **Header**: "Artifacts" title + "+ New artifact" button (top-right)
 - **Tabs**: "Inspiration" | "Your artifacts"
 - **Category filters** (pill buttons, horizontal row):
@@ -213,11 +233,13 @@ Expandable:
   - Cards have subtle border, rounded corners
 
 ### Featured Artifacts (Inspiration tab)
+
 Row 1: Writing editor, PRD To Prototype, Slack Project Insights
 Row 2: Raw Note Transformer, Brainstorm Idea Generator, Flashcards
 Row 3: (more below fold) CodeVerter, etc.
 
 ### Design Patterns
+
 - Visual-first gallery design with large preview images
 - Category-based filtering similar to an app store
 - Dual tab structure separating community/example artifacts from user-created ones
@@ -231,6 +253,7 @@ Row 3: (more below fold) CodeVerter, etc.
 **Layout**: Completely different UI from main Claude chat. Two-panel layout.
 
 ### Key Elements
+
 - **Header**: "Claude Code" text + "Research preview" badge
 - **Left panel** (~40% width):
   - "+ New session" button
@@ -252,6 +275,7 @@ Row 3: (more below fold) CodeVerter, etc.
 - **Bottom banner**: "Try Claude Code on desktop" with "Download" link and X close
 
 ### Design Patterns
+
 - Distinct product within Claude.ai with its own navigation
 - Code-focused UI with diff stats visibility
 - Repository integration prominent
@@ -265,6 +289,7 @@ Row 3: (more below fold) CodeVerter, etc.
 **Layout**: Left nav sub-menu with main content area
 
 ### Main Landing
+
 - **Header**: "Customize" with back arrow
 - **Sub-nav** (left panel):
   - Skills
@@ -276,7 +301,9 @@ Row 3: (more below fold) CodeVerter, etc.
     2. **Create new skills**: "Teach Claude your processes, team norms, and expertise." (document icon)
 
 ### Skills Sub-page
+
 **URL**: `https://claude.ai/customize/skills`
+
 - **Header**: "Skills" with search icon and "+" button
 - **Left panel**: Skill list organized in sections:
   - **My skills** (expandable): Shows user-created skills (e.g., "humanizer" with files: SKILL.md, README.md, WARP.md)
@@ -299,7 +326,9 @@ Row 3: (more below fold) CodeVerter, etc.
   - Shows "Allowed tools" (e.g., "Read,Write,Edit,Grep,Glob,AskUserQuestion")
 
 ### Connectors Sub-page
+
 **URL**: `https://claude.ai/customize/connectors`
+
 - **Header**: "Connectors" with search icon and "+" button
 - **Left panel**: Connector list organized by status:
   - **Web** (connected):
@@ -324,7 +353,9 @@ Row 3: (more below fold) CodeVerter, etc.
 ### Settings Tabs
 
 #### 9a. General (`/settings/general`)
+
 **Sections**:
+
 1. **Profile**:
    - Full name (avatar + text field)
    - "What should Claude call you?" (text field)
@@ -341,7 +372,9 @@ Row 3: (more below fold) CodeVerter, etc.
    - **Voice**: Buttery (selected) | Airy | Mellow | Glassy | Rounded -- card selectors
 
 #### 9b. Account (`/settings/account`)
+
 **Sections**:
+
 1. "Log out of all devices" + "Log out" button
 2. "Delete account" (requires canceling subscription first) + "Delete account" button
 3. "Organization ID" with UUID + copy button
@@ -350,7 +383,9 @@ Row 3: (more below fold) CodeVerter, etc.
    - Shows all active sessions (Chrome, Safari, Claude iOS, Claude Desktop)
 
 #### 9c. Privacy (`/settings/data-privacy-controls`)
+
 **Sections**:
+
 1. **Privacy header**: Shield icon + "Anthropic believes in transparent data practices"
    - Links: Privacy Center, Privacy Policy
    - "How we protect your data >"
@@ -363,7 +398,9 @@ Row 3: (more below fold) CodeVerter, etc.
    - "Help improve Claude" toggle (OFF) -- allow data for training
 
 #### 9d. Billing (`/settings/billing`)
+
 **Sections**:
+
 1. **Plan info**: "Max plan" with icon, "20x more usage than Pro", renewal date, "Adjust plan" button
 2. **Payment**: "Link by Stripe" with green Stripe icon + "Update" button
 3. **Extra usage**:
@@ -375,7 +412,9 @@ Row 3: (more below fold) CodeVerter, etc.
    - Shows invoice history with "View" links
 
 #### 9e. Usage (`/settings/usage`)
+
 **Sections**:
+
 1. **Plan usage limits**:
    - "Current session" progress bar (19% used, resets in 39 min)
 2. **Weekly limits**:
@@ -389,7 +428,9 @@ Row 3: (more below fold) CodeVerter, etc.
    - "$1.50 Current balance" + "Auto-reload off" link + "Buy more" button
 
 #### 9f. Capabilities (`/settings/capabilities`)
+
 **Sections**:
+
 1. **Memory**:
    - "Search and reference chats" toggle (ON) -- search past chats for context
    - "Generate memory from chat history" toggle (ON) -- auto-memory from chats
@@ -411,7 +452,9 @@ Row 3: (more below fold) CodeVerter, etc.
    - "Skills have moved to Customize" banner + "Go to Customize" button
 
 #### 9g. Connectors (`/settings/connectors`)
+
 **Sections**:
+
 1. Banner: "Connectors will move to the new Customize page" + "Go to Customize" button
 2. **Connectors list** with icons, names, and status:
    - Google Drive: Connected
@@ -424,7 +467,9 @@ Row 3: (more below fold) CodeVerter, etc.
 4. Each connector has "..." actions menu
 
 #### 9h. Claude Code (`/settings/claude-code`)
+
 **Sections**:
+
 1. **Gift a week of Claude Code**:
    - Guest pass card with crab mascot (pixel art)
    - "0/3 left" guest passes
@@ -443,6 +488,7 @@ Row 3: (more below fold) CodeVerter, etc.
 **URL**: `https://claude.ai/new`
 
 ### Input Area Anatomy
+
 1. **Text input**: Multi-line textarea, placeholder "How can I help you today?"
 2. **"+" button** (left of toolbar row): Opens attachment/features menu
 3. **Model selector** (right of toolbar row): "Opus 4.6 Extended v" -- dropdown
@@ -450,7 +496,9 @@ Row 3: (more below fold) CodeVerter, etc.
 5. **Send button**: Only appears when text is entered (orange/coral arrow icon)
 
 ### Quick Action Pills (below input)
+
 Horizontally scrollable row of outlined pill buttons:
+
 - `</> Code` -- Code bracket icon
 - `(pen) Write` -- Pencil/edit icon
 - `(grad cap) Learn` -- Graduation cap icon
@@ -467,6 +515,7 @@ These pills likely pre-fill the input with category-specific prompts.
 **Trigger**: Click user avatar/initials (SN) at bottom-left of sidebar
 
 ### Menu Items (top to bottom)
+
 1. **Email**: `siddharthanagula3@gmail.com` (non-clickable, header)
 2. **Settings** -- Gear icon, shortcut `Shift+Cmd+,`
 3. **Language** -- Globe icon, submenu arrow >
@@ -484,6 +533,7 @@ These pills likely pre-fill the input with category-specific prompts.
 ## Design System Summary
 
 ### Color Palette
+
 - **Background**: Dark olive/brown-green (#2a2a23 to #3a3a2f range)
 - **Text primary**: Off-white/cream (#e8e0d4 approximate)
 - **Text secondary**: Muted cream/gray (#a0987e approximate)
@@ -493,12 +543,14 @@ These pills likely pre-fill the input with category-specific prompts.
 - **Red**: High usage progress bars (95%+ fills)
 
 ### Typography
+
 - **Greeting**: Serif font (literary/editorial feel)
 - **UI elements**: Sans-serif (system or custom)
 - **Code/technical**: Monospace font
 - Chat font customizable: Default, Sans, System, Dyslexic friendly
 
 ### Component Patterns
+
 - **Cards**: Rounded corners (~12px), subtle border, slight hover elevation
 - **Buttons**: Outlined/ghost style for secondary, filled for primary
 - **Toggles**: Pill-shaped toggle switches (blue = ON, dark = OFF)
@@ -508,12 +560,14 @@ These pills likely pre-fill the input with category-specific prompts.
 - **Pill filters**: Rounded pill buttons for category selection
 
 ### Layout Patterns
+
 - Collapsible sidebar (icon-only or expanded with labels)
 - Full-width content areas for list views (Chats, Settings)
 - Card grids for gallery views (Projects, Artifacts)
 - Split-panel for detail views (Project detail, Skill editor, Connector detail)
 
 ### Unique Features (Competitive Differentiators)
+
 1. **Incognito mode** -- Built into the main chat with visual differentiation (dotted borders)
 2. **Skills system** -- Custom instructions with file-based structure (SKILL.md), allowed tools, invocation rules
 3. **Memory system** -- Auto-generates from chats, importable from other AI providers

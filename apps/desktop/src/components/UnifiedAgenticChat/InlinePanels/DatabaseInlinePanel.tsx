@@ -71,7 +71,8 @@ const DatabaseInlinePanelComponent: React.FC<DatabaseInlinePanelProps> = memo(
               <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                 Query
               </span>
-              <button type="button"
+              <button
+                type="button"
                 onClick={handleCopyQuery}
                 className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400"
                 title="Copy query"
@@ -111,7 +112,8 @@ const DatabaseInlinePanelComponent: React.FC<DatabaseInlinePanelProps> = memo(
                 <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                   Results
                 </span>
-                <button type="button"
+                <button
+                  type="button"
                   onClick={handleExportCSV}
                   className="text-xs px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400"
                   title="Export as CSV"
@@ -181,7 +183,8 @@ const DatabaseInlinePanelComponent: React.FC<DatabaseInlinePanelProps> = memo(
                     Page {currentPage + 1} of {totalPages}
                   </span>
                   <div className="flex gap-1">
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
                       disabled={currentPage === 0}
                       className="p-1 rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -189,7 +192,8 @@ const DatabaseInlinePanelComponent: React.FC<DatabaseInlinePanelProps> = memo(
                     >
                       <ChevronLeft size={16} />
                     </button>
-                    <button type="button"
+                    <button
+                      type="button"
                       onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
                       disabled={currentPage === totalPages - 1}
                       className="p-1 rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

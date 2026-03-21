@@ -12,13 +12,13 @@ The system runs MCP Apps in **sandboxed iframes** with a structured message prot
 
 ### Core Components
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `McpUIComponent` | `packages/types/mcp-apps.ts` | Single UI element (button, input, chart, etc.) |
-| `McpAppLayout` | `packages/types/mcp-apps.ts` | Container for components + event handlers |
-| `McpAppMessage` | `packages/types/mcp-apps.ts` | Serialized message protocol over postMessage |
-| Frontend host | `apps/desktop/src/components/MCP/MCPAppPanel.tsx` | Renders app iframe, routes events |
-| Tool server | External MCP server | Returns `McpAppLayout` in tool response |
+| Component        | Location                                          | Purpose                                        |
+| ---------------- | ------------------------------------------------- | ---------------------------------------------- |
+| `McpUIComponent` | `packages/types/mcp-apps.ts`                      | Single UI element (button, input, chart, etc.) |
+| `McpAppLayout`   | `packages/types/mcp-apps.ts`                      | Container for components + event handlers      |
+| `McpAppMessage`  | `packages/types/mcp-apps.ts`                      | Serialized message protocol over postMessage   |
+| Frontend host    | `apps/desktop/src/components/MCP/MCPAppPanel.tsx` | Renders app iframe, routes events              |
+| Tool server      | External MCP server                               | Returns `McpAppLayout` in tool response        |
 
 ### Message Flow
 
@@ -46,30 +46,30 @@ Frontend updates iframe with new layout
 
 ```typescript
 interface McpUIComponent {
-  id: string;                    // Stable component ID within app
-  type: string;                  // Component type discriminant
+  id: string; // Stable component ID within app
+  type: string; // Component type discriminant
   props: Record<string, unknown>; // Type-specific properties
   events?: Array<{
-    name: string;                // 'click', 'change', 'submit', etc.
-    handler: string;             // RPC method to call on event
+    name: string; // 'click', 'change', 'submit', etc.
+    handler: string; // RPC method to call on event
   }>;
 }
 ```
 
 ### Built-In Component Types
 
-| Type | Props | Events | Use Case |
-|------|-------|--------|----------|
-| `button` | `label`, `variant`, `disabled` | `click` | Primary actions |
-| `input` | `type`, `placeholder`, `value` | `change`, `submit` | Text/number entry |
-| `select` | `options: {label, value}[]` | `change` | Dropdown selection |
-| `checkbox` | `label`, `checked` | `change` | Boolean toggle |
-| `table` | `columns`, `rows`, `sortable` | `sort`, `select` | Data grid |
-| `chart` | `type`, `data`, `options` | `hover` | Visualization (line, bar, scatter, pie) |
-| `form` | `fields: Field[]` | `submit`, `validate` | Multi-field input |
-| `panel` | `title`, `children` | — | Container / grouping |
-| `text` | `content` | — | Static text / markdown |
-| `progress` | `value`, `max`, `label` | — | Progress indicator |
+| Type       | Props                          | Events               | Use Case                                |
+| ---------- | ------------------------------ | -------------------- | --------------------------------------- |
+| `button`   | `label`, `variant`, `disabled` | `click`              | Primary actions                         |
+| `input`    | `type`, `placeholder`, `value` | `change`, `submit`   | Text/number entry                       |
+| `select`   | `options: {label, value}[]`    | `change`             | Dropdown selection                      |
+| `checkbox` | `label`, `checked`             | `change`             | Boolean toggle                          |
+| `table`    | `columns`, `rows`, `sortable`  | `sort`, `select`     | Data grid                               |
+| `chart`    | `type`, `data`, `options`      | `hover`              | Visualization (line, bar, scatter, pie) |
+| `form`     | `fields: Field[]`              | `submit`, `validate` | Multi-field input                       |
+| `panel`    | `title`, `children`            | —                    | Container / grouping                    |
+| `text`     | `content`                      | —                    | Static text / markdown                  |
+| `progress` | `value`, `max`, `label`        | —                    | Progress indicator                      |
 
 ### Example: Interactive Dashboard
 
@@ -110,10 +110,7 @@ interface McpUIComponent {
 ### Iframe Sandbox Policy
 
 ```html
-<iframe
-  sandbox="allow-scripts allow-popups allow-modals"
-  srcdoc="<html>...</html>"
-/>
+<iframe sandbox="allow-scripts allow-popups allow-modals" srcdoc="<html>...</html>" />
 ```
 
 **Allowed**: Script execution, basic DOM manipulation
@@ -206,15 +203,19 @@ def handle_event(component_id, event_name, event_data):
 ## Example Tools
 
 ### SQLite Query UI
+
 Tool returns interactive query builder with table browser, SQL editor, results grid.
 
 ### Config Wizard
+
 Tool returns step-by-step form with conditional fields, real-time validation, preview pane.
 
 ### Monitoring Dashboard
+
 Tool returns live metrics dashboard with charts, alerts, drill-down capabilities.
 
 ### Data Transformer
+
 Tool returns visual ETL pipeline with drag-and-drop transformations, real-time preview.
 
 ## Future Enhancements

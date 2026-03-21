@@ -165,9 +165,7 @@ async fn execute_read_file(args: &HashMap<String, String>) -> Result<ToolResult>
                 .map(|s| s.saturating_sub(1))
                 .unwrap_or(0)
                 .min(total_lines);
-            let end_idx = end_line
-                .map(|e| e.min(total_lines))
-                .unwrap_or(total_lines);
+            let end_idx = end_line.map(|e| e.min(total_lines)).unwrap_or(total_lines);
 
             if start_idx >= end_idx {
                 return Ok(ToolResult {
@@ -417,7 +415,10 @@ async fn execute_run_command(
                     return Ok(ToolResult {
                         tool_name: "run_command".to_string(),
                         success: false,
-                        output: format!("Command '{}' is permanently denied. Use /permissions reset to clear.", base_cmd),
+                        output: format!(
+                            "Command '{}' is permanently denied. Use /permissions reset to clear.",
+                            base_cmd
+                        ),
                     });
                 }
                 None => {
@@ -465,10 +466,7 @@ async fn execute_run_command(
 
     let result = tokio::time::timeout(
         COMMAND_TIMEOUT,
-        Command::new("sh")
-            .arg("-c")
-            .arg(command)
-            .output(),
+        Command::new("sh").arg("-c").arg(command).output(),
     )
     .await;
 
@@ -537,15 +535,9 @@ async fn execute_search_files(args: &HashMap<String, String>) -> Result<ToolResu
         }
     };
 
-    let path = args
-        .get("path")
-        .map(|s| s.as_str())
-        .unwrap_or(".");
+    let path = args.get("path").map(|s| s.as_str()).unwrap_or(".");
 
-    print_tool_status(
-        "search_files",
-        &format!("Search({}, {})", pattern, path),
-    );
+    print_tool_status("search_files", &format!("Search({}, {})", pattern, path));
 
     // Use grep -rn for recursive search
     let result = tokio::time::timeout(
@@ -610,10 +602,7 @@ async fn execute_search_files(args: &HashMap<String, String>) -> Result<ToolResu
 // ---------------------------------------------------------------------------
 
 async fn execute_list_directory(args: &HashMap<String, String>) -> Result<ToolResult> {
-    let path = args
-        .get("path")
-        .map(|s| s.as_str())
-        .unwrap_or(".");
+    let path = args.get("path").map(|s| s.as_str()).unwrap_or(".");
 
     print_tool_status("list_directory", &format!("List({})", path));
 
@@ -670,7 +659,11 @@ async fn execute_list_directory(args: &HashMap<String, String>) -> Result<ToolRe
     // Sort entries: directories first, then alphabetical
     entries.sort_by(|a, b| {
         let dir_order = |ft: &str| -> u8 {
-            if ft == "dir" { 0 } else { 1 }
+            if ft == "dir" {
+                0
+            } else {
+                1
+            }
         };
         dir_order(a.1)
             .cmp(&dir_order(b.1))
@@ -916,10 +909,10 @@ fn validate_fetch_url(url: &str) -> Result<(), String> {
 
     // Block known cloud metadata endpoints
     const BLOCKED_HOSTS: &[&str] = &[
-        "169.254.169.254",   // AWS/GCP metadata
+        "169.254.169.254", // AWS/GCP metadata
         "metadata.google.internal",
         "metadata.google",
-        "100.100.100.200",   // Alibaba Cloud metadata
+        "100.100.100.200", // Alibaba Cloud metadata
     ];
     if BLOCKED_HOSTS.contains(&host) {
         return Err(format!("Blocked metadata service host: {}", host));
@@ -1009,10 +1002,7 @@ fn strip_html_tags(input: &str) -> String {
     }
 
     // Collapse runs of whitespace into a single space, then trim.
-    let collapsed: String = result
-        .split_whitespace()
-        .collect::<Vec<&str>>()
-        .join(" ");
+    let collapsed: String = result.split_whitespace().collect::<Vec<&str>>().join(" ");
 
     collapsed
 }
@@ -1046,7 +1036,8 @@ fn describe_command(command: &str) -> String {
 
     match base {
         "rm" => {
-            let targets: Vec<&str> = trimmed.split_whitespace()
+            let targets: Vec<&str> = trimmed
+                .split_whitespace()
                 .filter(|a| !a.starts_with('-'))
                 .skip(1)
                 .collect();
@@ -1059,12 +1050,17 @@ fn describe_command(command: &str) -> String {
             }
         }
         "mv" => {
-            let args: Vec<&str> = trimmed.split_whitespace()
+            let args: Vec<&str> = trimmed
+                .split_whitespace()
                 .filter(|a| !a.starts_with('-'))
                 .skip(1)
                 .collect();
             if args.len() >= 2 {
-                format!("Move {} -> {}", args[..args.len()-1].join(", "), args[args.len()-1])
+                format!(
+                    "Move {} -> {}",
+                    args[..args.len() - 1].join(", "),
+                    args[args.len() - 1]
+                )
             } else {
                 format!("Move files: {}", trimmed)
             }
@@ -1140,7 +1136,9 @@ fn truncate_by_lines(lines: &[&str]) -> String {
 /// Save full tool output to disk when truncation occurred.
 /// Returns the path where the output was saved.
 fn save_full_output(tool_name: &str, output: &str) -> Option<String> {
-    let dir = crate::config::CliConfig::config_dir().ok()?.join("tool-output");
+    let dir = crate::config::CliConfig::config_dir()
+        .ok()?
+        .join("tool-output");
     std::fs::create_dir_all(&dir).ok()?;
 
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f");
@@ -1225,7 +1223,11 @@ fn preview_string(s: &str, max_lines: usize) -> String {
         s.to_string()
     } else {
         let preview: Vec<&str> = lines[..max_lines].to_vec();
-        format!("{}... (+{} more lines)", preview.join("\n"), lines.len() - max_lines)
+        format!(
+            "{}... (+{} more lines)",
+            preview.join("\n"),
+            lines.len() - max_lines
+        )
     }
 }
 
@@ -1348,7 +1350,9 @@ mod tests {
         // Build output that exceeds MAX_OUTPUT_BYTES but use enough lines for head+tail
         let big_line = "x".repeat(1024); // 1KB per line
         let line_count = 100; // 100KB total, well over 50KB limit
-        let lines: Vec<String> = (0..line_count).map(|i| format!("{}: {}", i, big_line)).collect();
+        let lines: Vec<String> = (0..line_count)
+            .map(|i| format!("{}: {}", i, big_line))
+            .collect();
         let input = lines.join("\n");
         assert!(input.len() > MAX_OUTPUT_BYTES);
 
@@ -1435,7 +1439,11 @@ mod tests {
         let diff = generate_simple_diff(text, text);
         // Every line should be a context (unchanged) line starting with ' '
         for line in diff.lines() {
-            assert!(line.starts_with(' '), "expected context line, got: {}", line);
+            assert!(
+                line.starts_with(' '),
+                "expected context line, got: {}",
+                line
+            );
         }
         assert_eq!(diff.lines().count(), 3);
     }
@@ -1532,7 +1540,10 @@ mod tests {
     async fn test_read_file_start_line() {
         // Create a temp file with known content
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        let content = (1..=10).map(|i| format!("line {}", i)).collect::<Vec<_>>().join("\n");
+        let content = (1..=10)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
         std::fs::write(tmp.path(), &content).unwrap();
 
         let mut args = HashMap::new();
@@ -1551,7 +1562,10 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_end_line() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        let content = (1..=10).map(|i| format!("line {}", i)).collect::<Vec<_>>().join("\n");
+        let content = (1..=10)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
         std::fs::write(tmp.path(), &content).unwrap();
 
         let mut args = HashMap::new();
@@ -1569,7 +1583,10 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_start_and_end_line() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
-        let content = (1..=20).map(|i| format!("line {}", i)).collect::<Vec<_>>().join("\n");
+        let content = (1..=20)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
         std::fs::write(tmp.path(), &content).unwrap();
 
         let mut args = HashMap::new();
@@ -1583,7 +1600,9 @@ mod tests {
         assert!(result.output.contains("line 10"));
         assert!(result.output.contains("[lines 5-10 of 20 total]"));
         // Should have a hint to read more
-        assert!(result.output.contains("To read more, call read_file with start_line: 11"));
+        assert!(result
+            .output
+            .contains("To read more, call read_file with start_line: 11"));
     }
 
     #[tokio::test]
@@ -1666,8 +1685,11 @@ mod tests {
         // Should fail gracefully with an error message
         assert!(!result.success);
         assert!(
-            result.output.contains("Failed to fetch") || result.output.contains("URL blocked") || result.output.contains("Invalid URL"),
-            "Expected error message, got: {}", result.output
+            result.output.contains("Failed to fetch")
+                || result.output.contains("URL blocked")
+                || result.output.contains("Invalid URL"),
+            "Expected error message, got: {}",
+            result.output
         );
     }
 
@@ -1712,39 +1734,85 @@ mod tests {
 // Codex CLI parity tool handlers
 // ---------------------------------------------------------------------------
 
-async fn execute_apply_patch(args: &HashMap<String, String>, require_confirm: bool) -> Result<ToolResult> {
+async fn execute_apply_patch(
+    args: &HashMap<String, String>,
+    require_confirm: bool,
+) -> Result<ToolResult> {
     let patch = match args.get("patch") {
         Some(p) => p,
-        None => return Ok(ToolResult { tool_name: "apply_patch".into(), success: false, output: "Missing: patch".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "apply_patch".into(),
+                success: false,
+                output: "Missing: patch".into(),
+            })
+        }
     };
     if require_confirm {
-        print_tool_status("apply_patch", &format!("Apply patch ({} lines)", patch.lines().count()));
-        if !Confirm::new().with_prompt("Apply this patch?").default(false).interact().unwrap_or(false) {
-            return Ok(ToolResult { tool_name: "apply_patch".into(), success: false, output: "Denied by user.".into() });
+        print_tool_status(
+            "apply_patch",
+            &format!("Apply patch ({} lines)", patch.lines().count()),
+        );
+        if !Confirm::new()
+            .with_prompt("Apply this patch?")
+            .default(false)
+            .interact()
+            .unwrap_or(false)
+        {
+            return Ok(ToolResult {
+                tool_name: "apply_patch".into(),
+                success: false,
+                output: "Denied by user.".into(),
+            });
         }
     }
     match crate::apply_patch::apply_git_patch(patch, None).await {
         Ok(r) => {
             let mut out = String::new();
-            if !r.applied.is_empty() { out.push_str(&format!("Applied: {}\n", r.applied.join(", "))); }
-            if !r.conflicted.is_empty() { out.push_str(&format!("Conflicted: {}\n", r.conflicted.join(", "))); }
-            Ok(ToolResult { tool_name: "apply_patch".into(), success: r.exit_code == 0, output: out })
+            if !r.applied.is_empty() {
+                out.push_str(&format!("Applied: {}\n", r.applied.join(", ")));
+            }
+            if !r.conflicted.is_empty() {
+                out.push_str(&format!("Conflicted: {}\n", r.conflicted.join(", ")));
+            }
+            Ok(ToolResult {
+                tool_name: "apply_patch".into(),
+                success: r.exit_code == 0,
+                output: out,
+            })
         }
-        Err(e) => Ok(ToolResult { tool_name: "apply_patch".into(), success: false, output: format!("{}", e) }),
+        Err(e) => Ok(ToolResult {
+            tool_name: "apply_patch".into(),
+            success: false,
+            output: format!("{}", e),
+        }),
     }
 }
 
 async fn execute_grep_files(args: &HashMap<String, String>, quiet: bool) -> Result<ToolResult> {
     let pattern = match args.get("pattern") {
         Some(p) => p,
-        None => return Ok(ToolResult { tool_name: "grep_files".into(), success: false, output: "Missing: pattern".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "grep_files".into(),
+                success: false,
+                output: "Missing: pattern".into(),
+            })
+        }
     };
     let path = args.get("path").map(|s| s.as_str()).unwrap_or(".");
     let include = args.get("include");
-    if !quiet { print_tool_status("grep_files", &format!("/{}/{}", pattern, path)); }
+    if !quiet {
+        print_tool_status("grep_files", &format!("/{}/{}", pattern, path));
+    }
     let mut cmd = Command::new("rg");
-    cmd.arg("--line-number").arg("--no-heading").arg("--color=never").arg("--max-count=100");
-    if let Some(g) = include { cmd.arg("--glob").arg(g); }
+    cmd.arg("--line-number")
+        .arg("--no-heading")
+        .arg("--color=never")
+        .arg("--max-count=100");
+    if let Some(g) = include {
+        cmd.arg("--glob").arg(g);
+    }
     cmd.arg(pattern).arg(path);
     match tokio::time::timeout(COMMAND_TIMEOUT, cmd.output()).await {
         Ok(Ok(o)) => {
@@ -1753,33 +1821,82 @@ async fn execute_grep_files(args: &HashMap<String, String>, quiet: bool) -> Resu
                 format!("No matches for: {}", pattern)
             } else if stdout.len() > MAX_OUTPUT_BYTES {
                 let mut end = MAX_OUTPUT_BYTES.min(stdout.len());
-                while !stdout.is_char_boundary(end) { end -= 1; }
+                while !stdout.is_char_boundary(end) {
+                    end -= 1;
+                }
                 format!("{}\n...(truncated)", &stdout[..end])
             } else {
                 stdout
             };
-            Ok(ToolResult { tool_name: "grep_files".into(), success: true, output })
+            Ok(ToolResult {
+                tool_name: "grep_files".into(),
+                success: true,
+                output,
+            })
         }
         Ok(Err(_)) => {
-            let mut fb = Command::new("grep"); fb.arg("-rn").arg("--max-count=100").arg(pattern).arg(path);
+            let mut fb = Command::new("grep");
+            fb.arg("-rn").arg("--max-count=100").arg(pattern).arg(path);
             match fb.output().await {
-                Ok(o) => Ok(ToolResult { tool_name: "grep_files".into(), success: true, output: String::from_utf8_lossy(&o.stdout).to_string() }),
-                Err(e) => Ok(ToolResult { tool_name: "grep_files".into(), success: false, output: format!("{}", e) }),
+                Ok(o) => Ok(ToolResult {
+                    tool_name: "grep_files".into(),
+                    success: true,
+                    output: String::from_utf8_lossy(&o.stdout).to_string(),
+                }),
+                Err(e) => Ok(ToolResult {
+                    tool_name: "grep_files".into(),
+                    success: false,
+                    output: format!("{}", e),
+                }),
             }
         }
-        Err(_) => Ok(ToolResult { tool_name: "grep_files".into(), success: false,
-            output: format!("Search timed out after {} seconds", COMMAND_TIMEOUT.as_secs()) }),
+        Err(_) => Ok(ToolResult {
+            tool_name: "grep_files".into(),
+            success: false,
+            output: format!(
+                "Search timed out after {} seconds",
+                COMMAND_TIMEOUT.as_secs()
+            ),
+        }),
     }
 }
 
 async fn execute_tool_search(args: &HashMap<String, String>) -> Result<ToolResult> {
     let query = match args.get("query") {
         Some(q) => q,
-        None => return Ok(ToolResult { tool_name: "tool_search".into(), success: false, output: "Missing: query".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "tool_search".into(),
+                success: false,
+                output: "Missing: query".into(),
+            })
+        }
     };
-    let max: usize = args.get("max_results").and_then(|s| s.parse().ok()).unwrap_or(10);
-    let builtins: Vec<String> = ["read_file","write_file","edit_file","run_command","search_files","list_directory","web_search","web_fetch","apply_patch","grep_files","task"].iter().map(|s| s.to_string()).collect();
+    let max: usize = args
+        .get("max_results")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10);
+    let builtins: Vec<String> = [
+        "read_file",
+        "write_file",
+        "edit_file",
+        "run_command",
+        "search_files",
+        "list_directory",
+        "web_search",
+        "web_fetch",
+        "apply_patch",
+        "grep_files",
+        "task",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
     let disc = crate::plugins::build_discoverable_tools(&builtins, &[], &[]);
     let results = crate::tool_search::search_tools(query, &disc, max);
-    Ok(ToolResult { tool_name: "tool_search".into(), success: true, output: crate::tool_search::format_search_results(&results) })
+    Ok(ToolResult {
+        tool_name: "tool_search".into(),
+        success: true,
+        output: crate::tool_search::format_search_results(&results),
+    })
 }

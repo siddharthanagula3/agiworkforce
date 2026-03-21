@@ -2,6 +2,41 @@ import { useEffect } from 'react';
 import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { isTauri } from '../lib/tauri-mock';
 
+const ALLOWED_DEEP_LINK_SCHEME = 'agiworkforce:';
+const ALLOWED_MCP_OAUTH_PROVIDERS = new Set([
+  'github',
+  'google',
+  'slack',
+  'notion',
+  'figma',
+  'microsoft',
+  'atlassian',
+]);
+
+export type ParsedDeepLink =
+  | {
+      kind: 'auth-callback';
+      detail: Record<string, string>;
+    }
+  | {
+      kind: 'mcp-oauth-callback';
+      detail: {
+        provider: string;
+        code: string;
+        state: string;
+        url: string;
+      };
+    }
+  | {
+      kind: 'mcp-oauth-error';
+      detail: {
+        provider: string;
+        error: string;
+        error_description: string;
+        url: string;
+      };
+    };
+
 export function useDeepLink() {
   useEffect(() => {
     if (!isTauri) return;
@@ -42,9 +77,17 @@ export function useDeepLink() {
   }, []);
 }
 
-function handleDeepLink(url: string) {
+export function normalizeDeepLinkPath(parsed: URL): string {
+  const route = `${parsed.host ? `/${parsed.host}` : ''}${parsed.pathname || '/'}`;
+  return route.replace(/\/{2,}/g, '/');
+}
+
+export function parseDeepLink(url: string): ParsedDeepLink | null {
   try {
     const parsed = new URL(url);
+    if (parsed.protocol !== ALLOWED_DEEP_LINK_SCHEME) {
+      return null;
+    }
 
     // Extract params from query string
     const queryParams = Object.fromEntries(parsed.searchParams.entries());
@@ -59,84 +102,124 @@ function handleDeepLink(url: string) {
     }
 
     const allParams = { ...queryParams, ...hashParams };
+    const normalizedPathname = normalizeDeepLinkPath(parsed);
 
     // Check for Supabase auth callback (OAuth2 PKCE flow)
-    // Pattern: agiworkforce://auth/callback?code=AUTH_CODE_HERE
-    // Tauri deep links may produce double slashes: agiworkforce://auth/callback → pathname = //auth/callback
-    const normalizedPathname = parsed.pathname.replace(/^\/\//, '/');
     if (normalizedPathname === '/auth/callback') {
-      const code = parsed.searchParams.get('code');
-      if (code) {
-        (async () => {
-          try {
-            const { supabaseAuth } = await import('../services/supabaseAuth');
-            await supabaseAuth.exchangeCodeForSession(code);
-          } catch (error) {
-            console.error('[DeepLink] Auth callback exchange failed:', error);
-          }
-        })();
-      } else {
-        console.warn('[DeepLink] Auth callback received without code param');
+      if (!allParams['code'] && !allParams['access_token'] && !allParams['refresh_token']) {
+        return null;
       }
-      return; // Auth callback handled, don't process as other deep link types
+      return {
+        kind: 'auth-callback',
+        detail: {
+          url,
+          ...allParams,
+        },
+      };
     }
 
     // Check for MCP OAuth callback URLs
     // Pattern: agiworkforce://oauth/mcp/{provider}?code={code}&state={state}
     // Or error: agiworkforce://oauth/mcp/{provider}?error={error}&error_description={description}
-    const mcpOAuthMatch = parsed.pathname.match(/^\/oauth\/mcp\/([a-zA-Z0-9_-]+)$/);
+    const mcpOAuthMatch = normalizedPathname.match(/^\/oauth\/mcp\/([a-zA-Z0-9_-]+)$/);
     if (mcpOAuthMatch) {
-      const provider = mcpOAuthMatch[1];
+      const provider = mcpOAuthMatch[1]!.toLowerCase();
+      if (!ALLOWED_MCP_OAUTH_PROVIDERS.has(provider)) {
+        return null;
+      }
       const error = allParams['error'];
       const errorDescription = allParams['error_description'];
       const code = allParams['code'];
       const state = allParams['state'];
 
       if (error) {
-        // Handle OAuth error callback
-        window.dispatchEvent(
-          new CustomEvent('mcp-oauth-error', {
-            detail: {
-              provider,
-              error,
-              error_description: errorDescription || '',
-            },
-          }),
-        );
-      } else if (code && state) {
-        // Handle successful OAuth callback
-        window.dispatchEvent(
-          new CustomEvent('mcp-oauth-callback', {
-            detail: {
-              provider,
-              code,
-              state,
-            },
-          }),
-        );
-      } else {
-        console.warn('[DeepLink] MCP OAuth callback missing required params:', { code, state });
-      }
-      return; // MCP OAuth handled, don't process as regular deep link
-    }
-
-    // Check for common auth tokens
-    const access_token = allParams['access_token'];
-    const refresh_token = allParams['refresh_token'];
-    const type = allParams['type'];
-    const code = allParams['code'];
-
-    if (access_token || code || type || refresh_token) {
-      window.dispatchEvent(
-        new CustomEvent('agi-deep-link', {
+        return {
+          kind: 'mcp-oauth-error',
           detail: {
+            provider,
+            error,
+            error_description: errorDescription || '',
             url,
-            ...allParams,
           },
-        }),
-      );
+        };
+      }
+
+      if (code && state) {
+        return {
+          kind: 'mcp-oauth-callback',
+          detail: {
+            provider,
+            code,
+            state,
+            url,
+          },
+        };
+      }
+
+      return null;
     }
+
+    return null;
   } catch (e) {
     console.error('[DeepLink] Invalid URL:', url, e);
+    return null;
   }
+}
+
+function handleDeepLink(url: string) {
+  const parsedLink = parseDeepLink(url);
+  if (!parsedLink) {
+    return;
+  }
+
+  if (parsedLink.kind === 'auth-callback') {
+    const code = parsedLink.detail['code'];
+    if (code) {
+      (async () => {
+        try {
+          const { supabaseAuth } = await import('../services/supabaseAuth');
+          await supabaseAuth.exchangeCodeForSession(code);
+        } catch (error) {
+          console.error('[DeepLink] Auth callback exchange failed:', error);
+        }
+      })();
+    }
+
+    window.dispatchEvent(
+      new CustomEvent('agi-deep-link', {
+        detail: parsedLink.detail,
+      }),
+    );
+    return;
+  }
+
+  if (parsedLink.kind === 'mcp-oauth-error') {
+    window.dispatchEvent(
+      new CustomEvent('mcp-oauth-error', {
+        detail: parsedLink.detail,
+      }),
+    );
+    window.dispatchEvent(
+      new CustomEvent('agi-deep-link', {
+        detail: parsedLink.detail,
+      }),
+    );
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent('mcp-oauth-callback', {
+      detail: parsedLink.detail,
+    }),
+  );
+  window.dispatchEvent(
+    new CustomEvent('agi-deep-link', {
+      detail: parsedLink.detail,
+    }),
+  );
+}
+
+/** @deprecated Use `parseDeepLink` for validation before dispatching events. */
+export function handleDeepLinkForTests(url: string) {
+  handleDeepLink(url);
 }

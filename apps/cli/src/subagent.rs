@@ -225,8 +225,7 @@ impl SubagentManager {
                         }
                         Err(e) => {
                             let err_msg = format!("{:#}", e);
-                            *task_status.write().await =
-                                SubagentStatus::Failed(err_msg.clone());
+                            *task_status.write().await = SubagentStatus::Failed(err_msg.clone());
 
                             eprintln!(
                                 "  {} Subagent {} failed: {}",
@@ -309,7 +308,11 @@ impl SubagentManager {
                 Ok(())
             } else {
                 let status_display = format!("{}", *status);
-                bail!("Subagent '{}' is not running (status: {})", id, status_display)
+                bail!(
+                    "Subagent '{}' is not running (status: {})",
+                    id,
+                    status_display
+                )
             }
         } else {
             bail!("Subagent '{}' not found", id)
@@ -323,12 +326,7 @@ impl SubagentManager {
             let mut entries = self.entries.write().await;
             entries
                 .values_mut()
-                .filter_map(|entry| {
-                    entry
-                        .handle
-                        .take()
-                        .map(|h| (entry.id.clone(), h))
-                })
+                .filter_map(|entry| entry.handle.take().map(|h| (entry.id.clone(), h)))
                 .collect()
         };
 
@@ -540,8 +538,7 @@ mod tests {
 
     #[test]
     fn test_extract_modified_files_write() {
-        let output =
-            "Some output\nSuccessfully wrote 10 lines (200 bytes) to /tmp/foo.rs\nDone";
+        let output = "Some output\nSuccessfully wrote 10 lines (200 bytes) to /tmp/foo.rs\nDone";
         let files = extract_modified_files(output);
         assert_eq!(files, vec!["/tmp/foo.rs"]);
     }

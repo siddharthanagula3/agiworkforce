@@ -192,6 +192,11 @@ impl SecretManager {
         decrypt_secret(&encryption_key, &encrypted).map_err(SecretError::EncryptionError)
     }
 
+    /// Retrieve an application secret from encrypted storage.
+    pub fn get_secret(&self, key: &str) -> Result<String, SecretError> {
+        self.get_secret_from_database(key)
+    }
+
     /// Check whether an encrypted secret exists for the provided key.
     pub fn has_secret(&self, key: &str) -> Result<bool, SecretError> {
         let conn = self.db_conn.lock().map_err(|_| {

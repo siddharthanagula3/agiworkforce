@@ -96,9 +96,7 @@ beforeEach(() => {
 describe('2xx responses', () => {
   it('returns parsed JSON from a successful GET', async () => {
     const responseBody = { data: 'hello' };
-    jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(makeResponse(200, responseBody));
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(200, responseBody));
 
     const result = await api.get<typeof responseBody>('/api/test');
 
@@ -321,9 +319,7 @@ describe('HTTP method helpers', () => {
   });
 
   it('api.delete sends method=DELETE', async () => {
-    const fetchSpy = jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(makeResponse(204, {}));
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(204, {}));
 
     await api.delete('/api/items/1');
 

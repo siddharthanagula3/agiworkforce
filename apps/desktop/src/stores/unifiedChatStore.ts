@@ -180,7 +180,8 @@ function normalizeActionLogUpdates(
   chatState: ChatStateSnapshot,
   existingEntry?: ActionLogEntry,
 ): Partial<ActionLogEntry> {
-  const existingMessageId = updates.metadata?.['messageId'] ?? existingEntry?.metadata?.['messageId'];
+  const existingMessageId =
+    updates.metadata?.['messageId'] ?? existingEntry?.metadata?.['messageId'];
   if (typeof existingMessageId === 'string' && existingMessageId.length > 0) {
     return {
       ...updates,
@@ -213,7 +214,9 @@ function normalizeApprovalRequest(
 ): ApprovalRequestInput {
   const existingMessageId =
     request.messageId ??
-    (typeof request.details?.['messageId'] === 'string' ? (request.details['messageId'] as string) : undefined);
+    (typeof request.details?.['messageId'] === 'string'
+      ? (request.details['messageId'] as string)
+      : undefined);
 
   if (existingMessageId && existingMessageId.length > 0) {
     return {
@@ -730,9 +733,8 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
       toolState.addActionLogEntry(normalizeActionLogEntry(entry, useChatStore.getState())),
     updateActionLogEntry: (id, updates) => {
       const existingEntry =
-        useToolStore
-          .getState()
-          .actionLog.find((item) => item.id === id || item.actionId === id) ?? undefined;
+        useToolStore.getState().actionLog.find((item) => item.id === id || item.actionId === id) ??
+        undefined;
       toolState.updateActionLogEntry(
         id,
         normalizeActionLogUpdates(updates, useChatStore.getState(), existingEntry),

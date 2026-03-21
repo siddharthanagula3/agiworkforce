@@ -161,9 +161,7 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let case_insensitive = args
-            .get("case_insensitive")
-            .and_then(|v| v.as_bool());
+        let case_insensitive = args.get("case_insensitive").and_then(|v| v.as_bool());
 
         let output_mode = args
             .get("output_mode")
@@ -201,7 +199,10 @@ impl ToolExecutor {
                         ("pattern".to_string(), json!(pattern)),
                         ("root".to_string(), json!(root)),
                         ("match_count".to_string(), json!(match_count)),
-                        ("output_mode".to_string(), json!(output_mode.unwrap_or_else(|| "content".to_string()))),
+                        (
+                            "output_mode".to_string(),
+                            json!(output_mode.unwrap_or_else(|| "content".to_string())),
+                        ),
                     ]),
                 })
             }
@@ -250,12 +251,8 @@ impl ToolExecutor {
             .and_then(|v| v.as_u64())
             .map(|n| n as usize);
 
-        match crate::sys::commands::code_search::glob_search(
-            pattern.clone(),
-            root.clone(),
-            limit,
-        )
-        .await
+        match crate::sys::commands::code_search::glob_search(pattern.clone(), root.clone(), limit)
+            .await
         {
             Ok(result) => {
                 let match_count = result.matches.len();

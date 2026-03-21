@@ -52,6 +52,7 @@ export default [
       '.opencode/**',
       '.codex/**',
       '.cursor/**',
+      '**/.vercel/**',
     ],
   },
 

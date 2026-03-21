@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 // Lazy loader with guard
 
@@ -26,18 +27,19 @@ async function getAuthToken(): Promise<string | null> {
  */
 // Updated: Jan 17th 2026 - Added authorization header
 export async function openBillingPortal(customerId: string): Promise<void> {
+  void customerId;
   const authToken = await getAuthToken();
   if (!authToken) {
     throw new Error('User not authenticated. Please log in to access billing.');
   }
 
-  const response = await fetch('/.netlify/functions/payments/get-billing-portal', {
+  const response = await fetch('/api/portal', {
     method: 'POST',
-    headers: {
+    headers: await addCsrfHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${authToken}`,
-    },
-    body: JSON.stringify({ customerId }),
+    }),
+    body: JSON.stringify({}),
   });
 
   if (!response.ok) {
@@ -112,19 +114,25 @@ async function upgradeToPlan(data: {
   plan: 'pro' | 'max';
   billingPeriod?: 'monthly' | 'yearly';
 }): Promise<void> {
+  void data.userId;
+  void data.userEmail;
   const authToken = await getAuthToken();
   if (!authToken) {
     throw new Error('User not authenticated. Please log in to upgrade.');
   }
 
-  // Call Netlify function to create subscription checkout session
-  const response = await fetch('/.netlify/functions/payments/create-pro-subscription', {
+  const billingInterval = data.billingPeriod === 'yearly' ? 'annual' : 'monthly';
+
+  const response = await fetch('/api/checkout', {
     method: 'POST',
-    headers: {
+    headers: await addCsrfHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${authToken}`,
-    },
-    body: JSON.stringify(data),
+    }),
+    body: JSON.stringify({
+      plan: data.plan,
+      billingInterval,
+    }),
   });
 
   if (!response.ok) {

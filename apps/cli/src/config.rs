@@ -197,8 +197,7 @@ impl CliConfig {
             return Ok(Self::default());
         }
 
-        let contents =
-            std::fs::read_to_string(&path).context("Failed to read config file")?;
+        let contents = std::fs::read_to_string(&path).context("Failed to read config file")?;
         let mut config: CliConfig =
             toml::from_str(&contents).context("Failed to parse config.toml")?;
         config.source.global_path = Some(path);
@@ -289,12 +288,10 @@ impl CliConfig {
     /// Write the current config to disk, creating the directory if needed.
     pub fn save(&self) -> Result<()> {
         let dir = Self::config_dir()?;
-        std::fs::create_dir_all(&dir)
-            .context("Failed to create config directory")?;
+        std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
 
         let path = Self::config_path()?;
-        let contents =
-            toml::to_string_pretty(self).context("Failed to serialize config")?;
+        let contents = toml::to_string_pretty(self).context("Failed to serialize config")?;
         std::fs::write(&path, contents).context("Failed to write config file")?;
         Ok(())
     }
@@ -308,10 +305,7 @@ impl CliConfig {
 
     /// Get the base URL for a provider, if configured.
     pub fn base_url(&self, provider: &str) -> Option<String> {
-        self.providers
-            .get(provider)?
-            .base_url
-            .clone()
+        self.providers.get(provider)?.base_url.clone()
     }
 
     /// Display the config as a formatted string for --config output.
@@ -338,7 +332,10 @@ impl CliConfig {
         if self.source.env_overrides.is_empty() {
             out.push_str("  Env:     none\n");
         } else {
-            out.push_str(&format!("  Env:     {}\n", self.source.env_overrides.join(", ")));
+            out.push_str(&format!(
+                "  Env:     {}\n",
+                self.source.env_overrides.join(", ")
+            ));
         }
 
         out.push('\n');
@@ -352,7 +349,10 @@ impl CliConfig {
             out.push_str(&format!("Temperature: {}\n", temp));
         }
         if !self.default.fallback_chain.is_empty() {
-            out.push_str(&format!("Fallback:   {}\n", self.default.fallback_chain.join(" -> ")));
+            out.push_str(&format!(
+                "Fallback:   {}\n",
+                self.default.fallback_chain.join(" -> ")
+            ));
         }
         if let Some(ref fast) = self.default.fast_model {
             out.push_str(&format!("Fast model: {}\n", fast));
@@ -369,10 +369,7 @@ impl CliConfig {
             } else {
                 "no key needed".to_string()
             };
-            let url = pc
-                .base_url
-                .as_deref()
-                .unwrap_or("default");
+            let url = pc.base_url.as_deref().unwrap_or("default");
             out.push_str(&format!(
                 "  {:<12} key: {:<35} url: {}\n",
                 name, key_status, url
@@ -397,10 +394,7 @@ impl CliConfig {
         }
         if let Some(temp) = self.default.temperature {
             if !(0.0..=1.0).contains(&temp) {
-                bail!(
-                    "temperature must be between 0.0 and 1.0, got {}",
-                    temp
-                );
+                bail!("temperature must be between 0.0 and 1.0, got {}", temp);
             }
         }
         Ok(())
@@ -487,19 +481,25 @@ impl CliConfig {
         if let Ok(model) = std::env::var("AGIWORKFORCE_MODEL") {
             if !model.is_empty() {
                 self.default.model = model;
-                self.source.env_overrides.push("AGIWORKFORCE_MODEL".to_string());
+                self.source
+                    .env_overrides
+                    .push("AGIWORKFORCE_MODEL".to_string());
             }
         }
         if let Ok(provider) = std::env::var("AGIWORKFORCE_PROVIDER") {
             if !provider.is_empty() {
                 self.default.provider = provider;
-                self.source.env_overrides.push("AGIWORKFORCE_PROVIDER".to_string());
+                self.source
+                    .env_overrides
+                    .push("AGIWORKFORCE_PROVIDER".to_string());
             }
         }
         if let Ok(tokens_str) = std::env::var("AGIWORKFORCE_MAX_TOKENS") {
             if let Ok(tokens) = tokens_str.parse::<u32>() {
                 self.default.max_tokens = tokens;
-                self.source.env_overrides.push("AGIWORKFORCE_MAX_TOKENS".to_string());
+                self.source
+                    .env_overrides
+                    .push("AGIWORKFORCE_MAX_TOKENS".to_string());
             }
         }
     }
@@ -654,10 +654,7 @@ mod tests {
         assert!(deserialized.providers.contains_key("custom"));
         let custom = deserialized.providers.get("custom").unwrap();
         assert_eq!(custom.api_key_env.as_deref(), Some("CUSTOM_KEY"));
-        assert_eq!(
-            custom.base_url.as_deref(),
-            Some("http://localhost:9999")
-        );
+        assert_eq!(custom.base_url.as_deref(), Some("http://localhost:9999"));
     }
 
     #[test]
@@ -691,10 +688,7 @@ mod tests {
     fn test_config_path_is_toml_inside_config_dir() {
         let path = CliConfig::config_path().unwrap();
         assert!(path.is_absolute());
-        assert_eq!(
-            path.file_name().unwrap().to_str().unwrap(),
-            "config.toml"
-        );
+        assert_eq!(path.file_name().unwrap().to_str().unwrap(), "config.toml");
         assert_eq!(path.parent().unwrap(), CliConfig::config_dir().unwrap());
     }
 
@@ -722,7 +716,12 @@ mod tests {
         let config = CliConfig::default();
         let out = config.display();
         for provider in &[
-            "anthropic", "openai", "google", "ollama", "mistral", "xai",
+            "anthropic",
+            "openai",
+            "google",
+            "ollama",
+            "mistral",
+            "xai",
             "deepseek",
         ] {
             assert!(
@@ -983,8 +982,14 @@ max_tokens = 2048
         std::env::set_var("AGIWORKFORCE_PROVIDER", "openai");
         config.merge_env_overrides();
 
-        assert!(config.source.env_overrides.contains(&"AGIWORKFORCE_MODEL".to_string()));
-        assert!(config.source.env_overrides.contains(&"AGIWORKFORCE_PROVIDER".to_string()));
+        assert!(config
+            .source
+            .env_overrides
+            .contains(&"AGIWORKFORCE_MODEL".to_string()));
+        assert!(config
+            .source
+            .env_overrides
+            .contains(&"AGIWORKFORCE_PROVIDER".to_string()));
         assert_eq!(config.source.env_overrides.len(), 2);
 
         std::env::remove_var("AGIWORKFORCE_MODEL");
@@ -1046,8 +1051,7 @@ max_tokens = 2048
     #[test]
     fn test_display_shows_project_path() {
         let mut config = CliConfig::default();
-        config.source.project_path =
-            Some(PathBuf::from("/my/project/.agiworkforce/config.toml"));
+        config.source.project_path = Some(PathBuf::from("/my/project/.agiworkforce/config.toml"));
 
         let out = config.display();
         assert!(
@@ -1059,8 +1063,7 @@ max_tokens = 2048
     #[test]
     fn test_display_shows_global_path_when_loaded() {
         let mut config = CliConfig::default();
-        config.source.global_path =
-            Some(PathBuf::from("/home/user/.agiworkforce/config.toml"));
+        config.source.global_path = Some(PathBuf::from("/home/user/.agiworkforce/config.toml"));
 
         let out = config.display();
         assert!(
@@ -1127,7 +1130,10 @@ max_tokens = 2048
         config.source.env_overrides = vec!["FOO".to_string()];
 
         let serialized = toml::to_string_pretty(&config).unwrap();
-        assert!(!serialized.contains("source"), "source should be excluded from TOML output");
+        assert!(
+            !serialized.contains("source"),
+            "source should be excluded from TOML output"
+        );
         assert!(!serialized.contains("global_path"));
         assert!(!serialized.contains("project_path"));
         assert!(!serialized.contains("env_overrides"));
@@ -1151,7 +1157,10 @@ max_tokens = 2048
     #[test]
     fn test_get_value_model() {
         let config = CliConfig::default();
-        assert_eq!(config.get_value("model"), Some("claude-opus-4-6".to_string()));
+        assert_eq!(
+            config.get_value("model"),
+            Some("claude-opus-4-6".to_string())
+        );
     }
 
     #[test]
@@ -1163,16 +1172,29 @@ max_tokens = 2048
     #[test]
     fn test_set_get_fallback_chain() {
         let mut config = CliConfig::default();
-        config.set_value("fallback-chain", "gpt-4o, gemini-2.0-flash").unwrap();
-        assert_eq!(config.default.fallback_chain, vec!["gpt-4o", "gemini-2.0-flash"]);
-        assert_eq!(config.get_value("fallback-chain"), Some("gpt-4o,gemini-2.0-flash".to_string()));
+        config
+            .set_value("fallback-chain", "gpt-4o, gemini-2.0-flash")
+            .unwrap();
+        assert_eq!(
+            config.default.fallback_chain,
+            vec!["gpt-4o", "gemini-2.0-flash"]
+        );
+        assert_eq!(
+            config.get_value("fallback-chain"),
+            Some("gpt-4o,gemini-2.0-flash".to_string())
+        );
     }
 
     #[test]
     fn test_set_get_fast_model() {
         let mut config = CliConfig::default();
-        config.set_value("fast-model", "claude-haiku-4-5-20251001").unwrap();
-        assert_eq!(config.get_value("fast-model"), Some("claude-haiku-4-5-20251001".to_string()));
+        config
+            .set_value("fast-model", "claude-haiku-4-5-20251001")
+            .unwrap();
+        assert_eq!(
+            config.get_value("fast-model"),
+            Some("claude-haiku-4-5-20251001".to_string())
+        );
     }
 
     #[test]
@@ -1182,7 +1204,10 @@ max_tokens = 2048
         let serialized = toml::to_string_pretty(&config).unwrap();
         assert!(serialized.contains("fallback_chain"));
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();
-        assert_eq!(deserialized.default.fallback_chain, vec!["gpt-4o", "gemini-2.0-flash"]);
+        assert_eq!(
+            deserialized.default.fallback_chain,
+            vec!["gpt-4o", "gemini-2.0-flash"]
+        );
     }
 
     #[test]

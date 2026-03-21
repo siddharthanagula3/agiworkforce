@@ -7,13 +7,7 @@
 import { useCallback } from 'react';
 import { View, Pressable, FlatList } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
-import {
-  MessageSquare,
-  CheckCircle2,
-  Pause,
-  Zap,
-  ChevronRight,
-} from 'lucide-react-native';
+import { MessageSquare, CheckCircle2, Pause, Zap, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -82,17 +76,17 @@ function ThreadRow({ thread, onPress }: ThreadRowProps) {
   const hasUnread = thread.unreadCount > 0;
 
   return (
-    <Animated.View
-      entering={FadeIn.duration(200)}
-      layout={LinearTransition.springify()}
-    >
+    <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.springify()}>
       <Pressable
         onPress={handlePress}
         accessibilityLabel={`Thread: ${thread.title}, status: ${thread.status}`}
         accessibilityRole="button"
         accessibilityHint="Tap to open thread"
       >
-        <Card variant={hasUnread ? 'elevated' : 'default'} className={hasUnread ? 'border border-teal-500/20' : ''}>
+        <Card
+          variant={hasUnread ? 'elevated' : 'default'}
+          className={hasUnread ? 'border border-teal-500/20' : ''}
+        >
           <View className="flex-row items-start gap-3">
             {/* Icon container */}
             <View
@@ -112,10 +106,7 @@ function ThreadRow({ thread, onPress }: ThreadRowProps) {
             {/* Content */}
             <View className="flex-1 min-w-0">
               <View className="flex-row items-center gap-2 mb-0.5">
-                <Text
-                  className="text-sm font-semibold text-white flex-1"
-                  numberOfLines={1}
-                >
+                <Text className="text-sm font-semibold text-white flex-1" numberOfLines={1}>
                   {thread.title}
                 </Text>
                 {hasUnread && (
@@ -128,10 +119,7 @@ function ThreadRow({ thread, onPress }: ThreadRowProps) {
               </View>
 
               {preview ? (
-                <Text
-                  className="text-xs text-white/50 leading-4 mb-1"
-                  numberOfLines={2}
-                >
+                <Text className="text-xs text-white/50 leading-4 mb-1" numberOfLines={2}>
                   {preview}
                 </Text>
               ) : (
@@ -192,9 +180,7 @@ export function ThreadList({ onThreadPress }: ThreadListProps) {
   const threads = useCrossDeviceStore((s) => s.threads);
 
   const renderItem = useCallback(
-    ({ item }: { item: CrossDeviceThread }) => (
-      <ThreadRow thread={item} onPress={onThreadPress} />
-    ),
+    ({ item }: { item: CrossDeviceThread }) => <ThreadRow thread={item} onPress={onThreadPress} />,
     [onThreadPress],
   );
 

@@ -8,22 +8,22 @@
 
 ## 1. Project Overview
 
-| Attribute | Value |
-|-----------|-------|
-| **Name** | OpenCode |
-| **Tagline** | "The open source coding agent" |
-| **Repo** | github.com/sst/opencode (also github.com/anomalyco/opencode) |
-| **Website** | opencode.ai |
-| **License** | MIT |
-| **Stars** | 125,526 |
-| **Forks** | 13,226 |
-| **Open Issues** | 7,190 |
-| **Created** | 2025-04-30 |
-| **Latest Release** | v1.2.27 (2026-03-16) -- shipping ~2x/week |
-| **Primary Language** | TypeScript (54.9%), MDX docs (40.9%), Rust (0.5% -- Tauri shell) |
-| **Runtime** | Bun |
-| **Package Manager** | Bun workspaces (monorepo) |
-| **Monthly Active Devs** | ~2.5M (reported) |
+| Attribute               | Value                                                            |
+| ----------------------- | ---------------------------------------------------------------- |
+| **Name**                | OpenCode                                                         |
+| **Tagline**             | "The open source coding agent"                                   |
+| **Repo**                | github.com/sst/opencode (also github.com/anomalyco/opencode)     |
+| **Website**             | opencode.ai                                                      |
+| **License**             | MIT                                                              |
+| **Stars**               | 125,526                                                          |
+| **Forks**               | 13,226                                                           |
+| **Open Issues**         | 7,190                                                            |
+| **Created**             | 2025-04-30                                                       |
+| **Latest Release**      | v1.2.27 (2026-03-16) -- shipping ~2x/week                        |
+| **Primary Language**    | TypeScript (54.9%), MDX docs (40.9%), Rust (0.5% -- Tauri shell) |
+| **Runtime**             | Bun                                                              |
+| **Package Manager**     | Bun workspaces (monorepo)                                        |
+| **Monthly Active Devs** | ~2.5M (reported)                                                 |
 
 **History**: Originally built in Go by opencode-ai (Bubble Tea TUI). That repo was archived September 2025. The SST team (creators of SST framework and terminal.shop) rebuilt it from scratch in TypeScript. The SST version is now the canonical active project with 125K+ stars.
 
@@ -49,6 +49,7 @@ opencode serve  (headless backend -- Hono HTTP server + SSE)
 ```
 
 The server can run standalone (`opencode serve`) and clients attach to it via HTTP/SSE. This means:
+
 - Run the server on a powerful machine, drive it from a phone or tablet
 - Multiple clients can attach to the same server
 - `opencode run --attach http://localhost:4096 "prompt"` sends commands to a running server
@@ -56,17 +57,17 @@ The server can run standalone (`opencode serve`) and clients attach to it via HT
 
 ### Core Backend Stack
 
-| Component | Technology |
-|-----------|-----------|
-| HTTP Server | Hono |
-| Database | SQLite + Drizzle ORM |
-| Schema Validation | Zod |
+| Component               | Technology                |
+| ----------------------- | ------------------------- |
+| HTTP Server             | Hono                      |
+| Database                | SQLite + Drizzle ORM      |
+| Schema Validation       | Zod                       |
 | AI Provider Abstraction | Vercel AI SDK (ai-sdk v5) |
-| Runtime | Bun |
-| Monorepo | Turbo |
-| TUI Rendering | OpenTUI (custom) |
-| Syntax Highlighting | Shiki |
-| Markdown | Marked |
+| Runtime                 | Bun                       |
+| Monorepo                | Turbo                     |
+| TUI Rendering           | OpenTUI (custom)          |
+| Syntax Highlighting     | Shiki                     |
+| Markdown                | Marked                    |
 
 ### Monorepo Structure (20+ packages)
 
@@ -104,54 +105,58 @@ Client -> Server.App (HTTP) -> SessionPrompt.prompt()
 
 ### 3.1 Multi-Provider Support (75+ providers)
 
-| Category | Providers |
-|----------|-----------|
-| Cloud | Anthropic, OpenAI, Google, AWS Bedrock, Azure OpenAI, Google Vertex AI |
-| Gateways | OpenRouter, Cloudflare AI Gateway |
-| Specialized | GitHub Copilot, GitLab Duo, DeepSeek, Groq |
-| Local | Ollama, LM Studio (via openai-compatible adapter) |
-| Curated | OpenCode Zen (managed service with billing) |
+| Category    | Providers                                                              |
+| ----------- | ---------------------------------------------------------------------- |
+| Cloud       | Anthropic, OpenAI, Google, AWS Bedrock, Azure OpenAI, Google Vertex AI |
+| Gateways    | OpenRouter, Cloudflare AI Gateway                                      |
+| Specialized | GitHub Copilot, GitLab Duo, DeepSeek, Groq                             |
+| Local       | Ollama, LM Studio (via openai-compatible adapter)                      |
+| Curated     | OpenCode Zen (managed service with billing)                            |
 
 Model switching: `Ctrl+O` in TUI or `--model provider/model-id` on CLI.
 
 ### 3.2 Built-in Tools (20+)
 
-| Tool | Description | Notes |
-|------|-------------|-------|
-| `bash` | Execute shell commands | Permission-controlled, glob patterns for command allowlists |
-| `edit` | Exact string replacement in files | Primary file modification mechanism |
-| `write` | Create new files or overwrite | Governed by `edit` permission |
-| `read` | Read file contents | Supports line ranges for large files |
-| `grep` | Regex search across codebase | Uses ripgrep, respects .gitignore |
-| `glob` | Find files by pattern | Returns sorted by modification time |
-| `list` | List files/directories | With glob filtering |
-| `patch` | Apply patch files | Controlled by `edit` permission |
-| `task` | Delegate to subagents | Multi-step parallel task delegation |
-| `skill` | Load SKILL.md files | On-demand reusable instructions |
-| `todowrite` | Manage todo lists | Track multi-step operations |
-| `todoread` | Read todo lists | Check pending/completed tasks |
-| `webfetch` | Fetch web pages | Documentation lookup |
-| `websearch` | Web search via Exa AI | Requires OPENCODE_ENABLE_EXA=1 |
-| `question` | Ask user questions | Supports custom answer options |
-| `lsp` | LSP operations | Experimental: goToDefinition, findReferences, hover, symbols, callHierarchy |
-| `multiedit` | Batch file edits | Multiple edits in one call |
+| Tool        | Description                       | Notes                                                                       |
+| ----------- | --------------------------------- | --------------------------------------------------------------------------- |
+| `bash`      | Execute shell commands            | Permission-controlled, glob patterns for command allowlists                 |
+| `edit`      | Exact string replacement in files | Primary file modification mechanism                                         |
+| `write`     | Create new files or overwrite     | Governed by `edit` permission                                               |
+| `read`      | Read file contents                | Supports line ranges for large files                                        |
+| `grep`      | Regex search across codebase      | Uses ripgrep, respects .gitignore                                           |
+| `glob`      | Find files by pattern             | Returns sorted by modification time                                         |
+| `list`      | List files/directories            | With glob filtering                                                         |
+| `patch`     | Apply patch files                 | Controlled by `edit` permission                                             |
+| `task`      | Delegate to subagents             | Multi-step parallel task delegation                                         |
+| `skill`     | Load SKILL.md files               | On-demand reusable instructions                                             |
+| `todowrite` | Manage todo lists                 | Track multi-step operations                                                 |
+| `todoread`  | Read todo lists                   | Check pending/completed tasks                                               |
+| `webfetch`  | Fetch web pages                   | Documentation lookup                                                        |
+| `websearch` | Web search via Exa AI             | Requires OPENCODE_ENABLE_EXA=1                                              |
+| `question`  | Ask user questions                | Supports custom answer options                                              |
+| `lsp`       | LSP operations                    | Experimental: goToDefinition, findReferences, hover, symbols, callHierarchy |
+| `multiedit` | Batch file edits                  | Multiple edits in one call                                                  |
 
 ### 3.3 Agent System
 
 **Built-in Primary Agents:**
+
 - **Build**: Default agent. All tools enabled. Full development capability.
 - **Plan**: Analysis/planning only. File edits and bash set to `ask`. Read-only by default.
 
 **Built-in Subagents:**
+
 - **General**: Full tool access (except todo). For multi-step parallel tasks.
 - **Explore**: Read-only. Quick codebase exploration.
 
 **Hidden System Agents:**
+
 - **Compaction**: Auto-summarizes conversations near context limit.
 - **Title**: Generates session titles.
 - **Summary**: Creates conversation summaries.
 
 **Custom Agents**: Defined in JSON config or markdown files in `.opencode/agents/` or `~/.config/opencode/agents/`. Each agent supports:
+
 - Custom system prompt (inline or `{file:path}`)
 - Model override
 - Temperature / top_p control
@@ -165,6 +170,7 @@ Model switching: `Ctrl+O` in TUI or `--model provider/model-id` on CLI.
 ### 3.4 Agent Skills
 
 Reusable instruction sets loaded on-demand via the `skill` tool:
+
 - Directory: `.opencode/skills/<name>/SKILL.md`
 - Also reads `.claude/skills/` and `.agents/skills/` (cross-tool compatibility)
 - Global: `~/.config/opencode/skills/`
@@ -188,6 +194,7 @@ Reusable instruction sets loaded on-demand via the `skill` tool:
 ### 3.6 Configuration System (8-Layer Precedence)
 
 From lowest to highest priority:
+
 1. Remote config (`.well-known/opencode` endpoint)
 2. Global config (`~/.config/opencode/opencode.json`)
 3. Custom config (`OPENCODE_CONFIG` env var)
@@ -202,6 +209,7 @@ Variable substitution: `{env:VAR}` for env vars, `{file:path}` for file contents
 ### 3.7 LSP Integration (30+ Languages)
 
 Auto-detects and starts LSP servers for:
+
 - Python (Pyright), TypeScript/JavaScript, Rust, Go, Java, C/C++, C#
 - PHP, Ruby, Dart, Kotlin, Swift, Lua
 - Gleam, Elixir, Clojure, Haskell, OCaml, F#, Zig, Nix
@@ -226,6 +234,7 @@ Auto-download can be disabled via `OPENCODE_DISABLE_LSP_DOWNLOAD`.
 ### 3.9 ACP (Agent Client Protocol) Support
 
 Open protocol for editor-agent communication via JSON-RPC over stdio:
+
 - **Zed**: `opencode acp` in settings.json agent_servers
 - **JetBrains**: acp.json with binary path
 - **Neovim**: Avante.nvim or CodeCompanion.nvim integration
@@ -235,11 +244,13 @@ Open protocol for editor-agent communication via JSON-RPC over stdio:
 ### 3.10 Permissions System
 
 Three-tier permission model:
+
 - **allow**: Execute without approval
 - **deny**: Cannot run
 - **ask**: Requires user approval
 
 Granular control:
+
 - Per-tool permissions
 - Per-command bash patterns (`"git *": "ask"`, `"grep *": "allow"`)
 - Per-agent overrides
@@ -250,6 +261,7 @@ Granular control:
 ### 3.11 TUI (Terminal UI)
 
 Built with OpenTUI (custom terminal rendering framework, NOT Bubble Tea in current version):
+
 - Vim-like keybindings (hjkl navigation)
 - Inline diff viewer
 - Session browser (`Ctrl+A`)
@@ -325,19 +337,19 @@ opencode web                             # Headless with web UI
 
 ## 4. Installation Methods
 
-| Method | Command |
-|--------|---------|
-| curl | `curl -fsSL https://opencode.ai/install \| bash` |
-| npm | `npm i -g opencode` |
-| pnpm | `pnpm add -g opencode` |
-| bun | `bun add -g opencode` |
-| Homebrew | `brew install opencode` |
-| AUR | `pacman -S opencode` |
-| Chocolatey | `choco install opencode` |
-| Scoop | `scoop install opencode` |
-| Docker | `docker run ghcr.io/anomalyco/opencode` |
-| Mise | Via mise version manager |
-| Desktop | `.dmg` / `.exe` / `.AppImage` from GitHub Releases |
+| Method     | Command                                            |
+| ---------- | -------------------------------------------------- |
+| curl       | `curl -fsSL https://opencode.ai/install \| bash`   |
+| npm        | `npm i -g opencode`                                |
+| pnpm       | `pnpm add -g opencode`                             |
+| bun        | `bun add -g opencode`                              |
+| Homebrew   | `brew install opencode`                            |
+| AUR        | `pacman -S opencode`                               |
+| Chocolatey | `choco install opencode`                           |
+| Scoop      | `scoop install opencode`                           |
+| Docker     | `docker run ghcr.io/anomalyco/opencode`            |
+| Mise       | Via mise version manager                           |
+| Desktop    | `.dmg` / `.exe` / `.AppImage` from GitHub Releases |
 
 ---
 
@@ -345,21 +357,21 @@ opencode web                             # Headless with web UI
 
 Key environment variables:
 
-| Variable | Purpose |
-|----------|---------|
-| `OPENCODE_CONFIG` | Custom config file path |
-| `OPENCODE_CONFIG_CONTENT` | Inline JSON config |
-| `OPENCODE_PERMISSION` | Inline JSON permissions |
-| `OPENCODE_CLIENT` | Client identifier |
-| `OPENCODE_AUTO_SHARE` | Auto-share sessions |
-| `OPENCODE_DISABLE_AUTOUPDATE` | Skip update checks |
-| `OPENCODE_DISABLE_LSP_DOWNLOAD` | Skip LSP auto-download |
-| `OPENCODE_ENABLE_EXA` | Enable web search |
-| `OPENCODE_DISABLE_CLAUDE_CODE` | Skip .claude reading |
-| `OPENCODE_SERVER_PASSWORD` | Enable HTTP basic auth |
-| `OPENCODE_EXPERIMENTAL` | Enable all experimental features |
-| `OPENCODE_EXPERIMENTAL_PLAN_MODE` | Planning mode |
-| `OPENCODE_EXPERIMENTAL_LSP_TOOL` | LSP tool access |
+| Variable                          | Purpose                          |
+| --------------------------------- | -------------------------------- |
+| `OPENCODE_CONFIG`                 | Custom config file path          |
+| `OPENCODE_CONFIG_CONTENT`         | Inline JSON config               |
+| `OPENCODE_PERMISSION`             | Inline JSON permissions          |
+| `OPENCODE_CLIENT`                 | Client identifier                |
+| `OPENCODE_AUTO_SHARE`             | Auto-share sessions              |
+| `OPENCODE_DISABLE_AUTOUPDATE`     | Skip update checks               |
+| `OPENCODE_DISABLE_LSP_DOWNLOAD`   | Skip LSP auto-download           |
+| `OPENCODE_ENABLE_EXA`             | Enable web search                |
+| `OPENCODE_DISABLE_CLAUDE_CODE`    | Skip .claude reading             |
+| `OPENCODE_SERVER_PASSWORD`        | Enable HTTP basic auth           |
+| `OPENCODE_EXPERIMENTAL`           | Enable all experimental features |
+| `OPENCODE_EXPERIMENTAL_PLAN_MODE` | Planning mode                    |
+| `OPENCODE_EXPERIMENTAL_LSP_TOOL`  | LSP tool access                  |
 
 ---
 
@@ -367,40 +379,40 @@ Key environment variables:
 
 ### Feature Matrix
 
-| Feature | OpenCode | AGI Workforce CLI | Winner |
-|---------|----------|-------------------|--------|
-| **Language** | TypeScript (Bun) | Rust | AGI (performance) |
-| **Binary Size** | Node/Bun runtime needed | Single static binary | AGI |
-| **Stars** | 125K | N/A (proprietary) | OpenCode (OSS momentum) |
-| **Provider Support** | 75+ via AI SDK | 9+ via custom router | OpenCode |
-| **Local Models** | Ollama, LM Studio | Ollama, LM Studio | Tie |
-| **TUI** | OpenTUI (custom) | Custom Rust TUI | Tie |
-| **Desktop App** | Tauri v2 + Solid.js | Tauri v2 + React 19 | Tie (similar tech) |
-| **Mobile** | Remote attach via HTTP | QR-pair companion app | AGI |
-| **Client-Server** | Full decoupled arch | Integrated | OpenCode |
-| **Session Persistence** | SQLite + Drizzle | SQLite | Tie |
-| **MCP Support** | stdio + HTTP + OAuth | stdio + SSE + HTTP | Tie |
-| **ACP Support** | Zed, JetBrains, Neovim | N/A | OpenCode |
-| **LSP Integration** | 30+ languages | N/A | OpenCode |
-| **Agent System** | Primary + subagents | Agents + skills | Tie |
-| **Skills System** | SKILL.md on-demand | Skills system | Tie |
-| **GitHub CI** | Built-in Actions agent | N/A | OpenCode |
-| **Slack Bot** | Built-in | N/A | OpenCode |
-| **Plugin System** | npm plugins + hooks | N/A | OpenCode |
-| **SDKs** | TypeScript + Go | N/A | OpenCode |
-| **Non-Coding Skills** | Code-focused only | 150+ (healthcare, legal, finance) | AGI |
-| **Voice Mode** | N/A | Whisper voice mode | AGI |
-| **Desktop Autonomy** | Limited (code-focused) | Full desktop control (1375 commands) | AGI |
-| **Security** | Permissions system | ToolGuard + SecretManager + Argon2id | AGI |
-| **Cross-Device Sync** | Remote attach | Persistent thread sync | AGI |
-| **Pricing** | Free (BYOK) + Zen paid tier | BYOK + SaaS model | Tie |
-| **Claude Compatibility** | Reads .claude/ files | Native Claude support | Tie |
-| **Web Search** | Exa AI integration | Built-in | Tie |
-| **Code Formatters** | 25+ built-in | N/A | OpenCode |
-| **Custom Commands** | Template-based | N/A | OpenCode |
-| **Session Sharing** | `/share` with URLs | N/A | OpenCode |
-| **Auto-Compact** | Context compaction | Compaction system | Tie |
-| **File Snapshots** | Built-in | N/A | OpenCode |
+| Feature                  | OpenCode                    | AGI Workforce CLI                    | Winner                  |
+| ------------------------ | --------------------------- | ------------------------------------ | ----------------------- |
+| **Language**             | TypeScript (Bun)            | Rust                                 | AGI (performance)       |
+| **Binary Size**          | Node/Bun runtime needed     | Single static binary                 | AGI                     |
+| **Stars**                | 125K                        | N/A (proprietary)                    | OpenCode (OSS momentum) |
+| **Provider Support**     | 75+ via AI SDK              | 9+ via custom router                 | OpenCode                |
+| **Local Models**         | Ollama, LM Studio           | Ollama, LM Studio                    | Tie                     |
+| **TUI**                  | OpenTUI (custom)            | Custom Rust TUI                      | Tie                     |
+| **Desktop App**          | Tauri v2 + Solid.js         | Tauri v2 + React 19                  | Tie (similar tech)      |
+| **Mobile**               | Remote attach via HTTP      | QR-pair companion app                | AGI                     |
+| **Client-Server**        | Full decoupled arch         | Integrated                           | OpenCode                |
+| **Session Persistence**  | SQLite + Drizzle            | SQLite                               | Tie                     |
+| **MCP Support**          | stdio + HTTP + OAuth        | stdio + SSE + HTTP                   | Tie                     |
+| **ACP Support**          | Zed, JetBrains, Neovim      | N/A                                  | OpenCode                |
+| **LSP Integration**      | 30+ languages               | N/A                                  | OpenCode                |
+| **Agent System**         | Primary + subagents         | Agents + skills                      | Tie                     |
+| **Skills System**        | SKILL.md on-demand          | Skills system                        | Tie                     |
+| **GitHub CI**            | Built-in Actions agent      | N/A                                  | OpenCode                |
+| **Slack Bot**            | Built-in                    | N/A                                  | OpenCode                |
+| **Plugin System**        | npm plugins + hooks         | N/A                                  | OpenCode                |
+| **SDKs**                 | TypeScript + Go             | N/A                                  | OpenCode                |
+| **Non-Coding Skills**    | Code-focused only           | 150+ (healthcare, legal, finance)    | AGI                     |
+| **Voice Mode**           | N/A                         | Whisper voice mode                   | AGI                     |
+| **Desktop Autonomy**     | Limited (code-focused)      | Full desktop control (1375 commands) | AGI                     |
+| **Security**             | Permissions system          | ToolGuard + SecretManager + Argon2id | AGI                     |
+| **Cross-Device Sync**    | Remote attach               | Persistent thread sync               | AGI                     |
+| **Pricing**              | Free (BYOK) + Zen paid tier | BYOK + SaaS model                    | Tie                     |
+| **Claude Compatibility** | Reads .claude/ files        | Native Claude support                | Tie                     |
+| **Web Search**           | Exa AI integration          | Built-in                             | Tie                     |
+| **Code Formatters**      | 25+ built-in                | N/A                                  | OpenCode                |
+| **Custom Commands**      | Template-based              | N/A                                  | OpenCode                |
+| **Session Sharing**      | `/share` with URLs          | N/A                                  | OpenCode                |
+| **Auto-Compact**         | Context compaction          | Compaction system                    | Tie                     |
+| **File Snapshots**       | Built-in                    | N/A                                  | OpenCode                |
 
 ### Where OpenCode Wins
 
@@ -468,14 +480,14 @@ Key environment variables:
 
 ## 8. Release Cadence & Activity
 
-| Metric | Value |
-|--------|-------|
-| Release frequency | ~2x per week |
-| Latest release | v1.2.27 (2026-03-16) |
-| Top contributor | thdxr (1,924 commits) |
-| Active core team | 5-6 people (SST team) |
+| Metric            | Value                                  |
+| ----------------- | -------------------------------------- |
+| Release frequency | ~2x per week                           |
+| Latest release    | v1.2.27 (2026-03-16)                   |
+| Top contributor   | thdxr (1,924 commits)                  |
+| Active core team  | 5-6 people (SST team)                  |
 | Bot contributions | opencode-agent[bot]: 257 contributions |
-| Repo size | 217 MB |
+| Repo size         | 217 MB                                 |
 
 ---
 

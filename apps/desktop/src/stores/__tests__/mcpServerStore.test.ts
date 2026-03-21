@@ -68,10 +68,7 @@ describe('mcpServerStore', () => {
   it('updates the runtime server config through the typed MCP client', async () => {
     await useMcpServerStore.getState().updateConfig(4100, ['agi_chat', 'agi_bash']);
 
-    expect(mcpMock.updateRuntimeServerConfig).toHaveBeenCalledWith(4100, [
-      'agi_chat',
-      'agi_bash',
-    ]);
+    expect(mcpMock.updateRuntimeServerConfig).toHaveBeenCalledWith(4100, ['agi_chat', 'agi_bash']);
     expect(mcpMock.getRuntimeServerConfig).toHaveBeenCalled();
   });
 

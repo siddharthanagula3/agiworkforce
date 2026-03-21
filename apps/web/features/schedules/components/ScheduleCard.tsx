@@ -4,21 +4,8 @@ import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent } from '@shared/ui/card';
 import { Switch } from '@shared/ui/switch';
-import {
-  Clock,
-  Play,
-  History,
-  Pencil,
-  Trash2,
-  ChevronUp,
-  Copy,
-  TrendingUp,
-} from 'lucide-react';
-import {
-  formatDate,
-  getNextRunCountdown,
-  recurrenceLabel,
-} from '../types';
+import { Clock, Play, History, Pencil, Trash2, ChevronUp, Copy, TrendingUp } from 'lucide-react';
+import { formatDate, getNextRunCountdown, recurrenceLabel } from '../types';
 import type { Schedule, ScheduleRun } from '../types';
 import { ScheduleRunHistory } from './ScheduleRunHistory';
 
@@ -118,9 +105,7 @@ export function ScheduleCard({
               <span>
                 {schedule.timeOfDay} {schedule.timezone}
               </span>
-              {schedule.lastRunAt && (
-                <span>Last run: {formatDate(schedule.lastRunAt)}</span>
-              )}
+              {schedule.lastRunAt && <span>Last run: {formatDate(schedule.lastRunAt)}</span>}
               {countdown && schedule.isActive && (
                 <span className="text-primary/70">Next: {countdown}</span>
               )}

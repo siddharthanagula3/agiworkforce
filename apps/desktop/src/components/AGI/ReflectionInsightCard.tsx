@@ -171,7 +171,8 @@ function FailedStepCard({ step }: { step: FailedStep }) {
           <p className="text-xs text-red-400/80 line-clamp-2">{step.error}</p>
 
           {step.suggestedFix && (
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setExpanded(!expanded)}
               className="mt-2 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
             >
@@ -412,7 +413,8 @@ export function ReflectionInsightCard({
       {/* Failed Steps Section */}
       {assessment.failedSteps.length > 0 && (
         <div className="mb-4">
-          <button type="button"
+          <button
+            type="button"
             onClick={() => toggleSection('failures')}
             className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-surface-base transition"
           >
@@ -441,7 +443,8 @@ export function ReflectionInsightCard({
       {/* Corrections Section */}
       {corrections.length > 0 && (
         <div className="mb-4">
-          <button type="button"
+          <button
+            type="button"
             onClick={() => toggleSection('corrections')}
             className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-surface-base transition"
           >
@@ -481,7 +484,8 @@ export function ReflectionInsightCard({
       {/* Sub-goals Section */}
       {subGoals.length > 0 && (
         <div className="mb-4">
-          <button type="button"
+          <button
+            type="button"
             onClick={() => toggleSection('subgoals')}
             className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-surface-base transition"
           >
@@ -522,7 +526,8 @@ export function ReflectionInsightCard({
       {/* Learnings Section */}
       {learnings.length > 0 && (
         <div>
-          <button type="button"
+          <button
+            type="button"
             onClick={() => toggleSection('learnings')}
             className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-surface-base transition"
           >

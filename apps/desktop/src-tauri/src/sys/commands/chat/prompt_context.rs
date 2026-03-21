@@ -165,10 +165,7 @@ pub fn load_project_instructions(folder: &std::path::Path) -> Option<String> {
                     // File exists but is empty — continue to next candidate
                 }
                 Err(e) => {
-                    debug!(
-                        "[PromptContext] Could not read {:?}: {}",
-                        path, e
-                    );
+                    debug!("[PromptContext] Could not read {:?}: {}", path, e);
                 }
             }
         }

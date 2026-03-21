@@ -6,12 +6,12 @@ This directory contains detailed architecture guides for AGI Workforce's advance
 
 ## Core Guides
 
-| Document | Topic | Key Features |
-|----------|-------|--------------|
-| [EVENT_TRIGGERS.md](./EVENT_TRIGGERS.md) | Event-driven agent execution | Cron, webhooks, file watchers, approval gates |
-| [AGENT_TO_AGENT.md](./AGENT_TO_AGENT.md) | Agent collaboration protocol | Task delegation, handoffs, capability discovery |
-| [MCP_APPS.md](./MCP_APPS.md) | Interactive tool UIs | Sandboxed iframes, real-time rendering, event routing |
-| [CROSS_DEVICE.md](./CROSS_DEVICE.md) | Multi-device synchronization | WebRTC streams, persistent threads, mobile dashboards |
+| Document                                 | Topic                        | Key Features                                          |
+| ---------------------------------------- | ---------------------------- | ----------------------------------------------------- |
+| [EVENT_TRIGGERS.md](./EVENT_TRIGGERS.md) | Event-driven agent execution | Cron, webhooks, file watchers, approval gates         |
+| [AGENT_TO_AGENT.md](./AGENT_TO_AGENT.md) | Agent collaboration protocol | Task delegation, handoffs, capability discovery       |
+| [MCP_APPS.md](./MCP_APPS.md)             | Interactive tool UIs         | Sandboxed iframes, real-time rendering, event routing |
+| [CROSS_DEVICE.md](./CROSS_DEVICE.md)     | Multi-device synchronization | WebRTC streams, persistent threads, mobile dashboards |
 
 ## Quick Links
 
@@ -38,18 +38,23 @@ This directory contains detailed architecture guides for AGI Workforce's advance
 ## Architecture Principles
 
 ### 1. Transport Agnosticism
+
 Systems are designed to work across multiple transport layers (in-process, HTTP, WebRTC) without code changes. A2A protocol and cross-device messaging exemplify this pattern.
 
 ### 2. Sandboxing
+
 Untrusted content (MCP Apps, external tool outputs) run in sandboxed contexts (iframes, isolated processes) to prevent security escapes.
 
 ### 3. Approval Gates
+
 Dangerous operations (tool execution, mobile approvals, long-running agents) require explicit user approval before proceeding.
 
 ### 4. Real-Time Streaming
+
 Execution streams (agent actions, tool results) flow in real-time to relevant surfaces (desktop, mobile, web) via event channels and WebRTC.
 
 ### 5. Eventual Consistency
+
 Cross-device state uses optimistic updates with eventual cloud sync, tolerating temporary inconsistency for responsiveness.
 
 ## Related Documentation

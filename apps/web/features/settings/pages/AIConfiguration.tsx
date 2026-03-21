@@ -243,11 +243,7 @@ const AIConfigurationPageContent: React.FC = () => {
     setTestResults((prev) => ({ ...prev, [provider]: 'pending' }));
 
     try {
-      // Read auth token from localStorage (same pattern used elsewhere in the app)
-      const token =
-        typeof window !== 'undefined' ? localStorage.getItem('supabase_access_token') : null;
-
-      // Read CSRF token from cookie
+      // Auth is managed via Supabase SSR cookies (set by middleware) — no manual token needed.
       const csrfToken =
         typeof document !== 'undefined'
           ? (document.cookie
@@ -260,7 +256,6 @@ const AIConfigurationPageContent: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           'x-csrf-token': csrfToken,
         },
         body: JSON.stringify({ provider }),

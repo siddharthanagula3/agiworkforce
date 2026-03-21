@@ -66,13 +66,7 @@ function RunRow({ run }: RunRowProps) {
   const isRunning = run.status === 'running';
   const isPending = run.status === 'pending';
 
-  const StatusIcon = isSuccess
-    ? CheckCircle2
-    : isFailed
-      ? XCircle
-      : isRunning
-        ? Loader
-        : Clock;
+  const StatusIcon = isSuccess ? CheckCircle2 : isFailed ? XCircle : isRunning ? Loader : Clock;
 
   const iconColor = isSuccess
     ? colors.agentSuccess
@@ -92,13 +86,17 @@ function RunRow({ run }: RunRowProps) {
         <View className="flex-row items-center gap-2">
           <Text
             className="text-[13px] font-medium"
-            style={{ color: isSuccess ? colors.agentSuccess : isFailed ? colors.agentError : colors.textSecondary }}
+            style={{
+              color: isSuccess
+                ? colors.agentSuccess
+                : isFailed
+                  ? colors.agentError
+                  : colors.textSecondary,
+            }}
           >
             {isSuccess ? 'Success' : isFailed ? 'Failed' : isRunning ? 'Running' : 'Pending'}
           </Text>
-          {duration ? (
-            <Text className="text-[11px] text-white/30">{duration}</Text>
-          ) : null}
+          {duration ? <Text className="text-[11px] text-white/30">{duration}</Text> : null}
         </View>
         {run.error ? (
           <Text className="text-[11px] text-red-400/70 mt-0.5 leading-4" numberOfLines={2}>
@@ -167,7 +165,13 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
           {runs.map((run, idx) => (
             <View key={run.id}>
               {idx > 0 && (
-                <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: 1 }} />
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: 'rgba(255,255,255,0.05)',
+                    marginVertical: 1,
+                  }}
+                />
               )}
               <RunRow run={run} />
             </View>

@@ -180,8 +180,8 @@ pub fn create_spinner(message: &str) -> ProgressBar {
     spinner.set_style(
         ProgressStyle::default_spinner()
             .tick_strings(&[
-                "\u{2840}", "\u{28c0}", "\u{28c4}", "\u{28e4}",
-                "\u{28f0}", "\u{28b0}", "\u{2830}", "\u{2810}",
+                "\u{2840}", "\u{28c0}", "\u{28c4}", "\u{28e4}", "\u{28f0}", "\u{28b0}", "\u{2830}",
+                "\u{2810}",
             ])
             .template("{spinner:.cyan} {msg}")
             .expect("valid spinner template"),
@@ -314,12 +314,7 @@ pub fn print_subscription_cost(input_tokens: u32, output_tokens: u32) {
 }
 
 /// Print a session total cost.
-pub fn print_session_cost(
-    model: &str,
-    total_input: u32,
-    total_output: u32,
-    turn_count: u32,
-) {
+pub fn print_session_cost(model: &str, total_input: u32, total_output: u32, turn_count: u32) {
     let summary = format_cost(model, total_input, total_output);
     eprintln!(
         "\n{}\n  {} turns | {} in / {} out\n  {}",
@@ -441,10 +436,7 @@ pub fn print_banner(model: &str, provider: &str) {
         format!("({} via {})", model, provider).dimmed(),
         color_info.dimmed()
     );
-    eprintln!(
-        "{}",
-        "Type /help for commands, /exit to quit.".dimmed()
-    );
+    eprintln!("{}", "Type /help for commands, /exit to quit.".dimmed());
     eprintln!();
 }
 
@@ -875,7 +867,7 @@ mod tests {
         let result = format_table(headers, &rows);
         let lines: Vec<&str> = result.lines().collect();
         assert_eq!(lines.len(), 3); // header + sep + 1 row
-        // Row should contain "1" and two blank-padded cells
+                                    // Row should contain "1" and two blank-padded cells
         assert!(lines[2].starts_with('1'));
     }
 

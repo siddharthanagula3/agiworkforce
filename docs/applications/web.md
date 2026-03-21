@@ -541,22 +541,22 @@ The web app is in the right state when:
 
 ## 25. Feature acceptance criteria
 
-| Feature | Acceptance criteria |
-| --- | --- |
-| Public marketing site | Core marketing pages load quickly, explain the product clearly, and route users reliably into signup, docs, or download flows. |
-| Auth lifecycle | Signup, login, reset, verify, callback, and device-auth flows are complete, recoverable, and secure. |
-| Dashboard shell | Authenticated users land in a stable dashboard layout with clear navigation and resilient loading/error states. |
-| Hosted chat and feature modules | Hosted chat, workforce, projects, connectors, marketplace, support, and settings modules can load and act on account-scoped data correctly. |
-| Billing and subscription | Checkout, billing portal, usage, and webhook-driven state changes are accurate and observable. |
-| Docs/download/resources | Documentation, downloads, changelog, blog, and support surfaces remain navigable and consistent with product positioning. |
-| Hosted LM endpoints | Completion and model-facing endpoints validate auth and schema, route to the right provider abstraction, and fail safely. |
-| Share and artifact flows | Shared links, share pages, and hosted artifact/result flows are secure and user-understandable. |
-| Health, diagnostics, and rate limiting | Operational endpoints return safe information, enforce limits, and distinguish healthy from degraded/unhealthy states correctly. |
-| Hosted agent execution | Web can dispatch background agent tasks in sandboxed environments, track execution status in real time, and return results (files, PRs, reports) to the user's dashboard upon completion. |
-| Scheduled tasks | Users can create recurring and one-shot tasks with configurable schedules from the web dashboard, receive notifications on completion, and manage up to 10 active tasks per account. |
-| Project workspaces | Projects support adding sources from connected apps, chat history, uploaded files, and custom instructions; shared collaboration with role-based access; and project-scoped memory that persists across sessions. |
-| Workspace analytics | Enterprise admins can view adoption metrics (DAU/WAU/MAU), usage patterns by team and model, task completion and latency insights, cost attribution by project, and industry benchmarks for comparable deployments. |
-| EU AI Act compliance | Platform meets conformity assessment requirements for the August 2026 general application deadline, including technical documentation, risk management systems, transparency obligations, and CE marking readiness for high-risk use cases. |
+| Feature                                | Acceptance criteria                                                                                                                                                                                                                         |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public marketing site                  | Core marketing pages load quickly, explain the product clearly, and route users reliably into signup, docs, or download flows.                                                                                                              |
+| Auth lifecycle                         | Signup, login, reset, verify, callback, and device-auth flows are complete, recoverable, and secure.                                                                                                                                        |
+| Dashboard shell                        | Authenticated users land in a stable dashboard layout with clear navigation and resilient loading/error states.                                                                                                                             |
+| Hosted chat and feature modules        | Hosted chat, workforce, projects, connectors, marketplace, support, and settings modules can load and act on account-scoped data correctly.                                                                                                 |
+| Billing and subscription               | Checkout, billing portal, usage, and webhook-driven state changes are accurate and observable.                                                                                                                                              |
+| Docs/download/resources                | Documentation, downloads, changelog, blog, and support surfaces remain navigable and consistent with product positioning.                                                                                                                   |
+| Hosted LM endpoints                    | Completion and model-facing endpoints validate auth and schema, route to the right provider abstraction, and fail safely.                                                                                                                   |
+| Share and artifact flows               | Shared links, share pages, and hosted artifact/result flows are secure and user-understandable.                                                                                                                                             |
+| Health, diagnostics, and rate limiting | Operational endpoints return safe information, enforce limits, and distinguish healthy from degraded/unhealthy states correctly.                                                                                                            |
+| Hosted agent execution                 | Web can dispatch background agent tasks in sandboxed environments, track execution status in real time, and return results (files, PRs, reports) to the user's dashboard upon completion.                                                   |
+| Scheduled tasks                        | Users can create recurring and one-shot tasks with configurable schedules from the web dashboard, receive notifications on completion, and manage up to 10 active tasks per account.                                                        |
+| Project workspaces                     | Projects support adding sources from connected apps, chat history, uploaded files, and custom instructions; shared collaboration with role-based access; and project-scoped memory that persists across sessions.                           |
+| Workspace analytics                    | Enterprise admins can view adoption metrics (DAU/WAU/MAU), usage patterns by team and model, task completion and latency insights, cost attribution by project, and industry benchmarks for comparable deployments.                         |
+| EU AI Act compliance                   | Platform meets conformity assessment requirements for the August 2026 general application deadline, including technical documentation, risk management systems, transparency obligations, and CE marking readiness for high-risk use cases. |
 
 ## 26. Screen-by-screen implementation checklist
 

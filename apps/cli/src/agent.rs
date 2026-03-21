@@ -411,11 +411,7 @@ impl AgentSession {
                 let entries = mgr.load_all();
                 if !entries.is_empty() {
                     for entry in &entries {
-                        eprintln!(
-                            "  {} memory: {}",
-                            entry.source,
-                            entry.file_path.display()
-                        );
+                        eprintln!("  {} memory: {}", entry.source, entry.file_path.display());
                     }
                 }
                 mgr.get_context_prompt()
@@ -478,12 +474,7 @@ impl AgentSession {
 
     /// Spawn a teammate into the team (requires team mode to be enabled).
     #[allow(dead_code)]
-    pub async fn spawn_teammate(
-        &self,
-        name: &str,
-        role: &str,
-        prompt: &str,
-    ) -> Result<String> {
+    pub async fn spawn_teammate(&self, name: &str, role: &str, prompt: &str) -> Result<String> {
         match &self.team_manager {
             Some(tm) => Ok(tm.spawn_teammate(name, role, prompt).await?),
             None => Err(anyhow::anyhow!(
@@ -495,11 +486,7 @@ impl AgentSession {
     /// Initialize the subagent manager for parallel task execution.
     /// Must be called with the config before the agent can spawn subagents.
     #[allow(dead_code)]
-    pub fn init_subagent_manager(
-        &mut self,
-        config: &CliConfig,
-        sys_context: &SystemContext,
-    ) {
+    pub fn init_subagent_manager(&mut self, config: &CliConfig, sys_context: &SystemContext) {
         self.subagent_manager = Some(subagent::SubagentManager::new(
             config.clone(),
             self.model.clone(),
@@ -675,11 +662,7 @@ impl AgentSession {
         } else if usage.near_limit {
             eprintln!(
                 "  {}",
-                format!(
-                    "Warning: {}",
-                    compaction::format_context_report(&usage)
-                )
-                .yellow()
+                format!("Warning: {}", compaction::format_context_report(&usage)).yellow()
             );
         }
 
@@ -695,7 +678,13 @@ impl AgentSession {
         let mut tool_defs = build_tool_definitions();
         // In plan mode, only allow read-only tools
         if self.plan_mode {
-            let read_only = ["read_file", "search_files", "list_directory", "web_search", "web_fetch"];
+            let read_only = [
+                "read_file",
+                "search_files",
+                "list_directory",
+                "web_search",
+                "web_fetch",
+            ];
             tool_defs.retain(|t| read_only.contains(&t.name.as_str()));
         }
         // Add team tools when team mode is active
@@ -823,7 +812,11 @@ impl AgentSession {
                 format!(
                     "  Executing {} tool{}... (iteration {}/{})",
                     current_tool_calls.len(),
-                    if current_tool_calls.len() == 1 { "" } else { "s" },
+                    if current_tool_calls.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    },
                     iteration + 1,
                     effective_max
                 )
@@ -835,9 +828,8 @@ impl AgentSession {
             let mut result_blocks = Vec::new();
 
             // Partition tool calls: task tools run concurrently, others sequentially
-            let (task_calls, other_calls): (Vec<_>, Vec<_>) = current_tool_calls
-                .iter()
-                .partition(|tc| tc.name == "task");
+            let (task_calls, other_calls): (Vec<_>, Vec<_>) =
+                current_tool_calls.iter().partition(|tc| tc.name == "task");
 
             // Spawn all task tool calls concurrently via subagent manager
             let mut task_spawn_results = Vec::new();
@@ -883,7 +875,12 @@ impl AgentSession {
 
                 let mgr = self.subagent_manager.as_ref().unwrap();
                 let id_result = mgr.spawn(&description, &prompt).await;
-                task_spawn_results.push((tc.id.clone(), tc.name.clone(), tc.arguments.clone(), id_result));
+                task_spawn_results.push((
+                    tc.id.clone(),
+                    tc.name.clone(),
+                    tc.arguments.clone(),
+                    id_result,
+                ));
             }
 
             // Wait for all task subagents to complete concurrently
@@ -901,13 +898,18 @@ impl AgentSession {
                             if let Some(sa_result) = mgr.get_result(id).await {
                                 let mut output = sa_result.output;
                                 if !sa_result.files_modified.is_empty() {
-                                    output.push_str("
+                                    output.push_str(
+                                        "
 
 Files modified:
-");
+",
+                                    );
                                     for f in &sa_result.files_modified {
-                                        output.push_str(&format!("  - {}
-", f));
+                                        output.push_str(&format!(
+                                            "  - {}
+",
+                                            f
+                                        ));
                                     }
                                 }
                                 tools::ToolResult {
@@ -919,7 +921,10 @@ Files modified:
                                 tools::ToolResult {
                                     tool_name: "task".to_string(),
                                     success: false,
-                                    output: format!("Subagent {} finished with status: {}", id, sa_status),
+                                    output: format!(
+                                        "Subagent {} finished with status: {}",
+                                        id, sa_status
+                                    ),
                                 }
                             } else {
                                 tools::ToolResult {
@@ -1017,12 +1022,7 @@ Files modified:
                     } else {
                         "failed".red().to_string()
                     };
-                    eprintln!(
-                        "  {} {} [{}]",
-                        "->".dimmed(),
-                        tc.name.bold(),
-                        status
-                    );
+                    eprintln!("  {} {} [{}]", "->".dimmed(), tc.name.bold(), status);
                 }
 
                 hooks::run_hooks(
@@ -1049,8 +1049,7 @@ Files modified:
             }
 
             // Send tool results as a structured user message
-            self.messages
-                .push(Message::blocks("user", result_blocks));
+            self.messages.push(Message::blocks("user", result_blocks));
 
             // Re-send to LLM with tool results
             eprintln!();
@@ -1095,8 +1094,7 @@ Files modified:
             };
 
             // Build and store the assistant's continuation message
-            let cont_msg =
-                build_assistant_message(&continuation.text, &continuation.tool_calls);
+            let cont_msg = build_assistant_message(&continuation.text, &continuation.tool_calls);
             self.messages.push(cont_msg);
 
             total_input += continuation.input_tokens;
@@ -1111,8 +1109,7 @@ Files modified:
                 if self.loop_strike_count >= 2 {
                     eprintln!(
                         "\n{}",
-                        "  Auto-stopping: second content loop detected in this session."
-                            .red()
+                        "  Auto-stopping: second content loop detected in this session.".red()
                     );
                     break;
                 }
@@ -1191,8 +1188,8 @@ fn detect_content_loop(text: &str) -> bool {
     let chars: Vec<char> = plain.chars().collect();
     let mut chunk_entries: Vec<(u64, usize)> = Vec::new();
     let mut byte_offset: usize = 0;
-    for chunk_start in (0..chars.len().saturating_sub(CONTENT_CHUNK_SIZE - 1))
-        .step_by(CONTENT_CHUNK_SIZE)
+    for chunk_start in
+        (0..chars.len().saturating_sub(CONTENT_CHUNK_SIZE - 1)).step_by(CONTENT_CHUNK_SIZE)
     {
         let chunk: String = chars[chunk_start..chunk_start + CONTENT_CHUNK_SIZE]
             .iter()
@@ -1309,7 +1306,12 @@ async fn execute_mcp_tool(
 // ---------------------------------------------------------------------------
 
 /// Team tool names that are handled by the team manager.
-const TEAM_TOOL_NAMES: &[&str] = &["send_message", "team_task", "read_messages", "list_teammates"];
+const TEAM_TOOL_NAMES: &[&str] = &[
+    "send_message",
+    "team_task",
+    "read_messages",
+    "list_teammates",
+];
 
 /// Check if a tool name is a team tool.
 fn is_team_tool(name: &str) -> bool {
@@ -1629,12 +1631,7 @@ mod tests {
         assert!(props.get("end_line").is_some());
 
         // start_line and end_line should NOT be required
-        let required = rf
-            .input_schema
-            .get("required")
-            .unwrap()
-            .as_array()
-            .unwrap();
+        let required = rf.input_schema.get("required").unwrap().as_array().unwrap();
         let req_names: Vec<&str> = required.iter().map(|v| v.as_str().unwrap()).collect();
         assert!(!req_names.contains(&"start_line"));
         assert!(!req_names.contains(&"end_line"));
@@ -1647,12 +1644,7 @@ mod tests {
         let props = ws.input_schema.get("properties").unwrap();
         assert!(props.get("query").is_some());
         assert!(props.get("max_results").is_some());
-        let required = ws
-            .input_schema
-            .get("required")
-            .unwrap()
-            .as_array()
-            .unwrap();
+        let required = ws.input_schema.get("required").unwrap().as_array().unwrap();
         let req_names: Vec<&str> = required.iter().map(|v| v.as_str().unwrap()).collect();
         assert!(req_names.contains(&"query"));
         assert!(!req_names.contains(&"max_results"));
@@ -1664,12 +1656,7 @@ mod tests {
         let wf = defs.iter().find(|d| d.name == "web_fetch").unwrap();
         let props = wf.input_schema.get("properties").unwrap();
         assert!(props.get("url").is_some());
-        let required = wf
-            .input_schema
-            .get("required")
-            .unwrap()
-            .as_array()
-            .unwrap();
+        let required = wf.input_schema.get("required").unwrap().as_array().unwrap();
         let req_names: Vec<&str> = required.iter().map(|v| v.as_str().unwrap()).collect();
         assert!(req_names.contains(&"url"));
     }

@@ -245,7 +245,6 @@ Subagent execution, team tools, glob_files, apply_patch, stream-json, 6 slash co
 
 SSE + HTTP MCP transports, custom agent definitions (--agent), auto-memory tool, --worktree flag, notebook_edit tool, skill !`command` injection, MCP OAuth flow, file-level checkpoints with /rewind
 
-
 ---
 
 # Competitive Scorecard Details

@@ -84,7 +84,10 @@
   "TOKEN_EXPIRED": {
     "title": "Session expirée",
     "message": "Votre session a expiré. Veuillez vous reconnecter.",
-    "suggestions": ["Cliquez pour vous réauthentifier", "Vérifiez si vos informations d'identification sont encore valides"]
+    "suggestions": [
+      "Cliquez pour vous réauthentifier",
+      "Vérifiez si vos informations d'identification sont encore valides"
+    ]
   },
   "LLM_API_ERROR": {
     "title": "Erreur du fournisseur LLM",

@@ -2382,26 +2382,24 @@ impl LLMRouter {
                     // keeping a silent connection alive until the consumer task ends.
                     let provider_name = candidate.provider.as_string().to_string();
                     let model_name = candidate.model.clone();
-                    let wrapped = futures_util::stream::unfold(
-                        Some(stream),
-                        move |state| {
-                            let provider_name = provider_name.clone();
-                            let model_name = model_name.clone();
-                            async move {
-                                let mut s = state?; // None => stream already terminated
-                                match tokio::time::timeout(CHUNK_IDLE_TIMEOUT, s.next()).await {
-                                    Ok(Some(item)) => Some((item, Some(s))),
-                                    Ok(None) => None, // stream ended normally
-                                    Err(_elapsed) => {
-                                        let timeout_secs = CHUNK_IDLE_TIMEOUT.as_secs();
-                                        tracing::error!(
-                                            provider = %provider_name,
-                                            model = %model_name,
-                                            idle_timeout_secs = timeout_secs,
-                                            "Streaming idle timeout: provider went silent \
-                                             for {timeout_secs}s with no data — closing connection"
-                                        );
-                                        let err: Box<dyn std::error::Error + Send + Sync> =
+                    let wrapped = futures_util::stream::unfold(Some(stream), move |state| {
+                        let provider_name = provider_name.clone();
+                        let model_name = model_name.clone();
+                        async move {
+                            let mut s = state?; // None => stream already terminated
+                            match tokio::time::timeout(CHUNK_IDLE_TIMEOUT, s.next()).await {
+                                Ok(Some(item)) => Some((item, Some(s))),
+                                Ok(None) => None, // stream ended normally
+                                Err(_elapsed) => {
+                                    let timeout_secs = CHUNK_IDLE_TIMEOUT.as_secs();
+                                    tracing::error!(
+                                        provider = %provider_name,
+                                        model = %model_name,
+                                        idle_timeout_secs = timeout_secs,
+                                        "Streaming idle timeout: provider went silent \
+                                         for {timeout_secs}s with no data — closing connection"
+                                    );
+                                    let err: Box<dyn std::error::Error + Send + Sync> =
                                             format!(
                                                 "StreamingError::IdleTimeout — no data received \
                                                  for {timeout_secs}s (provider: {provider_name}, \
@@ -2411,15 +2409,14 @@ impl LLMRouter {
                                                  stopped sending data."
                                             )
                                             .into();
-                                        // Yield the error and set state to None so the
-                                        // next poll terminates the stream (and drops the
-                                        // inner stream, closing the HTTP connection).
-                                        Some((Err(err), None))
-                                    }
+                                    // Yield the error and set state to None so the
+                                    // next poll terminates the stream (and drops the
+                                    // inner stream, closing the HTTP connection).
+                                    Some((Err(err), None))
                                 }
                             }
-                        },
-                    );
+                        }
+                    });
                     return Ok(Box::pin(wrapped));
                 }
                 Err(e) => {

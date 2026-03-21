@@ -161,8 +161,7 @@ impl VisionAutomation {
             }
 
             // Save the already-captured image to disk for the OCR engine.
-            let filename =
-                format!("screenshot_{}.png", &uuid::Uuid::new_v4().to_string()[..8]);
+            let filename = format!("screenshot_{}.png", &uuid::Uuid::new_v4().to_string()[..8]);
             let screenshot_path = self.screenshot_dir.join(&filename);
             if let Err(e) = captured.pixels.save(&screenshot_path) {
                 tracing::warn!("Failed to save screenshot for OCR: {}", e);
@@ -255,7 +254,9 @@ impl VisionAutomation {
                     tracing::warn!(
                         "find_text: word-level bounding boxes unavailable for query '{}', \
                          falling back to screen center ({}, {}) — click accuracy will be low",
-                        query, center_x, center_y
+                        query,
+                        center_x,
+                        center_y
                     );
                     matches.push((center_x, center_y, ocr_result.text.clone()));
                 }
@@ -415,9 +416,7 @@ impl VisionAutomation {
                 // Coordinates and UIAElement are rejected by the pre-flight check above,
                 // so this branch should never be reached. Return an error defensively.
                 _ => {
-                    return Err(anyhow!(
-                        "Unsupported target type for wait_for_element"
-                    ));
+                    return Err(anyhow!("Unsupported target type for wait_for_element"));
                 }
             }
 

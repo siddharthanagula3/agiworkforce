@@ -348,8 +348,10 @@ pub fn model_uses_responses_api(model_id: &str) -> bool {
             if major == 4 {
                 let after_major = &rest[version_str.len()..];
                 if let Some(minor_str) = after_major.strip_prefix('.') {
-                    let minor_digits: String =
-                        minor_str.chars().take_while(|c| c.is_ascii_digit()).collect();
+                    let minor_digits: String = minor_str
+                        .chars()
+                        .take_while(|c| c.is_ascii_digit())
+                        .collect();
                     if let Ok(minor) = minor_digits.parse::<u32>() {
                         return minor >= 1;
                     }

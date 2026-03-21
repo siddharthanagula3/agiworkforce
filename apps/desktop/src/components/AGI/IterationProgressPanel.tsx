@@ -165,7 +165,8 @@ function IterationHistoryCard({
 
   return (
     <div className="bg-surface-base rounded-lg border border-border">
-      <button type="button"
+      <button
+        type="button"
         onClick={onToggle}
         className="w-full p-3 flex items-center justify-between hover:bg-surface-hover transition"
       >
@@ -580,7 +581,8 @@ export function IterationProgressPanel({
       {/* Current Insight */}
       {state.currentInsight && (
         <div className="px-4 pt-4">
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setShowInsight(!showInsight)}
             className="w-full flex items-center justify-between p-2 rounded-lg bg-surface-base hover:bg-surface-hover transition mb-2"
           >
