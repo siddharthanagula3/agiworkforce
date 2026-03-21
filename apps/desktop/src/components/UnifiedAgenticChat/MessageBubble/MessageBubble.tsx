@@ -8,6 +8,11 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { toast } from 'sonner';
+
+// Stable empty array reference to avoid infinite re-render in Zustand selectors.
+// Using `?? []` inline creates a new array reference every render, which React
+// interprets as state change → re-render → new array → infinite loop.
+const EMPTY_TIMELINE: never[] = [];
 import { cn } from '../../../lib/utils';
 import { useUnifiedChatStore, uuidToDbId } from '../../../stores/unifiedChatStore';
 import { useChatStore } from '../../../stores/chat/chatStore';
@@ -237,8 +242,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const researchTasks = useExecutionStore((state) => state.researchTasks);
 
   // Timeline data for this message
+  // IMPORTANT: Return stable references to avoid infinite re-render loop.
+  // `?? []` creates a new array every call — use a module-level constant instead.
   const messageToolTimeline = useChatStore(
-    useCallback((state) => state.toolTimelineByMessage[message.id] ?? [], [message.id]),
+    useCallback((state) => state.toolTimelineByMessage[message.id] ?? EMPTY_TIMELINE, [message.id]),
   );
   const messageThinkingContent = useChatStore(
     useCallback((state) => state.thinkingByMessage[message.id] ?? '', [message.id]),
