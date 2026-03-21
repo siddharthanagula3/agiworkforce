@@ -18,6 +18,7 @@ import { queryKeys } from '@shared/stores/query-client';
 import { supabase } from '@shared/lib/supabase-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { logger } from '@shared/lib/logger';
+import { PaymentAPI } from '@shared/lib/stripe';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -1250,19 +1251,9 @@ export function useCancelSubscription(): UseMutationResult<void, Error, { atPeri
         throw new Error('You must be logged in');
       }
 
-      // Call Netlify function to cancel subscription
-      const response = await fetch('/.netlify/functions/payments/cancel-subscription', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ atPeriodEnd }),
+      await PaymentAPI.cancelSubscription({
+        cancel_at_period_end: atPeriodEnd,
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to cancel subscription');
-      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.billing.subscription() });
@@ -1295,18 +1286,7 @@ export function useUpdatePaymentMethod(): UseMutationResult<
         throw new Error('You must be logged in');
       }
 
-      const response = await fetch('/.netlify/functions/payments/update-payment-method', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ paymentMethodId }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to update payment method');
-      }
+      await PaymentAPI.setDefaultPaymentMethod(paymentMethodId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.billing.paymentMethods() });

@@ -3,16 +3,18 @@
  *
  * These types define the canonical shape for model metadata, provider
  * configuration, and capability representation. The single source of
- * truth for model data is `apps/web/constants/models.json` (also
- * embedded in the Rust binary via `include_str!`).
+ * truth for model data is `packages/types/src/models.json`, re-exported
+ * as `modelsCatalogJson` from this package (also embedded in the Rust
+ * binary via `include_str!`).
  *
  * All surfaces should use these types when referencing model metadata.
  *
- * Canonical source: this file.
+ * Canonical source: this file (types) + ./models.json (data).
  * Consumed by:
- *   - apps/desktop/src/constants/llm.ts (re-exports from models.json)
+ *   - apps/desktop/src/constants/llm.ts (imports modelsCatalogJson)
  *   - apps/desktop/src-tauri/src/core/llm/models_config.rs (Rust mirror)
- *   - apps/web/constants/models.json (raw data)
+ *   - apps/web/constants/llm.ts (imports modelsCatalogJson)
+ *   - apps/web/app/api/models/route.ts (imports modelsCatalogJson)
  *   - apps/mobile/ (via API responses)
  */
 

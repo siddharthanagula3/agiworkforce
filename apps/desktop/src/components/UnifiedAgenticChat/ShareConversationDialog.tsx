@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { invoke } from '@/lib/tauri-mock';
+import { WEB_APP_URL } from '@/api/config';
 
 interface ShareConversationDialogProps {
   conversationId: string;
@@ -27,10 +28,6 @@ interface SharePayload {
   conversationId: string;
   title: string;
 }
-
-// VITE_WEB_APP_URL must be set in the desktop's .env file for production.
-const WEB_APP_URL: string =
-  (import.meta.env['VITE_WEB_APP_URL'] as string | undefined) ?? 'https://agiworkforce.com';
 
 export function ShareConversationDialog({
   conversationId,

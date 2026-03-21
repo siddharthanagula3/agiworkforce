@@ -6,7 +6,7 @@ AGI Workforce brings the power of every major LLM provider into your editor. Swi
 
 ## Features
 
-- **15+ LLM Models** — Claude Opus/Sonnet/Haiku, GPT-5 Pro/5.2/Nano, Gemini 3 Pro/Flash, DeepSeek R1, Perplexity Sonar, Grok 4, and more
+- **15+ LLM Models** — Claude Opus/Sonnet/Haiku, GPT-5.4/4o, Gemini 3 Pro/Flash, DeepSeek R1, Perplexity Sonar, Grok 4, and more
 - **Smart Auto-Routing** — Let AGI Workforce pick the best model: economy, balanced, or premium tier
 - **Chat Participant** — Type `@agi` in VS Code Chat to invoke the assistant with full editor context
 - **Sidebar Panel** — Dedicated chat panel with workspace-aware context (diagnostics, git status, open files)
