@@ -4,9 +4,10 @@
 
 import { logger } from './logger';
 
-// Allowed hosts for redirects (add external trusted domains if needed)
+// Allowed hosts for redirects — trusted subdomains for cross-origin auth flows
 const ALLOWED_HOSTS: Set<string> = new Set([
-  // Add any external trusted domains here if needed
+  'chat.agiworkforce.com',
+  'agiworkforce-chat.vercel.app',
 ]);
 
 /**

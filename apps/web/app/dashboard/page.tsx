@@ -1,7 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import DashboardHome from '@features/pages/DashboardHome';
-
+// Dashboard eliminated — all users go straight to chat
 export default function DashboardPage() {
-  return <DashboardHome />;
+  redirect('/chat');
 }
