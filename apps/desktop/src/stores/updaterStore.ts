@@ -181,7 +181,6 @@ export const useUpdaterStore = create<UpdaterState>()(
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
-            console.debug('[UpdaterStore] Rehydration complete');
           }
         },
       },

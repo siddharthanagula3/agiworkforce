@@ -45,6 +45,9 @@ export * from './workflow';
 // Model catalog types (metadata, capabilities, provider config)
 export * from './model-catalog';
 
+// Canonical model catalog data (single source of truth for all surfaces)
+export { default as modelsCatalogJson } from './models.json';
+
 // Runtime activity and approval contracts
 export * from './runtime';
 

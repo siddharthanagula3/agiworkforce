@@ -17,10 +17,24 @@ import { getTokenCounter } from '../services/tokenCounter';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface ChatMessage {
+/**
+ * Wire-format message sent to the AGI Workforce LLM API endpoint.
+ * Follows the OpenAI chat completions shape (role + content).
+ *
+ * This is NOT the canonical `ChatMessage` from `@agiworkforce/types`, which
+ * represents a persisted UI message with id, conversationId, timestamps, etc.
+ */
+export interface LlmChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
+
+/**
+ * @deprecated Renamed to `LlmChatMessage` to avoid confusion with the
+ * canonical `ChatMessage` from `@agiworkforce/types`. Remove this alias
+ * once all callers in the VS Code extension have been updated.
+ */
+export type ChatMessage = LlmChatMessage;
 
 interface ChatCompletionRequest {
   model: string;

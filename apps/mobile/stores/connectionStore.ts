@@ -49,7 +49,7 @@ export interface DesktopMetadata {
 interface ConnectionState {
   /** Current connection status */
   status: ConnectionStatus;
-  /** Active pairing code (6-8 chars extracted from QR) */
+  /** Active pairing code (8 uppercase alphanumeric chars extracted from QR) */
   pairingCode: string | null;
   /** Desktop device name from peer metadata */
   desktopName: string | null;
@@ -133,13 +133,14 @@ let dataChannel: RTCDataChannelType | null = null;
 /**
  * Parse the pairing code from a QR string.
  * Accepts raw codes or the `agiw:XXXXXXXX` format.
+ * Normalizes to uppercase to match server-generated codes (`/^[A-Z0-9]{8}$/`).
  */
 function parsePairingCode(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed.startsWith('agiw:')) {
-    return trimmed.slice(5);
+    return trimmed.slice(5).toUpperCase();
   }
-  return trimmed;
+  return trimmed.toUpperCase();
 }
 
 /**

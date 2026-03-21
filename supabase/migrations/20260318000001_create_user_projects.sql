@@ -24,11 +24,10 @@ CREATE POLICY "Service role full access on user_projects" ON public.user_project
 CREATE INDEX IF NOT EXISTS idx_user_projects_user_id ON public.user_projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_projects_updated_at ON public.user_projects(updated_at DESC);
 
--- Add project_id column to web_conversations for project-scoped conversations
-ALTER TABLE public.web_conversations
-  ADD COLUMN IF NOT EXISTS project_id uuid REFERENCES public.user_projects(id) ON DELETE SET NULL;
-
-CREATE INDEX IF NOT EXISTS idx_web_conversations_project_id ON public.web_conversations(project_id);
+-- NOTE: The project_id column on web_conversations is added by the web app's
+-- own migration (apps/web/supabase/migrations/20260318200000_conversations_project_id.sql).
+-- The ALTER was removed from here because web_conversations is not created in
+-- this migration set (root supabase/migrations/) — only in the web app's set.
 
 -- Auto-update updated_at trigger
 CREATE OR REPLACE FUNCTION public.update_user_projects_updated_at()

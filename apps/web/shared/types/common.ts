@@ -126,8 +126,15 @@ export interface MessageMetadata {
 }
 
 /**
- * Base chat message interface
- * Use this as the foundation for all message types
+ * Base chat message interface — web surface variant.
+ *
+ * Field mapping to canonical `ChatMessage` from `@agiworkforce/types`:
+ *   - `id`        → canonical `id`
+ *   - `role`      → canonical `role`
+ *   - `content`   → canonical `content`
+ *   - `createdAt` → canonical `createdAt` (canonical is always ISO string;
+ *                   this surface accepts both Date and string for local state)
+ *   - `metadata`  → canonical `metadata` (web extends with richer typing)
  */
 export interface BaseChatMessage {
   id: string;
@@ -156,8 +163,15 @@ export interface SimpleChatMessage {
 }
 
 /**
- * Chat message with session/conversation context
- * Full-featured message for multi-agent chat systems
+ * Web-surface chat message with session/conversation context.
+ *
+ * This is the web app's full-featured extension of the canonical
+ * `ChatMessage` from `@agiworkforce/types`. It extends `BaseChatMessage`
+ * (the web-local base) with multi-agent participant, delivery-status,
+ * streaming, and editing fields that are specific to the web surface.
+ *
+ * When the canonical package covers all these fields the surface-specific
+ * extension should be removed in favour of a direct import.
  */
 export interface ChatMessage extends BaseChatMessage {
   sessionId?: string;

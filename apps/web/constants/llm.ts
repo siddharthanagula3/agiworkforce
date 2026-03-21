@@ -1,11 +1,12 @@
 /**
  * LLM Constants for web app — reads from the shared models.json (single source of truth).
  *
- * The canonical model catalog lives in apps/desktop/src/constants/models.json.
- * This file imports it directly and re-exports with the same API as the desktop shim.
+ * The canonical model catalog lives in packages/types/src/models.json and is
+ * re-exported as `modelsCatalogJson` from @agiworkforce/types.
+ * This file imports it and re-exports with the same API as the desktop shim.
  */
 
-import modelsJson from './models.json';
+import { modelsCatalogJson as modelsJson } from '@agiworkforce/types';
 
 // ---- Types ----
 

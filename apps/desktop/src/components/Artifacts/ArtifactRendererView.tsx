@@ -310,8 +310,38 @@ function DiagramRenderer({ data }: { data: DiagramRenderData }) {
 
 function WebRenderer({ data }: { data: WebRenderData }) {
   const srcDoc = useMemo(() => {
-    // Build sandboxed HTML with security headers
-    const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline' *; img-src * data: blob:; font-src * data:; connect-src 'none'; frame-src 'none';">`;
+    // Content Security Policy for the sandboxed HTML iframe.
+    //
+    // script-src 'unsafe-inline':
+    //   Required — this renderer wraps user-supplied HTML snippets in a full
+    //   document with an injected <style> block; the user's own HTML may also
+    //   contain inline <script> tags that need to execute.
+    //
+    // script-src 'unsafe-eval' is intentionally OMITTED here.
+    //   This renderer is a lightweight preview (ArtifactRendererView) and does
+    //   not inject any eval-dependent console-capture logic. Blocking eval()
+    //   raises the bar against prototype-pollution and code-injection attacks.
+    //   If a user artifact explicitly calls eval() it will be blocked by the CSP
+    //   and surface as a console error — the correct fail-safe.
+    //   The full interactive sandbox (HtmlArtifact in ArtifactRenderer.tsx) retains
+    //   'unsafe-eval' because it is the CodePen-style execution environment where
+    //   users intentionally run arbitrary JavaScript.
+    //
+    // style-src 'unsafe-inline':
+    //   Required — the wrapper <style> block below is injected as inline CSS,
+    //   and user HTML fragments typically contain inline style attributes.
+    //
+    // style-src *:
+    //   Allows user artifacts to load stylesheets from CDNs (e.g. Bootstrap,
+    //   Tailwind CDN). Acceptable trade-off: external stylesheets are read-only
+    //   and cannot exfiltrate data; connect-src 'none' blocks all network I/O.
+    //
+    // connect-src 'none':
+    //   Blocks all fetch/XHR/WebSocket calls to prevent data exfiltration.
+    //
+    // object-src 'none':
+    //   Blocks Flash and other legacy plugin content.
+    const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'unsafe-inline'; style-src 'unsafe-inline' *; img-src * data: blob:; font-src * data:; connect-src 'none'; frame-src 'none'; object-src 'none';">`;
 
     const isFullDoc = /<html[\s>]/i.test(data.html);
     if (isFullDoc) {
