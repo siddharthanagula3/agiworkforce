@@ -13,7 +13,7 @@ apps/desktop/src-tauri/src/   # Rust backend (core/, sys/, automation/, features
 apps/desktop/src/              # React 19 frontend (components/, stores/, hooks/, services/)
 apps/web/                      # Next.js 16 (Supabase auth, Stripe billing)
 apps/mobile/                   # Expo + React Native (NativeWind)
-apps/cli/                      # Rust CLI agent (27 files, ~28K LOC, Whisper voice mode)
+apps/cli/                      # Rust CLI agent (37 files, ~31K LOC, Whisper voice mode)
 apps/extension/                # Chrome MV3 (native messaging, DOM automation)
 apps/extension-vscode/         # VS Code (chat participant, agent mode, inline completions)
 packages/types/                # Shared TS types: a2a, cross-device, mcp-apps, event-triggers, audit
@@ -90,7 +90,7 @@ The #1 source of silent bugs. Tauri auto-converts param names at the boundary.
 - Use `State<'_, T>` for managed state access
 - Use degraded state constructors for optional features: `MemoryState::degraded()`
 - `clippy::await_holding_lock` is allowed
-- Feature flags: `default = ["shell", "updater"]`. Optional: `ocr`, `local-llm`, `vad`, `local-whisper`, `remote-databases`, `devtools`. Use `#[cfg(feature = "...")]` guards
+- Feature flags: `default = ["shell", "updater", "billing", "vad"]`. Optional: `ocr`, `local-llm`, `local-whisper`, `webrtc-support`, `sentry`, `remote-databases`, `devtools`. Use `#[cfg(feature = "...")]` guards
 
 ## TypeScript Conventions
 
