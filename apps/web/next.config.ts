@@ -27,6 +27,21 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['@supabase/ssr'],
   },
+  // Rewrite /chat to serve the Vite chat app from chat.agiworkforce.com
+  // This keeps the browser on agiworkforce.com (same domain = auth cookies work)
+  async rewrites() {
+    const chatUrl = process.env['NEXT_PUBLIC_CHAT_URL'] || 'https://chat.agiworkforce.com';
+    return [
+      {
+        source: '/chat',
+        destination: `${chatUrl}/`,
+      },
+      {
+        source: '/chat/:path*',
+        destination: `${chatUrl}/:path*`,
+      },
+    ];
+  },
   // Security headers
   async headers() {
     return [
