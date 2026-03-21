@@ -44,6 +44,12 @@ ignore = [
     # lru - unsound IterMut (mysql_async dependency)
     # The unsoundness only affects IterMut which we don't use directly
     "RUSTSEC-2026-0002", # lru - unsound IterMut (mysql_async dependency, not used in our code)
+
+    # rustls-webpki v0.101.7 - CRL distribution point matching bug
+    # Transitive from Tauri's older rustls dependency chain, pinned to 0.101.x
+    # v0.103.x updated to 0.103.10 (patched), but 0.101.x has no patch available
+    # Low impact: requires compromised CA to exploit
+    "RUSTSEC-2026-0049", # rustls-webpki CRL matching (Tauri transitive, low impact)
 ]
 
 [yanked]
