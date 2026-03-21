@@ -4,27 +4,22 @@ import {
   ArchiveRestore,
   Calendar,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
+  PanelLeft,
   Clock,
   Cloud,
   Download,
   FileText,
-  FlaskConical,
   FolderOpen,
-  Image,
   Layers,
   Link2,
   MessageSquare,
-  PenTool,
   Pin,
   PinOff,
   Plus,
   Search,
   Sparkles,
-  TerminalSquare,
   Trash2,
-  Wrench,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -67,7 +62,7 @@ import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleModeToggle } from '../SimpleMode';
 import { NotificationCenter } from '../Notifications';
 import { ShareConversationDialog } from './ShareConversationDialog';
-import { SidebarFeaturesPopover } from './SidebarFeaturesPopover';
+// SidebarFeaturesPopover removed — features accessible via chat or Cmd+K
 import { TransferDialog } from './TransferDialog';
 import { IncognitoToggle } from './IncognitoToggle';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -389,16 +384,16 @@ export function Sidebar({
   onCollapsedChange = () => {},
   width = 260,
   onResize,
-  onOpenResearch,
-  onOpenRewind,
-  onOpenCollaboration,
-  onToggleMediaLab,
-  canAccessMediaLab,
-  onToggleArtifacts,
-  artifactPanelOpen = false,
-  onOpenMcpWorkspace,
-  onOpenMcpBundles,
-  onOpenCanvas,
+  onOpenResearch: _onOpenResearch,
+  onOpenRewind: _onOpenRewind,
+  onOpenCollaboration: _onOpenCollaboration,
+  onToggleMediaLab: _onToggleMediaLab,
+  canAccessMediaLab: _canAccessMediaLab,
+  onToggleArtifacts: _onToggleArtifacts,
+  artifactPanelOpen: _artifactPanelOpen = false,
+  onOpenMcpWorkspace: _onOpenMcpWorkspace,
+  onOpenMcpBundles: _onOpenMcpBundles,
+  onOpenCanvas: _onOpenCanvas,
 }: SidebarProps) {
   // Platform-aware modifier key: ⌘ on Mac, Ctrl on Windows/Linux
   const modKeySymbol =
@@ -507,7 +502,6 @@ export function Sidebar({
     conversationTitle: string;
   }>({ open: false, conversationId: '', conversationTitle: '' });
 
-  const [featuresPopoverOpen, setFeaturesPopoverOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState<{
     id: string;
     title: string;
@@ -861,7 +855,7 @@ export function Sidebar({
             aria-label="Expand sidebar"
             className="text-[hsl(var(--muted-foreground))]"
           >
-            <ChevronRight className="h-4 w-4" />
+            <PanelLeft className="h-4 w-4" />
           </Button>
           <Button
             onClick={handleNewChat}
@@ -883,6 +877,30 @@ export function Sidebar({
             className="text-[hsl(var(--muted-foreground))]"
           >
             <Search className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={() => {
+              if (onToggleCollapse) onToggleCollapse();
+              setActiveView('projects');
+            }}
+            variant="ghost"
+            size="icon"
+            aria-label="Projects"
+            className="text-[hsl(var(--muted-foreground))]"
+          >
+            <FolderOpen className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={() => {
+              if (onToggleCollapse) onToggleCollapse();
+              setActiveView('skills');
+            }}
+            variant="ghost"
+            size="icon"
+            aria-label="Skills"
+            className="text-[hsl(var(--muted-foreground))]"
+          >
+            <Sparkles className="h-4 w-4" />
           </Button>
           {/* Mode dot — collapsed state shows only the colored dot */}
           <div
@@ -1039,7 +1057,7 @@ export function Sidebar({
               size="icon"
               className="text-[hsl(var(--muted-foreground))]"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <PanelLeft className="h-4 w-4" />
             </Button>
             <div className="flex items-center gap-1.5">
               <IncognitoToggle
@@ -1076,54 +1094,16 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Features section: 4 promoted direct links + More popover */}
+        {/* Navigation: Claude-style minimal nav */}
         {!collapsed && !isSimpleMode && (
-          <div className="px-2 py-1.5 border-b border-[hsl(var(--border))]">
+          <div className="px-2 py-1.5 border-b border-[hsl(var(--border))] space-y-0.5">
             {[
               {
-                id: 'research',
-                label: 'Research',
-                icon: FlaskConical,
-                onClick: onOpenResearch,
-                isActive: false,
-              },
-              // Terminal only shown in desktop mode
-              ...(isTauri
-                ? [
-                    {
-                      id: 'terminal',
-                      label: 'Terminal',
-                      icon: TerminalSquare,
-                      onClick: () => setActiveView('terminal'),
-                      isActive: activeView === 'terminal',
-                    },
-                  ]
-                : []),
-              {
-                id: 'canvas',
-                label: 'Canvas',
-                icon: PenTool,
-                onClick: onOpenCanvas,
-                isActive: false,
-              },
-              // MCP Tools only shown in desktop mode (requires local MCP servers)
-              ...(isTauri
-                ? [
-                    {
-                      id: 'mcp-tools',
-                      label: 'MCP Tools',
-                      icon: Wrench,
-                      onClick: onOpenMcpWorkspace,
-                      isActive: false,
-                    },
-                  ]
-                : []),
-              {
-                id: 'images',
-                label: 'Images',
-                icon: Image,
-                onClick: () => setActiveView('images'),
-                isActive: activeView === 'images',
+                id: 'projects',
+                label: 'Projects',
+                icon: FolderOpen,
+                onClick: () => setActiveView('projects'),
+                isActive: activeView === 'projects',
               },
               {
                 id: 'skills',
@@ -1131,13 +1111,6 @@ export function Sidebar({
                 icon: Sparkles,
                 onClick: () => setActiveView('skills'),
                 isActive: activeView === 'skills',
-              },
-              {
-                id: 'schedules',
-                label: 'Schedules',
-                icon: Clock,
-                onClick: () => setActiveView('schedules'),
-                isActive: activeView === 'schedules',
               },
             ].map(({ id, label, icon: Icon, onClick, isActive }) => (
               <button
@@ -1156,22 +1129,6 @@ export function Sidebar({
                 <span>{label}</span>
               </button>
             ))}
-            <SidebarFeaturesPopover
-              activeView={activeView}
-              artifactPanelOpen={artifactPanelOpen}
-              canAccessMediaLab={canAccessMediaLab ?? false}
-              onSetActiveView={setActiveView}
-              onOpenResearch={onOpenResearch}
-              onOpenRewind={onOpenRewind}
-              onOpenCollaboration={onOpenCollaboration}
-              onToggleMediaLab={onToggleMediaLab}
-              onToggleArtifacts={onToggleArtifacts}
-              onOpenMcpWorkspace={onOpenMcpWorkspace}
-              onOpenMcpBundles={onOpenMcpBundles}
-              open={featuresPopoverOpen}
-              onOpenChange={setFeaturesPopoverOpen}
-              triggerAsRow
-            />
           </div>
         )}
 
@@ -1381,9 +1338,9 @@ export function Sidebar({
               </span>
             </button>
           )}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 overflow-hidden">
             {!collapsed && <SimpleModeToggle compact />}
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 overflow-hidden">
               <UserProfile collapsed={collapsed} />
             </div>
             {/* Mode toggle pill — expanded state (hidden in web mode, always cloud) */}

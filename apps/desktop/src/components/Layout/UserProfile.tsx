@@ -66,7 +66,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
         <button
           type="button"
           className={cn(
-            'flex w-full items-center gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left transition-all hover:bg-[hsl(var(--accent))] hover:border-[hsl(var(--border))]',
+            'flex w-full items-center gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left transition-all hover:bg-[hsl(var(--accent))] hover:border-[hsl(var(--border))] overflow-hidden',
             collapsed && 'justify-center px-2',
           )}
         >
@@ -83,13 +83,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
           </div>
 
           {!collapsed && (
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 overflow-hidden">
               <div className="truncate text-sm font-medium text-[hsl(var(--foreground))]">
                 {name}
               </div>
               <div
                 className={cn(
-                  'mt-0.5 inline-flex items-center rounded-xs bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]',
+                  'mt-0.5 inline-flex max-w-full items-center rounded-xs bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))] truncate',
                   isTierLoading && 'animate-pulse',
                 )}
               >
