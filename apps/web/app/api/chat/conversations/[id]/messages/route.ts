@@ -74,7 +74,8 @@ async function getAuthenticatedUser(request: NextRequest): Promise<User> {
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-interface ChatMessage {
+/** Wire-format message for the LLM provider call — not the canonical UI ChatMessage. */
+interface LlmTurnMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
 }
@@ -189,7 +190,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     .order('created_at', { ascending: true })
     .limit(20);
 
-  const messages: ChatMessage[] = (history || []).map((m) => ({
+  const messages: LlmTurnMessage[] = (history || []).map((m) => ({
     role: m.role as 'user' | 'assistant' | 'system',
     content: m.content,
   }));

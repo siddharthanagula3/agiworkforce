@@ -149,11 +149,6 @@ async function fetchCreditsWithCache(accessToken: string): Promise<CreditBalance
       errorMessage.includes('401') || errorMessage.toLowerCase().includes('unauthorized');
 
     if (isUnauthorized) {
-      if (!credits401Cache || credits401Cache.accessToken !== accessToken) {
-        console.debug(
-          '[AuthOrchestrator] Could not fetch credits (API unauthorized). In local dev, this often means AGI_API_URL points to a backend that does not match your Supabase project.',
-        );
-      }
       credits401Cache = { accessToken, at: now };
       return null;
     }
@@ -177,31 +172,22 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
   // skip the finally block that resets it back to false.
   if (isProcessingAuthChange) {
     pendingAuthState = authState;
-    console.debug('[AuthOrchestrator] Auth change queued (already processing)');
     return;
   }
 
   // Skip if still loading - wait for complete state
   if (authState.isLoading) {
-    console.debug('[AuthOrchestrator] Auth is loading, waiting...');
     return;
   }
 
   // Skip if subscription is still being fetched
   if (authState.subscriptionFetchStatus === 'fetching') {
-    console.debug('[AuthOrchestrator] Subscription fetch in progress, waiting...');
     return;
   }
 
   isProcessingAuthChange = true;
 
   try {
-    console.debug('[AuthOrchestrator] Processing auth state change:', {
-      hasUser: !!authState.user,
-      hasSession: !!authState.session,
-      subscriptionFetchStatus: authState.subscriptionFetchStatus,
-    });
-
     // Get the unified auth store
     const unifiedAuthStore = useUnifiedAuthStore.getState();
 
@@ -228,7 +214,6 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
 
     // If no user and not loading, clear store and return
     if (!authState.user) {
-      console.debug('[AuthOrchestrator] No user, clearing unified auth store');
       unifiedAuthStore.reset();
       clearCachedSubscription();
       cachedUserHash = null;
@@ -247,24 +232,20 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       planTier = asPlanTier(authState.subscription.plan_tier);
       subscriptionStatus = (authState.subscription.status as SubscriptionStatus) || 'active';
       setCachedSubscription(userId, planTier, subscriptionStatus);
-      console.debug('[AuthOrchestrator] Using fetched plan tier:', planTier);
     } else if (authState.subscriptionFetchStatus === 'failed') {
       // Fetch failed - try cache
       const cached = getCachedSubscription(userId);
       if (cached) {
         planTier = cached.planTier;
         subscriptionStatus = cached.subscriptionStatus;
-        console.debug('[AuthOrchestrator] Using cached plan tier:', planTier);
       } else {
         // CRITICAL: Don't default to 'free' - keep as null
         planTier = null;
-        console.debug('[AuthOrchestrator] Fetch failed, no cache - plan unknown');
       }
     } else {
       // Fetch succeeded but no subscription = genuinely free tier
       planTier = 'free';
       clearCachedSubscription();
-      console.debug('[AuthOrchestrator] Confirmed free tier (no subscription)');
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -274,7 +255,6 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     if (authState.session?.access_token) {
       try {
         credits = await fetchCreditsWithCache(authState.session.access_token);
-        console.debug('[AuthOrchestrator] Credits fetched:', credits?.remaining_cents);
       } catch (error) {
         console.warn('[AuthOrchestrator] Credit fetch failed:', error);
       }
@@ -385,13 +365,10 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
 
         // Initialize ManagedCloud provider
         await invoke('llm_ensure_managed_cloud');
-        console.debug('[AuthOrchestrator] Rust backend synced');
       } catch (error) {
         console.warn('[AuthOrchestrator] Failed to sync with Rust backend:', error);
       }
     }
-
-    console.debug('[AuthOrchestrator] Auth state processing complete');
   } finally {
     isProcessingAuthChange = false;
 
@@ -399,7 +376,6 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     if (pendingAuthState) {
       const nextState = pendingAuthState;
       pendingAuthState = null;
-      console.debug('[AuthOrchestrator] Processing queued auth state');
       await processAuthStateChange(nextState);
     }
   }
@@ -418,7 +394,6 @@ export function initializeAuthOrchestrator(): () => void {
     return unsubscribeFn || (() => {});
   }
 
-  console.debug('[AuthOrchestrator] Initializing...');
   orchestratorInitialized = true;
 
   // Subscribe to auth state changes
@@ -455,7 +430,6 @@ export function initializeAuthOrchestrator(): () => void {
   });
 
   return () => {
-    console.debug('[AuthOrchestrator] Cleanup');
     orchestratorInitialized = false;
     if (unsubscribeFn) {
       unsubscribeFn();

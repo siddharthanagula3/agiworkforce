@@ -29,6 +29,7 @@ use dashmap::DashMap;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 use crate::sys::api::oauth::{OAuth2Client, OAuth2Config, PkceChallenge, TokenResponse};
@@ -87,10 +88,15 @@ pub struct GmailUserProfile {
     pub verified_email: Option<bool>,
 }
 
+/// Maximum age for pending OAuth states (10 minutes)
+const OAUTH_STATE_TTL_SECS: u64 = 600;
+
 /// Pending OAuth state during authorization flow
 struct PendingOAuth {
     settings: GmailOAuthSettings,
     pkce: PkceChallenge,
+    /// Unix timestamp when this state was created
+    created_at: u64,
 }
 
 /// Gmail OAuth 2.0 client with PKCE support
@@ -346,6 +352,14 @@ impl GmailOAuthManager {
 
         let (auth_url, pkce) = client.generate_auth_url(&state);
 
+        // Clean up expired pending states before inserting new one
+        self.cleanup_expired_states();
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
         self.pending_auth.insert(
             state.clone(),
             PendingOAuth {
@@ -355,21 +369,44 @@ impl GmailOAuthManager {
                     redirect_uri,
                 },
                 pkce,
+                created_at: now,
             },
         );
 
         Ok((auth_url, state))
     }
 
+    /// Clean up expired pending OAuth states (older than 10 minutes)
+    fn cleanup_expired_states(&self) {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        self.pending_auth
+            .retain(|_, pending| now.saturating_sub(pending.created_at) < OAUTH_STATE_TTL_SECS);
+    }
+
     /// Take pending OAuth data for completion
     pub fn take_pending(&self, state: &str) -> Result<(GmailOAuthSettings, PkceChallenge)> {
-        self.pending_auth
+        let entry = self
+            .pending_auth
             .remove(state)
-            .map(|entry| {
-                let pending = entry.1;
-                (pending.settings, pending.pkce)
-            })
-            .ok_or_else(|| Error::Other("Invalid state parameter".to_string()))
+            .ok_or_else(|| Error::Other("Invalid or expired state parameter".to_string()))?;
+
+        let pending = entry.1;
+
+        // Validate TTL
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        if now.saturating_sub(pending.created_at) >= OAUTH_STATE_TTL_SECS {
+            return Err(Error::Other(
+                "OAuth state expired. Please start the flow again.".to_string(),
+            ));
+        }
+
+        Ok((pending.settings, pending.pkce))
     }
 
     /// Complete the OAuth flow after user authorization

@@ -173,7 +173,7 @@ export default function RootLayout() {
         parsed.path?.split('/').filter(Boolean).pop();
 
       if (code) {
-        const PAIRING_CODE_RE = /^[A-Za-z0-9]{6,8}$/;
+        const PAIRING_CODE_RE = /^[A-Za-z0-9]{8}$/;
         if (!PAIRING_CODE_RE.test(code)) {
           return;
         }

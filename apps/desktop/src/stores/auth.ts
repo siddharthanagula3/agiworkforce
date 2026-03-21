@@ -23,7 +23,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
-import { supabaseAuth, type AuthState as SupabaseAuthState } from '../services/supabaseAuth';
+import { supabaseAuth } from '../services/supabaseAuth';
 import { StripeService, type CustomerInfo, type SubscriptionInfo } from '../services/stripe';
 import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
 import { isSubscriptionActive, isInGracePeriod } from '../utils/featureGates';
@@ -33,45 +33,6 @@ import { cleanupAllStoresOnLogout, clearPersistedUserData } from './logoutCleanu
 // =============================================================================
 // Helpers
 // =============================================================================
-
-/** Sensitive field names that must never appear in logs. */
-const SENSITIVE_KEYS = new Set([
-  'access_token',
-  'refresh_token',
-  'token',
-  'secret',
-  'password',
-  'api_key',
-  'apiKey',
-  'private_key',
-  'privateKey',
-]);
-
-/**
- * Strip tokens and secrets from an auth state object before logging.
- * Returns a shallow copy with sensitive leaf values replaced by '[REDACTED]'.
- */
-function sanitizeAuthState(state: SupabaseAuthState): Record<string, unknown> {
-  const sanitize = (obj: unknown): unknown => {
-    if (obj === null || obj === undefined) return obj;
-    if (typeof obj !== 'object') return obj;
-    if (Array.isArray(obj)) return obj.map(sanitize);
-
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      if (SENSITIVE_KEYS.has(key)) {
-        result[key] = '[REDACTED]';
-      } else if (typeof value === 'object' && value !== null) {
-        result[key] = sanitize(value);
-      } else {
-        result[key] = value;
-      }
-    }
-    return result;
-  };
-
-  return sanitize(state) as Record<string, unknown>;
-}
 
 // =============================================================================
 // Types
@@ -413,7 +374,6 @@ const MAX_SUBSCRIPTION_RETRIES = 3;
 // Schedule retry is exported for use by authOrchestrator
 export function scheduleSubscriptionRetry(userId: string): void {
   if (retryCount >= MAX_SUBSCRIPTION_RETRIES) {
-    console.debug('[UnifiedAuth] Max subscription retries reached, stopping retries');
     return;
   }
 
@@ -421,18 +381,11 @@ export function scheduleSubscriptionRetry(userId: string): void {
   retryCount++;
 
   const delay = Math.min(3000 * Math.pow(2, retryCount - 1), 30000);
-  console.debug(
-    `[UnifiedAuth] Scheduling subscription retry ${retryCount}/${MAX_SUBSCRIPTION_RETRIES} in ${delay}ms`,
-  );
 
   retryTimeout = setTimeout(async () => {
-    console.debug('[UnifiedAuth] Retrying subscription fetch for user:', userId);
     // [C2 fix] Guard: skip retry if the active session has changed since scheduling
     const currentUserId = useUnifiedAuthStore.getState().user?.id;
     if (currentUserId && currentUserId !== userId) {
-      console.debug(
-        '[UnifiedAuth] User session changed since retry was scheduled, skipping stale retry',
-      );
       return;
     }
     await supabaseAuth.refreshUserData();
@@ -936,21 +889,15 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         syncWithBackend: async () => {
           // Prevent concurrent sync calls
           if (syncInProgress && pendingSyncPromise) {
-            console.debug('[UnifiedAuth] Sync already in progress, waiting for existing sync...');
             return pendingSyncPromise;
           }
 
           syncInProgress = true;
           pendingSyncPromise = (async () => {
             try {
-              console.debug('[UnifiedAuth] Starting syncWithBackend...');
               await supabaseAuth.refreshUserData();
 
               const authState = supabaseAuth.getState();
-              console.debug(
-                '[UnifiedAuth] Auth state after refresh:',
-                sanitizeAuthState(authState),
-              );
 
               if (!authState.user) {
                 console.warn('[UnifiedAuth] No authenticated user - skipping sync');
@@ -973,38 +920,24 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                   setCachedSubscription(userId, planTier, subscriptionStatus);
                   resetRetryCount();
                 }
-                console.debug('[UnifiedAuth] syncWithBackend - Using fetched plan tier:', planTier);
               } else if (userId && authState.subscriptionFetchStatus === 'failed') {
                 const cached = getCachedSubscription(userId);
                 if (cached) {
                   planTier = cached.planTier;
                   subscriptionStatus = cached.subscriptionStatus;
                   fetchStatus = 'succeeded';
-                  console.debug(
-                    '[UnifiedAuth] syncWithBackend - Using cached plan tier:',
-                    planTier,
-                  );
                 } else {
                   planTier = null;
                   fetchStatus = 'failed';
-                  console.debug(
-                    '[UnifiedAuth] syncWithBackend - Fetch failed, no cache - showing loading state',
-                  );
                 }
               } else if (userId && authState.subscriptionFetchStatus === 'succeeded') {
                 planTier = 'free';
                 fetchStatus = 'succeeded';
                 clearCachedSubscription();
                 resetRetryCount();
-                console.debug(
-                  '[UnifiedAuth] syncWithBackend - Setting plan to free (confirmed no subscription)',
-                );
               } else {
                 planTier = null;
                 fetchStatus = 'fetching';
-                console.debug(
-                  '[UnifiedAuth] syncWithBackend - Plan unknown, showing loading state',
-                );
               }
 
               // Fetch credits from API if we have a session
@@ -1256,7 +1189,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
-            console.debug('[UnifiedAuth] Rehydration complete, waiting for session validation...');
           }
         },
         migrate: (persistedState: unknown, version: number) => {

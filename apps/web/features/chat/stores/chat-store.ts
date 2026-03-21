@@ -27,6 +27,18 @@ export interface ThinkingSegment {
   durationSeconds?: number;
 }
 
+/**
+ * Web chat store message shape.
+ *
+ * Surface-specific extension of the canonical ChatMessage from
+ * `@agiworkforce/types`. Key differences from canonical:
+ *   - `sessionId` maps to `conversationId` in the canonical type
+ *   - `createdAt` is a `Date` object (canonical uses ISO 8601 string)
+ *   - `metadata` is typed explicitly for streaming/thinking UI state
+ *
+ * When serialising to the API or canonical layer, map these fields
+ * accordingly.
+ */
 export interface ChatMessage {
   id: string;
   sessionId: string;
