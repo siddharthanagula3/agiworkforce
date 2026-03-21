@@ -5,7 +5,7 @@
  * Extracted from the main useEffect in UnifiedAgenticChat.
  */
 import { useEffect } from 'react';
-import { listen, isTauri, invoke as tauriInvoke } from '../../lib/tauri-mock';
+import { listen, isCloudWeb, isTauri, invoke as tauriInvoke } from '../../lib/tauri-mock';
 import { invoke as ipcInvoke } from '../../utils/ipc';
 import { useChatPreferencesStore } from '../../stores/chatPreferencesStore';
 import { useUnifiedChatStore, uuidToDbId } from '../../stores/unifiedChatStore';
@@ -52,6 +52,7 @@ import { resolveToolHardTimeoutMs, shouldAbortGenerationOnToolTimeout } from './
 
 const TOOL_EXECUTION_SOFT_TIMEOUT_MS = 10_000;
 const AGENT_THINKING_ACTION_SOURCE = 'agent:thinking';
+type StreamConversationKey = number | string;
 
 export interface UseTauriStreamListenersConfig {
   abortControllerRef: React.MutableRefObject<AbortController | null>;
@@ -62,13 +63,13 @@ export interface UseTauriStreamListenersConfig {
     Map<
       string,
       {
-        conversationId: number;
+        conversationId: StreamConversationKey;
         softTimeoutId: ReturnType<typeof setTimeout>;
         hardTimeoutId: ReturnType<typeof setTimeout>;
       }
     >
   >;
-  activeStreamSessionsRef: React.MutableRefObject<Map<number, string>>;
+  activeStreamSessionsRef: React.MutableRefObject<Map<StreamConversationKey, string>>;
   streamWatchdogTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
   rafIdRef: React.MutableRefObject<number | null>;
   queueStreamUpdate: (messageId: string, fullContent: string) => void;
@@ -92,7 +93,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
   } = config;
 
   useEffect(() => {
-    if (!isTauri) return;
+    if (!isTauri && !isCloudWeb) return;
 
     const setupGeneration = ++listenerSetupGenerationRef.current;
     isMountedRef.current = true;
@@ -117,19 +118,24 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }
       };
 
-      const getConversationMessagesForStream = (conversationId: number) => {
+      const getConversationMessagesForStream = (conversationId: StreamConversationKey) => {
         const state = useUnifiedChatStore.getState();
 
         if (
           state.activeConversationId &&
-          uuidToDbId(state.activeConversationId) === conversationId
+          ((typeof conversationId === 'string' && state.activeConversationId === conversationId) ||
+            (typeof conversationId === 'number' &&
+              uuidToDbId(state.activeConversationId) === conversationId))
         ) {
           return state.messages;
         }
 
-        const matchingConversationId = Object.keys(state.messagesByConversation).find(
-          (id) => uuidToDbId(id) === conversationId,
-        );
+        const matchingConversationId =
+          typeof conversationId === 'string'
+            ? conversationId
+            : Object.keys(state.messagesByConversation).find(
+                (id) => uuidToDbId(id) === conversationId,
+              );
 
         if (matchingConversationId) {
           return state.messagesByConversation[matchingConversationId] ?? [];
@@ -139,7 +145,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
       };
 
       const resolveStreamTargetMessageId = (
-        conversationId: number,
+        conversationId: StreamConversationKey,
         payloadMessageId?: string | number,
       ): string | null => {
         const state = useUnifiedChatStore.getState();
@@ -154,7 +160,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
       };
 
       const upsertToolArtifact = (
-        conversationId: number,
+        conversationId: StreamConversationKey,
         toolCallId: string,
         patch: Record<string, unknown>,
         payloadMessageId?: string | number,
@@ -285,7 +291,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }
       };
 
-      const clearToolExecutionTimeoutsForConversation = (conversationId: number) => {
+      const clearToolExecutionTimeoutsForConversation = (conversationId: StreamConversationKey) => {
         for (const [toolCallId, timeoutEntry] of toolExecutionTimeoutsRef.current.entries()) {
           if (timeoutEntry.conversationId !== conversationId) {
             continue;
@@ -298,12 +304,12 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
       const syncGlobalStreamingState = () => {
         const state = useUnifiedChatStore.getState();
-        const activeConversationDbId = state.activeConversationId
-          ? uuidToDbId(state.activeConversationId)
+        const activeConversationKey = state.activeConversationId
+          ? (uuidToDbId(state.activeConversationId) ?? state.activeConversationId)
           : undefined;
         const activeConversationStreamId =
-          typeof activeConversationDbId === 'number'
-            ? (activeStreamSessionsRef.current.get(activeConversationDbId) ?? null)
+          activeConversationKey !== undefined
+            ? (activeStreamSessionsRef.current.get(activeConversationKey) ?? null)
             : null;
         const streamSessionValues = [...activeStreamSessionsRef.current.values()];
         const fallbackStreamId =
@@ -319,7 +325,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
       const scheduleToolExecutionTimeout = (
         toolCallId: string,
         toolName: string,
-        conversationId: number,
+        conversationId: StreamConversationKey,
         resetExisting: boolean,
         payloadMessageId?: string | number,
       ) => {
@@ -445,7 +451,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
        * Clears queued updates, abort controller, loading state, tool timeouts, and agent status.
        */
       const finalizeStream = (
-        conversationId: number,
+        conversationId: StreamConversationKey,
         finalizedMessageId: string | null,
         agentOutcome: 'completed' | 'failed',
         agentError?: string,
@@ -473,32 +479,33 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
       };
 
       registerListener(
-        listen<{ conversation_id: number; message_id: string | number; created_at: string }>(
-          'chat:stream-start',
-          ({ payload }) => {
-            if (!isMountedRef.current) return;
-            markStreamActivity();
+        listen<{
+          conversation_id: StreamConversationKey;
+          message_id: string | number;
+          created_at: string;
+        }>('chat:stream-start', ({ payload }) => {
+          if (!isMountedRef.current) return;
+          markStreamActivity();
 
-            // Create new AbortController for this streaming session
-            // This allows handleStopGeneration to cancel the current stream
-            abortControllerRef.current = new AbortController();
+          // Create new AbortController for this streaming session
+          // This allows handleStopGeneration to cancel the current stream
+          abortControllerRef.current = new AbortController();
 
-            // CHT-005 fix: Register this stream session with conversation-to-message mapping
-            // This prevents race conditions when multiple streams are active
-            const messageId = String(payload.message_id);
-            activeStreamSessionsRef.current.set(payload.conversation_id, messageId);
+          // CHT-005 fix: Register this stream session with conversation-to-message mapping
+          // This prevents race conditions when multiple streams are active
+          const messageId = String(payload.message_id);
+          activeStreamSessionsRef.current.set(payload.conversation_id, messageId);
 
-            // Stream has started, but we keep isLoading true until stream-end
-            // This allows the UI to show streaming state
-            useUnifiedChatStore.getState().setIsLoading(true);
-          },
-        ),
+          // Stream has started, but we keep isLoading true until stream-end
+          // This allows the UI to show streaming state
+          useUnifiedChatStore.getState().setIsLoading(true);
+        }),
       );
 
       // Live status updates: "Connecting...", "Writing response...", "Calling Read(file)..."
       registerListener(
         listen<{
-          conversation_id: number;
+          conversation_id: StreamConversationKey;
           message_id: string | number;
           phase: string;
           message: string;
@@ -529,7 +536,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
       registerListener(
         listen<{
-          conversation_id: number;
+          conversation_id: StreamConversationKey;
           message_id: string | number;
           delta: string;
           content: string;
@@ -548,7 +555,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
       registerListener(
         listen<{
-          conversation_id: number;
+          conversation_id: StreamConversationKey;
           message_id: string | number;
           backend_message_id?: number;
           usage?: {
@@ -678,80 +685,81 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
       // Listen for stream errors
       registerListener(
-        listen<{ conversation_id: number; message_id: string | number; error: string }>(
-          'chat:stream-error',
-          ({ payload }) => {
-            markStreamActivity();
-            const state = useUnifiedChatStore.getState();
-            const messageId = String(payload.message_id);
-            const currentStreamingId = state.currentStreamingMessageId;
+        listen<{
+          conversation_id: StreamConversationKey;
+          message_id: string | number;
+          error: string;
+        }>('chat:stream-error', ({ payload }) => {
+          markStreamActivity();
+          const state = useUnifiedChatStore.getState();
+          const messageId = String(payload.message_id);
+          const currentStreamingId = state.currentStreamingMessageId;
 
-            // CHT-005 fix: Use session tracking for reliable message identification
-            const sessionMessageId = activeStreamSessionsRef.current.get(payload.conversation_id);
-            const targetId = resolveStreamTargetMessageId(
-              payload.conversation_id,
-              payload.message_id,
+          // CHT-005 fix: Use session tracking for reliable message identification
+          const sessionMessageId = activeStreamSessionsRef.current.get(payload.conversation_id);
+          const targetId = resolveStreamTargetMessageId(
+            payload.conversation_id,
+            payload.message_id,
+          );
+          const currentMatchesSession =
+            !!currentStreamingId &&
+            (currentStreamingId === sessionMessageId || currentStreamingId === messageId);
+
+          // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
+          const resolution = resolveTerminalStreamTarget({
+            resolvedTargetId: targetId,
+            currentStreamingMessageId: currentStreamingId,
+            currentMatchesSession,
+            conversationMessages: getConversationMessagesForStream(payload.conversation_id),
+          });
+          const { finalizedMessageId } = resolution;
+          const { hasValidTarget } = resolution;
+
+          if (finalizedMessageId) {
+            const displayError = formatErrorForChat(payload.error, true);
+            state.updateMessage(
+              finalizedMessageId,
+              buildFailedStreamMessageUpdate({
+                displayError,
+                rawError: payload.error,
+              }),
             );
-            const currentMatchesSession =
-              !!currentStreamingId &&
-              (currentStreamingId === sessionMessageId || currentStreamingId === messageId);
+            finalizeRunningArtifactsForMessage(
+              finalizedMessageId,
+              'failed',
+              payload.error || 'Tool failed while generating the response.',
+            );
+          }
 
-            // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
-            const resolution = resolveTerminalStreamTarget({
-              resolvedTargetId: targetId,
-              currentStreamingMessageId: currentStreamingId,
-              currentMatchesSession,
-              conversationMessages: getConversationMessagesForStream(payload.conversation_id),
-            });
-            const { finalizedMessageId } = resolution;
-            const { hasValidTarget } = resolution;
+          // CHT-005 fix: Clean up stream session tracking on error
+          activeStreamSessionsRef.current.delete(payload.conversation_id);
 
-            if (finalizedMessageId) {
-              const displayError = formatErrorForChat(payload.error, true);
-              state.updateMessage(
+          // AUDIT-STREAM-059 fix: Clear the stream watchdog since we got a valid stream-error
+          if (streamWatchdogTimeoutRef.current) {
+            clearTimeout(streamWatchdogTimeoutRef.current);
+            streamWatchdogTimeoutRef.current = null;
+          }
+
+          const hasOtherActiveStreams = activeStreamSessionsRef.current.size > 0;
+          const shouldClearGlobalState = hasValidTarget || !hasOtherActiveStreams;
+
+          if (!hasValidTarget) {
+            console.warn(
+              '[UnifiedAgenticChat] stream-error received without valid target; applying fallback cleanup policy',
+              {
+                payloadMessageId: messageId,
+                sessionMessageId,
+                currentStreamingId,
                 finalizedMessageId,
-                buildFailedStreamMessageUpdate({
-                  displayError,
-                  rawError: payload.error,
-                }),
-              );
-              finalizeRunningArtifactsForMessage(
-                finalizedMessageId,
-                'failed',
-                payload.error || 'Tool failed while generating the response.',
-              );
-            }
+                hasOtherActiveStreams,
+              },
+            );
+          }
 
-            // CHT-005 fix: Clean up stream session tracking on error
-            activeStreamSessionsRef.current.delete(payload.conversation_id);
-
-            // AUDIT-STREAM-059 fix: Clear the stream watchdog since we got a valid stream-error
-            if (streamWatchdogTimeoutRef.current) {
-              clearTimeout(streamWatchdogTimeoutRef.current);
-              streamWatchdogTimeoutRef.current = null;
-            }
-
-            const hasOtherActiveStreams = activeStreamSessionsRef.current.size > 0;
-            const shouldClearGlobalState = hasValidTarget || !hasOtherActiveStreams;
-
-            if (!hasValidTarget) {
-              console.warn(
-                '[UnifiedAgenticChat] stream-error received without valid target; applying fallback cleanup policy',
-                {
-                  payloadMessageId: messageId,
-                  sessionMessageId,
-                  currentStreamingId,
-                  finalizedMessageId,
-                  hasOtherActiveStreams,
-                },
-              );
-            }
-
-            if (shouldClearGlobalState) {
-              finalizeStream(payload.conversation_id, finalizedMessageId, 'failed', payload.error);
-            }
-          },
-        ),
+          if (shouldClearGlobalState) {
+            finalizeStream(payload.conversation_id, finalizedMessageId, 'failed', payload.error);
+          }
+        }),
       );
 
       // Pending message event listeners

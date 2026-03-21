@@ -180,7 +180,8 @@ export function ToolErrorDisplay({
 
       {/* Troubleshooting Tips */}
       <div className="p-4 bg-muted/20 border-t border-border">
-        <button type="button"
+        <button
+          type="button"
           className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-3 hover:text-foreground transition-colors w-full"
           onClick={() => setShowDetails(!showDetails)}
         >

@@ -35,21 +35,25 @@ The desktop app already ships `ConnectorDiscoveryBar.tsx` (at `apps/desktop/src/
 ## 2. User Stories
 
 ### US-1: New User (Unauthenticated Visitor)
+
 **As** a visitor who has not signed up yet,
 **I want** to see recognizable service icons (GitHub, Gmail, Slack, etc.) in the chat empty state,
 **So that** I understand this product integrates with my workflow tools, increasing my motivation to sign up.
 
 **Acceptance Criteria:**
+
 - Connector icons are visible in the empty state even when not logged in.
 - Icons are shown in a muted/gray state with a "Sign up to connect" tooltip.
 - Clicking any icon or the bar itself redirects to the auth page with a `?returnTo=/chat&connector=<id>` parameter.
 
 ### US-2: New Authenticated User (Zero Connectors)
+
 **As** a newly signed-up user with no connected services,
 **I want** to see a connector discovery bar below the suggested prompts or above the composer,
 **So that** I can quickly connect my first service without leaving the chat page.
 
 **Acceptance Criteria:**
+
 - All icons shown in "not connected" gray state.
 - Clicking an icon opens the OAuth flow for that service (or navigates to `/dashboard/settings` with the relevant connector pre-selected, if OAuth is not yet wired for that service).
 - The bar includes a dismiss (X) button.
@@ -57,32 +61,38 @@ The desktop app already ships `ConnectorDiscoveryBar.tsx` (at `apps/desktop/src/
 - The bar reappears if a new connector becomes available (version bump).
 
 ### US-3: Returning User (Some Connectors Connected)
+
 **As** a returning user who has connected Gmail and GitHub,
 **I want** those icons to appear colored/active while unconnected services remain gray,
 **So that** I can see at a glance which tools are active and discover new ones.
 
 **Acceptance Criteria:**
+
 - Connected connectors shown with their brand color.
 - Unconnected connectors shown in muted gray.
 - Connected connectors show a green checkmark badge or colored ring.
 - Hovering a connected connector shows "Connected" tooltip; hovering unconnected shows "Click to connect [Service Name]".
 
 ### US-4: User Who Dismissed the Bar
+
 **As** a user who previously dismissed the connector bar,
 **I want** the bar to stay hidden on future visits,
 **So that** I am not annoyed by persistent prompts.
 
 **Acceptance Criteria:**
+
 - Dismissal stored in `chat-preferences-store.ts` (Zustand persist to localStorage).
 - Bar does not reappear on page reload or new sessions.
 - A "Show integrations" link in settings or footer can re-enable it.
 
 ### US-5: Admin / Workspace Owner
+
 **As** a workspace admin,
 **I want** to see which connectors my team has enabled and control which appear in the discovery bar,
 **So that** I can enforce security policies (e.g., disable Salesforce for non-sales teams).
 
 **Acceptance Criteria:**
+
 - (Phase 2) Admin settings page to whitelist/blacklist connectors per workspace.
 - For Phase 1, all connectors from the allowlist are shown to all users.
 
@@ -91,24 +101,28 @@ The desktop app already ships `ConnectorDiscoveryBar.tsx` (at `apps/desktop/src/
 ## 3. Competitive Analysis
 
 ### Claude.ai (Max Plan, March 2026)
+
 - **Pattern**: Quick-action pills in the input area: "Code", "Write", "Learn", "From Drive", "From Gmail".
 - **Connector pills**: "From Drive" and "From Gmail" are connector-linked actions that open a file picker within the context of that service.
 - **Strengths**: Action-oriented (not just "connect" but "use from"), minimal visual footprint.
 - **Weakness**: Only 2 connectors shown; not scalable to 20+ integrations.
 
 ### ChatGPT (Plus Plan, March 2026)
+
 - **Pattern**: No connector bar in the empty state. GPTs section in sidebar shows connected GPTs (e.g., "Canva").
 - **Connector discovery**: Buried in sidebar "Apps" and "Explore GPTs" sections.
 - **Strengths**: Clean empty state.
 - **Weakness**: Poor discoverability of integrations for new users.
 
 ### Perplexity Computer (Pro Plan, March 2026)
+
 - **Pattern**: Dedicated "Connectors" link in the sidebar navigation.
 - **Connector page**: Grid of service icons with connect/disconnect toggles.
 - **Strengths**: Dedicated surface for connector management.
 - **Weakness**: Requires navigating away from the chat to discover connectors.
 
 ### Manus AI
+
 - **Pattern**: Service icons displayed directly in the empty-state input area as a horizontal row.
 - **Icons include**: GitHub, Gmail, Slack, Google Drive, Notion, Jira, Figma, Salesforce, Calendar, and more.
 - **States**: Grayscale when not connected, colored when connected.
@@ -116,7 +130,9 @@ The desktop app already ships `ConnectorDiscoveryBar.tsx` (at `apps/desktop/src/
 - **Weakness**: Can feel cluttered with 10+ icons.
 
 ### Our Approach (Recommended Hybrid)
+
 Combine Manus's visual icon row with Claude's action-oriented mindset:
+
 - Show a horizontal row of service icons (Manus pattern) in the empty-state area.
 - Keep it slim and dismissible (desktop ConnectorDiscoveryBar pattern).
 - On hover, show action-oriented tooltips: "Search GitHub repos", "Import from Drive", "Read Gmail" -- not just "Connect GitHub".
@@ -131,12 +147,14 @@ Combine Manus's visual icon row with Claude's action-oriented mindset:
 **Layout**: A horizontal row of circular service icons, preceded by a link icon and "Connect your tools" label, with a dismiss (X) button at the trailing edge.
 
 **Dimensions**:
+
 - Bar height: 40px (py-2 + icon height)
 - Icon size: 28px (w-7 h-7) circular
 - Max width: `max-w-2xl` (matches SuggestedPrompts and composer width)
 - Centered horizontally within the empty state
 
 **Position in DOM hierarchy** (within `apps/web/app/chat/page.tsx`):
+
 ```
 <div> (empty state container)
   <Greeting />           -- "What can I help you with?"
@@ -147,6 +165,7 @@ Combine Manus's visual icon row with Claude's action-oriented mindset:
 ```
 
 **Color System** (uses existing CSS custom properties):
+
 - Bar background: `bg-[var(--chat-bg-elevated)]` or `bg-card/40` (matching SuggestedPrompts)
 - Bar border: `border-border/30` (subtle, matching prompt cards)
 - Not-connected icon: `bg-muted/60 text-muted-foreground` (grayscale)
@@ -155,19 +174,19 @@ Combine Manus's visual icon row with Claude's action-oriented mindset:
 
 ### 4.2 Connector Icon Set (Phase 1)
 
-| Service | Icon | Brand Color | Connector ID | Priority |
-|---------|------|-------------|--------------|----------|
-| GitHub | Octocat SVG | `zinc-400` | `github` | P0 |
-| Gmail | Envelope SVG | `red-500` | `gmail` | P0 |
-| Google Drive | Drive SVG | `yellow-500` / `blue-500` / `green-500` | `google-drive` | P0 |
-| Slack | Hash SVG | `purple-500` | `slack` | P0 |
-| Notion | N glyph | `zinc-200` (on dark) | `notion` | P0 |
-| Jira | Jira SVG | `blue-600` | `jira` | P1 |
-| Figma | Figma SVG | `purple-400` | `figma` | P1 |
-| Salesforce | Cloud SVG | `blue-400` | `salesforce` | P1 |
-| Calendar | Calendar SVG | `blue-500` | `calendly` | P1 |
-| Linear | Linear SVG | `violet-400` | `linear` | P2 |
-| Confluence | Confluence SVG | `blue-500` | `confluence` | P2 |
+| Service      | Icon           | Brand Color                             | Connector ID   | Priority |
+| ------------ | -------------- | --------------------------------------- | -------------- | -------- |
+| GitHub       | Octocat SVG    | `zinc-400`                              | `github`       | P0       |
+| Gmail        | Envelope SVG   | `red-500`                               | `gmail`        | P0       |
+| Google Drive | Drive SVG      | `yellow-500` / `blue-500` / `green-500` | `google-drive` | P0       |
+| Slack        | Hash SVG       | `purple-500`                            | `slack`        | P0       |
+| Notion       | N glyph        | `zinc-200` (on dark)                    | `notion`       | P0       |
+| Jira         | Jira SVG       | `blue-600`                              | `jira`         | P1       |
+| Figma        | Figma SVG      | `purple-400`                            | `figma`        | P1       |
+| Salesforce   | Cloud SVG      | `blue-400`                              | `salesforce`   | P1       |
+| Calendar     | Calendar SVG   | `blue-500`                              | `calendly`     | P1       |
+| Linear       | Linear SVG     | `violet-400`                            | `linear`       | P2       |
+| Confluence   | Confluence SVG | `blue-500`                              | `confluence`   | P2       |
 
 **Icon Source**: Use Lucide React icons where available (`Github`, `Mail`, `HardDrive`, `Hash`, `Calendar`). For services without Lucide equivalents (Notion, Jira, Figma, Salesforce, Linear), use the first-letter initial in a branded circle (matching the desktop implementation pattern).
 
@@ -176,6 +195,7 @@ Combine Manus's visual icon row with Claude's action-oriented mindset:
 ### 4.3 Interaction States
 
 **Not Connected (default)**:
+
 - Icon: Grayscale (`text-muted-foreground/60`)
 - Background: `bg-muted/30`
 - Cursor: `pointer`
@@ -183,6 +203,7 @@ Combine Manus's visual icon row with Claude's action-oriented mindset:
 - Tooltip text: "Connect [Service Name]"
 
 **Connected**:
+
 - Icon: Brand color (e.g., `text-red-500` for Gmail)
 - Background: Brand tint (e.g., `bg-red-500/15`)
 - Small green dot badge at bottom-right (3px circle, `bg-green-500`)
@@ -190,33 +211,40 @@ Combine Manus's visual icon row with Claude's action-oriented mindset:
 - Click: Opens service-specific action (Phase 2) or shows "Already connected" toast
 
 **Hover (all states)**:
+
 - Tooltip: Appears below the icon after 300ms delay
 - Tooltip content: Service name + connection status
 - Scale: `scale-110` transform on hover for micro-interaction
 
 **Loading**:
+
 - While fetching connector status from `/api/connectors`: Show skeleton placeholders (pulsing circles)
 - Duration: Match existing skeleton patterns in the codebase
 
 **Error**:
+
 - If the API call fails: Show the bar with all icons in "not connected" state
 - No error toast for the discovery bar itself (non-critical UI)
 
 ### 4.4 Click Behavior
 
 **Not Connected + Authenticated**:
+
 1. Click triggers navigation to `/dashboard/settings` with `?tab=connectors&connect=<connectorId>` query params.
 2. (Phase 2) For services with OAuth wired (GitHub, Gmail, Google Drive), directly initiate the OAuth popup flow without leaving the chat page.
 
 **Not Connected + Unauthenticated**:
+
 1. Click triggers navigation to `/auth/login?returnTo=/chat&connector=<connectorId>`.
 2. After login, the user returns to `/chat` and sees the connector bar with a prompt to connect the clicked service.
 
 **Connected**:
+
 1. Click shows a brief `sonner` toast: "[Service Name] is connected" with a "Manage" link to settings.
 2. (Phase 2) Click opens a context menu: "Search [Service]", "Import from [Service]", "Disconnect".
 
 **Dismiss (X button)**:
+
 1. Click sets `connectorBarDismissed: true` in the `chat-preferences-store`.
 2. Bar animates out (opacity fade + height collapse, 200ms).
 3. Bar does not reappear until the user resets preferences or a new major version of the connector list is released (tracked via a `connectorBarVersion` integer).
@@ -224,14 +252,17 @@ Combine Manus's visual icon row with Claude's action-oriented mindset:
 ### 4.5 Responsive Behavior
 
 **Desktop (>= 1024px, `lg`):**
+
 - Full horizontal row, all icons visible.
 - Bar width: `max-w-2xl` centered.
 
 **Tablet (768px - 1023px, `md`):**
+
 - Same layout, but icons may wrap to a second row if more than 8 are shown.
 - Or: horizontal scroll with fade gradient at edges.
 
 **Mobile (< 768px, `sm`):**
+
 - Horizontal scrollable row with `overflow-x-auto` and `-webkit-overflow-scrolling: touch`.
 - Leading/trailing fade gradients (`mask-image: linear-gradient(...)`) to indicate scrollability.
 - Smaller icon size: `w-6 h-6` (24px).
@@ -242,8 +273,8 @@ Combine Manus's visual icon row with Claude's action-oriented mindset:
 - **Storage**: `useChatPreferencesStore` (already at `apps/web/features/chat/stores/chat-preferences-store.ts`) with Zustand `persist` middleware pointing at localStorage key `agi-chat-preferences`.
 - **New fields**:
   ```typescript
-  connectorBarDismissed: boolean;    // default: false
-  connectorBarVersion: number;       // default: 1
+  connectorBarDismissed: boolean; // default: false
+  connectorBarVersion: number; // default: 1
   ```
 - **Version bump logic**: If the hardcoded `CURRENT_CONNECTOR_BAR_VERSION` in the component exceeds the stored `connectorBarVersion`, reset `connectorBarDismissed` to false and update the stored version. This allows re-showing the bar when significant new connectors are added.
 
@@ -253,27 +284,27 @@ Combine Manus's visual icon row with Claude's action-oriented mindset:
 
 ### 5.1 New Files to Create
 
-| File | Purpose |
-|------|---------|
-| `apps/web/features/chat/components/ConnectorDiscoveryBar.tsx` | Main component |
-| `apps/web/features/chat/components/ConnectorDiscoveryBar.test.tsx` | Unit tests |
-| `apps/web/features/chat/hooks/use-connectors.ts` | Hook to fetch user's connected services from `/api/connectors` |
+| File                                                               | Purpose                                                        |
+| ------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `apps/web/features/chat/components/ConnectorDiscoveryBar.tsx`      | Main component                                                 |
+| `apps/web/features/chat/components/ConnectorDiscoveryBar.test.tsx` | Unit tests                                                     |
+| `apps/web/features/chat/hooks/use-connectors.ts`                   | Hook to fetch user's connected services from `/api/connectors` |
 
 ### 5.2 Files to Modify
 
-| File | Change |
-|------|--------|
-| `apps/web/app/chat/page.tsx` | Import and render `<ConnectorDiscoveryBar />` between `<SuggestedPrompts />` and the composer |
-| `apps/web/features/chat/stores/chat-preferences-store.ts` | Add `connectorBarDismissed` and `connectorBarVersion` fields |
+| File                                                      | Change                                                                                        |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `apps/web/app/chat/page.tsx`                              | Import and render `<ConnectorDiscoveryBar />` between `<SuggestedPrompts />` and the composer |
+| `apps/web/features/chat/stores/chat-preferences-store.ts` | Add `connectorBarDismissed` and `connectorBarVersion` fields                                  |
 
 ### 5.3 Files NOT to Modify
 
-| File | Reason |
-|------|--------|
-| `apps/web/app/api/connectors/route.ts` | Existing API is sufficient; no changes needed |
-| `apps/web/features/chat/components/Composer/ChatComposerNew.tsx` | Connector bar is positioned outside the composer, not inside it |
-| `apps/desktop/src/components/UnifiedAgenticChat/ConnectorDiscoveryBar.tsx` | Desktop version; reference only |
-| `apps/desktop/src/stores/mcpStore.ts` | Desktop-only Tauri store; web uses its own API route |
+| File                                                                       | Reason                                                          |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `apps/web/app/api/connectors/route.ts`                                     | Existing API is sufficient; no changes needed                   |
+| `apps/web/features/chat/components/Composer/ChatComposerNew.tsx`           | Connector bar is positioned outside the composer, not inside it |
+| `apps/desktop/src/components/UnifiedAgenticChat/ConnectorDiscoveryBar.tsx` | Desktop version; reference only                                 |
+| `apps/desktop/src/stores/mcpStore.ts`                                      | Desktop-only Tauri store; web uses its own API route            |
 
 ### 5.4 Component API
 
@@ -297,19 +328,19 @@ export function ConnectorDiscoveryBar(props: ConnectorDiscoveryBarProps): React.
 // Phase 2: fetch from API or shared config
 
 interface ConnectorDefinition {
-  id: string;                    // matches VALID_CONNECTOR_IDS in route.ts
-  name: string;                  // Display name
-  icon: LucideIcon | null;       // Lucide icon component, null = use initial
-  initial: string;               // Fallback: first letter(s) for circle
-  brandColor: string;            // Tailwind color class (e.g., 'red-500')
+  id: string; // matches VALID_CONNECTOR_IDS in route.ts
+  name: string; // Display name
+  icon: LucideIcon | null; // Lucide icon component, null = use initial
+  initial: string; // Fallback: first letter(s) for circle
+  brandColor: string; // Tailwind color class (e.g., 'red-500')
   category: 'productivity' | 'development' | 'communication' | 'crm' | 'design';
-  actionVerb: string;            // For tooltip: "Search repos" / "Import files"
+  actionVerb: string; // For tooltip: "Search repos" / "Import files"
 }
 
 interface ConnectorStatus {
   connectorId: string;
   isConnected: boolean;
-  connectedAt?: string;          // ISO date from API
+  connectedAt?: string; // ISO date from API
 }
 ```
 
@@ -355,6 +386,7 @@ export function useConnectors(): UseConnectorsReturn;
 ```
 
 Implementation notes:
+
 - Uses `fetch('/api/connectors')` with credentials.
 - Caches result in a module-level `Map` to avoid re-fetching on every mount within the same session.
 - Falls back gracefully: if fetch fails, `connectedMap` is empty (all icons show as not connected).
@@ -363,13 +395,12 @@ Implementation notes:
 ### 5.8 Integration with `page.tsx`
 
 Current structure of `ChatPageInner` return:
+
 ```tsx
 return (
   <div className="flex flex-1 flex-col overflow-hidden">
     <div className="flex flex-1 flex-col items-center justify-center px-4 pb-4">
-      <div className="mb-8 text-center">
-        {/* Greeting */}
-      </div>
+      <div className="mb-8 text-center">{/* Greeting */}</div>
       <div className="w-full max-w-2xl">
         <SuggestedPrompts onSelect={handleSend} />
       </div>
@@ -381,13 +412,12 @@ return (
 ```
 
 New structure:
+
 ```tsx
 return (
   <div className="flex flex-1 flex-col overflow-hidden">
     <div className="flex flex-1 flex-col items-center justify-center px-4 pb-4">
-      <div className="mb-8 text-center">
-        {/* Greeting */}
-      </div>
+      <div className="mb-8 text-center">{/* Greeting */}</div>
       <div className="w-full max-w-2xl">
         <SuggestedPrompts onSelect={handleSend} />
       </div>
@@ -407,6 +437,7 @@ return (
 ### Phase 1: MVP (Target: 3 days)
 
 **Day 1: Component + Hook**
+
 1. Create `apps/web/features/chat/hooks/use-connectors.ts` with fetch logic.
 2. Create `apps/web/features/chat/components/ConnectorDiscoveryBar.tsx` with:
    - Hardcoded `CONNECTOR_DEFINITIONS` for 9 services (GitHub, Gmail, Drive, Slack, Notion, Jira, Figma, Salesforce, Calendar).
@@ -416,16 +447,9 @@ return (
    - Skeleton loading state.
 3. Update `apps/web/features/chat/stores/chat-preferences-store.ts` with new fields.
 
-**Day 2: Integration + Responsive**
-4. Update `apps/web/app/chat/page.tsx` to render `<ConnectorDiscoveryBar />`.
-5. Implement responsive behavior: scroll on mobile, full row on desktop.
-6. Implement click behavior: navigate to settings page for unconnected, toast for connected.
-7. Handle unauthenticated state: gray icons with auth redirect.
+**Day 2: Integration + Responsive** 4. Update `apps/web/app/chat/page.tsx` to render `<ConnectorDiscoveryBar />`. 5. Implement responsive behavior: scroll on mobile, full row on desktop. 6. Implement click behavior: navigate to settings page for unconnected, toast for connected. 7. Handle unauthenticated state: gray icons with auth redirect.
 
-**Day 3: Polish + Tests**
-8. Write unit tests for `ConnectorDiscoveryBar.test.tsx` (render states, dismiss, click handlers).
-9. Visual QA: dark mode, light mode, mobile viewport, empty state, all-connected state.
-10. Accessibility audit: keyboard navigation, screen reader, ARIA labels.
+**Day 3: Polish + Tests** 8. Write unit tests for `ConnectorDiscoveryBar.test.tsx` (render states, dismiss, click handlers). 9. Visual QA: dark mode, light mode, mobile viewport, empty state, all-connected state. 10. Accessibility audit: keyboard navigation, screen reader, ARIA labels.
 
 ### Phase 2: Enhanced (Future Sprint)
 
@@ -441,62 +465,70 @@ return (
 
 ### Primary Metrics
 
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Connector bar visibility rate | 80%+ of new users see the bar | Percentage of `/chat` page loads where bar renders (not dismissed) |
-| Connector click-through rate (CTR) | 15%+ of users who see the bar click at least one icon | Clicks / impressions |
-| First connector connection rate | 10%+ of new users connect at least one service within first session | Supabase `user_connectors` table, filtered by `connected_at` within 1h of `auth.users.created_at` |
-| Dismiss rate | <40% of users dismiss the bar | `connectorBarDismissed` events |
+| Metric                             | Target                                                              | Measurement                                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Connector bar visibility rate      | 80%+ of new users see the bar                                       | Percentage of `/chat` page loads where bar renders (not dismissed)                                |
+| Connector click-through rate (CTR) | 15%+ of users who see the bar click at least one icon               | Clicks / impressions                                                                              |
+| First connector connection rate    | 10%+ of new users connect at least one service within first session | Supabase `user_connectors` table, filtered by `connected_at` within 1h of `auth.users.created_at` |
+| Dismiss rate                       | <40% of users dismiss the bar                                       | `connectorBarDismissed` events                                                                    |
 
 ### Secondary Metrics
 
-| Metric | Target | Measurement |
-|--------|--------|-------------|
+| Metric                                | Target                        | Measurement                          |
+| ------------------------------------- | ----------------------------- | ------------------------------------ |
 | Return visit rate (connected vs. not) | 2x higher for connected users | DAU/MAU segmented by connector count |
-| Average connectors per user | 2.0+ after 30 days | `user_connectors` count per user |
-| Time to first connection | <5 minutes from signup | Timestamp delta |
+| Average connectors per user           | 2.0+ after 30 days            | `user_connectors` count per user     |
+| Time to first connection              | <5 minutes from signup        | Timestamp delta                      |
 
 ### Guardrail Metrics
 
-| Metric | Threshold | Action if Breached |
-|--------|-----------|-------------------|
-| Chat page load time regression | <200ms p95 increase | Defer connector fetch to `requestIdleCallback` |
-| Dismiss rate | >60% | Redesign bar (too intrusive) |
-| Error rate on `/api/connectors` | >5% | Add retry logic, circuit breaker |
+| Metric                          | Threshold           | Action if Breached                             |
+| ------------------------------- | ------------------- | ---------------------------------------------- |
+| Chat page load time regression  | <200ms p95 increase | Defer connector fetch to `requestIdleCallback` |
+| Dismiss rate                    | >60%                | Redesign bar (too intrusive)                   |
+| Error rate on `/api/connectors` | >5%                 | Add retry logic, circuit breaker               |
 
 ---
 
 ## 8. Edge Cases
 
 ### 8.1 No Connectors Available
+
 - **When**: The `VALID_CONNECTOR_IDS` allowlist is empty (should never happen in production).
 - **Behavior**: Bar renders nothing (returns `null`).
 
 ### 8.2 All Connectors Connected
+
 - **When**: User has connected every service in the definition list.
 - **Behavior**: Bar still renders with all icons colored. The "Connect your tools" label changes to "Your connected tools". Dismiss button remains available.
 
 ### 8.3 Auth Token Expired During Fetch
+
 - **When**: User's Supabase session expires between page load and connector fetch.
 - **Behavior**: `/api/connectors` returns 401. Hook treats this as "no connectors" (all gray). No error toast (the auth refresh middleware should handle session renewal separately).
 
 ### 8.4 Slow Network / Timeout
+
 - **When**: `/api/connectors` takes >3 seconds.
 - **Behavior**: Show skeleton loading for up to 5 seconds, then fall back to "all unconnected" state. The bar is still useful as a discovery mechanism even without live status.
 
 ### 8.5 OAuth Redirect Interruption
+
 - **When**: User clicks a connector, gets redirected to OAuth, but abandons the flow.
 - **Behavior**: No state change. Connector remains "not connected" on next visit. No dangling state.
 
 ### 8.6 Connector Disconnected Externally
+
 - **When**: User revokes access in the third-party service (e.g., GitHub settings).
 - **Behavior**: Our API still shows the connector as "connected" until the next token refresh fails. Phase 2 should add a health-check mechanism. For Phase 1, accept stale state.
 
 ### 8.7 localStorage Unavailable
+
 - **When**: Incognito mode with strict privacy settings, or Safari ITP.
 - **Behavior**: `useChatPreferencesStore` persist middleware handles this gracefully (Zustand persist catches the error). Bar always appears (dismiss does not persist). Acceptable UX degradation.
 
 ### 8.8 Server-Side Rendering
+
 - **When**: Next.js SSR renders the chat page.
 - **Behavior**: Component is `'use client'`. On server, `useConnectors()` returns `isLoading: true`. Skeleton is rendered. Hydration shows the real state. No flash of incorrect content because the skeleton is the initial state.
 
@@ -508,35 +540,19 @@ return (
 
 ```html
 <!-- Bar container -->
-<nav
-  aria-label="Available integrations"
-  role="navigation"
->
+<nav aria-label="Available integrations" role="navigation">
   <!-- Each connector icon -->
-  <button
-    aria-label="Connect GitHub"
-    title="Connect GitHub"
-    role="button"
-    tabindex="0"
-  >
+  <button aria-label="Connect GitHub" title="Connect GitHub" role="button" tabindex="0">
     <!-- icon -->
   </button>
 
   <!-- Connected connector -->
-  <button
-    aria-label="GitHub - connected"
-    title="GitHub connected"
-    role="button"
-    tabindex="0"
-  >
+  <button aria-label="GitHub - connected" title="GitHub connected" role="button" tabindex="0">
     <!-- icon with green badge -->
   </button>
 
   <!-- Dismiss button -->
-  <button
-    aria-label="Dismiss integrations bar"
-    tabindex="0"
-  >
+  <button aria-label="Dismiss integrations bar" tabindex="0">
     <X />
   </button>
 </nav>
@@ -573,11 +589,11 @@ return (
 
 ## 10. Timeline Estimate
 
-| Phase | Scope | Effort | Dependencies |
-|-------|-------|--------|-------------|
-| Phase 1 (MVP) | Component, hook, integration, tests | **Medium** (3 eng days) | None -- uses existing `/api/connectors` route |
-| Phase 2 (OAuth Inline) | Inline OAuth popups, action menus | **Medium** (3 eng days) | OAuth callback routes for each service |
-| Phase 3 (Analytics + Admin) | Event tracking, admin controls | **Small** (1 eng day) | Analytics infrastructure |
+| Phase                       | Scope                               | Effort                  | Dependencies                                  |
+| --------------------------- | ----------------------------------- | ----------------------- | --------------------------------------------- |
+| Phase 1 (MVP)               | Component, hook, integration, tests | **Medium** (3 eng days) | None -- uses existing `/api/connectors` route |
+| Phase 2 (OAuth Inline)      | Inline OAuth popups, action menus   | **Medium** (3 eng days) | OAuth callback routes for each service        |
+| Phase 3 (Analytics + Admin) | Event tracking, admin controls      | **Small** (1 eng day)   | Analytics infrastructure                      |
 
 **Total Phase 1 estimate**: 3 engineering days (Medium effort).
 
@@ -611,6 +627,7 @@ The desktop version at `apps/desktop/src/components/UnifiedAgenticChat/Connector
 - Returns `null` when dismissed.
 
 Key differences for the web version:
+
 - Web uses Supabase auth (not Tauri managed state).
 - Web stores preferences in `useChatPreferencesStore` (Zustand persist), not raw localStorage.
 - Web fetches connector status from `/api/connectors` (server-side Supabase), not from a Tauri `invoke()` call.
@@ -619,6 +636,7 @@ Key differences for the web version:
 ## Appendix B: API Contract
 
 **GET /api/connectors** (existing, no changes needed):
+
 ```json
 // Request: GET /api/connectors (with auth cookie or Bearer token)
 // Response 200:
@@ -642,15 +660,87 @@ The `connectorId` field in the response is matched against `ConnectorDefinition.
 
 ```typescript
 const CONNECTOR_DEFINITIONS: ConnectorDefinition[] = [
-  { id: 'github',       name: 'GitHub',        icon: Github,    initial: 'GH', brandColor: 'zinc-400',    category: 'development',    actionVerb: 'Search repos' },
-  { id: 'gmail',        name: 'Gmail',         icon: Mail,      initial: 'GM', brandColor: 'red-500',     category: 'communication',  actionVerb: 'Read emails' },
-  { id: 'google-drive', name: 'Google Drive',  icon: HardDrive, initial: 'GD', brandColor: 'yellow-500',  category: 'productivity',   actionVerb: 'Import files' },
-  { id: 'slack',        name: 'Slack',         icon: Hash,      initial: 'SL', brandColor: 'purple-500',  category: 'communication',  actionVerb: 'Search messages' },
-  { id: 'notion',       name: 'Notion',        icon: null,      initial: 'N',  brandColor: 'zinc-200',    category: 'productivity',   actionVerb: 'Search pages' },
-  { id: 'jira',         name: 'Jira',          icon: null,      initial: 'J',  brandColor: 'blue-600',    category: 'development',    actionVerb: 'View issues' },
-  { id: 'figma',        name: 'Figma',         icon: null,      initial: 'F',  brandColor: 'purple-400',  category: 'design',         actionVerb: 'Browse files' },
-  { id: 'salesforce',   name: 'Salesforce',    icon: null,      initial: 'SF', brandColor: 'blue-400',    category: 'crm',            actionVerb: 'Search contacts' },
-  { id: 'calendly',     name: 'Calendar',      icon: Calendar,  initial: 'CA', brandColor: 'blue-500',    category: 'productivity',   actionVerb: 'Check schedule' },
+  {
+    id: 'github',
+    name: 'GitHub',
+    icon: Github,
+    initial: 'GH',
+    brandColor: 'zinc-400',
+    category: 'development',
+    actionVerb: 'Search repos',
+  },
+  {
+    id: 'gmail',
+    name: 'Gmail',
+    icon: Mail,
+    initial: 'GM',
+    brandColor: 'red-500',
+    category: 'communication',
+    actionVerb: 'Read emails',
+  },
+  {
+    id: 'google-drive',
+    name: 'Google Drive',
+    icon: HardDrive,
+    initial: 'GD',
+    brandColor: 'yellow-500',
+    category: 'productivity',
+    actionVerb: 'Import files',
+  },
+  {
+    id: 'slack',
+    name: 'Slack',
+    icon: Hash,
+    initial: 'SL',
+    brandColor: 'purple-500',
+    category: 'communication',
+    actionVerb: 'Search messages',
+  },
+  {
+    id: 'notion',
+    name: 'Notion',
+    icon: null,
+    initial: 'N',
+    brandColor: 'zinc-200',
+    category: 'productivity',
+    actionVerb: 'Search pages',
+  },
+  {
+    id: 'jira',
+    name: 'Jira',
+    icon: null,
+    initial: 'J',
+    brandColor: 'blue-600',
+    category: 'development',
+    actionVerb: 'View issues',
+  },
+  {
+    id: 'figma',
+    name: 'Figma',
+    icon: null,
+    initial: 'F',
+    brandColor: 'purple-400',
+    category: 'design',
+    actionVerb: 'Browse files',
+  },
+  {
+    id: 'salesforce',
+    name: 'Salesforce',
+    icon: null,
+    initial: 'SF',
+    brandColor: 'blue-400',
+    category: 'crm',
+    actionVerb: 'Search contacts',
+  },
+  {
+    id: 'calendly',
+    name: 'Calendar',
+    icon: Calendar,
+    initial: 'CA',
+    brandColor: 'blue-500',
+    category: 'productivity',
+    actionVerb: 'Check schedule',
+  },
 ];
 ```
 

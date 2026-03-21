@@ -602,10 +602,7 @@ mod tests {
         {
             let mut index = registry.id_index.write();
             for i in 0..100 {
-                let fake_hash = format!(
-                    "mcp__h__{:040x}",
-                    i as u64 * 0x0102_0304_0506_0708u64
-                );
+                let fake_hash = format!("mcp__h__{:040x}", i as u64 * 0x0102_0304_0506_0708u64);
                 index.insert(
                     fake_hash.clone(),
                     (format!("server_{}", i), format!("tool_{}", i)),
@@ -627,13 +624,7 @@ mod tests {
         let entries: Vec<(String, String, String)> = tool_ids
             .iter()
             .enumerate()
-            .map(|(i, id)| {
-                (
-                    id.clone(),
-                    format!("server_{}", i),
-                    format!("tool_{}", i),
-                )
-            })
+            .map(|(i, id)| (id.clone(), format!("server_{}", i), format!("tool_{}", i)))
             .collect();
 
         let start_linear = std::time::Instant::now();

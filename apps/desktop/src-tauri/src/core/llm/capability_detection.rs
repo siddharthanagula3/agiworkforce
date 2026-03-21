@@ -114,9 +114,7 @@ async fn detect_uncached(
                 return default_capabilities(model);
             }
             Err(_elapsed) => {
-                tracing::warn!(
-                    "[CapDetect] Timeout querying /api/show for {model} (5s elapsed)"
-                );
+                tracing::warn!("[CapDetect] Timeout querying /api/show for {model} (5s elapsed)");
                 return default_capabilities(model);
             }
         };

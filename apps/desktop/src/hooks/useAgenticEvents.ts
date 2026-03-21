@@ -434,9 +434,7 @@ export function useAgenticEvents() {
     handlersRef.current.setSidecarSectionFromEvent(eventType);
   };
 
-  const emitRuntimeActivity = (
-    activity: ReturnType<typeof buildRuntimeActivityEmission>,
-  ) => {
+  const emitRuntimeActivity = (activity: ReturnType<typeof buildRuntimeActivityEmission>) => {
     upsertActionLogEntry(activity.log);
     if (activity.trail) {
       useUnifiedChatStore.getState().addActionTrailEntry(activity.trail);
@@ -597,10 +595,9 @@ export function useAgenticEvents() {
 
     const artifactId = `extension-${taskId}`;
     const artifacts = getMergedMessageArtifacts(targetMessage);
-    const existingArtifact =
-      artifacts.find((artifact) => artifact.id === artifactId) as
-        | (Artifact & Record<string, unknown>)
-        | undefined;
+    const existingArtifact = artifacts.find((artifact) => artifact.id === artifactId) as
+      | (Artifact & Record<string, unknown>)
+      | undefined;
     const patchMetadata = patch['metadata'];
     const mergedMetadata = {
       ...((existingArtifact?.metadata as Record<string, unknown> | undefined) ?? {}),
@@ -2185,7 +2182,9 @@ export function useAgenticEvents() {
                 metadata: { ...existingEntry.metadata, duration_ms, success },
                 trail: {
                   type: success ? 'completed' : 'error',
-                  message: success ? `${toolName} completed (${duration_ms}ms)` : `${toolName} failed`,
+                  message: success
+                    ? `${toolName} completed (${duration_ms}ms)`
+                    : `${toolName} failed`,
                 },
               }),
             );
@@ -2204,7 +2203,9 @@ export function useAgenticEvents() {
               metadata: { tool_id, duration_ms, success },
               trail: {
                 type: success ? 'completed' : 'error',
-                message: success ? `${toolName} completed (${duration_ms}ms)` : `${toolName} failed`,
+                message: success
+                  ? `${toolName} completed (${duration_ms}ms)`
+                  : `${toolName} failed`,
               },
             }),
           );
@@ -2222,7 +2223,8 @@ export function useAgenticEvents() {
               id: `mcp-conn-${server_name}-${Date.now()}`,
               type: 'mcp',
               title: connected ? `Connected to ${server_name}` : `Disconnected from ${server_name}`,
-              description: error ?? (connected ? 'MCP server connected' : 'MCP server disconnected'),
+              description:
+                error ?? (connected ? 'MCP server connected' : 'MCP server disconnected'),
               status: connected ? 'success' : error ? 'failed' : 'success',
               metadata: { server_name, connected, error },
               trail: {
@@ -2437,7 +2439,11 @@ export function useAgenticEvents() {
               const toolName =
                 useUnifiedChatStore.getState().activeToolStreams.get(cancelledEvent.tool_id)
                   ?.tool_name ?? 'tool';
-              clearRunningToolTrailEntries(useUnifiedChatStore.getState(), cancelledEvent.tool_id, toolName);
+              clearRunningToolTrailEntries(
+                useUnifiedChatStore.getState(),
+                cancelledEvent.tool_id,
+                toolName,
+              );
               emitRuntimeActivity(
                 buildToolStreamCancelledActivity({
                   id: `toolstream-${cancelledEvent.tool_id}`,

@@ -17,11 +17,11 @@ This mirrors the industry pattern (Claude Desktop ↔ claude.ai, ChatGPT Desktop
 
 ## 2. Business Model
 
-| Tier | Price | LLM Access | Data | Features |
-|------|-------|-----------|------|----------|
-| **Free** | $0 | Local LLMs (Ollama/LM Studio) + BYOK API keys | Local SQLite only | Full desktop app, all 150+ skills, unlimited MCP tools |
-| **Pro** | $20/mo | Frontier models included (Claude, GPT-4o, Gemini) | Cloud sync (Supabase) | + Web app, mobile companion, usage dashboard, 20 scheduled tasks |
-| **Max** | $50/mo | Unlimited frontier usage | Cloud sync | + Teams, unlimited schedules, unlimited memory, priority access |
+| Tier     | Price  | LLM Access                                        | Data                  | Features                                                         |
+| -------- | ------ | ------------------------------------------------- | --------------------- | ---------------------------------------------------------------- |
+| **Free** | $0     | Local LLMs (Ollama/LM Studio) + BYOK API keys     | Local SQLite only     | Full desktop app, all 150+ skills, unlimited MCP tools           |
+| **Pro**  | $20/mo | Frontier models included (Claude, GPT-4o, Gemini) | Cloud sync (Supabase) | + Web app, mobile companion, usage dashboard, 20 scheduled tasks |
+| **Max**  | $50/mo | Unlimited frontier usage                          | Cloud sync            | + Teams, unlimited schedules, unlimited memory, priority access  |
 
 Revenue comes from subscriptions (Pro/Max), not from API key markup. Free tier users pay their own LLM providers directly via BYOK.
 
@@ -61,12 +61,14 @@ Revenue comes from subscriptions (Pro/Max), not from API key markup. Free tier u
 Clean choice screen on first launch:
 
 **Card A: "Local Mode"**
+
 - Icon: Shield
 - "Free, private, yours"
 - "Use local models or your own API keys. No account needed."
 - Button: "Start Local" → enters app immediately
 
 **Card B: "Cloud Mode"**
+
 - Icon: Cloud
 - "Frontier models, synced everywhere"
 - "Sign in to get Claude, GPT-4o, Gemini with cloud sync."
@@ -77,6 +79,7 @@ Choice stored in `appModeStore.mode`. Shown only on first launch (`appModeStore.
 ### 3.3 Local Mode
 
 **LLM Routing** (existing `llm_router.rs`):
+
 - Auto-detects Ollama at `localhost:11434`
 - Auto-detects LM Studio at `localhost:1234`
 - BYOK: User enters API keys in Settings → stored via SecretManager (Argon2id + AES-GCM)
@@ -84,6 +87,7 @@ Choice stored in `appModeStore.mode`. Shown only on first launch (`appModeStore.
 - User pays their own API costs — we never see the bill
 
 **Data Storage**:
+
 - Conversations: Local SQLite (`~/.agiworkforce/sessions.db`)
 - Settings: Zustand persist → localStorage
 - Memory: Local SQLite
@@ -97,6 +101,7 @@ Choice stored in `appModeStore.mode`. Shown only on first launch (`appModeStore.
 Follows the same pattern as Claude Desktop and ChatGPT Desktop:
 
 **Authentication**:
+
 - OAuth2 PKCE via Supabase Auth
 - Desktop opens Supabase login URL in system browser
 - Callback redirects via deep link: `agiworkforce://auth/callback`
@@ -104,6 +109,7 @@ Follows the same pattern as Claude Desktop and ChatGPT Desktop:
 - Token refresh handled by Supabase client SDK
 
 **LLM Routing** (private API — NOT public developer APIs):
+
 - Desktop → API Gateway (`services/api-gateway`) → LLM providers
 - We proxy all LLM calls and pay for compute
 - User selects model in UI, never manages API keys
@@ -111,17 +117,20 @@ Follows the same pattern as Claude Desktop and ChatGPT Desktop:
 - Usage tracking per user via billing tables
 
 **Data Storage**:
+
 - Conversations: Supabase Postgres (shared with web app)
 - Desktop and web both read/write same tables via Supabase client
 - No local conversation cache — cloud-only (matches competitor pattern)
 - Settings synced to `user_settings` table in Supabase
 
 **Streaming**:
+
 - SSE (Server-Sent Events) for LLM responses
 - Same streaming pattern already used in Local Mode
 - Gateway streams from LLM provider → desktop client
 
 **Cross-device sync**:
+
 - Not real-time push (competitors don't do this either)
 - Desktop and web both query same Supabase database
 - Conversations appear on all surfaces on next load/refresh
@@ -199,22 +208,22 @@ Stripe integration (existing in `apps/web`):
 
 ### 3.8 Feature Gating
 
-| Feature | Free (Local/BYOK) | Pro ($20/mo) | Max ($50/mo) |
-|---------|-------------------|-------------|-------------|
-| Local LLMs (Ollama/LM Studio) | Unlimited | Unlimited | Unlimited |
-| BYOK API keys | Unlimited | Unlimited | Unlimited |
-| Cloud frontier models | None | ~500 msgs/day | Unlimited |
-| Desktop app | Full | Full | Full |
-| Web app | Read-only | Full | Full |
-| Mobile companion | None | Full | Full |
-| Cloud sync | None | Full | Full |
-| Scheduled tasks | 3 max | 20 max | Unlimited |
-| Teams | None | None | Full |
-| Cloud memory | None | 1,000 items | Unlimited |
-| MCP tools | Unlimited | Unlimited | Unlimited |
-| Skills | All 150+ | All 150+ | All 150+ |
-| Voice mode | Full | Full | Full |
-| Computer use | Full | Full | Full |
+| Feature                       | Free (Local/BYOK) | Pro ($20/mo)  | Max ($50/mo) |
+| ----------------------------- | ----------------- | ------------- | ------------ |
+| Local LLMs (Ollama/LM Studio) | Unlimited         | Unlimited     | Unlimited    |
+| BYOK API keys                 | Unlimited         | Unlimited     | Unlimited    |
+| Cloud frontier models         | None              | ~500 msgs/day | Unlimited    |
+| Desktop app                   | Full              | Full          | Full         |
+| Web app                       | Read-only         | Full          | Full         |
+| Mobile companion              | None              | Full          | Full         |
+| Cloud sync                    | None              | Full          | Full         |
+| Scheduled tasks               | 3 max             | 20 max        | Unlimited    |
+| Teams                         | None              | None          | Full         |
+| Cloud memory                  | None              | 1,000 items   | Unlimited    |
+| MCP tools                     | Unlimited         | Unlimited     | Unlimited    |
+| Skills                        | All 150+          | All 150+      | All 150+     |
+| Voice mode                    | Full              | Full          | Full         |
+| Computer use                  | Full              | Full          | Full         |
 
 ## 4. Chat Store Integration
 
@@ -235,6 +244,7 @@ if (mode === 'local') {
 ```
 
 Conversation listing similarly routes:
+
 - Local: `invoke('list_conversations')` → local SQLite
 - Cloud: `supabase.from('cloud_conversations').select()` → Supabase
 
@@ -242,86 +252,99 @@ Conversation listing similarly routes:
 
 ### New Files
 
-| File | Purpose |
-|------|---------|
-| `apps/desktop/src/stores/appModeStore.ts` | Mode state (local/cloud), plan tier, onboarding flag |
-| `apps/desktop/src/components/Onboarding/ModeSelector.tsx` | First-launch mode choice screen |
-| `apps/desktop/src/api/cloudApi.ts` | Cloud Mode API client (conversations, messages, usage) |
-| `services/api-gateway/src/routes/chat.ts` | Chat CRUD + LLM proxy routes |
-| `services/api-gateway/src/routes/usage.ts` | Usage tracking routes |
-| `supabase/migrations/20260319000002_cloud_conversations.sql` | Cloud conversation tables + RLS |
+| File                                                         | Purpose                                                |
+| ------------------------------------------------------------ | ------------------------------------------------------ |
+| `apps/desktop/src/stores/appModeStore.ts`                    | Mode state (local/cloud), plan tier, onboarding flag   |
+| `apps/desktop/src/components/Onboarding/ModeSelector.tsx`    | First-launch mode choice screen                        |
+| `apps/desktop/src/api/cloudApi.ts`                           | Cloud Mode API client (conversations, messages, usage) |
+| `services/api-gateway/src/routes/chat.ts`                    | Chat CRUD + LLM proxy routes                           |
+| `services/api-gateway/src/routes/usage.ts`                   | Usage tracking routes                                  |
+| `supabase/migrations/20260319000002_cloud_conversations.sql` | Cloud conversation tables + RLS                        |
 
 ### Modified Files
 
-| File | Change |
-|------|--------|
-| `apps/desktop/src/stores/chat/index.ts` | Route sends to local OR cloud based on mode |
-| `apps/desktop/src/services/supabaseAuth.ts` | Desktop OAuth PKCE flow + deep link callback |
-| `apps/desktop/src/components/Settings/SettingsPanel.tsx` | Mode toggle + plan management section |
-| `apps/desktop/src/components/UnifiedAgenticChat/Sidebar.tsx` | Mode indicator in footer |
-| `apps/desktop/src/App.tsx` | Show ModeSelector on first launch |
-| `services/api-gateway/src/index.ts` | Mount new chat + usage routes |
-| `apps/desktop/src-tauri/tauri.conf.json` | Deep link scheme registration |
+| File                                                         | Change                                       |
+| ------------------------------------------------------------ | -------------------------------------------- |
+| `apps/desktop/src/stores/chat/index.ts`                      | Route sends to local OR cloud based on mode  |
+| `apps/desktop/src/services/supabaseAuth.ts`                  | Desktop OAuth PKCE flow + deep link callback |
+| `apps/desktop/src/components/Settings/SettingsPanel.tsx`     | Mode toggle + plan management section        |
+| `apps/desktop/src/components/UnifiedAgenticChat/Sidebar.tsx` | Mode indicator in footer                     |
+| `apps/desktop/src/App.tsx`                                   | Show ModeSelector on first launch            |
+| `services/api-gateway/src/index.ts`                          | Mount new chat + usage routes                |
+| `apps/desktop/src-tauri/tauri.conf.json`                     | Deep link scheme registration                |
 
 ## 6. Spec Review Fixes (from architectural review)
 
 ### Fix 1: Use existing `conversations` + `messages` tables
+
 Do NOT create `cloud_conversations` / `cloud_messages`. Supabase already has `public.conversations` and `public.messages` tables with RLS, Realtime, and richer schema (includes `source`, `provider`, `last_message_at`, `cost`, `tool_calls`). The `cloudApi.ts` client and chat routes reference these existing tables.
 
 ### Fix 2: Create `cloudChat.ts`, not overwrite `chat.ts`
+
 `services/api-gateway/src/routes/chat.ts` already exists (mobile bridge). Create `services/api-gateway/src/routes/cloudChat.ts` for LLM-proxy routes under `/api/v1/chat`. Mount both routers in `index.ts`.
 
 ### Fix 3: Plan tiers include `hobby` and `enterprise`
+
 Live auth code defines 5 tiers: `free`, `hobby`, `pro`, `max`, `enterprise`. `appModeStore` must use the full `PlanTier` type. `hobby` maps to free-tier feature behavior.
 
 ### Fix 4: Integrate mode choice into existing OnboardingWizard
+
 Do NOT create a separate `ModeSelector.tsx`. Add mode choice as Step 1 of the existing `OnboardingWizard.tsx`. Use the same `onboardingCompleted` flag from `useSimpleModeStore` — do not create a second first-launch guard.
 
 ### Fix 5: Use `API_BASE_URL` for cloud fetch calls
+
 Desktop `fetch()` calls must use the fully qualified gateway URL (from `API_BASE_URL` in `api/client`), not relative paths. Tauri's asset server does not proxy to external APIs.
 
 ### Fix 6: Verify `useDeepLink` handles `auth/callback`
+
 Before Cloud Mode login can work, `apps/desktop/src/hooks/useDeepLink.ts` must handle `agiworkforce://auth/callback?code=...` and call `supabaseAuth.exchangeCodeForSession(code)`. This is the prerequisite for all Cloud Mode auth.
 
 ### Fix 7: SSE streaming implementation details
+
 - `POST /api/v1/chat/send` returns `Content-Type: text/event-stream`
 - Client uses `fetch()` with `response.body.getReader()` (not `await response.json()`)
 - `tauri://localhost` must be in `ALLOWED_ORIGINS` for CORS
 - Production Tauri scheme must also be whitelisted
 
 ### Fix 8: Block mode switch during active streaming
+
 Before allowing mode toggle, check `chatStore.isStreaming`. If active, show toast: "Finish the current response first." Do not switch modes mid-stream.
 
 ### Fix 9: Server-side plan enforcement
+
 `POST /api/v1/chat/send` must check `plan_tier` from `subscriptions` table before proxying to LLM. Return `403 Forbidden` if free tier. Client-side gating is additional UX only, not sole enforcement.
 
 ### Fix 10: Cloud Mode offline behavior
+
 When offline in Cloud Mode, show empty state with "No connection — switch to Local Mode or reconnect" prompt. No local conversation cache for cloud data in V1.
 
 ## 7. Updated Files List
 
 ### New Files
-| File | Purpose |
-|------|---------|
-| `apps/desktop/src/stores/appModeStore.ts` | Mode state (local/cloud), plan tier, uses full `PlanTier` type |
-| `apps/desktop/src/api/cloudApi.ts` | Cloud Mode API client using `API_BASE_URL`, targets existing `conversations`/`messages` tables |
-| `services/api-gateway/src/routes/cloudChat.ts` | Chat CRUD + LLM proxy routes with plan-tier enforcement |
-| `services/api-gateway/src/routes/usage.ts` | Usage tracking routes |
+
+| File                                           | Purpose                                                                                        |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `apps/desktop/src/stores/appModeStore.ts`      | Mode state (local/cloud), plan tier, uses full `PlanTier` type                                 |
+| `apps/desktop/src/api/cloudApi.ts`             | Cloud Mode API client using `API_BASE_URL`, targets existing `conversations`/`messages` tables |
+| `services/api-gateway/src/routes/cloudChat.ts` | Chat CRUD + LLM proxy routes with plan-tier enforcement                                        |
+| `services/api-gateway/src/routes/usage.ts`     | Usage tracking routes                                                                          |
 
 ### Modified Files
-| File | Change |
-|------|--------|
-| `apps/desktop/src/stores/chat/index.ts` | Route sends to local OR cloud based on `appModeStore.mode` |
-| `apps/desktop/src/hooks/useDeepLink.ts` | Handle `auth/callback` path, call `exchangeCodeForSession()` |
-| `apps/desktop/src/components/Onboarding/OnboardingWizard.tsx` | Add mode choice as Step 1 |
-| `apps/desktop/src/components/Settings/SettingsPanel.tsx` | Mode toggle + plan management |
-| `apps/desktop/src/components/UnifiedAgenticChat/Sidebar.tsx` | Mode indicator in footer |
-| `services/api-gateway/src/index.ts` | Mount `cloudChatRouter` under `/api/v1/chat`, add CORS for Tauri origins |
+
+| File                                                          | Change                                                                   |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `apps/desktop/src/stores/chat/index.ts`                       | Route sends to local OR cloud based on `appModeStore.mode`               |
+| `apps/desktop/src/hooks/useDeepLink.ts`                       | Handle `auth/callback` path, call `exchangeCodeForSession()`             |
+| `apps/desktop/src/components/Onboarding/OnboardingWizard.tsx` | Add mode choice as Step 1                                                |
+| `apps/desktop/src/components/Settings/SettingsPanel.tsx`      | Mode toggle + plan management                                            |
+| `apps/desktop/src/components/UnifiedAgenticChat/Sidebar.tsx`  | Mode indicator in footer                                                 |
+| `services/api-gateway/src/index.ts`                           | Mount `cloudChatRouter` under `/api/v1/chat`, add CORS for Tauri origins |
 
 ### Removed from original plan
-| File | Reason |
-|------|--------|
-| ~~`ModeSelector.tsx`~~ | Integrated into existing `OnboardingWizard.tsx` |
+
+| File                                         | Reason                                                             |
+| -------------------------------------------- | ------------------------------------------------------------------ |
+| ~~`ModeSelector.tsx`~~                       | Integrated into existing `OnboardingWizard.tsx`                    |
 | ~~`20260319000002_cloud_conversations.sql`~~ | Existing `conversations`/`messages` tables already have the schema |
 
 ## 8. Build Order

@@ -1,7 +1,10 @@
 type ToolNameEncodingGlobals = typeof globalThis & {
   atob?: (value: string) => string;
   Buffer?: {
-    from(value: string, encoding: string): {
+    from(
+      value: string,
+      encoding: string,
+    ): {
       toString(encoding: string): string;
     };
   };
@@ -38,7 +41,5 @@ export function decodeCompositeToolName(toolName: string): string {
     return toolName;
   }
 
-  return toolName.replace(/b64_[A-Za-z0-9+/=]+/g, (segment) =>
-    decodeBase64ToolSegment(segment),
-  );
+  return toolName.replace(/b64_[A-Za-z0-9+/=]+/g, (segment) => decodeBase64ToolSegment(segment));
 }

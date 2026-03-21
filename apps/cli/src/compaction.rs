@@ -45,28 +45,24 @@ const ROOT_MARKERS: &[&str] = &[
 
 /// Context window sizes keyed by model ID prefix (longest prefix wins first).
 const MODEL_LIMITS: &[(&str, usize)] = &[
-    ("claude-opus-4",    200_000),
-    ("claude-sonnet-4",  200_000),
-    ("claude-haiku-4",   200_000),
-    ("claude-3-5",       200_000),
-    ("claude-3",         200_000),
-    ("gpt-4o",           128_000),
-    ("o3",               200_000),
-    ("gemini-3",       1_048_576),
+    ("claude-opus-4", 200_000),
+    ("claude-sonnet-4", 200_000),
+    ("claude-haiku-4", 200_000),
+    ("claude-3-5", 200_000),
+    ("claude-3", 200_000),
+    ("gpt-4o", 128_000),
+    ("o3", 200_000),
+    ("gemini-3", 1_048_576),
     ("gemini-1.5-pro", 2_000_000),
-    ("gemini-1.5",     1_000_000),
-    ("mistral",          128_000),
-    ("grok-4",         2_000_000),
-    ("grok",             131_072),
-    ("deepseek",          64_000),
+    ("gemini-1.5", 1_000_000),
+    ("mistral", 128_000),
+    ("grok-4", 2_000_000),
+    ("grok", 131_072),
+    ("deepseek", 64_000),
 ];
 
 /// Instruction file names to search for, in order of preference.
-const INSTRUCTION_FILES: &[&str] = &[
-    "AGENTS.md",
-    "CLAUDE.md",
-    ".agiworkforce/instructions.md",
-];
+const INSTRUCTION_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md", ".agiworkforce/instructions.md"];
 
 // ---------------------------------------------------------------------------
 // CompressionConfig
@@ -219,7 +215,8 @@ pub fn format_context_report(usage: &ContextUsage) -> String {
 ///
 /// See [`compact_with_config`] for the full-featured version.
 pub fn compact_messages(messages: &[Message], target_tokens: usize) -> Vec<Message> {
-    let (msgs, _status) = compact_with_config(messages, target_tokens, &CompressionConfig::default());
+    let (msgs, _status) =
+        compact_with_config(messages, target_tokens, &CompressionConfig::default());
     msgs
 }
 
@@ -520,11 +517,8 @@ fn prune_tool_outputs(messages: Vec<Message>, max_tokens: usize) -> Vec<Message>
                         } = block
                         {
                             if estimate_tokens(content) > max_tokens {
-                                let head: String = content
-                                    .lines()
-                                    .take(20)
-                                    .collect::<Vec<_>>()
-                                    .join("\n");
+                                let head: String =
+                                    content.lines().take(20).collect::<Vec<_>>().join("\n");
                                 return ContentBlock::ToolResult {
                                     tool_use_id: tool_use_id.clone(),
                                     content: format!(
@@ -559,10 +553,7 @@ fn truncate_long_messages(messages: Vec<Message>, max_tokens: usize) -> Vec<Mess
                 if estimate_tokens(text) > max_tokens {
                     let truncated: String =
                         text.chars().take(max_tokens * BYTES_PER_TOKEN).collect();
-                    return Message::text(
-                        &msg.role,
-                        format!("{}\n[... truncated ...]", truncated),
-                    );
+                    return Message::text(&msg.role, format!("{}\n[... truncated ...]", truncated));
                 }
             }
             msg
@@ -822,8 +813,7 @@ mod tests {
             Message::text("user", "Hello"),
             Message::text("assistant", "World"),
         ];
-        let (_result, status) =
-            compact_with_config(&msgs, 100_000, &CompressionConfig::default());
+        let (_result, status) = compact_with_config(&msgs, 100_000, &CompressionConfig::default());
         assert_eq!(status, CompressionStatus::Unnecessary);
     }
 
@@ -833,10 +823,12 @@ mod tests {
         let msgs: Vec<Message> = (0..50)
             .map(|i| Message::text("user", "x".repeat(200 + i)))
             .collect();
-        let (_result, status) =
-            compact_with_config(&msgs, 500, &CompressionConfig::default());
+        let (_result, status) = compact_with_config(&msgs, 500, &CompressionConfig::default());
         match status {
-            CompressionStatus::Compressed { original_tokens, final_tokens } => {
+            CompressionStatus::Compressed {
+                original_tokens,
+                final_tokens,
+            } => {
                 assert!(final_tokens <= original_tokens);
             }
             _ => panic!("expected Compressed, got {:?}", status),
@@ -924,7 +916,10 @@ mod tests {
     #[test]
     fn test_reverse_budget_truncates_older_first() {
         // Two tool results: old (big) and new (big). Budget fits only one.
-        let big_content = (0..100).map(|i| format!("line {}", i)).collect::<Vec<_>>().join("\n");
+        let big_content = (0..100)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
         let msgs = vec![
             Message::text("user", "run tool"),
             Message::blocks(
@@ -1076,7 +1071,7 @@ mod tests {
     #[test]
     fn test_total_tokens_accumulates() {
         let msgs = vec![
-            Message::text("user", "abcd"),   // 4 bytes = 1 token + 4 overhead = 5
+            Message::text("user", "abcd"), // 4 bytes = 1 token + 4 overhead = 5
             Message::text("assistant", "efgh"), // 4 bytes = 1 token + 4 overhead = 5
         ];
         assert_eq!(total_tokens(&msgs), 10);
@@ -1195,7 +1190,10 @@ mod tests {
                 "user",
                 vec![ContentBlock::ToolResult {
                     tool_use_id: "t1".to_string(),
-                    content: (0..200).map(|i| format!("line {}", i)).collect::<Vec<_>>().join("\n"),
+                    content: (0..200)
+                        .map(|i| format!("line {}", i))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
                     is_error: false,
                 }],
             ),

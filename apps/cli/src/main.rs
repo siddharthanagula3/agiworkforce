@@ -30,8 +30,8 @@ mod voice;
 mod app_server;
 mod apply_patch;
 mod cloud;
-mod model_catalog;
 mod exec_policy;
+mod model_catalog;
 mod plugins;
 mod review;
 mod sandbox;
@@ -354,8 +354,13 @@ async fn main() -> Result<()> {
     if cli.debug.is_some() {
         // Setting verbose mode so debug info is visible
         if !cli.quiet {
-            eprintln!("[debug] Debug mode enabled. Categories: {}",
-                cli.debug.as_ref().and_then(|d| d.as_deref()).unwrap_or("all"));
+            eprintln!(
+                "[debug] Debug mode enabled. Categories: {}",
+                cli.debug
+                    .as_ref()
+                    .and_then(|d| d.as_deref())
+                    .unwrap_or("all")
+            );
         }
     }
 
@@ -364,33 +369,63 @@ async fn main() -> Result<()> {
 
     // Validate configuration — warn but continue with defaults on failure
     if let Err(e) = app_config.validate() {
-        eprintln!("Warning: config validation failed: {}. Continuing with defaults.", e);
+        eprintln!(
+            "Warning: config validation failed: {}. Continuing with defaults.",
+            e
+        );
     }
 
     // --- Subcommand dispatch (Codex CLI parity) ---
     if let Some(ref command) = cli.command {
         let sys_ctx = context::gather_system_context();
         return match command {
-            Command::Exec { prompt, model, full_auto, json } => {
-                let m = model.as_deref().unwrap_or(&app_config.default.model).to_string();
+            Command::Exec {
+                prompt,
+                model,
+                full_auto,
+                json,
+            } => {
+                let m = model
+                    .as_deref()
+                    .unwrap_or(&app_config.default.model)
+                    .to_string();
                 let mut session = agent::AgentSession::new(&m, &sys_ctx, None);
-                if *full_auto { session.skip_permissions = true; session.auto_approve_safe = true; }
+                if *full_auto {
+                    session.skip_permissions = true;
+                    session.auto_approve_safe = true;
+                }
                 session.quiet = true;
                 let is_json = *json;
-                let result = session.send(&app_config, prompt, Box::new(move |chunk| {
-                    if !is_json { output::print_assistant_chunk(chunk); }
-                })).await;
+                let result = session
+                    .send(
+                        &app_config,
+                        prompt,
+                        Box::new(move |chunk| {
+                            if !is_json {
+                                output::print_assistant_chunk(chunk);
+                            }
+                        }),
+                    )
+                    .await;
                 match result {
                     Ok(turn) => {
                         if *json {
-                            println!("{}", serde_json::to_string_pretty(&serde_json::json!({
-                                "response": turn.response, "input_tokens": turn.input_tokens,
-                                "output_tokens": turn.output_tokens,
-                            }))?);
-                        } else { println!(); }
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&serde_json::json!({
+                                    "response": turn.response, "input_tokens": turn.input_tokens,
+                                    "output_tokens": turn.output_tokens,
+                                }))?
+                            );
+                        } else {
+                            println!();
+                        }
                         Ok(())
                     }
-                    Err(e) => { eprintln!("{}", e); std::process::exit(1); }
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        std::process::exit(1);
+                    }
                 }
             }
             Command::Resume { session_id } => {
@@ -398,25 +433,67 @@ async fn main() -> Result<()> {
                 let sid = match session_id {
                     Some(id) => id.clone(),
                     None => sessions::list_sessions(&conn, 1)?
-                        .first().map(|s| s.id.clone())
+                        .first()
+                        .map(|s| s.id.clone())
                         .ok_or_else(|| anyhow::anyhow!("No sessions found"))?,
                 };
                 let msgs = sessions::load_session(&conn, &sid)?;
                 let model = app_config.default.model.clone();
-                repl::run_repl(&mut app_config, &model, &sys_ctx, None, Some(msgs), None, false, None, None, false, false, false).await
+                repl::run_repl(
+                    &mut app_config,
+                    &model,
+                    &sys_ctx,
+                    None,
+                    Some(msgs),
+                    None,
+                    false,
+                    None,
+                    None,
+                    false,
+                    false,
+                    false,
+                )
+                .await
             }
             Command::Fork { session_id } => {
                 let conn = sessions::open_db()?;
                 let msgs = sessions::load_session(&conn, session_id)?;
-                eprintln!("{} Forked session '{}' ({} messages)", "fork:".cyan().bold(), session_id, msgs.len());
+                eprintln!(
+                    "{} Forked session '{}' ({} messages)",
+                    "fork:".cyan().bold(),
+                    session_id,
+                    msgs.len()
+                );
                 let model = app_config.default.model.clone();
-                repl::run_repl(&mut app_config, &model, &sys_ctx, None, Some(msgs), None, false, None, None, false, false, false).await
+                repl::run_repl(
+                    &mut app_config,
+                    &model,
+                    &sys_ctx,
+                    None,
+                    Some(msgs),
+                    None,
+                    false,
+                    None,
+                    None,
+                    false,
+                    false,
+                    false,
+                )
+                .await
             }
-            Command::Review { base, commit, prompt, model, .. } => {
+            Command::Review {
+                base,
+                commit,
+                prompt,
+                model,
+                ..
+            } => {
                 let opts = review::ReviewOptions {
                     uncommitted: base.is_none() && commit.is_none(),
-                    base_branch: base.clone(), commit: commit.clone(),
-                    instructions: prompt.clone(), model: model.clone(),
+                    base_branch: base.clone(),
+                    commit: commit.clone(),
+                    instructions: prompt.clone(),
+                    model: model.clone(),
                 };
                 review::run_review(&app_config, &sys_ctx, &opts).await?;
                 Ok(())
@@ -433,15 +510,20 @@ async fn main() -> Result<()> {
                     if let Some(s) = sessions::list_sessions(&conn, 1)?.first() {
                         let r = apply_patch::apply_from_session(&s.id).await?;
                         apply_patch::print_patch_result(&r);
-                    } else { eprintln!("No sessions found."); }
+                    } else {
+                        eprintln!("No sessions found.");
+                    }
                 }
                 Ok(())
             }
             Command::Sandbox { full_auto, command } => {
                 let cmd_str = command.join(" ");
                 let cwd = std::env::current_dir()?;
-                let mgr = if *full_auto { sandbox::SandboxManager::full_auto(cwd.clone()) }
-                    else { sandbox::SandboxManager::new(sandbox::SandboxPolicy::default(), cwd.clone()) };
+                let mgr = if *full_auto {
+                    sandbox::SandboxManager::full_auto(cwd.clone())
+                } else {
+                    sandbox::SandboxManager::new(sandbox::SandboxPolicy::default(), cwd.clone())
+                };
                 eprintln!("Sandbox [{}]: {}", mgr.sandbox_type.name(), cmd_str);
                 let out = sandbox::execute_sandboxed(&mgr, &cmd_str, Some(&cwd)).await?;
                 io::Write::write_all(&mut io::stdout(), &out.stdout)?;
@@ -451,18 +533,37 @@ async fn main() -> Result<()> {
             Command::McpServer => app_server::run_mcp_server().await,
             Command::AppServer { listen } => {
                 const DEFAULT_APP_SERVER_ADDR: &str = "127.0.0.1:8787";
-                let cfg = if listen == "stdio" { app_server::AppServerConfig::default() }
-                    else { app_server::AppServerConfig { transport: app_server::AppServerTransport::WebSocket {
-                        addr: listen.trim_start_matches("ws://").parse().unwrap_or_else(|_| DEFAULT_APP_SERVER_ADDR.parse().unwrap()),
-                    }, ..Default::default() } };
+                let cfg = if listen == "stdio" {
+                    app_server::AppServerConfig::default()
+                } else {
+                    app_server::AppServerConfig {
+                        transport: app_server::AppServerTransport::WebSocket {
+                            addr: listen
+                                .trim_start_matches("ws://")
+                                .parse()
+                                .unwrap_or_else(|_| DEFAULT_APP_SERVER_ADDR.parse().unwrap()),
+                        },
+                        ..Default::default()
+                    }
+                };
                 app_server::run_app_server(cfg).await
             }
             Command::Cloud { action } => {
                 let cc = cloud::CloudConfig::default();
                 match action {
-                    CloudSubcommand::Exec { prompt, model } => { cloud::cloud_exec(&cc, prompt, model.as_deref()).await?; Ok(()) }
-                    CloudSubcommand::List { .. } => { println!("Cloud tasks: connect to cloud backend to list"); Ok(()) }
-                    CloudSubcommand::Models => { println!("{}", cloud::format_cloud_models()); cloud::print_cloud_status(&cc); Ok(()) }
+                    CloudSubcommand::Exec { prompt, model } => {
+                        cloud::cloud_exec(&cc, prompt, model.as_deref()).await?;
+                        Ok(())
+                    }
+                    CloudSubcommand::List { .. } => {
+                        println!("Cloud tasks: connect to cloud backend to list");
+                        Ok(())
+                    }
+                    CloudSubcommand::Models => {
+                        println!("{}", cloud::format_cloud_models());
+                        cloud::print_cloud_status(&cc);
+                        Ok(())
+                    }
                 }
             }
             Command::Plugin { action } => {
@@ -471,20 +572,40 @@ async fn main() -> Result<()> {
                     PluginSubcommand::List => {
                         mgr.load_all(std::env::current_dir().ok().as_deref())?;
                         for p in mgr.plugins() {
-                            let st = if p.enabled { "enabled".green() } else { "disabled".red() };
+                            let st = if p.enabled {
+                                "enabled".green()
+                            } else {
+                                "disabled".red()
+                            };
                             println!("  {} [{}] {}", p.config_name, st, p.root.display());
                         }
                         Ok(())
                     }
                     PluginSubcommand::Install { source, name } => {
-                        let pname = name.clone().unwrap_or_else(|| source.rsplit('/').next().unwrap_or("plugin").to_string());
+                        let pname = name.clone().unwrap_or_else(|| {
+                            source.rsplit('/').next().unwrap_or("plugin").to_string()
+                        });
                         let psrc = if source.starts_with("http") || source.contains("git") {
-                            plugins::PluginSource::Git { url: source.clone(), branch: None }
-                        } else { plugins::PluginSource::Local(std::path::PathBuf::from(source)) };
-                        match mgr.install(plugins::PluginInstallRequest { source: psrc, name: pname }) {
-                            plugins::PluginInstallOutcome::Installed { path } => println!("Installed to {}", path.display()),
-                            plugins::PluginInstallOutcome::AlreadyInstalled { path } => println!("Already at {}", path.display()),
-                            plugins::PluginInstallOutcome::Failed { error } => eprintln!("Failed: {}", error),
+                            plugins::PluginSource::Git {
+                                url: source.clone(),
+                                branch: None,
+                            }
+                        } else {
+                            plugins::PluginSource::Local(std::path::PathBuf::from(source))
+                        };
+                        match mgr.install(plugins::PluginInstallRequest {
+                            source: psrc,
+                            name: pname,
+                        }) {
+                            plugins::PluginInstallOutcome::Installed { path } => {
+                                println!("Installed to {}", path.display())
+                            }
+                            plugins::PluginInstallOutcome::AlreadyInstalled { path } => {
+                                println!("Already at {}", path.display())
+                            }
+                            plugins::PluginInstallOutcome::Failed { error } => {
+                                eprintln!("Failed: {}", error)
+                            }
                         }
                         Ok(())
                     }
@@ -498,8 +619,14 @@ async fn main() -> Result<()> {
             }
             Command::Execpolicy => {
                 let policy = exec_policy::ExecPolicy::load()?;
-                if policy.rules.is_empty() { println!("No rules. Add .rules files to ~/.agiworkforce/rules/"); }
-                else { println!("{} rule(s):", policy.rules.len()); for r in &policy.rules { println!("  {:?} — {}", r.effect, r.source); } }
+                if policy.rules.is_empty() {
+                    println!("No rules. Add .rules files to ~/.agiworkforce/rules/");
+                } else {
+                    println!("{} rule(s):", policy.rules.len());
+                    for r in &policy.rules {
+                        println!("  {:?} — {}", r.effect, r.source);
+                    }
+                }
                 Ok(())
             }
         };
@@ -578,7 +705,11 @@ async fn main() -> Result<()> {
                 query.cyan()
             );
             for s in &results {
-                let title = if s.title.is_empty() { "(untitled)" } else { &s.title };
+                let title = if s.title.is_empty() {
+                    "(untitled)"
+                } else {
+                    &s.title
+                };
                 let short_id = &s.id[..s.id.len().min(8)];
                 println!(
                     "  {} {}  {} msgs  {}",
@@ -678,17 +809,18 @@ async fn main() -> Result<()> {
     let stdin_content = if is_piped || cli.stdin {
         let mut buf = String::new();
         io::stdin().read_to_string(&mut buf)?;
-        if buf.is_empty() { None } else { Some(buf) }
+        if buf.is_empty() {
+            None
+        } else {
+            Some(buf)
+        }
     } else {
         None
     };
 
     // --cost with no prompt and no stdin: just show pricing info
     if cli.cost && cli.prompt.is_none() && stdin_content.is_none() {
-        let model = cli
-            .model
-            .as_deref()
-            .unwrap_or(&app_config.default.model);
+        let model = cli.model.as_deref().unwrap_or(&app_config.default.model);
         let (input_rate, output_rate) = output::model_pricing(model);
         if input_rate == 0.0 && output_rate == 0.0 {
             println!("Model '{}' — no cost (local/unknown model)", model);
@@ -811,7 +943,11 @@ async fn main() -> Result<()> {
                 messages.len()
             );
         } else {
-            eprintln!("Resuming session '{}' ({} messages).", session_id, messages.len());
+            eprintln!(
+                "Resuming session '{}' ({} messages).",
+                session_id,
+                messages.len()
+            );
         }
         Some(messages)
     } else if cli.continue_session {
@@ -960,9 +1096,13 @@ async fn run_oneshot(
         // Non-streaming JSON mode: collect full response
         let start = std::time::Instant::now();
         let result = session
-            .send(config, prompt, Box::new(|_chunk| {
-                // Collect silently — we use the returned text
-            }))
+            .send(
+                config,
+                prompt,
+                Box::new(|_chunk| {
+                    // Collect silently — we use the returned text
+                }),
+            )
             .await;
         let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -1000,9 +1140,13 @@ async fn run_oneshot(
     } else if raw_output {
         // Raw text mode: no spinner, no cost, no formatting
         let result = session
-            .send(config, prompt, Box::new(|chunk| {
-                output::print_assistant_chunk(chunk);
-            }))
+            .send(
+                config,
+                prompt,
+                Box::new(|chunk| {
+                    output::print_assistant_chunk(chunk);
+                }),
+            )
             .await;
 
         match result {
@@ -1021,11 +1165,15 @@ async fn run_oneshot(
         let md_cb = std::sync::Arc::clone(&md);
 
         let result = session
-            .send(config, prompt, Box::new(move |chunk| {
-                if let Ok(mut renderer) = md_cb.lock() {
-                    output::print_assistant_chunk_formatted(&mut renderer, chunk);
-                }
-            }))
+            .send(
+                config,
+                prompt,
+                Box::new(move |chunk| {
+                    if let Ok(mut renderer) = md_cb.lock() {
+                        output::print_assistant_chunk_formatted(&mut renderer, chunk);
+                    }
+                }),
+            )
             .await;
 
         spinner.finish_and_clear();

@@ -24,9 +24,11 @@ pub struct ScheduledJob {
     pub enabled: bool,
 
     /// Timestamp of the last successful run (if any).
+    #[serde(rename = "lastExecutedAt", alias = "lastRun")]
     pub last_run: Option<DateTime<Utc>>,
 
     /// Timestamp of the next scheduled run (if enabled).
+    #[serde(rename = "nextExecutionAt", alias = "nextRun")]
     pub next_run: Option<DateTime<Utc>>,
 
     /// Optional metadata associated with this job.
@@ -367,8 +369,10 @@ pub struct JobSummary {
     /// Whether the job is enabled.
     pub enabled: bool,
     /// Last run timestamp.
+    #[serde(rename = "lastExecutedAt", alias = "lastRun")]
     pub last_run: Option<DateTime<Utc>>,
     /// Next scheduled run.
+    #[serde(rename = "nextExecutionAt", alias = "nextRun")]
     pub next_run: Option<DateTime<Utc>>,
     /// Schedule description.
     pub schedule_description: String,
@@ -444,5 +448,62 @@ impl From<&ScheduledJob> for JobSummary {
             next_run: job.next_run,
             schedule_description,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    #[test]
+    fn scheduled_job_serializes_canonical_execution_fields() {
+        let timestamp = Utc::now();
+        let job = ScheduledJob {
+            id: "job-1".to_string(),
+            name: "Test job".to_string(),
+            schedule: JobSchedule::Interval(JobInterval::minutes(5)),
+            action: JobAction::EmitEvent {
+                event_name: "scheduler:test".to_string(),
+                payload: serde_json::json!({ "message": "world" }),
+            },
+            enabled: true,
+            last_run: Some(timestamp),
+            next_run: Some(timestamp),
+            metadata: HashMap::new(),
+            max_retries: 3,
+            retry_count: 0,
+            created_at: timestamp,
+            updated_at: timestamp,
+        };
+
+        let value = serde_json::to_value(&job).expect("job should serialize");
+        assert_eq!(value["lastExecutedAt"], serde_json::json!(timestamp));
+        assert_eq!(value["nextExecutionAt"], serde_json::json!(timestamp));
+        assert!(value.get("lastRun").is_none());
+        assert!(value.get("nextRun").is_none());
+    }
+
+    #[test]
+    fn scheduled_job_deserializes_legacy_execution_fields() {
+        let payload = serde_json::json!({
+            "id": "job-1",
+            "name": "Legacy job",
+            "schedule": { "type": "interval", "seconds": 60 },
+            "action": { "type": "emitEvent", "eventName": "scheduler:test", "payload": { "message": "world" } },
+            "enabled": true,
+            "lastRun": "2026-03-20T12:00:00Z",
+            "nextRun": "2026-03-20T13:00:00Z",
+            "metadata": {},
+            "maxRetries": 3,
+            "retryCount": 0,
+            "createdAt": "2026-03-20T11:00:00Z",
+            "updatedAt": "2026-03-20T11:00:00Z"
+        });
+
+        let job: ScheduledJob =
+            serde_json::from_value(payload).expect("legacy payload should deserialize");
+        assert!(job.last_run.is_some());
+        assert!(job.next_run.is_some());
     }
 }

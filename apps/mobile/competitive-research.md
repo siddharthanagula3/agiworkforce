@@ -93,9 +93,9 @@ _Generated: 2026-03-18 | Sources: 60+ web searches across 3 parallel research ag
 
 ### CRITICAL (Must match to compete)
 
-| Gap                            | Who Has It                            | Effort | Status      |
-| ------------------------------ | ------------------------------------- | ------ | ----------- |
-| Projects/context on mobile     | Claude, ChatGPT (GPTs), Gemini (Gems) | L      | Not started |
+| Gap                        | Who Has It                            | Effort | Status      |
+| -------------------------- | ------------------------------------- | ------ | ----------- |
+| Projects/context on mobile | Claude, ChatGPT (GPTs), Gemini (Gems) | L      | Not started |
 
 ### HIGH (Strong competitive advantage)
 

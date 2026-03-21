@@ -48,7 +48,8 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
                 Page Info
               </span>
               <div className="flex items-center gap-1">
-                <button type="button"
+                <button
+                  type="button"
                   onClick={handleCopyUrl}
                   className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400"
                   title="Copy URL"
@@ -64,7 +65,8 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
                     </>
                   )}
                 </button>
-                <button type="button"
+                <button
+                  type="button"
                   onClick={handleOpenInBrowser}
                   className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400"
                   title="Open in browser"

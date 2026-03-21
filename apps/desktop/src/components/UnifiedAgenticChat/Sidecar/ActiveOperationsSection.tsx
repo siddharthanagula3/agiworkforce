@@ -58,7 +58,8 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
               <Loader2 size={12} className="animate-spin" />
               {totalActive} active
             </div>
-            <button type="button"
+            <button
+              type="button"
               onClick={() => useUnifiedChatStore.getState().clearBackgroundTasks()}
               className="text-xs text-gray-500 hover:text-red-500 transition-colors"
               title="Clear all tasks"

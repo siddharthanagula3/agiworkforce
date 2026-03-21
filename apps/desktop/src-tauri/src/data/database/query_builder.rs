@@ -213,6 +213,14 @@ fn validate_where_clause(clause: &str) -> Result<()> {
     Ok(())
 }
 
+fn normalize_parameter_value(value: &str) -> String {
+    if value.starts_with('\'') && value.ends_with('\'') && value.len() >= 2 {
+        value[1..value.len() - 1].replace("''", "'")
+    } else {
+        value.to_string()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct QueryBuilder {
     query_type: QueryType,
@@ -448,18 +456,16 @@ impl QueryBuilder {
     pub fn build(&self) -> Result<String> {
         match &self.query_type {
             QueryType::Insert(query) => {
-                tracing::warn!(
-                    "QueryBuilder::build() called for INSERT on table '{}'. \
-                     Prefer build_parameterized() to avoid string interpolation.",
+                return Err(Error::Other(format!(
+                    "INSERT build() is disabled for table '{}'. Use build_parameterized() instead.",
                     query.table
-                );
+                )));
             }
             QueryType::Update(query) => {
-                tracing::warn!(
-                    "QueryBuilder::build() called for UPDATE on table '{}'. \
-                     Prefer build_parameterized() to avoid string interpolation.",
+                return Err(Error::Other(format!(
+                    "UPDATE build() is disabled for table '{}'. Use build_parameterized() instead.",
                     query.table
-                );
+                )));
             }
             _ => {}
         }
@@ -757,7 +763,7 @@ impl QueryBuilder {
                     .map(|v| {
                         let placeholder = format!("${}", param_index);
                         param_index += 1;
-                        params.push(v.clone());
+                        params.push(normalize_parameter_value(v));
                         placeholder
                     })
                     .collect();
@@ -800,7 +806,7 @@ impl QueryBuilder {
                 validate_sql_identifier(col).ok()?;
                 let placeholder = format!("${}", param_index);
                 param_index += 1;
-                params.push(val.clone());
+                params.push(normalize_parameter_value(val));
                 Some(format!("{} = {}", col, placeholder))
             })
             .collect::<Option<Vec<_>>>()
@@ -888,43 +894,49 @@ mod tests {
 
     #[test]
     fn test_insert() {
-        let query = QueryBuilder::insert("users")
+        let (query, params) = QueryBuilder::insert("users")
             .into_columns(&["name", "email"])
             .values(&["'Alice'", "'alice@example.com'"])
-            .build()
+            .build_parameterized()
             .unwrap();
-        assert_eq!(
-            query,
-            "INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com')"
-        );
+        assert_eq!(query, "INSERT INTO users (name, email) VALUES ($1, $2)");
+        assert_eq!(params, vec!["Alice", "alice@example.com"]);
     }
 
     #[test]
     fn test_insert_multiple_rows() {
-        let query = QueryBuilder::insert("users")
+        let (query, params) = QueryBuilder::insert("users")
             .into_columns(&["name", "email"])
             .values(&["'Alice'", "'alice@example.com'"])
             .values(&["'Bob'", "'bob@example.com'"])
-            .build()
+            .build_parameterized()
             .unwrap();
         assert_eq!(
             query,
-            "INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com'), ('Bob', 'bob@example.com')"
+            "INSERT INTO users (name, email) VALUES ($1, $2), ($3, $4)"
+        );
+        assert_eq!(
+            params,
+            vec!["Alice", "alice@example.com", "Bob", "bob@example.com"]
         );
     }
 
     #[test]
     fn test_update() {
-        let query = QueryBuilder::update("users")
+        let (query, params) = QueryBuilder::update("users")
             .set("name", "'Alice Updated'")
             .set("email", "'alice_new@example.com'")
             .where_clause("id = 1")
-            .build()
+            .build_parameterized()
             .unwrap();
 
         assert!(
-            query == "UPDATE users SET name = 'Alice Updated', email = 'alice_new@example.com' WHERE id = 1"
-            || query == "UPDATE users SET email = 'alice_new@example.com', name = 'Alice Updated' WHERE id = 1"
+            query == "UPDATE users SET name = $1, email = $2 WHERE id = 1"
+                || query == "UPDATE users SET email = $1, name = $2 WHERE id = 1"
+        );
+        assert!(
+            params == vec!["Alice Updated", "alice_new@example.com"]
+                || params == vec!["alice_new@example.com", "Alice Updated"]
         );
     }
 
@@ -939,16 +951,37 @@ mod tests {
 
     #[test]
     fn test_returning_clause() {
-        let query = QueryBuilder::insert("users")
+        let (query, params) = QueryBuilder::insert("users")
             .into_columns(&["name", "email"])
             .values(&["'Alice'", "'alice@example.com'"])
             .returning(&["id", "created_at"])
-            .build()
+            .build_parameterized()
             .unwrap();
         assert_eq!(
             query,
-            "INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com') RETURNING id, created_at"
+            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, created_at"
         );
+        assert_eq!(params, vec!["Alice", "alice@example.com"]);
+    }
+
+    #[test]
+    fn test_build_rejects_interpolated_writes() {
+        let insert_error = QueryBuilder::insert("users")
+            .into_columns(&["name"])
+            .values(&["'Alice'"])
+            .build()
+            .unwrap_err();
+        assert!(insert_error
+            .to_string()
+            .contains("Use build_parameterized() instead"));
+
+        let update_error = QueryBuilder::update("users")
+            .set("name", "'Alice'")
+            .build()
+            .unwrap_err();
+        assert!(update_error
+            .to_string()
+            .contains("Use build_parameterized() instead"));
     }
 
     #[test]

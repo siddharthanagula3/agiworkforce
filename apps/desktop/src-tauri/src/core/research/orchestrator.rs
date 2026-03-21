@@ -50,16 +50,28 @@ pub struct ResearchSession {
 }
 
 impl ResearchSession {
-    /// Creates a new research session.
-    pub fn new(query: ResearchQuery) -> Self {
-        let session_id = format!(
+    fn generate_session_id() -> String {
+        format!(
             "research_{}",
             uuid::Uuid::new_v4()
                 .to_string()
                 .split('-')
                 .next()
                 .unwrap_or("x")
-        );
+        )
+    }
+
+    /// Creates a new research session.
+    pub fn new(query: ResearchQuery) -> Self {
+        Self::new_with(
+            query,
+            Self::generate_session_id(),
+            Arc::new(AtomicBool::new(false)),
+        )
+    }
+
+    /// Creates a new research session with caller-owned cancellation state.
+    pub fn new_with(query: ResearchQuery, session_id: String, cancelled: Arc<AtomicBool>) -> Self {
         let total_iterations = query.mode.max_iterations();
 
         Self {
@@ -69,7 +81,7 @@ impl ResearchSession {
             results: Vec::new(),
             citation_tracker: CitationTracker::new(CitationFormat::Numbered),
             started_at: Instant::now(),
-            cancelled: Arc::new(AtomicBool::new(false)),
+            cancelled,
         }
     }
 
@@ -184,13 +196,30 @@ impl ResearchOrchestrator {
         query: &str,
         mode: ResearchMode,
     ) -> Result<ResearchResult, ResearchError> {
+        self.research_with_session(
+            query,
+            mode,
+            ResearchSession::generate_session_id(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+    }
+
+    /// Performs research with a caller-managed session ID and cancellation flag.
+    pub async fn research_with_session(
+        &self,
+        query: &str,
+        mode: ResearchMode,
+        session_id: String,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<ResearchResult, ResearchError> {
         if query.trim().is_empty() {
             return Err(ResearchError::InvalidQuery);
         }
 
         // Create research session
         let research_query = ResearchQuery::new(query, mode);
-        let mut session = ResearchSession::new(research_query);
+        let mut session = ResearchSession::new_with(research_query, session_id, cancelled);
 
         // Emit initial progress
         self.emit_progress(&session.progress);
@@ -1034,6 +1063,18 @@ That's the result."#;
         let session = ResearchSession::new(query);
 
         session.cancel();
+        assert!(session.is_cancelled());
+    }
+
+    #[test]
+    fn test_research_session_uses_external_cancel_flag() {
+        let query = ResearchQuery::new("test query", ResearchMode::Quick);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let session =
+            ResearchSession::new_with(query, "research_manual".to_string(), cancelled.clone());
+
+        assert_eq!(session.id, "research_manual");
+        cancelled.store(true, Ordering::SeqCst);
         assert!(session.is_cancelled());
     }
 }

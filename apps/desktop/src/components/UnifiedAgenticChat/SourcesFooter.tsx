@@ -82,7 +82,8 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
           </span>
         </div>
         {citations.length > 3 && (
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setIsExpanded(!isExpanded)}
             className="flex items-center gap-1 text-xs text-teal hover:text-teal/80 transition-colors"
           >

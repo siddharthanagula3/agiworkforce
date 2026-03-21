@@ -89,11 +89,9 @@ const ALL_TAGS: ConversationTag[] = [
 ];
 
 function getAuthHeaders(): Record<string, string> {
-  const token =
-    typeof window !== 'undefined' ? localStorage.getItem('supabase_access_token') : null;
+  // Auth is managed via Supabase SSR cookies (set by middleware) — no manual token needed.
   return {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
 

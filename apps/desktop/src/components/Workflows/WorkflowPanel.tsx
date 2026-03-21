@@ -492,7 +492,8 @@ function WorkflowItem({
     <div className={cn('group', isActive && 'bg-primary/5')}>
       {/* Workflow Header */}
       <div className="flex items-center gap-2 px-4 py-3">
-        <button type="button"
+        <button
+          type="button"
           onClick={onToggleExpanded}
           className="p-1 rounded hover:bg-muted/50 transition-colors"
         >

@@ -192,12 +192,8 @@ function MCPAppDefinitionRendererInner({
         case 'mcp:resize': {
           const resizeParams = msg.params as { height?: number } | null;
           if (typeof resizeParams?.height === 'number' && resizeParams.height > 0) {
-            const hardMax = expanded
-              ? Math.floor(window.innerHeight * 0.85)
-              : maxHeight;
-            setIframeHeight(
-              Math.min(Math.max(resizeParams.height, MIN_HEIGHT), hardMax),
-            );
+            const hardMax = expanded ? Math.floor(window.innerHeight * 0.85) : maxHeight;
+            setIframeHeight(Math.min(Math.max(resizeParams.height, MIN_HEIGHT), hardMax));
           }
           // Treat first resize report as "loaded"
           setIsLoading(false);
@@ -228,20 +224,13 @@ function MCPAppDefinitionRendererInner({
 
   // ── computed display height ─────────────────────────────────────────────
 
-  const hardMax = expanded
-    ? Math.floor(window.innerHeight * 0.85)
-    : maxHeight;
+  const hardMax = expanded ? Math.floor(window.innerHeight * 0.85) : maxHeight;
   const displayHeight = Math.min(iframeHeight, hardMax);
 
   // ── render ───────────────────────────────────────────────────────────────
 
   return (
-    <div
-      className={cn(
-        'rounded-lg border border-border overflow-hidden bg-background',
-        className,
-      )}
-    >
+    <div className={cn('rounded-lg border border-border overflow-hidden bg-background', className)}>
       {/* ── Header bar ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30 border-b border-border">
         <div className="flex items-center gap-2 min-w-0">
@@ -272,18 +261,13 @@ function MCPAppDefinitionRendererInner({
             onClick={() => setExpanded((prev) => !prev)}
             className="h-5 w-5 p-0"
           >
-            {expanded ? (
-              <Minimize2 className="w-3 h-3" />
-            ) : (
-              <Maximize2 className="w-3 h-3" />
-            )}
+            {expanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
           </Button>
         </div>
       </div>
 
       {/* ── Body ───────────────────────────────────────────────────── */}
       <div className="relative" style={{ minHeight: MIN_HEIGHT }}>
-
         {/* Loading overlay */}
         {isLoading && !hasError && (
           <div

@@ -195,7 +195,8 @@ function MemoryCard({ entry, onDelete }: MemoryCardProps) {
       <p className="text-sm text-zinc-400 leading-relaxed pl-7">
         {displayContent}
         {isLong && (
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setExpanded((e) => !e)}
             className="ml-1.5 text-teal-400 hover:text-teal-300 text-xs font-medium transition-colors"
           >
@@ -314,7 +315,8 @@ function AddMemoryDialog({ isOpen, onClose, onSave, isSaving }: AddMemoryDialogP
                 <Brain className="h-5 w-5 text-teal-400" />
                 <h2 className="text-base font-semibold text-zinc-100">Add Memory</h2>
               </div>
-              <button type="button"
+              <button
+                type="button"
                 onClick={onClose}
                 className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
               >
@@ -733,7 +735,8 @@ export function MemoryPanel({ isOpen, onClose, embedded }: MemoryPanelProps) {
                   <Plus className="h-3.5 w-3.5" />
                   Add Memory
                 </Button>
-                <button type="button"
+                <button
+                  type="button"
                   onClick={onClose}
                   className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
                 >
@@ -753,7 +756,8 @@ export function MemoryPanel({ isOpen, onClose, embedded }: MemoryPanelProps) {
                   className="pl-9 bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-600 focus:ring-teal-500 h-9 text-sm"
                 />
                 {searchQuery && (
-                  <button type="button"
+                  <button
+                    type="button"
                     onClick={() => setSearchQuery('')}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
                   >
@@ -766,7 +770,8 @@ export function MemoryPanel({ isOpen, onClose, embedded }: MemoryPanelProps) {
             {/* Category filter tabs */}
             <div className="flex items-center gap-1 px-4 py-2.5 border-b border-zinc-800 shrink-0 overflow-x-auto scrollbar-none">
               {FILTER_TABS.map((tab) => (
-                <button type="button"
+                <button
+                  type="button"
                   key={tab.value}
                   onClick={() => setCategoryFilter(tab.value)}
                   className={cn(

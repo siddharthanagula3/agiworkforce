@@ -15,6 +15,7 @@ use crate::core::research::{
 use crate::sys::commands::llm::LLMState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::RwLock;
@@ -267,11 +268,31 @@ pub async fn research_start(
 
     // Convert mode
     let mode: ResearchMode = request.mode.into();
+    let session_id = format!(
+        "research_{}",
+        uuid::Uuid::new_v4()
+            .to_string()
+            .split('-')
+            .next()
+            .unwrap_or("x")
+    );
+    let cancelled = Arc::new(AtomicBool::new(false));
+    state
+        .active_sessions
+        .write()
+        .await
+        .insert(session_id.clone(), cancelled.clone());
 
     tracing::info!("Starting research: query='{}', mode={:?}", query, mode);
 
     // Execute research
-    match orchestrator.research(query, mode).await {
+    let result = orchestrator
+        .research_with_session(query, mode, session_id.clone(), cancelled)
+        .await;
+
+    state.active_sessions.write().await.remove(&session_id);
+
+    match result {
         Ok(result) => {
             tracing::info!(
                 "Research completed: session={}, sources={}, duration={}s",

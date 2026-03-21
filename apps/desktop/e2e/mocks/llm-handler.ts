@@ -256,7 +256,9 @@ export async function installTauriInvokeMock(page: Page): Promise<void> {
 
     // Preserve any existing invoke (e.g. from a real Tauri webview) unless
     // already mocked.
-    const _originalInvoke = tauri['invoke'] as ((...args: unknown[]) => Promise<unknown>) | undefined;
+    const _originalInvoke = tauri['invoke'] as
+      | ((...args: unknown[]) => Promise<unknown>)
+      | undefined;
 
     tauri['invoke'] = async (cmd: unknown, args?: unknown): Promise<unknown> => {
       const command = String(cmd);
@@ -296,7 +298,11 @@ export async function installTauriInvokeMock(page: Page): Promise<void> {
       }
 
       if (command === 'create_conversation') {
-        return { id: 'e2e-conv-' + Date.now(), title: 'E2E Test', created_at: new Date().toISOString() };
+        return {
+          id: 'e2e-conv-' + Date.now(),
+          title: 'E2E Test',
+          created_at: new Date().toISOString(),
+        };
       }
 
       // ---- Settings ----

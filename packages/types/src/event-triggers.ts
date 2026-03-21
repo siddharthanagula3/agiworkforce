@@ -21,13 +21,7 @@
  * Discriminant used in `EventTriggerDefinition.type` and each
  * `TriggerConfig` variant to identify the trigger source.
  */
-export type TriggerType =
-  | 'cron'
-  | 'webhook'
-  | 'slack'
-  | 'github'
-  | 'linear'
-  | 'file_watcher';
+export type TriggerType = 'cron' | 'webhook' | 'slack' | 'github' | 'linear' | 'file_watcher';
 
 // ============================================================================
 // Trigger Config Variants

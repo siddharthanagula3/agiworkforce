@@ -7,7 +7,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
-use tauri::command;
+use tauri::{command, AppHandle};
 
 /// A single web search result
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,12 +81,9 @@ pub struct WebSearchResponse {
     pub duration_ms: u64,
 }
 
-/// Tauri command: web_search
-///
-/// Routes to the core SearchExecutor (Perplexity with DuckDuckGo fallback)
-/// and returns a normalized response for the frontend.
-#[command]
-pub async fn web_search(
+/// Shared search implementation for the Tauri command and tests.
+async fn execute_web_search(
+    app_handle: Option<&AppHandle>,
     query: String,
     num_results: Option<usize>,
     search_type: Option<String>,
@@ -117,7 +114,12 @@ pub async fn web_search(
 
     let exec = SearchExecutor::new();
     let raw = exec
-        .run_search(&trimmed_query, exec_search_type, num_results.unwrap_or(10))
+        .run_search_with_app_handle(
+            app_handle,
+            &trimmed_query,
+            exec_search_type,
+            num_results.unwrap_or(10),
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -197,6 +199,20 @@ pub async fn web_search(
         provider,
         duration_ms,
     })
+}
+
+/// Tauri command: web_search
+///
+/// Routes to the core SearchExecutor (Perplexity with DuckDuckGo fallback)
+/// and returns a normalized response for the frontend.
+#[command]
+pub async fn web_search(
+    app_handle: AppHandle,
+    query: String,
+    num_results: Option<usize>,
+    search_type: Option<String>,
+) -> Result<WebSearchResponse, String> {
+    execute_web_search(Some(&app_handle), query, num_results, search_type).await
 }
 
 /// Web search provider trait
@@ -453,7 +469,7 @@ mod tests {
 
     #[tokio::test]
     async fn web_search_rejects_unsupported_image_search() {
-        let error = web_search("cats".to_string(), Some(5), Some("images".to_string()))
+        let error = execute_web_search(None, "cats".to_string(), Some(5), Some("images".to_string()))
             .await
             .expect_err("images search should fail fast");
 

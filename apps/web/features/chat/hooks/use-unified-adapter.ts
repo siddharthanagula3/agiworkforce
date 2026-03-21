@@ -87,8 +87,7 @@ export function adaptMessage(msg: ChatMessage): AdaptedMessage {
       model: msg.metadata?.model,
       timestamp: msg.createdAt.getTime(),
     },
-    thinking:
-      thinkingSteps && thinkingSteps.length > 0 ? thinkingSteps.join('\n') : undefined,
+    thinking: thinkingSteps && thinkingSteps.length > 0 ? thinkingSteps.join('\n') : undefined,
     toolCalls:
       tools && tools.length > 0
         ? tools.map((t) => ({

@@ -71,8 +71,7 @@ export function BudgetTrackerDisplay({
   }, [showCreditBalance]);
 
   const tokensUsed = useMemo(
-    () =>
-      messages.reduce((sum, msg) => sum + (msg.metadata?.tokensUsed ?? 0), 0),
+    () => messages.reduce((sum, msg) => sum + (msg.metadata?.tokensUsed ?? 0), 0),
     [messages],
   );
 
@@ -89,10 +88,7 @@ export function BudgetTrackerDisplay({
 
   return (
     <div
-      className={cn(
-        'rounded-lg border border-white/[0.06] bg-white/[0.02] p-3',
-        className,
-      )}
+      className={cn('rounded-lg border border-white/[0.06] bg-white/[0.02] p-3', className)}
       aria-label="Session budget"
     >
       <div className="space-y-2 text-xs">

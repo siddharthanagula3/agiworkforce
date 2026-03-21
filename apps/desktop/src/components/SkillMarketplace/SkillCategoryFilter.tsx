@@ -67,7 +67,8 @@ export function SkillCategoryFilter() {
         const isActive = selectedCategory === cat;
 
         return (
-          <button type="button"
+          <button
+            type="button"
             key={cat}
             role="tab"
             aria-selected={isActive}

@@ -298,6 +298,7 @@ mod r5_context_compactor_ordering {
             target_tokens: 50_000,
             keep_recent: 3,
             min_messages: 5,
+            ..Default::default()
         };
         let compactor = ContextCompactor::new(config);
 
@@ -349,6 +350,7 @@ mod r5_context_compactor_ordering {
             target_tokens: 50_000,
             keep_recent: 2,
             min_messages: 4,
+            ..Default::default()
         };
         let compactor = ContextCompactor::new(config);
 
@@ -396,6 +398,7 @@ mod r5_context_compactor_ordering {
             target_tokens: 500,
             keep_recent: 3,
             min_messages: 10,
+            ..Default::default()
         };
         let compactor = ContextCompactor::new(config);
 
@@ -415,6 +418,7 @@ mod r5_context_compactor_ordering {
             target_tokens: 2500,
             keep_recent: 3,
             min_messages: 5,
+            ..Default::default()
         };
         let compactor = ContextCompactor::new(config);
 

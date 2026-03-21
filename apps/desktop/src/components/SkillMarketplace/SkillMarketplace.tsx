@@ -137,7 +137,8 @@ export function SkillMarketplace() {
 
             {/* View mode toggle */}
             <div className="flex rounded-md border border-border overflow-hidden">
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setViewMode('grid')}
                 aria-label="Grid view"
                 aria-pressed={viewMode === 'grid'}
@@ -150,7 +151,8 @@ export function SkillMarketplace() {
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setViewMode('list')}
                 aria-label="List view"
                 aria-pressed={viewMode === 'list'}

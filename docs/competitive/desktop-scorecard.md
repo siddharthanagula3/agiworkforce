@@ -195,7 +195,6 @@ _Generated: 2026-03-18 | Competitive research via live web search_
 9. **Zoom Action** — High-resolution element inspection for computer use
 10. **Response styles** — Configurable response tone/format
 
-
 ---
 
 # UI Parity Details

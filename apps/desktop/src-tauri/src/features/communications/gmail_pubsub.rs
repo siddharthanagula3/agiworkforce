@@ -670,7 +670,6 @@ impl GmailPubSubClient {
     /// * `ack_ids` - Acknowledgement IDs to modify
     /// * `deadline_seconds` - New deadline in seconds (0 to nack)
     // Used by: Pub/Sub message processing — extends deadline when processing is slow
-    #[allow(dead_code)]
     pub async fn modify_ack_deadline(
         &self,
         ack_ids: Vec<String>,

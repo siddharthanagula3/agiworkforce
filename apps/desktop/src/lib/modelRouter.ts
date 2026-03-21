@@ -197,14 +197,13 @@ const BALANCED_ADDITIONS: readonly string[] = [
 const PREMIUM_ADDITIONS: readonly string[] = [
   // === FLAGSHIP BENCHMARK (Best of the best) ===
   'claude-opus-4.6', // 80.9% SWE-bench - BEST CODING MODEL
-  'gpt-5.4-pro', // Latest GPT-5.2 flagship - PREMIUM REASONING
-  'gpt-5-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
+  'gpt-5.4-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
   'o3', // 65% SWE-bench - REASONING SPECIALIST
 
   // === HIGH BENCHMARK ===
   'grok-4', // 55.3% SWE-bench - REAL-TIME DATA
   'kimi-k2.5', // 55% SWE-bench, 99% AIME - V✓ T✓ Th✓ A✓
-  'deepseek-r1', // 55% SWE-bench - BUDGET REASONING
+  'deepseek-reasoner', // 55% SWE-bench - BUDGET REASONING
 ];
 
 export const MODEL_POOLS: Record<AutoMode, string[]> = {

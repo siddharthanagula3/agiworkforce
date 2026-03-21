@@ -18,7 +18,10 @@ apps/extension/                # Chrome MV3 (native messaging, DOM automation)
 apps/extension-vscode/         # VS Code (chat participant, agent mode, inline completions)
 packages/types/                # Shared TS types: a2a, cross-device, mcp-apps, event-triggers, audit
 packages/utils/                # Shared utilities
-services/api-gateway/          # Express API for mobile + integrations
+packages/api/                  # 1,061 typed API wrappers for all Tauri command domains
+packages/runtime/              # Runtime detection + capability-aware command routing
+packages/stores/               # Shared Zustand stores
+services/api-gateway/          # Express API for mobile + integrations + cloud chat SSE
 services/signaling-server/     # WebSocket signaling for cross-device streams
 ```
 

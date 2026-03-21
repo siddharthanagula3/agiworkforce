@@ -484,7 +484,11 @@ mod tests {
         ];
         for (status, expected_json) in &cases {
             let json = serde_json::to_string(status).unwrap();
-            assert_eq!(&json, expected_json, "serialization mismatch for {:?}", status);
+            assert_eq!(
+                &json, expected_json,
+                "serialization mismatch for {:?}",
+                status
+            );
             let deserialized: McpTaskStatus = serde_json::from_str(&json).unwrap();
             assert_eq!(&deserialized, status);
         }
@@ -509,8 +513,14 @@ mod tests {
             message: None,
         };
         let minimal_json = serde_json::to_string(&minimal).unwrap();
-        assert!(!minimal_json.contains("total"), "total should be omitted when None");
-        assert!(!minimal_json.contains("message"), "message should be omitted when None");
+        assert!(
+            !minimal_json.contains("total"),
+            "total should be omitted when None"
+        );
+        assert!(
+            !minimal_json.contains("message"),
+            "message should be omitted when None"
+        );
     }
 
     #[test]
@@ -569,7 +579,13 @@ mod tests {
         let params = TaskListParams::default();
         let json = serde_json::to_string(&params).unwrap();
         // Both optional fields should be absent when None
-        assert!(!json.contains("status"), "status should be omitted by default");
-        assert!(!json.contains("cursor"), "cursor should be omitted by default");
+        assert!(
+            !json.contains("status"),
+            "status should be omitted by default"
+        );
+        assert!(
+            !json.contains("cursor"),
+            "cursor should be omitted by default"
+        );
     }
 }
