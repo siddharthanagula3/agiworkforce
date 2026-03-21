@@ -79,6 +79,9 @@ export interface ChatMessage {
   /** Thinking / reasoning content from the model, if any. */
   reasoning?: string;
 
+  /** Whether this message is currently streaming tokens from the model. */
+  isStreaming?: boolean;
+
   /** File attachments associated with this message. */
   attachments?: ChatAttachment[];
 

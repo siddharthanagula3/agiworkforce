@@ -4,13 +4,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
-import modelsData from '@/constants/models.json';
+import { modelsCatalogJson as modelsData } from '@agiworkforce/types';
 
 /**
  * Model Catalog API
  * Endpoint: GET /api/models
  *
- * Returns the canonical model catalog sourced from constants/models.json.
+ * Returns the canonical model catalog sourced from @agiworkforce/types (models.json).
  * This is the single source of truth for model metadata consumed by the
  * desktop app, web app, and any external integrations.
  *

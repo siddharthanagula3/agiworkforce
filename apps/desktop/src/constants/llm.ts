@@ -1,15 +1,16 @@
 /**
- * LLM Constants — thin shim over models.json (single source of truth)
+ * LLM Constants — thin shim over the canonical models.json (single source of truth)
  *
- * All model data lives in ./models.json. This file re-exports it
- * with the same named exports that the 29+ TS importers expect.
+ * All model data lives in packages/types/src/models.json and is imported via
+ * @agiworkforce/types. This file re-exports it with the same named exports
+ * that the 29+ TS importers expect.
  *
- * To add a new model, edit models.json — not this file.
+ * To add a new model, edit packages/types/src/models.json — not this file.
  */
 
 import type { Provider } from '../types/provider';
 import type { SubscriptionTier } from './planModels';
-import modelsJson from './models.json';
+import { modelsCatalogJson as modelsJson } from '@agiworkforce/types';
 
 // ---- Types (unchanged from original) ----
 

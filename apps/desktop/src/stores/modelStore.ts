@@ -1274,18 +1274,12 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
         // In Simple Mode: Always use the BEST auto mode for the tier
         const bestAutoMode = getBestAutoModeForTier(normalizedTier);
         if (selectedModel !== bestAutoMode) {
-          console.debug(
-            `[ModelStore] Simple Mode: Setting ${normalizedTier} tier to best auto mode: ${bestAutoMode}`,
-          );
           // Await selectModel so the reentrancy guard holds until selection completes
           await selectModel(bestAutoMode, 'managed_cloud');
         }
       } else {
         // In Advanced Mode: Only downgrade if using an auto mode they shouldn't have
         if (isAutoSelection && selectedModel && !allowed.includes(selectedModel)) {
-          console.debug(
-            `[ModelStore] Enforcing tier restriction: ${normalizedTier} tier cannot use ${selectedModel}, switching to auto-economy`,
-          );
           await selectModel('auto-economy', 'managed_cloud');
         } else if (
           selectedModel &&
@@ -1293,9 +1287,6 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
           !isOllamaSelection &&
           !isModelAllowedForTier(selectedModel, normalizedTier)
         ) {
-          console.debug(
-            `[ModelStore] Enforcing tier restriction: ${normalizedTier} tier cannot use ${selectedModel}, switching to auto-economy`,
-          );
           await selectModel('auto-economy', 'managed_cloud');
         }
       }
@@ -1328,16 +1319,10 @@ if (typeof window !== 'undefined') {
           (state) => state.plan,
           (plan) => {
             const normalizedPlan = plan ?? 'free';
-            console.debug(
-              `[ModelStore] Plan changed to ${normalizedPlan}, enforcing model tier restriction`,
-            );
             enforceModelTierRestriction(normalizedPlan);
           },
         );
         const initialPlan = useUnifiedAuthStore.getState().plan ?? 'free';
-        console.debug(
-          `[ModelStore] Initial plan is ${initialPlan}, enforcing model tier restriction`,
-        );
         enforceModelTierRestriction(initialPlan);
       }
     })
@@ -1367,7 +1352,6 @@ if (typeof window !== 'undefined') {
       _unsubscribeAppMode = useAppModeStore.subscribe(
         (state) => ({ mode: state.mode, planTier: state.planTier }),
         ({ mode: newMode, planTier: newTier }) => {
-          console.debug(`[ModelStore] App mode/tier changed: mode=${newMode} tier=${newTier}`);
           useModelStore.getState().loadModelsForMode(newMode, newTier);
         },
         { equalityFn: (a, b) => a.mode === b.mode && a.planTier === b.planTier },

@@ -795,13 +795,15 @@ impl SummaryLLM for HttpSummaryLLM {
         Err(Error::LLMError(LLMError::ApiError(final_error)))
     }
 
-    /// Generate embeddings with 3-tier fallback, normalized to DEFAULT_EMBEDDING_DIM.
-    /// 1. Ollama local (nomic-embed-text, 768-dim → padded to 1536)
+    /// Generate embeddings with 3-tier fallback, stored at native dimensions.
+    /// 1. Ollama local (nomic-embed-text, 768-dim)
     /// 2. OpenAI cloud (text-embedding-3-small, 1536-dim)
     /// 3. None (no embedding available — honest, no zero vectors)
+    ///
+    /// Embeddings are stored at their native dimension. The vector_search
+    /// function skips comparisons between embeddings of different dimensions
+    /// (different models produce incompatible vector spaces).
     async fn generate_embedding(&self, text: &str) -> Result<Option<Vec<f32>>> {
-        use super::memory_persistence::DEFAULT_EMBEDDING_DIM;
-
         if text.trim().is_empty() {
             tracing::debug!("Skipping embedding generation for empty text");
             return Ok(None);
@@ -810,12 +812,11 @@ impl SummaryLLM for HttpSummaryLLM {
         // Tier 1: Try Ollama local embeddings
         match self.generate_ollama_embedding(text).await {
             Ok(embedding) => {
-                let normalized = normalize_embedding_dim(embedding, DEFAULT_EMBEDDING_DIM);
                 tracing::debug!(
-                    "Generated Ollama embedding (normalized to {} dimensions)",
-                    normalized.len()
+                    "Generated Ollama embedding ({} dimensions)",
+                    embedding.len()
                 );
-                return Ok(Some(normalized));
+                return Ok(Some(embedding));
             }
             Err(e) => {
                 tracing::debug!("Ollama embedding unavailable, trying OpenAI: {}", e);
@@ -825,12 +826,11 @@ impl SummaryLLM for HttpSummaryLLM {
         // Tier 2: Try OpenAI embeddings
         match self.generate_openai_embedding(text).await {
             Ok(embedding) => {
-                let normalized = normalize_embedding_dim(embedding, DEFAULT_EMBEDDING_DIM);
                 tracing::debug!(
-                    "Generated OpenAI embedding (normalized to {} dimensions)",
-                    normalized.len()
+                    "Generated OpenAI embedding ({} dimensions)",
+                    embedding.len()
                 );
-                return Ok(Some(normalized));
+                return Ok(Some(embedding));
             }
             Err(e) => {
                 tracing::debug!("OpenAI embedding unavailable: {}", e);
@@ -841,21 +841,6 @@ impl SummaryLLM for HttpSummaryLLM {
         tracing::warn!("No embedding provider available. Memory will use FTS-only search.");
         Ok(None)
     }
-}
-
-/// Normalize an embedding vector to the target dimension.
-/// If shorter, pads with zeros. If longer, truncates.
-/// This ensures all stored embeddings have consistent dimensions for cosine similarity.
-fn normalize_embedding_dim(mut embedding: Vec<f32>, target_dim: usize) -> Vec<f32> {
-    if embedding.len() == target_dim {
-        return embedding;
-    }
-    if embedding.len() < target_dim {
-        embedding.resize(target_dim, 0.0);
-    } else {
-        embedding.truncate(target_dim);
-    }
-    embedding
 }
 
 // =============================================================================
@@ -1131,87 +1116,46 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_normalize_embedding_dim() {
-        // Test padding shorter vectors
-        let short = vec![1.0, 2.0, 3.0];
-        let normalized = normalize_embedding_dim(short, 5);
-        assert_eq!(normalized, vec![1.0, 2.0, 3.0, 0.0, 0.0]);
+    async fn test_ollama_embedding_stored_at_native_768_dim() {
+        // Ollama nomic-embed-text returns 768-dim; must be stored as-is, not padded
+        let store = Arc::new(MemoryStore::in_memory().unwrap());
+        let llm = Arc::new(MockOllamaSucceeds);
+        let summarizer = ConversationSummarizer::new(store, llm);
 
-        // Test truncating longer vectors
-        let long = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let normalized = normalize_embedding_dim(long, 3);
-        assert_eq!(normalized, vec![1.0, 2.0, 3.0]);
+        let embedding = summarizer
+            .llm
+            .generate_embedding("test embedding")
+            .await
+            .unwrap();
 
-        // Test exact-length passthrough
-        let exact = vec![1.0, 2.0, 3.0];
-        let normalized = normalize_embedding_dim(exact, 3);
-        assert_eq!(normalized, vec![1.0, 2.0, 3.0]);
-    }
-
-    // =========================================================================
-    // normalize_embedding_dim: production dimension tests
-    // =========================================================================
-
-    #[test]
-    fn test_normalize_embedding_dim_768_to_1536() {
-        use super::super::memory_persistence::DEFAULT_EMBEDDING_DIM;
-
-        // Ollama nomic-embed-text returns 768-dim; must be padded to 1536
-        let ollama_embedding: Vec<f32> = (0..768).map(|i| (i as f32) * 0.001).collect();
-        let normalized = normalize_embedding_dim(ollama_embedding.clone(), DEFAULT_EMBEDDING_DIM);
-
+        assert!(embedding.is_some(), "Should return an embedding");
+        let vec = embedding.unwrap();
         assert_eq!(
-            normalized.len(),
-            1536,
-            "768-dim Ollama embedding must be padded to 1536"
-        );
-        // Original values preserved in first 768 positions
-        assert_eq!(
-            &normalized[..768],
-            &ollama_embedding[..],
-            "Original embedding values must be preserved"
-        );
-        // Remaining positions zero-padded
-        assert!(
-            normalized[768..].iter().all(|&v| v == 0.0),
-            "Padded positions must be zero"
+            vec.len(),
+            768,
+            "Ollama embedding must be stored at native 768 dimensions, not padded"
         );
     }
 
-    #[test]
-    fn test_normalize_embedding_dim_1536_unchanged() {
-        use super::super::memory_persistence::DEFAULT_EMBEDDING_DIM;
+    #[tokio::test]
+    async fn test_openai_embedding_stored_at_native_1536_dim() {
+        // OpenAI text-embedding-3-small returns 1536-dim; must be stored as-is
+        let store = Arc::new(MemoryStore::in_memory().unwrap());
+        let llm = Arc::new(MockOllamaFailsOpenAISucceeds);
+        let summarizer = ConversationSummarizer::new(store, llm);
 
-        // OpenAI text-embedding-3-small returns 1536-dim; must pass through unchanged
-        let openai_embedding: Vec<f32> = (0..1536).map(|i| (i as f32) * 0.0005).collect();
-        let normalized = normalize_embedding_dim(openai_embedding.clone(), DEFAULT_EMBEDDING_DIM);
+        let embedding = summarizer
+            .llm
+            .generate_embedding("test embedding")
+            .await
+            .unwrap();
 
+        assert!(embedding.is_some(), "Should return an embedding");
+        let vec = embedding.unwrap();
         assert_eq!(
-            normalized.len(),
+            vec.len(),
             1536,
-            "1536-dim OpenAI embedding must remain 1536"
-        );
-        assert_eq!(
-            normalized, openai_embedding,
-            "1536-dim embedding must pass through unchanged"
-        );
-    }
-
-    #[test]
-    fn test_normalize_embedding_dim_empty_vector() {
-        use super::super::memory_persistence::DEFAULT_EMBEDDING_DIM;
-
-        let empty: Vec<f32> = Vec::new();
-        let normalized = normalize_embedding_dim(empty, DEFAULT_EMBEDDING_DIM);
-
-        assert_eq!(
-            normalized.len(),
-            1536,
-            "Empty vector must be padded to target dimension"
-        );
-        assert!(
-            normalized.iter().all(|&v| v == 0.0),
-            "Padded-from-empty vector must be all zeros"
+            "OpenAI embedding must be stored at native 1536 dimensions"
         );
     }
 

@@ -396,11 +396,6 @@ export const useMemoryStore = create<MemoryState>()(
 
             // AUDIT-006-024: Apply memory limits to prevent unbounded growth
             const prunedMemories = pruneMemories(memories);
-            if (prunedMemories.length < memories.length) {
-              console.debug(
-                `[memoryStore] Pruned ${memories.length - prunedMemories.length} memories to fit within limits`,
-              );
-            }
 
             set(
               { memories: prunedMemories, isLoading: false },
@@ -949,13 +944,7 @@ export const useMemoryStore = create<MemoryState>()(
           if (version < 2) {
             // Version 2: Apply memory limits to existing data
             if (state.memories && Array.isArray(state.memories)) {
-              const originalCount = state.memories.length;
               state.memories = pruneMemories(state.memories);
-              if (state.memories.length < originalCount) {
-                console.debug(
-                  `[MemoryStore] Migration v2: Pruned ${originalCount - state.memories.length} memories to fit within new limits`,
-                );
-              }
             }
           }
 
@@ -965,7 +954,6 @@ export const useMemoryStore = create<MemoryState>()(
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
-            console.debug('[MemoryStore] Rehydration complete');
           }
         },
       },

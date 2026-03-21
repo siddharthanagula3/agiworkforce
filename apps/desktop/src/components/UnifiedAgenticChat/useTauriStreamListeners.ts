@@ -1421,6 +1421,37 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           toast.error(`Tool "${payload.tool_name}" is blocked in Safe mode`);
         }),
       );
+
+      // Agent budget and iteration limit events
+      registerListener(
+        listen<{
+          maxIterations: number;
+          message: string;
+        }>('agent:loop-iteration-limit', ({ payload }) => {
+          toast.warning(payload.message || 'Agent reached iteration limit and was stopped');
+        }),
+      );
+
+      registerListener(
+        listen<{
+          cumulativeCost: number;
+          sessionLimit: number;
+          message: string;
+        }>('agent:budget-exceeded', ({ payload }) => {
+          toast.error(payload.message || 'Agent session budget exceeded');
+        }),
+      );
+
+      registerListener(
+        listen<{
+          cumulativeCost: number;
+          sessionLimit: number;
+          percentUsed: number;
+          message: string;
+        }>('agent:budget-warning', ({ payload }) => {
+          toast.warning(payload.message || 'Agent approaching session budget limit');
+        }),
+      );
     };
 
     // Start setting up listeners

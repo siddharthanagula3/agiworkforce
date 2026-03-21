@@ -1,6 +1,7 @@
 import type { PlanTier, SubscriptionStatus } from '../stores/auth';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://www.agiworkforce.com';
+// Re-export from centralized config so existing imports continue to work.
+export { API_BASE_URL } from './config';
 
 export const API_ENDPOINTS = {
   deviceLink: '/api/device/link',

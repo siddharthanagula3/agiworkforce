@@ -1034,14 +1034,47 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
     // Extract or detect if content is a full HTML document or just a snippet
     const isFullDocument = /<html[\s>]/i.test(content) || /<!doctype/i.test(content);
 
-    // Content Security Policy to restrict what the iframe can do
-    // - default-src 'self' blob: data: - allows same-origin, blobs, and data URIs
-    // - script-src 'unsafe-inline' 'unsafe-eval' - needed for inline scripts
-    // - style-src 'unsafe-inline' - needed for inline styles
-    // - img-src * data: blob: - allows images from anywhere (common use case)
-    // - font-src * data: - allows fonts
-    // - connect-src 'none' - blocks fetch/XHR to prevent data exfiltration
-    // - frame-src 'none' - blocks nested iframes
+    // Content Security Policy for the interactive HTML/JS execution sandbox.
+    // This component is intentionally permissive for script execution — it is a
+    // CodePen/JSFiddle-style live preview where users run their own JavaScript.
+    //
+    // script-src 'unsafe-inline':
+    //   Required — the console-capture bootstrap is injected as an inline <script>
+    //   block (see `consoleCapture` below). Removing this would silently break
+    //   all console output forwarding and the sandbox-ready handshake.
+    //   Additionally, user HTML artifacts commonly contain inline <script> tags.
+    //
+    // script-src 'unsafe-eval':
+    //   Required for full JavaScript sandbox parity. Users may legitimately write
+    //   artifacts that call eval(), new Function(), or pass strings to setTimeout().
+    //   Example: a user asks the AI to create a JS REPL — eval() is the mechanism.
+    //   Removing this would silently break those artifacts at runtime with a CSP
+    //   violation, which contradicts the feature's purpose.
+    //   TRADE-OFF: This is acceptable because:
+    //     (a) The iframe sandbox="allow-scripts" (no allow-same-origin) prevents
+    //         access to the parent window, localStorage, and cookies.
+    //     (b) connect-src 'none' blocks all network exfiltration.
+    //     (c) frame-src 'none' blocks nested iframe attacks.
+    //   If we ever move to a Worker-based execution model, eval can be dropped.
+    //
+    // style-src 'unsafe-inline':
+    //   Required — the base styles below are injected as an inline <style> block,
+    //   and user HTML fragments typically contain inline style attributes.
+    //
+    // style-src *:
+    //   Allows user artifacts to load stylesheets from CDNs (Bootstrap, Tailwind,
+    //   etc.). Acceptable trade-off: external CSS is read-only presentation data
+    //   and cannot exfiltrate information; connect-src 'none' blocks all I/O.
+    //
+    // connect-src 'none':
+    //   Blocks ALL fetch(), XMLHttpRequest, WebSocket calls. This is the primary
+    //   data-exfiltration guard. Do not relax without careful review.
+    //
+    // frame-src 'none':
+    //   Blocks nested iframes to prevent clickjacking and iframe injection attacks.
+    //
+    // object-src 'none':
+    //   Blocks Flash, Silverlight, and other legacy plugin content.
     const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline' *; img-src * data: blob:; font-src * data:; connect-src 'none'; frame-src 'none'; object-src 'none';">`;
 
     // Console capture script that forwards console output to parent

@@ -1035,7 +1035,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
 
             if (get().loading === false) {
-              console.debug('[settingsStore] Load cancelled - another operation started');
               return;
             }
 
@@ -1099,7 +1098,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
 
             if (get().loading === false) {
-              console.debug('[settingsStore] Load cancelled before final update');
               return;
             }
 
@@ -1166,16 +1164,11 @@ export const useSettingsStore = create<SettingsState>()(
             try {
               const dirs = settings.allowedDirectories ?? [];
               await invoke('update_allowed_directories', { paths: dirs });
-              console.debug('[settingsStore] Synced allowed directories to backend:', dirs.length);
 
               // Also update MCP filesystem server to use the allowed directories.
               // Empty directory lists are represented by ToolGuard only.
               if (dirs.length > 0) {
                 await McpClient.updateFilesystemDirectories(dirs);
-                console.debug(
-                  '[settingsStore] Updated MCP filesystem with allowed directories:',
-                  dirs.length,
-                );
               }
             } catch (error) {
               console.error('Failed to sync allowed directories to backend:', error);
@@ -1232,10 +1225,6 @@ export const useSettingsStore = create<SettingsState>()(
               if (allowedDirectories.length > 0) {
                 // Also update MCP filesystem server to use the allowed directories
                 await McpClient.updateFilesystemDirectories(allowedDirectories);
-                console.debug(
-                  '[settingsStore] Updated MCP filesystem with allowed directories:',
-                  allowedDirectories.length,
-                );
               }
             } catch (error) {
               console.error('Failed to sync allowed directories to backend:', error);
@@ -1618,7 +1607,6 @@ export const useSettingsStore = create<SettingsState>()(
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
-            console.debug('[SettingsStore] Rehydration complete');
             // Sync capability toggles to backend on startup
             if (isTauriContext() && state.features && Object.keys(state.features).length > 0) {
               invoke('sync_capabilities', { capabilities: state.features }).catch(
@@ -1646,9 +1634,6 @@ export const enforceTaskRoutingTierRestriction = (planTier: string | null): void
       return;
     }
 
-    console.debug(
-      `[SettingsStore] Enforcing task routing restriction: ${normalizedTier} tier cannot use ${route.model} for ${category}, switching to auto`,
-    );
     setTaskRouting(category, 'managed_cloud', 'auto');
   });
 };
