@@ -487,16 +487,14 @@ impl ToolExecutor {
                 // (PowerShell or Cmd) so bash/sh code snippets still execute rather than fail.
                 // On non-Windows the system default shell will be bash/zsh/sh as expected.
                 "bash" | "sh" | "shell" => {
-                    #[cfg(target_os = "windows")]
-                    {
-                        use crate::features::terminal::get_default_shell;
-                        get_default_shell()
-                    }
-                    #[cfg(not(target_os = "windows"))]
-                    ShellType::Wsl
+                    use crate::features::terminal::get_default_shell;
+                    get_default_shell()
                 }
                 "cmd" | "batch" => ShellType::Cmd,
-                _ => ShellType::PowerShell,
+                _ => {
+                    use crate::features::terminal::get_default_shell;
+                    get_default_shell()
+                }
             };
 
             let session_id = match session_manager.create_session(shell_type, None).await {
