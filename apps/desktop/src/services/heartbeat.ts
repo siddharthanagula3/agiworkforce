@@ -18,7 +18,7 @@ async function sendHeartbeat(userId: string): Promise<void> {
   const untypedClient = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
   try {
-    await untypedClient.from('surface_heartbeats').upsert(
+    const { error } = await untypedClient.from('surface_heartbeats').upsert(
       {
         user_id: userId,
         surface_id: 'desktop',
@@ -26,9 +26,10 @@ async function sendHeartbeat(userId: string): Promise<void> {
       },
       { onConflict: 'user_id,surface_id' },
     );
-  } catch (err) {
-    // Non-fatal — table may not be migrated in all envs yet
-    console.debug('[Heartbeat] Desktop upsert failed (non-fatal):', err);
+    // Silently ignore — table may not exist in all environments
+    if (error) return;
+  } catch {
+    // Non-fatal — silently ignore
   }
 }
 

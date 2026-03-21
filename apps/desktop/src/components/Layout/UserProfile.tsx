@@ -63,10 +63,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           className={cn(
-            'flex w-full items-center gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left transition-all hover:bg-[hsl(var(--accent))] hover:border-[hsl(var(--border))] overflow-hidden',
+            'flex w-full items-center gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2.5 text-left transition-all hover:bg-[hsl(var(--accent))] hover:border-[hsl(var(--border))] overflow-hidden cursor-pointer',
             collapsed && 'justify-center px-2',
           )}
         >
@@ -97,7 +98,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
               </div>
             </div>
           )}
-        </button>
+        </div>
       </Popover.Trigger>
 
       <Popover.Portal>
