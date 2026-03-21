@@ -3,6 +3,7 @@ import { Check, Link, Linkedin, MessageSquare, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { WEB_APP_URL } from '@/api/config';
 
 interface ShareCardDialogProps {
   isOpen: boolean;
@@ -11,10 +12,6 @@ interface ShareCardDialogProps {
   firstMessage: string;
   conversationId: string;
 }
-
-// VITE_WEB_APP_URL must be set in the desktop's .env for production.
-const WEB_APP_URL: string =
-  (import.meta.env['VITE_WEB_APP_URL'] as string | undefined) ?? 'https://agiworkforce.com';
 
 function buildShareUrl(conversationId: string): string {
   return `${WEB_APP_URL}/shared/${conversationId}`;

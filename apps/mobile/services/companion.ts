@@ -28,11 +28,11 @@ const RECONNECT_COUNTDOWN_SECONDS = 15;
 // QR Code Helpers
 // ---------------------------------------------------------------------------
 
-/** Pattern for valid pairing codes: `agiw:` prefix + 6-12 alphanumeric chars */
-const PAIRING_CODE_PATTERN = /^agiw:[A-Za-z0-9]{6,12}$/;
+/** Pattern for valid pairing codes: `agiw:` prefix + 8 uppercase alphanumeric chars (case-insensitive input accepted) */
+const PAIRING_CODE_PATTERN = /^agiw:[A-Za-z0-9]{8}$/;
 
-/** Pattern for raw codes without prefix */
-const RAW_CODE_PATTERN = /^[A-Za-z0-9]{6,12}$/;
+/** Pattern for raw codes without prefix: 8 uppercase alphanumeric chars (case-insensitive input accepted) */
+const RAW_CODE_PATTERN = /^[A-Za-z0-9]{8}$/;
 
 /**
  * Validate a scanned QR string or manually entered code.
@@ -45,13 +45,14 @@ export function isValidPairingCode(code: string): boolean {
 
 /**
  * Extract the raw code from a QR string (strip `agiw:` prefix).
+ * Normalizes to uppercase to match server-generated codes.
  */
 export function extractPairingCode(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed.startsWith('agiw:')) {
-    return trimmed.slice(5);
+    return trimmed.slice(5).toUpperCase();
   }
-  return trimmed;
+  return trimmed.toUpperCase();
 }
 
 // ---------------------------------------------------------------------------

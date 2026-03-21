@@ -46,7 +46,7 @@ import {
   buildAnthropicContextManagement,
   getContextManagementBetaHeader,
   type ContextManagementOptions,
-  type ChatMessage,
+  type LlmRequestMessage,
 } from '@/lib/llm-providers/context-management';
 import { apiCache } from '@/shared/lib/cache';
 import { modelRouter } from '@core/ai/orchestration/model-router';
@@ -719,8 +719,8 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
   let contextManagementObj: Record<string, unknown> | null = null;
 
   if (aiSdkProvider === 'anthropic') {
-    const chatMessages: ChatMessage[] = internalMessages.map((m) => ({
-      role: m.role as ChatMessage['role'],
+    const chatMessages: LlmRequestMessage[] = internalMessages.map((m) => ({
+      role: m.role as LlmRequestMessage['role'],
       content: m.content,
     }));
     const contextWindow = getModelContextWindow(chatRequest.model);

@@ -1,5 +1,17 @@
 import DOMPurify from 'dompurify';
 
+/**
+ * Side-panel UI message shape.
+ *
+ * File-local type for the Chrome extension side panel renderer.
+ * Cannot import from `@agiworkforce/types` (workspace package, not bundled
+ * with the extension). Field mapping to canonical ChatMessage:
+ *   - `id`        → canonical `id`
+ *   - `role`      → canonical `role`
+ *   - `content`   → canonical `content`
+ *   - `timestamp` → canonical `createdAt` (here as Unix ms instead of ISO string)
+ *   - `streaming` → canonical `isStreaming`
+ */
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';

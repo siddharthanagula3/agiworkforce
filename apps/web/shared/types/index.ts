@@ -3,7 +3,21 @@
  * Central export point for all shared type definitions
  *
  * Import pattern: import { TypeName } from '@shared/types';
+ *
+ * NOTE: The canonical cross-surface ChatMessage is in `@agiworkforce/types`.
+ * The web surface extends it with multi-agent / delivery-status fields.
+ * Use `CanonicalChatMessage` when you need the base cross-surface contract.
  */
+
+// ============================================================================
+// CANONICAL TYPES (cross-surface, from @agiworkforce/types)
+// ============================================================================
+
+export {
+  type ChatMessage as CanonicalChatMessage,
+  type Conversation as CanonicalConversation,
+  type ChatAttachment as CanonicalChatAttachment,
+} from '@agiworkforce/types';
 
 // ============================================================================
 // COMMON TYPES (Primary source for frequently-used types)
