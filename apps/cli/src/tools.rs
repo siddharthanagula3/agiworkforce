@@ -1746,19 +1746,29 @@ async fn execute_grep_files(args: &HashMap<String, String>, quiet: bool) -> Resu
     cmd.arg("--line-number").arg("--no-heading").arg("--color=never").arg("--max-count=100");
     if let Some(g) = include { cmd.arg("--glob").arg(g); }
     cmd.arg(pattern).arg(path);
-    match cmd.output().await {
-        Ok(o) => {
+    match tokio::time::timeout(COMMAND_TIMEOUT, cmd.output()).await {
+        Ok(Ok(o)) => {
             let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-            Ok(ToolResult { tool_name: "grep_files".into(), success: true,
-                output: if stdout.is_empty() { format!("No matches for: {}", pattern) } else if stdout.len() > MAX_OUTPUT_BYTES { format!("{}\n...(truncated)", &stdout[..MAX_OUTPUT_BYTES]) } else { stdout } })
+            let output = if stdout.is_empty() {
+                format!("No matches for: {}", pattern)
+            } else if stdout.len() > MAX_OUTPUT_BYTES {
+                let mut end = MAX_OUTPUT_BYTES.min(stdout.len());
+                while !stdout.is_char_boundary(end) { end -= 1; }
+                format!("{}\n...(truncated)", &stdout[..end])
+            } else {
+                stdout
+            };
+            Ok(ToolResult { tool_name: "grep_files".into(), success: true, output })
         }
-        Err(_) => {
+        Ok(Err(_)) => {
             let mut fb = Command::new("grep"); fb.arg("-rn").arg("--max-count=100").arg(pattern).arg(path);
             match fb.output().await {
                 Ok(o) => Ok(ToolResult { tool_name: "grep_files".into(), success: true, output: String::from_utf8_lossy(&o.stdout).to_string() }),
                 Err(e) => Ok(ToolResult { tool_name: "grep_files".into(), success: false, output: format!("{}", e) }),
             }
         }
+        Err(_) => Ok(ToolResult { tool_name: "grep_files".into(), success: false,
+            output: format!("Search timed out after {} seconds", COMMAND_TIMEOUT.as_secs()) }),
     }
 }
 
