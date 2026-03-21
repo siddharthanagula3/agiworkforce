@@ -1335,7 +1335,13 @@ function isSessionExpired(session: Session): boolean {
 }
 
 function generateCode(): string {
-  return randomBytes(6).toString('base64url').substring(0, 8).toUpperCase();
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const bytes = randomBytes(PAIRING_CODE_LENGTH);
+  let code = '';
+  for (let i = 0; i < PAIRING_CODE_LENGTH; i++) {
+    code += charset[bytes.readUInt8(i) % charset.length];
+  }
+  return code;
 }
 
 async function insertSessionWithRetry(

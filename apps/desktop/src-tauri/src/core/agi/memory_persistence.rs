@@ -44,7 +44,10 @@ use crate::sys::error::{Error, Result};
 // CONSTANTS
 // =============================================================================
 
-/// Default vector dimension for embeddings (matches common embedding models)
+/// Reference dimension for the OpenAI text-embedding-3-small model.
+/// Embeddings are stored at their native dimensions (768 for Ollama,
+/// 1536 for OpenAI). The vector_search function skips comparisons
+/// between embeddings of different dimensions.
 pub const DEFAULT_EMBEDDING_DIM: usize = 1536;
 
 /// MEM-016 fix: Maximum embeddings to load for vector search
@@ -810,6 +813,13 @@ impl MemoryStore {
             .filter_map(|r| r.ok())
             .filter_map(|memory| {
                 if let Some(ref emb) = memory.embedding {
+                    // Skip embeddings with different dimensions — they come from
+                    // different models and live in incompatible vector spaces.
+                    // Comparing (or zero-padding) across dimensions gives incorrect
+                    // cosine similarity scores.
+                    if emb.len() != query_embedding.len() {
+                        return None;
+                    }
                     let similarity = cosine_similarity(query_embedding, emb);
                     if similarity > 0.0 {
                         Some((memory, similarity))

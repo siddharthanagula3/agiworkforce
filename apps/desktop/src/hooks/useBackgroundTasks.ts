@@ -190,7 +190,6 @@ export function useBackgroundTasks(
    */
   const refreshTasks = useCallback(async () => {
     if (!isTauri) {
-      console.debug('[useBackgroundTasks] Not in Tauri environment, skipping refresh');
       return;
     }
 
@@ -237,7 +236,6 @@ export function useBackgroundTasks(
   const cancelTask = useCallback(
     async (taskId: string): Promise<boolean> => {
       if (!isTauri) {
-        console.debug('[useBackgroundTasks] Not in Tauri environment, cannot cancel task');
         return false;
       }
 
@@ -279,7 +277,6 @@ export function useBackgroundTasks(
       priority: string = 'Normal',
     ): Promise<string | null> => {
       if (!isTauri) {
-        console.debug('[useBackgroundTasks] Not in Tauri environment, cannot submit task');
         return null;
       }
 
@@ -321,7 +318,6 @@ export function useBackgroundTasks(
   const pauseTask = useCallback(
     async (taskId: string): Promise<boolean> => {
       if (!isTauri) {
-        console.debug('[useBackgroundTasks] Not in Tauri environment, cannot pause task');
         return false;
       }
 
@@ -355,7 +351,6 @@ export function useBackgroundTasks(
   const resumeTask = useCallback(
     async (taskId: string): Promise<boolean> => {
       if (!isTauri) {
-        console.debug('[useBackgroundTasks] Not in Tauri environment, cannot resume task');
         return false;
       }
 
@@ -388,7 +383,6 @@ export function useBackgroundTasks(
    */
   const getTaskStatus = useCallback(async (taskId: string): Promise<BackgroundTask | null> => {
     if (!isTauri) {
-      console.debug('[useBackgroundTasks] Not in Tauri environment, cannot get task status');
       return null;
     }
 

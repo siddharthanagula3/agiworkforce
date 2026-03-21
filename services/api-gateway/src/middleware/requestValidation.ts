@@ -182,3 +182,71 @@ export const requireBody: RequestHandler = (
 
   next();
 };
+
+/**
+ * HTTP methods that modify state and require CSRF protection.
+ */
+const CSRF_PROTECTED_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
+
+/**
+ * Path prefixes that are exempt from CSRF checks because they use
+ * their own authentication (e.g., HMAC signatures for webhooks).
+ */
+const CSRF_EXEMPT_PATHS = ['/api/webhooks/', '/health', '/api/v1/status'];
+
+/**
+ * Middleware that requires an `X-Requested-With: XMLHttpRequest` header
+ * on all state-changing requests (POST, PUT, DELETE, PATCH).
+ *
+ * SECURITY: This is the custom-header CSRF mitigation pattern. Browsers
+ * will not send custom headers on cross-origin form submissions or
+ * simple CORS requests, so the presence of this header proves the
+ * request originated from JavaScript running on an allowed origin
+ * (already validated by the CORS middleware).
+ *
+ * Webhook endpoints are exempt because they authenticate via HMAC
+ * signatures or shared secrets rather than browser cookies.
+ *
+ * @example
+ * app.use(validateCsrf);
+ */
+export const validateCsrf: RequestHandler = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
+  if (!CSRF_PROTECTED_METHODS.includes(req.method)) {
+    next();
+    return;
+  }
+
+  // Skip CSRF check for webhook and monitoring endpoints
+  if (CSRF_EXEMPT_PATHS.some((prefix) => req.path.startsWith(prefix))) {
+    next();
+    return;
+  }
+
+  const xRequestedWith = req.headers['x-requested-with'];
+
+  if (xRequestedWith !== 'XMLHttpRequest') {
+    if (process.env.NODE_ENV === 'production') {
+      logger.warn(
+        {
+          ip: req.ip,
+          path: req.path,
+          method: req.method,
+          userAgent: req.headers['user-agent'],
+        },
+        'SECURITY: CSRF check failed — missing X-Requested-With header',
+      );
+    }
+
+    res.status(403).json({
+      error: 'CSRF_ERROR',
+      message: 'Missing required X-Requested-With header',
+    });
+    return;
+  }
+
+  next();
+};

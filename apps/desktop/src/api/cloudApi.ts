@@ -6,8 +6,9 @@
  */
 
 import { supabaseAuth } from '../services/supabaseAuth';
+import { API_BASE_URL } from './config';
 
-const CLOUD_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const CLOUD_API_BASE_URL = API_BASE_URL;
 
 // ============================================================================
 // Type Definitions

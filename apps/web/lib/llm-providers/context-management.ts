@@ -9,12 +9,26 @@ import 'server-only';
  * grow large.
  */
 
-export interface ChatMessage {
+/**
+ * Wire-format message for LLM API requests (OpenAI-compatible shape).
+ *
+ * This is NOT the same as the canonical `ChatMessage` from `@agiworkforce/types`.
+ * That type represents a persisted UI message. This type represents an entry
+ * in the `messages` array sent directly to an LLM provider endpoint.
+ */
+export interface LlmRequestMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   tool_calls?: unknown[];
   tool_call_id?: string;
 }
+
+/**
+ * @deprecated Renamed to `LlmRequestMessage` to avoid confusion with the
+ * canonical `ChatMessage` from `@agiworkforce/types`. Remove this alias once
+ * all callers have been updated.
+ */
+export type ChatMessage = LlmRequestMessage;
 
 export interface ContextManagementOptions {
   /**
@@ -126,7 +140,7 @@ export function getModelContextWindow(modelId: string): number {
  * Uses the 3.5-chars-per-token heuristic (closer to GPT-4/Claude tokenizer average).
  * Includes per-message overhead (role label + framing ≈ 4 tokens each).
  */
-export function estimateTokenCount(messages: ChatMessage[]): number {
+export function estimateTokenCount(messages: LlmRequestMessage[]): number {
   let total = 0;
   for (const msg of messages) {
     const text = typeof msg.content === 'string' ? msg.content : '';
@@ -142,7 +156,7 @@ export function estimateTokenCount(messages: ChatMessage[]): number {
  * Returns true when the estimated token count exceeds 80% of the model's
  * context window, giving headroom for the model's response.
  */
-export function shouldCompact(messages: ChatMessage[], model: string): boolean {
+export function shouldCompact(messages: LlmRequestMessage[], model: string): boolean {
   const contextWindow = getModelContextWindow(model);
   const estimatedTokens = estimateTokenCount(messages);
   const threshold = Math.floor(contextWindow * 0.8);
