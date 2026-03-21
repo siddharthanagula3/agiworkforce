@@ -45,3 +45,6 @@ next-env.d.ts
 e2e/test-results/
 e2e/playwright-report/
 e2e/.auth/
+
+# Chat app build (built from apps/desktop during CI)
+/public/chat/
