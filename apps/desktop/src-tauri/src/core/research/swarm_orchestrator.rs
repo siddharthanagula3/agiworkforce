@@ -13,14 +13,12 @@ use crate::core::swarm::orchestrator::SwarmOrchestrator;
 use std::sync::Arc;
 
 /// Wraps a [`SwarmOrchestrator`] and exposes a research-specific API.
-#[allow(dead_code)]
 pub struct ResearchSwarmOrchestrator {
     swarm: Arc<SwarmOrchestrator>,
 }
 
 impl ResearchSwarmOrchestrator {
     /// Creates a new research swarm orchestrator backed by the given swarm.
-    #[allow(dead_code)]
     pub fn new(swarm: Arc<SwarmOrchestrator>) -> Self {
         Self { swarm }
     }
@@ -33,7 +31,6 @@ impl ResearchSwarmOrchestrator {
     /// 3. Converts swarm results back into [`SearchAgentResult`] values.
     ///
     /// On failure the caller should fall back to sequential execution.
-    #[allow(dead_code)]
     pub async fn execute_strategies(
         &self,
         strategies: Vec<SearchStrategy>,

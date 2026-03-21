@@ -12,11 +12,11 @@
 
 The VS Code extension currently has **three separate edit paths** that do not share code or contracts:
 
-| Path | File | Mechanism | Scope |
-|------|------|-----------|-------|
-| **Agent Mode** | `agentModeProvider.ts` | Whole-file replacement via ````edit:path``` blocks | Multi-file batch |
-| **Inline Commands** | `applyEdit.ts` | Selection replacement via extracted code block | Single selection |
-| **Diff Decorations** | `diffDecorationProvider.ts` | Range replacement via CodeLens accept/reject | Single range per session |
+| Path                 | File                        | Mechanism                                      | Scope                    |
+| -------------------- | --------------------------- | ---------------------------------------------- | ------------------------ |
+| **Agent Mode**       | `agentModeProvider.ts`      | Whole-file replacement via ``edit:path` blocks | Multi-file batch         |
+| **Inline Commands**  | `applyEdit.ts`              | Selection replacement via extracted code block | Single selection         |
+| **Diff Decorations** | `diffDecorationProvider.ts` | Range replacement via CodeLens accept/reject   | Single range per session |
 
 ### 1.2 Weaknesses Identified
 
@@ -24,7 +24,7 @@ The VS Code extension currently has **three separate edit paths** that do not sh
 
 2. **No conflict detection**: None of the three paths check whether the file has been modified between patch generation and application. `applyEdit.ts` catches the VS Code `WorkspaceEdit` failure but cannot explain what conflicted. `agentModeProvider.ts` has no protection at all — it blindly replaces the full range.
 
-3. **No unified patch format**: The agent uses ````edit:path``` (whole file), inline commands use extracted code blocks (selection-scoped), and diff decorations take raw range+text pairs. There is no shared data structure for "a proposed change."
+3. **No unified patch format**: The agent uses ``edit:path` (whole file), inline commands use extracted code blocks (selection-scoped), and diff decorations take raw range+text pairs. There is no shared data structure for "a proposed change."
 
 4. **No batch atomicity**: Agent mode applies edits sequentially via `WorkspaceEdit`. If file 3 of 5 fails, files 1-2 are already modified. The undo mechanism exists (`undoBatch`) but requires manual user action.
 
@@ -49,6 +49,7 @@ replacement text
 ```
 
 **Rules**:
+
 - The SEARCH block must match exactly one location in the target file (byte-identical, including whitespace and indentation).
 - The REPLACE block contains the full replacement text for the matched region.
 - Multiple search-and-replace blocks may appear in a single patch for the same file. They are applied top-to-bottom; earlier replacements must not invalidate later SEARCH blocks (the LLM must account for this, or each block must reference the file state after prior blocks are applied).
@@ -59,7 +60,7 @@ replacement text
 
 Each patch is wrapped in a file-scoped envelope:
 
-```
+````
 ```patch:path/to/file.ts
 <<<<<<< SEARCH
 old code
@@ -67,7 +68,7 @@ old code
 new code
 >>>>>>> REPLACE
 ```​
-```
+````
 
 Multiple patches for different files appear as separate ` ```patch:path ``` ` blocks.
 
@@ -75,7 +76,7 @@ Multiple patches for different files appear as separate ` ```patch:path ``` ` bl
 
 New files use an empty SEARCH block:
 
-```
+````
 ```patch:path/to/new-file.ts
 <<<<<<< SEARCH
 =======
@@ -83,20 +84,20 @@ New files use an empty SEARCH block:
 export function hello() { return "world"; }
 >>>>>>> REPLACE
 ```​
-```
+````
 
 ### 2.4 File Deletion
 
 File deletion is expressed as a special directive (not a patch):
 
-```
+````
 ```delete:path/to/old-file.ts
 ```​
-```
+````
 
 ### 2.5 Backward Compatibility
 
-During the transition period, the agent mode parser MUST continue to accept the legacy ````edit:path``` ` whole-file format and convert it internally to a single search-and-replace block where SEARCH = entire original file and REPLACE = entire new content. This ensures existing conversations and prompts keep working.
+During the transition period, the agent mode parser MUST continue to accept the legacy ``edit:path` ` whole-file format and convert it internally to a single search-and-replace block where SEARCH = entire original file and REPLACE = entire new content. This ensures existing conversations and prompts keep working.
 
 ---
 
@@ -131,6 +132,7 @@ Within a single file, patches are applied **bottom-to-top** (highest line number
 ### 4.1 Detection
 
 A conflict occurs when the SEARCH text cannot be found in the current document content. Causes:
+
 - The file was edited by the user after the LLM generated the patch.
 - The LLM hallucinated content that does not exist in the file.
 - A prior patch in the same batch modified the region.
@@ -140,10 +142,12 @@ A conflict occurs when the SEARCH text cannot be found in the current document c
 1. **Fuzzy match attempt**: If exact match fails, attempt a fuzzy match using normalized whitespace (collapse runs of whitespace to single spaces, ignore trailing whitespace per line). If a unique fuzzy match is found, use it with a warning badge in the diff preview.
 
 2. **User notification**: If no match (exact or fuzzy) is found, show a warning:
+
    ```
    Patch conflict in path/to/file.ts: could not locate the target code block.
    The file may have changed since the patch was generated.
    ```
+
    Offer: `Show Expected Content` | `Skip This Patch` | `Open Diff View`
 
 3. **"Show Expected Content"**: Opens a read-only document showing the SEARCH text so the user can manually locate it.
@@ -163,6 +167,7 @@ Before applying any patch, compute a lightweight hash (first 64 bytes + length +
 All patches — whether from agent mode, inline commands, or chat participant — flow through the **DiffDecorationProvider** for review. This is the single review surface.
 
 **Flow**:
+
 1. Agent/command generates one or more patches.
 2. Each patch is parsed into a `PatchProposal` (new type — see section 7).
 3. Each `PatchProposal` is registered with `DiffDecorationProvider.showPatch(editor, proposal)`.
@@ -193,6 +198,7 @@ Every set of related patches gets a `batchId` (format: `batch-{timestamp}-{rando
 ### 6.2 Atomic Undo
 
 The existing `undoBatch` mechanism is preserved. When the user clicks "Undo Batch":
+
 1. All files modified in the batch are reverted to their pre-patch content.
 2. Files created in the batch are deleted.
 3. Files deleted in the batch are restored (requires storing the original content in the batch record).
@@ -257,7 +263,7 @@ interface PatchProposal {
 
 The agent mode system prompt (in `agentModeProvider.ts`) must be updated to instruct the LLM to use the new patch format:
 
-```
+````
 To edit a file, use search-and-replace blocks:
 
 ```patch:path/to/file.ts
@@ -273,11 +279,12 @@ Rules:
 - You can include multiple SEARCH/REPLACE blocks per file.
 - Always read a file before editing it.
 - Only include the code that changes, not the entire file.
-```
+````
 
 ### 8.2 Parser Update
 
 `parseFileEdits()` in `agentModeProvider.ts` must be extended to parse both:
+
 - Legacy: ` ```edit:path ``` ` (whole-file)
 - New: ` ```patch:path ``` ` with `<<<<<<< SEARCH ... >>>>>>> REPLACE` blocks
 
@@ -306,6 +313,7 @@ applyAcceptedPatches(patches) -> PatchBatch (for undo)
 ### 9.1 Patch Application Failure
 
 If `vscode.workspace.applyEdit()` returns `false`:
+
 1. Log the failure with the file path and range.
 2. Show user notification: "Failed to apply patch to {file}. The file may have been modified."
 3. Offer: `Retry` | `Skip` | `Show Diff`
@@ -316,6 +324,7 @@ If `vscode.workspace.applyEdit()` returns `false`:
 ### 9.2 Parse Failure
 
 If the LLM response contains malformed patch blocks:
+
 1. Log the raw block for debugging.
 2. Show: "Could not parse patch block — the AI response may be malformed."
 3. Offer: `View Raw Response` | `Dismiss`
@@ -323,6 +332,7 @@ If the LLM response contains malformed patch blocks:
 ### 9.3 Undo Failure
 
 If undo fails (file moved, deleted, or permissions changed):
+
 1. Report which files could not be reverted.
 2. Show the stored original content in a new tab so the user can manually restore.
 
@@ -331,20 +341,23 @@ If undo fails (file moved, deleted, or permissions changed):
 ## 10. Migration Plan
 
 ### Phase 1 (Wave 2 — this quarter)
+
 - Implement `parsePatchBlocks()` parser alongside existing `parseFileEdits()`.
 - Add the `PatchHunk`, `FilePatch`, `PatchBatch`, `PatchProposal` types.
 - Update agent mode system prompt to prefer patch format.
 - Keep legacy parser as fallback.
 
 ### Phase 2 (Wave 3)
+
 - Route inline command results (`applyEdit.ts`) through the patch system.
 - Unify diff preview: all edits go through `DiffDecorationProvider`.
 - Remove the custom `agi-original`/`agi-modified` URI scheme providers from agent mode.
 
 ### Phase 3 (Wave 4)
+
 - Add staleness guard (content hashing).
 - Add fuzzy match fallback.
-- Deprecate legacy ````edit:path``` ` format (stop generating, keep parsing).
+- Deprecate legacy ``edit:path` ` format (stop generating, keep parsing).
 - Add telemetry: patch success rate, conflict rate, undo rate.
 
 ---

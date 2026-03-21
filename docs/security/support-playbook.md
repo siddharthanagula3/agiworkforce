@@ -25,12 +25,12 @@ An agent tool call is waiting for user approval but no approval prompt appears o
 
 ### Resolution
 
-| Step | Action |
-|------|--------|
-| 1 | Force-timeout the stuck approval from the desktop UI (triggers `tool_timeout`). The agent will proceed with its fallback behavior. |
-| 2 | If mobile is disconnected, tell the user to re-open the companion app. Pending approvals will be delivered on reconnect (up to 50 per session, 10 min TTL). |
-| 3 | If the signaling WebSocket is in `heartbeat_missed` or `disconnected` state, have the user tap "Reconnect" on mobile or re-pair via QR. |
-| 4 | As a last resort, cancel the agent task and restart it. |
+| Step | Action                                                                                                                                                      |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Force-timeout the stuck approval from the desktop UI (triggers `tool_timeout`). The agent will proceed with its fallback behavior.                          |
+| 2    | If mobile is disconnected, tell the user to re-open the companion app. Pending approvals will be delivered on reconnect (up to 50 per session, 10 min TTL). |
+| 3    | If the signaling WebSocket is in `heartbeat_missed` or `disconnected` state, have the user tap "Reconnect" on mobile or re-pair via QR.                     |
+| 4    | As a last resort, cancel the agent task and restart it.                                                                                                     |
 
 ### Escalation
 
@@ -58,12 +58,12 @@ The QR code pairing flow does not complete. Desktop and mobile cannot establish 
 
 ### Resolution
 
-| Step | Action |
-|------|--------|
-| 1 | Have the user cancel the current pairing (`DELETE /pair/cancel?code=<CODE>`) and re-initiate. |
-| 2 | Clear stale sessions: on mobile, go to Settings > Connection > "Forget Desktop" to wipe persisted pairing data. |
-| 3 | If the signaling server is down, restart the `signaling-server` service. |
-| 4 | If behind a corporate firewall, ensure ports 4000 (HTTP) and 4000 (WS) are open, or configure `SIGNALING_HTTP_URL` to use an externally accessible address. |
+| Step | Action                                                                                                                                                      |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Have the user cancel the current pairing (`DELETE /pair/cancel?code=<CODE>`) and re-initiate.                                                               |
+| 2    | Clear stale sessions: on mobile, go to Settings > Connection > "Forget Desktop" to wipe persisted pairing data.                                             |
+| 3    | If the signaling server is down, restart the `signaling-server` service.                                                                                    |
+| 4    | If behind a corporate firewall, ensure ports 4000 (HTTP) and 4000 (WS) are open, or configure `SIGNALING_HTTP_URL` to use an externally accessible address. |
 
 ### Escalation
 
@@ -90,12 +90,12 @@ An LLM streaming response cuts off partway through. The user sees a partial mess
 
 ### Resolution
 
-| Step | Action |
-|------|--------|
-| 1 | Increase the stream timeout in Settings > General > "Response Timeout" (default varies by provider). |
-| 2 | If the provider is unhealthy, switch to an alternative. Use the fallback recommendation from the health endpoint. |
-| 3 | Retry the message -- click "Regenerate" on the partial message. |
-| 4 | If a specific model consistently drops streams, switch models or providers. |
+| Step | Action                                                                                                            |
+| ---- | ----------------------------------------------------------------------------------------------------------------- |
+| 1    | Increase the stream timeout in Settings > General > "Response Timeout" (default varies by provider).              |
+| 2    | If the provider is unhealthy, switch to an alternative. Use the fallback recommendation from the health endpoint. |
+| 3    | Retry the message -- click "Regenerate" on the partial message.                                                   |
+| 4    | If a specific model consistently drops streams, switch models or providers.                                       |
 
 ### Escalation
 
@@ -123,13 +123,13 @@ The user is repeatedly redirected to the login screen immediately after signing 
 
 ### Resolution
 
-| Step | Action |
-|------|--------|
-| 1 | Sign out completely (clear token cache) and sign back in. |
-| 2 | On desktop: open DevTools > Application > Local Storage, delete auth-related keys, and reload. |
-| 3 | On mobile: go to Settings > Account > "Sign Out", then sign in again. |
-| 4 | If clock skew is the issue, sync the device clock to NTP. |
-| 5 | If account is suspended (`ACCOUNT_NOT_ACTIVE`), direct the user to contact support for account review. |
+| Step | Action                                                                                                 |
+| ---- | ------------------------------------------------------------------------------------------------------ |
+| 1    | Sign out completely (clear token cache) and sign back in.                                              |
+| 2    | On desktop: open DevTools > Application > Local Storage, delete auth-related keys, and reload.         |
+| 3    | On mobile: go to Settings > Account > "Sign Out", then sign in again.                                  |
+| 4    | If clock skew is the issue, sync the device clock to NTP.                                              |
+| 5    | If account is suspended (`ACCOUNT_NOT_ACTIVE`), direct the user to contact support for account review. |
 
 ### Escalation
 
@@ -157,12 +157,12 @@ Changes made while offline are not syncing to the server after connectivity is r
 
 ### Resolution
 
-| Step | Action |
-|------|--------|
-| 1 | Trigger a manual sync from Settings > Sync > "Sync Now." |
-| 2 | If conflicts exist, resolve them via the conflict resolution UI or call `POST /sync/resolve-conflict`. |
-| 3 | If the queue is corrupted, clear it from Settings > Sync > "Clear Pending Queue." The user will lose unsynced changes. |
-| 4 | Check the `X-Device-ID` header is being sent -- missing device ID can cause the client to receive its own updates back, creating loops. |
+| Step | Action                                                                                                                                  |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Trigger a manual sync from Settings > Sync > "Sync Now."                                                                                |
+| 2    | If conflicts exist, resolve them via the conflict resolution UI or call `POST /sync/resolve-conflict`.                                  |
+| 3    | If the queue is corrupted, clear it from Settings > Sync > "Clear Pending Queue." The user will lose unsynced changes.                  |
+| 4    | Check the `X-Device-ID` header is being sent -- missing device ID can cause the client to receive its own updates back, creating loops. |
 
 ### Escalation
 
@@ -190,12 +190,12 @@ The VS Code extension cannot communicate with the desktop app. Chat participant,
 
 ### Resolution
 
-| Step | Action |
-|------|--------|
-| 1 | Restart the desktop app to reinitialize the bridge server. |
-| 2 | In VS Code, run the command "AGI Workforce: Reconnect" from the command palette. |
-| 3 | If the port is in use, change the bridge port in both the desktop app and the extension settings. |
-| 4 | As a last resort, restart the VS Code extension host: Command Palette > "Developer: Restart Extension Host." |
+| Step | Action                                                                                                       |
+| ---- | ------------------------------------------------------------------------------------------------------------ |
+| 1    | Restart the desktop app to reinitialize the bridge server.                                                   |
+| 2    | In VS Code, run the command "AGI Workforce: Reconnect" from the command palette.                             |
+| 3    | If the port is in use, change the bridge port in both the desktop app and the extension settings.            |
+| 4    | As a last resort, restart the VS Code extension host: Command Palette > "Developer: Restart Extension Host." |
 
 ### Escalation
 
@@ -222,12 +222,12 @@ One or more LLM providers are unreachable. Users cannot generate responses with 
 
 ### Resolution
 
-| Step | Action |
-|------|--------|
-| 1 | Switch to the recommended fallback provider from the health endpoint response. |
-| 2 | In the desktop app, change the model in Settings > Models, or use the quick model selector in the chat input area. |
-| 3 | If using BYOK, verify the API key is still valid and has sufficient credits/quota. |
-| 4 | If the provider is experiencing an outage, wait for recovery. The health check will automatically detect when the provider comes back. |
+| Step | Action                                                                                                                                 |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Switch to the recommended fallback provider from the health endpoint response.                                                         |
+| 2    | In the desktop app, change the model in Settings > Models, or use the quick model selector in the chat input area.                     |
+| 3    | If using BYOK, verify the API key is still valid and has sufficient credits/quota.                                                     |
+| 4    | If the provider is experiencing an outage, wait for recovery. The health check will automatically detect when the provider comes back. |
 
 ### Escalation
 
@@ -255,13 +255,13 @@ An automation workflow fails to execute or fails partway through.
 
 ### Resolution
 
-| Step | Action |
-|------|--------|
-| 1 | Open the workflow editor and inspect the failed step. Check its configuration and inputs. |
-| 2 | If a command was blocked by ToolGuard, add it to the allowed list in Settings > Security > Tool Permissions, or adjust the risk classification. |
-| 3 | Edit the failing step to fix the issue, then retry the workflow from the failed step (if the workflow supports partial retry). |
-| 4 | If the workflow is timing out, increase the per-step timeout in the workflow configuration. |
-| 5 | For MCP tool failures, check the MCP server status in Settings > MCP and restart the server if needed. |
+| Step | Action                                                                                                                                          |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Open the workflow editor and inspect the failed step. Check its configuration and inputs.                                                       |
+| 2    | If a command was blocked by ToolGuard, add it to the allowed list in Settings > Security > Tool Permissions, or adjust the risk classification. |
+| 3    | Edit the failing step to fix the issue, then retry the workflow from the failed step (if the workflow supports partial retry).                  |
+| 4    | If the workflow is timing out, increase the per-step timeout in the workflow configuration.                                                     |
+| 5    | For MCP tool failures, check the MCP server status in Settings > MCP and restart the server if needed.                                          |
 
 ### Escalation
 
@@ -271,12 +271,12 @@ If workflow execution fails due to a platform bug (not a user configuration issu
 
 ## General Escalation Path
 
-| Level | Who | Response Time | When |
-|-------|-----|---------------|------|
-| L1 | Support agent (this playbook) | Immediate | First contact -- use diagnostics and resolutions above |
-| L2 | Platform engineering (on-call) | < 30 min | Playbook exhausted, issue persists, or affects multiple users |
-| L3 | Component owner (see zone ownership in CLAUDE.md) | < 2 hours | Requires code change or deep investigation |
-| P0 | All hands | < 15 min | Complete service outage or security incident |
+| Level | Who                                               | Response Time | When                                                          |
+| ----- | ------------------------------------------------- | ------------- | ------------------------------------------------------------- |
+| L1    | Support agent (this playbook)                     | Immediate     | First contact -- use diagnostics and resolutions above        |
+| L2    | Platform engineering (on-call)                    | < 30 min      | Playbook exhausted, issue persists, or affects multiple users |
+| L3    | Component owner (see zone ownership in CLAUDE.md) | < 2 hours     | Requires code change or deep investigation                    |
+| P0    | All hands                                         | < 15 min      | Complete service outage or security incident                  |
 
 ### Escalation Template
 

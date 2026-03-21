@@ -450,7 +450,9 @@ impl McpOAuthManager {
             .set_pkce_verifier(PkceCodeVerifier::new(pending.verifier))
             .request_async(oauth2::reqwest::async_http_client)
             .await
-            .map_err(|e| McpError::ConnectionError(format!("OAuth token exchange failed: {}", e)))?;
+            .map_err(|e| {
+                McpError::ConnectionError(format!("OAuth token exchange failed: {}", e))
+            })?;
 
         // Build our token struct
         let expires_at = token_result
@@ -520,10 +522,7 @@ impl McpOAuthManager {
 
             // 3. Attempt refresh if we have a refresh token
             if let Some(ref refresh) = db_token.refresh_token {
-                match self
-                    .refresh_token_internal(server_name, refresh)
-                    .await
-                {
+                match self.refresh_token_internal(server_name, refresh).await {
                     Ok(new_token) => return Ok(new_token.access_token),
                     Err(e) => {
                         tracing::warn!(
@@ -682,7 +681,10 @@ fn build_oauth_client(config: &McpOAuthConfig) -> McpResult<BasicClient> {
         .map(|s| ClientSecret::new(s.clone()));
 
     let auth_url = AuthUrl::new(config.auth_url.clone()).map_err(|e| {
-        McpError::InvalidConfig(format!("Invalid OAuth auth_url '{}': {}", config.auth_url, e))
+        McpError::InvalidConfig(format!(
+            "Invalid OAuth auth_url '{}': {}",
+            config.auth_url, e
+        ))
     })?;
 
     let token_url = TokenUrl::new(config.token_url.clone()).map_err(|e| {
@@ -1062,10 +1064,7 @@ mod tests {
 
     #[test]
     fn test_db_key_helpers() {
-        assert_eq!(
-            db_key_access("github"),
-            "mcp_oauth_v2_github_access_token"
-        );
+        assert_eq!(db_key_access("github"), "mcp_oauth_v2_github_access_token");
         assert_eq!(
             db_key_refresh("github"),
             "mcp_oauth_v2_github_refresh_token"
@@ -1097,7 +1096,10 @@ mod tests {
 
         // camelCase serialization
         assert!(json.contains("clientName"), "should serialize as camelCase");
-        assert!(json.contains("redirectUris"), "should serialize as camelCase");
+        assert!(
+            json.contains("redirectUris"),
+            "should serialize as camelCase"
+        );
         assert!(json.contains("clientType"), "should serialize as camelCase");
 
         let deserialized: OAuthClientMetadata = serde_json::from_str(&json).unwrap();
@@ -1120,11 +1122,26 @@ mod tests {
             capabilities: std::collections::HashMap::new(),
         };
         let json = serde_json::to_string(&meta).unwrap();
-        assert!(!json.contains("clientUri"), "clientUri should be absent when None");
-        assert!(!json.contains("logoUri"), "logoUri should be absent when None");
-        assert!(!json.contains("contacts"), "contacts should be absent when None");
-        assert!(!json.contains("grantTypes"), "grantTypes should be absent when empty");
-        assert!(!json.contains("capabilities"), "capabilities should be absent when empty");
+        assert!(
+            !json.contains("clientUri"),
+            "clientUri should be absent when None"
+        );
+        assert!(
+            !json.contains("logoUri"),
+            "logoUri should be absent when None"
+        );
+        assert!(
+            !json.contains("contacts"),
+            "contacts should be absent when None"
+        );
+        assert!(
+            !json.contains("grantTypes"),
+            "grantTypes should be absent when empty"
+        );
+        assert!(
+            !json.contains("capabilities"),
+            "capabilities should be absent when empty"
+        );
     }
 
     #[test]
@@ -1168,6 +1185,9 @@ mod tests {
         // Test that the default client_type serde helper works
         let json = r#"{"clientName":"Test","redirectUris":["https://localhost/cb"]}"#;
         let meta: OAuthClientMetadata = serde_json::from_str(json).unwrap();
-        assert_eq!(meta.client_type, "public", "default client_type should be 'public'");
+        assert_eq!(
+            meta.client_type, "public",
+            "default client_type should be 'public'"
+        );
     }
 }

@@ -136,9 +136,7 @@ const listeners = new Set<CompanionMessageListener>();
  * This is an internal pub-sub bus. The connectionStore should call
  * `notifyCompanionMessage()` whenever a control message arrives.
  */
-export function addCompanionMessageListener(
-  listener: CompanionMessageListener,
-): () => void {
+export function addCompanionMessageListener(listener: CompanionMessageListener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }

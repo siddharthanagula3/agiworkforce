@@ -30,6 +30,24 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
   // Determine build targets based on platform
   const isWindows = env['TAURI_PLATFORM'] === 'windows';
   const isDebug = Boolean(env['TAURI_DEBUG']);
+  const webTauriAliases = isWebBuild
+    ? {
+        '@tauri-apps/api/core': path.resolve(__dirname, './src/lib/tauri-web/core.ts'),
+        '@tauri-apps/api/event': path.resolve(__dirname, './src/lib/tauri-web/event.ts'),
+        '@tauri-apps/api/window': path.resolve(__dirname, './src/lib/tauri-web/window.ts'),
+        '@tauri-apps/api/path': path.resolve(__dirname, './src/lib/tauri-web/path.ts'),
+        '@tauri-apps/plugin-deep-link': path.resolve(__dirname, './src/lib/tauri-web/deep-link.ts'),
+        '@tauri-apps/plugin-dialog': path.resolve(__dirname, './src/lib/tauri-web/dialog.ts'),
+        '@tauri-apps/plugin-shell': path.resolve(__dirname, './src/lib/tauri-web/shell.ts'),
+        '@tauri-apps/plugin-fs': path.resolve(__dirname, './src/lib/tauri-web/fs.ts'),
+        '@tauri-apps/plugin-notification': path.resolve(
+          __dirname,
+          './src/lib/tauri-web/notification.ts',
+        ),
+        '@tauri-apps/plugin-process': path.resolve(__dirname, './src/lib/tauri-web/process.ts'),
+        '@tauri-apps/plugin-updater': path.resolve(__dirname, './src/lib/tauri-web/updater.ts'),
+      }
+    : {};
 
   // Build target: Use esnext for modern builds, with platform-specific fallbacks
   const buildTarget = isWindows ? 'chrome105' : 'safari14';
@@ -130,20 +148,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
 
       // Rollup-specific options
       rollupOptions: {
-        // Externalize Tauri packages in web builds — they're never used
-        ...(isWebBuild && {
-          external: [
-            '@tauri-apps/api',
-            '@tauri-apps/api/core',
-            '@tauri-apps/api/event',
-            '@tauri-apps/api/window',
-            '@tauri-apps/plugin-dialog',
-            '@tauri-apps/plugin-shell',
-            '@tauri-apps/plugin-process',
-            '@tauri-apps/plugin-updater',
-            '@tauri-apps/cli',
-          ],
-        }),
         output: {
           /**
            * Manual chunk splitting for optimal loading performance.
@@ -240,6 +244,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         '@assets': path.resolve(__dirname, './src/assets'),
         '@lib': path.resolve(__dirname, './src/lib'),
         '@agiworkforce/utils': path.resolve(__dirname, '../../packages/utils/src/index.ts'),
+        ...webTauriAliases,
       },
     },
 

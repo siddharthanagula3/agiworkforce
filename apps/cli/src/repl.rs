@@ -46,7 +46,10 @@ pub async fn run_repl(
     // Enable team mode if requested
     if team_mode {
         session.enable_team_mode();
-        eprintln!("{}", "Team mode enabled. Teammate messaging and shared tasks are active.".cyan());
+        eprintln!(
+            "{}",
+            "Team mode enabled. Teammate messaging and shared tasks are active.".cyan()
+        );
     }
 
     // Pre-load messages from a resumed session (--session flag)
@@ -100,9 +103,7 @@ pub async fn run_repl(
     let mut editor = DefaultEditor::with_config(rl_config)?;
 
     // Load history if available
-    let history_path = CliConfig::config_dir()
-        .ok()
-        .map(|d| d.join("history.txt"));
+    let history_path = CliConfig::config_dir().ok().map(|d| d.join("history.txt"));
     if let Some(ref path) = history_path {
         let _ = editor.load_history(path);
     }
@@ -167,15 +168,23 @@ pub async fn run_repl(
                         SlashResult::Btw(question) => {
                             // Side query: send to LLM without affecting main history
                             let spinner = output::create_spinner("Side query...");
-                            let md_btw = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
+                            let md_btw =
+                                std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
                             let md_btw_cb = std::sync::Arc::clone(&md_btw);
 
                             let btw_result = session
-                                .send_btw(config, &question, Box::new(move |chunk| {
-                                    if let Ok(mut renderer) = md_btw_cb.lock() {
-                                        output::print_assistant_chunk_formatted(&mut renderer, chunk);
-                                    }
-                                }))
+                                .send_btw(
+                                    config,
+                                    &question,
+                                    Box::new(move |chunk| {
+                                        if let Ok(mut renderer) = md_btw_cb.lock() {
+                                            output::print_assistant_chunk_formatted(
+                                                &mut renderer,
+                                                chunk,
+                                            );
+                                        }
+                                    }),
+                                )
                                 .await;
 
                             spinner.finish_and_clear();
@@ -187,7 +196,10 @@ pub async fn run_repl(
                             match btw_result {
                                 Ok(_) => {
                                     output::print_assistant_end();
-                                    eprintln!("{}", "  (side query — not added to conversation)".dimmed());
+                                    eprintln!(
+                                        "{}",
+                                        "  (side query — not added to conversation)".dimmed()
+                                    );
                                 }
                                 Err(e) => {
                                     output::print_error(&format!("Side query failed: {:#}", e));
@@ -216,7 +228,6 @@ pub async fn run_repl(
                     continue;
                 }
 
-
                 // Handle multi-line input (trailing backslash)
                 let full_input = if input.ends_with('\\') {
                     collect_multiline(input, &mut editor)?
@@ -230,11 +241,15 @@ pub async fn run_repl(
                 let md_cb = std::sync::Arc::clone(&md);
 
                 let result = session
-                    .send(config, &full_input, Box::new(move |chunk| {
-                        if let Ok(mut renderer) = md_cb.lock() {
-                            output::print_assistant_chunk_formatted(&mut renderer, chunk);
-                        }
-                    }))
+                    .send(
+                        config,
+                        &full_input,
+                        Box::new(move |chunk| {
+                            if let Ok(mut renderer) = md_cb.lock() {
+                                output::print_assistant_chunk_formatted(&mut renderer, chunk);
+                            }
+                        }),
+                    )
                     .await;
 
                 spinner.finish_and_clear();
@@ -248,10 +263,7 @@ pub async fn run_repl(
                     Ok(turn) => {
                         output::print_assistant_end();
                         if turn.via_subscription {
-                            output::print_subscription_cost(
-                                turn.input_tokens,
-                                turn.output_tokens,
-                            );
+                            output::print_subscription_cost(turn.input_tokens, turn.output_tokens);
                         } else {
                             output::print_cost(
                                 &session.model,
@@ -356,10 +368,7 @@ fn handle_slash_command(
             } else {
                 session.switch_model(arg);
                 let provider = format!("{:?}", session.provider).to_lowercase();
-                output::print_info(&format!(
-                    "Switched to {} ({})",
-                    arg, provider
-                ));
+                output::print_info(&format!("Switched to {} ({})", arg, provider));
             }
         }
         "/clear" => {
@@ -425,10 +434,19 @@ fn handle_slash_command(
             eprintln!("  Version:    {}", env!("CARGO_PKG_VERSION"));
             eprintln!("  Model:      {}", session.model);
             eprintln!("  Provider:   {:?}", session.provider);
-            eprintln!("  Plan mode:  {}", if session.plan_mode { "ON" } else { "OFF" });
-            eprintln!("  Fast mode:  {}", if session.fast_mode { "ON" } else { "OFF" });
+            eprintln!(
+                "  Plan mode:  {}",
+                if session.plan_mode { "ON" } else { "OFF" }
+            );
+            eprintln!(
+                "  Fast mode:  {}",
+                if session.fast_mode { "ON" } else { "OFF" }
+            );
             eprintln!("  Turns:      {}", session.turn_count);
-            eprintln!("  Tokens:     {} in / {} out", session.total_input_tokens, session.total_output_tokens);
+            eprintln!(
+                "  Tokens:     {} in / {} out",
+                session.total_input_tokens, session.total_output_tokens
+            );
             eprintln!("  Checkpoints: {}", session.checkpoint_count());
             eprintln!("  Skip perms: {}", session.skip_permissions);
         }
@@ -534,7 +552,10 @@ fn handle_slash_command(
             print_help();
         }
         _ => {
-            output::print_warn(&format!("Unknown command: {}. Type /help for available commands.", cmd));
+            output::print_warn(&format!(
+                "Unknown command: {}. Type /help for available commands.",
+                cmd
+            ));
         }
     }
 
@@ -543,22 +564,55 @@ fn handle_slash_command(
 
 fn print_help() {
     eprintln!("{}", "Agent & Mode:".cyan().bold());
-    eprintln!("  {}    Switch model (e.g. /model gpt-4o)", "/model <name>".bold());
-    eprintln!("  {}             Toggle plan mode (read-only tools)", "/plan".bold());
-    eprintln!("  {}    Toggle fast mode (cheaper model)", "/fast [on|off]".bold());
+    eprintln!(
+        "  {}    Switch model (e.g. /model gpt-4o)",
+        "/model <name>".bold()
+    );
+    eprintln!(
+        "  {}             Toggle plan mode (read-only tools)",
+        "/plan".bold()
+    );
+    eprintln!(
+        "  {}    Toggle fast mode (cheaper model)",
+        "/fast [on|off]".bold()
+    );
     eprintln!("  {} Manual context compaction", "/compact [focus]".bold());
-    eprintln!("  {}  Side query (not added to history)", "/btw <question>".bold());
-    eprintln!("  {}  Voice input (push-to-talk with Whisper STT)", "/voice [lang]".bold());
-    eprintln!("  {}           Rewind to previous checkpoint", "/rewind".bold());
-    eprintln!("  {}   Fork conversation at current point", "/branch [name]".bold());
-    eprintln!("  {}             Show uncommitted git changes", "/diff".bold());
+    eprintln!(
+        "  {}  Side query (not added to history)",
+        "/btw <question>".bold()
+    );
+    eprintln!(
+        "  {}  Voice input (push-to-talk with Whisper STT)",
+        "/voice [lang]".bold()
+    );
+    eprintln!(
+        "  {}           Rewind to previous checkpoint",
+        "/rewind".bold()
+    );
+    eprintln!(
+        "  {}   Fork conversation at current point",
+        "/branch [name]".bold()
+    );
+    eprintln!(
+        "  {}             Show uncommitted git changes",
+        "/diff".bold()
+    );
     eprintln!();
     eprintln!("{}", "Configuration:".cyan().bold());
-    eprintln!("  {}           Show current configuration", "/config".bold());
+    eprintln!(
+        "  {}           Show current configuration",
+        "/config".bold()
+    );
     eprintln!("  {} Set config value", "/config set <k> <v>".bold());
     eprintln!("  {}    Get config value", "/config get <key>".bold());
-    eprintln!("  {}        List all providers and key status", "/providers".bold());
-    eprintln!("  {}            Interactive provider setup", "/setup".bold());
+    eprintln!(
+        "  {}        List all providers and key status",
+        "/providers".bold()
+    );
+    eprintln!(
+        "  {}            Interactive provider setup",
+        "/setup".bold()
+    );
     eprintln!("  {}     View/reset permissions", "/permissions".bold());
     eprintln!();
     eprintln!("{}", "Sessions:".cyan().bold());
@@ -566,21 +620,42 @@ fn print_help() {
     eprintln!("  {}     Load a saved conversation", "/load <id>".bold());
     eprintln!("  {}          List saved conversations", "/history".bold());
     eprintln!("  {}   Delete a conversation", "/delete <id>".bold());
-    eprintln!("  {}           Export (markdown or /export json)", "/export".bold());
+    eprintln!(
+        "  {}           Export (markdown or /export json)",
+        "/export".bold()
+    );
     eprintln!("  {} Rename session", "/rename <id> <title>".bold());
     eprintln!("  {}         List sessions (SQLite)", "/sessions".bold());
     eprintln!("  {}          Migrate JSON to SQLite", "/migrate".bold());
     eprintln!();
     eprintln!("{}", "Memory & Project:".cyan().bold());
-    eprintln!("  {}        Show all memory tiers (global/project/local)", "/memory".bold());
+    eprintln!(
+        "  {}        Show all memory tiers (global/project/local)",
+        "/memory".bold()
+    );
     eprintln!("  {}  View a specific tier", "/memory <tier>".bold());
-    eprintln!("  {} Add text to tier (default: project)", "/memory add [tier] <text>".bold());
-    eprintln!("  {}      Edit tier in $EDITOR", "/memory edit [tier]".bold());
-    eprintln!("  {}             Initialize project with CLAUDE.md", "/init".bold());
-    eprintln!("  {}        Append text to project CLAUDE.md", "# <text>".bold());
+    eprintln!(
+        "  {} Add text to tier (default: project)",
+        "/memory add [tier] <text>".bold()
+    );
+    eprintln!(
+        "  {}      Edit tier in $EDITOR",
+        "/memory edit [tier]".bold()
+    );
+    eprintln!(
+        "  {}             Initialize project with CLAUDE.md",
+        "/init".bold()
+    );
+    eprintln!(
+        "  {}        Append text to project CLAUDE.md",
+        "# <text>".bold()
+    );
     eprintln!();
     eprintln!("{}", "Info:".cyan().bold());
-    eprintln!("  {}           Show version, model, provider, status", "/status".bold());
+    eprintln!(
+        "  {}           Show version, model, provider, status",
+        "/status".bold()
+    );
     eprintln!("  {}             Show session cost summary", "/cost".bold());
     eprintln!("  {}          Show context window usage", "/context".bold());
     eprintln!("  {}           List available models", "/models".bold());
@@ -588,7 +663,10 @@ fn print_help() {
     eprintln!("  {}            Show configured hooks", "/hooks".bold());
     eprintln!("  {}            Login with subscription", "/login".bold());
     eprintln!("  {}           Logout", "/logout".bold());
-    eprintln!("  {}            Clear conversation context", "/clear".bold());
+    eprintln!(
+        "  {}            Clear conversation context",
+        "/clear".bold()
+    );
     eprintln!("  {}             Show this help", "/help".bold());
     eprintln!("  {}             Exit", "/exit".bold());
     eprintln!();
@@ -600,11 +678,24 @@ fn print_help() {
     eprintln!("  {}         Show this agent's card", "/a2a card".bold());
     eprintln!();
     eprintln!("{}", "Shortcuts:".cyan().bold());
-    eprintln!("  {}           Run shell command (output added to context)", "! <command>".bold());
-    eprintln!("  {}        Append text to project CLAUDE.md", "# <text>".bold());
+    eprintln!(
+        "  {}           Run shell command (output added to context)",
+        "! <command>".bold()
+    );
+    eprintln!(
+        "  {}        Append text to project CLAUDE.md",
+        "# <text>".bold()
+    );
     eprintln!("  {} Multi-line input", "\\".bold());
-    eprintln!("  {}              Cancel input / {} Exit", "Ctrl-C".bold(), "Ctrl-D".bold());
-    eprintln!("  {}            Set AGIWORKFORCE_VI=1 for vim keybindings", "Vi mode".bold());
+    eprintln!(
+        "  {}              Cancel input / {} Exit",
+        "Ctrl-C".bold(),
+        "Ctrl-D".bold()
+    );
+    eprintln!(
+        "  {}            Set AGIWORKFORCE_VI=1 for vim keybindings",
+        "Vi mode".bold()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -815,7 +906,13 @@ fn handle_providers(config: &CliConfig) {
 
 fn handle_setup(config: &mut CliConfig) {
     let providers = vec![
-        "anthropic", "openai", "google", "mistral", "xai", "deepseek", "ollama",
+        "anthropic",
+        "openai",
+        "google",
+        "mistral",
+        "xai",
+        "deepseek",
+        "ollama",
     ];
 
     let selection = Select::new()
@@ -882,9 +979,8 @@ fn handle_setup(config: &mut CliConfig) {
         .dimmed()
     );
 
-    let key_result: std::result::Result<String, _> = Input::new()
-        .with_prompt("API key")
-        .interact_text();
+    let key_result: std::result::Result<String, _> =
+        Input::new().with_prompt("API key").interact_text();
 
     match key_result {
         Ok(key) => {
@@ -1026,7 +1122,10 @@ fn handle_rename(arg: &str) {
 
     match sessions::rename_session(&conn, session_id, new_title) {
         Ok(()) => {
-            output::print_info(&format!("Renamed session {} to '{}'", session_id, new_title));
+            output::print_info(&format!(
+                "Renamed session {} to '{}'",
+                session_id, new_title
+            ));
         }
         Err(e) => {
             output::print_error(&format!("Failed to rename: {:#}", e));
@@ -1082,7 +1181,11 @@ fn handle_compact(arg: &str, session: &mut AgentSession) {
         before_tokens,
         after.used_tokens,
         (after.fraction * 100.0) as u32,
-        if focus.is_some() { format!(" [focus: {}]", arg) } else { String::new() }
+        if focus.is_some() {
+            format!(" [focus: {}]", arg)
+        } else {
+            String::new()
+        }
     ));
 }
 
@@ -1141,7 +1244,9 @@ fn handle_branch(arg: &str, session: &AgentSession) {
         .map(|p| p.display().to_string())
         .unwrap_or_default();
 
-    if let Err(e) = sessions::save_session(&conn, &branch_id, &branch_name, &session.model, &cwd, "") {
+    if let Err(e) =
+        sessions::save_session(&conn, &branch_id, &branch_name, &session.model, &cwd, "")
+    {
         output::print_error(&format!("Failed to save branch: {:#}", e));
         return;
     }
@@ -1181,10 +1286,7 @@ fn handle_diff() {
             eprintln!("{}", stat);
 
             // Also show the actual diff (truncated)
-            match std::process::Command::new("git")
-                .args(["diff"])
-                .output()
-            {
+            match std::process::Command::new("git").args(["diff"]).output() {
                 Ok(diff_output) => {
                     let diff = String::from_utf8_lossy(&diff_output.stdout);
                     let lines: Vec<&str> = diff.lines().collect();
@@ -1201,7 +1303,10 @@ fn handle_diff() {
                         }
                     }
                     if lines.len() > max_lines {
-                        eprintln!("{}", format!("... ({} more lines)", lines.len() - max_lines).dimmed());
+                        eprintln!(
+                            "{}",
+                            format!("... ({} more lines)", lines.len() - max_lines).dimmed()
+                        );
                     }
                 }
                 Err(e) => output::print_error(&format!("Failed to run git diff: {}", e)),
@@ -1297,10 +1402,7 @@ fn handle_memory(arg: &str) {
             }
 
             let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-            match std::process::Command::new(&editor)
-                .arg(&path)
-                .status()
-            {
+            match std::process::Command::new(&editor).arg(&path).status() {
                 Ok(status) => {
                     if status.success() {
                         output::print_info(&format!("Saved {} memory.", tier));
@@ -1308,10 +1410,9 @@ fn handle_memory(arg: &str) {
                         output::print_warn("Editor exited with non-zero status.");
                     }
                 }
-                Err(e) => output::print_error(&format!(
-                    "Failed to open editor '{}': {}",
-                    editor, e
-                )),
+                Err(e) => {
+                    output::print_error(&format!("Failed to open editor '{}': {}", editor, e))
+                }
             }
         }
         "global" | "project" | "local" => {
@@ -1323,10 +1424,8 @@ fn handle_memory(arg: &str) {
             };
 
             let entries = mgr.load_all();
-            let matching: Vec<&memory::MemoryEntry> = entries
-                .iter()
-                .filter(|e| e.source == tier)
-                .collect();
+            let matching: Vec<&memory::MemoryEntry> =
+                entries.iter().filter(|e| e.source == tier).collect();
 
             if matching.is_empty() {
                 output::print_info(&format!("No {} memory found.", tier));
@@ -1446,11 +1545,7 @@ fn handle_config(arg: &str, config: &mut CliConfig) {
 
 fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
     eprintln!("{}", format!("$ {}", cmd).dimmed());
-    match std::process::Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
-        .output()
-    {
+    match std::process::Command::new("sh").arg("-c").arg(cmd).output() {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1493,9 +1588,9 @@ fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
 }
 
 fn handle_memory_prefix(input: &str) {
-    let text = input.strip_prefix("# ").unwrap_or(
-        input.strip_prefix('#').unwrap_or("")
-    );
+    let text = input
+        .strip_prefix("# ")
+        .unwrap_or(input.strip_prefix('#').unwrap_or(""));
     if text.trim().is_empty() {
         output::print_warn("Usage: # <text to append to CLAUDE.md>");
         return;

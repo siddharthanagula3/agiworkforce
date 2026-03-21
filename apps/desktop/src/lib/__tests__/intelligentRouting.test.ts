@@ -150,9 +150,7 @@ describe('MultiModalRouter', () => {
 
     it('should prefer quality when specified', () => {
       const result = selectModalityModel('image', 'max', { preferQuality: true });
-      expect(['gpt-image-1.5', 'imagen-4.0-ultra-generate-001']).toContain(
-        result.selectedModel,
-      );
+      expect(['gpt-image-1.5', 'imagen-4.0-ultra-generate-001']).toContain(result.selectedModel);
     });
 
     it('should select sonar for hobby search', () => {

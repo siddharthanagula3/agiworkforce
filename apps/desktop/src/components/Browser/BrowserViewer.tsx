@@ -395,7 +395,10 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
 
         <div className="flex items-center gap-2">
           {pageTitle && (
-            <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={pageTitle}>
+            <span
+              className="text-xs text-muted-foreground truncate max-w-[200px]"
+              title={pageTitle}
+            >
               {pageTitle}
             </span>
           )}
@@ -408,7 +411,11 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
           )}
 
           <Button variant="ghost" size="sm" onClick={toggleFullscreen} className="h-7 w-7 p-0">
-            {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            {isFullscreen ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
           </Button>
         </div>
       </div>

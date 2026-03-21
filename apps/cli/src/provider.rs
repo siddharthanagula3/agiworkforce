@@ -20,13 +20,13 @@ pub struct ModelInfo {
     pub output_price_per_1m: f64, // USD per 1M output tokens
     pub supports_tools: bool,
     pub supports_vision: bool,
-    pub supports_reasoning: bool,     // extended thinking / reasoning
+    pub supports_reasoning: bool, // extended thinking / reasoning
     pub supports_audio_input: bool,
     pub supports_audio_output: bool,
     pub supports_pdf: bool,
     pub max_output_tokens: usize,
-    pub status: &'static str,         // "active", "beta", "deprecated"
-    pub release_date: &'static str,   // "2025-03" etc.
+    pub status: &'static str,       // "active", "beta", "deprecated"
+    pub release_date: &'static str, // "2025-03" etc.
 }
 
 /// Built-in model catalog with capabilities and pricing.
@@ -626,7 +626,11 @@ mod tests {
         let original_len = ids.len();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), original_len, "Catalog contains duplicate model IDs");
+        assert_eq!(
+            ids.len(),
+            original_len,
+            "Catalog contains duplicate model IDs"
+        );
     }
 
     #[test]
@@ -800,10 +804,7 @@ mod tests {
     #[test]
     fn test_provider_for_model_prefix_anthropic() {
         assert_eq!(provider_for_model("claude-opus-4-6"), Some("anthropic"));
-        assert_eq!(
-            provider_for_model("claude-sonnet-4-6"),
-            Some("anthropic")
-        );
+        assert_eq!(provider_for_model("claude-sonnet-4-6"), Some("anthropic"));
         assert_eq!(provider_for_model("claude-anything"), Some("anthropic"));
     }
 
@@ -826,22 +827,19 @@ mod tests {
 
     #[test]
     fn test_provider_for_model_prefix_mistral() {
-        assert_eq!(
-            provider_for_model("mistral-large-2512"),
-            Some("mistral")
-        );
+        assert_eq!(provider_for_model("mistral-large-2512"), Some("mistral"));
         // Legacy name still resolves via prefix
-        assert_eq!(
-            provider_for_model("mistral-large-latest"),
-            Some("mistral")
-        );
+        assert_eq!(provider_for_model("mistral-large-latest"), Some("mistral"));
         assert_eq!(provider_for_model("codestral-latest"), Some("mistral"));
     }
 
     #[test]
     fn test_provider_for_model_prefix_xai() {
         assert_eq!(provider_for_model("grok-4.1"), Some("xai"));
-        assert_eq!(provider_for_model("grok-4-1-fast-non-reasoning"), Some("xai"));
+        assert_eq!(
+            provider_for_model("grok-4-1-fast-non-reasoning"),
+            Some("xai")
+        );
         // Unrecognized Grok IDs still resolve via prefix
         assert_eq!(provider_for_model("grok-future"), Some("xai"));
     }

@@ -452,26 +452,24 @@ impl McpServersConfig {
                             rusqlite::params![api_key_storage_key],
                             |row| row.get::<_, String>(0),
                         ) {
-                            Ok(stored_value) => {
-                                match decrypt_oauth_token(&stored_value) {
-                                    Ok(decrypted) => {
-                                        plan.push((
-                                            server_name.clone(),
-                                            key.clone(),
-                                            Resolved::Done(decrypted),
-                                        ));
-                                    }
-                                    Err(e) => {
-                                        tracing::warn!(
+                            Ok(stored_value) => match decrypt_oauth_token(&stored_value) {
+                                Ok(decrypted) => {
+                                    plan.push((
+                                        server_name.clone(),
+                                        key.clone(),
+                                        Resolved::Done(decrypted),
+                                    ));
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
                                             "Skipping MCP server '{}': failed to decrypt credential '{}': {}",
                                             server_name,
                                             key,
                                             e
                                         );
-                                        continue;
-                                    }
+                                    continue;
                                 }
-                            }
+                            },
                             Err(_) => {
                                 tracing::warn!("API key not found for provider: {}", provider);
                             }
@@ -483,26 +481,24 @@ impl McpServersConfig {
                             rusqlite::params![cred_key],
                             |row| row.get::<_, String>(0),
                         ) {
-                            Ok(stored_value) => {
-                                match decrypt_mcp_credential(&stored_value) {
-                                    Ok(decrypted) => {
-                                        plan.push((
-                                            server_name.clone(),
-                                            key.clone(),
-                                            Resolved::Done(decrypted),
-                                        ));
-                                    }
-                                    Err(e) => {
-                                        tracing::warn!(
+                            Ok(stored_value) => match decrypt_mcp_credential(&stored_value) {
+                                Ok(decrypted) => {
+                                    plan.push((
+                                        server_name.clone(),
+                                        key.clone(),
+                                        Resolved::Done(decrypted),
+                                    ));
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
                                             "Skipping MCP server '{}': failed to decrypt credential '{}': {}",
                                             server_name,
                                             key,
                                             e
                                         );
-                                        continue;
-                                    }
+                                    continue;
                                 }
-                            }
+                            },
                             Err(_) => {
                                 tracing::warn!(
                                     "Credential not found for {} / {}",
@@ -879,31 +875,32 @@ fn read_oauth_client_credentials(
 ) -> Result<(String, String), String> {
     let conn = open_mcp_settings_db()?;
 
-    let load_credential = |keys: &[&str], label: &str| -> Result<String, String> {
-        for key in keys {
-            let result: Result<String, rusqlite::Error> = conn.query_row(
-                "SELECT value FROM settings_v2 WHERE key = ?1",
-                rusqlite::params![key],
-                |row| row.get(0),
-            );
-            if let Ok(stored_value) = result {
-                match decrypt_oauth_token(&stored_value) {
-                    Ok(decrypted) => return Ok(decrypted),
-                    Err(e) => {
-                        tracing::warn!(
+    let load_credential =
+        |keys: &[&str], label: &str| -> Result<String, String> {
+            for key in keys {
+                let result: Result<String, rusqlite::Error> = conn.query_row(
+                    "SELECT value FROM settings_v2 WHERE key = ?1",
+                    rusqlite::params![key],
+                    |row| row.get(0),
+                );
+                if let Ok(stored_value) = result {
+                    match decrypt_oauth_token(&stored_value) {
+                        Ok(decrypted) => return Ok(decrypted),
+                        Err(e) => {
+                            tracing::warn!(
                             "Config decryption failed for OAuth {} (provider: '{}', key: {}): {}, \
                              consider re-entering credentials",
                             label, provider, key, e
                         );
+                        }
                     }
                 }
             }
-        }
-        Err(format!(
-            "OAuth {} not found or could not be decrypted for provider: {}",
-            label, provider
-        ))
-    };
+            Err(format!(
+                "OAuth {} not found or could not be decrypted for provider: {}",
+                label, provider
+            ))
+        };
 
     let client_id = load_credential(client_id_keys, "client_id")?;
     let client_secret = load_credential(client_secret_keys, "client_secret")?;
@@ -1055,7 +1052,9 @@ pub(super) fn decrypt_oauth_token(encrypted: &str) -> Result<String, ConfigDecry
         .map_err(ConfigDecryptionError::InvalidBase64)?;
 
     if combined.len() < 12 {
-        return Err(ConfigDecryptionError::CiphertextTooShort { len: combined.len() });
+        return Err(ConfigDecryptionError::CiphertextTooShort {
+            len: combined.len(),
+        });
     }
 
     // Split nonce and ciphertext
@@ -1124,7 +1123,9 @@ pub fn decrypt_mcp_credential(encrypted: &str) -> Result<String, ConfigDecryptio
         .map_err(ConfigDecryptionError::InvalidBase64)?;
 
     if combined.len() < 12 {
-        return Err(ConfigDecryptionError::CiphertextTooShort { len: combined.len() });
+        return Err(ConfigDecryptionError::CiphertextTooShort {
+            len: combined.len(),
+        });
     }
 
     // Split nonce and ciphertext
@@ -1351,8 +1352,8 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt_oauth_token_roundtrip() {
         let original = "ghp_abc123DEF456_test_token";
-        let encrypted = encrypt_oauth_token(original)
-            .expect("encryption should succeed for a valid plaintext");
+        let encrypted =
+            encrypt_oauth_token(original).expect("encryption should succeed for a valid plaintext");
         let decrypted = decrypt_oauth_token(&encrypted)
             .expect("decryption should succeed for validly-encrypted data");
         assert_eq!(decrypted, original);
@@ -1428,8 +1429,7 @@ mod tests {
     #[test]
     fn test_decrypt_oauth_token_tampered_ciphertext() {
         let original = "valid_token_value";
-        let encrypted = encrypt_oauth_token(original)
-            .expect("encryption should succeed");
+        let encrypted = encrypt_oauth_token(original).expect("encryption should succeed");
 
         // Tamper with the encrypted payload by flipping bits in the ciphertext portion
         use base64::{engine::general_purpose, Engine as _};
@@ -1456,8 +1456,7 @@ mod tests {
     #[test]
     fn test_decrypt_mcp_credential_tampered_ciphertext() {
         let original = "my-secret-credential";
-        let encrypted = encrypt_mcp_credential(original)
-            .expect("encryption should succeed");
+        let encrypted = encrypt_mcp_credential(original).expect("encryption should succeed");
 
         use base64::{engine::general_purpose, Engine as _};
         let mut raw = general_purpose::STANDARD
@@ -1682,11 +1681,7 @@ mod tests {
         let result = load_bundle(std::path::Path::new("/nonexistent/path/bundle.mcpb"));
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(
-            msg.contains("Failed to read bundle file"),
-            "got: {}",
-            msg
-        );
+        assert!(msg.contains("Failed to read bundle file"), "got: {}", msg);
     }
 
     #[test]
@@ -1698,11 +1693,7 @@ mod tests {
         let result = load_bundle(&path);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(
-            msg.contains("Failed to parse bundle file"),
-            "got: {}",
-            msg
-        );
+        assert!(msg.contains("Failed to parse bundle file"), "got: {}", msg);
         let _ = std::fs::remove_file(&path);
     }
 

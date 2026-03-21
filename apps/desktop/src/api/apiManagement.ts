@@ -168,10 +168,7 @@ export async function apiParseResponse(
 }
 
 /** Extract a value from a JSON response body using a dot-separated path. */
-export async function apiExtractJsonPath(
-  body: string,
-  path: string,
-): Promise<unknown> {
+export async function apiExtractJsonPath(body: string, path: string): Promise<unknown> {
   try {
     return await invoke<unknown>('api_extract_json_path', { body, path });
   } catch (error) {
@@ -184,10 +181,7 @@ export async function apiExtractJsonPath(
 // ---------------------------------------------------------------------------
 
 /** Register an OAuth 2.0 client for later use in auth flows. */
-export async function apiOAuthCreateClient(
-  clientId: string,
-  config: OAuth2Config,
-): Promise<void> {
+export async function apiOAuthCreateClient(clientId: string, config: OAuth2Config): Promise<void> {
   try {
     await invoke('api_oauth_create_client', { clientId, config });
   } catch (error) {
@@ -212,10 +206,7 @@ export async function apiOAuthGetAuthUrl(
 }
 
 /** Exchange an authorization code for access/refresh tokens. */
-export async function apiOAuthExchangeCode(
-  clientId: string,
-  code: string,
-): Promise<TokenResponse> {
+export async function apiOAuthExchangeCode(clientId: string, code: string): Promise<TokenResponse> {
   try {
     return await invoke<TokenResponse>('api_oauth_exchange_code', { clientId, code });
   } catch (error) {
@@ -236,9 +227,7 @@ export async function apiOAuthRefreshToken(
 }
 
 /** Obtain tokens using the client-credentials grant (machine-to-machine). */
-export async function apiOAuthClientCredentials(
-  clientId: string,
-): Promise<TokenResponse> {
+export async function apiOAuthClientCredentials(clientId: string): Promise<TokenResponse> {
   try {
     return await invoke<TokenResponse>('api_oauth_client_credentials', { clientId });
   } catch (error) {
@@ -263,9 +252,7 @@ export async function apiRenderTemplate(
 }
 
 /** Extract the set of variable names referenced in a template string. */
-export async function apiExtractTemplateVariables(
-  templateStr: string,
-): Promise<string[]> {
+export async function apiExtractTemplateVariables(templateStr: string): Promise<string[]> {
   try {
     return await invoke<string[]>('api_extract_template_variables', { templateStr });
   } catch (error) {

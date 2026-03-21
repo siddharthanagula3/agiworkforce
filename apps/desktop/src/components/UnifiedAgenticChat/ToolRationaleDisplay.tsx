@@ -57,7 +57,8 @@ const ToolRationaleDisplayComponent: React.FC<ToolRationaleDisplayProps> = ({
           </div>
         </div>
         {onDismiss && (
-          <button type="button"
+          <button
+            type="button"
             onClick={onDismiss}
             className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
             aria-label="Dismiss rationale"
@@ -85,7 +86,8 @@ const ToolRationaleDisplayComponent: React.FC<ToolRationaleDisplayProps> = ({
       {/* Alternatives */}
       {rationale.alternatives && rationale.alternatives.length > 0 && (
         <div className="mt-2 pl-6">
-          <button type="button"
+          <button
+            type="button"
             onClick={() => setShowAlternatives(!showAlternatives)}
             className="flex items-center gap-1 text-xs text-zinc-400 hover:text-indigo-300 transition-colors"
           >

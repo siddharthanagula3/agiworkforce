@@ -20,7 +20,12 @@ export function MessageApprovalsContent({ approvals, className }: MessageApprova
   }
 
   return (
-    <div className={cn('space-y-2 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3', className)}>
+    <div
+      className={cn(
+        'space-y-2 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3',
+        className,
+      )}
+    >
       <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-yellow-300">
         <Shield className="h-3.5 w-3.5" />
         Pending approvals

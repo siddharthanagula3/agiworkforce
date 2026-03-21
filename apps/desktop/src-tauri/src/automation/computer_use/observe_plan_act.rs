@@ -18,7 +18,7 @@ use tokio::time::{sleep, timeout};
 use crate::automation::input::{
     KeyboardSimulator, MouseButton as InputMouseButton, MouseSimulator,
 };
-use crate::automation::screen::capture_primary_screen;
+use crate::automation::screen::{capture_primary_screen, list_displays, ScreenInfo};
 use crate::core::llm::llm_router::LLMRouter;
 use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
@@ -252,7 +252,8 @@ impl ComputerUseAgent {
                     &mut session,
                     state,
                     CompletionReason::SafetyBlocked {
-                        reason: serde_json::to_string(&reason).unwrap_or_else(|_| format!("{reason:?}")),
+                        reason: serde_json::to_string(&reason)
+                            .unwrap_or_else(|_| format!("{reason:?}")),
                     },
                 );
             }
@@ -302,7 +303,8 @@ impl ComputerUseAgent {
                             &mut session,
                             state,
                             CompletionReason::SafetyBlocked {
-                                reason: serde_json::to_string(&reason).unwrap_or_else(|_| format!("{reason:?}")),
+                                reason: serde_json::to_string(&reason)
+                                    .unwrap_or_else(|_| format!("{reason:?}")),
                             },
                         );
                     }
@@ -797,6 +799,8 @@ Only include actions you're confident will make progress."#,
 
     /// Executes a single action.
     async fn execute_action(&self, action: &ComputerUseAction) -> Result<()> {
+        let primary_display = resolve_primary_display()?;
+
         match action {
             ComputerUseAction::Click { x, y, button } => {
                 let mut mouse = MouseSimulator::new()?;
@@ -805,23 +809,27 @@ Only include actions you're confident will make progress."#,
                     MouseButton::Right => InputMouseButton::Right,
                     MouseButton::Middle => InputMouseButton::Middle,
                 };
-                mouse.click(*x, *y, btn)?;
+                let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
+                mouse.click(input_x, input_y, btn)?;
             }
             ComputerUseAction::DoubleClick { x, y } => {
                 let mut mouse = MouseSimulator::new()?;
-                mouse.double_click(*x, *y).await?;
+                let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
+                mouse.double_click(input_x, input_y).await?;
             }
             ComputerUseAction::TripleClick { x, y } => {
                 let mut mouse = MouseSimulator::new()?;
-                mouse.click(*x, *y, InputMouseButton::Left)?;
+                let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
+                mouse.click(input_x, input_y, InputMouseButton::Left)?;
                 sleep(Duration::from_millis(50)).await;
-                mouse.click(*x, *y, InputMouseButton::Left)?;
+                mouse.click(input_x, input_y, InputMouseButton::Left)?;
                 sleep(Duration::from_millis(50)).await;
-                mouse.click(*x, *y, InputMouseButton::Left)?;
+                mouse.click(input_x, input_y, InputMouseButton::Left)?;
             }
             ComputerUseAction::RightClick { x, y } => {
                 let mut mouse = MouseSimulator::new()?;
-                mouse.click(*x, *y, InputMouseButton::Right)?;
+                let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
+                mouse.click(input_x, input_y, InputMouseButton::Right)?;
             }
             ComputerUseAction::Type { text, delay_ms } => {
                 let mut keyboard = KeyboardSimulator::new()?;
@@ -857,7 +865,8 @@ Only include actions you're confident will make progress."#,
                 let mut mouse = MouseSimulator::new()?;
 
                 if let Some(coord) = at {
-                    mouse.move_to(coord.x, coord.y)?;
+                    let translated = translate_capture_coordinate(*coord, &primary_display);
+                    mouse.move_to(translated.x, translated.y)?;
                 }
 
                 let scroll_amount = match direction {
@@ -873,16 +882,25 @@ Only include actions you're confident will make progress."#,
                 duration_ms,
             } => {
                 let mut mouse = MouseSimulator::new()?;
+                let input_from = translate_capture_coordinate(*from, &primary_display);
+                let input_to = translate_capture_coordinate(*to, &primary_display);
                 mouse
-                    .drag_and_drop(from.x, from.y, to.x, to.y, *duration_ms)
+                    .drag_and_drop(
+                        input_from.x,
+                        input_from.y,
+                        input_to.x,
+                        input_to.y,
+                        *duration_ms,
+                    )
                     .await?;
             }
             ComputerUseAction::MoveMouse { x, y, smooth } => {
                 let mut mouse = MouseSimulator::new()?;
+                let (input_x, input_y) = translate_capture_point(*x, *y, &primary_display);
                 if *smooth {
-                    mouse.move_to_smooth(*x, *y, 200).await?;
+                    mouse.move_to_smooth(input_x, input_y, 200).await?;
                 } else {
-                    mouse.move_to(*x, *y)?;
+                    mouse.move_to(input_x, input_y)?;
                 }
             }
             ComputerUseAction::Wait { condition } => match condition {
@@ -1089,6 +1107,30 @@ struct ActionPlan {
     actions: Vec<ComputerUseAction>,
 }
 
+fn translate_capture_coordinate(coord: Coordinate, display: &ScreenInfo) -> Coordinate {
+    Coordinate::new(
+        display.x + ((coord.x as f32) / display.scale_factor).round() as i32,
+        display.y + ((coord.y as f32) / display.scale_factor).round() as i32,
+    )
+}
+
+fn translate_capture_point(x: i32, y: i32, display: &ScreenInfo) -> (i32, i32) {
+    let translated = translate_capture_coordinate(Coordinate::new(x, y), display);
+    (translated.x, translated.y)
+}
+
+fn resolve_primary_display() -> Result<ScreenInfo> {
+    let displays = list_displays()?;
+    if let Some(primary) = displays.iter().find(|display| display.is_primary) {
+        return Ok(primary.clone());
+    }
+
+    displays
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("No display available for coordinate translation"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1120,5 +1162,21 @@ mod tests {
         let json = serde_json::to_string(&reason).unwrap();
         assert!(json.contains("too_many_failures"));
         assert!(json.contains("5"));
+    }
+
+    #[test]
+    fn test_translate_capture_coordinate_accounts_for_hidpi_scaling() {
+        let display = ScreenInfo {
+            id: 0,
+            x: 100,
+            y: 50,
+            width: 1440,
+            height: 900,
+            scale_factor: 2.0,
+            is_primary: true,
+        };
+
+        let translated = translate_capture_coordinate(Coordinate::new(400, 200), &display);
+        assert_eq!(translated, Coordinate::new(300, 150));
     }
 }

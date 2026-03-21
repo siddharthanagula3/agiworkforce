@@ -145,7 +145,8 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
           >
             {/* Toolbar */}
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/60 backdrop-blur-xs border border-white/10">
-              <button type="button"
+              <button
+                type="button"
                 onClick={handleZoomOut}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors"
                 title="Zoom out (-)"
@@ -155,7 +156,8 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
               <span className="px-2 text-xs text-white/80 font-medium min-w-[50px] text-center">
                 {Math.round(scale * 100)}%
               </span>
-              <button type="button"
+              <button
+                type="button"
                 onClick={handleZoomIn}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors"
                 title="Zoom in (+)"
@@ -163,14 +165,16 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
                 <ZoomIn className="h-4 w-4 text-white" />
               </button>
               <div className="w-px h-4 bg-white/20 mx-1" />
-              <button type="button"
+              <button
+                type="button"
                 onClick={handleRotate}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors"
                 title="Rotate (R)"
               >
                 <RotateCw className="h-4 w-4 text-white" />
               </button>
-              <button type="button"
+              <button
+                type="button"
                 onClick={handleReset}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors"
                 title="Reset (0)"
@@ -178,7 +182,8 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
                 <Maximize2 className="h-4 w-4 text-white" />
               </button>
               <div className="w-px h-4 bg-white/20 mx-1" />
-              <button type="button"
+              <button
+                type="button"
                 onClick={handleDownload}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors"
                 title="Download"
@@ -188,7 +193,8 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
             </div>
 
             {/* Close button */}
-            <button type="button"
+            <button
+              type="button"
               onClick={onClose}
               className="absolute top-4 right-4 z-10 p-2 hover:bg-white/10 rounded-full transition-colors"
               title="Close (Escape)"

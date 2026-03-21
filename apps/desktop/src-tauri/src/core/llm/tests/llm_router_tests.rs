@@ -864,8 +864,9 @@ mod streaming_idle_timeout_tests {
     #[tokio::test]
     async fn test_idle_timeout_fires_when_no_data() {
         // A stream that never yields any items (hangs forever).
-        let hanging_stream: std::pin::Pin<Box<dyn futures_util::Stream<Item = ChunkResult> + Send>> =
-            Box::pin(stream::pending());
+        let hanging_stream: std::pin::Pin<
+            Box<dyn futures_util::Stream<Item = ChunkResult> + Send>,
+        > = Box::pin(stream::pending());
 
         let mut wrapped = wrap_with_idle_timeout(hanging_stream, TEST_IDLE_TIMEOUT);
 
@@ -922,10 +923,7 @@ mod streaming_idle_timeout_tests {
         );
         assert!(collected[2].is_ok());
         assert!(
-            collected[2]
-                .as_ref()
-                .expect("checked is_ok")
-                .done,
+            collected[2].as_ref().expect("checked is_ok").done,
             "last chunk should have done=true"
         );
     }
@@ -968,7 +966,10 @@ mod streaming_idle_timeout_tests {
 
         // Third poll: should return None (stream terminated).
         let third = wrapped.next().await;
-        assert!(third.is_none(), "stream should be terminated after idle timeout");
+        assert!(
+            third.is_none(),
+            "stream should be terminated after idle timeout"
+        );
 
         // Drop tx to clean up.
         drop(tx);
@@ -1023,7 +1024,11 @@ mod streaming_idle_timeout_tests {
 
         send_handle.await.expect("sender task should complete");
 
-        assert_eq!(content_chunks.len(), 5, "should receive all 5 content chunks");
+        assert_eq!(
+            content_chunks.len(),
+            5,
+            "should receive all 5 content chunks"
+        );
         assert!(saw_done, "should receive the done chunk");
         for (i, content) in content_chunks.iter().enumerate() {
             assert_eq!(content, &format!("chunk_{i}"));
@@ -1078,7 +1083,10 @@ mod streaming_idle_timeout_tests {
 
         send_handle.await.expect("sender task should complete");
 
-        assert_eq!(keepalive_count, 5, "should have received 5 keepalive chunks");
+        assert_eq!(
+            keepalive_count, 5,
+            "should have received 5 keepalive chunks"
+        );
         assert_eq!(received_content.len(), 1, "should have 1 content chunk");
         assert_eq!(received_content[0], "after keepalives");
         assert!(saw_done, "should receive done chunk");

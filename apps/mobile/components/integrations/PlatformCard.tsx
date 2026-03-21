@@ -1,13 +1,5 @@
 import { View, Pressable } from 'react-native';
-import {
-  MessageCircle,
-  Send,
-  Hash,
-  Mail,
-  Settings,
-  Zap,
-  Monitor,
-} from 'lucide-react-native';
+import { MessageCircle, Send, Hash, Mail, Settings, Zap, Monitor } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

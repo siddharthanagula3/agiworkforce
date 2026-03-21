@@ -79,7 +79,8 @@ export const InlineDocumentSearch: React.FC<ToolResultProps> = ({ result, status
           </div>
 
           {results.length > 5 && (
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setExpanded((prev) => !prev)}
               className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
             >

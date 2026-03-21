@@ -983,7 +983,8 @@ impl HttpSseTransport {
             // localhost guard above (lines 960-975) confirms the target is 127.0.0.1/::1.
             // Remote servers are rejected before reaching this point.
             client_builder = client_builder.danger_accept_invalid_certs(true); // lgtm[rust/disabled-certificate-check]
-            sse_client_builder = sse_client_builder.danger_accept_invalid_certs(true); // lgtm[rust/disabled-certificate-check]
+            sse_client_builder = sse_client_builder.danger_accept_invalid_certs(true);
+            // lgtm[rust/disabled-certificate-check]
         }
 
         let client = client_builder.build().map_err(|e| {

@@ -129,7 +129,6 @@ Need: proper descriptions, all icon sizes, privacy policy link, permission justi
 
 Side panel should show desktop app connection status more prominently.
 
-
 ---
 
 # Research Details

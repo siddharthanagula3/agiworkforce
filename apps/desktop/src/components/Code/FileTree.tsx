@@ -576,7 +576,8 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
           >
             {contextMenu.isDirectory && (
               <>
-                <button type="button"
+                <button
+                  type="button"
                   className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
                   onClick={() => {
                     handleCreate(contextMenu.path, false);
@@ -588,7 +589,8 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
                   <PlusCircle className="h-4 w-4" aria-hidden="true" />
                   New file
                 </button>
-                <button type="button"
+                <button
+                  type="button"
                   className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
                   onClick={() => {
                     handleCreate(contextMenu.path, true);
@@ -603,7 +605,8 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
                 <div className="my-1 h-px bg-border/60" role="separator" />
               </>
             )}
-            <button type="button"
+            <button
+              type="button"
               className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted"
               onClick={() => {
                 handleRename(contextMenu.path);
@@ -615,7 +618,8 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
               <Pencil className="h-4 w-4" aria-hidden="true" />
               Rename
             </button>
-            <button type="button"
+            <button
+              type="button"
               className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted text-red-600"
               onClick={() => {
                 handleDelete(contextMenu.path, contextMenu.isDirectory);

@@ -39,7 +39,9 @@ describe('ToolLabel', () => {
   });
 
   it('shows spinner when status is running', () => {
-    const { container } = render(<ToolLabel entry={makeEntry({ status: 'running', durationMs: undefined })} />);
+    const { container } = render(
+      <ToolLabel entry={makeEntry({ status: 'running', durationMs: undefined })} />,
+    );
     expect(container.querySelector('.animate-spin')).toBeDefined();
   });
 

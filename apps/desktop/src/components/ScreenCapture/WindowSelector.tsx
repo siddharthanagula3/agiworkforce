@@ -122,7 +122,8 @@ export function WindowSelector({ onConfirm, onCancel }: WindowSelectorProps) {
           ) : (
             <div className="p-2">
               {filteredWindows.map((window) => (
-                <button type="button"
+                <button
+                  type="button"
                   key={window.handle}
                   onClick={() => setSelectedWindow(window)}
                   className={cn(

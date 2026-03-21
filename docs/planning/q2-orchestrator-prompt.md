@@ -88,7 +88,7 @@ You must produce all of the following during execution:
    - partial,
    - in progress,
    - blocked
-   across all major surfaces.
+     across all major surfaces.
 
 4. doc updates where current claims drift from code.
 

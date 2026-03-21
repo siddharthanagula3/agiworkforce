@@ -84,9 +84,9 @@ describe('messageActivity', () => {
     expect(selectMessageActionLog(unifiedState, 'assistant-1').map((entry) => entry.id)).toEqual([
       'log-2',
     ]);
-    expect(selectMessageApprovals(unifiedState, 'assistant-1').map((approval) => approval.id)).toEqual([
-      'approval-1',
-    ]);
+    expect(
+      selectMessageApprovals(unifiedState, 'assistant-1').map((approval) => approval.id),
+    ).toEqual(['approval-1']);
     expect(selectUnassignedApprovals(unifiedState).map((approval) => approval.id)).toEqual([
       'approval-2',
     ]);

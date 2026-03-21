@@ -38,7 +38,11 @@ interface ActivityTableProps {
 function StatusBadge({ status }: { status: ActivityRow['status'] }) {
   const config: Record<
     ActivityRow['status'],
-    { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ReactNode }
+    {
+      label: string;
+      variant: 'default' | 'secondary' | 'destructive' | 'outline';
+      icon: React.ReactNode;
+    }
   > = {
     success: {
       label: 'Success',

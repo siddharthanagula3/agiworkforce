@@ -77,8 +77,7 @@ export default async function SharedConversationPage({ params }: PageProps) {
   const { id } = await params;
 
   // Basic UUID-v4 validation to avoid unnecessary DB lookups.
-  const UUID_V4_RE =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (!UUID_V4_RE.test(id)) {
     notFound();
   }
@@ -124,9 +123,7 @@ export default async function SharedConversationPage({ params }: PageProps) {
                 {/* Role label */}
                 <p
                   className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${
-                    isUserRole(msg.role)
-                      ? 'text-blue-200'
-                      : 'text-zinc-500 dark:text-zinc-400'
+                    isUserRole(msg.role) ? 'text-blue-200' : 'text-zinc-500 dark:text-zinc-400'
                   }`}
                 >
                   {roleLabel(msg.role)}

@@ -88,7 +88,7 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
         "figma" => Some(ConnectorMcpMapping {
             server_name: "connector-figma",
             command: "npx",
-            args: &["-y", "@figma/mcp-server-figma"],
+            args: &["-y", "@sethdouglasford/mcp-figma"],
             env_keys: &[("FIGMA_ACCESS_TOKEN", "Figma access token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "figma" },
         }),
@@ -102,14 +102,14 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
         "vercel" => Some(ConnectorMcpMapping {
             server_name: "connector-vercel",
             command: "npx",
-            args: &["-y", "@vercel/mcp"],
+            args: &["-y", "mcp-vercel"],
             env_keys: &[("VERCEL_TOKEN", "Vercel token")],
             credential_source: ConnectorCredentialSource::ApiKey,
         }),
         "supabase" => Some(ConnectorMcpMapping {
             server_name: "connector-supabase",
             command: "npx",
-            args: &["-y", "supabase-mcp-server"],
+            args: &["-y", "@supabase/mcp-server-supabase"],
             env_keys: &[("SUPABASE_ACCESS_TOKEN", "Supabase access token")],
             credential_source: ConnectorCredentialSource::ApiKey,
         }),
@@ -144,21 +144,21 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
         "gmail" => Some(ConnectorMcpMapping {
             server_name: "connector-gmail",
             command: "npx",
-            args: &["-y", "@anthropic/mcp-server-gmail"],
+            args: &["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
             env_keys: &[("GMAIL_OAUTH_TOKEN", "Gmail OAuth token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
         }),
         "google_calendar" => Some(ConnectorMcpMapping {
             server_name: "connector-google-calendar",
             command: "npx",
-            args: &["-y", "@anthropic/mcp-server-google-calendar"],
+            args: &["-y", "@cocal/google-calendar-mcp"],
             env_keys: &[("GOOGLE_CALENDAR_OAUTH_TOKEN", "Google Calendar OAuth token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
         }),
         "outlook" => Some(ConnectorMcpMapping {
             server_name: "connector-outlook",
             command: "npx",
-            args: &["-y", "@anthropic/mcp-server-outlook"],
+            args: &["-y", "outlook-mcp-device-flow"],
             env_keys: &[("OUTLOOK_OAUTH_TOKEN", "Outlook OAuth token")],
             credential_source: ConnectorCredentialSource::OAuth {
                 provider: "microsoft",
@@ -167,7 +167,7 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
         "jira" => Some(ConnectorMcpMapping {
             server_name: "connector-jira",
             command: "npx",
-            args: &["-y", "@anthropic/mcp-server-jira"],
+            args: &["-y", "@caobing122/jira-mcp-server"],
             env_keys: &[("JIRA_OAUTH_TOKEN", "Jira OAuth token")],
             credential_source: ConnectorCredentialSource::OAuth {
                 provider: "atlassian",

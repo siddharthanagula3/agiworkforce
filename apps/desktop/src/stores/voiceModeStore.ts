@@ -30,7 +30,7 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
-import { invoke } from '../lib/tauri-mock';
+import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import {
   voiceGetCapabilities,
   voiceGetSettings,
@@ -134,6 +134,13 @@ export interface VoiceTurn {
   timestamp: number;
 }
 
+interface DeepgramTranscriptEvent {
+  transcript?: string;
+  text?: string;
+  isFinal?: boolean;
+  is_final?: boolean;
+}
+
 interface LLMResponse {
   content: string;
 }
@@ -172,6 +179,7 @@ interface VoiceModeState {
   _audioContext: AudioContext | null;
   _animFrameId: number | null;
   _isSpeaking: boolean;
+  _deepgramUnlisten: UnlistenFn | null;
 
   // -- Core voice loop actions --
   open: () => void;
@@ -315,6 +323,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         _audioContext: null,
         _animFrameId: null,
         _isSpeaking: false,
+        _deepgramUnlisten: null,
 
         open: () => {
           set({ isOpen: true, phase: 'idle', error: null, userTranscript: '', aiResponse: '' });
@@ -325,7 +334,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         close: () => {
-          const { _mediaStream, _recorder, _audioContext, _animFrameId } = get();
+          const { _mediaStream, _recorder, _audioContext, _animFrameId, _deepgramUnlisten } = get();
 
           // Stop backend TTS if speaking
           if (get()._isSpeaking) {
@@ -351,6 +360,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
               // ignore
             }
           }
+          _deepgramUnlisten?.();
 
           set({
             isOpen: false,
@@ -366,6 +376,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
             _audioContext: null,
             _animFrameId: null,
             _isSpeaking: false,
+            _deepgramUnlisten: null,
           });
         },
 
@@ -657,7 +668,14 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         reset: () => {
-          const { _mediaStream, _recorder, _audioContext, _animFrameId, _isSpeaking } = get();
+          const {
+            _mediaStream,
+            _recorder,
+            _audioContext,
+            _animFrameId,
+            _isSpeaking,
+            _deepgramUnlisten,
+          } = get();
 
           // Stop backend TTS if speaking
           if (_isSpeaking) {
@@ -682,6 +700,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
               // ignore
             }
           }
+          _deepgramUnlisten?.();
 
           set({
             phase: 'idle',
@@ -697,6 +716,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
             _audioContext: null,
             _animFrameId: null,
             _isSpeaking: false,
+            _deepgramUnlisten: null,
           });
         },
 
@@ -917,9 +937,33 @@ export const useVoiceModeStore = create<VoiceModeState>()(
 
         startDeepgramStream: async () => {
           try {
+            get()._deepgramUnlisten?.();
+
+            const unlisten = await listen<DeepgramTranscriptEvent>(
+              'deepgram:transcript',
+              (event) => {
+                const payload = event.payload ?? {};
+                const nextTranscript = payload.text ?? payload.transcript ?? '';
+                if (!nextTranscript) {
+                  return;
+                }
+
+                set((state) => ({
+                  userTranscript:
+                    (payload.isFinal ?? payload.is_final)
+                      ? nextTranscript
+                      : state.userTranscript
+                        ? `${state.userTranscript} ${nextTranscript}`.trim()
+                        : nextTranscript,
+                }));
+              },
+            );
+
             await voiceStartDeepgramStream();
-            set({ deepgramStreaming: true });
+            set({ deepgramStreaming: true, error: null, _deepgramUnlisten: unlisten });
           } catch (e) {
+            get()._deepgramUnlisten?.();
+            set({ _deepgramUnlisten: null });
             set({ error: String(e) });
           }
         },
@@ -927,10 +971,12 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         stopDeepgramStream: async () => {
           try {
             const stats = await voiceStopDeepgramStream();
-            set({ deepgramStreaming: false });
+            get()._deepgramUnlisten?.();
+            set({ deepgramStreaming: false, _deepgramUnlisten: null });
             return stats;
           } catch {
-            set({ deepgramStreaming: false });
+            get()._deepgramUnlisten?.();
+            set({ deepgramStreaming: false, _deepgramUnlisten: null });
             return null;
           }
         },

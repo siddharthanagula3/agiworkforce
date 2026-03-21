@@ -100,7 +100,10 @@ function ActionLogItem({ entry }: { entry: ActionLogEntry }) {
                 className="flex items-center gap-1 text-[10px] opacity-80 transition-colors hover:opacity-100"
                 aria-expanded={isDetailsOpen}
               >
-                <motion.div animate={{ rotate: isDetailsOpen ? 180 : 0 }} transition={{ duration: 0.15 }}>
+                <motion.div
+                  animate={{ rotate: isDetailsOpen ? 180 : 0 }}
+                  transition={{ duration: 0.15 }}
+                >
                   <ChevronDown className="h-3 w-3" />
                 </motion.div>
                 Details
@@ -134,7 +137,9 @@ interface ActionLogTimelineContentProps {
 export function ActionLogTimelineContent({ entries, className }: ActionLogTimelineContentProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const hasActiveEntries = entries.some((entry) => entry.status === 'running' || entry.status === 'blocked');
+  const hasActiveEntries = entries.some(
+    (entry) => entry.status === 'running' || entry.status === 'blocked',
+  );
   const isOpen = hasActiveEntries || isExpanded;
 
   if (entries.length === 0) {
@@ -142,7 +147,9 @@ export function ActionLogTimelineContent({ entries, className }: ActionLogTimeli
   }
 
   return (
-    <div className={cn('overflow-hidden rounded-lg border border-white/10 bg-zinc-900/25', className)}>
+    <div
+      className={cn('overflow-hidden rounded-lg border border-white/10 bg-zinc-900/25', className)}
+    >
       <button
         type="button"
         onClick={() => setIsExpanded((value) => !value)}
@@ -155,9 +162,7 @@ export function ActionLogTimelineContent({ entries, className }: ActionLogTimeli
         <Activity className="h-3.5 w-3.5" />
         <span className="font-medium">
           Agent activity
-          <span className="ml-1 text-zinc-500">
-            ({entries.length})
-          </span>
+          <span className="ml-1 text-zinc-500">({entries.length})</span>
         </span>
       </button>
       <AnimatePresence initial={false}>

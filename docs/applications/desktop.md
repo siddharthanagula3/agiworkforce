@@ -678,19 +678,19 @@ Desktop is in the right state when:
 
 ## 24. Feature acceptance criteria
 
-| Feature | Acceptance criteria |
-| --- | --- |
-| Unified agentic chat | User can create/open conversations, stream responses, see reasoning/tool states inline, and preserve coherent message ownership through the entire run. |
-| Approval workflows | Sensitive tool actions render approval UI inline, capture approve/reject decisions, and update runtime state immediately and visibly. |
-| Filesystem and terminal execution | User can request file and shell work, preview risky actions, see outputs inline, and recover from failures without losing conversation state. |
-| Browser and computer use | Desktop can coordinate browser and computer-use actions through explicit tool/runtime layers, with safety checks and visible execution feedback. |
-| Model routing | Provider selection, fallback, local-model support, and cost/usage accounting work consistently across chat and feature modules. |
-| Connectors and MCP | User can connect, inspect, and use connectors/MCP servers from a clear management surface with degraded handling for unavailable integrations. |
-| Projects and memory | User can maintain durable project context and memory, and that context improves task performance without becoming opaque. |
-| Artifacts and file generation | Chat can produce meaningful artifacts/files, render them in-product, and export/share them where supported. |
-| Settings and permissions | User can inspect preferences, feature flags, and automation permissions separately, and changes apply predictably. |
-| Onboarding and degraded states | First-run UX brings the user into a functional runtime quickly; degraded/offline/subscription failures surface clearly without bricking the app. |
-| Cross-surface bridges | Desktop can safely serve as the execution authority for extension/mobile/VS Code handoffs without exposing uncontrolled local power. |
+| Feature                           | Acceptance criteria                                                                                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unified agentic chat              | User can create/open conversations, stream responses, see reasoning/tool states inline, and preserve coherent message ownership through the entire run. |
+| Approval workflows                | Sensitive tool actions render approval UI inline, capture approve/reject decisions, and update runtime state immediately and visibly.                   |
+| Filesystem and terminal execution | User can request file and shell work, preview risky actions, see outputs inline, and recover from failures without losing conversation state.           |
+| Browser and computer use          | Desktop can coordinate browser and computer-use actions through explicit tool/runtime layers, with safety checks and visible execution feedback.        |
+| Model routing                     | Provider selection, fallback, local-model support, and cost/usage accounting work consistently across chat and feature modules.                         |
+| Connectors and MCP                | User can connect, inspect, and use connectors/MCP servers from a clear management surface with degraded handling for unavailable integrations.          |
+| Projects and memory               | User can maintain durable project context and memory, and that context improves task performance without becoming opaque.                               |
+| Artifacts and file generation     | Chat can produce meaningful artifacts/files, render them in-product, and export/share them where supported.                                             |
+| Settings and permissions          | User can inspect preferences, feature flags, and automation permissions separately, and changes apply predictably.                                      |
+| Onboarding and degraded states    | First-run UX brings the user into a functional runtime quickly; degraded/offline/subscription failures surface clearly without bricking the app.        |
+| Cross-surface bridges             | Desktop can safely serve as the execution authority for extension/mobile/VS Code handoffs without exposing uncontrolled local power.                    |
 
 ## 25. Screen-by-screen implementation checklist
 

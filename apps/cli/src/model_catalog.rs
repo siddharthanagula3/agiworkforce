@@ -69,47 +69,299 @@ pub struct Model {
 fn bundled_models() -> Vec<Model> {
     vec![
         // ── Anthropic ── docs.anthropic.com/en/docs/about-claude/models
-        m("claude-opus-4-6",       "anthropic", "Claude Opus 4.6",          200_000,   32_000, 15.0,  75.0,  true,  true,  true,  "2026-02-05", true),
-        m("claude-sonnet-4-6",     "anthropic", "Claude Sonnet 4.6",        200_000,   16_000,  3.0,  15.0,  true,  true,  true,  "2026-02-17", true),
-        m("claude-haiku-4-5",      "anthropic", "Claude Haiku 4.5",         200_000,    8_192,  0.25,  1.25, true,  true,  false, "2025-04-01", false),
+        m(
+            "claude-opus-4-6",
+            "anthropic",
+            "Claude Opus 4.6",
+            200_000,
+            32_000,
+            15.0,
+            75.0,
+            true,
+            true,
+            true,
+            "2026-02-05",
+            true,
+        ),
+        m(
+            "claude-sonnet-4-6",
+            "anthropic",
+            "Claude Sonnet 4.6",
+            200_000,
+            16_000,
+            3.0,
+            15.0,
+            true,
+            true,
+            true,
+            "2026-02-17",
+            true,
+        ),
+        m(
+            "claude-haiku-4-5",
+            "anthropic",
+            "Claude Haiku 4.5",
+            200_000,
+            8_192,
+            0.25,
+            1.25,
+            true,
+            true,
+            false,
+            "2025-04-01",
+            false,
+        ),
         // ── OpenAI ── platform.openai.com/docs/models
-        m("gpt-5.4",               "openai",    "GPT-5.4",               1_050_000,  128_000,  2.50, 10.0,  true,  true,  false, "2026-03-05", true),
-        m("gpt-5.4-mini",          "openai",    "GPT-5.4 Mini",            400_000,  128_000,  0.15,  0.60, true,  true,  false, "2026-03-17", false),
-        m("gpt-4.1",               "openai",    "GPT-4.1",              1_047_576,   32_768,  2.0,   8.0,  true,  true,  false, "2025-04-01", false),
-        m("o3-mini",               "openai",    "o3-mini",                 200_000,  100_000,  1.10,  4.40, true,  false, true,  "2025-01-01", false),
+        m(
+            "gpt-5.4",
+            "openai",
+            "GPT-5.4",
+            1_050_000,
+            128_000,
+            2.50,
+            10.0,
+            true,
+            true,
+            false,
+            "2026-03-05",
+            true,
+        ),
+        m(
+            "gpt-5.4-mini",
+            "openai",
+            "GPT-5.4 Mini",
+            400_000,
+            128_000,
+            0.15,
+            0.60,
+            true,
+            true,
+            false,
+            "2026-03-17",
+            false,
+        ),
+        m(
+            "gpt-4.1",
+            "openai",
+            "GPT-4.1",
+            1_047_576,
+            32_768,
+            2.0,
+            8.0,
+            true,
+            true,
+            false,
+            "2025-04-01",
+            false,
+        ),
+        m(
+            "o3-mini",
+            "openai",
+            "o3-mini",
+            200_000,
+            100_000,
+            1.10,
+            4.40,
+            true,
+            false,
+            true,
+            "2025-01-01",
+            false,
+        ),
         // ── Google ── ai.google.dev/gemini-api/docs/models
-        m("gemini-3.1-pro-preview","google",    "Gemini 3.1 Pro",        1_048_576,   65_536,  1.25, 10.0,  true,  true,  true,  "2026-02-19", true),
-        m("gemini-3-flash-preview","google",    "Gemini 3 Flash",        1_048_576,    8_192,  0.10,  0.40, true,  true,  false, "2026-01-01", false),
+        m(
+            "gemini-3.1-pro-preview",
+            "google",
+            "Gemini 3.1 Pro",
+            1_048_576,
+            65_536,
+            1.25,
+            10.0,
+            true,
+            true,
+            true,
+            "2026-02-19",
+            true,
+        ),
+        m(
+            "gemini-3-flash-preview",
+            "google",
+            "Gemini 3 Flash",
+            1_048_576,
+            8_192,
+            0.10,
+            0.40,
+            true,
+            true,
+            false,
+            "2026-01-01",
+            false,
+        ),
         // ── Mistral ── docs.mistral.ai/models
-        m("mistral-large-2512",    "mistral",   "Mistral Large 3",        256_000,   65_536,  2.0,   6.0,  true,  false, false, "2025-12-01", true),
-        m("codestral-latest",      "mistral",   "Codestral",               32_000,    8_192,  0.3,   0.9,  true,  false, false, "2024-05-01", false),
+        m(
+            "mistral-large-2512",
+            "mistral",
+            "Mistral Large 3",
+            256_000,
+            65_536,
+            2.0,
+            6.0,
+            true,
+            false,
+            false,
+            "2025-12-01",
+            true,
+        ),
+        m(
+            "codestral-latest",
+            "mistral",
+            "Codestral",
+            32_000,
+            8_192,
+            0.3,
+            0.9,
+            true,
+            false,
+            false,
+            "2024-05-01",
+            false,
+        ),
         // ── xAI ── docs.x.ai/developers/models
-        m("grok-4.1",              "xai",       "Grok 4.1",             2_000_000,  128_000,  2.0,  10.0,  true,  true,  false, "2025-11-17", true),
-        m("grok-4-1-fast-non-reasoning","xai",  "Grok 4.1 Fast",        2_000_000,  128_000,  0.60,  4.0,  true,  true,  false, "2025-11-20", false),
+        m(
+            "grok-4.1",
+            "xai",
+            "Grok 4.1",
+            2_000_000,
+            128_000,
+            2.0,
+            10.0,
+            true,
+            true,
+            false,
+            "2025-11-17",
+            true,
+        ),
+        m(
+            "grok-4-1-fast-non-reasoning",
+            "xai",
+            "Grok 4.1 Fast",
+            2_000_000,
+            128_000,
+            0.60,
+            4.0,
+            true,
+            true,
+            false,
+            "2025-11-20",
+            false,
+        ),
         // ── DeepSeek ── api-docs.deepseek.com (V3.2 shipping, V4 not yet released)
-        m("deepseek-chat",         "deepseek",  "DeepSeek V3.2",          128_000,    8_000,  0.14,  0.28, true,  false, false, "2025-12-01", true),
-        m("deepseek-reasoner",     "deepseek",  "DeepSeek V3.2 Reasoner", 128_000,   64_000,  0.55,  2.19, false, false, true,  "2025-12-01", false),
+        m(
+            "deepseek-chat",
+            "deepseek",
+            "DeepSeek V3.2",
+            128_000,
+            8_000,
+            0.14,
+            0.28,
+            true,
+            false,
+            false,
+            "2025-12-01",
+            true,
+        ),
+        m(
+            "deepseek-reasoner",
+            "deepseek",
+            "DeepSeek V3.2 Reasoner",
+            128_000,
+            64_000,
+            0.55,
+            2.19,
+            false,
+            false,
+            true,
+            "2025-12-01",
+            false,
+        ),
         // ── Ollama (local, free) ──
-        m("llama3.1",              "ollama",    "Llama 3.1",              128_000,    8_192,  0.0,   0.0,  false, false, false, "2024-07-01", false),
-        m("mistral-7b",            "ollama",    "Mistral 7B",              32_000,    4_096,  0.0,   0.0,  false, false, false, "2023-09-01", false),
-        m("codellama",             "ollama",    "Code Llama",              16_000,    4_096,  0.0,   0.0,  false, false, false, "2023-08-01", false),
+        m(
+            "llama3.1",
+            "ollama",
+            "Llama 3.1",
+            128_000,
+            8_192,
+            0.0,
+            0.0,
+            false,
+            false,
+            false,
+            "2024-07-01",
+            false,
+        ),
+        m(
+            "mistral-7b",
+            "ollama",
+            "Mistral 7B",
+            32_000,
+            4_096,
+            0.0,
+            0.0,
+            false,
+            false,
+            false,
+            "2023-09-01",
+            false,
+        ),
+        m(
+            "codellama",
+            "ollama",
+            "Code Llama",
+            16_000,
+            4_096,
+            0.0,
+            0.0,
+            false,
+            false,
+            false,
+            "2023-08-01",
+            false,
+        ),
     ]
 }
 
 /// Shorthand constructor to keep the bundled table compact.
+#[allow(clippy::too_many_arguments)]
 fn m(
-    id: &str, provider: &str, name: &str,
-    ctx: usize, out: usize, price_in: f64, price_out: f64,
-    tools: bool, vision: bool, reasoning: bool,
-    date: &str, cloud: bool,
+    id: &str,
+    provider: &str,
+    name: &str,
+    ctx: usize,
+    out: usize,
+    price_in: f64,
+    price_out: f64,
+    tools: bool,
+    vision: bool,
+    reasoning: bool,
+    date: &str,
+    cloud: bool,
 ) -> Model {
     Model {
-        id: id.into(), provider: provider.into(), display_name: name.into(),
-        context_window: ctx, max_output_tokens: out,
-        input_price_per_1m: price_in, output_price_per_1m: price_out,
-        supports_tools: tools, supports_vision: vision, supports_reasoning: reasoning,
-        supports_audio_input: false, supports_audio_output: false, supports_pdf: false,
-        release_date: date.into(), cloud_eligible: cloud,
+        id: id.into(),
+        provider: provider.into(),
+        display_name: name.into(),
+        context_window: ctx,
+        max_output_tokens: out,
+        input_price_per_1m: price_in,
+        output_price_per_1m: price_out,
+        supports_tools: tools,
+        supports_vision: vision,
+        supports_reasoning: reasoning,
+        supports_audio_input: false,
+        supports_audio_output: false,
+        supports_pdf: false,
+        release_date: date.into(),
+        cloud_eligible: cloud,
     }
 }
 
@@ -251,17 +503,31 @@ async fn fetch_remote() -> Option<Vec<Model>> {
 
     // Map provider names to our provider IDs
     let provider_map: HashMap<&str, &str> = [
-        ("anthropic", "anthropic"), ("openai", "openai"), ("google", "google"),
-        ("mistral", "mistral"), ("xai", "xai"), ("deepseek", "deepseek"),
-        ("groq", "groq"), ("cohere", "cohere"), ("together", "together"),
-    ].into_iter().collect();
+        ("anthropic", "anthropic"),
+        ("openai", "openai"),
+        ("google", "google"),
+        ("mistral", "mistral"),
+        ("xai", "xai"),
+        ("deepseek", "deepseek"),
+        ("groq", "groq"),
+        ("cohere", "cohere"),
+        ("together", "together"),
+    ]
+    .into_iter()
+    .collect();
 
     let mut models = Vec::new();
 
     for (provider_key, provider_val) in providers {
-        let Some(provider_obj) = provider_val.as_object() else { continue };
-        let Some(models_obj) = provider_obj.get("models").and_then(|m| m.as_object()) else { continue };
-        let our_provider = provider_map.get(provider_key.as_str()).copied()
+        let Some(provider_obj) = provider_val.as_object() else {
+            continue;
+        };
+        let Some(models_obj) = provider_obj.get("models").and_then(|m| m.as_object()) else {
+            continue;
+        };
+        let our_provider = provider_map
+            .get(provider_key.as_str())
+            .copied()
             .unwrap_or(provider_key.as_str());
 
         for (model_id, model_val) in models_obj {
@@ -292,7 +558,11 @@ async fn fetch_remote() -> Option<Vec<Model>> {
         }
     }
 
-    if models.is_empty() { None } else { Some(models) }
+    if models.is_empty() {
+        None
+    } else {
+        Some(models)
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -444,7 +714,10 @@ impl Catalog {
     }
 
     pub fn models_for(&self, provider: &str) -> Vec<&Model> {
-        self.models.iter().filter(|m| m.provider == provider).collect()
+        self.models
+            .iter()
+            .filter(|m| m.provider == provider)
+            .collect()
     }
 
     pub fn providers(&self) -> Vec<&str> {
@@ -467,12 +740,24 @@ impl Catalog {
         }
         // Provider-level prefix fallback for unknown models
         let lower = model_id.to_lowercase();
-        if lower.starts_with("claude") { return 200_000; }
-        if lower.starts_with("gpt") { return 128_000; }
-        if lower.starts_with("gemini") { return 1_048_576; }
-        if lower.starts_with("grok") { return 2_000_000; }
-        if lower.starts_with("mistral") || lower.starts_with("codestral") { return 256_000; }
-        if lower.starts_with("deepseek") { return 128_000; }
+        if lower.starts_with("claude") {
+            return 200_000;
+        }
+        if lower.starts_with("gpt") {
+            return 128_000;
+        }
+        if lower.starts_with("gemini") {
+            return 1_048_576;
+        }
+        if lower.starts_with("grok") {
+            return 2_000_000;
+        }
+        if lower.starts_with("mistral") || lower.starts_with("codestral") {
+            return 256_000;
+        }
+        if lower.starts_with("deepseek") {
+            return 128_000;
+        }
         128_000
     }
 
@@ -488,12 +773,24 @@ impl Catalog {
             return Some(&m.provider);
         }
         let lower = model_id.to_lowercase();
-        if lower.starts_with("claude") { return Some("anthropic"); }
-        if lower.starts_with("gpt") || lower.starts_with("o1") || lower.starts_with("o3") { return Some("openai"); }
-        if lower.starts_with("gemini") { return Some("google"); }
-        if lower.starts_with("mistral") || lower.starts_with("codestral") { return Some("mistral"); }
-        if lower.starts_with("grok") { return Some("xai"); }
-        if lower.starts_with("deepseek") { return Some("deepseek"); }
+        if lower.starts_with("claude") {
+            return Some("anthropic");
+        }
+        if lower.starts_with("gpt") || lower.starts_with("o1") || lower.starts_with("o3") {
+            return Some("openai");
+        }
+        if lower.starts_with("gemini") {
+            return Some("google");
+        }
+        if lower.starts_with("mistral") || lower.starts_with("codestral") {
+            return Some("mistral");
+        }
+        if lower.starts_with("grok") {
+            return Some("xai");
+        }
+        if lower.starts_with("deepseek") {
+            return Some("deepseek");
+        }
         None
     }
 }
@@ -567,7 +864,15 @@ mod tests {
     #[test]
     fn all_providers_represented() {
         let cat = Catalog::bundled();
-        for p in ["anthropic", "openai", "google", "mistral", "xai", "deepseek", "ollama"] {
+        for p in [
+            "anthropic",
+            "openai",
+            "google",
+            "mistral",
+            "xai",
+            "deepseek",
+            "ollama",
+        ] {
             assert!(!cat.models_for(p).is_empty(), "Missing: {}", p);
         }
     }

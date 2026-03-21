@@ -385,12 +385,14 @@ mod tests {
             .expect("add_to_allowlist should succeed");
 
         // The file should now exist.
-        assert!(path.exists(), "persistence file should exist after mutation");
+        assert!(
+            path.exists(),
+            "persistence file should exist after mutation"
+        );
 
         // Read it back and verify.
         let contents = std::fs::read_to_string(&path).expect("should read file");
-        let state: PersistedDmState =
-            serde_json::from_str(&contents).expect("should parse JSON");
+        let state: PersistedDmState = serde_json::from_str(&contents).expect("should parse JSON");
 
         assert!(!state.config.enabled);
         assert_eq!(state.allowlist.len(), 1);
@@ -425,8 +427,7 @@ mod tests {
             .expect("remove should succeed");
 
         let contents = std::fs::read_to_string(&path).expect("should read file");
-        let state: PersistedDmState =
-            serde_json::from_str(&contents).expect("should parse JSON");
+        let state: PersistedDmState = serde_json::from_str(&contents).expect("should parse JSON");
         assert!(state.allowlist.is_empty());
 
         let _ = std::fs::remove_file(&path);
@@ -453,11 +454,11 @@ mod tests {
             code_expiry_minutes: 15,
             max_pending_codes: 20,
         };
-        dm.set_config(new_config).expect("set_config should succeed");
+        dm.set_config(new_config)
+            .expect("set_config should succeed");
 
         let contents = std::fs::read_to_string(&path).expect("should read file");
-        let state: PersistedDmState =
-            serde_json::from_str(&contents).expect("should parse JSON");
+        let state: PersistedDmState = serde_json::from_str(&contents).expect("should parse JSON");
         assert!(!state.config.enabled);
         assert!(!state.config.require_pairing_for_unknown);
         assert_eq!(state.config.code_expiry_minutes, 15);

@@ -84,7 +84,10 @@
   "TOKEN_EXPIRED": {
     "title": "Sessione Scaduta",
     "message": "La tua sessione è scaduta. Accedi di nuovo.",
-    "suggestions": ["Clicca per ri-autenticarti", "Verifica se le tue credenziali sono ancora valide"]
+    "suggestions": [
+      "Clicca per ri-autenticarti",
+      "Verifica se le tue credenziali sono ancora valide"
+    ]
   },
   "LLM_API_ERROR": {
     "title": "Errore del Provider LLM",

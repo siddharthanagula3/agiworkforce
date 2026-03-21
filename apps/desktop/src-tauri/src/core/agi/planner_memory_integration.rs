@@ -254,5 +254,4 @@ mod tests {
         assert_eq!(ctx.referenced_decisions.len(), 0);
         assert_eq!(ctx.memory_confidence, 0.5);
     }
-
 }

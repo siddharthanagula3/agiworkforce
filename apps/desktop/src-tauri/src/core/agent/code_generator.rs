@@ -240,7 +240,8 @@ impl CodeGenerator {
                                     json_str.chars().take(300).collect::<String>()
                                 );
                                 return Err(anyhow::anyhow!(
-                                    "LLM returned malformed JSON for code generation: {}", e
+                                    "LLM returned malformed JSON for code generation: {}",
+                                    e
                                 ));
                             }
                         }

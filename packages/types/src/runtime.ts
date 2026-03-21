@@ -17,19 +17,10 @@
 // ============================================================================
 
 /** Type of runtime activity. */
-export type RuntimeActivityType =
-  | 'tool_call'
-  | 'agent_action'
-  | 'system_event'
-  | 'mcp_request';
+export type RuntimeActivityType = 'tool_call' | 'agent_action' | 'system_event' | 'mcp_request';
 
 /** Execution status of a runtime activity. */
-export type RuntimeActivityStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+export type RuntimeActivityStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 /**
  * A single unit of runtime activity (tool call, agent action, etc.).

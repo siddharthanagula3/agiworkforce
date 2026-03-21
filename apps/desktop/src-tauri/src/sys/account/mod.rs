@@ -361,7 +361,9 @@ static API_BASE_URL_OVERRIDE: RwLock<Option<String>> = RwLock::new(None);
 /// 3) Production default
 pub fn get_api_base_url() -> String {
     {
-        let url = API_BASE_URL_OVERRIDE.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let url = API_BASE_URL_OVERRIDE
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(value) = url.clone() {
             return value;
         }
@@ -391,7 +393,10 @@ fn validate_api_base_url(url: &str) -> Result<(), String> {
         return Err("API base URL must not contain credentials (userinfo)".to_string());
     }
 
-    let is_localhost = matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]" | "0.0.0.0");
+    let is_localhost = matches!(
+        host,
+        "localhost" | "127.0.0.1" | "::1" | "[::1]" | "0.0.0.0"
+    );
 
     // Enforce https:// except for localhost / 127.0.0.1 / ::1 / 0.0.0.0
     if scheme == "http" && !is_localhost {
@@ -408,9 +413,7 @@ fn validate_api_base_url(url: &str) -> Result<(), String> {
     }
 
     // Domain allowlist: *.agiworkforce.com, localhost, 127.0.0.1
-    let allowed = is_localhost
-        || host == "agiworkforce.com"
-        || host.ends_with(".agiworkforce.com");
+    let allowed = is_localhost || host == "agiworkforce.com" || host.ends_with(".agiworkforce.com");
 
     if !allowed {
         return Err(format!(
@@ -439,7 +442,9 @@ pub fn account_store_api_base_url(apiBaseUrl: String) -> Result<(), String> {
     // SSRF protection: validate against scheme and domain allowlist
     validate_api_base_url(&sanitized)?;
 
-    let mut url = API_BASE_URL_OVERRIDE.write().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut url = API_BASE_URL_OVERRIDE
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     *url = Some(sanitized);
     Ok(())
 }
@@ -499,7 +504,9 @@ fn validate_token_format(token: &str, label: &str) -> Result<(), String> {
 #[allow(non_snake_case)]
 pub fn account_store_access_token(accessToken: String) -> Result<(), String> {
     validate_token_format(&accessToken, "Access token")?;
-    let mut token = ACCESS_TOKEN.write().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut token = ACCESS_TOKEN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     *token = Some(accessToken);
     Ok(())
 }
@@ -509,7 +516,9 @@ pub fn account_store_access_token(accessToken: String) -> Result<(), String> {
 #[allow(non_snake_case)]
 pub fn account_store_refresh_token(refreshToken: String) -> Result<(), String> {
     validate_token_format(&refreshToken, "Refresh token")?;
-    let mut token = REFRESH_TOKEN.write().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut token = REFRESH_TOKEN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     *token = Some(refreshToken);
     Ok(())
 }
@@ -518,11 +527,15 @@ pub fn account_store_refresh_token(refreshToken: String) -> Result<(), String> {
 #[tauri::command]
 pub fn account_clear_tokens() -> Result<(), String> {
     {
-        let mut token = ACCESS_TOKEN.write().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut token = ACCESS_TOKEN
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *token = None;
     }
     {
-        let mut token = REFRESH_TOKEN.write().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut token = REFRESH_TOKEN
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         *token = None;
     }
     Ok(())
@@ -530,14 +543,18 @@ pub fn account_clear_tokens() -> Result<(), String> {
 
 // Helpers to get tokens from in-memory storage
 pub fn get_access_token() -> Result<String, String> {
-    let token = ACCESS_TOKEN.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let token = ACCESS_TOKEN
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     token
         .clone()
         .ok_or_else(|| "No access token stored. Please sign in.".to_string())
 }
 
 pub fn get_refresh_token() -> Result<String, String> {
-    let token = REFRESH_TOKEN.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let token = REFRESH_TOKEN
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     token
         .clone()
         .ok_or_else(|| "No refresh token stored. Please sign in.".to_string())

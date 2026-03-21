@@ -253,10 +253,7 @@ export async function browserGetTitle(tabId?: string): Promise<string> {
 }
 
 /** Wait for navigation to complete. */
-export async function browserWaitForNavigation(
-  timeoutMs?: number,
-  tabId?: string,
-): Promise<void> {
+export async function browserWaitForNavigation(timeoutMs?: number, tabId?: string): Promise<void> {
   try {
     await invoke('browser_wait_for_navigation', { timeoutMs, tabId });
   } catch (error) {
@@ -278,11 +275,7 @@ export async function browserClick(selector: string, tabId?: string): Promise<vo
 }
 
 /** Type text into an element by CSS selector. */
-export async function browserType(
-  selector: string,
-  text: string,
-  tabId?: string,
-): Promise<void> {
+export async function browserType(selector: string, text: string, tabId?: string): Promise<void> {
   try {
     await invoke('browser_type', { selector, text, tabId });
   } catch (error) {
@@ -379,10 +372,7 @@ export async function browserFocus(selector: string, tabId?: string): Promise<vo
 }
 
 /** Query all elements matching selector. Returns their text content. */
-export async function browserQueryAll(
-  selector: string,
-  tabId?: string,
-): Promise<string[]> {
+export async function browserQueryAll(selector: string, tabId?: string): Promise<string[]> {
   try {
     return await invoke<string[]>('browser_query_all', { selector, tabId });
   } catch (error) {
@@ -391,10 +381,7 @@ export async function browserQueryAll(
 }
 
 /** Scroll an element into view. */
-export async function browserScrollIntoView(
-  selector: string,
-  tabId?: string,
-): Promise<void> {
+export async function browserScrollIntoView(selector: string, tabId?: string): Promise<void> {
   try {
     await invoke('browser_scroll_into_view', { selector, tabId });
   } catch (error) {
@@ -493,10 +480,7 @@ export async function browserUploadFile(
 // =============================================================================
 
 /** Take a screenshot. Returns base64-encoded PNG data. */
-export async function browserScreenshot(
-  selector?: string,
-  tabId?: string,
-): Promise<string> {
+export async function browserScreenshot(selector?: string, tabId?: string): Promise<string> {
   try {
     return await invoke<string>('browser_screenshot', { selector, tabId });
   } catch (error) {
@@ -536,10 +520,7 @@ export async function browserGetDomSnapshot(tabId?: string): Promise<string> {
 // =============================================================================
 
 /** Evaluate JavaScript in the page. Requires user confirmation. */
-export async function browserEvaluate(
-  script: string,
-  tabId?: string,
-): Promise<unknown> {
+export async function browserEvaluate(script: string, tabId?: string): Promise<unknown> {
   try {
     return await invoke('browser_evaluate', { script, tabId });
   } catch (error) {
@@ -548,10 +529,7 @@ export async function browserEvaluate(
 }
 
 /** Execute async JavaScript in the page. Requires user confirmation. */
-export async function browserExecuteAsyncJs(
-  script: string,
-  tabId?: string,
-): Promise<unknown> {
+export async function browserExecuteAsyncJs(script: string, tabId?: string): Promise<unknown> {
   try {
     return await invoke('browser_execute_async_js', { script, tabId });
   } catch (error) {
@@ -586,10 +564,7 @@ export async function browserGetCookies(tabId?: string): Promise<BrowserCookie[]
 }
 
 /** Set a cookie. */
-export async function browserSetCookie(
-  cookie: BrowserCookie,
-  tabId?: string,
-): Promise<void> {
+export async function browserSetCookie(cookie: BrowserCookie, tabId?: string): Promise<void> {
   try {
     await invoke('browser_set_cookie', { cookie, tabId });
   } catch (error) {
@@ -611,9 +586,7 @@ export async function browserClearCookies(tabId?: string): Promise<void> {
 // =============================================================================
 
 /** Get performance metrics for a page. */
-export async function browserGetPerformanceMetrics(
-  tabId?: string,
-): Promise<PerformanceMetrics> {
+export async function browserGetPerformanceMetrics(tabId?: string): Promise<PerformanceMetrics> {
   try {
     return await invoke<PerformanceMetrics>('browser_get_performance_metrics', {
       tabId,
@@ -646,9 +619,7 @@ export async function browserExecuteInFrame(
 }
 
 /** Enable or disable network request interception (stub). */
-export async function browserEnableRequestInterception(
-  enabled: boolean,
-): Promise<void> {
+export async function browserEnableRequestInterception(enabled: boolean): Promise<void> {
   try {
     await invoke('browser_enable_request_interception', { enabled });
   } catch (error) {
@@ -661,10 +632,7 @@ export async function browserEnableRequestInterception(
 // =============================================================================
 
 /** Find an element using natural language query. Returns a CSS selector. */
-export async function findElementSemantic(
-  query: string,
-  tabId?: string,
-): Promise<string> {
+export async function findElementSemantic(query: string, tabId?: string): Promise<string> {
   try {
     return await invoke<string>('find_element_semantic', { query, tabId });
   } catch (error) {
@@ -673,10 +641,7 @@ export async function findElementSemantic(
 }
 
 /** Find all elements matching a natural language query. Returns CSS selectors. */
-export async function findAllElementsSemantic(
-  query: string,
-  tabId?: string,
-): Promise<string[]> {
+export async function findAllElementsSemantic(query: string, tabId?: string): Promise<string[]> {
   try {
     return await invoke<string[]>('find_all_elements_semantic', { query, tabId });
   } catch (error) {
@@ -694,11 +659,7 @@ export async function clickSemantic(query: string, tabId?: string): Promise<void
 }
 
 /** Type text into an element found by natural language query. */
-export async function typeSemantic(
-  query: string,
-  text: string,
-  tabId?: string,
-): Promise<void> {
+export async function typeSemantic(query: string, text: string, tabId?: string): Promise<void> {
   try {
     await invoke('type_semantic', { query, text, tabId });
   } catch (error) {
@@ -750,11 +711,7 @@ export async function getInteractiveElements(tabId?: string): Promise<string[]> 
 }
 
 /** Find an element by ARIA role, optionally filtering by name. */
-export async function findByRole(
-  role: string,
-  name?: string,
-  tabId?: string,
-): Promise<string> {
+export async function findByRole(role: string, name?: string, tabId?: string): Promise<string> {
   try {
     return await invoke<string>('find_by_role', { role, name, tabId });
   } catch (error) {

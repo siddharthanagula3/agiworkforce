@@ -46,9 +46,26 @@ export interface CreateConversationRequest {
 }
 
 export interface SendMessageRequest {
-  conversation_id: string;
-  content: string;
+  conversation_id?: string;
+  message: string;
   model: string;
+}
+
+interface ListConversationsResponse {
+  conversations: CloudConversation[];
+}
+
+interface CreateConversationResponse {
+  conversation: CloudConversation;
+}
+
+interface GetConversationResponse {
+  conversation: CloudConversation;
+  messages: CloudMessage[];
+}
+
+interface UpdateConversationResponse {
+  conversation: CloudConversation;
 }
 
 // ============================================================================
@@ -93,7 +110,8 @@ export async function listCloudConversations(): Promise<CloudConversation[]> {
     throw new Error(`Failed to list conversations: HTTP ${res.status}`);
   }
 
-  return res.json() as Promise<CloudConversation[]>;
+  const data = (await res.json()) as ListConversationsResponse;
+  return data.conversations ?? [];
 }
 
 /**
@@ -117,7 +135,8 @@ export async function createCloudConversation(
     throw new Error(`Failed to create conversation: HTTP ${res.status}`);
   }
 
-  return res.json() as Promise<CloudConversation>;
+  const data = (await res.json()) as CreateConversationResponse;
+  return data.conversation;
 }
 
 /**
@@ -135,7 +154,11 @@ export async function getCloudConversation(id: string): Promise<CloudConversatio
     throw new Error(`Failed to get conversation ${id}: HTTP ${res.status}`);
   }
 
-  return res.json() as Promise<CloudConversation>;
+  const data = (await res.json()) as GetConversationResponse;
+  return {
+    ...data.conversation,
+    messages: data.messages ?? [],
+  };
 }
 
 /**
@@ -152,6 +175,26 @@ export async function deleteCloudConversation(id: string): Promise<void> {
   if (!res.ok) {
     throw new Error(`Failed to delete conversation ${id}: HTTP ${res.status}`);
   }
+}
+
+export async function updateCloudConversationTitle(
+  id: string,
+  title: string,
+): Promise<CloudConversation> {
+  const headers = await getAuthHeaders();
+
+  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ title }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to update conversation ${id}: HTTP ${res.status}`);
+  }
+
+  const data = (await res.json()) as UpdateConversationResponse;
+  return data.conversation;
 }
 
 // ============================================================================
@@ -273,6 +316,7 @@ export async function sendCloudMessage(
   onDone: () => void,
   onError: (err: Error) => void,
   signal?: AbortSignal,
+  onEvent?: (payload: Record<string, unknown>) => void,
 ): Promise<void> {
   let headers: Record<string, string>;
 
@@ -284,8 +328,8 @@ export async function sendCloudMessage(
   }
 
   const body: SendMessageRequest = {
-    conversation_id: conversationId,
-    content,
+    conversation_id: conversationId || undefined,
+    message: content,
     model,
   };
 
@@ -325,7 +369,7 @@ export async function sendCloudMessage(
       if (done) {
         // Flush any remaining buffered line
         if (buffer.trim().length > 0) {
-          parseAndDispatchLine(buffer.trim(), onChunk);
+          parseAndDispatchLine(buffer.trim(), onChunk, onError, onEvent);
         }
         onDone();
         return;
@@ -353,7 +397,7 @@ export async function sendCloudMessage(
         }
 
         if (trimmed.startsWith('data: ')) {
-          parseAndDispatchLine(trimmed, onChunk);
+          parseAndDispatchLine(trimmed, onChunk, onError, onEvent);
         }
       }
     }
@@ -374,7 +418,12 @@ export async function sendCloudMessage(
  * `onChunk`. Gracefully ignores lines that cannot be parsed as JSON or that
  * carry no text field.
  */
-function parseAndDispatchLine(line: string, onChunk: (text: string) => void): void {
+function parseAndDispatchLine(
+  line: string,
+  onChunk: (text: string) => void,
+  onError: (err: Error) => void,
+  onEvent?: (payload: Record<string, unknown>) => void,
+): void {
   const jsonStr = line.startsWith('data: ') ? line.slice('data: '.length) : line;
 
   if (jsonStr === '[DONE]') {
@@ -389,6 +438,12 @@ function parseAndDispatchLine(line: string, onChunk: (text: string) => void): vo
     }
 
     const obj = parsed as Record<string, unknown>;
+    onEvent?.(obj);
+
+    if (typeof obj['error'] === 'string') {
+      onError(new Error(obj['error']));
+      return;
+    }
 
     // Support both { text: "..." } and OpenAI-style { choices: [{ delta: { content: "..." } }] }
     if (typeof obj['text'] === 'string') {

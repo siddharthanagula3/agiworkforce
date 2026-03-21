@@ -701,20 +701,20 @@ Voice input in terminal is an emerging interaction paradigm:
 
 ## 23. Feature acceptance criteria
 
-| Feature | Acceptance criteria |
-| --- | --- |
-| One-shot prompt mode | Accepts a prompt directly, resolves model/config correctly, streams by default, exits cleanly, persists session metadata, and returns a non-zero exit code on fatal failure. |
-| Interactive REPL | Launches without prompt, preserves history, supports multiline entry, supports slash commands, and keeps session state coherent across turns. |
-| Session resume/fork/search | User can resume by id, search prior sessions, fork an existing session, and continue without corrupting source history. |
-| Model selection | `--model`, provider inference, fallback model, and effort presets behave deterministically and surface the active model clearly. |
-| Memory hierarchy | Global, project, and local memory can be shown, added to, and edited; memory loading is deterministic and visible in behavior. |
-| File context | `--file` attachments load predictably, respect size limits, and are represented clearly in the runtime context. |
-| Tool execution | Read tools, write tools, shell tools, and web tools execute through one consistent dispatcher with timeouts, truncation, and typed results. |
-| Safety and approvals | Safe tools can auto-approve only when configured; mutating actions prompt by default; dangerous shell commands are classified before execution. |
-| Structured output | JSON and stream-JSON outputs are parseable, stable, and omit decorative terminal formatting. |
-| MCP integration | CLI can discover configured MCP servers, connect, list tools, and execute them without destabilizing the session. |
-| Side query and plan mode | `/btw` does not mutate main history; `/plan` changes runtime behavior in a visible and reversible way. |
-| Team mode | Team mode enables shared-task and teammate semantics without breaking non-team sessions. |
+| Feature                    | Acceptance criteria                                                                                                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One-shot prompt mode       | Accepts a prompt directly, resolves model/config correctly, streams by default, exits cleanly, persists session metadata, and returns a non-zero exit code on fatal failure. |
+| Interactive REPL           | Launches without prompt, preserves history, supports multiline entry, supports slash commands, and keeps session state coherent across turns.                                |
+| Session resume/fork/search | User can resume by id, search prior sessions, fork an existing session, and continue without corrupting source history.                                                      |
+| Model selection            | `--model`, provider inference, fallback model, and effort presets behave deterministically and surface the active model clearly.                                             |
+| Memory hierarchy           | Global, project, and local memory can be shown, added to, and edited; memory loading is deterministic and visible in behavior.                                               |
+| File context               | `--file` attachments load predictably, respect size limits, and are represented clearly in the runtime context.                                                              |
+| Tool execution             | Read tools, write tools, shell tools, and web tools execute through one consistent dispatcher with timeouts, truncation, and typed results.                                  |
+| Safety and approvals       | Safe tools can auto-approve only when configured; mutating actions prompt by default; dangerous shell commands are classified before execution.                              |
+| Structured output          | JSON and stream-JSON outputs are parseable, stable, and omit decorative terminal formatting.                                                                                 |
+| MCP integration            | CLI can discover configured MCP servers, connect, list tools, and execute them without destabilizing the session.                                                            |
+| Side query and plan mode   | `/btw` does not mutate main history; `/plan` changes runtime behavior in a visible and reversible way.                                                                       |
+| Team mode                  | Team mode enables shared-task and teammate semantics without breaking non-team sessions.                                                                                     |
 
 ## 24. Interaction-by-interaction implementation checklist
 

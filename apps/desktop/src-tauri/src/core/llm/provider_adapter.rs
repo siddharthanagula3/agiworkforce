@@ -662,7 +662,11 @@ impl OpenAIAdapter {
         if let Some(oc) = &request.output_config {
             use super::OutputFormat;
             match &oc.format {
-                OutputFormat::JsonSchema { name, schema, description } => {
+                OutputFormat::JsonSchema {
+                    name,
+                    schema,
+                    description,
+                } => {
                     let mut schema_obj = serde_json::json!({
                         "name": name,
                         "schema": schema,
@@ -829,7 +833,11 @@ impl OpenAIAdapter {
         if let Some(oc) = &request.output_config {
             use super::OutputFormat;
             match &oc.format {
-                OutputFormat::JsonSchema { name, schema, description } => {
+                OutputFormat::JsonSchema {
+                    name,
+                    schema,
+                    description,
+                } => {
                     let mut schema_obj = serde_json::json!({
                         "name": name,
                         "schema": schema,
@@ -1065,8 +1073,7 @@ impl OpenAIAdapter {
 
     /// Process multimodal content and extract audio inputs
     // Used by: audio-capable model support (e.g., GPT-4o audio, Gemini audio)
-    #[allow(dead_code)]
-    fn process_audio_content(
+    fn _process_audio_content(
         &self,
         content_parts: &[super::ContentPart],
     ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
@@ -1826,7 +1833,10 @@ impl ProviderAdapter for AnthropicAdapter {
                         "type": "disabled"
                     });
                 }
-                ThinkingParameter::Level { level, max_thinking_tokens } => {
+                ThinkingParameter::Level {
+                    level,
+                    max_thinking_tokens,
+                } => {
                     let budget = max_thinking_tokens.unwrap_or(match level.as_str() {
                         "low" => 2048,
                         "medium" => 8192,
@@ -1862,16 +1872,16 @@ impl ProviderAdapter for AnthropicAdapter {
         // exactly 1 (the default when omitted).  Remove any explicitly set
         // temperature so the API does not reject the request.
         if let Some(budget) = thinking_budget_tokens {
-            anthropic_request.as_object_mut().map(|obj| obj.remove("temperature"));
+            anthropic_request
+                .as_object_mut()
+                .map(|obj| obj.remove("temperature"));
 
             // Ensure max_tokens is large enough to hold both the thinking
             // budget and the actual response.  The API requires
             // max_tokens >= budget_tokens; we add a comfortable margin for
             // the actual output text.
             if budget > 0 {
-                let current_max = anthropic_request["max_tokens"]
-                    .as_u64()
-                    .unwrap_or(4096) as u32;
+                let current_max = anthropic_request["max_tokens"].as_u64().unwrap_or(4096) as u32;
                 let min_required = budget + 1024; // budget + at least 1024 for output
                 if current_max < min_required {
                     anthropic_request["max_tokens"] = serde_json::json!(min_required);
@@ -1898,7 +1908,11 @@ impl ProviderAdapter for AnthropicAdapter {
         if let Some(oc) = &request.output_config {
             use super::OutputFormat;
             match &oc.format {
-                OutputFormat::JsonSchema { name, schema, description } => {
+                OutputFormat::JsonSchema {
+                    name,
+                    schema,
+                    description,
+                } => {
                     let mut schema_obj = serde_json::json!({
                         "type": "json_schema",
                         "name": name,
@@ -2534,7 +2548,11 @@ impl ProviderAdapter for GoogleAdapter {
             prompt_tokens,
             completion_tokens,
             cache_read_input_tokens,
-            model: response["model"].as_str().or_else(|| response["modelVersion"].as_str()).unwrap_or("").to_string(),
+            model: response["model"]
+                .as_str()
+                .or_else(|| response["modelVersion"].as_str())
+                .unwrap_or("")
+                .to_string(),
             tool_calls,
             finish_reason,
             ..LLMResponse::default()
@@ -2928,11 +2946,21 @@ impl ProviderAdapter for ZhipuAdapter {
         if let Some(obj) = payload.as_object_mut() {
             // Whitelist: only these keys are accepted by Zhipu's /chat/completions
             let allowed_keys: std::collections::HashSet<&str> = [
-                "model", "messages", "stream", "temperature", "top_p",
-                "max_tokens", "stop", "tools", "tool_choice",
-            ].into_iter().collect();
+                "model",
+                "messages",
+                "stream",
+                "temperature",
+                "top_p",
+                "max_tokens",
+                "stop",
+                "tools",
+                "tool_choice",
+            ]
+            .into_iter()
+            .collect();
 
-            let keys_to_remove: Vec<String> = obj.keys()
+            let keys_to_remove: Vec<String> = obj
+                .keys()
                 .filter(|k| !allowed_keys.contains(k.as_str()))
                 .cloned()
                 .collect();
@@ -3019,7 +3047,10 @@ impl ProviderAdapter for BedrockAdapter {
         &self,
         response: &Value,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
-        crate::core::llm::providers::bedrock::parse_converse_response_for_adapter(response, "bedrock-model")
+        crate::core::llm::providers::bedrock::parse_converse_response_for_adapter(
+            response,
+            "bedrock-model",
+        )
     }
 
     fn provider_name(&self) -> &str {

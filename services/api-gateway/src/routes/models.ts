@@ -16,6 +16,7 @@
  */
 
 import { Router, type Request, type Response } from 'express';
+import type { Provider } from '@agiworkforce/types';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { checkAllProviders } from '../services/providerHealth';
 import { logger } from '../lib/logger';
@@ -23,23 +24,6 @@ import { logger } from '../lib/logger';
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/** Provider identifier — mirrors Provider from @agiworkforce/types/model-catalog */
-type Provider =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'xai'
-  | 'deepseek'
-  | 'mistral'
-  | 'groq'
-  | 'together'
-  | 'fireworks'
-  | 'perplexity'
-  | 'moonshot'
-  | 'qwen'
-  | 'zhipu'
-  | 'cohere';
 
 type ModelSpeed = 'very-fast' | 'fast' | 'medium' | 'slow';
 type ModelQuality = 'excellent' | 'good' | 'fair';

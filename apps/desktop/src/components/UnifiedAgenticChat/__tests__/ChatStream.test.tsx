@@ -70,11 +70,9 @@ vi.mock('../../../hooks/useReducedMotion', () => ({
 }));
 
 vi.mock('../MessageBubble', () => ({
-  MessageBubble: ({
-    message,
-  }: {
-    message: { content: string };
-  }) => <div data-testid="message-bubble">{message.content}</div>,
+  MessageBubble: ({ message }: { message: { content: string } }) => (
+    <div data-testid="message-bubble">{message.content}</div>
+  ),
 }));
 
 vi.mock('../Cards/ActiveToolStreams', () => ({
@@ -106,11 +104,9 @@ vi.mock('../ThinkingBlock', () => ({
 }));
 
 vi.mock('../Cards/ApprovalRequestCard', () => ({
-  ApprovalRequestCard: ({
-    approval,
-  }: {
-    approval: { description: string };
-  }) => <div data-testid="approval-card">{approval.description}</div>,
+  ApprovalRequestCard: ({ approval }: { approval: { description: string } }) => (
+    <div data-testid="approval-card">{approval.description}</div>
+  ),
 }));
 
 import { ChatStream } from '../ChatStream';
@@ -119,9 +115,7 @@ describe('ChatStream', () => {
   it('renders pending approvals inline in the transcript', () => {
     render(<ChatStream />);
 
-    expect(screen.getByTestId('message-bubble')).toHaveTextContent(
-      'I am preparing the operation.',
-    );
+    expect(screen.getByTestId('message-bubble')).toHaveTextContent('I am preparing the operation.');
     expect(screen.getByText('Unassigned approvals')).toBeInTheDocument();
     expect(screen.getByTestId('approval-card')).toHaveTextContent(
       'Run npm install in the project workspace',

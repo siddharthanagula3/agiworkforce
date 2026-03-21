@@ -22,19 +22,58 @@ pub enum CommandSafety {
 
 /// Standalone commands that are always safe (read-only, no side effects).
 const SAFE_COMMANDS: &[&str] = &[
-    "cat", "ls", "pwd", "head", "tail", "grep", "wc", "stat", "which",
-    "echo", "file", "env", "printenv", "whoami",
-    "uname", "date", "tree", "less", "more", "diff", "sort", "uniq", "cut",
-    "tr", "tee",
+    "cat",
+    "ls",
+    "pwd",
+    "head",
+    "tail",
+    "grep",
+    "wc",
+    "stat",
+    "which",
+    "echo",
+    "file",
+    "env",
+    "printenv",
+    "whoami",
+    "uname",
+    "date",
+    "tree",
+    "less",
+    "more",
+    "diff",
+    "sort",
+    "uniq",
+    "cut",
+    "tr",
+    "tee",
     // Data inspection
-    "jq", "awk", "od", "hexdump", "strings",
+    "jq",
+    "awk",
+    "od",
+    "hexdump",
+    "strings",
     // Binary inspection
-    "ldd", "nm", "readelf",
+    "ldd",
+    "nm",
+    "readelf",
     // System info
-    "ps", "top", "df", "du", "free", "uptime",
+    "ps",
+    "top",
+    "df",
+    "du",
+    "free",
+    "uptime",
     // Network info (read-only)
-    "ifconfig", "ip", "hostname", "dig", "nslookup", "traceroute",
-    "ss", "lsof", "netstat",
+    "ifconfig",
+    "ip",
+    "hostname",
+    "dig",
+    "nslookup",
+    "traceroute",
+    "ss",
+    "lsof",
+    "netstat",
 ];
 
 /// Multi-word command prefixes that are safe (e.g. "cargo check").
@@ -52,10 +91,31 @@ const SAFE_PREFIXES: &[&str] = &[
 
 /// Standalone commands that are dangerous (destructive, privileged).
 pub(crate) const DANGEROUS_COMMANDS: &[&str] = &[
-    "sudo", "chown", "chgrp", "kill", "killall", "pkill", "mkfs", "dd", "fdisk",
-    "mount", "umount", "reboot", "shutdown", "rmdir", "eval", "exec", "mv",
+    "sudo",
+    "chown",
+    "chgrp",
+    "kill",
+    "killall",
+    "pkill",
+    "mkfs",
+    "dd",
+    "fdisk",
+    "mount",
+    "umount",
+    "reboot",
+    "shutdown",
+    "rmdir",
+    "eval",
+    "exec",
+    "mv",
     // Firewall / system services / kernel modules
-    "iptables", "ufw", "systemctl", "service", "insmod", "modprobe", "rmmod",
+    "iptables",
+    "ufw",
+    "systemctl",
+    "service",
+    "insmod",
+    "modprobe",
+    "rmmod",
 ];
 
 /// Multi-word command prefixes that are dangerous.
@@ -85,40 +145,39 @@ const DANGEROUS_PIPE_SINKS: &[&str] = &["sh", "bash", "zsh", "dash"];
 
 /// `find` options that execute or delete (not read-only).
 const FIND_DANGEROUS_OPTIONS: &[&str] = &[
-    "-exec", "-execdir", "-ok", "-okdir", "-delete",
-    "-fls", "-fprint", "-fprint0", "-fprintf",
+    "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fls", "-fprint", "-fprint0", "-fprintf",
 ];
 
 /// `rg` (ripgrep) options that execute external programs or access compressed data.
-const RG_DANGEROUS_OPTIONS: &[&str] = &[
-    "--pre", "--hostname-bin", "--search-zip", "-z",
-];
+const RG_DANGEROUS_OPTIONS: &[&str] = &["--pre", "--hostname-bin", "--search-zip", "-z"];
 
 /// `base64` options that write to files.
 const BASE64_DANGEROUS_OPTIONS: &[&str] = &["-o", "--output"];
 
 /// Read-only git subcommands.
-const GIT_SAFE_SUBCOMMANDS: &[&str] = &[
-    "status", "log", "diff", "show",
-];
+const GIT_SAFE_SUBCOMMANDS: &[&str] = &["status", "log", "diff", "show"];
 
 /// Read-only git branch flags.
 const GIT_BRANCH_READONLY_FLAGS: &[&str] = &[
-    "--list", "-l", "--show-current", "-a", "-r", "-v", "--verbose",
+    "--list",
+    "-l",
+    "--show-current",
+    "-a",
+    "-r",
+    "-v",
+    "--verbose",
 ];
 
 /// Git global options that take a value and should be skipped to find the subcommand.
-const GIT_GLOBAL_OPTIONS_WITH_VALUE: &[&str] = &[
-    "-C", "--git-dir", "--work-tree", "--namespace",
-];
+const GIT_GLOBAL_OPTIONS_WITH_VALUE: &[&str] = &["-C", "--git-dir", "--work-tree", "--namespace"];
 
 // ---------------------------------------------------------------------------
 // System paths — `mv` targeting these is dangerous
 // ---------------------------------------------------------------------------
 
 const SYSTEM_PATHS: &[&str] = &[
-    "/bin", "/sbin", "/usr", "/etc", "/var", "/System", "/Library",
-    "/boot", "/dev", "/proc", "/sys", "/opt",
+    "/bin", "/sbin", "/usr", "/etc", "/var", "/System", "/Library", "/boot", "/dev", "/proc",
+    "/sys", "/opt",
 ];
 
 // ---------------------------------------------------------------------------
@@ -230,10 +289,7 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
     let base_cmd = strip_path(first_word);
 
     // Check dangerous multi-word prefixes first.
-    let normalized_segment = trimmed
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let normalized_segment = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
 
     for prefix in DANGEROUS_PREFIXES {
         if normalized_segment.starts_with(prefix) {
@@ -275,7 +331,9 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
 
     // Check dangerous single-word commands (exact match or prefix like mkfs.ext4).
     let is_dangerous = DANGEROUS_COMMANDS.contains(&base_cmd)
-        || DANGEROUS_COMMANDS.iter().any(|&dc| base_cmd.starts_with(&format!("{}.", dc)));
+        || DANGEROUS_COMMANDS
+            .iter()
+            .any(|&dc| base_cmd.starts_with(&format!("{}.", dc)));
     if is_dangerous {
         // Special case: `mv` is only dangerous when targeting a system path.
         if base_cmd == "mv" {
@@ -385,7 +443,8 @@ fn is_sed_readonly_print(expr: &str) -> bool {
     // Range: "5,10p" or "$,10p" or "5,$p"
     if let Some((left, right)) = body.split_once(',') {
         let left_ok = left == "$" || (!left.is_empty() && left.chars().all(|c| c.is_ascii_digit()));
-        let right_ok = right == "$" || (!right.is_empty() && right.chars().all(|c| c.is_ascii_digit()));
+        let right_ok =
+            right == "$" || (!right.is_empty() && right.chars().all(|c| c.is_ascii_digit()));
         return left_ok && right_ok;
     }
     false
@@ -423,7 +482,10 @@ fn classify_git(command: &str) -> CommandSafety {
             continue;
         }
         // Skip --git-dir=value style
-        if GIT_GLOBAL_OPTIONS_WITH_VALUE.iter().any(|opt| arg.starts_with(&format!("{}=", opt))) {
+        if GIT_GLOBAL_OPTIONS_WITH_VALUE
+            .iter()
+            .any(|opt| arg.starts_with(&format!("{}=", opt)))
+        {
             i += 1;
             continue;
         }
@@ -444,9 +506,7 @@ fn classify_git(command: &str) -> CommandSafety {
         .collect::<Vec<_>>()
         .join(" ");
 
-    if normalized_sub.starts_with("push --force")
-        || normalized_sub.starts_with("reset --hard")
-    {
+    if normalized_sub.starts_with("push --force") || normalized_sub.starts_with("reset --hard") {
         return CommandSafety::Dangerous;
     }
 
@@ -461,7 +521,9 @@ fn classify_git(command: &str) -> CommandSafety {
     }
 
     // `git tag -l` is safe.
-    if subcommand == "tag" && (sub_args.is_empty() || sub_args.contains(&"-l") || sub_args.contains(&"--list")) {
+    if subcommand == "tag"
+        && (sub_args.is_empty() || sub_args.contains(&"-l") || sub_args.contains(&"--list"))
+    {
         return CommandSafety::Safe;
     }
 
@@ -548,7 +610,10 @@ mod tests {
     fn safe_text_processing() {
         assert_eq!(classify_command("sort names.txt"), CommandSafety::Safe);
         assert_eq!(classify_command("uniq -c data.txt"), CommandSafety::Safe);
-        assert_eq!(classify_command("cut -d: -f1 /etc/passwd"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("cut -d: -f1 /etc/passwd"),
+            CommandSafety::Safe
+        );
         assert_eq!(classify_command("tr a-z A-Z"), CommandSafety::Safe);
         assert_eq!(classify_command("diff a.txt b.txt"), CommandSafety::Safe);
     }
@@ -562,7 +627,10 @@ mod tests {
     #[test]
     fn safe_git_read_commands() {
         assert_eq!(classify_command("git status"), CommandSafety::Safe);
-        assert_eq!(classify_command("git log --oneline -10"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("git log --oneline -10"),
+            CommandSafety::Safe
+        );
         assert_eq!(classify_command("git diff HEAD~1"), CommandSafety::Safe);
         assert_eq!(classify_command("git branch -a"), CommandSafety::Safe);
         assert_eq!(classify_command("git show HEAD"), CommandSafety::Safe);
@@ -571,10 +639,19 @@ mod tests {
     #[test]
     fn safe_build_and_test_commands() {
         assert_eq!(classify_command("cargo check"), CommandSafety::Safe);
-        assert_eq!(classify_command("cargo test -- module::test_name"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("cargo test -- module::test_name"),
+            CommandSafety::Safe
+        );
         assert_eq!(classify_command("npm test"), CommandSafety::Safe);
-        assert_eq!(classify_command("python -c 'print(1+1)'"), CommandSafety::Safe);
-        assert_eq!(classify_command("node -e 'console.log(42)'"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("python -c 'print(1+1)'"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("node -e 'console.log(42)'"),
+            CommandSafety::Safe
+        );
     }
 
     #[test]
@@ -603,14 +680,8 @@ mod tests {
 
     #[test]
     fn safe_chained_commands() {
-        assert_eq!(
-            classify_command("pwd && ls -la"),
-            CommandSafety::Safe
-        );
-        assert_eq!(
-            classify_command("echo hello; date"),
-            CommandSafety::Safe
-        );
+        assert_eq!(classify_command("pwd && ls -la"), CommandSafety::Safe);
+        assert_eq!(classify_command("echo hello; date"), CommandSafety::Safe);
     }
 
     #[test]
@@ -619,18 +690,21 @@ mod tests {
             classify_command("/usr/bin/cat /etc/hosts"),
             CommandSafety::Safe
         );
-        assert_eq!(
-            classify_command("/bin/ls -la"),
-            CommandSafety::Safe
-        );
+        assert_eq!(classify_command("/bin/ls -la"), CommandSafety::Safe);
     }
 
     // -- New safe commands --
 
     #[test]
     fn safe_new_data_inspection_commands() {
-        assert_eq!(classify_command("jq '.name' package.json"), CommandSafety::Safe);
-        assert_eq!(classify_command("awk '{print $1}' file.txt"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("jq '.name' package.json"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("awk '{print $1}' file.txt"),
+            CommandSafety::Safe
+        );
         assert_eq!(classify_command("od -x binary.bin"), CommandSafety::Safe);
         assert_eq!(classify_command("hexdump -C file.bin"), CommandSafety::Safe);
         assert_eq!(classify_command("strings /usr/bin/ls"), CommandSafety::Safe);
@@ -656,8 +730,14 @@ mod tests {
         assert_eq!(classify_command("ifconfig"), CommandSafety::Safe);
         assert_eq!(classify_command("ip addr"), CommandSafety::Safe);
         assert_eq!(classify_command("dig example.com"), CommandSafety::Safe);
-        assert_eq!(classify_command("nslookup example.com"), CommandSafety::Safe);
-        assert_eq!(classify_command("traceroute example.com"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("nslookup example.com"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("traceroute example.com"),
+            CommandSafety::Safe
+        );
         assert_eq!(classify_command("ss -tlnp"), CommandSafety::Safe);
         assert_eq!(classify_command("lsof -i :8080"), CommandSafety::Safe);
         assert_eq!(classify_command("netstat -an"), CommandSafety::Safe);
@@ -669,9 +749,18 @@ mod tests {
     fn dangerous_rm_with_force() {
         assert_eq!(classify_command("rm -rf /"), CommandSafety::Dangerous);
         assert_eq!(classify_command("rm -f file.txt"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("/usr/bin/rm -rf /tmp"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("rm --force file.txt"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("rm -rfv /tmp/stuff"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("/usr/bin/rm -rf /tmp"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("rm --force file.txt"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("rm -rfv /tmp/stuff"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
@@ -684,63 +773,126 @@ mod tests {
 
     #[test]
     fn dangerous_sudo() {
-        assert_eq!(classify_command("sudo apt install foo"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("sudo apt install foo"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
     fn dangerous_process_signals() {
         assert_eq!(classify_command("kill -9 1234"), CommandSafety::Dangerous);
         assert_eq!(classify_command("killall node"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("pkill -f server"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("pkill -f server"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
     fn dangerous_disk_commands() {
-        assert_eq!(classify_command("mkfs.ext4 /dev/sda1"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("dd if=/dev/zero of=/dev/sda"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("mkfs.ext4 /dev/sda1"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("dd if=/dev/zero of=/dev/sda"),
+            CommandSafety::Dangerous
+        );
         assert_eq!(classify_command("fdisk /dev/sda"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("mount /dev/sda1 /mnt"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("mount /dev/sda1 /mnt"),
+            CommandSafety::Dangerous
+        );
         assert_eq!(classify_command("umount /mnt"), CommandSafety::Dangerous);
     }
 
     #[test]
     fn dangerous_system_control() {
         assert_eq!(classify_command("reboot"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("shutdown -h now"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("systemctl stop nginx"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("launchctl unload com.app"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("shutdown -h now"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("systemctl stop nginx"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("launchctl unload com.app"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
     fn dangerous_new_system_commands() {
-        assert_eq!(classify_command("chgrp wheel file"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("iptables -A INPUT -j DROP"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("chgrp wheel file"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("iptables -A INPUT -j DROP"),
+            CommandSafety::Dangerous
+        );
         assert_eq!(classify_command("ufw deny 22"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("service nginx stop"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("insmod mymodule.ko"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("service nginx stop"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("insmod mymodule.ko"),
+            CommandSafety::Dangerous
+        );
         assert_eq!(classify_command("modprobe vfat"), CommandSafety::Dangerous);
         assert_eq!(classify_command("rmmod vfat"), CommandSafety::Dangerous);
     }
 
     #[test]
     fn dangerous_new_package_install_prefixes() {
-        assert_eq!(classify_command("apt install nginx"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("apt remove nginx"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("dnf install httpd"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("brew install node"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("pip install flask"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("npm install -g typescript"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("cargo install ripgrep"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("apt install nginx"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("apt remove nginx"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("dnf install httpd"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("brew install node"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("pip install flask"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("npm install -g typescript"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("cargo install ripgrep"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
     fn dangerous_chmod_777() {
-        assert_eq!(classify_command("chmod 777 /tmp/file"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("chmod 777 /tmp/file"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
     fn dangerous_chown() {
-        assert_eq!(classify_command("chown root:root file"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("chown root:root file"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
@@ -769,7 +921,10 @@ mod tests {
 
     #[test]
     fn dangerous_eval_exec() {
-        assert_eq!(classify_command("eval $(decode payload)"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("eval $(decode payload)"),
+            CommandSafety::Dangerous
+        );
         assert_eq!(classify_command("exec /bin/bash"), CommandSafety::Dangerous);
     }
 
@@ -819,29 +974,62 @@ mod tests {
     #[test]
     fn find_safe_without_exec() {
         assert_eq!(classify_command("find . -name '*.rs'"), CommandSafety::Safe);
-        assert_eq!(classify_command("find /tmp -type f -mtime -1"), CommandSafety::Safe);
-        assert_eq!(classify_command("find . -name '*.log' -print"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("find /tmp -type f -mtime -1"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("find . -name '*.log' -print"),
+            CommandSafety::Safe
+        );
     }
 
     #[test]
     fn find_dangerous_with_exec() {
-        assert_eq!(classify_command("find . -name '*.tmp' -exec rm {} ;"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("find . -execdir sh -c 'echo {}' ;"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("find . -ok rm {} ;"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("find . -okdir rm {} ;"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("find . -name '*.tmp' -exec rm {} ;"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("find . -execdir sh -c 'echo {}' ;"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("find . -ok rm {} ;"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("find . -okdir rm {} ;"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
     fn find_dangerous_with_delete() {
-        assert_eq!(classify_command("find . -name '*.tmp' -delete"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("find . -name '*.tmp' -delete"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
     fn find_dangerous_with_file_output() {
-        assert_eq!(classify_command("find . -fls /tmp/output"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("find . -fprint /tmp/output"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("find . -fprint0 /tmp/output"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("find . -fprintf /tmp/output '%p'"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("find . -fls /tmp/output"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("find . -fprint /tmp/output"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("find . -fprint0 /tmp/output"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("find . -fprintf /tmp/output '%p'"),
+            CommandSafety::Dangerous
+        );
     }
 
     // -- Tool-specific: rg --
@@ -849,24 +1037,39 @@ mod tests {
     #[test]
     fn rg_safe_basic_search() {
         assert_eq!(classify_command("rg 'fn main' src/"), CommandSafety::Safe);
-        assert_eq!(classify_command("rg -i pattern --type rust"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("rg -i pattern --type rust"),
+            CommandSafety::Safe
+        );
         assert_eq!(classify_command("rg --count 'TODO' ."), CommandSafety::Safe);
     }
 
     #[test]
     fn rg_dangerous_with_pre() {
-        assert_eq!(classify_command("rg --pre my-preprocessor pattern"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("rg --pre my-preprocessor pattern"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
     fn rg_dangerous_with_hostname_bin() {
-        assert_eq!(classify_command("rg --hostname-bin /usr/bin/evil pattern"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("rg --hostname-bin /usr/bin/evil pattern"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
     fn rg_dangerous_with_search_zip() {
-        assert_eq!(classify_command("rg --search-zip pattern archive/"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("rg -z pattern archive/"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("rg --search-zip pattern archive/"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("rg -z pattern archive/"),
+            CommandSafety::Dangerous
+        );
     }
 
     // -- Tool-specific: sed --
@@ -874,16 +1077,34 @@ mod tests {
     #[test]
     fn sed_safe_readonly_print() {
         assert_eq!(classify_command("sed -n 5p file.txt"), CommandSafety::Safe);
-        assert_eq!(classify_command("sed -n 10,20p file.txt"), CommandSafety::Safe);
-        assert_eq!(classify_command("sed -n '$p' file.txt"), CommandSafety::Safe);
-        assert_eq!(classify_command("sed -n 1,$p file.txt"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("sed -n 10,20p file.txt"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("sed -n '$p' file.txt"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("sed -n 1,$p file.txt"),
+            CommandSafety::Safe
+        );
     }
 
     #[test]
     fn sed_unknown_substitution() {
-        assert_eq!(classify_command("sed 's/foo/bar/g' file.txt"), CommandSafety::Unknown);
-        assert_eq!(classify_command("sed -i 's/old/new/g' file.txt"), CommandSafety::Unknown);
-        assert_eq!(classify_command("sed '/pattern/d' file.txt"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("sed 's/foo/bar/g' file.txt"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("sed -i 's/old/new/g' file.txt"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("sed '/pattern/d' file.txt"),
+            CommandSafety::Unknown
+        );
     }
 
     #[test]
@@ -897,13 +1118,22 @@ mod tests {
     #[test]
     fn base64_safe_stdout() {
         assert_eq!(classify_command("base64 file.bin"), CommandSafety::Safe);
-        assert_eq!(classify_command("base64 -d encoded.txt"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("base64 -d encoded.txt"),
+            CommandSafety::Safe
+        );
     }
 
     #[test]
     fn base64_dangerous_with_output() {
-        assert_eq!(classify_command("base64 -o output.txt file.bin"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("base64 --output output.txt file.bin"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("base64 -o output.txt file.bin"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("base64 --output output.txt file.bin"),
+            CommandSafety::Dangerous
+        );
     }
 
     // -- Enhanced git validation --
@@ -911,7 +1141,10 @@ mod tests {
     #[test]
     fn git_safe_read_commands() {
         assert_eq!(classify_command("git status"), CommandSafety::Safe);
-        assert_eq!(classify_command("git log --oneline -10"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("git log --oneline -10"),
+            CommandSafety::Safe
+        );
         assert_eq!(classify_command("git diff HEAD~1"), CommandSafety::Safe);
         assert_eq!(classify_command("git show HEAD"), CommandSafety::Safe);
         assert_eq!(classify_command("git remote -v"), CommandSafety::Safe);
@@ -928,37 +1161,76 @@ mod tests {
         assert_eq!(classify_command("git branch -a"), CommandSafety::Safe);
         assert_eq!(classify_command("git branch -r"), CommandSafety::Safe);
         assert_eq!(classify_command("git branch -v"), CommandSafety::Safe);
-        assert_eq!(classify_command("git branch --verbose"), CommandSafety::Safe);
-        assert_eq!(classify_command("git branch --show-current"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("git branch --verbose"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("git branch --show-current"),
+            CommandSafety::Safe
+        );
         assert_eq!(classify_command("git branch -a -v"), CommandSafety::Safe);
     }
 
     #[test]
     fn git_branch_unknown_write() {
-        assert_eq!(classify_command("git branch new-branch"), CommandSafety::Unknown);
-        assert_eq!(classify_command("git branch -d feature"), CommandSafety::Unknown);
-        assert_eq!(classify_command("git branch -D feature"), CommandSafety::Unknown);
-        assert_eq!(classify_command("git branch -m old new"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("git branch new-branch"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("git branch -d feature"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("git branch -D feature"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("git branch -m old new"),
+            CommandSafety::Unknown
+        );
     }
 
     #[test]
     fn git_dangerous_config_injection() {
-        assert_eq!(classify_command("git -c core.pager=less status"), CommandSafety::Dangerous);
-        assert_eq!(classify_command("git -c protocol.ext.allow=always fetch"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("git -c core.pager=less status"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("git -c protocol.ext.allow=always fetch"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
     fn git_global_options_skipped() {
         // git -C /path status should still find "status" as the subcommand.
-        assert_eq!(classify_command("git -C /some/path status"), CommandSafety::Safe);
-        assert_eq!(classify_command("git --git-dir /repo/.git log"), CommandSafety::Safe);
-        assert_eq!(classify_command("git --work-tree /repo diff"), CommandSafety::Safe);
-        assert_eq!(classify_command("git --namespace ns status"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("git -C /some/path status"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("git --git-dir /repo/.git log"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("git --work-tree /repo diff"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("git --namespace ns status"),
+            CommandSafety::Safe
+        );
     }
 
     #[test]
     fn git_global_options_with_equals() {
-        assert_eq!(classify_command("git --git-dir=/repo/.git log"), CommandSafety::Safe);
+        assert_eq!(
+            classify_command("git --git-dir=/repo/.git log"),
+            CommandSafety::Safe
+        );
         assert_eq!(classify_command("git -C=/path status"), CommandSafety::Safe);
     }
 
@@ -976,26 +1248,47 @@ mod tests {
 
     #[test]
     fn git_unknown_write_commands() {
-        assert_eq!(classify_command("git commit -m 'msg'"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("git commit -m 'msg'"),
+            CommandSafety::Unknown
+        );
         assert_eq!(classify_command("git add ."), CommandSafety::Unknown);
         assert_eq!(classify_command("git push"), CommandSafety::Unknown);
-        assert_eq!(classify_command("git merge feature"), CommandSafety::Unknown);
-        assert_eq!(classify_command("git checkout main"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("git merge feature"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("git checkout main"),
+            CommandSafety::Unknown
+        );
     }
 
     // -- Unknown commands --
 
     #[test]
     fn unknown_arbitrary_binaries() {
-        assert_eq!(classify_command("my-custom-tool --flag"), CommandSafety::Unknown);
-        assert_eq!(classify_command("npm install express"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("my-custom-tool --flag"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("npm install express"),
+            CommandSafety::Unknown
+        );
         assert_eq!(classify_command("cargo build"), CommandSafety::Unknown);
     }
 
     #[test]
     fn unknown_mv_to_normal_path() {
-        assert_eq!(classify_command("mv old.txt new.txt"), CommandSafety::Unknown);
-        assert_eq!(classify_command("mv src/a.rs src/b.rs"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("mv old.txt new.txt"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("mv src/a.rs src/b.rs"),
+            CommandSafety::Unknown
+        );
     }
 
     #[test]
@@ -1024,7 +1317,10 @@ mod tests {
     #[test]
     fn handles_extra_whitespace() {
         assert_eq!(classify_command("  ls   -la  "), CommandSafety::Safe);
-        assert_eq!(classify_command("  rm   -rf  /  "), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_command("  rm   -rf  /  "),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
@@ -1071,7 +1367,10 @@ mod tests {
 
     #[test]
     fn mv_to_usr_is_dangerous() {
-        assert_eq!(classify_mv("mv file /usr/bin/file"), CommandSafety::Dangerous);
+        assert_eq!(
+            classify_mv("mv file /usr/bin/file"),
+            CommandSafety::Dangerous
+        );
     }
 
     #[test]
@@ -1133,14 +1432,23 @@ mod tests {
     fn git_branch_readonly() {
         assert_eq!(classify_git_branch(&["-a"]), CommandSafety::Safe);
         assert_eq!(classify_git_branch(&["-r", "-v"]), CommandSafety::Safe);
-        assert_eq!(classify_git_branch(&["--show-current"]), CommandSafety::Safe);
+        assert_eq!(
+            classify_git_branch(&["--show-current"]),
+            CommandSafety::Safe
+        );
         assert_eq!(classify_git_branch(&[]), CommandSafety::Safe);
     }
 
     #[test]
     fn git_branch_write() {
         assert_eq!(classify_git_branch(&["new-branch"]), CommandSafety::Unknown);
-        assert_eq!(classify_git_branch(&["-d", "branch"]), CommandSafety::Unknown);
-        assert_eq!(classify_git_branch(&["-D", "branch"]), CommandSafety::Unknown);
+        assert_eq!(
+            classify_git_branch(&["-d", "branch"]),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_git_branch(&["-D", "branch"]),
+            CommandSafety::Unknown
+        );
     }
 }

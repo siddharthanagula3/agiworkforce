@@ -157,9 +157,8 @@ async function handleManualReconnect(): Promise<void> {
   applyConnectionStatus('connecting');
 
   try {
-    // Ask background to trigger a fresh connection attempt
     const result = (await chrome.runtime.sendMessage({
-      type: 'GET_CONNECTION_STATUS',
+      type: 'RECONNECT_NATIVE',
     })) as ConnectionStatusResponse;
 
     const status: ConnectionStatus =

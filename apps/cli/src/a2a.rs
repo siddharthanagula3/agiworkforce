@@ -497,11 +497,7 @@ pub async fn handoff_conversation(
 // ---------------------------------------------------------------------------
 
 /// Build the A2A server state.
-pub fn build_a2a_state(
-    card: AgentCard,
-    auth_token: Option<String>,
-    config: CliConfig,
-) -> A2aState {
+pub fn build_a2a_state(card: AgentCard, auth_token: Option<String>, config: CliConfig) -> A2aState {
     A2aState {
         card,
         tasks: Arc::new(RwLock::new(HashMap::new())),
@@ -546,12 +542,7 @@ pub async fn serve_a2a(state: A2aState, port: u16) -> Result<()> {
         let state = state.clone();
         tokio::spawn(async move {
             if let Err(e) = handle_connection(stream, addr, state).await {
-                eprintln!(
-                    "  {} Connection error from {}: {}",
-                    "[a2a]".red(),
-                    addr,
-                    e
-                );
+                eprintln!("  {} Connection error from {}: {}", "[a2a]".red(), addr, e);
             }
         });
     }
@@ -661,11 +652,7 @@ async fn handle_post_task(state: &A2aState, body: &str) -> String {
         started_at_ms: 0,
     };
 
-    state
-        .tasks
-        .write()
-        .await
-        .insert(request_id.clone(), task);
+    state.tasks.write().await.insert(request_id.clone(), task);
 
     // Spawn background execution (limited by semaphore to MAX_CONCURRENT_A2A_TASKS)
     let tasks = Arc::clone(&state.tasks);
@@ -767,11 +754,7 @@ async fn handle_post_handoff(state: &A2aState, body: &str) -> String {
     );
 
     if let Some(ref instructions) = handoff.instructions {
-        eprintln!(
-            "  {} Instructions: {}",
-            "[a2a]".dimmed(),
-            instructions
-        );
+        eprintln!("  {} Instructions: {}", "[a2a]".dimmed(), instructions);
     }
 
     // Accept the handoff -- in a real implementation this would inject messages
@@ -796,8 +779,7 @@ async fn handle_post_handoff(state: &A2aState, body: &str) -> String {
 /// - External context is quarantined to prevent prompt injection
 async fn execute_delegated_task(config: &CliConfig, request: &TaskRequest) -> Result<String> {
     let sys_context = crate::context::gather_system_context();
-    let mut session =
-        crate::agent::AgentSession::new(&config.default.model, &sys_context, None);
+    let mut session = crate::agent::AgentSession::new(&config.default.model, &sys_context, None);
     // SECURITY: delegated tasks must NOT skip permission checks -- external agents
     // should not gain unchecked tool execution on the local machine.
     session.skip_permissions = false;
@@ -997,8 +979,7 @@ pub async fn handle_a2a_command(
             let port = if arg.is_empty() {
                 DEFAULT_A2A_PORT
             } else {
-                arg.parse::<u16>()
-                    .context("Port must be a valid number")?
+                arg.parse::<u16>().context("Port must be a valid number")?
             };
 
             // SECURITY: Auto-generate a random auth token so the A2A server
@@ -1141,10 +1122,7 @@ mod tests {
         let parsed: TaskRequest = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.request_id, "req-123");
         assert_eq!(parsed.priority, TaskPriority::High);
-        assert_eq!(
-            parsed.context.as_deref(),
-            Some("Focus on error handling")
-        );
+        assert_eq!(parsed.context.as_deref(), Some("Focus on error handling"));
     }
 
     #[test]
@@ -1311,10 +1289,7 @@ mod tests {
     #[test]
     fn test_agent_card_with_metadata() {
         let mut metadata = HashMap::new();
-        metadata.insert(
-            "region".to_string(),
-            serde_json::json!("us-east-1"),
-        );
+        metadata.insert("region".to_string(), serde_json::json!("us-east-1"));
         metadata.insert("online".to_string(), serde_json::json!(true));
 
         let card = AgentCard {

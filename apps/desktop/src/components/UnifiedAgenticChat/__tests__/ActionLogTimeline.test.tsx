@@ -57,8 +57,6 @@ describe('ActionLogTimeline', () => {
     expect(
       screen.getByText((content) => content.includes('"tool": "filesystem.search"')),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText((content) => content.includes('"query": "TODO"')),
-    ).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes('"query": "TODO"'))).toBeInTheDocument();
   });
 });

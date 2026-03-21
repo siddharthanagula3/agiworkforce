@@ -39,6 +39,7 @@ import ErrorToastContainer from './components/Errors/ErrorToast';
 import { Spinner } from './components/ui/Spinner';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
+import { initializeWebAuth } from './services/supabaseAuth';
 import { useAuthStore, useAccountStore } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import useErrorStore, { useSimpleModeStore, selectOnboardingCompleted } from './stores/ui';
@@ -906,6 +907,7 @@ const DesktopShell = () => {
 
 const App = () => {
   const { i18n } = useTranslation();
+  const [isWebAuthReady, setIsWebAuthReady] = useState(isTauri);
 
   // Set document direction for RTL language support (Arabic)
   useEffect(() => {
@@ -944,6 +946,30 @@ const App = () => {
     return () => {
       cancelled = true;
       unsubscribeOrchestrator();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isTauri) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void initializeWebAuth()
+      .then((ready) => {
+        if (!cancelled && ready) {
+          setIsWebAuthReady(true);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('[App] Web auth initialization failed:', error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -999,6 +1025,10 @@ const App = () => {
       }
     };
   }, [windowMode]);
+
+  if (!isWebAuthReady) {
+    return <LoadingFallback />;
+  }
 
   return (
     <ErrorBoundary>
