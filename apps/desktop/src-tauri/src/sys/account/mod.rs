@@ -511,11 +511,27 @@ pub fn account_store_access_token(accessToken: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Validate that a refresh token is non-empty and within size bounds.
+/// Supabase refresh tokens are opaque strings (not JWTs), so we only
+/// check for non-empty and reasonable length.
+fn validate_refresh_token_format(token: &str) -> Result<(), String> {
+    if token.is_empty() {
+        return Err("Refresh token cannot be empty".to_string());
+    }
+    if token.len() > 8192 {
+        return Err(format!(
+            "Refresh token is too long ({} chars, maximum 8192)",
+            token.len()
+        ));
+    }
+    Ok(())
+}
+
 /// Store refresh token from frontend (called when Supabase auth state changes)
 #[tauri::command]
 #[allow(non_snake_case)]
 pub fn account_store_refresh_token(refreshToken: String) -> Result<(), String> {
-    validate_token_format(&refreshToken, "Refresh token")?;
+    validate_refresh_token_format(&refreshToken)?;
     let mut token = REFRESH_TOKEN
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());

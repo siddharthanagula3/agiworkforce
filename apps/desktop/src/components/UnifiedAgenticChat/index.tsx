@@ -59,29 +59,30 @@ import {
   validateSlashCommandArgs,
 } from '../../lib/chatToolUtils';
 import { getSkillById } from '../../lib/skillLoader';
-import { CanvasWorkspace } from '../Canvas';
-import { InteractiveHelp } from '../Help/InteractiveHelp';
-import { CalendarWorkspace } from '../Calendar/CalendarWorkspace';
-import { DocumentWorkspace } from '../Document';
-import { DatabaseWorkspace } from '../Database/DatabaseWorkspace';
-import { CostDashboard } from '../Analytics/CostDashboard';
-import { RealtimeROIDashboard } from '../ROIDashboard/components';
-import { GitPanel } from '../Git';
-import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
-import { VisionWorkspace } from '../Vision/VisionWorkspace';
-import { MarketplacePage } from '../Marketplace/MarketplacePage';
-import { WorkflowPanel } from '../Workflows';
-import { ImagesGallery } from '../Images/ImagesGallery';
+// View components — kept for future modal/inline use, removed from full-page routing
+// import { CanvasWorkspace } from '../Canvas';
+// import { InteractiveHelp } from '../Help/InteractiveHelp';
+// import { CalendarWorkspace } from '../Calendar/CalendarWorkspace';
+// import { DocumentWorkspace } from '../Document';
+// import { DatabaseWorkspace } from '../Database/DatabaseWorkspace';
+// import { CostDashboard } from '../Analytics/CostDashboard';
+// import { RealtimeROIDashboard } from '../ROIDashboard/components';
+// import { GitPanel } from '../Git';
+// import { TerminalWorkspace } from '../Terminal/TerminalWorkspace';
+// import { VisionWorkspace } from '../Vision/VisionWorkspace';
+// import { MarketplacePage } from '../Marketplace/MarketplacePage';
+// import { WorkflowPanel } from '../Workflows';
+// import { ImagesGallery } from '../Images/ImagesGallery';
 import { SkillsMarketplace } from '../Skills/SkillsMarketplace';
-import { ScheduledTasksPage } from '../Schedules/ScheduledTasksPage';
-import { ArtifactsGallery } from '../Artifacts/ArtifactsGallery';
-import { DeepResearchPage } from '../Research/DeepResearchPage';
-import { ComputerUseMonitor } from '../ComputerUse';
-import { ActionRecorder } from '../Automation/ActionRecorder';
-import { GovernanceDashboard } from '../Governance/GovernanceDashboard';
-import { TeamDashboard } from '../Teams/TeamDashboard';
-import { CloudStoragePanel } from '../Cloud/CloudStoragePanel';
-import { MobileCompanionPanel } from '../Mobile/MobileCompanionPanel';
+// import { ScheduledTasksPage } from '../Schedules/ScheduledTasksPage';
+// import { ArtifactsGallery } from '../Artifacts/ArtifactsGallery';
+// import { DeepResearchPage } from '../Research/DeepResearchPage';
+// import { ComputerUseMonitor } from '../ComputerUse';
+// import { ActionRecorder } from '../Automation/ActionRecorder';
+// import { GovernanceDashboard } from '../Governance/GovernanceDashboard';
+// import { TeamDashboard } from '../Teams/TeamDashboard';
+// import { CloudStoragePanel } from '../Cloud/CloudStoragePanel';
+// import { MobileCompanionPanel } from '../Mobile/MobileCompanionPanel';
 import { ChatErrorBoundary } from '../ErrorBoundary';
 import { SectionErrorBoundary } from '../ui/SectionErrorBoundary';
 import { AppLayout } from './AppLayout';
@@ -90,7 +91,7 @@ import { BudgetAlertsPanel } from './BudgetAlertsPanel';
 import { ChatInputArea, type SendOptions } from './ChatInputArea';
 import { ChatStream } from './ChatStream';
 import { ProjectsView } from './ProjectsView';
-import { TasksView } from './TasksView';
+// import { TasksView } from './TasksView';
 import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationDialog';
 import { BackgroundTaskIndicator } from '../BackgroundTasks';
 import { PlanPreview } from '../Planning/PlanPreview';
@@ -107,7 +108,7 @@ import { AgentStepTimeline, type AgentStep } from './AgentStepTimeline';
 import { TokenCounter } from './TokenCounter';
 import { DragDropOverlay } from './DragDropOverlay';
 import { CouncilView } from './CouncilView';
-import { ChatInputToolbar } from './ChatInputToolbar';
+// import { ChatInputToolbar } from './ChatInputToolbar';
 import { BriefStatus, type BriefStatusState } from './BriefStatus';
 import { usePromptSuggestions } from '../../hooks/usePromptSuggestions';
 import {
@@ -298,7 +299,7 @@ export const UnifiedAgenticChat: React.FC<{
     setStreamingMessage,
     conversationMode,
     activeView,
-    setActiveView,
+    setActiveView: _setActiveView,
     setWorkflowContext,
   } = useUnifiedChatStore(
     useShallow((state) => ({
@@ -1670,106 +1671,15 @@ export const UnifiedAgenticChat: React.FC<{
                 </div>
               )}
 
-              {/* ChatInputToolbar — model selector, incognito toggle, auto/manual mode */}
-              <ChatInputToolbar />
+              {/* ChatInputToolbar removed — model selector is in ChatInputArea, other toggles move to settings/Cmd+K */}
 
               <ChatInputArea onSend={handleSendMessage} onStopGeneration={handleStopGeneration} />
             </>
           ) : activeView === 'projects' ? (
             <ProjectsView />
-          ) : activeView === 'tasks' ? (
-            <TasksView />
-          ) : activeView === 'artifacts' ? (
-            <div className="flex-1 p-4">
-              <CanvasWorkspace className="h-full" />
-            </div>
-          ) : activeView === 'help' ? (
-            <div className="flex-1 overflow-auto p-4">
-              <InteractiveHelp onClose={() => setActiveView('chat')} />
-            </div>
-          ) : activeView === 'calendar' ? (
-            <div className="flex-1 overflow-hidden">
-              <CalendarWorkspace className="h-full" />
-            </div>
-          ) : activeView === 'documents' ? (
-            <div className="flex-1 overflow-hidden">
-              <DocumentWorkspace className="h-full" />
-            </div>
-          ) : activeView === 'database' ? (
-            <div className="flex-1 overflow-hidden">
-              <DatabaseWorkspace className="h-full" />
-            </div>
-          ) : activeView === 'analytics' ? (
-            <div className="flex-1 overflow-hidden">
-              <CostDashboard />
-            </div>
-          ) : activeView === 'roi' ? (
-            <div className="flex-1 overflow-hidden">
-              <RealtimeROIDashboard />
-            </div>
-          ) : activeView === 'git' ? (
-            <div className="flex-1 overflow-hidden p-4">
-              <GitPanel repoPath="." className="h-full" />
-            </div>
-          ) : activeView === 'terminal' ? (
-            <div className="flex-1 overflow-hidden">
-              <TerminalWorkspace className="h-full" />
-            </div>
-          ) : activeView === 'vision' ? (
-            <div className="flex-1 overflow-hidden">
-              <VisionWorkspace />
-            </div>
-          ) : activeView === 'marketplace' ? (
-            <div className="flex-1 overflow-hidden">
-              <MarketplacePage />
-            </div>
-          ) : activeView === 'workflows' ? (
-            <div className="flex-1 overflow-hidden">
-              <WorkflowPanel className="h-full" />
-            </div>
           ) : activeView === 'skills' ? (
             <div className="flex-1 overflow-hidden">
               <SkillsMarketplace />
-            </div>
-          ) : activeView === 'computer-use' ? (
-            <div className="flex-1 overflow-hidden">
-              <ComputerUseMonitor />
-            </div>
-          ) : activeView === 'automation' ? (
-            <div className="flex-1 overflow-auto p-4">
-              <ActionRecorder />
-            </div>
-          ) : activeView === 'governance' ? (
-            <div className="flex-1 overflow-hidden">
-              <GovernanceDashboard />
-            </div>
-          ) : activeView === 'teams' ? (
-            <div className="flex-1 overflow-hidden">
-              <TeamDashboard />
-            </div>
-          ) : activeView === 'cloud' ? (
-            <div className="flex-1 overflow-hidden">
-              <CloudStoragePanel />
-            </div>
-          ) : activeView === 'mobile' ? (
-            <div className="flex-1 overflow-hidden">
-              <MobileCompanionPanel />
-            </div>
-          ) : activeView === 'images' ? (
-            <div className="flex-1 overflow-hidden">
-              <ImagesGallery />
-            </div>
-          ) : activeView === 'schedules' ? (
-            <div className="flex-1 overflow-hidden">
-              <ScheduledTasksPage />
-            </div>
-          ) : activeView === 'artifacts-gallery' ? (
-            <div className="flex-1 overflow-hidden">
-              <ArtifactsGallery />
-            </div>
-          ) : activeView === 'deep-research' ? (
-            <div className="flex-1 overflow-hidden">
-              <DeepResearchPage />
             </div>
           ) : null}
         </AppLayout>
