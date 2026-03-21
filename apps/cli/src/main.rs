@@ -439,7 +439,7 @@ async fn main() -> Result<()> {
             }
             Command::Sandbox { full_auto, command } => {
                 let cmd_str = command.join(" ");
-                let cwd = std::env::current_dir().unwrap_or_default();
+                let cwd = std::env::current_dir()?;
                 let mgr = if *full_auto { sandbox::SandboxManager::full_auto(cwd.clone()) }
                     else { sandbox::SandboxManager::new(sandbox::SandboxPolicy::default(), cwd.clone()) };
                 eprintln!("Sandbox [{}]: {}", mgr.sandbox_type.name(), cmd_str);
@@ -450,9 +450,10 @@ async fn main() -> Result<()> {
             }
             Command::McpServer => app_server::run_mcp_server().await,
             Command::AppServer { listen } => {
+                const DEFAULT_APP_SERVER_ADDR: &str = "127.0.0.1:8787";
                 let cfg = if listen == "stdio" { app_server::AppServerConfig::default() }
                     else { app_server::AppServerConfig { transport: app_server::AppServerTransport::WebSocket {
-                        addr: listen.trim_start_matches("ws://").parse().unwrap_or_else(|_| "127.0.0.1:8787".parse().unwrap()),
+                        addr: listen.trim_start_matches("ws://").parse().unwrap_or_else(|_| DEFAULT_APP_SERVER_ADDR.parse().unwrap()),
                     }, ..Default::default() } };
                 app_server::run_app_server(cfg).await
             }
