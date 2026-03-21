@@ -126,11 +126,11 @@ pub fn load_artifact_from_db(conn: &Connection, id: &str) -> Result<Option<Artif
                 artifact_type: row.get(1)?,
                 title: row.get(2)?,
                 content: row.get(3)?,
-                language: row.get(4)?,
+                _language: row.get(4)?,
                 metadata: row.get(5)?,
                 conversation_id: row.get::<_, Option<String>>(6)?,
                 version: row.get(7)?,
-                content_hash: row.get(8)?,
+                _content_hash: row.get(8)?,
                 status: row.get(9)?,
                 is_pinned: row.get(10)?,
                 is_archived: row.get(11)?,
@@ -183,11 +183,11 @@ pub fn list_artifacts_from_db(
                     artifact_type: row.get(1)?,
                     title: row.get(2)?,
                     content: row.get(3)?,
-                    language: row.get(4)?,
+                    _language: row.get(4)?,
                     metadata: row.get(5)?,
                     conversation_id: row.get::<_, Option<String>>(6)?,
                     version: row.get(7)?,
-                    content_hash: row.get(8)?,
+                    _content_hash: row.get(8)?,
                     status: row.get(9)?,
                     is_pinned: row.get(10)?,
                     is_archived: row.get(11)?,
@@ -218,11 +218,11 @@ pub fn list_artifacts_from_db(
                     artifact_type: row.get(1)?,
                     title: row.get(2)?,
                     content: row.get(3)?,
-                    language: row.get(4)?,
+                    _language: row.get(4)?,
                     metadata: row.get(5)?,
                     conversation_id: row.get::<_, Option<String>>(6)?,
                     version: row.get(7)?,
-                    content_hash: row.get(8)?,
+                    _content_hash: row.get(8)?,
                     status: row.get(9)?,
                     is_pinned: row.get(10)?,
                     is_archived: row.get(11)?,
@@ -240,8 +240,11 @@ pub fn list_artifacts_from_db(
 /// Delete an artifact and its versions from the database.
 pub fn delete_artifact_from_db(conn: &Connection, id: &str) -> Result<(), String> {
     // Versions are cascade-deleted via foreign key, but be explicit
-    conn.execute("DELETE FROM artifact_versions WHERE artifact_id = ?1", params![id])
-        .map_err(|e| format!("Failed to delete artifact versions: {}", e))?;
+    conn.execute(
+        "DELETE FROM artifact_versions WHERE artifact_id = ?1",
+        params![id],
+    )
+    .map_err(|e| format!("Failed to delete artifact versions: {}", e))?;
 
     conn.execute("DELETE FROM artifacts WHERE id = ?1", params![id])
         .map_err(|e| format!("Failed to delete artifact: {}", e))?;
@@ -257,13 +260,11 @@ struct RawArtifactRow {
     artifact_type: String,
     title: String,
     content: String,
-    #[allow(dead_code)]
-    language: Option<String>,
+    _language: Option<String>,
     metadata: Option<String>,
     conversation_id: Option<String>,
     version: i64,
-    #[allow(dead_code)]
-    content_hash: Option<String>,
+    _content_hash: Option<String>,
     status: String,
     is_pinned: i32,
     is_archived: i32,
@@ -291,7 +292,13 @@ fn load_versions_for_artifact(
             let change_description: Option<String> = row.get(3)?;
             let created_at_str: String = row.get(4)?;
 
-            Ok((version, content, content_hash, change_description, created_at_str))
+            Ok((
+                version,
+                content,
+                content_hash,
+                change_description,
+                created_at_str,
+            ))
         })
         .map_err(|e| format!("Failed to query versions: {}", e))?;
 
@@ -346,7 +353,10 @@ fn parse_artifact_status(s: &str, is_archived: i32) -> ArtifactStatus {
     }
 }
 
-fn row_to_artifact(raw: RawArtifactRow, versions: Vec<ArtifactVersion>) -> Result<Artifact, String> {
+fn row_to_artifact(
+    raw: RawArtifactRow,
+    versions: Vec<ArtifactVersion>,
+) -> Result<Artifact, String> {
     let artifact_type = parse_artifact_type(&raw.artifact_type);
     let status = parse_artifact_status(&raw.status, raw.is_archived);
 
@@ -392,7 +402,10 @@ fn row_to_artifact(raw: RawArtifactRow, versions: Vec<ArtifactVersion>) -> Resul
 
 fn collect_artifact_rows(
     conn: &Connection,
-    rows: rusqlite::MappedRows<'_, impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<RawArtifactRow>>,
+    rows: rusqlite::MappedRows<
+        '_,
+        impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<RawArtifactRow>,
+    >,
 ) -> Result<Vec<Artifact>, String> {
     let mut artifacts = Vec::new();
     for row_result in rows {

@@ -25,13 +25,9 @@ vi.mock('../MessageBubble/InlinePanelList', () => ({
 }));
 
 vi.mock('../MessageBubble/WidgetList', () => ({
-  WidgetList: ({
-    messageId,
-    widgets,
-  }: {
-    messageId: string;
-    widgets: Array<{ id: string }>;
-  }) => <div data-testid="widget-list">{`${messageId}:${widgets.length}`}</div>,
+  WidgetList: ({ messageId, widgets }: { messageId: string; widgets: Array<{ id: string }> }) => (
+    <div data-testid="widget-list">{`${messageId}:${widgets.length}`}</div>
+  ),
 }));
 
 vi.mock('../MessageBubble/MessageAttachments', () => ({
@@ -39,7 +35,9 @@ vi.mock('../MessageBubble/MessageAttachments', () => ({
 }));
 
 vi.mock('../SourcesFooter', () => ({
-  SourcesFooter: ({ content }: { content: string }) => <div data-testid="sources-footer">{content}</div>,
+  SourcesFooter: ({ content }: { content: string }) => (
+    <div data-testid="sources-footer">{content}</div>
+  ),
 }));
 
 vi.mock('../Visualizations/CodeBlock', () => ({

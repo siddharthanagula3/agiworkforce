@@ -15,6 +15,7 @@
 **Layout**: Clean, minimal dark-themed page centered around a single input area. The design follows Perplexity's Scandinavian subway aesthetic -- clean, considered, invisible.
 
 **Key Elements**:
+
 - Large prompt input field with placeholder text (e.g., "What should we work on next?")
 - Templates/suggestions area below the input for common task types
 - Prominent "+" button to start new workflows
@@ -25,6 +26,7 @@
 - Voice mode input option (shipped March 2026 -- natural conversation within Computer)
 
 **Design Patterns**:
+
 - Dark theme: `#1a1a1a` background, layered surfaces (`#242424`, `#3a3a3a`)
 - Accent color: True Turquoise `#1FB8CD` for interactive elements
 - Typography: FK Grotesk (brand), FK Grotesk Neue (body copy)
@@ -32,6 +34,7 @@
 - Minimalist, outcome-focused -- no clutter
 
 **Unique Features**:
+
 - Voice mode for hands-free task description
 - Model Council option: run 3 frontier models (GPT-5.4, Claude Opus 4.6, Gemini 3.1 Pro) in parallel and compare outputs
 - Credit-based usage system (10,000 credits/month for Max subscribers + 20,000 one-time bonus)
@@ -45,20 +48,21 @@
 
 **Navigation Items** (confirmed from multiple sources):
 
-| Position | Item | Icon | Description |
-|----------|------|------|-------------|
-| Top | **Search** | Magnifying glass | Traditional Perplexity search mode |
-| | **Computer** | Computer/monitor icon | Agent/Computer mode (main product) |
-| | **New Task** | "+" icon | Create a new Computer task |
-| | **Tasks** | Checklist/list icon | View all tasks and their statuses |
-| | **Files** | File/folder icon | Uploaded files and generated outputs |
-| | **Connectors** | Plug/link icon | App integrations (400+) |
-| | **Skills** | Gear/wrench icon | Reusable workflow specifications |
-| | **Use Cases** | Lightbulb/grid icon | Workflow examples and templates |
-| Bottom | **Library** | Bookmark icon | Recent threads, bookmarks |
-| | **Account/Settings** | User avatar | Account, credits, preferences |
+| Position | Item                 | Icon                  | Description                          |
+| -------- | -------------------- | --------------------- | ------------------------------------ |
+| Top      | **Search**           | Magnifying glass      | Traditional Perplexity search mode   |
+|          | **Computer**         | Computer/monitor icon | Agent/Computer mode (main product)   |
+|          | **New Task**         | "+" icon              | Create a new Computer task           |
+|          | **Tasks**            | Checklist/list icon   | View all tasks and their statuses    |
+|          | **Files**            | File/folder icon      | Uploaded files and generated outputs |
+|          | **Connectors**       | Plug/link icon        | App integrations (400+)              |
+|          | **Skills**           | Gear/wrench icon      | Reusable workflow specifications     |
+|          | **Use Cases**        | Lightbulb/grid icon   | Workflow examples and templates      |
+| Bottom   | **Library**          | Bookmark icon         | Recent threads, bookmarks            |
+|          | **Account/Settings** | User avatar           | Account, credits, preferences        |
 
 **Additional Sidebar Features** (March 2026 updates):
+
 - Library pinned to top of menu; hovering reveals bookmarks and expanded recent conversations
 - Rename and delete threads directly from sidebar via ellipsis icon
 - Customizable shortcuts menu (Finance, Academic, Shopping, etc.) via "Customize menu" option
@@ -66,6 +70,7 @@
 - Chat bubble-style message display for natural back-and-forth
 
 **Design Patterns**:
+
 - Collapsed sidebar with icons; expandable on hover/click
 - Dark sidebar matching the overall `#1a1a1a` theme
 - Turquoise accent (`#1FB8CD`) for active/selected items
@@ -81,22 +86,24 @@
 
 **Key Differences from Computer Mode**:
 
-| Feature | Search Mode | Computer Mode |
-|---------|------------|---------------|
-| **Purpose** | Find and synthesize information | Do work (build, create, automate) |
-| **Output** | Formatted answers with citations | Files, apps, reports, automations |
-| **Duration** | Seconds | Minutes to hours (async) |
-| **Background** | No | Yes -- close browser, return later |
-| **Connectors** | Limited (file search) | Full 400+ app integrations |
-| **Models** | Single model per query | 20 models orchestrated in parallel |
-| **Memory** | Limited | Persistent across sessions |
+| Feature        | Search Mode                      | Computer Mode                      |
+| -------------- | -------------------------------- | ---------------------------------- |
+| **Purpose**    | Find and synthesize information  | Do work (build, create, automate)  |
+| **Output**     | Formatted answers with citations | Files, apps, reports, automations  |
+| **Duration**   | Seconds                          | Minutes to hours (async)           |
+| **Background** | No                               | Yes -- close browser, return later |
+| **Connectors** | Limited (file search)            | Full 400+ app integrations         |
+| **Models**     | Single model per query           | 20 models orchestrated in parallel |
+| **Memory**     | Limited                          | Persistent across sessions         |
 
 **Search Modes Available**:
+
 - **Search Mode**: Quick answers using fast AI model (free tier)
 - **Research Mode**: Comprehensive analysis of 100s of sources, 3-5 minute reports with citations
 - **Model Council**: 3 frontier models in parallel (Max only)
 
 **UI Elements**:
+
 - Model selector in the search input box
 - Image generation model selector (Nano Banana, GPT Image-1)
 - Result tabs: Links, Images, Videos, Shopping, Places (accessible from top of each thread)
@@ -112,6 +119,7 @@
 **Layout**: Task list view showing all active and completed Computer tasks.
 
 **Key Elements**:
+
 - "+" New Task button to open task creation modal
 - Task list with status indicators (running, completed, failed, paused)
 - Hierarchical task/subtask breakdown visible
@@ -121,6 +129,7 @@
 - Background task indicators (tasks running while browser is closed)
 
 **Task Creation Modal**:
+
 - Schedule configuration (one-time or recurring)
 - Notification settings
 - Search mode selector
@@ -131,6 +140,7 @@
 **Task Statuses**: Running, Completed, Failed, Paused, Queued
 
 **Limitations**:
+
 - No real-time execution replay (unlike Manus AI)
 - Limited sandbox visibility during execution
 - Credit consumption only visible after task completion via usage dashboard
@@ -144,6 +154,7 @@
 **Layout**: Central file storage for uploaded documents and generated outputs.
 
 **Key Elements**:
+
 - File upload area (drag & drop supported, both files and folders)
 - "+ Attach" button for manual upload
 - Gallery view for images
@@ -153,18 +164,20 @@
 
 **File Upload Limits** (by plan):
 
-| Plan | Max File Size | Files/Prompt | Retention |
-|------|--------------|--------------|-----------|
-| Free | 40 MB | 10 | 30 days |
-| Plus | 40 MB | 10 | 30 days |
-| Pro | 50 MB | 10 | 90 days |
-| Enterprise Pro | 1 GB | - | 1 year |
+| Plan           | Max File Size | Files/Prompt | Retention |
+| -------------- | ------------- | ------------ | --------- |
+| Free           | 40 MB         | 10           | 30 days   |
+| Plus           | 40 MB         | 10           | 30 days   |
+| Pro            | 50 MB         | 10           | 90 days   |
+| Enterprise Pro | 1 GB          | -            | 1 year    |
 
 **Supported Formats**:
+
 - Documents: PDF, DOCX, XLSX, CSV, PPTX, TXT, Markdown, JSON
 - Images: JPEG, HEIF, PNG, PDF (up to 40MB)
 
 **Spaces Integration** (Pro+):
+
 - Upload up to 50 files per Space (Pro), 500 files (Enterprise Pro)
 - Organization-wide file repository for Enterprise
 - Sync from Google Drive, SharePoint, OneDrive, Box, Dropbox
@@ -178,6 +191,7 @@
 **Layout**: Grid/card layout showing available app integrations with search and filtering.
 
 **Key Elements**:
+
 - Search field for finding connectors
 - Tabs: **All** | **Connected** | **Available**
 - "All categories" dropdown filter
@@ -190,22 +204,23 @@
 
 **Named Connectors** (confirmed from sources):
 
-| Category | Connectors |
-|----------|-----------|
-| **Communication** | Gmail, Outlook, Slack, Microsoft Teams |
-| **Development** | GitHub, Linear |
-| **Knowledge & Content** | Notion, Confluence, Google Drive, SharePoint, OneDrive |
-| **Data & Analytics** | Snowflake, Databricks, Datadog |
-| **CRM & Sales** | Salesforce, HubSpot |
-| **Cloud Storage** | Google Drive, SharePoint, OneDrive, Box, Dropbox |
-| **Finance** | 40+ live financial tools (SEC filings, FactSet, S&P Global, Coinbase, LSEG, Quartr) |
-| **Travel** | Tripadvisor |
-| **Project Management** | Airtable (inferred), Asana |
-| **Customer Support** | Zendesk |
-| **Marketing** | MailChimp |
-| **Workflow Automation** | Make.com, Integrately, AutomatorPlugin |
+| Category                | Connectors                                                                          |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| **Communication**       | Gmail, Outlook, Slack, Microsoft Teams                                              |
+| **Development**         | GitHub, Linear                                                                      |
+| **Knowledge & Content** | Notion, Confluence, Google Drive, SharePoint, OneDrive                              |
+| **Data & Analytics**    | Snowflake, Databricks, Datadog                                                      |
+| **CRM & Sales**         | Salesforce, HubSpot                                                                 |
+| **Cloud Storage**       | Google Drive, SharePoint, OneDrive, Box, Dropbox                                    |
+| **Finance**             | 40+ live financial tools (SEC filings, FactSet, S&P Global, Coinbase, LSEG, Quartr) |
+| **Travel**              | Tripadvisor                                                                         |
+| **Project Management**  | Airtable (inferred), Asana                                                          |
+| **Customer Support**    | Zendesk                                                                             |
+| **Marketing**           | MailChimp                                                                           |
+| **Workflow Automation** | Make.com, Integrately, AutomatorPlugin                                              |
 
 **Connector Categories** (inferred from documentation):
+
 - Communication
 - Development
 - Productivity
@@ -218,11 +233,13 @@
 - Marketing
 
 **Enterprise-Specific Connectors**:
+
 - Snowflake, Datadog, Salesforce, SharePoint, HubSpot (business-grade)
 - Custom connectors via MCP (Model Context Protocol)
 - Admin-controlled connector availability per user
 
 **Custom Remote Connectors**:
+
 - Add via "+ Custom connector" button
 - Uses MCP protocol (stdio + SSE + streamable HTTP)
 - Enterprise admins can install organization-wide
@@ -236,6 +253,7 @@
 **Layout**: Browsable skill library with tabs for different skill categories.
 
 **Key Elements**:
+
 - Search field for locating skills
 - Tabs: **All** | **My Skills** | **Example Skills**
 - "+ Create Skill" button
@@ -243,6 +261,7 @@
 - Skill cards showing name, description, activation context
 
 **Skills System**:
+
 - Skills are markdown-based instruction sets (SKILL.md format)
 - Reusable workflow specifications that tell Computer how to handle specific task types
 - Auto-activated based on task context (e.g., "create a presentation" activates Slides skill)
@@ -250,6 +269,7 @@
 - Compatible with Claude Code and Codex SKILL.md files (direct import, no rewriting)
 
 **Built-in Perplexity Skills** (confirmed):
+
 - **Slides** -- Activated for presentation creation
 - **Research** -- Activated for detailed analysis requests
 - **Research Report** -- Formatting research findings
@@ -257,20 +277,21 @@
 
 **Community Super-Skills** (from GitHub ecosystem, 10 categories):
 
-| # | Skill Name | Domain |
-|---|-----------|--------|
-| 1 | AI Agent Builder | Agent architecture, MCP servers, RAG pipelines |
-| 2 | Dev & Engineering | Full-stack development, CI/CD, code review |
-| 3 | Marketing | Content creation, SEO, campaigns, analytics |
-| 4 | Sales | Prospecting, outreach, pipeline management |
-| 5 | Finance | Financial statements, audit prep, forecasting |
-| 6 | Legal | Contract review, NDA triage, compliance |
-| 7 | Product Management | PRDs, roadmap prioritization, sprint ops |
-| 8 | Operations & CX | Ticket triage, KB management, escalation |
-| 9 | Research & Knowledge | Deep research, knowledge graphs, statistics |
-| 10 | Content & Creative | Video, image generation, web building |
+| #   | Skill Name           | Domain                                         |
+| --- | -------------------- | ---------------------------------------------- |
+| 1   | AI Agent Builder     | Agent architecture, MCP servers, RAG pipelines |
+| 2   | Dev & Engineering    | Full-stack development, CI/CD, code review     |
+| 3   | Marketing            | Content creation, SEO, campaigns, analytics    |
+| 4   | Sales                | Prospecting, outreach, pipeline management     |
+| 5   | Finance              | Financial statements, audit prep, forecasting  |
+| 6   | Legal                | Contract review, NDA triage, compliance        |
+| 7   | Product Management   | PRDs, roadmap prioritization, sprint ops       |
+| 8   | Operations & CX      | Ticket triage, KB management, escalation       |
+| 9   | Research & Knowledge | Deep research, knowledge graphs, statistics    |
+| 10  | Content & Creative   | Video, image generation, web building          |
 
 **Custom Skill Creation**:
+
 - Create for any repeated task
 - Computer follows skill instructions automatically without re-explanation
 - View, search, delete from "My Skills" tab
@@ -288,6 +309,7 @@
 **Use Case Categories** (confirmed):
 
 **Product & Engineering**:
+
 - Pricing/Feature Intelligence Dashboard
 - Meeting-to-Ticket Converter (Linear/Jira)
 - Quarterly OKR Kickoff Deck
@@ -295,30 +317,35 @@
 - App building and deployment
 
 **Research & Analysis**:
+
 - Competitive analysis reports
 - Deep research pipelines with visualization
 - Data analysis and dashboard creation
 - Investment research/due diligence
 
 **Business Operations**:
+
 - Support ticket triage by severity
 - Escalation brief preparation
 - Monday standup documentation
 - CMS powered by Google Docs
 
 **Enterprise Workflow Templates**:
+
 - Legal contract review
 - Finance audit support
 - Sales call preparation
 - Customer support ticket triage
 
 **Creative & Content**:
+
 - Report generation (Excel, PDF)
 - Presentation creation
 - Content ideation pipelines
 - Multi-step creative workflows
 
 **Monitoring & Automation**:
+
 - Continuous autonomous monitoring
 - Recurring briefings and reports
 - Email/calendar/flight status monitoring
@@ -334,6 +361,7 @@
 **Layout**: The core Computer interface -- a conversational agent view with enhanced capabilities beyond Search.
 
 **Key Elements**:
+
 - Task input area (same as New Task)
 - Active task panel showing subtask breakdown
 - Model orchestration indicator
@@ -344,6 +372,7 @@
 - Credit usage counter
 
 **How It Works**:
+
 1. User describes a high-level goal in natural language
 2. Claude Opus 4.6 (orchestrator) breaks goal into subtasks
 3. Routes each subtask to the best specialist model
@@ -353,17 +382,18 @@
 
 **Model Orchestra** (20 models, 6 confirmed by name):
 
-| Model | Role |
-|-------|------|
+| Model               | Role                                         |
+| ------------------- | -------------------------------------------- |
 | **Claude Opus 4.6** | Core reasoning engine, orchestration, coding |
-| **Gemini** | Deep research, sub-agent creation |
-| **GPT-5.2 / 5.4** | Long-context recall, wide web search |
-| **Grok** | Fast/lightweight speed-sensitive tasks |
-| **Nano Banana** | Image generation |
-| **Veo 3.1** | Video production |
-| **GPT-5.3-Codex** | Specialized coding subagent (March 2026) |
+| **Gemini**          | Deep research, sub-agent creation            |
+| **GPT-5.2 / 5.4**   | Long-context recall, wide web search         |
+| **Grok**            | Fast/lightweight speed-sensitive tasks       |
+| **Nano Banana**     | Image generation                             |
+| **Veo 3.1**         | Video production                             |
+| **GPT-5.3-Codex**   | Specialized coding subagent (March 2026)     |
 
 **Special Features**:
+
 - **Model Council**: Run GPT-5.4, Claude Opus 4.6, and Gemini 3.1 Pro simultaneously, compare where they agree/disagree
 - **Voice Mode**: Natural conversation, describe projects, give feedback mid-task without typing
 - **Persistent Memory**: Cross-session context retention for ongoing projects
@@ -371,6 +401,7 @@
 - **Checkpoints**: Review points during execution for user approval
 
 **Sandbox Environment**:
+
 - 2 vCPU, 8GB RAM per task
 - Pre-installed: Python, Node.js, ffmpeg, standard Unix tools
 - Real filesystem access
@@ -386,11 +417,13 @@
 **Key Settings Areas**:
 
 **Account Settings** (`/account`):
+
 - Authentication (Google, Apple, email)
 - Subscription management (Free/Pro/Max/Enterprise)
 - Profile preferences
 
 **Credits & Usage** (`/account/credits`, `/account/usage`):
+
 - Credit balance display
 - Per-thread credit consumption (via overflow menu / three dots)
 - Spending limits configuration
@@ -398,6 +431,7 @@
 - Usage dashboard with historical tracking
 
 **Preferences**:
+
 - Preferred response language
 - Autosuggest toggle (autocompletion of search questions)
 - Homepage widgets toggle
@@ -407,6 +441,7 @@
 - Sidebar customization ("Customize menu" from "More" menu)
 
 **Enterprise Admin Settings**:
+
 - SSO/SAML authentication
 - SCIM provisioning
 - Granular admin controls per user
@@ -425,6 +460,7 @@
 **Layout**: Detailed view of a specific task showing execution progress and outputs.
 
 **Key Elements**:
+
 - Task title and description
 - Hierarchical subtask breakdown (live to-do list)
 - Clickable subtasks showing real-time status
@@ -436,6 +472,7 @@
 - Model orchestration indicators
 
 **Limitations** (significant competitive gap):
+
 - **No sandbox visibility** -- cannot watch agent actions in real-time
 - **No execution replay** -- unlike Manus AI which shows real-time replay of every agent action
 - **No live preview** for coding iterations
@@ -468,16 +505,19 @@
 | Olive | `#707C36` | Muted green accent |
 
 **Dark Mode Surface Layers**:
+
 - Background: `#1a1a1a`
 - Surface 1: `#242424`
 - Surface 2: `#3a3a3a`
 
 ### Typography
+
 - **Brand**: FK Grotesk -- Scandinavian subway aesthetic, large family, multilingual
 - **Body**: FK Grotesk Neue -- optimized legibility for long text
 - **Design philosophy**: "Clean and considered but in an invisible sort of way"
 
 ### UI Patterns
+
 - Forced dark theme by default (`#1a1a1a` regardless of system preference)
 - Chat bubble message display (March 2026 update)
 - Minimalist, outcome-focused layout
@@ -490,22 +530,22 @@
 
 ## 13. March 2026 Feature Updates (Changelog)
 
-| Date | Feature | Details |
-|------|---------|---------|
-| Mar 6 | **Custom Skills** | Create reusable capabilities, auto-apply to relevant tasks |
-| Mar 6 | **Model Council** | Run GPT-5.4 + Opus 4.6 + Gemini 3.1 Pro in parallel |
-| Mar 6 | **Voice Mode in Computer** | Natural conversation for task description/feedback |
-| Mar 6 | **GPT-5.3-Codex Subagent** | Thousands of lines of production code, GitHub push |
-| Mar 6 | **GPT-5.4 + GPT-5.4 Thinking** | Latest OpenAI models for Pro and Max |
-| Mar 11 | **Everything is Computer** | Unified architecture announcement |
-| Mar 11 | **Personal Computer** | Dedicated Mac Mini, 24/7 local apps + cloud |
-| Mar 11 | **Computer for Enterprise** | Business connectors, admin controls, audit logs |
-| Mar 11 | **Developer API** | Standalone code execution environment (Python, JS, SQL) |
-| Mar | **Chat Bubbles** | Simplified message display as chat bubbles |
-| Mar | **Sidebar Library** | Library at top, hover for bookmarks/recent |
-| Mar | **Thread Management** | Rename/delete from sidebar ellipsis |
-| Mar | **Menu Customization** | Customize sidebar shortcuts (Finance, Academic, etc.) |
-| Mar | **Result Tabs** | Links, Images, Videos, Shopping, Places at top of threads |
+| Date   | Feature                        | Details                                                    |
+| ------ | ------------------------------ | ---------------------------------------------------------- |
+| Mar 6  | **Custom Skills**              | Create reusable capabilities, auto-apply to relevant tasks |
+| Mar 6  | **Model Council**              | Run GPT-5.4 + Opus 4.6 + Gemini 3.1 Pro in parallel        |
+| Mar 6  | **Voice Mode in Computer**     | Natural conversation for task description/feedback         |
+| Mar 6  | **GPT-5.3-Codex Subagent**     | Thousands of lines of production code, GitHub push         |
+| Mar 6  | **GPT-5.4 + GPT-5.4 Thinking** | Latest OpenAI models for Pro and Max                       |
+| Mar 11 | **Everything is Computer**     | Unified architecture announcement                          |
+| Mar 11 | **Personal Computer**          | Dedicated Mac Mini, 24/7 local apps + cloud                |
+| Mar 11 | **Computer for Enterprise**    | Business connectors, admin controls, audit logs            |
+| Mar 11 | **Developer API**              | Standalone code execution environment (Python, JS, SQL)    |
+| Mar    | **Chat Bubbles**               | Simplified message display as chat bubbles                 |
+| Mar    | **Sidebar Library**            | Library at top, hover for bookmarks/recent                 |
+| Mar    | **Thread Management**          | Rename/delete from sidebar ellipsis                        |
+| Mar    | **Menu Customization**         | Customize sidebar shortcuts (Finance, Academic, etc.)      |
+| Mar    | **Result Tabs**                | Links, Images, Videos, Shopping, Places at top of threads  |
 
 ---
 
@@ -513,35 +553,35 @@
 
 ### Where Perplexity Computer WINS
 
-| Feature | Perplexity | AGI Workforce Status |
-|---------|-----------|---------------------|
-| 400+ OAuth connectors | Shipping | 26 connectors (adding 10 more) |
-| 20-model orchestration | Shipping | 9+ providers, no auto-orchestration |
-| Background async tasks | Shipping | No background task queue |
-| Persistent memory across sessions | Shipping | Memory store exists but limited |
-| Skills/SKILL.md system | Shipping | No SKILL.md support |
-| Voice mode in agent | Shipping | Voice mode exists but not in agent |
-| Model Council (3-model compare) | Shipping | No equivalent |
-| Enterprise SSO/SCIM/SOC2 | Shipping | No enterprise features |
-| $200/month pricing established | Shipping | No pricing model |
-| Live financial data (40+ tools) | Shipping | No financial data connectors |
-| Personal Computer (Mac Mini) | Shipping | Desktop-native (Tauri) is better |
+| Feature                           | Perplexity | AGI Workforce Status                |
+| --------------------------------- | ---------- | ----------------------------------- |
+| 400+ OAuth connectors             | Shipping   | 26 connectors (adding 10 more)      |
+| 20-model orchestration            | Shipping   | 9+ providers, no auto-orchestration |
+| Background async tasks            | Shipping   | No background task queue            |
+| Persistent memory across sessions | Shipping   | Memory store exists but limited     |
+| Skills/SKILL.md system            | Shipping   | No SKILL.md support                 |
+| Voice mode in agent               | Shipping   | Voice mode exists but not in agent  |
+| Model Council (3-model compare)   | Shipping   | No equivalent                       |
+| Enterprise SSO/SCIM/SOC2          | Shipping   | No enterprise features              |
+| $200/month pricing established    | Shipping   | No pricing model                    |
+| Live financial data (40+ tools)   | Shipping   | No financial data connectors        |
+| Personal Computer (Mac Mini)      | Shipping   | Desktop-native (Tauri) is better    |
 
 ### Where AGI Workforce WINS
 
-| Feature | AGI Workforce | Perplexity Gap |
-|---------|--------------|----------------|
-| Desktop-native (Tauri) | Shipping | Web-only, no desktop app |
-| Local LLM support (Ollama) | Shipping | Cloud-only models |
-| BYOK (Bring Your Own Key) | Shipping | No BYOK |
-| Mobile companion (QR pair) | Shipping | No mobile app |
-| Real-time execution visibility | Shipping | No sandbox visibility |
-| MCP without limits | Shipping | MCP support but limited |
-| 150+ non-coding skills | Shipping | ~50 skill playbooks |
-| Browser extension | Shipping | No browser extension |
-| VS Code extension | Shipping | No IDE extension |
-| Free tier available | Yes | Max-only ($200/mo) |
-| Execution replay/trace | Partial | None |
+| Feature                        | AGI Workforce | Perplexity Gap           |
+| ------------------------------ | ------------- | ------------------------ |
+| Desktop-native (Tauri)         | Shipping      | Web-only, no desktop app |
+| Local LLM support (Ollama)     | Shipping      | Cloud-only models        |
+| BYOK (Bring Your Own Key)      | Shipping      | No BYOK                  |
+| Mobile companion (QR pair)     | Shipping      | No mobile app            |
+| Real-time execution visibility | Shipping      | No sandbox visibility    |
+| MCP without limits             | Shipping      | MCP support but limited  |
+| 150+ non-coding skills         | Shipping      | ~50 skill playbooks      |
+| Browser extension              | Shipping      | No browser extension     |
+| VS Code extension              | Shipping      | No IDE extension         |
+| Free tier available            | Yes           | Max-only ($200/mo)       |
+| Execution replay/trace         | Partial       | None                     |
 
 ### Priority Features to Steal from Perplexity
 

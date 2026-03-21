@@ -154,13 +154,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
   connectAccount: async ({ provider, email, password, display_name, custom_config }) => {
     set({ loading: true, error: null });
     try {
-      const account = await emailConnect(
-        provider,
-        email,
-        password,
-        display_name,
-        custom_config,
-      );
+      const account = await emailConnect(provider, email, password, display_name, custom_config);
 
       toast.success(`Connected ${email}`);
       set((state) => ({
@@ -455,12 +449,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
 
     try {
       set({ loading: true, error: null });
-      const result = await emailSearch(
-        selectedAccountId,
-        query,
-        folder ?? null,
-        limit ?? 50,
-      );
+      const result = await emailSearch(selectedAccountId, query, folder ?? null, limit ?? 50);
       set({ loading: false });
       return result;
     } catch (error) {

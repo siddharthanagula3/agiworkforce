@@ -775,7 +775,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             author: "Model Context Protocol".to_string(),
             category: "data".to_string(),
             icon_url: Some("https://www.postgresql.org/media/img/about/press/elephant.png".to_string()),
-            npm_package: Some("@modelcontextprotocol/server-postgres".to_string()),
+            npm_package: Some("@henkey/postgres-mcp-server".to_string()),
             github_url: Some("https://github.com/modelcontextprotocol/server-postgres".to_string()),
             documentation_url: Some("https://modelcontextprotocol.io/docs/servers/postgres".to_string()),
             tools: vec![
@@ -789,7 +789,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             ],
             config_template: McpConfigTemplate {
                 command: "npx".to_string(),
-                args: vec!["-y".to_string(), "@modelcontextprotocol/server-postgres".to_string()],
+                args: vec!["-y".to_string(), "@henkey/postgres-mcp-server".to_string()],
                 env: {
                     let mut env = HashMap::new();
                     env.insert("POSTGRES_CONNECTION_STRING".to_string(), "<from_credential_manager>".to_string());
@@ -1268,7 +1268,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             author: "Model Context Protocol".to_string(),
             category: "data".to_string(),
             icon_url: Some("https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg".to_string()),
-            npm_package: Some("@modelcontextprotocol/server-stripe".to_string()),
+            npm_package: Some("@stripe/mcp".to_string()),
             github_url: Some("https://github.com/modelcontextprotocol/servers/tree/main/src/stripe".to_string()),
             documentation_url: Some("https://modelcontextprotocol.io/docs/servers/stripe".to_string()),
             tools: vec![
@@ -1294,7 +1294,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             ],
             config_template: McpConfigTemplate {
                 command: "npx".to_string(),
-                args: vec!["-y".to_string(), "@modelcontextprotocol/server-stripe".to_string()],
+                args: vec!["-y".to_string(), "@stripe/mcp".to_string()],
                 env: {
                     let mut env = HashMap::new();
                     env.insert("STRIPE_SECRET_KEY".to_string(), "<from_credential_manager>".to_string());
@@ -1662,7 +1662,7 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             ],
             config_template: McpConfigTemplate {
                 command: "npx".to_string(),
-                args: vec!["-y".to_string(), "@anthropic/mcp-server-figma".to_string()],
+                args: vec!["-y".to_string(), "@sethdouglasford/mcp-figma".to_string()],
                 env: {
                     let mut env = HashMap::new();
                     env.insert("FIGMA_ACCESS_TOKEN".to_string(), "<from_credential_manager>".to_string());

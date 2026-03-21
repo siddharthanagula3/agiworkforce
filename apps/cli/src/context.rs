@@ -180,7 +180,12 @@ pub fn detect_project_type(cwd: &str) -> Option<String> {
         (&["pom.xml", "build.gradle", "build.gradle.kts"], "java"),
         (&["*.csproj", "*.sln"], "dotnet"),
         (
-            &["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"],
+            &[
+                "pyproject.toml",
+                "setup.py",
+                "setup.cfg",
+                "requirements.txt",
+            ],
             "python",
         ),
         (&["package.json"], "node"),
@@ -222,7 +227,12 @@ pub fn detect_project_language(cwd: &str) -> Option<String> {
         (&["Gemfile"], "Ruby"),
         (&["pom.xml", "build.gradle", "build.gradle.kts"], "Java"),
         (
-            &["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"],
+            &[
+                "pyproject.toml",
+                "setup.py",
+                "setup.cfg",
+                "requirements.txt",
+            ],
             "Python",
         ),
     ];
@@ -829,10 +839,7 @@ mod tests {
     fn test_detect_pm_go_modules() {
         let (_d, path) = tmp_project_dir();
         fs::write(Path::new(&path).join("go.sum"), "").unwrap();
-        assert_eq!(
-            detect_package_manager(&path).as_deref(),
-            Some("go modules")
-        );
+        assert_eq!(detect_package_manager(&path).as_deref(), Some("go modules"));
     }
 
     #[test]
@@ -1162,10 +1169,7 @@ mod tests {
             git_remote_url: None,
             project_type: None,
             project_language: None,
-            ci_providers: vec![
-                "GitHub Actions".to_string(),
-                "Jenkins".to_string(),
-            ],
+            ci_providers: vec!["GitHub Actions".to_string(), "Jenkins".to_string()],
             monorepo_type: None,
             package_manager: None,
             containerization: vec![],

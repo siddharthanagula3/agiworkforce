@@ -16,14 +16,15 @@ The system uses a **signaling server** to coordinate WebRTC data channels betwee
 ## Core Concepts
 
 ### Cross-Device Thread
+
 A persistent conversation that synchronizes across all paired devices.
 
 ```typescript
 interface CrossDeviceThread {
-  id: string;                    // Cloud-backed thread ID
-  userId: string;                // User who owns thread
-  title: string;                 // User-assigned title
-  deviceIds: string[];           // Paired devices with access
+  id: string; // Cloud-backed thread ID
+  userId: string; // User who owns thread
+  title: string; // User-assigned title
+  deviceIds: string[]; // Paired devices with access
   status: 'active' | 'archived'; // Thread lifecycle
   createdAt: ISO8601;
   lastMessageAt: ISO8601;
@@ -32,13 +33,14 @@ interface CrossDeviceThread {
 ```
 
 ### Cross-Device Message
+
 A message within a thread, tagged with device origin and attachments.
 
 ```typescript
 interface CrossDeviceMessage {
   id: string;
   threadId: string;
-  deviceId: string;              // Device that originated this message
+  deviceId: string; // Device that originated this message
   role: 'user' | 'assistant';
   content: string;
   timestamp: ISO8601;
@@ -47,20 +49,22 @@ interface CrossDeviceMessage {
 ```
 
 ### Device Pairing
+
 QR-code-initiated link between desktop and mobile.
 
 ```typescript
 interface DevicePairing {
-  pairingId: string;             // Temporary pairing session ID
-  initiatorDeviceId: string;     // Device showing QR code
-  responderDeviceId: string;     // Device scanning QR code
-  qrCode: string;                // Base64-encoded QR image
-  expiresAt: ISO8601;            // QR valid for 10 minutes
+  pairingId: string; // Temporary pairing session ID
+  initiatorDeviceId: string; // Device showing QR code
+  responderDeviceId: string; // Device scanning QR code
+  qrCode: string; // Base64-encoded QR image
+  expiresAt: ISO8601; // QR valid for 10 minutes
   status: 'pending' | 'confirmed' | 'expired';
 }
 ```
 
 ### Execution Stream Event
+
 Real-time update streamed from agent execution on desktop to mobile dashboard.
 
 ```typescript
@@ -82,13 +86,13 @@ interface ExecutionStreamEvent {
 
 ### Components
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| Signaling Server | `services/signaling-server/` | WebRTC signaling + message relay |
-| Desktop cross-device store | `apps/desktop/src/stores/crossDeviceStore.ts` | Desktop thread state + sync |
-| Mobile cross-device store | `apps/mobile/stores/crossDeviceStore.ts` | Mobile thread state + sync |
-| Realtime service | `apps/web/features/chat/services/realtime-collaboration.ts` | Cloud subscription + conflict resolution |
-| Thread sync service | Cloud backend | Persist threads, manage device subscriptions |
+| Component                  | Location                                                    | Purpose                                      |
+| -------------------------- | ----------------------------------------------------------- | -------------------------------------------- |
+| Signaling Server           | `services/signaling-server/`                                | WebRTC signaling + message relay             |
+| Desktop cross-device store | `apps/desktop/src/stores/crossDeviceStore.ts`               | Desktop thread state + sync                  |
+| Mobile cross-device store  | `apps/mobile/stores/crossDeviceStore.ts`                    | Mobile thread state + sync                   |
+| Realtime service           | `apps/web/features/chat/services/realtime-collaboration.ts` | Cloud subscription + conflict resolution     |
+| Thread sync service        | Cloud backend                                               | Persist threads, manage device subscriptions |
 
 ### Data Flow: Desktop → Mobile
 
@@ -168,7 +172,7 @@ interface PairedDevice {
   deviceId: string;
   deviceName: string;
   deviceType: 'desktop' | 'mobile' | 'web';
-  signingPublicKey: string;      // For verifying device's messages
+  signingPublicKey: string; // For verifying device's messages
   lastSeenAt: ISO8601;
   isPrimary: boolean;
 }
@@ -194,13 +198,13 @@ interface PairedDevice {
 
 The mobile companion app shows live execution on desktop:
 
-| Feature | Implementation |
-|---------|-----------------|
-| Agent status | Real-time execution stream with current tool |
-| Tool timeline | Scrollable log of all tool calls + results |
-| Approval UI | Modal overlay with tool details + Approve/Deny buttons |
-| Chat view | Message history in chronological order |
-| Agent selector | Quick switch between multiple running agents |
+| Feature        | Implementation                                         |
+| -------------- | ------------------------------------------------------ |
+| Agent status   | Real-time execution stream with current tool           |
+| Tool timeline  | Scrollable log of all tool calls + results             |
+| Approval UI    | Modal overlay with tool details + Approve/Deny buttons |
+| Chat view      | Message history in chronological order                 |
+| Agent selector | Quick switch between multiple running agents           |
 
 ## Security Considerations
 

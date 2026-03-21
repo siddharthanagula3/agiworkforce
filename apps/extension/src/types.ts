@@ -15,6 +15,7 @@ export type NativeMessageType =
   | 'FILL_FORM'
   | 'SUBMIT_FORM'
   | 'GET_CONNECTION_STATUS'
+  | 'RECONNECT_NATIVE'
   | 'CONNECTION_STATUS_CHANGED'
   | 'TAB_READY'
   | 'SYNC_PAGE_CONTEXT'
@@ -343,6 +344,10 @@ export interface AutoFillJobApplicationResponse {
 
 export interface ConnectionStatusMessage extends BaseMessage {
   type: 'GET_CONNECTION_STATUS';
+}
+
+export interface ReconnectNativeMessage extends BaseMessage {
+  type: 'RECONNECT_NATIVE';
 }
 
 export interface ConnectionStatusResponse {
@@ -825,6 +830,7 @@ export type ExtensionMessage =
   | FillFormMessage
   | SubmitFormMessage
   | ConnectionStatusMessage
+  | ReconnectNativeMessage
   | ConnectionStatusChangedMessage
   | TabReadyMessage
   | SyncPageContextMessage

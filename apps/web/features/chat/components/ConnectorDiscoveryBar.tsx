@@ -12,12 +12,7 @@ import { Github, Settings, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn } from '@shared/lib/utils';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@shared/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
 import { useChatPreferencesStore } from '@features/chat/stores/chat-preferences-store';
 
 interface ConnectorDef {

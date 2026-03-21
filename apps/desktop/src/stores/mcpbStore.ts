@@ -15,7 +15,12 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { invoke, listen } from '../lib/tauri-mock';
-import type { McpBundle, McpBundleCategory, BundleInstallProgress, BundleInstallStatus } from '../types/mcp';
+import type {
+  McpBundle,
+  McpBundleCategory,
+  BundleInstallProgress,
+  BundleInstallStatus,
+} from '../types/mcp';
 
 // ---------------------------------------------------------------------------
 // mcpb:install_progress — Rust-emitted event payload

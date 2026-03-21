@@ -187,7 +187,11 @@ export function StatusTrailContent({
     >
       <AnimatePresence mode="popLayout">
         {actionTrail.map((entry) => (
-          <StatusTrailItem key={entry.id} entry={entry} prefersReducedMotion={prefersReducedMotion} />
+          <StatusTrailItem
+            key={entry.id}
+            entry={entry}
+            prefersReducedMotion={prefersReducedMotion}
+          />
         ))}
       </AnimatePresence>
     </div>

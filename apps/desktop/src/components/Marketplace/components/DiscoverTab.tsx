@@ -108,7 +108,8 @@ export function DiscoverTab() {
           <h2 className="text-3xl font-bold mb-4">Popular Tags</h2>
           <div className="flex flex-wrap gap-2">
             {popularTags.map((tagObj) => (
-              <button type="button"
+              <button
+                type="button"
                 key={tagObj.tag}
                 onClick={() => {
                   setFilter('tags', [...filters.tags, tagObj.tag]);
@@ -163,7 +164,8 @@ interface CategoryCardProps {
 
 function CategoryCard({ label, description, count, onClick }: CategoryCardProps) {
   return (
-    <button type="button"
+    <button
+      type="button"
       onClick={onClick}
       className="group p-6 rounded-lg border-2 border-border hover:border-primary hover:bg-primary/5 transition-all text-left"
     >

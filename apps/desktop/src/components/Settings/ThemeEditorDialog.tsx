@@ -185,9 +185,18 @@ function MiniPreview({ colors }: MiniPreviewProps) {
         className="flex items-center gap-1 px-2 py-1.5"
         style={{ backgroundColor: `hsl(${colors.card})` }}
       >
-        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: `hsl(${colors.destructive})` }} />
-        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: `hsl(${colors.accent})` }} />
-        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: `hsl(${colors.primary})` }} />
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: `hsl(${colors.destructive})` }}
+        />
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: `hsl(${colors.accent})` }}
+        />
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: `hsl(${colors.primary})` }}
+        />
         <span
           className="ml-2 truncate text-[9px]"
           style={{ color: `hsl(${colors.cardForeground})` }}
@@ -225,16 +234,16 @@ function MiniPreview({ colors }: MiniPreviewProps) {
       </div>
       <div
         className="flex items-center gap-1.5 px-2 py-1"
-        style={{ backgroundColor: `hsl(${colors.card})`, borderTop: `1px solid hsl(${colors.border})` }}
+        style={{
+          backgroundColor: `hsl(${colors.card})`,
+          borderTop: `1px solid hsl(${colors.border})`,
+        }}
       >
         <div
           className="h-4 flex-1 rounded-sm"
           style={{ backgroundColor: `hsl(${colors.input})` }}
         />
-        <div
-          className="h-4 w-8 rounded-sm"
-          style={{ backgroundColor: `hsl(${colors.primary})` }}
-        />
+        <div className="h-4 w-8 rounded-sm" style={{ backgroundColor: `hsl(${colors.primary})` }} />
       </div>
     </div>
   );

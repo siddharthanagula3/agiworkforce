@@ -181,9 +181,9 @@ impl ProjectMemoryManager {
         // Atomic upsert inside a transaction to prevent TOCTOU races where two
         // concurrent saves both see updated==0 and both attempt INSERT, causing
         // a UNIQUE constraint violation on pre-v58 databases.
-        let tx = conn.transaction().map_err(|e| {
-            Error::Database(format!("Failed to begin transaction: {}", e))
-        })?;
+        let tx = conn
+            .transaction()
+            .map_err(|e| Error::Database(format!("Failed to begin transaction: {}", e)))?;
 
         let updated = tx
             .execute(
@@ -201,9 +201,7 @@ impl ProjectMemoryManager {
                     ProjectMemoryType::Context.as_str()
                 ],
             )
-            .map_err(|e| {
-                Error::Database(format!("Failed to update project context: {}", e))
-            })?;
+            .map_err(|e| Error::Database(format!("Failed to update project context: {}", e)))?;
 
         if updated == 0 {
             // Use INSERT OR REPLACE to handle pre-v58 schemas that have a
@@ -226,9 +224,8 @@ impl ProjectMemoryManager {
             })?;
         }
 
-        tx.commit().map_err(|e| {
-            Error::Database(format!("Failed to commit transaction: {}", e))
-        })?;
+        tx.commit()
+            .map_err(|e| Error::Database(format!("Failed to commit transaction: {}", e)))?;
 
         // Return the id of the upserted row.
         let id: i64 = conn
@@ -324,8 +321,8 @@ impl ProjectMemoryManager {
         // Build a JSON key pattern to match existing rows with the same style_key.
         // Use serde_json to get the exact JSON-escaped form of the key, then escape
         // SQL LIKE wildcards. This handles backslashes correctly (JSON doubles them).
-        let json_escaped_key = serde_json::to_string(style_key)
-            .unwrap_or_else(|_| format!("\"{}\"", style_key));
+        let json_escaped_key =
+            serde_json::to_string(style_key).unwrap_or_else(|_| format!("\"{}\"", style_key));
         // Strip surrounding quotes from JSON string
         let json_inner = &json_escaped_key[1..json_escaped_key.len() - 1];
         let key_pattern = format!(
@@ -338,9 +335,9 @@ impl ProjectMemoryManager {
 
         // Atomic upsert: try UPDATE on the existing row with the same style_key.
         // Wrap in a transaction to prevent TOCTOU UNIQUE constraint crashes.
-        let tx = conn.transaction().map_err(|e| {
-            Error::Database(format!("Failed to begin transaction: {}", e))
-        })?;
+        let tx = conn
+            .transaction()
+            .map_err(|e| Error::Database(format!("Failed to begin transaction: {}", e)))?;
 
         let updated = tx
             .execute(
@@ -359,9 +356,7 @@ impl ProjectMemoryManager {
                     key_pattern
                 ],
             )
-            .map_err(|e| {
-                Error::Database(format!("Failed to update coding style: {}", e))
-            })?;
+            .map_err(|e| Error::Database(format!("Failed to update coding style: {}", e)))?;
 
         if updated == 0 {
             tx.execute(
@@ -382,9 +377,8 @@ impl ProjectMemoryManager {
             })?;
         }
 
-        tx.commit().map_err(|e| {
-            Error::Database(format!("Failed to commit transaction: {}", e))
-        })?;
+        tx.commit()
+            .map_err(|e| Error::Database(format!("Failed to commit transaction: {}", e)))?;
 
         // Return the id of the upserted row.
         let id: i64 = conn
@@ -485,8 +479,8 @@ impl ProjectMemoryManager {
 
         // Build a pattern to match existing rows with the same decision text.
         // Use serde_json to get the exact JSON-escaped form, then escape LIKE wildcards.
-        let json_escaped_decision = serde_json::to_string(decision)
-            .unwrap_or_else(|_| format!("\"{}\"", decision));
+        let json_escaped_decision =
+            serde_json::to_string(decision).unwrap_or_else(|_| format!("\"{}\"", decision));
         let json_inner_decision = &json_escaped_decision[1..json_escaped_decision.len() - 1];
         let decision_pattern = format!(
             "%\"decision\":\"{}\"%",
@@ -497,9 +491,9 @@ impl ProjectMemoryManager {
         );
 
         // Wrap in a transaction to prevent TOCTOU UNIQUE constraint crashes.
-        let tx = conn.transaction().map_err(|e| {
-            Error::Database(format!("Failed to begin transaction: {}", e))
-        })?;
+        let tx = conn
+            .transaction()
+            .map_err(|e| Error::Database(format!("Failed to begin transaction: {}", e)))?;
 
         let updated = tx
             .execute(
@@ -519,10 +513,7 @@ impl ProjectMemoryManager {
                 ],
             )
             .map_err(|e| {
-                Error::Database(format!(
-                    "Failed to update architectural decision: {}",
-                    e
-                ))
+                Error::Database(format!("Failed to update architectural decision: {}", e))
             })?;
 
         if updated == 0 {
@@ -544,9 +535,8 @@ impl ProjectMemoryManager {
             })?;
         }
 
-        tx.commit().map_err(|e| {
-            Error::Database(format!("Failed to commit transaction: {}", e))
-        })?;
+        tx.commit()
+            .map_err(|e| Error::Database(format!("Failed to commit transaction: {}", e)))?;
 
         // Return the id of the upserted row.
         let id: i64 = conn
@@ -1034,10 +1024,7 @@ mod tests {
             .get_project_context("/path/to/project")
             .unwrap()
             .unwrap();
-        assert_eq!(
-            context.main_language,
-            Some("TypeScript".to_string())
-        );
+        assert_eq!(context.main_language, Some("TypeScript".to_string()));
         assert_eq!(context.tech_stack.len(), 2);
         assert_eq!(context.importance, 8);
     }

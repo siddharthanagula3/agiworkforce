@@ -20,9 +20,7 @@ export function GreetingBanner({ visible }: GreetingBannerProps) {
       )}
     >
       <h1 className="text-2xl font-semibold text-foreground">
-        {headline}
-        {' '}
-        <span aria-hidden="true">{emoji}</span>
+        {headline} <span aria-hidden="true">{emoji}</span>
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">{subtext}</p>
     </div>

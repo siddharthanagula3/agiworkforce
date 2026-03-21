@@ -36,13 +36,20 @@ interface ParsedSchedule {
 }
 
 const DAY_NAMES: Record<string, number> = {
-  sunday: 0, sun: 0,
-  monday: 1, mon: 1,
-  tuesday: 2, tue: 2,
-  wednesday: 3, wed: 3,
-  thursday: 4, thu: 4,
-  friday: 5, fri: 5,
-  saturday: 6, sat: 6,
+  sunday: 0,
+  sun: 0,
+  monday: 1,
+  mon: 1,
+  tuesday: 2,
+  tue: 2,
+  wednesday: 3,
+  wed: 3,
+  thursday: 4,
+  thu: 4,
+  friday: 5,
+  fri: 5,
+  saturday: 6,
+  sat: 6,
 };
 
 function parseTime(raw: string): string | null {
@@ -94,7 +101,9 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
   }
 
   if (dayMatches.length > 0) {
-    const dayLabels = dayMatches.map((d) => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ');
+    const dayLabels = dayMatches
+      .map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d])
+      .join(', ');
     return {
       recurrence: 'weekly',
       timeOfDay,
@@ -104,7 +113,9 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
   }
 
   // Monthly: "every 1st", "on the 15th", "monthly"
-  const monthlyMatch = lower.match(/(?:every\s+)?(\d{1,2})(?:st|nd|rd|th)|monthly|once\s+a\s+month/);
+  const monthlyMatch = lower.match(
+    /(?:every\s+)?(\d{1,2})(?:st|nd|rd|th)|monthly|once\s+a\s+month/,
+  );
   if (monthlyMatch) {
     const day = monthlyMatch[1] ? parseInt(monthlyMatch[1], 10) : 1;
     const clampedDay = Math.min(Math.max(day, 1), 31);
@@ -254,7 +265,11 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
       <Pressable
         onPress={handleOpen}
         className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl active:opacity-70"
-        style={{ backgroundColor: `${colors.teal}12`, borderWidth: 1, borderColor: `${colors.teal}25` }}
+        style={{
+          backgroundColor: `${colors.teal}12`,
+          borderWidth: 1,
+          borderColor: `${colors.teal}25`,
+        }}
         accessibilityLabel="Quick schedule"
         accessibilityRole="button"
       >
@@ -266,12 +281,7 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
       </Pressable>
 
       {/* Modal */}
-      <Modal
-        visible={visible}
-        transparent
-        animationType="slide"
-        onRequestClose={handleClose}
-      >
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
@@ -389,9 +399,7 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
                 </View>
 
                 {/* Error */}
-                {error ? (
-                  <Text className="text-[12px] text-red-400 mb-3">{error}</Text>
-                ) : null}
+                {error ? <Text className="text-[12px] text-red-400 mb-3">{error}</Text> : null}
 
                 {/* Create button */}
                 <Pressable

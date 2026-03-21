@@ -90,8 +90,15 @@ impl ToolTimeoutConfig {
     pub fn get_timeout(&self, tool_id: &str) -> u64 {
         match tool_id {
             // Fast tools (15s)
-            "search_web" | "api_call" | "web_fetch" | "llm_reason" | "code_search"
-            | "grep_search" | "glob_search" | "conversation_search" | "recent_chats" => self.fast,
+            "search_web"
+            | "api_call"
+            | "web_fetch"
+            | "llm_reason"
+            | "code_search"
+            | "grep_search"
+            | "glob_search"
+            | "conversation_search"
+            | "recent_chats" => self.fast,
 
             // Medium tools (60s)
             "file_read"
@@ -1600,10 +1607,7 @@ impl ToolExecutor {
             "memory_recall" => self.execute_memory_recall_tool(&args, &tool.id).await,
             "memory_search" => self.execute_memory_search_tool(&args, &tool.id).await,
             "memory_forget" => self.execute_memory_forget_tool(&args, &tool.id).await,
-            "conversation_search" => {
-                self.execute_conversation_search_tool(&args, &tool.id)
-                    .await
-            }
+            "conversation_search" => self.execute_conversation_search_tool(&args, &tool.id).await,
             "recent_chats" => self.execute_recent_chats_tool(&args, &tool.id).await,
             "browser_click" => self.execute_browser_tool("browser_click", args).await,
             "browser_extract" => self.execute_browser_tool("browser_extract", args).await,

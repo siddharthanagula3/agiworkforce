@@ -5,6 +5,9 @@ use std::path::PathBuf;
 
 use super::{EmbeddingMetadata, Vector};
 
+const ANN_SIGNATURE_BITS: usize = 16;
+const ANN_EXPANSION_LIMIT: usize = 64;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
     pub metadata: EmbeddingMetadata,
@@ -73,12 +76,58 @@ impl SimilaritySearch {
                 .execute("ALTER TABLE embeddings ADD COLUMN model_id TEXT", [])?;
         }
 
+        let has_ann_bucket: bool = self
+            .db
+            .prepare("PRAGMA table_info(embeddings)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .any(|col| col == "ann_bucket");
+
+        if !has_ann_bucket {
+            self.db
+                .execute("ALTER TABLE embeddings ADD COLUMN ann_bucket TEXT", [])?;
+        }
+
         // Index on model_id for efficient same-model filtering during search.
         // Must come AFTER the column migration above.
         self.db.execute(
             "CREATE INDEX IF NOT EXISTS idx_embeddings_model_id ON embeddings(model_id)",
             [],
         )?;
+
+        self.db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_embeddings_ann_bucket ON embeddings(ann_bucket)",
+            [],
+        )?;
+
+        self.db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_embeddings_model_bucket ON embeddings(model_id, ann_bucket)",
+            [],
+        )?;
+
+        self.backfill_ann_buckets()?;
+
+        Ok(())
+    }
+
+    fn backfill_ann_buckets(&self) -> Result<()> {
+        let mut stmt = self.db.prepare(
+            "SELECT id, embedding FROM embeddings WHERE ann_bucket IS NULL OR ann_bucket = ''",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
+        })?;
+
+        for row in rows {
+            let (id, embedding_blob) = row?;
+            let embedding = deserialize_vector(&embedding_blob)?;
+            let bucket = compute_ann_bucket(&embedding);
+            self.db.execute(
+                "UPDATE embeddings SET ann_bucket = ?1 WHERE id = ?2",
+                params![bucket, id],
+            )?;
+        }
 
         Ok(())
     }
@@ -92,12 +141,13 @@ impl SimilaritySearch {
         let embedding_blob = serialize_vector(&embedding)?;
         let dimensions = embedding.len() as i32;
         let now = chrono::Utc::now().timestamp();
+        let ann_bucket = compute_ann_bucket(&embedding);
 
         self.db.execute(
             "INSERT OR REPLACE INTO embeddings
             (id, file_path, chunk_index, content, language, symbol_name, start_line, end_line,
-             embedding, dimensions, created_at, updated_at, model_id)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+             embedding, dimensions, created_at, updated_at, model_id, ann_bucket)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 id,
                 metadata.file_path,
@@ -112,6 +162,7 @@ impl SimilaritySearch {
                 metadata.created_at,
                 now,
                 metadata.model_id,
+                ann_bucket,
             ],
         )?;
 
@@ -135,26 +186,10 @@ impl SimilaritySearch {
         limit: usize,
         model_id: Option<&str>,
     ) -> Result<Vec<SearchResult>> {
-        let (sql, has_param) = if model_id.is_some() {
-            (
-                "SELECT id, file_path, chunk_index, content, language, symbol_name,
-                        start_line, end_line, embedding, created_at, model_id
-                 FROM embeddings
-                 WHERE model_id = ?1",
-                true,
-            )
-        } else {
-            (
-                "SELECT id, file_path, chunk_index, content, language, symbol_name,
-                        start_line, end_line, embedding, created_at, model_id
-                 FROM embeddings",
-                false,
-            )
-        };
-
-        let mut stmt = self.db.prepare(sql)?;
-
         let mut results: Vec<SearchResult> = Vec::new();
+        let query_bucket = compute_ann_bucket(&query_embedding);
+        let candidate_buckets = generate_candidate_buckets(&query_bucket, ANN_EXPANSION_LIMIT);
+        let mut seen_ids = std::collections::HashSet::new();
 
         let row_mapper = |row: &rusqlite::Row| {
             let id: String = row.get(0)?;
@@ -184,45 +219,128 @@ impl SimilaritySearch {
             ))
         };
 
-        let rows: Vec<_> = if has_param {
-            stmt.query_map(params![model_id], row_mapper)?.collect()
-        } else {
-            stmt.query_map([], row_mapper)?.collect()
-        };
+        for bucket in candidate_buckets {
+            let sql = if model_id.is_some() {
+                "SELECT id, file_path, chunk_index, content, language, symbol_name,
+                        start_line, end_line, embedding, created_at, model_id
+                 FROM embeddings
+                 WHERE model_id = ?1 AND ann_bucket = ?2"
+            } else {
+                "SELECT id, file_path, chunk_index, content, language, symbol_name,
+                        start_line, end_line, embedding, created_at, model_id
+                 FROM embeddings
+                 WHERE ann_bucket = ?1"
+            };
 
-        for row in rows {
-            let (
-                id,
-                file_path,
-                chunk_index,
-                content,
-                language,
-                symbol_name,
-                start_line,
-                end_line,
-                embedding_blob,
-                created_at,
-                row_model_id,
-            ) = row?;
+            let mut stmt = self.db.prepare(sql)?;
+            let rows: Vec<_> = if let Some(model_id) = model_id {
+                stmt.query_map(params![model_id, bucket], row_mapper)?
+                    .collect()
+            } else {
+                stmt.query_map(params![bucket], row_mapper)?.collect()
+            };
 
-            let embedding = deserialize_vector(&embedding_blob)?;
-            let similarity = cosine_similarity(&query_embedding, &embedding);
-
-            results.push(SearchResult {
-                metadata: EmbeddingMetadata {
+            for row in rows {
+                let (
                     id,
                     file_path,
-                    chunk_index: chunk_index as usize,
+                    chunk_index,
                     content,
                     language,
                     symbol_name,
                     start_line,
                     end_line,
+                    embedding_blob,
                     created_at,
-                    model_id: row_model_id,
-                },
-                similarity,
-            });
+                    row_model_id,
+                ) = row?;
+
+                if !seen_ids.insert(id.clone()) {
+                    continue;
+                }
+
+                let embedding = deserialize_vector(&embedding_blob)?;
+                let similarity = cosine_similarity(&query_embedding, &embedding);
+
+                results.push(SearchResult {
+                    metadata: EmbeddingMetadata {
+                        id,
+                        file_path,
+                        chunk_index: chunk_index as usize,
+                        content,
+                        language,
+                        symbol_name,
+                        start_line,
+                        end_line,
+                        created_at,
+                        model_id: row_model_id,
+                    },
+                    similarity,
+                });
+            }
+
+            if results.len() >= limit.saturating_mul(4).max(limit) {
+                break;
+            }
+        }
+
+        if results.len() < limit {
+            let sql = if model_id.is_some() {
+                "SELECT id, file_path, chunk_index, content, language, symbol_name,
+                        start_line, end_line, embedding, created_at, model_id
+                 FROM embeddings
+                 WHERE model_id = ?1"
+            } else {
+                "SELECT id, file_path, chunk_index, content, language, symbol_name,
+                        start_line, end_line, embedding, created_at, model_id
+                 FROM embeddings"
+            };
+
+            let mut stmt = self.db.prepare(sql)?;
+            let rows: Vec<_> = if let Some(model_id) = model_id {
+                stmt.query_map(params![model_id], row_mapper)?.collect()
+            } else {
+                stmt.query_map([], row_mapper)?.collect()
+            };
+
+            for row in rows {
+                let (
+                    id,
+                    file_path,
+                    chunk_index,
+                    content,
+                    language,
+                    symbol_name,
+                    start_line,
+                    end_line,
+                    embedding_blob,
+                    created_at,
+                    row_model_id,
+                ) = row?;
+
+                if !seen_ids.insert(id.clone()) {
+                    continue;
+                }
+
+                let embedding = deserialize_vector(&embedding_blob)?;
+                let similarity = cosine_similarity(&query_embedding, &embedding);
+
+                results.push(SearchResult {
+                    metadata: EmbeddingMetadata {
+                        id,
+                        file_path,
+                        chunk_index: chunk_index as usize,
+                        content,
+                        language,
+                        symbol_name,
+                        start_line,
+                        end_line,
+                        created_at,
+                        model_id: row_model_id,
+                    },
+                    similarity,
+                });
+            }
         }
 
         results.sort_by(|a, b| {
@@ -396,6 +514,47 @@ fn deserialize_vector(bytes: &[u8]) -> Result<Vector> {
     bincode::deserialize(bytes).context("Failed to deserialize vector")
 }
 
+fn compute_ann_bucket(vector: &[f32]) -> String {
+    vector
+        .iter()
+        .take(ANN_SIGNATURE_BITS)
+        .map(|value| if *value >= 0.0 { '1' } else { '0' })
+        .collect()
+}
+
+fn generate_candidate_buckets(bucket: &str, limit: usize) -> Vec<String> {
+    let mut candidates = Vec::with_capacity(limit.max(1));
+    candidates.push(bucket.to_string());
+
+    let chars: Vec<char> = bucket.chars().collect();
+
+    for i in 0..chars.len() {
+        if candidates.len() >= limit {
+            break;
+        }
+        let mut one_flip = chars.clone();
+        one_flip[i] = if one_flip[i] == '1' { '0' } else { '1' };
+        candidates.push(one_flip.into_iter().collect());
+    }
+
+    for i in 0..chars.len() {
+        for j in (i + 1)..chars.len() {
+            if candidates.len() >= limit {
+                break;
+            }
+            let mut two_flip = chars.clone();
+            two_flip[i] = if two_flip[i] == '1' { '0' } else { '1' };
+            two_flip[j] = if two_flip[j] == '1' { '0' } else { '1' };
+            candidates.push(two_flip.into_iter().collect());
+        }
+        if candidates.len() >= limit {
+            break;
+        }
+    }
+
+    candidates
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -428,5 +587,40 @@ mod tests {
     fn test_new_in_memory_initializes_schema() {
         let search = SimilaritySearch::new_in_memory().unwrap();
         assert_eq!(search.count_embeddings().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_ann_bucket_generation_is_stable() {
+        let bucket = compute_ann_bucket(&[
+            1.0, -1.0, 0.1, -0.2, 0.0, 2.0, -3.0, 4.0, 0.3, -0.4, 0.5, -0.6, 0.7, -0.8, 0.9, -1.0,
+        ]);
+        assert_eq!(bucket.len(), ANN_SIGNATURE_BITS);
+        assert_eq!(bucket, "1010101010101010");
+    }
+
+    #[test]
+    fn test_search_with_model_uses_ann_candidates() {
+        let mut search = SimilaritySearch::new_in_memory().unwrap();
+        let model_id = "test-model".to_string();
+        let target = vec![1.0; 16];
+        let metadata = EmbeddingMetadata::new(
+            "src/main.rs".to_string(),
+            0,
+            "fn main() {}".to_string(),
+            "rust".to_string(),
+            1,
+            1,
+        )
+        .with_model_id(model_id.clone());
+
+        search
+            .add_embedding(&metadata.id.clone(), target.clone(), metadata)
+            .unwrap();
+
+        let results = search
+            .search_with_model(target, 1, Some(&model_id))
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].metadata.file_path, "src/main.rs");
     }
 }

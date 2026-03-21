@@ -71,10 +71,12 @@ describe('useExtensionEvents', () => {
 
   it('updates shared extension state without auto-opening the sidecar', async () => {
     const listeners = new Map<string, ListenerCallback<unknown>>();
-    listenMock.mockImplementation(async (eventName: string, callback: ListenerCallback<unknown>) => {
-      listeners.set(eventName, callback);
-      return () => {};
-    });
+    listenMock.mockImplementation(
+      async (eventName: string, callback: ListenerCallback<unknown>) => {
+        listeners.set(eventName, callback);
+        return () => {};
+      },
+    );
 
     renderHook(() => useExtensionEvents());
 

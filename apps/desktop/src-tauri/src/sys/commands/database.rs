@@ -574,14 +574,10 @@ pub async fn db_build_select(query: SelectQuery) -> Result<String, String> {
         .map_err(|e| format!("Failed to build query: {}", e))
 }
 
-/// Build an INSERT SQL string using string interpolation.
+/// Build an INSERT SQL string with placeholders.
 ///
-/// # Deprecation Warning (M10)
-/// This command returns a fully-interpolated SQL string. Callers should treat
-/// the result as read-only data for display purposes only. For actual database
-/// writes, use `db_execute_prepared` with parameterized placeholders instead,
-/// which eliminates the risk of SQL injection from bypassing the escape layer.
-/// All column names and values are length-validated (max 10 000 chars each).
+/// This command returns parameterized SQL only. Callers must bind values via
+/// `db_execute_prepared`.
 #[tauri::command]
 pub async fn db_build_insert(query: InsertQuery) -> Result<String, String> {
     // M10: validate lengths on all columns and values before building
@@ -604,10 +600,6 @@ pub async fn db_build_insert(query: InsertQuery) -> Result<String, String> {
         }
     }
 
-    tracing::warn!(
-        "db_build_insert uses string interpolation. Prefer db_execute_prepared for safe writes."
-    );
-
     let mut builder = QueryBuilder::insert(&query.table);
 
     builder = builder.into_columns(&query.columns.iter().map(|s| s.as_str()).collect::<Vec<_>>());
@@ -617,16 +609,15 @@ pub async fn db_build_insert(query: InsertQuery) -> Result<String, String> {
     }
 
     builder
-        .build()
+        .build_parameterized()
+        .map(|(sql, _params)| sql)
         .map_err(|e| format!("Failed to build query: {}", e))
 }
 
-/// Build an UPDATE SQL string using string interpolation.
+/// Build an UPDATE SQL string with placeholders.
 ///
-/// # Deprecation Warning (M10)
-/// This command returns a fully-interpolated SQL string. For actual database
-/// writes, use `db_execute_prepared` with parameterized placeholders instead.
-/// All keys and values are length-validated (max 10 000 chars each).
+/// This command returns parameterized SQL only. Callers must bind values via
+/// `db_execute_prepared`.
 #[tauri::command]
 pub async fn db_build_update(query: UpdateQuery) -> Result<String, String> {
     // M10: validate lengths on all set_values keys and values
@@ -645,10 +636,6 @@ pub async fn db_build_update(query: UpdateQuery) -> Result<String, String> {
         }
     }
 
-    tracing::warn!(
-        "db_build_update uses string interpolation. Prefer db_execute_prepared for safe writes."
-    );
-
     let mut builder = QueryBuilder::update(&query.table);
 
     for (key, value) in &query.set_values {
@@ -662,7 +649,8 @@ pub async fn db_build_update(query: UpdateQuery) -> Result<String, String> {
     };
 
     builder
-        .build()
+        .build_parameterized()
+        .map(|(sql, _params)| sql)
         .map_err(|e| format!("Failed to build query: {}", e))
 }
 

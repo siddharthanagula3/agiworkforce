@@ -6,9 +6,9 @@
  *
  * Event flow:
  *   cloudApi.sendCloudMessage(onChunk, onDone, onError)
- *     → dispatchCloudEvent('stream:start', ...)
- *     → dispatchCloudEvent('stream:delta', ...) × N
- *     → dispatchCloudEvent('stream:end', ...)
+ *     → dispatchCloudEvent('chat:stream-start', ...)
+ *     → dispatchCloudEvent('chat:stream-chunk', ...) × N
+ *     → dispatchCloudEvent('chat:stream-end', ...)
  */
 
 import { sendCloudMessage } from '../api/cloudApi';
@@ -27,30 +27,35 @@ function dispatchCloudEvent(event: string, payload: unknown): void {
 // ---------------------------------------------------------------------------
 
 interface StreamStartPayload {
-  conversationId: string;
-  messageId: string;
-  model: string;
+  conversation_id: string;
+  message_id: string;
+  created_at: string;
 }
 
-interface StreamDeltaPayload {
-  conversationId: string;
-  messageId: string;
+interface StreamChunkPayload {
+  conversation_id: string;
+  message_id: string;
   delta: string;
+  content: string;
 }
 
 interface StreamEndPayload {
-  conversationId: string;
-  messageId: string;
-  fullContent: string;
-  model: string;
-  tokens?: number;
-  cost?: number;
+  conversation_id: string;
+  message_id: string;
 }
 
 interface StreamErrorPayload {
-  conversationId: string;
-  messageId: string;
+  conversation_id: string;
+  message_id: string;
   error: string;
+}
+
+interface StartCloudChatStreamOptions {
+  conversationId?: string;
+  content: string;
+  model: string;
+  messageId?: string;
+  signal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,79 +72,76 @@ interface StreamErrorPayload {
  * @param signal         - Optional AbortSignal for cancellation
  * @returns Promise that resolves when the stream completes
  */
-export async function startCloudChatStream(
-  conversationId: string,
-  content: string,
-  model: string,
-  signal?: AbortSignal,
-): Promise<void> {
-  const messageId = `cloud_${crypto.randomUUID()}`;
+export async function startCloudChatStream(options: StartCloudChatStreamOptions): Promise<void> {
+  const messageId = options.messageId ?? `cloud_${crypto.randomUUID()}`;
+  let conversationId = options.conversationId ?? `cloud_${crypto.randomUUID()}`;
   let fullContent = '';
+  let started = false;
 
-  // Emit stream:start
-  dispatchCloudEvent('stream:start', {
-    conversationId,
-    messageId,
-    model,
-  } satisfies StreamStartPayload);
+  const emitStart = () => {
+    if (started) {
+      return;
+    }
+    started = true;
+    dispatchCloudEvent('chat:stream-start', {
+      conversation_id: conversationId,
+      message_id: messageId,
+      created_at: new Date().toISOString(),
+    } satisfies StreamStartPayload);
+  };
 
   return new Promise<void>((resolve, reject) => {
     sendCloudMessage(
       conversationId,
-      content,
-      model,
+      options.content,
+      options.model,
       // onChunk — called for each text delta
       (text: string) => {
+        emitStart();
         fullContent += text;
-        dispatchCloudEvent('stream:delta', {
-          conversationId,
-          messageId,
+        dispatchCloudEvent('chat:stream-chunk', {
+          conversation_id: conversationId,
+          message_id: messageId,
           delta: text,
-        } satisfies StreamDeltaPayload);
+          content: fullContent,
+        } satisfies StreamChunkPayload);
       },
       // onDone — called when the stream ends successfully
       () => {
-        dispatchCloudEvent('stream:end', {
-          conversationId,
-          messageId,
-          fullContent,
-          model,
+        emitStart();
+        dispatchCloudEvent('chat:stream-end', {
+          conversation_id: conversationId,
+          message_id: messageId,
         } satisfies StreamEndPayload);
         resolve();
       },
       // onError — called if the stream encounters an error
       (err: Error) => {
-        dispatchCloudEvent('stream:error', {
-          conversationId,
-          messageId,
+        emitStart();
+        dispatchCloudEvent('chat:stream-error', {
+          conversation_id: conversationId,
+          message_id: messageId,
           error: err.message,
         } satisfies StreamErrorPayload);
 
-        // Also emit stream:end so listeners clean up
-        dispatchCloudEvent('stream:end', {
-          conversationId,
-          messageId,
-          fullContent,
-          model,
-        } satisfies StreamEndPayload);
-
         reject(err);
       },
-      signal,
+      options.signal,
+      (payload) => {
+        const nextConversationId = payload['conversation_id'];
+        if (typeof nextConversationId === 'string' && nextConversationId.length > 0) {
+          conversationId = nextConversationId;
+        }
+      },
     ).catch((err) => {
       // Catch any unhandled errors from sendCloudMessage itself
       const error = err instanceof Error ? err : new Error(String(err));
-      dispatchCloudEvent('stream:error', {
-        conversationId,
-        messageId,
+      emitStart();
+      dispatchCloudEvent('chat:stream-error', {
+        conversation_id: conversationId,
+        message_id: messageId,
         error: error.message,
       } satisfies StreamErrorPayload);
-      dispatchCloudEvent('stream:end', {
-        conversationId,
-        messageId,
-        fullContent,
-        model,
-      } satisfies StreamEndPayload);
       reject(error);
     });
   });

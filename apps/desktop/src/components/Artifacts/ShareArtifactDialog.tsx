@@ -59,7 +59,15 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
     };
 
     void generate();
-  }, [isOpen, expiryMode, artifact.id, artifact.title, artifact.artifact_type, artifact.content, artifact.metadata]);
+  }, [
+    isOpen,
+    expiryMode,
+    artifact.id,
+    artifact.title,
+    artifact.artifact_type,
+    artifact.content,
+    artifact.metadata,
+  ]);
 
   const handleCopy = useCallback(async () => {
     if (!shareResult?.url) return;
@@ -90,7 +98,8 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
     >
       <div className="relative w-full max-w-md rounded-xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6">
         {/* Close button */}
-        <button type="button"
+        <button
+          type="button"
           onClick={onClose}
           className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
           aria-label="Close"
@@ -115,7 +124,8 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
         <div className="mb-4">
           <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">Link expiry</p>
           <div className="flex gap-2">
-            <button type="button"
+            <button
+              type="button"
               onClick={() => handleExpiryChange('seven-days')}
               className={cn(
                 'flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
@@ -126,7 +136,8 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
             >
               Expire after 7 days
             </button>
-            <button type="button"
+            <button
+              type="button"
               onClick={() => handleExpiryChange('never')}
               className={cn(
                 'flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',

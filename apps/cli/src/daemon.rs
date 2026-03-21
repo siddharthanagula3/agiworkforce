@@ -21,9 +21,7 @@ use tokio::sync::{mpsc, watch, Semaphore};
 use crate::agent::AgentSession;
 use crate::config::CliConfig;
 use crate::context;
-use crate::hooks::{
-    self, HookEvent, HookInput, HooksConfig, TriggerConfig, TriggerType,
-};
+use crate::hooks::{self, HookEvent, HookInput, HooksConfig, TriggerConfig, TriggerType};
 
 // ---------------------------------------------------------------------------
 // Security helpers
@@ -85,9 +83,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
                 "{} No triggers.json found at ~/.agiworkforce/triggers.json",
                 "daemon:".bright_yellow()
             );
-            eprintln!(
-                "  Create triggers.json to define cron, webhook, or file-watcher triggers."
-            );
+            eprintln!("  Create triggers.json to define cron, webhook, or file-watcher triggers.");
             eprintln!("  Example:");
             eprintln!(
                 r#"  {{
@@ -252,7 +248,12 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
 
     // Fire DaemonStopped hook
     let hooks_config_final = hooks::load_hooks().unwrap_or_default();
-    fire_daemon_hook(&hooks_config_final, HookEvent::DaemonStopped, "daemon stopped").await;
+    fire_daemon_hook(
+        &hooks_config_final,
+        HookEvent::DaemonStopped,
+        "daemon stopped",
+    )
+    .await;
 
     eprintln!("{} Stopped.", "daemon:".bright_green());
     Ok(())
@@ -267,13 +268,10 @@ fn validate_triggers(triggers: &[&TriggerConfig]) -> Result<()> {
     for t in triggers {
         match t.trigger_type {
             TriggerType::Cron => {
-                let expr = t
-                    .cron
-                    .as_deref()
-                    .context(format!(
-                        "Trigger '{}': cron trigger requires a 'cron' field",
-                        t.id
-                    ))?;
+                let expr = t.cron.as_deref().context(format!(
+                    "Trigger '{}': cron trigger requires a 'cron' field",
+                    t.id
+                ))?;
                 // The `cron` crate expects 7-field expressions (sec min hour dom mon dow year)
                 // but users write 5-field ones.  Prepend "0 " for the seconds field.
                 let full = format!("0 {}", expr);
@@ -1094,10 +1092,7 @@ mod tests {
 
         assert_eq!(config.triggers[1].id, "deploy-hook");
         assert_eq!(config.triggers[1].trigger_type, TriggerType::Webhook);
-        assert_eq!(
-            config.triggers[1].webhook_path.as_deref(),
-            Some("/deploy")
-        );
+        assert_eq!(config.triggers[1].webhook_path.as_deref(), Some("/deploy"));
 
         assert_eq!(config.triggers[2].id, "src-watch");
         assert_eq!(config.triggers[2].trigger_type, TriggerType::FileWatcher);

@@ -197,7 +197,8 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
       */}
       {onToggleSidecar && (
         <div className="flex justify-end mt-1 px-1">
-          <button type="button"
+          <button
+            type="button"
             onClick={() => onToggleSidecar(targetTab as SidecarMode)}
             className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
           >

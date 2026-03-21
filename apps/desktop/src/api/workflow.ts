@@ -18,7 +18,12 @@ export async function createWorkflow(definition: WorkflowDefinition): Promise<st
     return `mock-workflow-${Date.now()}`;
   }
 
-  return invoke<string>('create_workflow', { definition });
+  try {
+    return await invoke<string>('create_workflow', { definition });
+  } catch (error) {
+    console.error('[workflow] failed to create workflow:', error);
+    throw error;
+  }
 }
 
 /**
@@ -30,7 +35,12 @@ export async function updateWorkflow(id: string, definition: WorkflowDefinition)
     return;
   }
 
-  await invoke('update_workflow', { id, definition });
+  try {
+    await invoke('update_workflow', { id, definition });
+  } catch (error) {
+    console.error('[workflow] failed to update workflow:', error);
+    throw error;
+  }
 }
 
 /**
@@ -42,7 +52,12 @@ export async function deleteWorkflow(id: string): Promise<void> {
     return;
   }
 
-  await invoke('delete_workflow', { id });
+  try {
+    await invoke('delete_workflow', { id });
+  } catch (error) {
+    console.error('[workflow] failed to delete workflow:', error);
+    throw error;
+  }
 }
 
 /**
@@ -65,7 +80,12 @@ export async function getWorkflow(id: string): Promise<WorkflowDefinition> {
     };
   }
 
-  return invoke<WorkflowDefinition>('get_workflow', { id });
+  try {
+    return await invoke<WorkflowDefinition>('get_workflow', { id });
+  } catch (error) {
+    console.error('[workflow] failed to get workflow:', error);
+    throw error;
+  }
 }
 
 /**
@@ -77,7 +97,12 @@ export async function getUserWorkflows(userId: string): Promise<WorkflowDefiniti
     return [];
   }
 
-  return invoke<WorkflowDefinition[]>('get_user_workflows', { userId });
+  try {
+    return await invoke<WorkflowDefinition[]>('get_user_workflows', { userId });
+  } catch (error) {
+    console.error('[workflow] failed to get user workflows:', error);
+    throw error;
+  }
 }
 
 /**
@@ -92,7 +117,12 @@ export async function executeWorkflow(
     return `mock-execution-${Date.now()}`;
   }
 
-  return invoke<string>('execute_workflow', { workflowId, inputs });
+  try {
+    return await invoke<string>('execute_workflow', { workflowId, inputs });
+  } catch (error) {
+    console.error('[workflow] failed to execute workflow:', error);
+    throw error;
+  }
 }
 
 /**
@@ -104,7 +134,12 @@ export async function pauseWorkflow(executionId: string): Promise<void> {
     return;
   }
 
-  await invoke('pause_workflow', { executionId });
+  try {
+    await invoke('pause_workflow', { executionId });
+  } catch (error) {
+    console.error('[workflow] failed to pause workflow:', error);
+    throw error;
+  }
 }
 
 /**
@@ -116,7 +151,12 @@ export async function resumeWorkflow(executionId: string): Promise<void> {
     return;
   }
 
-  await invoke('resume_workflow', { executionId });
+  try {
+    await invoke('resume_workflow', { executionId });
+  } catch (error) {
+    console.error('[workflow] failed to resume workflow:', error);
+    throw error;
+  }
 }
 
 /**
@@ -128,7 +168,12 @@ export async function cancelWorkflow(executionId: string): Promise<void> {
     return;
   }
 
-  await invoke('cancel_workflow', { executionId });
+  try {
+    await invoke('cancel_workflow', { executionId });
+  } catch (error) {
+    console.error('[workflow] failed to cancel workflow:', error);
+    throw error;
+  }
 }
 
 /**
@@ -148,7 +193,12 @@ export async function getWorkflowStatus(executionId: string): Promise<WorkflowEx
     };
   }
 
-  return invoke<WorkflowExecution>('get_workflow_status', { executionId });
+  try {
+    return await invoke<WorkflowExecution>('get_workflow_status', { executionId });
+  } catch (error) {
+    console.error('[workflow] failed to get workflow status:', error);
+    throw error;
+  }
 }
 
 /**
@@ -160,7 +210,12 @@ export async function getExecutionLogs(executionId: string): Promise<WorkflowExe
     return [];
   }
 
-  return invoke<WorkflowExecutionLog[]>('get_execution_logs', { executionId });
+  try {
+    return await invoke<WorkflowExecutionLog[]>('get_execution_logs', { executionId });
+  } catch (error) {
+    console.error('[workflow] failed to get execution logs:', error);
+    throw error;
+  }
 }
 
 /**
@@ -176,7 +231,12 @@ export async function scheduleWorkflow(
     return;
   }
 
-  await invoke('schedule_workflow', { workflowId, cronExpr, timezone });
+  try {
+    await invoke('schedule_workflow', { workflowId, cronExpr, timezone });
+  } catch (error) {
+    console.error('[workflow] failed to schedule workflow:', error);
+    throw error;
+  }
 }
 
 /**
@@ -188,7 +248,12 @@ export async function getNextExecutionTime(cronExpr: string): Promise<number> {
     return Date.now() + 3600000; // 1 hour from now
   }
 
-  return invoke<number>('get_next_execution_time', { cronExpr });
+  try {
+    return await invoke<number>('get_next_execution_time', { cronExpr });
+  } catch (error) {
+    console.error('[workflow] failed to get next execution time:', error);
+    throw error;
+  }
 }
 
 /**
@@ -204,9 +269,14 @@ export async function triggerWorkflowOnEvent(
     return `mock-execution-${Date.now()}`;
   }
 
-  return invoke<string>('trigger_workflow_on_event', {
-    workflowId,
-    eventType,
-    eventData,
-  });
+  try {
+    return await invoke<string>('trigger_workflow_on_event', {
+      workflowId,
+      eventType,
+      eventData,
+    });
+  } catch (error) {
+    console.error('[workflow] failed to trigger workflow on event:', error);
+    throw error;
+  }
 }

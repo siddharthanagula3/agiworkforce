@@ -125,10 +125,7 @@ export async function getElementStyles(selector: string): Promise<string> {
  * @param baseColor - A CSS hex color, e.g. "#3B82F6"
  * @param theme - Theme style, e.g. "dark", "light", "warm"
  */
-export async function generateColorScheme(
-  baseColor: string,
-  theme: string,
-): Promise<ColorScheme> {
+export async function generateColorScheme(baseColor: string, theme: string): Promise<ColorScheme> {
   return invoke<ColorScheme>('design_generate_color_scheme', { baseColor, theme });
 }
 

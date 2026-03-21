@@ -60,7 +60,11 @@ impl ArtifactStore {
             let conn = match db.lock() {
                 Ok(c) => c,
                 Err(e) => {
-                    tracing::warn!("Failed to acquire DB lock for artifact {}: {}", artifact.id, e);
+                    tracing::warn!(
+                        "Failed to acquire DB lock for artifact {}: {}",
+                        artifact.id,
+                        e
+                    );
                     return;
                 }
             };
@@ -69,11 +73,9 @@ impl ArtifactStore {
             }
             // Persist the latest version
             if let Some(latest_version) = artifact.versions.last() {
-                if let Err(e) = persistence::save_artifact_version_to_db(
-                    &conn,
-                    &artifact.id,
-                    latest_version,
-                ) {
+                if let Err(e) =
+                    persistence::save_artifact_version_to_db(&conn, &artifact.id, latest_version)
+                {
                     tracing::warn!(
                         "Failed to persist artifact version {}_v{}: {}",
                         artifact.id,
@@ -91,7 +93,11 @@ impl ArtifactStore {
             let conn = match db.lock() {
                 Ok(c) => c,
                 Err(e) => {
-                    tracing::warn!("Failed to acquire DB lock for deleting artifact {}: {}", id, e);
+                    tracing::warn!(
+                        "Failed to acquire DB lock for deleting artifact {}: {}",
+                        id,
+                        e
+                    );
                     return;
                 }
             };

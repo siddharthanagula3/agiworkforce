@@ -677,14 +677,14 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                                 .unwrap_or("")
                                 .to_string();
                             let entry =
-                                tool_call_map.entry(index).or_insert_with(|| {
-                                    StreamingToolCall {
+                                tool_call_map
+                                    .entry(index)
+                                    .or_insert_with(|| StreamingToolCall {
                                         index,
                                         id: String::new(),
                                         name: String::new(),
                                         arguments: String::new(),
-                                    }
-                                });
+                                    });
                             if !id.is_empty() {
                                 entry.id = id;
                             }
@@ -744,14 +744,15 @@ fn parse_anthropic_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send 
                                 .get("partial_json")
                                 .and_then(|p| p.as_str())
                                 .unwrap_or("");
-                            let entry = tool_call_map
-                                .entry(index)
-                                .or_insert_with(|| StreamingToolCall {
-                                    index,
-                                    id: String::new(),
-                                    name: String::new(),
-                                    arguments: String::new(),
-                                });
+                            let entry =
+                                tool_call_map
+                                    .entry(index)
+                                    .or_insert_with(|| StreamingToolCall {
+                                        index,
+                                        id: String::new(),
+                                        name: String::new(),
+                                        arguments: String::new(),
+                                    });
                             entry.arguments.push_str(partial_json);
                         }
                         "thinking_delta" => {
@@ -960,15 +961,14 @@ fn parse_google_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                                     let id = format!("call_{}", uuid::Uuid::new_v4());
                                     let idx = next_tool_index;
                                     next_tool_index += 1;
-                                    let entry =
-                                        tool_call_map.entry(idx).or_insert_with(|| {
-                                            StreamingToolCall {
-                                                index: idx,
-                                                id: String::new(),
-                                                name: String::new(),
-                                                arguments: String::new(),
-                                            }
-                                        });
+                                    let entry = tool_call_map.entry(idx).or_insert_with(|| {
+                                        StreamingToolCall {
+                                            index: idx,
+                                            id: String::new(),
+                                            name: String::new(),
+                                            arguments: String::new(),
+                                        }
+                                    });
                                     entry.id = id;
                                     entry.name = name.to_string();
                                     entry.arguments.push_str(&args);
@@ -1085,14 +1085,14 @@ fn parse_ollama_sse(event: &str) -> Result<StreamChunk, Box<dyn Error + Send + S
                         .and_then(|i| i.as_str())
                         .unwrap_or("")
                         .to_string();
-                    let entry = tool_call_map.entry(idx).or_insert_with(|| {
-                        StreamingToolCall {
+                    let entry = tool_call_map
+                        .entry(idx)
+                        .or_insert_with(|| StreamingToolCall {
                             index: idx,
                             id: String::new(),
                             name: String::new(),
                             arguments: String::new(),
-                        }
-                    });
+                        });
                     if !id.is_empty() {
                         entry.id = id;
                     }
@@ -1504,7 +1504,11 @@ mod stream_tests {
         let chunk = parse_sse_event(event, crate::core::llm::Provider::OpenAI).unwrap();
         let tool_calls = chunk.tool_calls.expect("should have tool calls");
 
-        assert_eq!(tool_calls.len(), 1, "duplicate index entries must be merged");
+        assert_eq!(
+            tool_calls.len(),
+            1,
+            "duplicate index entries must be merged"
+        );
         assert_eq!(tool_calls[0].index, 0);
         assert_eq!(tool_calls[0].id, "call_merge");
         assert_eq!(tool_calls[0].name, "write_file");

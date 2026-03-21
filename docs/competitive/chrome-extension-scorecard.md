@@ -123,7 +123,6 @@
 - [ ] Detailed description — need to write
 - [ ] Promotional tile (440x280) — need to create
 
-
 ---
 
 # UI Parity Details

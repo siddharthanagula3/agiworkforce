@@ -47,8 +47,10 @@ export interface ScheduledJob {
   status: JobStatus;
   createdAt: string;
   updatedAt: string;
-  lastRun: string | null;
-  nextRun: string | null;
+  lastRun?: string | null;
+  nextRun?: string | null;
+  lastExecutedAt?: string | null;
+  nextExecutionAt?: string | null;
   runCount: number;
   failureCount: number;
   description: string | null;
@@ -682,8 +684,16 @@ export const useSchedulerStore = create<SchedulerState>()(
                 cronExpression: job.schedule,
               },
               status: job.status as TaskStatus,
-              lastRunAt: job.lastRun ? new Date(job.lastRun).getTime() : null,
-              nextRunAt: job.nextRun ? new Date(job.nextRun).getTime() : null,
+              lastRunAt: job.lastExecutedAt
+                ? new Date(job.lastExecutedAt).getTime()
+                : job.lastRun
+                  ? new Date(job.lastRun).getTime()
+                  : null,
+              nextRunAt: job.nextExecutionAt
+                ? new Date(job.nextExecutionAt).getTime()
+                : job.nextRun
+                  ? new Date(job.nextRun).getTime()
+                  : null,
               runCount: job.runCount,
               lastOutput: null,
               createdAt: new Date(job.createdAt).getTime(),

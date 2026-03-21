@@ -206,7 +206,8 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
             }}
             className="absolute bottom-6 right-6"
           >
-            <button type="button"
+            <button
+              type="button"
               onClick={handleSave}
               disabled={saveState.status === 'saving'}
               className={cn(
@@ -257,7 +258,8 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
                 <p className="text-sm font-semibold text-rose-200">Save Failed</p>
                 <p className="mt-1 text-xs text-rose-300">{saveState.message}</p>
               </div>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => setSaveState({ status: 'idle' })}
                 className="shrink-0 rounded-lg p-1 hover:bg-rose-500/20 transition-colors"
               >

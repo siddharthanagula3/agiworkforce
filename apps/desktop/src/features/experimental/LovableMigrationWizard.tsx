@@ -332,8 +332,8 @@ export function LovableMigrationWizard() {
                   <CardTitle>Step 1 · Connect Lovable Workspace</CardTitle>
                   <CardDescription>
                     Provide a Lovable API key with workflow read access and specify the workspace
-                    slug. This flow is still experimental and currently blocked until a real
-                    Lovable backend integration is implemented.
+                    slug. This flow is still experimental and currently blocked until a real Lovable
+                    backend integration is implemented.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">

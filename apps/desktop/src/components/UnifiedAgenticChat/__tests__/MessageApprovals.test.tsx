@@ -32,11 +32,9 @@ vi.mock('../../../stores/unifiedChatStore', () => ({
 }));
 
 vi.mock('../Cards/ApprovalRequestCard', () => ({
-  ApprovalRequestCard: ({
-    approval,
-  }: {
-    approval: { description: string };
-  }) => <div data-testid="approval-card">{approval.description}</div>,
+  ApprovalRequestCard: ({ approval }: { approval: { description: string } }) => (
+    <div data-testid="approval-card">{approval.description}</div>
+  ),
 }));
 
 import { MessageApprovals } from '../MessageApprovals';

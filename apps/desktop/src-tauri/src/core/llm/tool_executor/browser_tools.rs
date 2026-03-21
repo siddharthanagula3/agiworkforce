@@ -80,10 +80,7 @@ fn validate_css_selector(selector: &str) -> Result<(), String> {
     //    interpolation context ever changes from single-quoted to template strings.
     for ch in ['<', '\'', '"', '\\', '`'] {
         if trimmed.contains(ch) {
-            return Err(format!(
-                "contains disallowed character '{}'",
-                ch
-            ));
+            return Err(format!("contains disallowed character '{}'", ch));
         }
     }
 
@@ -162,7 +159,9 @@ fn validate_pseudo_classes(selector: &str) -> Result<(), String> {
             }
             // Consume the name: [a-zA-Z0-9_-]
             let name_start = i;
-            while i < len && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'-' || bytes[i] == b'_') {
+            while i < len
+                && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'-' || bytes[i] == b'_')
+            {
                 i += 1;
             }
             if i == name_start {
@@ -174,9 +173,7 @@ fn validate_pseudo_classes(selector: &str) -> Result<(), String> {
             let pseudo_name = &selector[start..i];
             let pseudo_lower = pseudo_name.to_lowercase();
 
-            let is_safe = SAFE_PSEUDO_CLASSES.iter().any(|safe| {
-                pseudo_lower == *safe
-            });
+            let is_safe = SAFE_PSEUDO_CLASSES.iter().any(|safe| pseudo_lower == *safe);
             // Also allow `:not(` — we validate nesting depth separately.
             let is_not = pseudo_lower == ":not";
 
@@ -216,10 +213,11 @@ fn validate_not_nesting(selector: &str) -> Result<(), String> {
                 } else if bytes[j] == b')' {
                     depth = depth.saturating_sub(1);
                 }
-                if depth > 0 && j + not_pattern.len() <= len && &bytes[j..j + not_pattern.len()] == not_pattern {
-                    return Err(
-                        "contains nested :not() (negation abuse)".to_string(),
-                    );
+                if depth > 0
+                    && j + not_pattern.len() <= len
+                    && &bytes[j..j + not_pattern.len()] == not_pattern
+                {
+                    return Err("contains nested :not() (negation abuse)".to_string());
                 }
                 j += 1;
             }
@@ -237,9 +235,7 @@ fn validate_not_nesting(selector: &str) -> Result<(), String> {
 fn require_safe_selector(selector: &str) -> Result<()> {
     if let Err(reason) = validate_css_selector(selector) {
         tracing::warn!("Invalid selector pattern: {reason}");
-        return Err(anyhow!(
-            "Invalid CSS selector: {reason}"
-        ));
+        return Err(anyhow!("Invalid CSS selector: {reason}"));
     }
     Ok(())
 }
@@ -1267,10 +1263,7 @@ mod tests {
 
     #[test]
     fn test_safe_complex_real_world_selector() {
-        assert!(validate_css_selector(
-            "div.container > ul.list > li:first-child"
-        )
-        .is_ok());
+        assert!(validate_css_selector("div.container > ul.list > li:first-child").is_ok());
     }
 
     #[test]
@@ -1445,9 +1438,7 @@ mod tests {
 
     #[test]
     fn test_multiple_safe_pseudos_combined() {
-        assert!(
-            validate_css_selector("input:enabled:checked:first-child").is_ok()
-        );
+        assert!(validate_css_selector("input:enabled:checked:first-child").is_ok());
     }
 
     // ---------------------------------------------------------------

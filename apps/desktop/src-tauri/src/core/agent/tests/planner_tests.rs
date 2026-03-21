@@ -608,10 +608,7 @@ I need to take a screenshot first.
 
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].id, "step_rt");
-        assert_eq!(
-            parsed[0].expected_result.as_deref(),
-            Some("Button clicked")
-        );
+        assert_eq!(parsed[0].expected_result.as_deref(), Some("Button clicked"));
         assert!(parsed[0].retry_on_failure);
 
         if let Action::Click { target } = &parsed[0].action {

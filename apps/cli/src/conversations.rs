@@ -79,8 +79,7 @@ pub fn save_conversation(session: &AgentSession) -> Result<String> {
 
 /// Save a conversation into `dir`. Extracted so tests can supply a temp directory.
 fn save_conversation_in_dir(session: &AgentSession, dir: &std::path::Path) -> Result<String> {
-    std::fs::create_dir_all(dir)
-        .context("Failed to create conversations directory")?;
+    std::fs::create_dir_all(dir).context("Failed to create conversations directory")?;
 
     let now = chrono::Utc::now();
     let id = format!("{}", now.format("%Y%m%d_%H%M%S"));
@@ -125,8 +124,8 @@ fn save_conversation_in_dir(session: &AgentSession, dir: &std::path::Path) -> Re
     };
 
     let path = dir.join(format!("{}.json", id));
-    let json = serde_json::to_string_pretty(&conversation)
-        .context("Failed to serialize conversation")?;
+    let json =
+        serde_json::to_string_pretty(&conversation).context("Failed to serialize conversation")?;
     std::fs::write(&path, json).context("Failed to write conversation file")?;
 
     Ok(id)
@@ -144,8 +143,7 @@ fn load_conversation_in_dir(id: &str, dir: &std::path::Path) -> Result<SavedConv
         bail!("Conversation '{}' not found", id);
     }
 
-    let contents =
-        std::fs::read_to_string(&path).context("Failed to read conversation file")?;
+    let contents = std::fs::read_to_string(&path).context("Failed to read conversation file")?;
     let conversation: SavedConversation =
         serde_json::from_str(&contents).context("Failed to parse conversation file")?;
     Ok(conversation)
@@ -226,11 +224,7 @@ pub fn restore_into_session(session: &mut AgentSession, conv: &SavedConversation
     session.total_output_tokens = conv.total_output_tokens;
 
     // Count user messages as turns (exclude system prompt)
-    session.turn_count = conv
-        .messages
-        .iter()
-        .filter(|m| m.role == "user")
-        .count() as u32;
+    session.turn_count = conv.messages.iter().filter(|m| m.role == "user").count() as u32;
 }
 
 /// Export the current session as a markdown string.
@@ -452,7 +446,9 @@ mod tests {
         let ctx = test_ctx();
         let mut session = AgentSession::new("test-model", &ctx, None);
         session.messages.push(Message::text("user", "Hello"));
-        session.messages.push(Message::text("assistant", "Hi there!"));
+        session
+            .messages
+            .push(Message::text("assistant", "Hi there!"));
         session.turn_count = 1;
 
         let md = export_as_markdown(&session);
@@ -472,10 +468,13 @@ mod tests {
 
         let ctx = test_ctx();
         let mut session = AgentSession::new("claude-opus-4-6", &ctx, None);
-        session.messages.push(Message::text("user", "What is Rust?"));
         session
             .messages
-            .push(Message::text("assistant", "Rust is a systems programming language."));
+            .push(Message::text("user", "What is Rust?"));
+        session.messages.push(Message::text(
+            "assistant",
+            "Rust is a systems programming language.",
+        ));
         session.total_input_tokens = 10;
         session.total_output_tokens = 25;
 
@@ -504,9 +503,7 @@ mod tests {
         let ctx = test_ctx();
         let mut session = AgentSession::new("gpt-4o", &ctx, None);
         session.messages.push(Message::text("user", "Hello world"));
-        session
-            .messages
-            .push(Message::text("assistant", "Hi!"));
+        session.messages.push(Message::text("assistant", "Hi!"));
 
         let id = save_conversation_in_dir(&session, dir).unwrap();
         let summaries = list_conversations_in_dir(dir).unwrap();
@@ -542,7 +539,9 @@ mod tests {
     fn test_export_markdown_with_tool_calls() {
         let ctx = test_ctx();
         let mut session = AgentSession::new("test-model", &ctx, None);
-        session.messages.push(Message::text("user", "Read /tmp/test.txt"));
+        session
+            .messages
+            .push(Message::text("user", "Read /tmp/test.txt"));
 
         // Assistant message with text + tool_use
         session.messages.push(Message::blocks(
@@ -572,7 +571,10 @@ mod tests {
         session.turn_count = 1;
 
         let md = export_as_markdown(&session);
-        assert!(md.contains("**Tool: read_file**"), "should contain tool name");
+        assert!(
+            md.contains("**Tool: read_file**"),
+            "should contain tool name"
+        );
         assert!(md.contains("path: /tmp/test.txt"), "should contain args");
         assert!(
             md.contains("\u{2713} Success"),

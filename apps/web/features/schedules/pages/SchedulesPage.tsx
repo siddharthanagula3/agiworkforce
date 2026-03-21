@@ -21,14 +21,7 @@ import {
   AlertDialogTitle,
 } from '@shared/ui/alert-dialog';
 import { ScrollArea } from '@shared/ui/scroll-area';
-import {
-  Plus,
-  Calendar,
-  Loader2,
-  AlertTriangle,
-  RefreshCw,
-  Clock,
-} from 'lucide-react';
+import { Plus, Calendar, Loader2, AlertTriangle, RefreshCw, Clock } from 'lucide-react';
 import { useScheduleStore } from '../stores/schedule-store';
 import { ScheduleCard } from '../components/ScheduleCard';
 import { ScheduleForm } from '../components/ScheduleForm';
@@ -114,9 +107,8 @@ export function SchedulesPage() {
       }
     } else {
       // Check for prefill data from duplicate action
-      const prefill = (
-        useScheduleStore.getState() as { _prefill?: Partial<ScheduleFormData> }
-      )._prefill;
+      const prefill = (useScheduleStore.getState() as { _prefill?: Partial<ScheduleFormData> })
+        ._prefill;
       setForm(prefill ? { ...INITIAL_FORM, ...prefill } : INITIAL_FORM);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

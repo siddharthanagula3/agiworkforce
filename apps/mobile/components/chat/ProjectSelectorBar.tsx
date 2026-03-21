@@ -98,7 +98,11 @@ export function ProjectSelectorBar() {
             <Pressable
               onPress={handleOpenDropdown}
               className="flex-row items-center gap-2 self-start rounded-full px-3 py-1.5 active:opacity-70"
-              style={{ backgroundColor: `${colors.teal}15`, borderWidth: 1, borderColor: `${colors.teal}30` }}
+              style={{
+                backgroundColor: `${colors.teal}15`,
+                borderWidth: 1,
+                borderColor: `${colors.teal}30`,
+              }}
               accessibilityLabel={`Active project: ${activeProject.name}. Tap to change`}
               accessibilityRole="button"
             >
@@ -207,7 +211,13 @@ export function ProjectSelectorBar() {
                   />
                 )}
                 ItemSeparatorComponent={() => (
-                  <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.04)', marginHorizontal: 16 }} />
+                  <View
+                    style={{
+                      height: 1,
+                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      marginHorizontal: 16,
+                    }}
+                  />
                 )}
               />
             </View>

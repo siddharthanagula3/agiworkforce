@@ -120,7 +120,13 @@ interface TimePickerModalProps {
   onConfirm: (time: string) => void;
 }
 
-function TimePickerModal({ visible, field, currentValue, onClose, onConfirm }: TimePickerModalProps) {
+function TimePickerModal({
+  visible,
+  field,
+  currentValue,
+  onClose,
+  onConfirm,
+}: TimePickerModalProps) {
   const [value, setValue] = useState(currentValue);
 
   const handleConfirm = useCallback(() => {
@@ -145,17 +151,11 @@ function TimePickerModal({ visible, field, currentValue, onClose, onConfirm }: T
   }, [value, onConfirm, onClose]);
 
   // Quick-select common times
-  const QUICK_TIMES = field === 'start'
-    ? ['21:00', '22:00', '23:00']
-    : ['06:00', '07:00', '08:00', '09:00'];
+  const QUICK_TIMES =
+    field === 'start' ? ['21:00', '22:00', '23:00'] : ['06:00', '07:00', '08:00', '09:00'];
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
         className="flex-1 justify-center items-center"
         style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
@@ -193,7 +193,12 @@ function TimePickerModal({ visible, field, currentValue, onClose, onConfirm }: T
                   placeholderTextColor={colors.textMuted}
                   keyboardType="numbers-and-punctuation"
                   maxLength={5}
-                  style={{ flex: 1, color: colors.textPrimary, fontSize: 18, fontVariant: ['tabular-nums'] }}
+                  style={{
+                    flex: 1,
+                    color: colors.textPrimary,
+                    fontSize: 18,
+                    fontVariant: ['tabular-nums'],
+                  }}
                   autoFocus
                   selectTextOnFocus
                 />
@@ -431,9 +436,7 @@ export default function NotificationPreferencesScreen() {
 
         {/* Vibration */}
         <View className="mt-6 mb-2">
-          <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-3">
-            Vibration
-          </Text>
+          <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-3">Vibration</Text>
         </View>
         <Card>
           <View className="flex-row items-center gap-3 mb-3 px-1">
@@ -460,9 +463,7 @@ export default function NotificationPreferencesScreen() {
         <TimePickerModal
           visible={timePickerField !== null}
           field={timePickerField}
-          currentValue={
-            timePickerField === 'start' ? quietHours.startTime : quietHours.endTime
-          }
+          currentValue={timePickerField === 'start' ? quietHours.startTime : quietHours.endTime}
           onClose={() => setTimePickerField(null)}
           onConfirm={handleTimeConfirm}
         />

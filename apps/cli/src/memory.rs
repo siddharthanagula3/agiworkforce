@@ -94,10 +94,16 @@ impl MemoryManager {
                 // Also skip if the local path equals the project path (edge case)
                 let already_covered = project_path.as_ref().is_some_and(|pp| {
                     let pp_canon = pp.canonicalize().unwrap_or_else(|_| pp.clone());
-                    let cc_canon = candidate.canonicalize().unwrap_or_else(|_| candidate.clone());
+                    let cc_canon = candidate
+                        .canonicalize()
+                        .unwrap_or_else(|_| candidate.clone());
                     pp_canon == cc_canon
                 });
-                if already_covered { None } else { Some(candidate) }
+                if already_covered {
+                    None
+                } else {
+                    Some(candidate)
+                }
             }
         };
 
@@ -172,27 +178,24 @@ impl MemoryManager {
     pub fn save(&self, tier: &MemoryTier, content: &str) -> Result<PathBuf, String> {
         let path = match tier {
             MemoryTier::Global => self.global_path.clone(),
-            MemoryTier::Project => self
-                .project_path
-                .clone()
-                .ok_or_else(|| "No project root found. Run from a project directory or use /init.".to_string())?,
-            MemoryTier::Local => self
-                .local_path
-                .clone()
-                .unwrap_or_else(|| {
-                    // Fallback: if local_path is None because cwd==project root,
-                    // save to the project CLAUDE.md instead.
-                    self.project_path
-                        .clone()
-                        .unwrap_or_else(|| PathBuf::from("CLAUDE.md"))
-                }),
+            MemoryTier::Project => self.project_path.clone().ok_or_else(|| {
+                "No project root found. Run from a project directory or use /init.".to_string()
+            })?,
+            MemoryTier::Local => self.local_path.clone().unwrap_or_else(|| {
+                // Fallback: if local_path is None because cwd==project root,
+                // save to the project CLAUDE.md instead.
+                self.project_path
+                    .clone()
+                    .unwrap_or_else(|| PathBuf::from("CLAUDE.md"))
+            }),
         };
 
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
             if !parent.exists() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create directory {}: {}", parent.display(), e))?;
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    format!("Failed to create directory {}: {}", parent.display(), e)
+                })?;
             }
         }
 
@@ -290,7 +293,13 @@ fn find_git_root(start: &Path) -> Option<PathBuf> {
     }
 
     // Fallback: walk up looking for root markers
-    let markers = [".git", "Cargo.toml", "package.json", "go.mod", "pyproject.toml"];
+    let markers = [
+        ".git",
+        "Cargo.toml",
+        "package.json",
+        "go.mod",
+        "pyproject.toml",
+    ];
     let mut current = start.to_path_buf();
     loop {
         for marker in &markers {
@@ -310,7 +319,11 @@ pub fn content_preview(content: &str, max_lines: usize) -> String {
     let lines: Vec<&str> = content.lines().take(max_lines + 1).collect();
     if lines.len() > max_lines {
         let preview: Vec<&str> = lines[..max_lines].to_vec();
-        format!("{}\n  ... ({} more lines)", preview.join("\n"), content.lines().count() - max_lines)
+        format!(
+            "{}\n  ... ({} more lines)",
+            preview.join("\n"),
+            content.lines().count() - max_lines
+        )
     } else {
         lines.join("\n")
     }

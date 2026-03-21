@@ -416,20 +416,18 @@ impl McpConnection {
         let mut request_json = serde_json::to_string(&request)?;
         request_json.push('\n');
 
-        let stdin = self
-            .child
-            .stdin
-            .as_mut()
-            .context(format!("[{}] MCP server stdin not available", self.server_name))?;
+        let stdin = self.child.stdin.as_mut().context(format!(
+            "[{}] MCP server stdin not available",
+            self.server_name
+        ))?;
         stdin.write_all(request_json.as_bytes()).await?;
         stdin.flush().await?;
 
         // Read response (single line JSON-RPC)
-        let stdout = self
-            .child
-            .stdout
-            .as_mut()
-            .context(format!("[{}] MCP server stdout not available", self.server_name))?;
+        let stdout = self.child.stdout.as_mut().context(format!(
+            "[{}] MCP server stdout not available",
+            self.server_name
+        ))?;
         let mut reader = BufReader::new(stdout);
         let mut line = String::new();
 
@@ -442,12 +440,10 @@ impl McpConnection {
         match tokio::time::timeout(timeout, async {
             loop {
                 line.clear();
-                let bytes_read = reader.read_line(&mut line)
+                let bytes_read = reader
+                    .read_line(&mut line)
                     .await
-                    .context(format!(
-                        "[{}] Failed to read from MCP server",
-                        server_name
-                    ))?;
+                    .context(format!("[{}] Failed to read from MCP server", server_name))?;
 
                 if bytes_read == 0 {
                     bail!("[{}] MCP server closed connection", server_name);
@@ -467,7 +463,9 @@ impl McpConnection {
                 }
                 // Otherwise it's a notification or response to a different request -- skip
             }
-        }).await {
+        })
+        .await
+        {
             Ok(result) => result,
             Err(_) => Err(anyhow::anyhow!(
                 "[{}] MCP server response timeout ({}ms) on '{}'",
@@ -493,11 +491,10 @@ impl McpConnection {
         let mut json = serde_json::to_string(&notification)?;
         json.push('\n');
 
-        let stdin = self
-            .child
-            .stdin
-            .as_mut()
-            .context(format!("[{}] MCP server stdin not available", self.server_name))?;
+        let stdin = self.child.stdin.as_mut().context(format!(
+            "[{}] MCP server stdin not available",
+            self.server_name
+        ))?;
         stdin.write_all(json.as_bytes()).await?;
         stdin.flush().await?;
 
@@ -609,8 +606,7 @@ impl McpManager {
             if global_mcp.exists() {
                 if let Ok(contents) = std::fs::read_to_string(&global_mcp) {
                     if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&contents) {
-                        if let Some(servers) =
-                            parsed.get("mcpServers").and_then(|s| s.as_object())
+                        if let Some(servers) = parsed.get("mcpServers").and_then(|s| s.as_object())
                         {
                             for (name, config) in servers {
                                 if let Ok(server_config) =
@@ -629,10 +625,7 @@ impl McpManager {
     }
 
     /// Connect to all configured MCP servers and discover tools.
-    pub async fn connect_all(
-        &mut self,
-        configs: &HashMap<String, McpServerConfig>,
-    ) -> Result<()> {
+    pub async fn connect_all(&mut self, configs: &HashMap<String, McpServerConfig>) -> Result<()> {
         for (name, config) in configs {
             match McpConnection::connect(name, config).await {
                 Ok(mut conn) => match conn.list_tools().await {
@@ -692,10 +685,7 @@ impl McpManager {
         let conn = self
             .connections
             .get_mut(&tool.server_name)
-            .context(format!(
-                "[{}] MCP server not connected",
-                tool.server_name
-            ))?;
+            .context(format!("[{}] MCP server not connected", tool.server_name))?;
 
         conn.call_tool(&tool.original_name, arguments).await
     }
@@ -704,10 +694,7 @@ impl McpManager {
     pub async fn shutdown_all(&mut self) {
         for (name, mut conn) in self.connections.drain() {
             if let Err(e) = conn.shutdown().await {
-                eprintln!(
-                    "Warning: failed to shut down MCP server '{}': {}",
-                    name, e
-                );
+                eprintln!("Warning: failed to shut down MCP server '{}': {}", name, e);
             }
         }
     }

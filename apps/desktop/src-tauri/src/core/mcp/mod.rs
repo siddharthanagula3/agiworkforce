@@ -37,7 +37,9 @@ pub use extensions::{
 };
 pub use health::{HealthStatus, McpHealthMonitor, ServerHealth};
 pub use manager::{ManagedServer, McpServerManager, ServerStatus};
-pub use oauth::{McpAuthMethod, McpOAuthConfig, McpOAuthManager, McpOAuthToken, OAuthClientMetadata};
+pub use oauth::{
+    McpAuthMethod, McpOAuthConfig, McpOAuthManager, McpOAuthToken, OAuthClientMetadata,
+};
 pub use protocol::{
     McpTask, McpTaskProgress, McpTaskStatus, McpToolDefinition, ServerCapabilitiesV2,
     TaskCreateParams, TaskIdParams, TaskListParams, TaskListResult, ToolCallResult, ToolContent,

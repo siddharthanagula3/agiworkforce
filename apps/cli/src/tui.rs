@@ -118,8 +118,8 @@ impl TuiApp {
     /// Get the current spinner character.
     fn spinner_char(&self) -> &str {
         const FRAMES: &[&str] = &[
-            "\u{2840}", "\u{28c0}", "\u{28c4}", "\u{28e4}",
-            "\u{28f0}", "\u{28b0}", "\u{2830}", "\u{2810}",
+            "\u{2840}", "\u{28c0}", "\u{28c4}", "\u{28e4}", "\u{28f0}", "\u{28b0}", "\u{2830}",
+            "\u{2810}",
         ];
         FRAMES[(self.spinner_tick as usize) % FRAMES.len()]
     }
@@ -157,7 +157,7 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // header
+                Constraint::Length(3), // header
                 Constraint::Min(5),    // chat area
                 Constraint::Length(3), // input
                 Constraint::Length(1), // status bar
@@ -173,11 +173,7 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
     Ok(())
 }
 
-fn render_header(
-    frame: &mut ratatui::Frame,
-    area: Rect,
-    app: &TuiApp,
-) {
+fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     let provider_display = match app.provider_name.as_str() {
         "ollama" => "Local",
         other => other,
@@ -203,10 +199,7 @@ fn render_header(
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" | "),
-        Span::styled(
-            provider_display,
-            Style::default().fg(Color::Green),
-        ),
+        Span::styled(provider_display, Style::default().fg(Color::Green)),
         Span::raw(" | "),
         Span::styled(
             format!("Turns: {}", app.turn_count),
@@ -217,26 +210,20 @@ fn render_header(
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::DarkGray))
-        .title_bottom(Line::from(vec![
-            Span::styled(
-                format!(
-                    " {}in / {}out ",
-                    crate::output::format_tokens(app.total_input_tokens),
-                    crate::output::format_tokens(app.total_output_tokens),
-                ),
-                Style::default().fg(Color::DarkGray),
+        .title_bottom(Line::from(vec![Span::styled(
+            format!(
+                " {}in / {}out ",
+                crate::output::format_tokens(app.total_input_tokens),
+                crate::output::format_tokens(app.total_output_tokens),
             ),
-        ]));
+            Style::default().fg(Color::DarkGray),
+        )]));
 
     let header = Paragraph::new(header_text).block(block);
     frame.render_widget(header, area);
 }
 
-fn render_chat(
-    frame: &mut ratatui::Frame,
-    area: Rect,
-    app: &TuiApp,
-) {
+fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     let mut lines: Vec<Line> = Vec::new();
 
     if app.chat_messages.is_empty() && !app.is_loading {
@@ -284,9 +271,10 @@ fn render_chat(
                 ),
             };
 
-            lines.push(Line::from(vec![
-                Span::styled(format!("  {} ", role_label), role_style),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                format!("  {} ", role_label),
+                role_style,
+            )]));
 
             // Render message text with basic formatting
             for text_line in msg.text.lines() {
@@ -346,10 +334,7 @@ fn style_message_line(line: &str, role: ChatRole) -> Line<'static> {
 
     // Detect code block fences (lines starting with ```).
     if line.starts_with("```") {
-        return Line::from(Span::styled(
-            text,
-            Style::default().fg(Color::DarkGray),
-        ));
+        return Line::from(Span::styled(text, Style::default().fg(Color::DarkGray)));
     }
 
     let content_style = match role {
@@ -376,10 +361,7 @@ fn parse_inline_formatting(text: &str, base_style: Style) -> Vec<Span<'static>> 
             if let Some(end) = remaining[start + 2..].find("**") {
                 // Push text before bold
                 if start > 0 {
-                    spans.push(Span::styled(
-                        remaining[..start].to_string(),
-                        base_style,
-                    ));
+                    spans.push(Span::styled(remaining[..start].to_string(), base_style));
                 }
                 // Push bold text
                 let bold_text = &remaining[start + 2..start + 2 + end];
@@ -399,10 +381,7 @@ fn parse_inline_formatting(text: &str, base_style: Style) -> Vec<Span<'static>> 
             if let Some(end) = remaining[start + 1..].find('`') {
                 // Push text before code
                 if start > 0 {
-                    spans.push(Span::styled(
-                        remaining[..start].to_string(),
-                        base_style,
-                    ));
+                    spans.push(Span::styled(remaining[..start].to_string(), base_style));
                 }
                 // Push code text
                 let code_text = &remaining[start + 1..start + 1 + end];
@@ -424,11 +403,7 @@ fn parse_inline_formatting(text: &str, base_style: Style) -> Vec<Span<'static>> 
     spans
 }
 
-fn render_input(
-    frame: &mut ratatui::Frame,
-    area: Rect,
-    app: &TuiApp,
-) {
+fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     let display_text = if app.input.is_empty() && !app.is_loading {
         "Type your message..."
     } else {
@@ -442,7 +417,12 @@ fn render_input(
     };
 
     let input_line = Line::from(vec![
-        Span::styled("> ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "> ",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(display_text.to_string(), style),
     ]);
 
@@ -462,13 +442,12 @@ fn render_input(
     }
 }
 
-fn render_status_bar(
-    frame: &mut ratatui::Frame,
-    area: Rect,
-    app: &TuiApp,
-) {
+fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     let mode = if app.session.plan_mode {
-        Span::styled(" PLAN ", Style::default().fg(Color::Black).bg(Color::Yellow))
+        Span::styled(
+            " PLAN ",
+            Style::default().fg(Color::Black).bg(Color::Yellow),
+        )
     } else {
         Span::styled(" CHAT ", Style::default().fg(Color::Black).bg(Color::Cyan))
     };
@@ -476,29 +455,16 @@ fn render_status_bar(
     let status = Line::from(vec![
         mode,
         Span::raw(" "),
-        Span::styled(
-            "[Esc: Quit]",
-            Style::default().fg(Color::DarkGray),
-        ),
+        Span::styled("[Esc: Quit]", Style::default().fg(Color::DarkGray)),
         Span::raw(" "),
-        Span::styled(
-            "[Up/Down: Scroll]",
-            Style::default().fg(Color::DarkGray),
-        ),
+        Span::styled("[Up/Down: Scroll]", Style::default().fg(Color::DarkGray)),
         Span::raw(" "),
-        Span::styled(
-            "[Ctrl-L: Clear]",
-            Style::default().fg(Color::DarkGray),
-        ),
+        Span::styled("[Ctrl-L: Clear]", Style::default().fg(Color::DarkGray)),
         Span::raw(" "),
-        Span::styled(
-            "[/help: Commands]",
-            Style::default().fg(Color::DarkGray),
-        ),
+        Span::styled("[/help: Commands]", Style::default().fg(Color::DarkGray)),
     ]);
 
-    let bar = Paragraph::new(status)
-        .style(Style::default().bg(Color::DarkGray).fg(Color::White));
+    let bar = Paragraph::new(status).style(Style::default().bg(Color::DarkGray).fg(Color::White));
     frame.render_widget(bar, area);
 }
 
@@ -659,10 +625,7 @@ fn handle_tui_slash(input: &str, app: &mut TuiApp) -> TuiSlashResult {
                 app.session.total_input_tokens,
                 app.session.total_output_tokens,
             );
-            TuiSlashResult::SystemMessage(format!(
-                "Turns: {} | {}",
-                app.session.turn_count, cost
-            ))
+            TuiSlashResult::SystemMessage(format!("Turns: {} | {}", app.session.turn_count, cost))
         }
 
         "/status" => {

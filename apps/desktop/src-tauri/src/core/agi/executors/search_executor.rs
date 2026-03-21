@@ -7,6 +7,7 @@ use super::{ExecutorContext, ToolExecutor};
 use crate::core::agi::ExecutionContext;
 use crate::integrations::api_integrations::perplexity::{PerplexityClient, PerplexityModel};
 use crate::integrations::api_integrations::RequestConfig;
+use crate::sys::commands::security::SecretManagerState;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use regex::Regex;
@@ -160,11 +161,25 @@ impl SearchExecutor {
         Self
     }
 
-    /// Get Perplexity API key from environment or return None.
-    fn get_perplexity_api_key() -> Option<String> {
+    /// Get Perplexity API key from SecretManager when the app handle is available.
+    /// Falls back to the environment for legacy/background contexts.
+    fn get_perplexity_api_key(app_handle: Option<&tauri::AppHandle>) -> Option<String> {
+        if let Some(app_handle) = app_handle {
+            use tauri::Manager;
+
+            if let Some(secret_state) = app_handle.try_state::<SecretManagerState>() {
+                if let Ok(secret) = secret_state.manager().get_secret("perplexity_api_key") {
+                    let trimmed = secret.trim();
+                    if !trimmed.is_empty() {
+                        return Some(trimmed.to_string());
+                    }
+                }
+            }
+        }
+
         std::env::var("PERPLEXITY_API_KEY")
             .ok()
-            .filter(|k| !k.is_empty())
+            .filter(|key| !key.is_empty())
     }
 
     fn decode_html_entities(text: &str) -> String {
@@ -678,11 +693,13 @@ impl ToolExecutor for SearchExecutor {
         &self,
         tool_name: &str,
         parameters: &HashMap<String, Value>,
-        _context: &ExecutorContext,
+        context: &ExecutorContext,
         _execution_context: &ExecutionContext,
     ) -> Result<Value> {
         match tool_name {
-            "search_web" => self.execute_search(parameters).await,
+            "search_web" => self
+                .execute_search(parameters, context.app_handle.as_ref())
+                .await,
             _ => Err(anyhow!("Unknown search tool: {}", tool_name)),
         }
     }
@@ -694,6 +711,17 @@ impl SearchExecutor {
     /// This is a public entrypoint for Tauri commands and other internal callers.
     pub async fn run_search(
         &self,
+        query: &str,
+        search_type: SearchType,
+        num_results: usize,
+    ) -> Result<Value> {
+        self.run_search_with_app_handle(None, query, search_type, num_results)
+            .await
+    }
+
+    pub async fn run_search_with_app_handle(
+        &self,
+        app_handle: Option<&tauri::AppHandle>,
         query: &str,
         search_type: SearchType,
         num_results: usize,
@@ -721,7 +749,7 @@ impl SearchExecutor {
         );
 
         // Try Perplexity first if API key is available (all tiers)
-        if let Some(api_key) = Self::get_perplexity_api_key() {
+        if let Some(api_key) = Self::get_perplexity_api_key(app_handle) {
             match self
                 .search_with_perplexity(query_trimmed, search_type, num_results, &api_key)
                 .await
@@ -746,7 +774,11 @@ impl SearchExecutor {
     ///
     /// Performs a web search using Perplexity API (if configured) with fallback to DuckDuckGo.
     /// Supports different search types: general, code, academic, news, research.
-    async fn execute_search(&self, parameters: &HashMap<String, Value>) -> Result<Value> {
+    async fn execute_search(
+        &self,
+        parameters: &HashMap<String, Value>,
+        app_handle: Option<&tauri::AppHandle>,
+    ) -> Result<Value> {
         let query = parameters
             .get("query")
             .and_then(|v| v.as_str())
@@ -772,7 +804,8 @@ impl SearchExecutor {
             SearchType::General
         });
 
-        self.run_search(query, search_type, num_results).await
+        self.run_search_with_app_handle(app_handle, query, search_type, num_results)
+            .await
     }
 }
 
@@ -929,7 +962,7 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("query".to_string(), Value::String("".to_string()));
 
-        let result = executor.execute_search(&params).await;
+        let result = executor.execute_search(&params, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("empty"));
     }
@@ -940,7 +973,7 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("query".to_string(), Value::String("a".repeat(501)));
 
-        let result = executor.execute_search(&params).await;
+        let result = executor.execute_search(&params, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("too long"));
     }
@@ -950,7 +983,7 @@ mod tests {
         let executor = SearchExecutor::new();
         let params = HashMap::new();
 
-        let result = executor.execute_search(&params).await;
+        let result = executor.execute_search(&params, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Missing"));
     }

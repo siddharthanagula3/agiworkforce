@@ -19,6 +19,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 ## ASI01: Prompt Injection (Direct + Indirect)
 
 ### [CRITICAL] ASI01-001: CLI web_fetch content flows unsanitized into LLM context
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/cli/src/tools.rs:974-977`
 - **Surfaces**: CLI
 - **Description**: The `execute_web_fetch` tool fetches arbitrary URLs and strips HTML tags with a naive `<`/`>` removal, then returns the text content directly to the LLM context. A malicious webpage could embed prompt injection payloads in text nodes, `<script>` tag bodies (partially stripped), HTML comments, or non-`<>` encoded content that survives the `strip_html_tags` function.
@@ -26,6 +27,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Add a content sanitization layer that strips known prompt injection patterns from fetched content before returning to the LLM. (2) Mark web-fetched content with a `[EXTERNAL_CONTENT]` wrapper in the system prompt that instructs the LLM to treat it as untrusted data, not instructions. (3) Implement a content length limit and truncation before the content enters the context.
 
 ### [HIGH] ASI01-002: Chrome Extension injects raw page HTML into desktop agent context
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/extension/src/content.ts:269-289`
 - **Surfaces**: Chrome Extension, Desktop
 - **Description**: `buildCurrentPageContext()` captures `document.documentElement.outerHTML` (up to 100K chars) and sends it to the desktop app via the native messaging bridge. This raw HTML is forwarded to the LLM for analysis. A malicious web page can embed prompt injection payloads in its DOM (hidden divs, data attributes, HTML comments, meta tags) that will be included in the captured HTML.
@@ -33,6 +35,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Sanitize captured HTML by stripping hidden elements, comments, and elements with `display:none` or `visibility:hidden` before sending to the desktop. (2) Apply text-only extraction (visible text content) rather than raw HTML for LLM context. (3) Add explicit system prompt guardrails that instruct the LLM to ignore instructions found within `<page_context>` blocks.
 
 ### [HIGH] ASI01-003: Chrome Extension side panel chat concatenates page context into user prompt
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/extension/src/background.ts:1827-1829`
 - **Surfaces**: Chrome Extension
 - **Description**: The `handleChatMessage` function concatenates page context directly into the user message using string interpolation: `` `${text}\n\n<page_context>\n${pageContext}\n</page_context>` ``. The `pageContext` variable contains HTML from the current page. There is no sanitization between the page content extraction and the prompt construction.
@@ -40,6 +43,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Escape XML special characters in page context before wrapping in XML tags. (2) Use a nonce-based delimiter instead of predictable `<page_context>` tags. (3) Pass page context as a separate structured parameter rather than concatenating into the user message string.
 
 ### [MEDIUM] ASI01-004: CLI system prompt includes unsanitized memory and instruction files
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/cli/src/agent.rs:1308-1356`
 - **Surfaces**: CLI
 - **Description**: The `build_system_prompt` function concatenates project instructions (from `CLAUDE.md`), memory entries, and skills content directly into the system prompt without any sanitization. If a repository contains a malicious `CLAUDE.md` (e.g., from a cloned repository or a pull request), its contents become part of the system prompt.
@@ -51,6 +55,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 ## ASI02: Sensitive Information Disclosure
 
 ### [HIGH] ASI02-001: CLI tool output saved to world-readable files without access control
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/cli/src/tools.rs:1138-1148`
 - **Surfaces**: CLI
 - **Description**: The `save_full_output` function writes full tool output (which may include file contents, command results, or search results containing secrets) to `~/.agiworkforce/tool-output/` directory. These files are created with default permissions (typically 644 on Unix), making them readable by other users on shared systems.
@@ -58,6 +63,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Set restrictive file permissions (600) on saved output files. (2) Set restrictive directory permissions (700) on the `tool-output` directory. (3) Consider encrypting saved output or adding a configurable retention policy with automatic cleanup.
 
 ### [HIGH] ASI02-002: LLM v2 chat route caches responses including potentially sensitive content
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/web/app/api/llm/v2/chat/route.ts:201-244`
 - **Surfaces**: Web
 - **Description**: The v2 chat route caches deterministic (temperature=0) LLM responses using a cache key derived from the model name, messages, and max_tokens. The cache key includes the full message content serialized as JSON, meaning the user's conversation (which may contain sensitive data) becomes a cache key. Additionally, the cached response body could contain sensitive information generated by the LLM.
@@ -65,6 +71,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Include the user ID in the cache key to ensure per-user cache isolation. (2) Never cache responses to messages containing PII markers. (3) Set a shorter TTL and add cache eviction on user logout.
 
 ### [MEDIUM] ASI02-003: Test files contain hardcoded credential patterns
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/cli/src/auth.rs:1123`
 - **Surfaces**: CLI
 - **Description**: Test code contains a hardcoded API key pattern `sk-proj-abcdefghijklmnopqrstuvwxyz1234` that resembles a real OpenAI API key format. While this is in a `#[cfg(test)]` block, it establishes a pattern that could lead to real keys being committed. The email.rs file also contains test passwords.
@@ -76,12 +83,14 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 ## ASI03: Supply Chain Vulnerabilities
 
 ### [MEDIUM] ASI03-001: MCP extension packages installed without integrity verification
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src-tauri/src/core/mcp/extensions/package.rs`
 - **Surfaces**: Desktop
 - **Description**: The MCP extensions system allows downloading and installing extension packages. The extension manifest and package system exists in `core/mcp/extensions/` but based on the file structure (manifest.rs, package.rs, error.rs), there is a risk that packages fetched from external registries may not have cryptographic signature verification.
 - **Remediation**: (1) Verify package checksums (SHA-256) against a signed manifest before installation. (2) Implement code signing verification for MCP extension packages. (3) Maintain an allowlist of trusted extension publishers.
 
 ### [MEDIUM] ASI03-002: CLI hooks execute arbitrary shell commands from user-writable config
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/cli/src/hooks.rs:365-389`
 - **Surfaces**: CLI
 - **Description**: The hooks system loads `~/.agiworkforce/hooks.json` and executes arbitrary shell commands specified in the `command` field via `sh -c`. While the config file requires write access to the user's home directory, a compromised dependency or malware that modifies this file can establish persistence by hooking into `SessionStart` or `BeforeToolUse` events.
@@ -93,6 +102,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 ## ASI04: Excessive Agency
 
 ### [CRITICAL] ASI04-001: CLI --yes flag with auto_approve_safe bypasses all safe tool confirmations
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/cli/src/tools.rs:82-108`
 - **Surfaces**: CLI
 - **Description**: When `auto_approve_safe` is true (enabled by `--yes` flag), read-only tools like `read_file`, `search_files`, `list_directory`, `web_search`, and `web_fetch` execute without any user confirmation. Combined with `skip_permissions`, ALL tools including `write_file`, `edit_file`, and `run_command` execute without confirmation. This gives the LLM unrestricted agency to read/write any file and execute any command on the system.
@@ -100,6 +110,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Even in `--yes` mode, require explicit confirmation for operations involving sensitive paths (`~/.ssh/`, `~/.gnupg/`, `~/.aws/`). (2) Implement a path allowlist/blocklist that restricts file operations regardless of confirmation mode. (3) Add a `--allowed-dirs` flag that restricts file operations to specific directories.
 
 ### [CRITICAL] ASI04-002: Desktop terminal command execution with AI-generated commands
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src-tauri/src/sys/commands/terminal.rs:40-74`
 - **Surfaces**: Desktop
 - **Description**: The `execute_terminal_command` Tauri IPC command accepts a command string from the frontend and executes it via shell after command validation. The command validator (`command_validator.rs`) provides a safety layer, but the AI agent's tool execution path can construct and execute commands based on LLM output. The command string is passed as a single string argument to the shell, which means shell metacharacters can be used.
@@ -107,6 +118,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Ensure the desktop command validator has parity with the CLI's comprehensive `safety.rs` classification (pipe detection, dangerous command lists, etc.). (2) Always require user confirmation for commands generated from AI context that includes external content. (3) Implement command parameterization where possible instead of shell string execution.
 
 ### [HIGH] ASI04-003: Chrome Extension executes AI-planned page actions without user approval
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/extension/src/background.ts:1375-1380`
 - **Surfaces**: Chrome Extension
 - **Description**: The `syncTabContextWithDesktop` function receives a plan of page actions from the native desktop app and immediately forwards them to the content script for execution via `forwardToContentScript(tabId, { type: 'RUN_PAGE_ACTIONS', ... })`. There is no user confirmation step between receiving the action plan and executing it. Actions include clicking, typing, form filling, navigation, and form submission.
@@ -118,6 +130,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 ## ASI05: Insecure Output Handling
 
 ### [HIGH] ASI05-001: Web LLM API returns raw LLM content without output encoding
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/web/app/api/llm/v1/chat/completions/route.ts:1258-1264`
 - **Surfaces**: Web
 - **Description**: The chat completions API returns `llmResponse.content` directly in the JSON response without any output sanitization. If the LLM generates content containing JavaScript, HTML, or other executable content, and the frontend renders it without proper escaping, this creates a stored XSS vector. While React generally escapes content, use of `dangerouslySetInnerHTML` or markdown rendering with raw HTML support can bypass this.
@@ -125,6 +138,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Sanitize LLM output on the server side before returning to clients (strip `<script>`, `onerror`, `onclick`, etc.). (2) Ensure all frontend markdown renderers use DOMPurify or equivalent sanitization. (3) Set CSP headers on API responses that prevent inline script execution.
 
 ### [MEDIUM] ASI05-002: CLI command output displayed without terminal escape sequence sanitization
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/cli/src/tools.rs:472-498`
 - **Surfaces**: CLI
 - **Description**: The `execute_run_command` function captures stdout/stderr and returns them as-is. If a command produces output containing ANSI escape sequences or terminal control characters, these are displayed raw to the user's terminal. Malicious escape sequences can overwrite terminal content, change terminal settings, or in some terminals, execute commands.
@@ -136,6 +150,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 ## ASI06: Denial of Wallet/Service
 
 ### [CRITICAL] ASI06-001: LLM API streaming reconciliation failure leaves credits unrecovered
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/web/app/api/llm/v1/chat/completions/route.ts:966-1036`
 - **Surfaces**: Web
 - **Description**: The streaming credit reconciliation happens in the TransformStream `flush()` callback. If the reconciliation fails (database error, network issue), the error is caught and logged but the overcharged credits are never refunded. The comment says "may require manual adjustment" but there is no automated recovery mechanism. Credits are reserved upfront based on estimated cost, and the actual cost may be significantly lower.
@@ -143,6 +158,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Implement a background job that periodically scans for unreconciled reservations (reservations without matching reconciliations after a timeout). (2) Add a dead-letter queue for failed reconciliations that automatically retries. (3) Set an upper bound on reservation-to-actual cost ratio and auto-refund outliers.
 
 ### [HIGH] ASI06-002: No per-request cost ceiling for LLM API calls
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/web/app/api/llm/v1/chat/completions/route.ts:491`
 - **Surfaces**: Web
 - **Description**: The `maxTokens` is derived from user input (`chatRequest.max_tokens || chatRequest.max_completion_tokens || 1000`). While the request body is limited to 2MB and individual messages have length limits, there is no ceiling on the `max_tokens` parameter. A user can request `max_tokens: 100000` which, combined with a large prompt, could result in a single request costing tens of dollars in credits. The cost estimation happens after accepting the parameters.
@@ -153,6 +169,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 ## ASI07: System Prompt Leakage
 
 ### [MEDIUM] ASI07-001: CLI system prompt is accessible via conversation history
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/cli/src/agent.rs:410-419`
 - **Surfaces**: CLI
 - **Description**: The system prompt (containing project instructions, memory context, skills, and the base assistant persona) is stored as `messages[0]` in the `AgentSession`. The full message history is used for context compaction and session persistence. A user can ask "repeat your system prompt verbatim" or "what are your instructions?" and the LLM may comply since the system prompt is in its context.
@@ -160,6 +177,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Add a system prompt prefix instruction that explicitly prohibits revealing the system prompt content. (2) Post-process LLM responses to detect and redact system prompt content before displaying to the user. (3) Use API-level system prompt caching features that separate the prompt from the conversation.
 
 ### [MEDIUM] ASI07-002: Web v2 chat route exposes provider and model information in response headers
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/web/app/api/llm/v2/chat/route.ts:559-563`
 - **Surfaces**: Web
 - **Description**: The v2 chat route sets response headers `x-agi-provider`, `x-agi-sdk-path`, and `x-agi-model` that reveal the internal provider routing, SDK path, and actual model ID used. This information leaks the internal model mapping (e.g., that `gpt-5-nano` maps to a specific API model) and could be used for targeted attacks.
@@ -170,6 +188,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 ## ASI08: Vector/Embedding Weaknesses
 
 ### [MEDIUM] ASI08-001: Embeddings commands exist without visible access control
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src-tauri/src/sys/commands/embeddings.rs`
 - **Surfaces**: Desktop
 - **Description**: The embeddings command module exists in the Tauri command structure. Embedding operations that process user content and store vectors need careful access control to prevent one user's embeddings from being accessible to another (in multi-user scenarios) and to prevent embedding poisoning where malicious content is stored in the vector space to influence retrieval results.
@@ -180,6 +199,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 ## ASI09: Misinformation/Hallucination Risks
 
 ### [MEDIUM] ASI09-001: CLI web_search results enter context without source attribution
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/cli/src/tools.rs:863-891`
 - **Surfaces**: CLI
 - **Description**: The `execute_web_search` tool returns raw API response body directly to the LLM context without any structured source attribution or confidence scoring. The LLM may treat search results as authoritative facts and present them to the user without caveats, even when results are from unreliable sources.
@@ -190,6 +210,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 ## ASI10: Unbounded Consumption
 
 ### [CRITICAL] ASI10-001: CLI agentic loop allows 25 iterations by default with no cost tracking
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/cli/src/agent.rs:291-292, 717-718`
 - **Surfaces**: CLI
 - **Description**: The `MAX_AGENTIC_ITERATIONS` constant is 25. Each iteration can involve multiple LLM calls (tool results sent back for continuation). With expensive models like claude-opus-4-6 ($15/$75 per 1M tokens), 25 iterations with large context windows can generate hundreds of dollars in API costs in a single session. The CLI tracks input/output tokens but does not enforce any cost ceiling. The loop detection (5 consecutive identical calls) helps but doesn't prevent diverse-but-expensive loops.
@@ -197,6 +218,7 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 - **Remediation**: (1) Implement a configurable cost ceiling per session (e.g., `--max-cost $5.00`). (2) Display running cost estimate to the user at each iteration. (3) Prompt for confirmation when estimated session cost exceeds a threshold (e.g., $2.00). (4) Reduce default `MAX_AGENTIC_ITERATIONS` to 15 and require explicit opt-in for higher limits.
 
 ### [HIGH] ASI10-002: Desktop automation executor has no iteration/time limits for script actions
+
 - **File**: `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/src-tauri/src/automation/executor.rs:35-43`
 - **Surfaces**: Desktop
 - **Description**: The `AutomationScript` struct contains a `Vec<ScriptAction>` with no upper bound on the number of actions. A script with thousands of actions could run indefinitely, consuming system resources and potentially performing destructive operations across many iterations. While individual actions may be safety-checked, the total execution time and resource consumption are not bounded.
@@ -228,30 +250,30 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 
 ## Remediation Priority Matrix
 
-| Priority | Finding ID | Title | Effort |
-|----------|-----------|-------|--------|
-| P0 | ASI04-001 | CLI --yes bypasses all safe tool confirmations | Medium |
-| P0 | ASI04-002 | Desktop terminal AI-generated command execution | Medium |
-| P0 | ASI01-001 | CLI web_fetch unsanitized content in LLM context | Medium |
-| P0 | ASI06-001 | Streaming credit reconciliation failure | High |
-| P0 | ASI10-001 | CLI agentic loop no cost tracking | Medium |
-| P1 | ASI01-002 | Extension raw HTML injected into agent context | Medium |
-| P1 | ASI01-003 | Extension side panel prompt concatenation | Low |
-| P1 | ASI04-003 | Extension executes AI actions without approval | Medium |
-| P1 | ASI05-001 | Web LLM returns unsanitized content | Medium |
-| P1 | ASI02-001 | CLI tool output world-readable files | Low |
-| P1 | ASI02-002 | Web v2 cache without user scoping | Low |
-| P1 | ASI06-002 | No per-request cost ceiling | Medium |
-| P1 | ASI10-002 | Desktop automation no iteration limits | Low |
-| P2 | ASI01-004 | CLI unsanitized memory/instruction files | Medium |
-| P2 | ASI03-001 | MCP extensions no integrity verification | High |
-| P2 | ASI03-002 | CLI hooks arbitrary shell from config | Low |
-| P2 | ASI05-002 | CLI terminal escape sequence exposure | Low |
-| P2 | ASI07-001 | CLI system prompt leakage via conversation | Low |
-| P2 | ASI07-002 | Web response headers leak internal routing | Low |
-| P2 | ASI08-001 | Embeddings access control | Medium |
-| P2 | ASI09-001 | Web search results no source attribution | Low |
-| P2 | ASI02-003 | Test files contain credential patterns | Low |
+| Priority | Finding ID | Title                                            | Effort |
+| -------- | ---------- | ------------------------------------------------ | ------ |
+| P0       | ASI04-001  | CLI --yes bypasses all safe tool confirmations   | Medium |
+| P0       | ASI04-002  | Desktop terminal AI-generated command execution  | Medium |
+| P0       | ASI01-001  | CLI web_fetch unsanitized content in LLM context | Medium |
+| P0       | ASI06-001  | Streaming credit reconciliation failure          | High   |
+| P0       | ASI10-001  | CLI agentic loop no cost tracking                | Medium |
+| P1       | ASI01-002  | Extension raw HTML injected into agent context   | Medium |
+| P1       | ASI01-003  | Extension side panel prompt concatenation        | Low    |
+| P1       | ASI04-003  | Extension executes AI actions without approval   | Medium |
+| P1       | ASI05-001  | Web LLM returns unsanitized content              | Medium |
+| P1       | ASI02-001  | CLI tool output world-readable files             | Low    |
+| P1       | ASI02-002  | Web v2 cache without user scoping                | Low    |
+| P1       | ASI06-002  | No per-request cost ceiling                      | Medium |
+| P1       | ASI10-002  | Desktop automation no iteration limits           | Low    |
+| P2       | ASI01-004  | CLI unsanitized memory/instruction files         | Medium |
+| P2       | ASI03-001  | MCP extensions no integrity verification         | High   |
+| P2       | ASI03-002  | CLI hooks arbitrary shell from config            | Low    |
+| P2       | ASI05-002  | CLI terminal escape sequence exposure            | Low    |
+| P2       | ASI07-001  | CLI system prompt leakage via conversation       | Low    |
+| P2       | ASI07-002  | Web response headers leak internal routing       | Low    |
+| P2       | ASI08-001  | Embeddings access control                        | Medium |
+| P2       | ASI09-001  | Web search results no source attribution         | Low    |
+| P2       | ASI02-003  | Test files contain credential patterns           | Low    |
 
 ---
 
@@ -259,14 +281,14 @@ This audit examined ~600K lines of code across 6 application surfaces against th
 
 This audit was conducted through static code analysis of the following surfaces:
 
-| Surface | Primary Files Examined |
-|---------|----------------------|
-| Desktop (Tauri v2) | `src-tauri/src/sys/commands/terminal.rs`, `automation/safety.rs`, `automation/executor.rs`, `tauri.conf.json`, `core/mcp/extensions/` |
-| Web (Next.js 16) | `app/api/llm/v1/chat/completions/route.ts`, `app/api/llm/v2/chat/route.ts`, `app/api/stripe-webhook/route.ts` |
-| Mobile (Expo) | `services/api.ts`, `services/companion.ts` |
-| CLI (Rust) | `src/safety.rs`, `src/tools.rs`, `src/agent.rs`, `src/hooks.rs`, `src/provider.rs` |
-| Chrome Extension (MV3) | `src/content.ts`, `src/background.ts`, `src/utils.ts` |
-| VS Code Extension | `src/services/desktopBridge.ts`, `src/providers/chatParticipant.ts` |
-| API Gateway | `src/middleware/auth.ts`, `src/middleware/rateLimit.ts`, `src/index.ts` |
+| Surface                | Primary Files Examined                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop (Tauri v2)     | `src-tauri/src/sys/commands/terminal.rs`, `automation/safety.rs`, `automation/executor.rs`, `tauri.conf.json`, `core/mcp/extensions/` |
+| Web (Next.js 16)       | `app/api/llm/v1/chat/completions/route.ts`, `app/api/llm/v2/chat/route.ts`, `app/api/stripe-webhook/route.ts`                         |
+| Mobile (Expo)          | `services/api.ts`, `services/companion.ts`                                                                                            |
+| CLI (Rust)             | `src/safety.rs`, `src/tools.rs`, `src/agent.rs`, `src/hooks.rs`, `src/provider.rs`                                                    |
+| Chrome Extension (MV3) | `src/content.ts`, `src/background.ts`, `src/utils.ts`                                                                                 |
+| VS Code Extension      | `src/services/desktopBridge.ts`, `src/providers/chatParticipant.ts`                                                                   |
+| API Gateway            | `src/middleware/auth.ts`, `src/middleware/rateLimit.ts`, `src/index.ts`                                                               |
 
 Each file was read in full and analyzed against the OWASP Agentic AI Security Top 10 categories. Only findings with confirmed code-level evidence are included.

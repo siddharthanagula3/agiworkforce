@@ -68,10 +68,12 @@ describe('useTauriStreamListeners tool timeline', () => {
 
   it('writes chat tool events into the per-message tool timeline', async () => {
     const listeners = new Map<string, ListenerCallback<unknown>>();
-    listenMock.mockImplementation(async (eventName: string, callback: ListenerCallback<unknown>) => {
-      listeners.set(eventName, callback);
-      return () => {};
-    });
+    listenMock.mockImplementation(
+      async (eventName: string, callback: ListenerCallback<unknown>) => {
+        listeners.set(eventName, callback);
+        return () => {};
+      },
+    );
 
     useChatStore.getState().createConversation('Browser tool timeline');
     const messageId = useChatStore.getState().addMessage({
@@ -128,10 +130,12 @@ describe('useTauriStreamListeners tool timeline', () => {
 
   it('routes thinking events to the streaming transcript message when the session map is empty', async () => {
     const listeners = new Map<string, ListenerCallback<unknown>>();
-    listenMock.mockImplementation(async (eventName: string, callback: ListenerCallback<unknown>) => {
-      listeners.set(eventName, callback);
-      return () => {};
-    });
+    listenMock.mockImplementation(
+      async (eventName: string, callback: ListenerCallback<unknown>) => {
+        listeners.set(eventName, callback);
+        return () => {};
+      },
+    );
 
     useChatStore.getState().createConversation('Thinking target fallback');
     const messageId = useChatStore.getState().addMessage({

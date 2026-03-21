@@ -96,13 +96,9 @@ impl PresentationCreator {
 
         // ppt/slideMasters/_rels/slideMaster1.xml.rels
         zip.start_file("ppt/slideMasters/_rels/slideMaster1.xml.rels", options)
-            .map_err(|e| {
-                Error::Generic(format!("Failed to write slide master rels: {}", e))
-            })?;
+            .map_err(|e| Error::Generic(format!("Failed to write slide master rels: {}", e)))?;
         zip.write_all(Self::slide_master_rels_xml().as_bytes())
-            .map_err(|e| {
-                Error::Generic(format!("Failed to write slide master rels: {}", e))
-            })?;
+            .map_err(|e| Error::Generic(format!("Failed to write slide master rels: {}", e)))?;
 
         // ppt/slideLayouts/slideLayout1.xml
         zip.start_file("ppt/slideLayouts/slideLayout1.xml", options)
@@ -112,13 +108,9 @@ impl PresentationCreator {
 
         // ppt/slideLayouts/_rels/slideLayout1.xml.rels
         zip.start_file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", options)
-            .map_err(|e| {
-                Error::Generic(format!("Failed to write slide layout rels: {}", e))
-            })?;
+            .map_err(|e| Error::Generic(format!("Failed to write slide layout rels: {}", e)))?;
         zip.write_all(Self::slide_layout_rels_xml().as_bytes())
-            .map_err(|e| {
-                Error::Generic(format!("Failed to write slide layout rels: {}", e))
-            })?;
+            .map_err(|e| Error::Generic(format!("Failed to write slide layout rels: {}", e)))?;
 
         // ppt/theme/theme1.xml
         zip.start_file("ppt/theme/theme1.xml", options)
@@ -142,18 +134,13 @@ impl PresentationCreator {
 
             // ppt/slides/_rels/slideN.xml.rels
             let slide_rels_path = format!("ppt/slides/_rels/slide{}.xml.rels", slide_num);
-            zip.start_file(slide_rels_path.as_str(), options).map_err(|e| {
-                Error::Generic(format!(
-                    "Failed to write slide {} rels: {}",
-                    slide_num, e
-                ))
-            })?;
+            zip.start_file(slide_rels_path.as_str(), options)
+                .map_err(|e| {
+                    Error::Generic(format!("Failed to write slide {} rels: {}", slide_num, e))
+                })?;
             zip.write_all(Self::slide_rels_xml().as_bytes())
                 .map_err(|e| {
-                    Error::Generic(format!(
-                        "Failed to write slide {} rels: {}",
-                        slide_num, e
-                    ))
+                    Error::Generic(format!("Failed to write slide {} rels: {}", slide_num, e))
                 })?;
 
             // ppt/notesSlides/notesSlideN.xml (only if notes present)
@@ -161,10 +148,7 @@ impl PresentationCreator {
                 if !notes.is_empty() {
                     let notes_path = format!("ppt/notesSlides/notesSlide{}.xml", slide_num);
                     zip.start_file(notes_path.as_str(), options).map_err(|e| {
-                        Error::Generic(format!(
-                            "Failed to write notes slide {}: {}",
-                            slide_num, e
-                        ))
+                        Error::Generic(format!("Failed to write notes slide {}: {}", slide_num, e))
                     })?;
                     zip.write_all(Self::notes_slide_xml(notes).as_bytes())
                         .map_err(|e| {
@@ -452,7 +436,8 @@ impl PresentationCreator {
       </a:bgFillStyleLst>
     </a:fmtScheme>
   </a:themeElements>
-</a:theme>"#.to_string()
+</a:theme>"#
+            .to_string()
     }
 
     fn slide_xml(&self, slide: &PresentationSlide) -> String {
@@ -632,15 +617,9 @@ mod tests {
             vec![
                 (
                     "Introduction".to_string(),
-                    vec![
-                        "First point".to_string(),
-                        "Second point".to_string(),
-                    ],
+                    vec!["First point".to_string(), "Second point".to_string()],
                 ),
-                (
-                    "Conclusion".to_string(),
-                    vec!["Summary".to_string()],
-                ),
+                ("Conclusion".to_string(), vec!["Summary".to_string()]),
             ],
             output_path_str,
         );
@@ -705,7 +684,10 @@ mod tests {
     fn test_xml_escape() {
         assert_eq!(xml_escape("A & B"), "A &amp; B");
         assert_eq!(xml_escape("<tag>"), "&lt;tag&gt;");
-        assert_eq!(xml_escape(r#"She said "hello""#), "She said &quot;hello&quot;");
+        assert_eq!(
+            xml_escape(r#"She said "hello""#),
+            "She said &quot;hello&quot;"
+        );
     }
 
     #[test]
