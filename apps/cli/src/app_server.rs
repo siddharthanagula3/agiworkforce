@@ -32,9 +32,9 @@ impl JsonRpcResponse {
     fn err(id: Option<serde_json::Value>, code: i32, msg: String) -> Self { Self { jsonrpc: "2.0".into(), id, result: None, error: Some(JsonRpcError { code, message: msg }) } }
 }
 
-struct Processor { sessions: Arc<RwLock<HashMap<String, String>>> }
+struct Processor;
 impl Processor {
-    fn new() -> Self { Self { sessions: Arc::new(RwLock::new(HashMap::new())) } }
+    fn new() -> Self { Self }
     async fn process(&self, req: JsonRpcRequest) -> JsonRpcResponse {
         match req.method.as_str() {
             "initialize" => JsonRpcResponse::ok(req.id, serde_json::json!({"capabilities": {"tools": true, "streaming": true}, "serverInfo": {"name": "agiworkforce-app-server", "version": env!("CARGO_PKG_VERSION")}})),
@@ -64,9 +64,15 @@ async fn run_ws(config: AppServerConfig) -> Result<()> {
 async fn handle_ws(mut socket: WebSocket, proc: Arc<Processor>) {
     while let Some(Ok(msg)) = futures_util::StreamExt::next(&mut socket).await {
         if let Message::Text(text) = msg {
-            if let Ok(req) = serde_json::from_str::<JsonRpcRequest>(&text) {
-                let resp = proc.process(req).await;
-                if let Ok(j) = serde_json::to_string(&resp) { let _ = futures_util::SinkExt::send(&mut socket, Message::Text(j.into())).await; }
+            let resp = match serde_json::from_str::<JsonRpcRequest>(&text) {
+                Ok(req) => proc.process(req).await,
+                Err(e) => JsonRpcResponse::err(None, -32700, format!("Parse error: {e}")),
+            };
+            if let Ok(j) = serde_json::to_string(&resp) {
+                if let Err(e) = futures_util::SinkExt::send(&mut socket, Message::Text(j.into())).await {
+                    eprintln!("WebSocket send error: {e}");
+                    break;
+                }
             }
         }
     }
@@ -84,15 +90,18 @@ async fn run_stdio(_config: AppServerConfig) -> Result<()> {
         if reader.read_line(&mut line).await? == 0 { break; }
         let t = line.trim();
         if t.is_empty() { continue; }
-        if let Ok(req) = serde_json::from_str::<JsonRpcRequest>(t) {
-            let is_shutdown = req.method == "shutdown";
-            let resp = proc.process(req).await;
-            let j = serde_json::to_string(&resp)?;
-            stdout.write_all(j.as_bytes()).await?;
-            stdout.write_all(b"\n").await?;
-            stdout.flush().await?;
-            if is_shutdown { break; }
-        }
+        let (resp, is_shutdown) = match serde_json::from_str::<JsonRpcRequest>(t) {
+            Ok(req) => {
+                let shutdown = req.method == "shutdown";
+                (proc.process(req).await, shutdown)
+            }
+            Err(e) => (JsonRpcResponse::err(None, -32700, format!("Parse error: {e}")), false),
+        };
+        let j = serde_json::to_string(&resp)?;
+        stdout.write_all(j.as_bytes()).await?;
+        stdout.write_all(b"\n").await?;
+        stdout.flush().await?;
+        if is_shutdown { break; }
     }
     Ok(())
 }
@@ -108,7 +117,17 @@ pub async fn run_mcp_server() -> Result<()> {
         if reader.read_line(&mut line).await? == 0 { break; }
         let t = line.trim();
         if t.is_empty() { continue; }
-        let req: serde_json::Value = match serde_json::from_str(t) { Ok(v) => v, Err(_) => continue };
+        let req: serde_json::Value = match serde_json::from_str(t) {
+            Ok(v) => v,
+            Err(e) => {
+                let resp = JsonRpcResponse::err(None, -32700, format!("Parse error: {e}"));
+                let j = serde_json::to_string(&resp)?;
+                stdout.write_all(j.as_bytes()).await?;
+                stdout.write_all(b"\n").await?;
+                stdout.flush().await?;
+                continue;
+            }
+        };
         let method = req.get("method").and_then(|v| v.as_str()).unwrap_or("");
         let id = req.get("id").cloned();
         let resp = match method {
