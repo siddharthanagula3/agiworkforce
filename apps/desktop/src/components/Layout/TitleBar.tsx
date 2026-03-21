@@ -5,7 +5,7 @@ import {
   Square,
   Search,
   Minimize2,
-  Menu,
+  PanelLeft,
   Pin,
   PinOff,
   ArrowUpFromDot,
@@ -79,7 +79,7 @@ const TitleBar = ({
             !onToggleSidebar && 'cursor-not-allowed opacity-50',
           )}
         >
-          <Menu className="h-4 w-4" />
+          <PanelLeft className="h-4 w-4" />
         </button>
         <div className="flex flex-col min-w-0 overflow-hidden" data-tauri-drag-region>
           <h1 className="text-sm font-semibold leading-none truncate">AGI Workforce</h1>
