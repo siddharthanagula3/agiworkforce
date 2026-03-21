@@ -1,9 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import DashboardHome from '@features/pages/DashboardHome';
-
-// Temporary: keep dashboard until cross-domain auth is resolved
-// Goal: eliminate dashboard, serve chat directly on agiworkforce.com/chat
+// Dashboard eliminated — redirect to /chat (served via same-domain rewrite)
 export default function DashboardPage() {
-  return <DashboardHome />;
+  redirect('/chat');
 }
