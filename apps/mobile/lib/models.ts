@@ -21,6 +21,8 @@ export interface ModelDef {
   supportsVision: boolean;
   supportsThinking: boolean;
   tier: ModelTier;
+  /** Whether this model should show a "New" badge in the picker. */
+  isNew?: boolean;
 }
 
 export interface ProviderDef {
@@ -48,20 +50,20 @@ export const AUTO_MODES: AutoModeDef[] = [
   {
     id: 'auto-economy',
     name: 'Economy',
-    description: 'Fastest, cheapest',
+    description: 'Best for cost',
     icon: 'Zap',
     tier: 'economy',
   },
   {
     id: 'auto-balanced',
     name: 'Balanced',
-    description: 'Best all-around',
+    description: 'Best value',
     icon: 'Scale',
     tier: 'balanced',
   },
   {
     id: 'auto-premium',
-    name: 'Premium',
+    name: 'Best',
     description: 'Most capable',
     icon: 'Crown',
     tier: 'premium',
@@ -99,6 +101,7 @@ export const MODEL_LIST: ModelDef[] = [
     supportsVision: true,
     supportsThinking: true,
     tier: 'premium',
+    isNew: true,
   },
   {
     id: 'gpt-5.4-mini',
@@ -215,6 +218,7 @@ export const MODEL_LIST: ModelDef[] = [
     supportsVision: false,
     supportsThinking: true,
     tier: 'premium',
+    isNew: true,
   },
   {
     id: 'grok-4-fast-reasoning',
@@ -424,4 +428,20 @@ export function getDisplayName(id: string): string {
 
   const model = getModelById(id);
   return model?.name ?? id;
+}
+
+/** Short display name for the model pill in the input bar. */
+export function getShortDisplayName(id: string): string {
+  const auto = AUTO_MODES.find((a) => a.id === id);
+  if (auto) return auto.name;
+
+  const model = getModelById(id);
+  if (!model) return id;
+
+  // Shorten common patterns for pill display.
+  return model.name
+    .replace('Claude 4.6 ', '')
+    .replace('Claude 4.5 ', '')
+    .replace('GPT-5.4 ', 'GPT-')
+    .replace('OpenAI ', '');
 }

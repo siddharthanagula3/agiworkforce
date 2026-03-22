@@ -1,8 +1,13 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { View, RefreshControl, Text } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
+import { Reply } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { MessageBubble } from './MessageBubble';
-import { ConversationStarters } from './ConversationStarters';
+import { ChatEmptyState } from './ChatEmptyState';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { colors } from '@/lib/theme';
 import type { ChatMessage } from '@/types/chat';
 
 interface MessageListProps {
@@ -14,6 +19,13 @@ interface MessageListProps {
   onEditMessage?: (messageId: string, newContent: string) => void;
   onRefresh?: () => void;
   refreshing?: boolean;
+  /** Called when user taps a quoted message to reply */
+  onQuoteReply?: (message: ChatMessage) => void;
+  /** Called when user reacts to a message */
+  onReaction?: (messageId: string, reaction: 'thumbsUp' | 'thumbsDown' | null) => void;
+  onPairDesktop?: () => void;
+  /** Called to open the shared thinking bottom sheet */
+  onOpenThinking?: (content: string, duration?: number) => void;
 }
 
 /**
@@ -29,6 +41,10 @@ export function MessageList({
   onEditMessage,
   onRefresh,
   refreshing = false,
+  onQuoteReply,
+  onReaction,
+  onPairDesktop,
+  onOpenThinking,
 }: MessageListProps) {
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
 
@@ -52,16 +68,29 @@ export function MessageList({
 
   const renderItem = useCallback(
     ({ item }: { item: ChatMessage }) => (
-      <MessageBubble
-        message={item}
-        onApprove={onApprove}
-        onReject={onReject}
-        onDeleteMessage={onDeleteMessage}
-        onRetryMessage={onRetryMessage}
-        onEditMessage={onEditMessage}
-      />
+      <SwipeReplyWrapper message={item} onSwipeReply={onQuoteReply}>
+        <MessageBubble
+          message={item}
+          onApprove={onApprove}
+          onReject={onReject}
+          onDeleteMessage={onDeleteMessage}
+          onRetryMessage={onRetryMessage}
+          onEditMessage={onEditMessage}
+          onReaction={onReaction}
+          onOpenThinking={onOpenThinking}
+        />
+      </SwipeReplyWrapper>
     ),
-    [onApprove, onReject, onDeleteMessage, onRetryMessage, onEditMessage],
+    [
+      onApprove,
+      onReject,
+      onDeleteMessage,
+      onRetryMessage,
+      onEditMessage,
+      onQuoteReply,
+      onReaction,
+      onOpenThinking,
+    ],
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
@@ -95,11 +124,7 @@ export function MessageList({
   }, [messages]);
 
   if (messages.length === 0) {
-    return (
-      <View className="flex-1 justify-center px-6">
-        <ConversationStarters title="Start a conversation" />
-      </View>
-    );
+    return <ChatEmptyState onPairDesktop={onPairDesktop} />;
   }
 
   return (
@@ -123,5 +148,76 @@ export function MessageList({
       }
       ListFooterComponent={typingFooter}
     />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SwipeReplyWrapper — swipe right on any message to quote-reply
+// ---------------------------------------------------------------------------
+
+interface SwipeReplyWrapperProps {
+  message: ChatMessage;
+  onSwipeReply?: (message: ChatMessage) => void;
+  children: React.ReactNode;
+}
+
+function SwipeReplyWrapper({ message, onSwipeReply, children }: SwipeReplyWrapperProps) {
+  const swipeableRef = useRef<Swipeable>(null);
+  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+
+  const renderLeftActions = useCallback(() => {
+    return (
+      <View
+        style={{
+          justifyContent: 'center',
+          alignItems: 'center',
+          width: 60,
+          marginRight: 4,
+        }}
+      >
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: 'rgba(33, 128, 141, 0.2)',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Reply size={18} color={colors.teal} />
+        </View>
+      </View>
+    );
+  }, []);
+
+  const handleSwipeOpen = useCallback(
+    (direction: 'left' | 'right') => {
+      // Only trigger on left-side swipe (user swipes right to reveal left actions)
+      if (direction !== 'left') return;
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      onSwipeReply?.(message);
+      // Close the swipeable after triggering
+      swipeableRef.current?.close();
+    },
+    [message, onSwipeReply, hapticsEnabled],
+  );
+
+  if (!onSwipeReply) {
+    return <>{children}</>;
+  }
+
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      renderLeftActions={renderLeftActions}
+      onSwipeableOpen={handleSwipeOpen}
+      overshootLeft={false}
+      friction={2}
+    >
+      {children}
+    </Swipeable>
   );
 }
