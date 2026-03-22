@@ -172,7 +172,7 @@ const Header: React.FC = () => {
                 onClick={() => router.push('/chat')}
                 className="bg-gradient-to-r from-primary to-accent text-sm font-medium hover:opacity-90"
               >
-                Go to Dashboard
+                Open Chat
               </Button>
             ) : (
               <>
@@ -248,7 +248,7 @@ const Header: React.FC = () => {
                       onClick={() => handleNavigation('/chat')}
                       className="w-full bg-gradient-to-r from-primary to-accent"
                     >
-                      Go to Dashboard
+                      Open Chat
                     </Button>
                   ) : (
                     <>
