@@ -174,7 +174,7 @@ const PublicHeader: React.FC = () => {
             <ThemeToggle />
             {user ? (
               <Button
-                onClick={() => handleNavigate('/dashboard')}
+                onClick={() => handleNavigate('/chat')}
                 className="btn-glow gradient-primary text-sm text-white"
               >
                 <User className="mr-2 h-4 w-4" />
@@ -223,7 +223,7 @@ const PublicHeader: React.FC = () => {
                   {user ? (
                     <Button
                       onClick={() => {
-                        handleNavigate('/dashboard');
+                        handleNavigate('/chat');
                         setIsMenuOpen(false);
                       }}
                       className="gradient-primary w-full text-white"

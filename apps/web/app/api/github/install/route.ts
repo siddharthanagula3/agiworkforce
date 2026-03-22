@@ -12,7 +12,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const accountType = searchParams.get('account_type') ?? 'User';
 
   if (!installationId) {
-    return NextResponse.redirect(new URL('/dashboard?error=github_install_failed', request.url));
+    return NextResponse.redirect(new URL('/chat?error=github_install_failed', request.url));
   }
 
   const cookieStore = await cookies();
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (authError || !user) {
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', '/dashboard/integrations/github');
+    loginUrl.searchParams.set('redirect', '/chat/integrations/github');
     return NextResponse.redirect(loginUrl);
   }
 
@@ -58,11 +58,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (error) {
     logger.error({ error, userId: user.id }, 'Failed to save GitHub installation');
     return NextResponse.redirect(
-      new URL('/dashboard/integrations/github?error=save_failed', request.url),
+      new URL('/chat/integrations/github?error=save_failed', request.url),
     );
   }
 
-  return NextResponse.redirect(
-    new URL('/dashboard/integrations/github?connected=true', request.url),
-  );
+  return NextResponse.redirect(new URL('/chat/integrations/github?connected=true', request.url));
 }

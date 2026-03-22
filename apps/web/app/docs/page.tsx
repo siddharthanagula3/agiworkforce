@@ -393,7 +393,7 @@ export default function DocsPage() {
                   View FAQ
                 </Link>
                 <a
-                  href="mailto:contact@agiagentautomation.com"
+                  href="mailto:contact@agiworkforce.com"
                   className="inline-flex items-center justify-center rounded-lg border border-zinc-800 bg-black px-6 py-3 text-sm font-medium text-zinc-300 hover:bg-zinc-900 hover:text-white transition-colors"
                 >
                   Contact Support

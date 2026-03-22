@@ -334,7 +334,7 @@ export default function SettingsPage() {
           variant="ghost"
           size="sm"
           className="hidden items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:flex"
-          onClick={() => router.push('/dashboard/system-status')}
+          onClick={() => router.push('/chat')}
         >
           <Activity className="h-3.5 w-3.5" />
           System Status
