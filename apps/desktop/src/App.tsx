@@ -441,6 +441,59 @@ const DesktopShell = () => {
     ensureActiveConversation();
   }, [restoreSession, ensureActiveConversation]);
 
+  // Load available models from Rust backend and populate the chat package's model store
+  useEffect(() => {
+    async function loadModels() {
+      try {
+        const { useChatModelStore } = await import('@agiworkforce/chat');
+        interface RustModelInfo {
+          id: string;
+          name: string;
+          provider: string;
+          available: boolean;
+        }
+        const rustModels = await invoke<RustModelInfo[]>('llm_get_available_models');
+        const validProviders = new Set([
+          'anthropic',
+          'openai',
+          'google',
+          'mistral',
+          'meta',
+          'xai',
+          'deepseek',
+          'local',
+        ]);
+        const chatModels = rustModels.map((m) => ({
+          id: m.id,
+          name: m.name,
+          provider: (validProviders.has(m.provider.toLowerCase())
+            ? m.provider.toLowerCase()
+            : 'openai') as import('@agiworkforce/chat').ModelInfo['provider'],
+          tier: (m.name.toLowerCase().includes('opus') ||
+          m.name.toLowerCase().includes('4o') ||
+          m.name.toLowerCase().includes('pro')
+            ? 'flagship'
+            : m.name.toLowerCase().includes('haiku') ||
+                m.name.toLowerCase().includes('mini') ||
+                m.name.toLowerCase().includes('flash')
+              ? 'fast'
+              : 'standard') as import('@agiworkforce/chat').ModelInfo['tier'],
+          supportsThinking:
+            m.name.toLowerCase().includes('think') || m.provider.toLowerCase() === 'anthropic',
+          supportsVision: true,
+          supportsTools: true,
+          contextWindow: 128000,
+          isLocal: m.provider.toLowerCase() === 'ollama' || m.provider.toLowerCase() === 'local',
+          isByok: m.available,
+        }));
+        useChatModelStore.getState().setModels(chatModels);
+      } catch {
+        // Non-fatal — model list will be empty but chat still works with default model
+      }
+    }
+    void loadModels();
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const key = event.key?.toLowerCase();
