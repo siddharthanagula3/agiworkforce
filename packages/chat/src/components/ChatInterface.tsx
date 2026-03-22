@@ -15,6 +15,7 @@ import { useChat } from '../hooks/useChat';
 import { useTheme } from '../hooks/useTheme';
 import { useKeyboard } from '../hooks/useKeyboard';
 import { useArtifact } from '../hooks/useArtifact';
+import { SettingsModal } from './SettingsModal';
 import { cn } from '../lib/utils';
 
 // Runtime context — lets deeply nested components access the runtime without prop drilling
@@ -263,6 +264,9 @@ export function ChatInterface({
           </div>
         )}
       </div>
+
+      {/* Settings modal — shared across desktop & web */}
+      <SettingsModal />
     </RuntimeContext.Provider>
   );
 }
