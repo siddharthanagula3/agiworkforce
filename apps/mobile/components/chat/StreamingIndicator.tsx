@@ -11,17 +11,18 @@ import Animated, {
 import { colors } from '@/lib/theme';
 
 /**
- * Amber pulsing cursor that indicates the assistant is still generating.
- * Simple `|` character that pulses between opacity 0 and 1 on a 500ms cycle.
+ * Teal sparkle indicator that pulses at the end of streaming text.
+ * Brand-distinctive AGI Workforce animation: pulsing opacity 0.3 -> 1.0 on 600ms cycle.
+ * Replaces the previous amber cursor (`|`) with a teal sparkle character.
  */
 export function StreamingIndicator() {
-  const opacity = useSharedValue(1);
+  const opacity = useSharedValue(0.3);
 
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0, { duration: 500, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.3, { duration: 600, easing: Easing.inOut(Easing.ease) }),
       ),
       -1, // infinite
       false,
@@ -40,18 +41,18 @@ export function StreamingIndicator() {
     <Animated.Text
       style={[
         {
-          color: colors.agentWarning,
+          color: colors.teal,
           fontSize: 16,
           fontWeight: '600',
           lineHeight: 22,
-          marginLeft: 1,
+          marginLeft: 2,
         },
         animatedStyle,
       ]}
       accessibilityLabel="Generating response"
       accessibilityRole="text"
     >
-      |
+      {'\u2728'}
     </Animated.Text>
   );
 }

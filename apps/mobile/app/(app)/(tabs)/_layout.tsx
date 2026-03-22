@@ -1,70 +1,26 @@
 import { Tabs } from 'expo-router';
-import { Home, MessageSquare, Bot, FolderOpen, Settings } from 'lucide-react-native';
-import { useTheme } from '@/hooks/useTheme';
 
 /**
- * Bottom tab navigator for the main app screens.
- * Five tabs: Home, Chat, Projects, Agents, Settings.
- * Each tab has its own stack navigator for drill-down screens.
+ * Tab navigator -- hidden (no visible tab bar).
+ *
+ * The bottom tab bar has been replaced by the app-level drawer navigator.
+ * This layout is retained for route compatibility so that existing routes
+ * like /(app)/(tabs)/chat, /(app)/(tabs)/projects, and /(app)/(tabs)/settings
+ * continue to resolve correctly. The tab bar is fully hidden.
  */
 export default function TabsLayout() {
-  const { colors: themeColors } = useTheme();
-
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: themeColors.surfaceElevated,
-          borderTopColor: themeColors.border,
-          borderTopWidth: 1,
-          height: 84,
-          paddingBottom: 28,
-          paddingTop: 8,
-        },
-        tabBarActiveTintColor: themeColors.teal,
-        tabBarInactiveTintColor: themeColors.textMuted,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-        },
+        tabBarStyle: { display: 'none' },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="chat"
-        options={{
-          title: 'Chat',
-          tabBarIcon: ({ color, size }) => <MessageSquare size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="projects"
-        options={{
-          title: 'Projects',
-          tabBarIcon: ({ color, size }) => <FolderOpen size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="agents"
-        options={{
-          title: 'Agents',
-          tabBarIcon: ({ color, size }) => <Bot size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, size }) => <Settings size={size} color={color} />,
-        }}
-      />
+      <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen name="chat" />
+      <Tabs.Screen name="projects" />
+      <Tabs.Screen name="agents" />
+      <Tabs.Screen name="settings" />
     </Tabs>
   );
 }

@@ -15,8 +15,10 @@ interface ModelState {
   favorites: string[];
   /** Most recently used model ids (newest first, de-duped). */
   recentModels: string[];
-  /** Whether extended thinking / reasoning mode is toggled on. */
+  /** Whether extended thinking / reasoning mode is toggled on (legacy — kept for compat). */
   thinkingModeEnabled: boolean;
+  /** Per-model thinking toggle state. Key = model id, value = enabled. */
+  thinkingEnabledPerModel: Record<string, boolean>;
 
   // -- Actions --
 
@@ -26,8 +28,12 @@ interface ModelState {
   setProvider: (providerId: string) => void;
   /** Toggle a model in / out of favorites. */
   toggleFavorite: (modelId: string) => void;
-  /** Toggle thinking mode on / off. */
+  /** Toggle thinking mode on / off (legacy). */
   setThinkingMode: (enabled: boolean) => void;
+  /** Toggle thinking for a specific model. Only works if model supports thinking. */
+  toggleThinkingForModel: (modelId: string) => void;
+  /** Check if thinking is enabled for the currently selected model. */
+  isThinkingEnabledForSelected: () => boolean;
 }
 
 export const useModelStore = create<ModelState>()(
@@ -38,15 +44,15 @@ export const useModelStore = create<ModelState>()(
       favorites: [],
       recentModels: [],
       thinkingModeEnabled: false,
+      thinkingEnabledPerModel: {},
 
       setModel: (modelId: string) => {
         const prev = get().recentModels.filter((id) => id !== modelId);
         const recentModels = [modelId, ...prev].slice(0, MAX_RECENT);
 
-        // When selecting a model that does not support thinking, turn it off.
-        const model = getModelById(modelId);
-        const thinkingModeEnabled =
-          model?.supportsThinking === false ? false : get().thinkingModeEnabled;
+        // Sync legacy thinkingModeEnabled with per-model state.
+        const perModel = get().thinkingEnabledPerModel;
+        const thinkingModeEnabled = perModel[modelId] ?? false;
 
         set({ selectedModel: modelId, recentModels, thinkingModeEnabled });
       },
@@ -71,6 +77,30 @@ export const useModelStore = create<ModelState>()(
           if (model && !model.supportsThinking) return;
         }
         set({ thinkingModeEnabled: enabled });
+      },
+
+      toggleThinkingForModel: (modelId: string) => {
+        // Auto modes don't have thinking state
+        if (isAutoMode(modelId)) return;
+
+        // Only toggle for models that support thinking.
+        const model = getModelById(modelId);
+        if (model && !model.supportsThinking) return;
+
+        const current = get().thinkingEnabledPerModel;
+        const next = { ...current, [modelId]: !current[modelId] };
+        const updates: Partial<ModelState> = { thinkingEnabledPerModel: next };
+
+        // If toggling the currently selected model, sync legacy field.
+        if (get().selectedModel === modelId) {
+          updates.thinkingModeEnabled = next[modelId] ?? false;
+        }
+        set(updates as ModelState);
+      },
+
+      isThinkingEnabledForSelected: () => {
+        const { selectedModel, thinkingEnabledPerModel } = get();
+        return thinkingEnabledPerModel[selectedModel] ?? false;
       },
     }),
     {

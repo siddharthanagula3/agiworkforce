@@ -11,11 +11,14 @@ import {
 } from 'react-native';
 import { memo, useCallback, useState } from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { TapGestureHandler, State } from 'react-native-gesture-handler';
+import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
+import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Avatar } from '@/components/ui/avatar';
 import { StreamingIndicator } from './StreamingIndicator';
-import { ReasoningAccordion } from './ReasoningAccordion';
+import { ThinkingLine } from './ThinkingLine';
 import { InlineArtifactCard } from './InlineArtifactCard';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
 import { ToolCallCard } from './ToolCallCard';
@@ -28,8 +31,12 @@ import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { FileExportButton } from './FileExportButton';
 import { CitationChip } from './CitationChip';
 import { copyToClipboard } from '@/lib/clipboard';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 import type { ChatMessage, Artifact } from '@/types/chat';
+
+/** Reaction state: cycles thumbsUp -> thumbsDown -> null */
+type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -38,6 +45,9 @@ interface MessageBubbleProps {
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
+  onReaction?: (messageId: string, reaction: ReactionType) => void;
+  /** Called to open the shared thinking bottom sheet with this message's reasoning */
+  onOpenThinking?: (content: string, duration?: number) => void;
 }
 
 /**
@@ -275,6 +285,8 @@ export const MessageBubble = memo(function MessageBubble({
   onDeleteMessage,
   onRetryMessage,
   onEditMessage,
+  onReaction,
+  onOpenThinking,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
@@ -283,7 +295,9 @@ export const MessageBubble = memo(function MessageBubble({
   const [showExportSheet, setShowExportSheet] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editText, setEditText] = useState('');
+  const [reaction, setReaction] = useState<ReactionType>(null);
   const { width } = useWindowDimensions();
+  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const handleExpandArtifact = useCallback((artifact: Artifact) => {
     setExpandedArtifact(artifact);
@@ -315,6 +329,32 @@ export const MessageBubble = memo(function MessageBubble({
   const handleCloseExport = useCallback(() => {
     setShowExportSheet(false);
   }, []);
+
+  const handleDoubleTap = useCallback(
+    (event: TapGestureHandlerStateChangeEvent) => {
+      if (event.nativeEvent.state === State.ACTIVE && isAssistant) {
+        if (hapticsEnabled) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        // Cycle: null -> thumbsUp -> thumbsDown -> null
+        setReaction((prev) => {
+          let next: ReactionType;
+          if (prev === null) next = 'thumbsUp';
+          else if (prev === 'thumbsUp') next = 'thumbsDown';
+          else next = null;
+          onReaction?.(message.id, next);
+          return next;
+        });
+      }
+    },
+    [isAssistant, hapticsEnabled, message.id, onReaction],
+  );
+
+  const handleOpenThinkingSheet = useCallback(() => {
+    if (message.reasoning && onOpenThinking) {
+      onOpenThinking(message.reasoning, message.metadata?.thinkingDuration as number | undefined);
+    }
+  }, [message.reasoning, message.metadata?.thinkingDuration, onOpenThinking]);
 
   const handleOpenEditModal = useCallback(() => {
     setEditText(message.content);
@@ -421,7 +461,7 @@ export const MessageBubble = memo(function MessageBubble({
   // Compute image display width: full bubble width minus avatar + gap + padding
   const imageWidth = Math.min(width - 80, 320);
 
-  return (
+  const messageContent = (
     <Animated.View
       entering={FadeInDown.duration(200).springify()}
       className={`px-4 py-3 ${isAssistant ? 'bg-white/[0.02]' : ''}`}
@@ -472,9 +512,13 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             )}
 
-            {/* Reasoning accordion (before main content, assistant only) */}
+            {/* Thinking line (before main content, assistant only) */}
             {isAssistant && message.reasoning ? (
-              <ReasoningAccordion reasoning={message.reasoning} isStreaming={message.isStreaming} />
+              <ThinkingLine
+                isStreaming={message.isStreaming}
+                duration={message.metadata?.thinkingDuration as number | undefined}
+                onPress={handleOpenThinkingSheet}
+              />
             ) : null}
 
             {/* Status steps */}
@@ -575,6 +619,30 @@ export const MessageBubble = memo(function MessageBubble({
         </View>
       </Pressable>
 
+      {/* Reaction badge (assistant messages only) */}
+      {isAssistant && reaction && (
+        <View
+          style={{
+            flexDirection: 'row',
+            paddingLeft: 48,
+            paddingTop: 2,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: 'rgba(33, 128, 141, 0.15)',
+              borderRadius: 12,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+            }}
+          >
+            <Text style={{ fontSize: 14 }}>
+              {reaction === 'thumbsUp' ? '\uD83D\uDC4D' : '\uD83D\uDC4E'}
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Artifact full-screen modal */}
       <ArtifactFullScreen
         artifact={expandedArtifact}
@@ -641,6 +709,17 @@ export const MessageBubble = memo(function MessageBubble({
       </Modal>
     </Animated.View>
   );
+
+  // Wrap assistant messages with a double-tap gesture handler for reactions
+  if (isAssistant) {
+    return (
+      <TapGestureHandler numberOfTaps={2} onHandlerStateChange={handleDoubleTap}>
+        <View>{messageContent}</View>
+      </TapGestureHandler>
+    );
+  }
+
+  return messageContent;
 });
 
 const editStyles = StyleSheet.create({

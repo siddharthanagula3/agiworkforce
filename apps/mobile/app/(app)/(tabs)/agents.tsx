@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { View, useWindowDimensions, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -13,16 +13,23 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { colors } from '@/lib/theme';
 
 /**
- * Agents tab -- grid of active agents synced from desktop via WebRTC.
- * Shows real-time status, progress, and pending approvals.
+ * Agents tab -- redirects to Dispatch when no agents are active.
+ * When agents are running, shows the full agent grid with monitoring.
  */
 export default function AgentsTabScreen() {
   const router = useRouter();
+  const agents = useAgentStore((s) => s.agents);
+
+  // Redirect to Dispatch when no agents are active
+  useEffect(() => {
+    if (agents.length === 0) {
+      router.replace('/(app)/dispatch' as Parameters<typeof router.replace>[0]);
+    }
+  }, [agents.length, router]);
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const numColumns = isTablet ? 3 : 2;
 
-  const agents = useAgentStore((s) => s.agents);
   const selectAgent = useAgentStore((s) => s.selectAgent);
   const clearCompleted = useAgentStore((s) => s.clearCompleted);
   const pendingApprovals = useAgentStore((s) =>

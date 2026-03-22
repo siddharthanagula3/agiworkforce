@@ -1,6 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
-import { MessageSquare, Search } from 'lucide-react-native';
+import { MessageSquare, Pin, Search } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { ConversationItem } from './ConversationItem';
 import { useChatStore } from '@/stores/chatStore';
@@ -8,19 +8,24 @@ import { colors } from '@/lib/theme';
 import { TIME_GROUPS } from '@/lib/constants';
 import type { ConversationSummary, ConversationGroup } from '@/types/chat';
 
+type SectionLabel = 'Pinned' | ConversationGroup;
+
 interface GroupedConversations {
-  label: ConversationGroup;
+  label: SectionLabel;
   conversations: ConversationSummary[];
 }
 
 /**
- * Groups conversations into Today / Yesterday / This Week / Older buckets.
+ * Groups conversations into Pinned / Today / Yesterday / This Week / Older buckets.
+ * Pinned conversations appear in a dedicated section at the top and are excluded
+ * from the date-based groups to prevent duplication.
  */
 function groupConversations(conversations: ConversationSummary[]): GroupedConversations[] {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const todayMs = startOfToday.getTime();
 
+  const pinned: ConversationSummary[] = [];
   const groups: Record<ConversationGroup, ConversationSummary[]> = {
     Today: [],
     Yesterday: [],
@@ -34,6 +39,11 @@ function groupConversations(conversations: ConversationSummary[]): GroupedConver
   );
 
   for (const conv of sorted) {
+    if (conv.pinned) {
+      pinned.push(conv);
+      continue;
+    }
+
     const updated = new Date(conv.updatedAt).getTime();
     const age = todayMs - updated;
 
@@ -49,11 +59,22 @@ function groupConversations(conversations: ConversationSummary[]): GroupedConver
     }
   }
 
-  // Only return non-empty groups
+  const result: GroupedConversations[] = [];
+
+  // Pinned section always first
+  if (pinned.length > 0) {
+    result.push({ label: 'Pinned', conversations: pinned });
+  }
+
+  // Only return non-empty date groups
   const order: ConversationGroup[] = ['Today', 'Yesterday', 'This Week', 'Older'];
-  return order
-    .filter((label) => groups[label].length > 0)
-    .map((label) => ({ label, conversations: groups[label] }));
+  for (const label of order) {
+    if (groups[label].length > 0) {
+      result.push({ label, conversations: groups[label] });
+    }
+  }
+
+  return result;
 }
 
 interface ConversationListProps {
@@ -187,8 +208,12 @@ export function ConversationList({
               paddingHorizontal: 4,
               paddingTop: groupIndex === 0 ? 8 : 16,
               paddingBottom: 6,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
             }}
           >
+            {group.label === 'Pinned' && <Pin size={10} color="rgba(255, 255, 255, 0.35)" />}
             <Text
               style={{
                 fontSize: 11,

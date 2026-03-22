@@ -2,9 +2,11 @@ import { useState, useCallback } from 'react';
 import { View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Settings, Smartphone } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { SidebarHeader } from './SidebarHeader';
 import { ConversationList } from './ConversationList';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 
 /**
@@ -61,9 +63,18 @@ interface FooterItemProps {
 }
 
 function FooterItem({ icon, label, onPress }: FooterItemProps) {
+  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+
+  const handlePress = useCallback(() => {
+    if (hapticsEnabled) {
+      Haptics.selectionAsync();
+    }
+    onPress();
+  }, [hapticsEnabled, onPress]);
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
