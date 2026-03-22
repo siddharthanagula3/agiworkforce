@@ -24,7 +24,7 @@ export interface ChatInputProps {
 export function ChatInput({
   onSend,
   onStop,
-  onPlusClick,
+  onPlusClick: _onPlusClick,
   onModelSelectorClick,
   onVoiceClick,
   hasMessages,
@@ -35,6 +35,8 @@ export function ChatInput({
   const { displayName, models, selectedModelId, selectModel } = useModel();
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   const draftContent = useChatStore((s) => s.draftContent);
   const setDraftContent = useChatStore((s) => s.setDraftContent);
@@ -89,6 +91,7 @@ export function ChatInput({
     onSend(content);
     el.value = '';
     el.style.height = 'auto';
+    setAttachedFiles([]);
   }, [isStreaming, onSend]);
 
   const handleKeyDown = useCallback(
@@ -111,6 +114,28 @@ export function ChatInput({
           'bg-[var(--chat-surface-elevated)]',
         )}
       >
+        {/* Attached files preview */}
+        {attachedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 px-3 pt-2">
+            {attachedFiles.map((file, i) => (
+              <span
+                key={`${file.name}-${i}`}
+                className="inline-flex items-center gap-1 rounded-md bg-[var(--chat-surface-hover)] px-2 py-0.5 text-xs text-[var(--chat-text-secondary)]"
+              >
+                {file.name}
+                <button
+                  type="button"
+                  onClick={() => setAttachedFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="ml-0.5 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]"
+                  aria-label={`Remove ${file.name}`}
+                >
+                  &times;
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Textarea */}
         <textarea
           ref={textareaRef}
@@ -130,19 +155,39 @@ export function ChatInput({
 
         {/* Bottom toolbar */}
         <div className="flex items-center justify-between px-3 py-2">
-          {/* Left: Plus button */}
+          {/* Left: Plus button — opens file picker */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            accept="image/*,.pdf,.txt,.md,.csv,.json,.js,.ts,.py,.rs,.go,.java,.html,.css"
+            onChange={(e) => {
+              const files = e.target.files;
+              if (files && files.length > 0) {
+                setAttachedFiles(Array.from(files));
+              }
+              e.target.value = '';
+            }}
+          />
           <button
             type="button"
-            onClick={onPlusClick}
-            aria-label="Add attachment or action"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="Add attachment"
             className={cn(
               'flex h-8 w-8 items-center justify-center rounded-lg',
               'text-[var(--chat-text-secondary)] transition-colors duration-150',
               'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+              attachedFiles.length > 0 && 'text-[var(--chat-accent-primary)]',
             )}
           >
             <Plus size={16} />
+            {attachedFiles.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[8px] font-bold text-white">
+                {attachedFiles.length}
+              </span>
+            )}
           </button>
 
           {/* Right: Model selector + mic/stop */}
