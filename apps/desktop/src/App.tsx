@@ -497,6 +497,43 @@ const DesktopShell = () => {
     void initModels();
   }, []);
 
+  // Sync desktop auth user profile → chat package's settingsStore
+  useEffect(() => {
+    async function syncProfile() {
+      try {
+        const { useAuthStore, useBillingStore } = await import('./stores/auth');
+        const { useChatSettingsStore } = await import('@agiworkforce/chat');
+
+        const syncFromAuth = () => {
+          const authState = useAuthStore.getState();
+          const billingState = useBillingStore.getState();
+          const user = authState.user;
+          if (!user) return;
+
+          useChatSettingsStore.getState().updateProfile({
+            fullName: user.name || user.email?.split('@')[0] || 'User',
+            email: user.email || '',
+            plan: billingState.getCurrentPlan?.() || 'free',
+          });
+        };
+
+        // Sync immediately
+        syncFromAuth();
+
+        // Re-sync when auth changes
+        const unsub = useAuthStore.subscribe(syncFromAuth);
+        return unsub;
+      } catch {
+        // Non-fatal
+        return undefined;
+      }
+    }
+    const cleanup = syncProfile();
+    return () => {
+      void cleanup?.then((unsub) => unsub?.());
+    };
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const key = event.key?.toLowerCase();
