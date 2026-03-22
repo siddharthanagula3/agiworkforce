@@ -121,9 +121,8 @@ vi.mock('lucide-react', () => {
   };
 });
 
-// Import the component from the dashboard support page
-// The dashboard support page contains the full SupportPage with FAQ + form
-import SupportPage from '../../../app/dashboard/support/page';
+// Import the component from the support page
+import SupportPage from '../../../app/support/page';
 
 describe('SupportPage (Dashboard)', () => {
   beforeEach(() => {
