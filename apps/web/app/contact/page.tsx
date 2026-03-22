@@ -20,7 +20,7 @@ export default function ContactPage() {
     setIsSubmitting(true);
 
     // Create mailto link as fallback
-    const mailtoLink = `mailto:contact@agiagentautomation.com?subject=${encodeURIComponent(formState.subject)}&body=${encodeURIComponent(`Name: ${formState.name}\nEmail: ${formState.email}\n\n${formState.message}`)}`;
+    const mailtoLink = `mailto:contact@agiworkforce.com?subject=${encodeURIComponent(formState.subject)}&body=${encodeURIComponent(`Name: ${formState.name}\nEmail: ${formState.email}\n\n${formState.message}`)}`;
     window.location.href = mailtoLink;
 
     setIsSubmitting(false);
@@ -62,7 +62,7 @@ export default function ContactPage() {
 
                 <div className="space-y-6">
                   <a
-                    href="mailto:contact@agiagentautomation.com"
+                    href="mailto:contact@agiworkforce.com"
                     className="flex items-start gap-4 p-4 rounded-xl border border-zinc-800 bg-black/50 hover:border-blue-500/50 transition-colors"
                   >
                     <div className="p-3 rounded-lg bg-blue-500/10">
@@ -70,7 +70,7 @@ export default function ContactPage() {
                     </div>
                     <div>
                       <div className="font-semibold mb-1">Email Us</div>
-                      <div className="text-zinc-400">contact@agiagentautomation.com</div>
+                      <div className="text-zinc-400">contact@agiworkforce.com</div>
                     </div>
                   </a>
 
@@ -131,7 +131,7 @@ export default function ContactPage() {
                     <h3 className="text-xl font-semibold mb-2">Message Sent!</h3>
                     <p className="text-zinc-400 mb-6">
                       Your email client should have opened. If not, please email us directly at
-                      contact@agiagentautomation.com
+                      contact@agiworkforce.com
                     </p>
                     <button
                       onClick={() => setSubmitted(false)}

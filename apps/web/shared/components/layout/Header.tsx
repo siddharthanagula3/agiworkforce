@@ -169,7 +169,7 @@ const Header: React.FC = () => {
             <ThemeToggle />
             {user ? (
               <Button
-                onClick={() => router.push('/dashboard')}
+                onClick={() => router.push('/chat')}
                 className="bg-gradient-to-r from-primary to-accent text-sm font-medium hover:opacity-90"
               >
                 Go to Dashboard
@@ -245,7 +245,7 @@ const Header: React.FC = () => {
                   </div>
                   {user ? (
                     <Button
-                      onClick={() => handleNavigation('/dashboard')}
+                      onClick={() => handleNavigation('/chat')}
                       className="w-full bg-gradient-to-r from-primary to-accent"
                     >
                       Go to Dashboard

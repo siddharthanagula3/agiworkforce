@@ -473,7 +473,7 @@ function UserProfileArea() {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-52 mb-1">
-          <DropdownMenuItem onClick={() => router.push('/dashboard/settings')}>
+          <DropdownMenuItem onClick={() => router.push('/chat')}>
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </DropdownMenuItem>

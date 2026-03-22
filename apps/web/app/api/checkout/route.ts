@@ -195,7 +195,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
           quantity: 1,
         },
       ],
-      success_url: `${process.env['NEXT_PUBLIC_APP_URL']}/dashboard`,
+      success_url: `${process.env['NEXT_PUBLIC_APP_URL']}/chat`,
       cancel_url: `${process.env['NEXT_PUBLIC_APP_URL']}/pricing`,
       client_reference_id: user.id, // Primary identifier for webhook
       // Metadata duplicates user.id for fast webhook lookups: the webhook handler

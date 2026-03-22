@@ -61,7 +61,7 @@ const CHECKLIST: ChecklistItem[] = [
     label: 'Account created',
     description: 'Welcome aboard! Your account is ready.',
     icon: Sparkles,
-    href: '/dashboard',
+    href: '/chat',
     actionLabel: 'Dashboard',
   },
   {
@@ -77,7 +77,7 @@ const CHECKLIST: ChecklistItem[] = [
     label: 'Set up billing',
     description: 'Unlock higher limits and more AI capabilities.',
     icon: CreditCard,
-    href: '/dashboard/billing',
+    href: '/billing',
     actionLabel: 'View Plans',
   },
   {
@@ -85,7 +85,7 @@ const CHECKLIST: ChecklistItem[] = [
     label: 'Connect desktop app',
     description: 'Download and link the desktop agent for full autonomy.',
     icon: Monitor,
-    href: '/dashboard/settings',
+    href: '/chat/settings',
     actionLabel: 'Get Desktop App',
   },
   {
@@ -93,7 +93,7 @@ const CHECKLIST: ChecklistItem[] = [
     label: 'Invite your team',
     description: 'Collaborate with colleagues using shared workspaces.',
     icon: Users,
-    href: '/dashboard/workforce',
+    href: '/chat/workforce',
     actionLabel: 'Invite Team',
   },
 ];

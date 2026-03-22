@@ -49,7 +49,6 @@ export async function updateSession(request: NextRequest) {
 
   // Protected routes that require authentication
   const protectedPaths = [
-    '/dashboard',
     '/chat',
     '/device-auth',
     '/settings',
@@ -85,7 +84,7 @@ export async function updateSession(request: NextRequest) {
   // Redirect authenticated users away from login/signup to dashboard
   if (user && isAuthOnlyPath) {
     const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
+    url.pathname = '/chat';
     const redirectResponse = NextResponse.redirect(url);
     // Preserve session cookies on the redirect response
     supabaseResponse.cookies.getAll().forEach((cookie) => {

@@ -23,27 +23,27 @@ export function Sidebar({ className }: SidebarProps) {
   const navItems = [
     {
       title: 'Overview',
-      href: '/dashboard',
+      href: '/chat',
       icon: Home,
     },
     {
       title: 'Chat',
-      href: '/dashboard/chat',
+      href: '/chat',
       icon: MessageSquare,
     },
     {
       title: 'Billing & Plan',
-      href: '/dashboard/billing',
+      href: '/billing',
       icon: CreditCard,
     },
     {
       title: 'Media Generation',
-      href: '/dashboard/media',
+      href: '/chat',
       icon: Image,
     },
     {
       title: 'Usage',
-      href: '/dashboard/usage',
+      href: '/billing',
       icon: BarChart3,
     },
     {
@@ -53,7 +53,7 @@ export function Sidebar({ className }: SidebarProps) {
     },
     {
       title: 'Settings',
-      href: '/dashboard/settings',
+      href: '/chat',
       icon: Settings,
     },
   ];

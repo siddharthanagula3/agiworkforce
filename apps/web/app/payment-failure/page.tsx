@@ -38,7 +38,7 @@ function PaymentFailureContent() {
             </Button>
           </Link>
 
-          <Link href="/dashboard/billing" className="w-full">
+          <Link href="/billing" className="w-full">
             <Button
               variant="outline"
               className="w-full h-11 border-zinc-800 text-zinc-300 hover:bg-zinc-900 hover:text-white"
@@ -51,7 +51,7 @@ function PaymentFailureContent() {
           <div className="pt-4 border-t border-zinc-900/50 w-full mt-2">
             <p className="text-xs text-zinc-600 mb-2">Need help?</p>
             <Link
-              href="mailto:contact@agiagentautomation.com"
+              href="mailto:contact@agiworkforce.com"
               className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               Contact Support
