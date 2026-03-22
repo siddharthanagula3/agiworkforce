@@ -114,7 +114,7 @@ function useCommands(
       group: 'Navigate',
       icon: LayoutDashboard,
       shortcut: `${mod}D`,
-      action: () => router.push('/dashboard'),
+      action: () => router.push('/chat'),
     },
     {
       id: 'go-chat',
@@ -129,21 +129,21 @@ function useCommands(
       title: 'Go to Settings',
       group: 'Navigate',
       icon: Settings,
-      action: () => router.push('/dashboard/settings'),
+      action: () => router.push('/chat'),
     },
     {
       id: 'go-billing',
       title: 'Go to Billing',
       group: 'Navigate',
       icon: CreditCard,
-      action: () => router.push('/dashboard/billing'),
+      action: () => router.push('/billing'),
     },
     {
       id: 'go-media',
       title: 'Go to Media Generation',
       group: 'Navigate',
       icon: Image,
-      action: () => router.push('/dashboard/media'),
+      action: () => router.push('/chat'),
     },
     {
       id: 'go-pricing',

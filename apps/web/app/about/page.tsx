@@ -81,7 +81,7 @@ const jsonLd = {
       contactPoint: {
         '@type': 'ContactPoint',
         contactType: 'customer support',
-        email: 'contact@agiagentautomation.com',
+        email: 'contact@agiworkforce.com',
       },
     },
     {

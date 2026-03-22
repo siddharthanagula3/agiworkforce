@@ -14,7 +14,7 @@ const SalesTeamsPage: React.FC = () => {
 
   const handleStartTrial = () => {
     if (user) {
-      router.push('/dashboard');
+      router.push('/chat');
     } else {
       router.push('/register');
     }

@@ -18,7 +18,7 @@ export function VibeTopNav() {
         </div>
 
         <Link
-          href="/dashboard"
+          href="/chat"
           className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <span>Dashboard</span>

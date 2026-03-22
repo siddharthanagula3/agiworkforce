@@ -27,7 +27,7 @@ import { PaymentAPI } from '@shared/lib/stripe';
 /**
  * Billing plan types
  */
-export type BillingPlan = 'free' | 'pro' | 'enterprise';
+export type BillingPlan = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
 
 /**
  * Subscription status types
@@ -154,11 +154,75 @@ interface UserPlanData {
   stripeSubscriptionId: string | null;
 }
 
-// Constants
-const FREE_TIER_LIMIT = 1_000_000;
-const FREE_PROVIDER_LIMIT = 250_000;
-const PRO_TIER_LIMIT = 10_000_000;
-const PRO_PROVIDER_LIMIT = 2_500_000;
+// Per-tier configuration for token limits, pricing, and display
+const TIER_CONFIG: Record<
+  BillingPlan,
+  { totalLimit: number; providerLimit: number; price: number; name: string; features: string[] }
+> = {
+  free: {
+    totalLimit: 1_000_000,
+    providerLimit: 250_000,
+    price: 0,
+    name: 'Free',
+    features: [
+      '1M tokens/month (250k per LLM)',
+      'All 4 AI providers included',
+      'Basic analytics',
+      'Community support',
+    ],
+  },
+  hobby: {
+    totalLimit: 2_500_000,
+    providerLimit: 625_000,
+    price: 10,
+    name: 'Hobby',
+    features: [
+      '2.5M tokens/month (625k per LLM)',
+      'All 4 AI providers included',
+      'Basic analytics',
+      'Email support',
+    ],
+  },
+  pro: {
+    totalLimit: 10_000_000,
+    providerLimit: 2_500_000,
+    price: 29.99,
+    name: 'Pro',
+    features: [
+      '10M tokens/month (2.5M per LLM)',
+      'All 4 AI providers included',
+      'Advanced analytics',
+      'Priority support',
+      'API access',
+    ],
+  },
+  max: {
+    totalLimit: 50_000_000,
+    providerLimit: 12_500_000,
+    price: 299.99,
+    name: 'Max',
+    features: [
+      '50M tokens/month (12.5M per LLM)',
+      'All 4 AI providers included',
+      'Advanced analytics',
+      'Priority support',
+      'Custom integrations',
+    ],
+  },
+  enterprise: {
+    totalLimit: 100_000_000,
+    providerLimit: 25_000_000,
+    price: 0,
+    name: 'Enterprise',
+    features: [
+      'Unlimited tokens',
+      'All AI providers',
+      'Custom analytics',
+      'Dedicated support',
+      'SLA guarantee',
+    ],
+  },
+};
 
 /**
  * Fetch credit balance for a user from the shared Supabase (token_credits table).
@@ -223,10 +287,10 @@ async function fetchTokenUsage(userId: string): Promise<LLMUsage[]> {
     .eq('user_id', userId);
 
   const defaultUsage: LLMUsage[] = [
-    { provider: 'OpenAI', tokens: 0, cost: 0, limit: FREE_PROVIDER_LIMIT },
-    { provider: 'Anthropic', tokens: 0, cost: 0, limit: FREE_PROVIDER_LIMIT },
-    { provider: 'Google', tokens: 0, cost: 0, limit: FREE_PROVIDER_LIMIT },
-    { provider: 'Perplexity', tokens: 0, cost: 0, limit: FREE_PROVIDER_LIMIT },
+    { provider: 'OpenAI', tokens: 0, cost: 0, limit: TIER_CONFIG.free.providerLimit },
+    { provider: 'Anthropic', tokens: 0, cost: 0, limit: TIER_CONFIG.free.providerLimit },
+    { provider: 'Google', tokens: 0, cost: 0, limit: TIER_CONFIG.free.providerLimit },
+    { provider: 'Perplexity', tokens: 0, cost: 0, limit: TIER_CONFIG.free.providerLimit },
   ];
 
   if (error || !data || (data as unknown[]).length === 0) {
@@ -259,9 +323,11 @@ async function fetchTokenUsage(userId: string): Promise<LLMUsage[]> {
  */
 async function fetchUserPlan(userId: string): Promise<UserPlanData> {
   const { data, error } = await supabase
-    .from('users' as never)
-    .select('plan, subscription_end_date, plan_status, stripe_customer_id, stripe_subscription_id')
-    .eq('id', userId)
+    .from('subscriptions')
+    .select(
+      'plan_tier, plan_name, status, current_period_end, stripe_customer_id, stripe_subscription_id',
+    )
+    .eq('user_id', userId)
     .maybeSingle();
 
   if (error || !data) {
@@ -274,14 +340,24 @@ async function fetchUserPlan(userId: string): Promise<UserPlanData> {
   }
 
   const row = data as {
-    plan?: string;
-    subscription_end_date?: string | null;
+    plan_tier?: string;
+    plan_name?: string;
+    status?: string;
+    current_period_end?: string | null;
     stripe_customer_id?: string | null;
     stripe_subscription_id?: string | null;
   };
+
+  // Map plan_tier to BillingPlan — hobby is a valid paid tier
+  const planTier = (row.plan_tier ?? row.plan_name ?? 'free').toLowerCase();
+  const plan: BillingPlan =
+    planTier === 'hobby' || planTier === 'pro' || planTier === 'max' || planTier === 'enterprise'
+      ? (planTier as BillingPlan)
+      : 'free';
+
   return {
-    plan: (row.plan as BillingPlan) || 'free',
-    subscriptionEndDate: row.subscription_end_date ?? null,
+    plan,
+    subscriptionEndDate: row.current_period_end ?? null,
     stripeCustomerId: row.stripe_customer_id ?? null,
     stripeSubscriptionId: row.stripe_subscription_id ?? null,
   };
@@ -308,9 +384,9 @@ export function useBillingData(): UseQueryResult<BillingInfo | null, Error> {
         fetchUserPlan(user.id),
       ]);
 
-      const isPro = userPlan.plan === 'pro';
-      const totalLimit = isPro ? PRO_TIER_LIMIT : FREE_TIER_LIMIT;
-      const providerLimit = isPro ? PRO_PROVIDER_LIMIT : FREE_PROVIDER_LIMIT;
+      const tierConfig = TIER_CONFIG[userPlan.plan] ?? TIER_CONFIG.free;
+      const totalLimit = tierConfig.totalLimit;
+      const providerLimit = tierConfig.providerLimit;
 
       // Update limits based on plan
       const updatedLlmUsage = llmUsage.map((llm) => ({
@@ -335,22 +411,9 @@ export function useBillingData(): UseQueryResult<BillingInfo | null, Error> {
             ).toISOString()
           : currentMonthStart.toISOString(),
         current_period_end: userPlan.subscriptionEndDate || nextMonthStart.toISOString(),
-        price: isPro ? 29 : 0,
+        price: tierConfig.price,
         currency: 'USD',
-        features: isPro
-          ? [
-              '10M tokens/month (2.5M per LLM)',
-              'All 4 AI providers included',
-              'Advanced analytics',
-              'Priority support',
-              'API access',
-            ]
-          : [
-              '1M tokens/month (250k per LLM)',
-              'All 4 AI providers included',
-              'Basic analytics',
-              'Community support',
-            ],
+        features: tierConfig.features,
         stripeCustomerId: userPlan.stripeCustomerId,
         stripeSubscriptionId: userPlan.stripeSubscriptionId,
         usage: {
@@ -734,12 +797,9 @@ export function useInvoices(): UseQueryResult<Invoice[], Error> {
         .order('created_at', { ascending: false });
 
       if (error) {
-        // Table might not exist
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          logger.warn('[useInvoices] Invoices table does not exist');
-          return [];
-        }
-        throw error;
+        // Table might not exist or user may not have access — degrade gracefully
+        logger.warn('[useInvoices] Failed to load invoices:', error.message);
+        return [];
       }
 
       interface InvoiceRow {
@@ -833,12 +893,9 @@ export function usePaymentMethods(): UseQueryResult<PaymentMethod[], Error> {
         .order('is_default', { ascending: false });
 
       if (error) {
-        // Table might not exist
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          logger.warn('[usePaymentMethods] Payment methods table does not exist');
-          return [];
-        }
-        throw error;
+        // Table might not exist or user may not have access — degrade gracefully
+        logger.warn('[usePaymentMethods] Failed to load payment methods:', error.message);
+        return [];
       }
 
       interface PaymentMethodRow {
