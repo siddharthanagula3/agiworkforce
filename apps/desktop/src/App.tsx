@@ -441,10 +441,13 @@ const DesktopShell = () => {
     ensureActiveConversation();
   }, [restoreSession, ensureActiveConversation]);
 
-  // Load available models from Rust backend and populate the chat package's model store
+  // Initialize cloud provider + load available models into the chat package's model store
   useEffect(() => {
-    async function loadModels() {
+    async function initModels() {
       try {
+        // Enable ManagedCloud provider if user is authenticated (subscription-based models)
+        await invoke<boolean>('llm_ensure_managed_cloud').catch(() => false);
+
         const { useChatModelStore } = await import('@agiworkforce/chat');
         interface RustModelInfo {
           id: string;
@@ -491,7 +494,7 @@ const DesktopShell = () => {
         // Non-fatal — model list will be empty but chat still works with default model
       }
     }
-    void loadModels();
+    void initModels();
   }, []);
 
   useEffect(() => {

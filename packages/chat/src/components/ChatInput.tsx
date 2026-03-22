@@ -1,5 +1,12 @@
-import { useRef, useEffect, useCallback, type KeyboardEvent, type ChangeEvent } from 'react';
-import { Mic, Plus, Square, ChevronDown } from 'lucide-react';
+import {
+  useRef,
+  useEffect,
+  useCallback,
+  useState,
+  type KeyboardEvent,
+  type ChangeEvent,
+} from 'react';
+import { Mic, Plus, Square, ChevronDown, Check, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
 import { useModel } from '../hooks/useModel';
@@ -25,7 +32,9 @@ export function ChatInput({
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const { displayName } = useModel();
+  const { displayName, models, selectedModelId, selectModel } = useModel();
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
 
   const draftContent = useChatStore((s) => s.draftContent);
   const setDraftContent = useChatStore((s) => s.setDraftContent);
@@ -42,6 +51,18 @@ export function ChatInput({
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, []);
+
+  // Close model dropdown on outside click
+  useEffect(() => {
+    if (!modelDropdownOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
+        setModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [modelDropdownOpen]);
 
   // Apply draft content from store (e.g. from chip clicks)
   useEffect(() => {
@@ -126,21 +147,85 @@ export function ChatInput({
 
           {/* Right: Model selector + mic/stop */}
           <div className="flex items-center gap-2">
-            {/* Model selector */}
-            <button
-              type="button"
-              onClick={onModelSelectorClick}
-              aria-label="Select model"
-              className={cn(
-                'inline-flex items-center gap-1 rounded-lg px-2.5 py-1',
-                'text-xs text-[var(--chat-text-secondary)] transition-colors duration-150',
-                'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+            {/* Model selector with dropdown */}
+            <div className="relative" ref={modelDropdownRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (models.length > 0) {
+                    setModelDropdownOpen((prev) => !prev);
+                  } else {
+                    onModelSelectorClick();
+                  }
+                }}
+                aria-label="Select model"
+                aria-expanded={modelDropdownOpen}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-lg px-2.5 py-1',
+                  'text-xs text-[var(--chat-text-secondary)] transition-colors duration-150',
+                  'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                )}
+              >
+                <span className="max-w-[140px] truncate font-medium">{displayName}</span>
+                <ChevronDown size={12} className="shrink-0 opacity-60" />
+              </button>
+
+              {modelDropdownOpen && models.length > 0 && (
+                <div className="absolute bottom-full mb-1 right-0 z-50 w-64 max-h-80 overflow-y-auto rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-lg">
+                  <div className="p-1">
+                    {/* Group models by provider */}
+                    {Object.entries(
+                      models.reduce<Record<string, typeof models>>((acc, m) => {
+                        const key = m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push(m);
+                        return acc;
+                      }, {}),
+                    ).map(([provider, providerModels]) => (
+                      <div key={provider}>
+                        <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-[var(--chat-text-muted)]">
+                          {provider}
+                        </p>
+                        {providerModels.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              selectModel(m.id);
+                              setModelDropdownOpen(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors',
+                              m.id === selectedModelId
+                                ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
+                                : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
+                            )}
+                          >
+                            <span className="flex-1 truncate">{m.name}</span>
+                            {m.id === selectedModelId && <Check size={14} className="shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Settings link at bottom */}
+                  <div className="border-t border-[var(--chat-border)] p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModelDropdownOpen(false);
+                        onModelSelectorClick();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+                    >
+                      <Settings size={13} />
+                      <span>Manage API Keys</span>
+                    </button>
+                  </div>
+                </div>
               )}
-            >
-              <span className="max-w-[140px] truncate font-medium">{displayName}</span>
-              <ChevronDown size={12} className="shrink-0 opacity-60" />
-            </button>
+            </div>
 
             {/* Mic / Stop */}
             {isStreaming ? (
