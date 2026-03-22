@@ -30,7 +30,7 @@ const VibeSidebar: React.FC = () => {
         <Tooltip>
           <TooltipTrigger asChild>
             <Link
-              href="/dashboard"
+              href="/chat"
               className="rounded-lg p-3 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <LayoutDashboard size={20} />

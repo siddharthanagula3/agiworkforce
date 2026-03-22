@@ -95,12 +95,12 @@ export function ConnectorDiscoveryBar() {
 
   function handleConnectorClick() {
     toast.info('Configure connectors in Settings');
-    router.push('/dashboard/settings');
+    router.push('/chat');
   }
 
   function handleSettingsClick(e: React.MouseEvent) {
     e.stopPropagation();
-    router.push('/dashboard/settings');
+    router.push('/chat');
   }
 
   function handleDismiss(e: React.MouseEvent) {

@@ -140,8 +140,8 @@ async function handleCreditTopup(request: NextRequest) {
   } catch {
     throw createError.internal('Invalid base URL for redirect');
   }
-  const successUrl = `${baseUrl}/dashboard/billing?topup=success`;
-  const cancelUrl = `${baseUrl}/dashboard/billing?topup=cancelled`;
+  const successUrl = `${baseUrl}/billing?topup=success`;
+  const cancelUrl = `${baseUrl}/billing?topup=cancelled`;
 
   // Create Stripe Checkout session for one-time credit purchase
   const checkoutSession = await stripe.checkout.sessions.create({
