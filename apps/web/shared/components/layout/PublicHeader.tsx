@@ -178,7 +178,7 @@ const PublicHeader: React.FC = () => {
                 className="btn-glow gradient-primary text-sm text-white"
               >
                 <User className="mr-2 h-4 w-4" />
-                Dashboard
+                Chat
               </Button>
             ) : (
               <>
@@ -229,7 +229,7 @@ const PublicHeader: React.FC = () => {
                       className="gradient-primary w-full text-white"
                     >
                       <User className="mr-2 h-4 w-4" />
-                      Dashboard
+                      Chat
                     </Button>
                   ) : (
                     <>
