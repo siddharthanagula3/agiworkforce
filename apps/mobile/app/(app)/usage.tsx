@@ -1,9 +1,24 @@
+/**
+ * Usage Screen
+ *
+ * Shows session/monthly progress bars, API spend, and links
+ * to subscription management and purchase restoration.
+ */
 import { useCallback, useEffect, useState } from 'react';
-import { View, ScrollView, Pressable, RefreshControl } from 'react-native';
+import { View, ScrollView, Pressable, RefreshControl, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ArrowLeft, BarChart3, MessageSquare, Cpu, TrendingUp } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  BarChart3,
+  CreditCard,
+  RotateCcw,
+  ChevronRight,
+  Cpu,
+  MessageSquare,
+  TrendingUp,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -14,6 +29,7 @@ import {
   type ModelUsage,
   type DailyUsage,
 } from '@/services/usage';
+import { api } from '@/services/api';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,6 +45,32 @@ function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+/** Calculate countdown string from a reset timestamp */
+function formatCountdown(resetAt: string | null): string {
+  if (!resetAt) return '';
+  const now = Date.now();
+  const target = new Date(resetAt).getTime();
+  const diffMs = target - now;
+  if (diffMs <= 0) return 'Resetting...';
+
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (hours > 0) return `Resets in ${hours}h ${minutes}m`;
+  return `Resets in ${minutes}m`;
+}
+
+/** Format a reset date for monthly display */
+function formatResetDate(resetAt: string | null): string {
+  if (!resetAt) return '';
+  try {
+    const date = new Date(resetAt);
+    return `Resets ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  } catch {
+    return '';
+  }
+}
+
 /** Return the 3-letter weekday abbreviation for an ISO date string */
 function dayLabel(isoDate: string): string {
   try {
@@ -40,67 +82,112 @@ function dayLabel(isoDate: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Progress Bar
 // ---------------------------------------------------------------------------
 
-function SummaryCard({ summary }: { summary: UsageSummary }) {
+function ProgressBar({ percentage, label }: { percentage: number; label: string }) {
+  const clamped = Math.max(0, Math.min(100, percentage));
+  return (
+    <View className="gap-2">
+      <View
+        className="h-2.5 rounded-full overflow-hidden"
+        style={{ backgroundColor: colors.charcoal700 }}
+      >
+        <View
+          className="h-full rounded-full"
+          style={{
+            width: `${clamped}%`,
+            backgroundColor: clamped > 80 ? colors.agentWarning : colors.teal,
+          }}
+        />
+      </View>
+      <Text className="text-[13px] text-white/60">{label}</Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Usage cards
+// ---------------------------------------------------------------------------
+
+function SessionUsageCard({ summary }: { summary: UsageSummary }) {
+  const SESSION_TOKEN_LIMIT = 100_000;
+  const sessionPercent =
+    summary.totalTokens > 0
+      ? Math.min(100, Math.round((summary.totalTokens / SESSION_TOKEN_LIMIT) * 100))
+      : 0;
+
   return (
     <Card>
-      <Text variant="caption" className="mb-3 uppercase tracking-wider">
-        {summary.period}
+      <Text className="text-[13px] text-white/50 uppercase tracking-wider font-semibold mb-3">
+        Current Session
       </Text>
-      <View className="flex-row justify-around py-2">
-        <SummaryItem
-          icon={<BarChart3 size={18} color={colors.teal} />}
-          value={formatNumber(summary.totalTokens)}
-          label="Total Tokens"
-        />
-        <SummaryItem
-          icon={<TrendingUp size={18} color={colors.agentWarning} />}
-          value={formatCost(summary.totalCost)}
-          label="Est. Cost"
-        />
-        <SummaryItem
-          icon={<MessageSquare size={18} color={colors.agentActive} />}
-          value={summary.conversationCount.toString()}
-          label="Conversations"
-        />
-      </View>
-      <Separator className="my-3" />
-      <View className="flex-row justify-between">
-        <View className="items-center flex-1">
-          <Text className="text-xs text-white/40 mb-0.5">Input</Text>
-          <Text className="text-sm text-white font-medium">
-            {formatNumber(summary.totalInputTokens)}
-          </Text>
-        </View>
-        <View style={{ width: 1, backgroundColor: colors.border }} />
-        <View className="items-center flex-1">
-          <Text className="text-xs text-white/40 mb-0.5">Output</Text>
-          <Text className="text-sm text-white font-medium">
-            {formatNumber(summary.totalOutputTokens)}
-          </Text>
-        </View>
-      </View>
+      <ProgressBar
+        percentage={sessionPercent}
+        label={`${formatNumber(summary.totalTokens)} / ${formatNumber(SESSION_TOKEN_LIMIT)} tokens`}
+      />
+      <Text className="text-[11px] text-white/30 mt-1">Resets periodically</Text>
     </Card>
   );
 }
 
-function SummaryItem({
-  icon,
-  value,
-  label,
-}: {
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-}) {
+function MonthlyUsageCard({ summary }: { summary: UsageSummary }) {
+  // Monthly usage — derive percentage from conversation count or token budget
+  const monthlyBudget = 50; // $50 default budget
+  const monthlyPercent = Math.min(100, Math.round((summary.totalCost / monthlyBudget) * 100));
+
+  // Reset date — first of next month
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthlyResetAt = nextMonth.toISOString();
+
   return (
-    <View className="items-center gap-1.5">
-      {icon}
-      <Text className="text-xl font-bold text-white">{value}</Text>
-      <Text className="text-[11px] text-white/40">{label}</Text>
-    </View>
+    <Card>
+      <Text className="text-[13px] text-white/50 uppercase tracking-wider font-semibold mb-3">
+        Monthly Limits
+      </Text>
+      <ProgressBar percentage={monthlyPercent} label={`${monthlyPercent}% used`} />
+      <Text className="text-[11px] text-white/30 mt-1">{formatResetDate(monthlyResetAt)}</Text>
+    </Card>
+  );
+}
+
+function ApiSpendCard({ summary }: { summary: UsageSummary }) {
+  const budget = 50;
+  return (
+    <Card>
+      <Text className="text-[13px] text-white/50 uppercase tracking-wider font-semibold mb-2">
+        API Spend
+      </Text>
+      <Text className="text-2xl font-bold text-white">
+        {formatCost(summary.totalCost)}{' '}
+        <Text className="text-base text-white/30 font-normal">/ {formatCost(budget)}</Text>
+      </Text>
+    </Card>
+  );
+}
+
+function StatsRow({ summary }: { summary: UsageSummary }) {
+  return (
+    <Card>
+      <View className="flex-row justify-around">
+        <View className="items-center gap-1">
+          <BarChart3 size={16} color={colors.teal} />
+          <Text className="text-lg font-bold text-white">{formatNumber(summary.totalTokens)}</Text>
+          <Text className="text-[11px] text-white/40">Tokens</Text>
+        </View>
+        <View className="items-center gap-1">
+          <MessageSquare size={16} color={colors.agentActive} />
+          <Text className="text-lg font-bold text-white">{summary.conversationCount}</Text>
+          <Text className="text-[11px] text-white/40">Conversations</Text>
+        </View>
+        <View className="items-center gap-1">
+          <TrendingUp size={16} color={colors.agentWarning} />
+          <Text className="text-lg font-bold text-white">{formatCost(summary.totalCost)}</Text>
+          <Text className="text-[11px] text-white/40">Total Cost</Text>
+        </View>
+      </View>
+    </Card>
   );
 }
 
@@ -113,48 +200,47 @@ function ModelBreakdownCard({ models }: { models: ModelUsage[] }) {
     <Card>
       <View className="flex-row items-center gap-2 mb-3">
         <Cpu size={14} color={colors.textMuted} />
-        <Text variant="caption" className="uppercase tracking-wider">
+        <Text className="text-[13px] text-white/50 uppercase tracking-wider font-semibold">
           By Model
         </Text>
       </View>
-      {models.map((model, index) => (
-        <View key={model.modelId}>
-          {index > 0 && <Separator className="my-3" />}
-          <ModelRow model={model} maxTokens={maxTokens} />
-        </View>
-      ))}
+      {models.map((model, index) => {
+        const fraction = maxTokens > 0 ? model.totalTokens / maxTokens : 0;
+        return (
+          <View key={model.modelId}>
+            {index > 0 && <Separator className="my-3" />}
+            <View>
+              <View className="flex-row justify-between items-center mb-1.5">
+                <Text className="text-sm text-white font-medium flex-1 mr-2" numberOfLines={1}>
+                  {model.modelName}
+                </Text>
+                <Text className="text-sm text-white/60">{formatCost(model.estimatedCost)}</Text>
+              </View>
+              <View
+                className="h-1.5 rounded-full mb-1.5"
+                style={{ backgroundColor: colors.charcoal700 }}
+              >
+                <View
+                  className="h-1.5 rounded-full"
+                  style={{
+                    width: `${Math.round(fraction * 100)}%`,
+                    backgroundColor: colors.teal,
+                  }}
+                />
+              </View>
+              <View className="flex-row gap-3">
+                <Text className="text-[11px] text-white/40">
+                  {formatNumber(model.totalTokens)} tokens
+                </Text>
+                <Text className="text-[11px] text-white/30">
+                  in {formatNumber(model.inputTokens)} / out {formatNumber(model.outputTokens)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        );
+      })}
     </Card>
-  );
-}
-
-function ModelRow({ model, maxTokens }: { model: ModelUsage; maxTokens: number }) {
-  const fraction = maxTokens > 0 ? model.totalTokens / maxTokens : 0;
-
-  return (
-    <View>
-      <View className="flex-row justify-between items-center mb-1.5">
-        <Text className="text-sm text-white font-medium flex-1 mr-2" numberOfLines={1}>
-          {model.modelName}
-        </Text>
-        <Text className="text-sm text-white/60">{formatCost(model.estimatedCost)}</Text>
-      </View>
-      {/* Progress bar */}
-      <View className="h-1.5 rounded-full mb-1.5" style={{ backgroundColor: colors.charcoal700 }}>
-        <View
-          className="h-1.5 rounded-full"
-          style={{
-            width: `${Math.round(fraction * 100)}%`,
-            backgroundColor: colors.teal,
-          }}
-        />
-      </View>
-      <View className="flex-row gap-3">
-        <Text className="text-[11px] text-white/40">{formatNumber(model.totalTokens)} tokens</Text>
-        <Text className="text-[11px] text-white/30">
-          in {formatNumber(model.inputTokens)} / out {formatNumber(model.outputTokens)}
-        </Text>
-      </View>
-    </View>
   );
 }
 
@@ -162,14 +248,13 @@ function DailyChartCard({ days }: { days: DailyUsage[] }) {
   if (days.length === 0) return null;
 
   const maxTokens = Math.max(...days.map((d) => d.totalTokens), 1);
-  // Chart renders bars up to a fixed height (px converted to flex units)
   const MAX_BAR_HEIGHT = 80;
 
   return (
     <Card>
       <View className="flex-row items-center gap-2 mb-4">
         <BarChart3 size={14} color={colors.textMuted} />
-        <Text variant="caption" className="uppercase tracking-wider">
+        <Text className="text-[13px] text-white/50 uppercase tracking-wider font-semibold">
           Last 7 Days
         </Text>
       </View>
@@ -208,6 +293,39 @@ function DailyChartCard({ days }: { days: DailyUsage[] }) {
     </Card>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Action rows
+// ---------------------------------------------------------------------------
+
+function ActionRow({
+  icon: Icon,
+  label,
+  onPress,
+}: {
+  icon: typeof CreditCard;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className="flex-row items-center justify-between py-3.5 px-4 active:bg-white/5"
+      accessibilityLabel={label}
+      accessibilityRole="button"
+    >
+      <View className="flex-row items-center gap-3">
+        <Icon size={18} color={colors.textSecondary} />
+        <Text className="text-[15px] text-white">{label}</Text>
+      </View>
+      <ChevronRight size={16} color={colors.textMuted} />
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Error state
+// ---------------------------------------------------------------------------
 
 function ErrorCard() {
   return (
@@ -265,13 +383,38 @@ export default function UsageScreen() {
     void load(true);
   }, [load]);
 
+  const handleManageSubscription = useCallback(async () => {
+    try {
+      const data = await api.post<{ url: string }>('/api/portal');
+      if (data.url) {
+        await Linking.openURL(data.url);
+        return;
+      }
+    } catch {
+      // Fall back to static URL
+    }
+    try {
+      await Linking.openURL('https://agiworkforce.com/billing');
+    } catch {
+      Alert.alert(
+        'Error',
+        'Could not open subscription management. Please visit agiworkforce.com/billing.',
+      );
+    }
+  }, []);
+
+  const handleRestorePurchases = useCallback(() => {
+    Alert.alert(
+      'Restore Purchases',
+      'Purchase restoration will be available when the app launches on the App Store.',
+      [{ text: 'OK' }],
+    );
+  }, []);
+
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
       {/* Header */}
-      <View
-        className="flex-row items-center px-3 h-12"
-        style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
-      >
+      <View className="flex-row items-center px-3 h-12">
         <Pressable
           onPress={handleBack}
           className="p-2 rounded-lg active:bg-white/5"
@@ -281,7 +424,7 @@ export default function UsageScreen() {
           <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
         <Text variant="subheading" className="ml-2">
-          Usage &amp; Costs
+          Usage
         </Text>
       </View>
 
@@ -311,19 +454,47 @@ export default function UsageScreen() {
           </Animated.View>
         ) : (
           <>
+            {/* Progress bars */}
             <Animated.View entering={FadeInDown.duration(250)}>
-              <SummaryCard summary={summary} />
+              <SessionUsageCard summary={summary} />
             </Animated.View>
 
-            <Animated.View entering={FadeInDown.duration(250).delay(60)}>
+            <Animated.View entering={FadeInDown.duration(250).delay(40)}>
+              <MonthlyUsageCard summary={summary} />
+            </Animated.View>
+
+            <Animated.View entering={FadeInDown.duration(250).delay(80)}>
+              <ApiSpendCard summary={summary} />
+            </Animated.View>
+
+            {/* Stats */}
+            <Animated.View entering={FadeInDown.duration(250).delay(120)}>
+              <StatsRow summary={summary} />
+            </Animated.View>
+
+            {/* Daily chart */}
+            <Animated.View entering={FadeInDown.duration(250).delay(160)}>
               <DailyChartCard days={summary.dailyUsage} />
             </Animated.View>
 
-            <Animated.View entering={FadeInDown.duration(250).delay(120)}>
+            {/* Model breakdown */}
+            <Animated.View entering={FadeInDown.duration(250).delay(200)}>
               <ModelBreakdownCard models={summary.modelBreakdown} />
             </Animated.View>
           </>
         )}
+
+        {/* Actions */}
+        <Separator />
+        <Card className="p-0 overflow-hidden">
+          <ActionRow
+            icon={CreditCard}
+            label="Manage Subscription"
+            onPress={handleManageSubscription}
+          />
+          <View className="h-px mx-4" style={{ backgroundColor: colors.border }} />
+          <ActionRow icon={RotateCcw} label="Restore Purchases" onPress={handleRestorePurchases} />
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );

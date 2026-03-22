@@ -7,6 +7,24 @@ export type ThemeMode = 'dark' | 'light' | 'system';
 export type FontPreference = 'default' | 'system' | 'dyslexic';
 export type TTSProvider = 'system' | 'cloud';
 
+interface Personalization {
+  fullName: string;
+  nickname: string;
+  occupation: string;
+  instructions: string;
+  warmth: number;
+  enthusiasm: number;
+  headersLists: number;
+  emoji: number;
+}
+
+interface Capabilities {
+  webSearch: boolean;
+  imageGen: boolean;
+  memory: boolean;
+  desktopControl: boolean;
+}
+
 interface SettingsState {
   /** Auto-approve mode for tool execution */
   autoApproveMode: AutoApproveMode;
@@ -38,6 +56,10 @@ interface SettingsState {
   autoListenEnabled: boolean;
   /** Temporary chat mode: conversations won't be saved */
   isTemporaryChat: boolean;
+  /** User personalization preferences */
+  personalization: Personalization;
+  /** AI capability toggles */
+  capabilities: Capabilities;
 
   setAutoApproveMode: (mode: AutoApproveMode) => void;
   setHapticsEnabled: (enabled: boolean) => void;
@@ -54,11 +76,13 @@ interface SettingsState {
   setTtsProvider: (provider: TTSProvider) => void;
   setAutoListenEnabled: (enabled: boolean) => void;
   setTemporaryChat: (enabled: boolean) => void;
+  setPersonalization: (partial: Partial<Personalization>) => void;
+  setCapability: (key: keyof Capabilities, value: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       autoApproveMode: 'ask',
       hapticsEnabled: true,
       notificationsEnabled: true,
@@ -74,6 +98,22 @@ export const useSettingsStore = create<SettingsState>()(
       ttsProvider: 'system',
       autoListenEnabled: true,
       isTemporaryChat: false,
+      personalization: {
+        fullName: '',
+        nickname: '',
+        occupation: '',
+        instructions: '',
+        warmth: 50,
+        enthusiasm: 50,
+        headersLists: 50,
+        emoji: 50,
+      },
+      capabilities: {
+        webSearch: true,
+        imageGen: true,
+        memory: true,
+        desktopControl: true,
+      },
 
       setAutoApproveMode: (mode) => set({ autoApproveMode: mode }),
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
@@ -90,6 +130,9 @@ export const useSettingsStore = create<SettingsState>()(
       setTtsProvider: (provider) => set({ ttsProvider: provider }),
       setAutoListenEnabled: (enabled) => set({ autoListenEnabled: enabled }),
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
+      setPersonalization: (partial) =>
+        set({ personalization: { ...get().personalization, ...partial } }),
+      setCapability: (key, value) => set({ capabilities: { ...get().capabilities, [key]: value } }),
     }),
     {
       name: 'settings-store',
