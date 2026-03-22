@@ -57,6 +57,17 @@ export interface DeviceIntegration {
 }
 
 // ---------------------------------------------------------------------------
+// Connector types (used by Connectors page)
+// ---------------------------------------------------------------------------
+
+export interface ConnectorState {
+  /** Connector IDs that have been authorized via OAuth */
+  connectedConnectors: Record<string, boolean>;
+  /** Connector IDs that are toggled on (only relevant for connected ones) */
+  enabledConnectors: Record<string, boolean>;
+}
+
+// ---------------------------------------------------------------------------
 // Store shape
 // ---------------------------------------------------------------------------
 
@@ -67,11 +78,22 @@ interface IntegrationState {
   deviceLoading: boolean;
   error: string | null;
 
+  // Connector state
+  connectedConnectors: Record<string, boolean>;
+  enabledConnectors: Record<string, boolean>;
+
   fetchPlatforms: () => Promise<void>;
   connectPlatform: (platformId: string, config?: Record<string, string>) => Promise<void>;
   disconnectPlatform: (platformId: string) => Promise<void>;
   checkDeviceIntegrations: () => Promise<void>;
   clearError: () => void;
+
+  // Connector actions
+  connectConnector: (connectorId: string) => void;
+  disconnectConnector: (connectorId: string) => void;
+  toggleConnector: (connectorId: string, enabled: boolean) => void;
+  isConnectorConnected: (connectorId: string) => boolean;
+  isConnectorEnabled: (connectorId: string) => boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +150,10 @@ export const useIntegrationStore = create<IntegrationState>()(
       platformsLoading: false,
       deviceLoading: false,
       error: null,
+
+      // Connector state — empty by default, populated as users connect
+      connectedConnectors: {},
+      enabledConnectors: {},
 
       // ------------------------------------------------------------------
       // Platforms
@@ -263,14 +289,52 @@ export const useIntegrationStore = create<IntegrationState>()(
         }
       },
 
+      // ------------------------------------------------------------------
+      // Connectors (Cloud Storage, Productivity, Communication, Email)
+      // ------------------------------------------------------------------
+
+      connectConnector: (connectorId) => {
+        set((state) => ({
+          connectedConnectors: { ...state.connectedConnectors, [connectorId]: true },
+          enabledConnectors: { ...state.enabledConnectors, [connectorId]: true },
+        }));
+      },
+
+      disconnectConnector: (connectorId) => {
+        set((state) => {
+          const { [connectorId]: _c, ...restConnected } = state.connectedConnectors;
+          const { [connectorId]: _e, ...restEnabled } = state.enabledConnectors;
+          return {
+            connectedConnectors: restConnected,
+            enabledConnectors: restEnabled,
+          };
+        });
+      },
+
+      toggleConnector: (connectorId, enabled) => {
+        set((state) => ({
+          enabledConnectors: { ...state.enabledConnectors, [connectorId]: enabled },
+        }));
+      },
+
+      isConnectorConnected: (connectorId) => {
+        return !!get().connectedConnectors[connectorId];
+      },
+
+      isConnectorEnabled: (connectorId) => {
+        return !!get().enabledConnectors[connectorId];
+      },
+
       clearError: () => set({ error: null }),
     }),
     {
       name: 'integration-store',
       storage: createJSONStorage(() => mmkvStorage),
       partialize: (state) => ({
-        // Persist platform connection state only — don't persist loading/error/device status
+        // Persist platform + connector connection state — not loading/error/device status
         platforms: state.platforms,
+        connectedConnectors: state.connectedConnectors,
+        enabledConnectors: state.enabledConnectors,
       }),
     },
   ),

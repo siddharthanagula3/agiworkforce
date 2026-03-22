@@ -1,19 +1,18 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
+import { DrawerActions } from '@react-navigation/native';
 import { Plus, Menu } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
-import BottomSheetImpl, {
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-} from '@gorhom/bottom-sheet';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { AddToChatSheet } from '@/components/chat/AddToChatSheet';
 import { ProjectSelectorBar } from '@/components/chat/ProjectSelectorBar';
 import { ModelPickerSheet } from '@/components/model-picker/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/components/voice/VoiceConversationScreen';
 import { ConversationList } from '@/components/sidebar/ConversationList';
-import { SidebarContent } from '@/components/sidebar/SidebarContent';
 import { SearchBar } from '@/components/sidebar/SearchBar';
 import { TagFilter } from '@/components/sidebar/TagFilter';
 import { Text } from '@/components/ui/text';
@@ -27,11 +26,16 @@ import type { ConversationTag } from '@/services/autotag';
  * Chat tab -- shows conversation list with a new-chat input bar.
  * Tapping a conversation navigates to the full chat screen.
  * The input bar at bottom creates a new conversation on send.
+ * The hamburger menu opens the app-level drawer navigator.
  */
 export default function ChatTabScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const modelPickerRef = useRef<BottomSheet>(null);
-  const sidebarSheetRef = useRef<BottomSheetImpl>(null);
+  const addToChatRef = useRef<BottomSheet>(null);
+  const chatInputAttachRef = useRef<{
+    addAttachments: (items: import('@/components/chat/AttachmentPreview').Attachment[]) => void;
+  } | null>(null);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<ConversationTag | null>(null);
@@ -49,6 +53,14 @@ export default function ChatTabScreen() {
     loadConversations();
   }, [loadConversations]);
 
+  const handleOpenDrawer = useCallback(() => {
+    // Walk up to the drawer navigator (parent of the tab navigator)
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.dispatch(DrawerActions.openDrawer());
+    }
+  }, [navigation]);
+
   const handleSend = useCallback(
     async (
       text: string,
@@ -58,7 +70,9 @@ export default function ChatTabScreen() {
         const title = text.length > 40 ? text.slice(0, 40).trim() + '...' : text;
         const conversationId = await createConversation(title);
         router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
-        sendMessage(conversationId, text, selectedModel, attachments);
+        sendMessage(conversationId, text, selectedModel, attachments).catch(() => {
+          // Message send failed — conversation was created, user can retry from chat screen
+        });
       } catch {
         // Conversation creation failed — no-op (user can retry)
       }
@@ -68,6 +82,93 @@ export default function ChatTabScreen() {
 
   const handleOpenModelPicker = useCallback(() => {
     modelPickerRef.current?.snapToIndex(0);
+  }, []);
+
+  const handleOpenAddToChat = useCallback(() => {
+    addToChatRef.current?.snapToIndex(0);
+  }, []);
+
+  const handleOpenConnectors = useCallback(() => {
+    router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  const handleSheetCamera = useCallback(async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Camera Access',
+        'Camera permission is required to take photos. Please enable it in Settings.',
+      );
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+      allowsEditing: false,
+      exif: false,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      const attachments: import('@/components/chat/AttachmentPreview').Attachment[] =
+        result.assets.map((asset) => ({
+          id: `cam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          uri: asset.uri,
+          mimeType: asset.mimeType ?? 'image/jpeg',
+          fileName: asset.fileName ?? 'photo.jpg',
+          width: asset.width,
+          height: asset.height,
+          fileSize: asset.fileSize,
+        }));
+      chatInputAttachRef.current?.addAttachments(attachments);
+    }
+  }, []);
+
+  const handleSheetPhotos = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Photo Library Access',
+        'Photo library permission is required. Please enable it in Settings.',
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+      allowsMultipleSelection: true,
+      selectionLimit: 5,
+      orderedSelection: true,
+      exif: false,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      const attachments: import('@/components/chat/AttachmentPreview').Attachment[] =
+        result.assets.map((asset) => ({
+          id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          uri: asset.uri,
+          mimeType: asset.mimeType ?? 'image/jpeg',
+          fileName: asset.fileName ?? 'image.jpg',
+          width: asset.width,
+          height: asset.height,
+          fileSize: asset.fileSize,
+        }));
+      chatInputAttachRef.current?.addAttachments(attachments);
+    }
+  }, []);
+
+  const handleSheetFile = useCallback(async () => {
+    try {
+      await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain',
+          'text/csv',
+        ],
+        copyToCacheDirectory: true,
+      });
+    } catch {
+      Alert.alert('Error', 'Failed to pick document. Please try again.');
+    }
   }, []);
 
   const handleOpenVoiceMode = useCallback(() => {
@@ -115,9 +216,9 @@ export default function ChatTabScreen() {
       <View className="flex-row items-center justify-between px-4 h-12">
         <View className="flex-row items-center gap-2">
           <Pressable
-            onPress={() => sidebarSheetRef.current?.snapToIndex(0)}
+            onPress={handleOpenDrawer}
             className="w-8 h-8 rounded-lg items-center justify-center active:bg-white/5"
-            accessibilityLabel="Open sidebar"
+            accessibilityLabel="Open navigation drawer"
             accessibilityRole="button"
           >
             <Menu size={18} color={colors.textSecondary} />
@@ -161,6 +262,17 @@ export default function ChatTabScreen() {
         onSend={handleSend}
         onOpenModelPicker={handleOpenModelPicker}
         onOpenVoiceMode={handleOpenVoiceMode}
+        onOpenAddToChat={handleOpenAddToChat}
+        onOpenConnectors={handleOpenConnectors}
+        attachRef={chatInputAttachRef}
+      />
+
+      {/* Add to Chat bottom sheet */}
+      <AddToChatSheet
+        ref={addToChatRef}
+        onCamera={handleSheetCamera}
+        onPhotos={handleSheetPhotos}
+        onFile={handleSheetFile}
       />
 
       {/* Model picker bottom sheet */}
@@ -172,28 +284,6 @@ export default function ChatTabScreen() {
         onClose={handleCloseVoiceMode}
         onSendMessage={handleVoiceSendMessage}
       />
-
-      {/* Sidebar drawer as bottom sheet */}
-      <BottomSheetImpl
-        ref={sidebarSheetRef}
-        index={-1}
-        snapPoints={['85%']}
-        enablePanDownToClose
-        enableDynamicSizing={false}
-        backdropComponent={(props: BottomSheetBackdropProps) => (
-          <BottomSheetBackdrop
-            {...props}
-            disappearsOnIndex={-1}
-            appearsOnIndex={0}
-            opacity={0.6}
-            pressBehavior="close"
-          />
-        )}
-        backgroundStyle={{ backgroundColor: colors.background }}
-        handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
-      >
-        <SidebarContent />
-      </BottomSheetImpl>
     </SafeAreaView>
   );
 }

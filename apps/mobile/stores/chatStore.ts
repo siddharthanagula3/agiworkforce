@@ -9,6 +9,22 @@ import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/type
 import type { Attachment } from '@/components/chat/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
 
+/** Chat mode — determines how the AI processes the conversation. */
+export type ChatMode = 'chat' | 'research' | 'create';
+
+/** Per-chat response style. */
+export type ChatStyle = 'normal' | 'concise' | 'detailed' | 'creative';
+
+/** Per-chat tool loading strategy. */
+export type ToolAccess = 'auto' | 'on-demand' | 'always';
+
+/** Feature toggles available in the "Add to Chat" sheet. */
+export interface ChatFeatures {
+  webSearch: boolean;
+  imageGen: boolean;
+  health: boolean;
+}
+
 interface ChatState {
   /** All conversation summaries for the sidebar */
   conversations: ConversationSummary[];
@@ -46,6 +62,14 @@ interface ChatState {
   isEditing: boolean;
   /** Retry attempt counts keyed by message ID */
   retryAttempts: Record<string, number>;
+  /** Current chat mode — chat, research, or create */
+  chatMode: ChatMode;
+  /** Per-chat response style */
+  chatStyle: ChatStyle;
+  /** Per-chat tool loading strategy */
+  toolAccess: ToolAccess;
+  /** Feature toggles for web search, image generation, health */
+  features: ChatFeatures;
 
   // --- Actions ---
   loadConversations: () => Promise<void>;
@@ -69,6 +93,10 @@ interface ChatState {
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
+  setChatMode: (mode: ChatMode) => void;
+  setChatStyle: (style: ChatStyle) => void;
+  setToolAccess: (access: ToolAccess) => void;
+  setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
 }
 
 /** Abort controllers keyed by conversationId — supports concurrent streams */
@@ -79,6 +107,8 @@ let streamingConversationId: string | null = null;
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 /** Maximum retry attempts before showing permanent failure */
 const MAX_RETRY_ATTEMPTS = 3;
+/** Tracks when thinking/reasoning started for duration calculation */
+let thinkingStartedAt: number | null = null;
 
 function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -142,6 +172,10 @@ export const useChatStore = create<ChatState>()(
       isSearching: false,
       isEditing: false,
       retryAttempts: {},
+      chatMode: 'chat',
+      chatStyle: 'normal',
+      toolAccess: 'auto',
+      features: { webSearch: true, imageGen: true, health: false },
 
       setCurrentConversationId: (id) => {
         set({ currentConversationId: id });
@@ -428,6 +462,10 @@ export const useChatStore = create<ChatState>()(
                   newContent += delta.content;
                 }
                 if (delta.reasoning) {
+                  // Track when thinking first starts for duration calculation
+                  if (!thinkingStartedAt && !state.streamingReasoning) {
+                    thinkingStartedAt = Date.now();
+                  }
                   newReasoning += delta.reasoning;
                 }
 
@@ -452,10 +490,25 @@ export const useChatStore = create<ChatState>()(
               },
 
               onDone: () => {
+                // Compute thinking duration if reasoning was streamed
+                const thinkingDuration = thinkingStartedAt
+                  ? (Date.now() - thinkingStartedAt) / 1000
+                  : undefined;
+                thinkingStartedAt = null;
+
                 const state = get();
                 const msgs = state.messages[conversationId] ?? [];
                 const updatedMsgs = msgs.map((m) =>
-                  m.id === assistantMessageId ? { ...m, isStreaming: false } : m,
+                  m.id === assistantMessageId
+                    ? {
+                        ...m,
+                        isStreaming: false,
+                        metadata: {
+                          ...m.metadata,
+                          ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
+                        },
+                      }
+                    : m,
                 );
 
                 // Update conversation with assistant's reply preview
@@ -484,6 +537,7 @@ export const useChatStore = create<ChatState>()(
               },
 
               onError: (_error: Error) => {
+                thinkingStartedAt = null;
                 const state = get();
                 const msgs = state.messages[conversationId] ?? [];
                 const updatedMsgs = msgs.map((m) =>
@@ -513,6 +567,7 @@ export const useChatStore = create<ChatState>()(
         } catch {
           // Handle synchronous errors from streamChat (e.g., network failure before stream starts)
           // Always clean up streaming state, even on abort
+          thinkingStartedAt = null;
           abortControllers.delete(conversationId);
           streamingConversationId = null;
 
@@ -547,6 +602,7 @@ export const useChatStore = create<ChatState>()(
       stopStreaming: () => {
         // Use the tracked streaming conversation, not currentConversationId
         const convId = streamingConversationId ?? get().currentConversationId;
+        thinkingStartedAt = null;
 
         // Abort the controller for the streaming conversation
         if (convId) {
@@ -825,6 +881,24 @@ export const useChatStore = create<ChatState>()(
           };
         });
       },
+
+      setChatMode: (mode) => {
+        set({ chatMode: mode });
+      },
+
+      setChatStyle: (style) => {
+        set({ chatStyle: style });
+      },
+
+      setToolAccess: (access) => {
+        set({ toolAccess: access });
+      },
+
+      setFeature: (feature, enabled) => {
+        set((state) => ({
+          features: { ...state.features, [feature]: enabled },
+        }));
+      },
     }),
     {
       name: 'chat-store',
@@ -850,8 +924,10 @@ export const useChatStore = create<ChatState>()(
           conversations,
           messages,
           currentConversationId: state.currentConversationId,
-          // Do NOT persist transient UI state
-          // retryAttempts are also not persisted — they reset on app restart
+          chatMode: state.chatMode,
+          chatStyle: state.chatStyle,
+          toolAccess: state.toolAccess,
+          features: state.features,
         };
       },
     },

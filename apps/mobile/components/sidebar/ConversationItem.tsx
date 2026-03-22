@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Pressable, Alert, Platform, Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MessageSquare, Pin, Trash2 } from 'lucide-react-native';
+import { Archive, MessageSquare, Pin, Trash2 } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -18,6 +18,7 @@ interface ConversationItemProps {
   conversation: ConversationSummary;
   isActive: boolean;
   snippet?: string;
+  onArchive?: (id: string) => void;
 }
 
 /**
@@ -27,7 +28,12 @@ interface ConversationItemProps {
  * - Long press for rename/delete menu
  * - Active state highlight with teal left border
  */
-export function ConversationItem({ conversation, isActive, snippet }: ConversationItemProps) {
+export function ConversationItem({
+  conversation,
+  isActive,
+  snippet,
+  onArchive,
+}: ConversationItemProps) {
   const router = useRouter();
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const renameConversation = useChatStore((s) => s.renameConversation);
@@ -79,12 +85,27 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
     setRenameVisible(false);
   }, [renameText, conversation.id, conversation.title, renameConversation]);
 
+  const pinConversation = useChatStore((s) => s.pinConversation);
+
+  const handlePin = useCallback(() => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    pinConversation(conversation.id);
+  }, [conversation.id, pinConversation, hapticsEnabled]);
+
+  const handleArchive = useCallback(() => {
+    onArchive?.(conversation.id);
+  }, [conversation.id, onArchive]);
+
   const handleLongPress = useCallback(() => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     Alert.alert(conversation.title, undefined, [
+      { text: conversation.pinned ? 'Unpin' : 'Pin', onPress: handlePin },
       { text: 'Rename', onPress: handleRename },
+      { text: 'Archive', onPress: handleArchive },
       {
         text: 'Delete',
         style: 'destructive',
@@ -92,7 +113,15 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
       },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [conversation.title, hapticsEnabled, handleRename, handleDelete]);
+  }, [
+    conversation.title,
+    conversation.pinned,
+    hapticsEnabled,
+    handlePin,
+    handleRename,
+    handleArchive,
+    handleDelete,
+  ]);
 
   const renderRightActions = useCallback(
     () => (
@@ -115,9 +144,35 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
     [handleDelete],
   );
 
+  const renderLeftActions = useCallback(
+    () => (
+      <Pressable
+        onPress={handlePin}
+        style={{
+          backgroundColor: colors.teal,
+          justifyContent: 'center',
+          alignItems: 'center',
+          width: 72,
+          borderRadius: 8,
+          marginRight: 4,
+        }}
+        accessibilityLabel={conversation.pinned ? 'Unpin conversation' : 'Pin conversation'}
+        accessibilityRole="button"
+      >
+        <Pin size={18} color="#fff" />
+      </Pressable>
+    ),
+    [handlePin, conversation.pinned],
+  );
+
   return (
     <>
-      <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
+      <Swipeable
+        renderRightActions={renderRightActions}
+        renderLeftActions={renderLeftActions}
+        overshootRight={false}
+        overshootLeft={false}
+      >
         <Animated.View entering={FadeIn.duration(200)}>
           <Pressable
             onPress={handlePress}

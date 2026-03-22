@@ -27,7 +27,7 @@ export function Switch({ value, onValueChange }: SwitchProps) {
     const newValue = !value;
     translateX.value = withSpring(newValue ? 20 : 2, { damping: 15, stiffness: 200 });
     if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.selectionAsync();
     }
     onValueChange(newValue);
   };
