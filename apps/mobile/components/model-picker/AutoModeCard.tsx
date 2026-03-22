@@ -1,16 +1,10 @@
 import { View, Pressable } from 'react-native';
-import { Zap, Scale, Crown, type LucideIcon } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
 import type { AutoModeDef } from '@/lib/models';
-
-// Map icon name strings to Lucide components so we can render dynamically.
-
-const ICON_MAP: Record<string, LucideIcon> = {
-  Zap,
-  Scale,
-  Crown,
-};
 
 interface AutoModeCardProps {
   mode: AutoModeDef;
@@ -19,25 +13,35 @@ interface AutoModeCardProps {
 }
 
 function SingleCard({ mode, isSelected, onSelect }: AutoModeCardProps) {
-  const Icon = ICON_MAP[mode.icon] ?? Zap;
+  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+
+  const handlePress = () => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    onSelect(mode.id);
+  };
 
   return (
     <Pressable
-      onPress={() => onSelect(mode.id)}
-      className={`flex-1 items-center gap-1.5 rounded-xl px-3 py-3 border ${
+      onPress={handlePress}
+      className={`flex-row items-center justify-between rounded-xl px-4 py-3 border ${
         isSelected
-          ? 'border-teal-500 bg-teal-500/10'
+          ? 'border-teal-500/40 bg-teal-500/10'
           : 'border-white/8 bg-surface-elevated active:bg-white/5'
       }`}
       accessibilityLabel={`${mode.name}: ${mode.description}`}
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
     >
-      <Icon size={18} color={isSelected ? colors.teal : colors.textMuted} />
-      <Text className={`text-xs font-semibold ${isSelected ? 'text-teal-400' : 'text-white'}`}>
-        {mode.name}
-      </Text>
-      <Text className="text-[10px] text-white/50 text-center">{mode.description}</Text>
+      <View className="gap-0.5">
+        <Text className={`text-sm font-semibold ${isSelected ? 'text-teal-400' : 'text-white'}`}>
+          {mode.name}
+        </Text>
+        <Text className="text-xs text-white/50">{mode.description}</Text>
+      </View>
+
+      {isSelected && <Check size={18} color={colors.teal} />}
     </Pressable>
   );
 }
@@ -50,7 +54,7 @@ interface AutoModeCardsProps {
 
 export function AutoModeCards({ modes, selectedId, onSelect }: AutoModeCardsProps) {
   return (
-    <View className="flex-row gap-2 px-4 mb-4">
+    <View className="gap-2 px-4 mb-2">
       {modes.map((mode) => (
         <SingleCard
           key={mode.id}
