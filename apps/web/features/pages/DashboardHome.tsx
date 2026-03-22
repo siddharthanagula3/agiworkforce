@@ -914,7 +914,7 @@ export const DashboardHomePage: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="mt-3 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => router.push('/dashboard/hire')}
+                  onClick={() => router.push('/chat')}
                 >
                   Browse skills
                   <ArrowRight className="ml-1 h-3 w-3" />
@@ -938,7 +938,7 @@ export const DashboardHomePage: React.FC = () => {
                       variant="ghost"
                       size="sm"
                       className="text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() => router.push('/dashboard/agents')}
+                      onClick={() => router.push('/chat')}
                     >
                       +{hiredEmployees.length - 5} more
                       <ArrowRight className="ml-1 h-3 w-3" />
@@ -966,21 +966,21 @@ export const DashboardHomePage: React.FC = () => {
             icon={Zap}
             label="Open VIBE"
             description="Visual IDE and build environment"
-            href="/dashboard/vibe"
+            href="/chat"
             accentColor="bg-amber-500/10 text-amber-400"
           />
           <QuickActionCard
             icon={Users}
             label="Browse Skills"
             description="AI specialists for any task"
-            href="/dashboard/hire"
+            href="/chat"
             accentColor="bg-blue-500/10 text-blue-400"
           />
           <QuickActionCard
             icon={Image}
             label="Media Studio"
             description="Generate images, video, and audio"
-            href="/dashboard/media"
+            href="/chat"
             accentColor="bg-pink-500/10 text-pink-400"
           />
         </div>

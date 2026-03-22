@@ -117,7 +117,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           owner,
           repo,
           prNumber,
-          `To use AGI Workforce PR review, connect your GitHub account at [agiworkforce.com/dashboard/integrations/github](https://agiworkforce.com/dashboard/integrations/github).`,
+          `To use AGI Workforce PR review, connect your GitHub account at [agiworkforce.com/chat](https://agiworkforce.com/chat).`,
         );
         return;
       }
@@ -168,7 +168,7 @@ ${diff}
       };
       const reviewText = llmData.content?.[0]?.text ?? 'Unable to generate review.';
 
-      const reviewBody = `## AGI Workforce Code Review\n\n${reviewText}\n\n---\n*Reviewed by [AGI Workforce](https://agiworkforce.com) · [Disconnect](https://agiworkforce.com/dashboard/integrations/github)*`;
+      const reviewBody = `## AGI Workforce Code Review\n\n${reviewText}\n\n---\n*Reviewed by [AGI Workforce](https://agiworkforce.com) · [Disconnect](https://agiworkforce.com/chat)*`;
 
       await postIssueComment(token, owner, repo, prNumber, reviewBody);
     } catch (error) {

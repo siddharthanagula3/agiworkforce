@@ -30,10 +30,10 @@ async function sendMobileHeartbeat(): Promise<void> {
     await client.from('surface_heartbeats').upsert(
       {
         user_id: userId,
-        surface_id: 'mobile',
+        surface: 'mobile',
         last_seen_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id,surface_id' },
+      { onConflict: 'user_id,surface' },
     );
   } catch (err) {
     // Non-fatal — table may not be migrated in all envs

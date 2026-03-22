@@ -155,7 +155,7 @@ const WorkforceErrorFallback = () => (
         >
           Refresh Page
         </Button>
-        <Link href="/dashboard">
+        <Link href="/chat">
           <Button variant="outline" className="w-full">
             Return to Dashboard
           </Button>
@@ -451,7 +451,7 @@ const EmployeeManagement: React.FC = () => {
                     </Button>
                   </>
                 )}
-                <Link href="/dashboard/hire" className="w-full sm:w-auto">
+                <Link href="/chat" className="w-full sm:w-auto">
                   <Button size="lg" className="btn-glow gradient-primary w-full text-white">
                     <Plus className="mr-2 h-5 w-5" />
                     Hire AI Employee
@@ -665,7 +665,7 @@ const EmployeeManagement: React.FC = () => {
                     Start building your AI workforce by hiring specialized employees from the
                     marketplace
                   </p>
-                  <Link href="/dashboard/hire">
+                  <Link href="/chat">
                     <Button size="lg" className="btn-glow gradient-primary text-white">
                       <Plus className="mr-2 h-5 w-5" />
                       Browse Marketplace
@@ -834,10 +834,7 @@ const EmployeeManagement: React.FC = () => {
                                 <ListTodo className="mr-1.5 h-3.5 w-3.5" />
                                 Assign Task
                               </Button>
-                              <Link
-                                href={`/dashboard/vibe?employee=${rec.employee_id}`}
-                                className="flex-1"
-                              >
+                              <Link href="/chat" className="flex-1">
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -881,7 +878,7 @@ const EmployeeManagement: React.FC = () => {
                       Showing {hiredEmployees.length}{' '}
                       {hiredEmployees.length === 1 ? 'employee' : 'employees'}
                     </p>
-                    <Link href="/dashboard/vibe">
+                    <Link href="/chat">
                       <Button variant="outline">
                         <Code className="mr-2 h-4 w-4" />
                         Start Building
@@ -991,7 +988,7 @@ const EmployeeManagement: React.FC = () => {
                       <ListTodo className="mr-2 h-4 w-4" />
                       Assign to All
                     </Button>
-                    <Link href="/dashboard/vibe">
+                    <Link href="/chat">
                       <Button className="gradient-primary text-white">
                         <Code className="mr-2 h-4 w-4" />
                         Start Building
@@ -1008,7 +1005,7 @@ const EmployeeManagement: React.FC = () => {
                   <p className="mx-auto mb-6 max-w-md text-muted-foreground">
                     Hire AI employees and start assigning tasks to see performance metrics
                   </p>
-                  <Link href="/dashboard/hire">
+                  <Link href="/chat">
                     <Button size="lg" className="btn-glow gradient-primary text-white">
                       <Plus className="mr-2 h-5 w-5" />
                       Get Started

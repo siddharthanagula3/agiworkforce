@@ -174,21 +174,21 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, classNam
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => router.push('/dashboard/settings')}
+                onClick={() => router.push('/chat')}
                 className="cursor-pointer gap-2"
               >
                 <Settings className="h-4 w-4" aria-hidden="true" />
                 Settings
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => router.push('/dashboard/billing')}
+                onClick={() => router.push('/billing')}
                 className="cursor-pointer gap-2"
               >
                 <CreditCard className="h-4 w-4" aria-hidden="true" />
                 Billing & Usage
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => router.push('/dashboard/support')}
+                onClick={() => router.push('/support')}
                 className="cursor-pointer gap-2"
               >
                 <HelpCircle className="h-4 w-4" aria-hidden="true" />

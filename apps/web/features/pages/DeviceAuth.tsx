@@ -70,7 +70,7 @@ const DeviceAuthPage: React.FC = () => {
   };
 
   const handleDeny = () => {
-    router.push('/dashboard');
+    router.push('/chat');
   };
 
   // Show loading while auth state initializes
@@ -101,7 +101,7 @@ const DeviceAuthPage: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <Button onClick={() => router.push('/dashboard')} variant="outline">
+            <Button onClick={() => router.push('/chat')} variant="outline">
               Go to Dashboard
             </Button>
           </CardContent>
@@ -189,7 +189,7 @@ const DeviceAuthPage: React.FC = () => {
                     You can now return to the desktop app. It will sign you in automatically.
                   </p>
                 </div>
-                <Button variant="outline" onClick={() => router.push('/dashboard')}>
+                <Button variant="outline" onClick={() => router.push('/chat')}>
                   Go to Dashboard
                 </Button>
               </motion.div>
@@ -207,11 +207,7 @@ const DeviceAuthPage: React.FC = () => {
                   <p className="mt-1 text-sm text-muted-foreground">{errorMessage}</p>
                 </div>
                 <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => router.push('/dashboard')}
-                  >
+                  <Button variant="outline" className="flex-1" onClick={() => router.push('/chat')}>
                     Cancel
                   </Button>
                   <Button

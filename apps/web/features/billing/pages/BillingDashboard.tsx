@@ -50,7 +50,7 @@ import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { cn } from '@shared/lib/utils';
 
 // Known valid plan tiers — used to validate API responses before rendering
-const VALID_PLANS = ['free', 'pro', 'enterprise'] as const;
+const VALID_PLANS = ['free', 'hobby', 'pro', 'max', 'enterprise'] as const;
 type PlanTier = (typeof VALID_PLANS)[number];
 
 const VALID_STATUSES = ['active', 'cancelled', 'past_due', 'unpaid'] as const;
@@ -85,7 +85,7 @@ interface LLMUsage {
 }
 
 interface BillingInfo {
-  plan: 'free' | 'pro' | 'enterprise';
+  plan: 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
   status: 'active' | 'cancelled' | 'past_due' | 'unpaid';
   current_period_start: string;
   current_period_end: string;
@@ -404,8 +404,12 @@ const BillingPage: React.FC = () => {
     switch (normalized) {
       case 'free':
         return <Zap className="h-5 w-5" />;
+      case 'hobby':
+        return <Star className="h-5 w-5" />;
       case 'pro':
         return <Crown className="h-5 w-5" />;
+      case 'max':
+        return <Crown className="h-5 w-5 text-amber-500" />;
       case 'enterprise':
         return <Building className="h-5 w-5" />;
     }
@@ -519,7 +523,8 @@ const BillingPage: React.FC = () => {
                 <ExternalLink className="h-4 w-4" />
               </Button>
             )}
-            {billing?.plan === 'free' && (
+            {(normalizePlan(billing?.plan) === 'free' ||
+              normalizePlan(billing?.plan) === 'hobby') && (
               <Button onClick={() => handleUpgrade('pro')} size="sm" className="gradient-primary">
                 <Crown className="mr-2 h-4 w-4" />
                 <span className="hidden sm:inline">Upgrade to Pro</span>
@@ -687,135 +692,25 @@ const BillingPage: React.FC = () => {
                 <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/30">
                   <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
                     <CheckCircle className="h-5 w-5" />
-                    <span className="font-medium">Free Tier Active</span>
+                    <span className="font-medium">
+                      {normalizePlan(billing?.plan) === 'free' && 'Free Tier Active'}
+                      {normalizePlan(billing?.plan) === 'hobby' && 'Hobby Plan Active'}
+                      {normalizePlan(billing?.plan) === 'pro' && 'Pro Plan Active'}
+                      {normalizePlan(billing?.plan) === 'max' && 'Max Plan Active'}
+                      {normalizePlan(billing?.plan) === 'enterprise' && 'Enterprise Plan Active'}
+                    </span>
                   </div>
-                  <p className="mt-1 text-sm text-green-600 dark:text-green-500">
-                    You&apos;re saving {formatCurrency(billing?.usage?.totalCost ?? 0, 'USD')} with
-                    the free plan!
-                  </p>
+                  {normalizePlan(billing?.plan) === 'free' && (
+                    <p className="mt-1 text-sm text-green-600 dark:text-green-500">
+                      You&apos;re saving {formatCurrency(billing?.usage?.totalCost ?? 0, 'USD')}{' '}
+                      with the free plan!
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Per-LLM Token Usage */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center space-x-2">
-                  <Brain className="h-5 w-5" />
-                  <span>Token Usage by LLM Provider</span>
-                </CardTitle>
-                <CardDescription className="mt-1">
-                  {billing?.plan === 'pro'
-                    ? 'Each provider has a 2.5M token limit • 10M total'
-                    : 'Each provider has a 250k token limit • 1M total'}
-                </CardDescription>
-              </div>
-              <Badge variant="outline" className="px-3 py-1">
-                {normalizePlan(billing?.plan) === 'enterprise'
-                  ? 'Enterprise'
-                  : normalizePlan(billing?.plan) === 'pro'
-                    ? 'Pro Plan'
-                    : 'Free Tier'}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {billing?.usage.llmUsage.map((llm, _index) => {
-                const percentage = safePercentage(llm.tokens, llm.limit);
-                const isNearLimit = percentage >= 80;
-                const isAtLimit = percentage >= 100;
-
-                return (
-                  <div
-                    key={llm.provider}
-                    className={`rounded-lg border p-4 transition-all ${llm.bgColor} ${isAtLimit ? 'border-red-300 dark:border-red-800' : isNearLimit ? 'border-amber-300 dark:border-amber-800' : ''}`}
-                  >
-                    <div className="mb-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`rounded-lg bg-white p-2 dark:bg-gray-800 ${llm.color}`}>
-                          {llm.icon}
-                        </div>
-                        <div>
-                          <h3 className="text-base font-semibold">{llm.provider}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {llm.tokens.toLocaleString()} / {llm.limit.toLocaleString()} tokens
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div
-                          className={`text-lg font-bold ${isAtLimit ? 'text-red-600 dark:text-red-500' : isNearLimit ? 'text-amber-600 dark:text-amber-500' : ''}`}
-                        >
-                          {percentage.toFixed(1)}%
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {formatCurrency(llm.cost, 'USD')}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Progress
-                        value={llm.tokens > 0 ? Math.min(percentage, 100) : 0}
-                        className={`h-2 ${isAtLimit ? 'bg-red-100 dark:bg-red-950/30' : isNearLimit ? 'bg-amber-100 dark:bg-amber-950/30' : ''}`}
-                      />
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>0</span>
-                        <span>
-                          {Math.max(llm.limit - llm.tokens, 0).toLocaleString()} remaining
-                        </span>
-                      </div>
-
-                      {llm.tokens > 0 && isAtLimit && (
-                        <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-500">
-                          <AlertTriangle className="h-4 w-4" />
-                          <span>Limit reached! Upgrade to continue using {llm.provider}</span>
-                        </div>
-                      )}
-                      {llm.tokens > 0 && !isAtLimit && isNearLimit && (
-                        <div className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-500">
-                          <AlertTriangle className="h-4 w-4" />
-                          <span>{(100 - percentage).toFixed(0)}% remaining</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 rounded-lg border border-dashed bg-muted/50 p-4">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-primary/10 p-2">
-                  <Crown className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="mb-1 font-medium">Need more tokens?</h4>
-                  <p className="mb-3 text-sm text-muted-foreground">
-                    {billing?.plan === 'free' &&
-                      'Upgrade to Pro for 10M tokens/month (2.5M per LLM) - Only $29/month'}
-                    {billing?.plan === 'pro' &&
-                      'You have the Pro plan with 10M tokens/month (2.5M per LLM)'}
-                  </p>
-                  {billing?.plan === 'free' && (
-                    <Button
-                      className="gradient-primary"
-                      onClick={() => handleUpgrade('pro', 'monthly')}
-                    >
-                      Upgrade to Pro - $29/month
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Plan Features */}
         <Card>
@@ -1034,7 +929,7 @@ const BillingPage: React.FC = () => {
         )}
 
         {/* Upgrade Options */}
-        {billing?.plan === 'free' && (
+        {(normalizePlan(billing?.plan) === 'free' || normalizePlan(billing?.plan) === 'hobby') && (
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">

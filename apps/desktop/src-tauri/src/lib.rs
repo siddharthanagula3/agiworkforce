@@ -117,6 +117,30 @@ fn initialize_embedding_service_state(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env.local so Rust has access to VITE_SUPABASE_URL etc. during dev.
+    // In production these are baked into the binary or set by the OS environment.
+    for env_file in &[".env.local", ".env"] {
+        let path = std::path::Path::new(env_file);
+        if let Ok(contents) = std::fs::read_to_string(path) {
+            for line in contents.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                if let Some((key, value)) = line.split_once('=') {
+                    let key = key.trim();
+                    let value = value.trim();
+                    // Only set if not already present in the environment.
+                    // This runs before tokio, so single-threaded.
+                    #[allow(clippy::disallowed_methods)]
+                    if std::env::var(key).is_err() {
+                        std::env::set_var(key, value);
+                    }
+                }
+            }
+        }
+    }
+
     let _telemetry_guard = match telemetry::init() {
         Ok(guard) => Some(guard),
         Err(e) => {
