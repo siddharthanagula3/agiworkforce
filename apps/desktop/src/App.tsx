@@ -6,6 +6,8 @@ import { VoiceInputOverlay } from './components/Voice/VoiceInputOverlay';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
 
+import { ChatInterface } from '@agiworkforce/chat';
+import { TauriRuntime } from './runtime/TauriRuntime';
 import { CommandPalette, type CommandOption } from './components/UnifiedAgenticChat/CommandPalette';
 import { SearchModal } from './components/UnifiedAgenticChat/SearchModal';
 import { useSearchModal } from './hooks/useSearchModal';
@@ -13,6 +15,7 @@ import { QuickQuery } from './components/QuickQuery';
 import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
 import {
+  dbIdToUuid,
   initializeAgentStatusListener,
   initializeToolEventListener,
   useUnifiedChatStore,
@@ -66,17 +69,20 @@ const AuthPage = lazy(() =>
 const SettingsPanel = lazy(() =>
   import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 );
-const UnifiedAgenticChat = lazy(() =>
-  import('./components/UnifiedAgenticChat').then((m) => ({
-    default: m.UnifiedAgenticChat,
-  })),
-);
+// Retained for reference — UnifiedAgenticChat is replaced by ChatInterface from @agiworkforce/chat.
+// const UnifiedAgenticChat = lazy(() =>
+//   import('./components/UnifiedAgenticChat').then((m) => ({
+//     default: m.UnifiedAgenticChat,
+//   })),
+// );
 import { UpdateChecker } from './components/Updates';
 import { AutomationPermissionsModal } from './components/Settings/AutomationPermissionsModal';
 import { StatusBanner } from './components/StatusBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
+import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
+import type { CaptureResult } from './types/capture';
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full">
@@ -478,6 +484,24 @@ const DesktopShell = () => {
     };
   }, []);
 
+  // Listen for chat:action events dispatched by the shared chat package
+  useEffect(() => {
+    const handleChatAction = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { type: string; tab?: string };
+      if (detail.type === 'open-settings') {
+        openSettingsDialog((detail.tab as Parameters<typeof openSettingsDialog>[0]) ?? 'general');
+      } else if (detail.type === 'keyboard-shortcuts') {
+        useSettingsDialogStore.getState().openShortcuts();
+      } else if (detail.type === 'logout') {
+        void import('./services/supabaseAuth').then(({ supabaseAuth }) => {
+          supabaseAuth.signOut();
+        });
+      }
+    };
+    window.addEventListener('chat:action', handleChatAction);
+    return () => window.removeEventListener('chat:action', handleChatAction);
+  }, [openSettingsDialog]);
+
   // Listen for timeout warning events from Tauri backend
   useEffect(() => {
     if (!isTauri) return;
@@ -546,6 +570,68 @@ const DesktopShell = () => {
   const startNewChat = useCallback(async () => {
     clearHistory();
   }, [clearHistory]);
+
+  const routeToChatSurface = useCallback(
+    async (draft?: string) => {
+      if (isTauri) {
+        await actions.show();
+      }
+
+      const chatStore = useUnifiedChatStore.getState();
+      chatStore.setActiveView('chat');
+
+      const trimmedDraft = draft?.trim();
+      if (trimmedDraft) {
+        chatStore.setDraftContent(trimmedDraft);
+      }
+    },
+    [actions],
+  );
+
+  const handleQuickQueryOpenConversation = useCallback(
+    async (conversationDbId: number) => {
+      await routeToChatSurface();
+      useUnifiedChatStore.getState().selectConversation(dbIdToUuid(conversationDbId));
+      setQuickQueryOpen(false);
+    },
+    [routeToChatSurface],
+  );
+
+  const handleQuickQueryStartNewChat = useCallback(async () => {
+    await routeToChatSurface();
+    await startNewChat();
+    setQuickQueryOpen(false);
+  }, [routeToChatSurface, startNewChat]);
+
+  const handleVoiceInputRequest = useCallback(
+    async (draft = '') => {
+      await routeToChatSurface(draft);
+      setQuickQueryOpen(false);
+
+      const { useVoiceInputStore } = await import('./stores/voiceInputStore');
+      const voiceInputState = useVoiceInputStore.getState();
+
+      if (voiceInputState.mode === 'listening') {
+        await voiceInputState.stopListening();
+      } else {
+        await voiceInputState.startListening();
+      }
+    },
+    [routeToChatSurface],
+  );
+
+  const handleCaptureRequest = useCallback(
+    async (captureResult?: CaptureResult, draft = '') => {
+      await routeToChatSurface(draft);
+      setQuickQueryOpen(false);
+      window.dispatchEvent(
+        new CustomEvent(CHAT_COMPOSER_CAPTURE_EVENT, {
+          detail: captureResult ? { captureResult } : {},
+        }),
+      );
+    },
+    [routeToChatSurface],
+  );
 
   // Listen for global hotkey (Cmd+Shift+Space / Ctrl+Shift+Space) to open Quick Query overlay
   useEffect(() => {
@@ -661,10 +747,10 @@ const DesktopShell = () => {
               // Handled by dedicated `global-hotkey-triggered` listener to avoid duplicate opens.
               break;
             case 'voice_input':
-              // Handle voice input
+              void handleVoiceInputRequest();
               break;
             case 'quick_capture':
-              // Handle quick capture
+              void handleCaptureRequest();
               break;
           }
         });
@@ -690,7 +776,7 @@ const DesktopShell = () => {
         unlistenFn = null;
       }
     };
-  }, [startNewChat]);
+  }, [handleCaptureRequest, handleVoiceInputRequest, startNewChat]);
 
   const openSettings = useCallback(() => openSettingsDialog(), [openSettingsDialog]);
 
@@ -698,6 +784,8 @@ const DesktopShell = () => {
     setIsTimeoutWarningOpen(false);
     setTimeoutWarning(null);
   }, []);
+
+  const tauriRuntime = useMemo(() => new TauriRuntime(), []);
 
   const commandOptions = useMemo(() => {
     const buildOption = (definition: {
@@ -791,7 +879,10 @@ const DesktopShell = () => {
 
   return (
     <Suspense fallback={<LoadingFallback />}>
-      <div className="flex h-screen w-full flex-col overflow-hidden bg-surface-base text-foreground font-sans">
+      <div
+        className="flex h-screen w-full flex-col overflow-hidden bg-surface-base text-foreground font-sans"
+        data-theme-managed=""
+      >
         {!isTauri && import.meta.env.DEV && (
           <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
             <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
@@ -864,13 +955,30 @@ const DesktopShell = () => {
                 </div>
               }
             >
-              <Suspense fallback={<LoadingFallback />}>
-                <UnifiedAgenticChat
-                  className="h-full w-full"
-                  layout="default"
-                  defaultSidecarOpen={false}
-                />
-              </Suspense>
+              {/* OLD: <UnifiedAgenticChat className="h-full w-full" layout="default" defaultSidecarOpen={false} /> */}
+              <ChatInterface
+                runtime={tauriRuntime}
+                className="h-full w-full"
+                manageTheme={false}
+                enableShortcuts={true}
+                onModelSelectorClick={() => openSettingsDialog('models-keys')}
+                onVoiceClick={() => {
+                  // Toggle voice input overlay
+                  const event = new CustomEvent('toggle-voice-input');
+                  window.dispatchEvent(event);
+                }}
+                onNavigateView={(view) => {
+                  if (view === 'customize') {
+                    openSettingsDialog('mcp-skills');
+                  } else if (view === 'connectors') {
+                    openSettingsDialog('connectors');
+                  } else if (view === 'skills') {
+                    openSettingsDialog('mcp-skills');
+                  } else if (view === 'projects') {
+                    openSettingsDialog('account');
+                  }
+                }}
+              />
             </ErrorBoundary>
           </div>
         </main>
@@ -899,6 +1007,16 @@ const DesktopShell = () => {
           open={quickQueryOpen}
           onClose={() => setQuickQueryOpen(false)}
           onSubmit={handleQuickQuerySubmit}
+          onOpenConversation={handleQuickQueryOpenConversation}
+          onStartNewChat={() => {
+            void handleQuickQueryStartNewChat();
+          }}
+          onRequestVoice={(draft) => {
+            void handleVoiceInputRequest(draft);
+          }}
+          onRequestCapture={(captureResult, draft) => {
+            void handleCaptureRequest(captureResult, draft);
+          }}
         />
       </div>
     </Suspense>

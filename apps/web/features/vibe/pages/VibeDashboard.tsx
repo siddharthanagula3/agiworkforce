@@ -60,7 +60,7 @@ const VibeErrorFallback = () => (
         </Button>
         <Button
           variant="outline"
-          onClick={() => (window.location.href = '/dashboard')}
+          onClick={() => (window.location.href = '/chat')}
           className="gap-2"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -376,7 +376,7 @@ const VibeDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!user) {
-      router.push('/login?from=/dashboard/vibe');
+      router.push('/login?from=/chat');
       return;
     }
 

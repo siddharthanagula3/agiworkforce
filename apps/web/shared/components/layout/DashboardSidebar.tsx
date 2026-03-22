@@ -6,18 +6,12 @@ import { usePathname } from 'next/navigation';
 import { Button } from '@shared/ui/button';
 import { cn } from '@shared/lib/utils';
 import {
-  Users,
   MessageSquare,
-  Store,
-  Sparkles,
   Plus,
   Download,
-  Image,
   PanelLeftClose,
   PanelLeftOpen,
-  Plug,
-  Clock,
-  Briefcase,
+  Sparkles,
 } from 'lucide-react';
 
 interface DashboardSidebarProps {
@@ -37,41 +31,6 @@ const PRODUCT_NAVIGATION: NavigationItem[] = [
     name: 'Chat',
     href: '/chat',
     icon: MessageSquare,
-  },
-  {
-    name: 'VIBE',
-    href: '/dashboard/vibe',
-    icon: Sparkles,
-  },
-  {
-    name: 'AI Agents',
-    href: '/dashboard/agents',
-    icon: Users,
-  },
-  {
-    name: 'Skills',
-    href: '/dashboard/hire',
-    icon: Store,
-  },
-  {
-    name: 'Media Studio',
-    href: '/dashboard/media',
-    icon: Image,
-  },
-  {
-    name: 'Workforce',
-    href: '/dashboard/workforce',
-    icon: Briefcase,
-  },
-  {
-    name: 'Connectors',
-    href: '/dashboard/connectors',
-    icon: Plug,
-  },
-  {
-    name: 'Schedules',
-    href: '/dashboard/schedules',
-    icon: Clock,
   },
 ];
 

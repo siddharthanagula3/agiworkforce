@@ -262,7 +262,7 @@ export function Header() {
             </Link>
           ))}
           {userEmail && (
-            <Link href="/dashboard" className="hover:text-white transition-colors">
+            <Link href="/chat" className="hover:text-white transition-colors">
               Dashboard
             </Link>
           )}
@@ -279,7 +279,7 @@ export function Header() {
                 Sign Out
               </button>
               <Link
-                href="/dashboard"
+                href="/chat"
                 className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
               >
                 Dashboard
@@ -364,7 +364,7 @@ export function Header() {
             ))}
             {userEmail && (
               <Link
-                href="/dashboard"
+                href="/chat"
                 className="hover:text-white transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >

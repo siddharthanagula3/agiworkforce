@@ -14,20 +14,23 @@ import { getSupabase } from '../lib/supabase';
 const HEARTBEAT_INTERVAL_MS = 60_000; // 60 seconds
 
 async function sendHeartbeat(userId: string): Promise<void> {
-  const supabase = getSupabase();
-  const untypedClient = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
-
   try {
-    const { error } = await untypedClient.from('surface_heartbeats').upsert(
+    const supabase = getSupabase();
+    const untypedClient = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
+
+    // Skip if user has no active Supabase session (avoids 401 network errors).
+    // Desktop uses device-link OAuth — Supabase JS session may not exist.
+    const { data: sessionData } = await untypedClient.auth.getSession();
+    if (!sessionData?.session?.access_token) return;
+
+    await untypedClient.from('surface_heartbeats').upsert(
       {
         user_id: userId,
-        surface_id: 'desktop',
+        surface: 'desktop',
         last_seen_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id,surface_id' },
+      { onConflict: 'user_id,surface' },
     );
-    // Silently ignore — table may not exist in all environments
-    if (error) return;
   } catch {
     // Non-fatal — silently ignore
   }

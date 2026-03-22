@@ -13,7 +13,7 @@
  *   Red    — < 25% remaining
  *
  * Tooltip: "X credits remaining · Resets [date]"
- * Click:   navigate to /dashboard/billing
+ * Click:   navigate to /billing
  * Loading: skeleton pill
  * Error:   renders nothing
  */
@@ -30,8 +30,9 @@ import type { BillingPlan } from '@features/billing/hooks/use-billing-queries';
 // Helpers
 // ============================================================================
 
-const PLAN_LABELS: Record<BillingPlan | 'max', string> = {
+const PLAN_LABELS: Record<BillingPlan, string> = {
   free: 'Free',
+  hobby: 'Hobby',
   pro: 'Pro',
   max: 'Max',
   enterprise: 'Enterprise',
@@ -92,7 +93,7 @@ export function PlanBadge() {
     return null;
   }
 
-  const plan = billing.plan as BillingPlan | 'max';
+  const plan = billing.plan as BillingPlan;
   const planLabel = PLAN_LABELS[plan] ?? 'Free';
   const isFree = plan === 'free';
 
@@ -109,7 +110,7 @@ export function PlanBadge() {
   const resetDate = formatResetDate(billing.current_period_end);
 
   const handleClick = () => {
-    router.push('/dashboard/billing');
+    router.push('/billing');
   };
 
   // ---- Tooltip content ----

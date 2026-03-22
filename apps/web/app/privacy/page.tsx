@@ -102,7 +102,7 @@ export default function PrivacyPage() {
             <h3>6. Contact Us</h3>
             <p>
               If you have any questions about this Privacy Policy, please contact us at
-              contact@agiagentautomation.com.
+              contact@agiworkforce.com.
             </p>
           </div>
         </div>
