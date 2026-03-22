@@ -1,0 +1,46 @@
+{
+  "name": "@agiworkforce/cli",
+  "version": "0.1.0",
+  "description": "AGI Workforce CLI — multi-model AI agent for your terminal. BYOK, 24 providers, desktop automation, voice mode.",
+  "license": "Proprietary",
+  "bin": {
+    "agiworkforce": "bin/agiworkforce.js"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin",
+    "vendor",
+    "README.md"
+  ],
+  "keywords": [
+    "ai",
+    "cli",
+    "agent",
+    "llm",
+    "gpt",
+    "claude",
+    "gemini",
+    "terminal",
+    "coding",
+    "byok",
+    "multi-model",
+    "desktop-automation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/siddharthanagula3/agiworkforce-desktop-app.git",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://agiworkforce.com",
+  "optionalDependencies": {
+    "@agiworkforce/cli-darwin-arm64": "0.1.0",
+    "@agiworkforce/cli-darwin-x64": "0.1.0",
+    "@agiworkforce/cli-linux-arm64": "0.1.0",
+    "@agiworkforce/cli-linux-x64": "0.1.0",
+    "@agiworkforce/cli-win32-arm64": "0.1.0",
+    "@agiworkforce/cli-win32-x64": "0.1.0"
+  }
+}
