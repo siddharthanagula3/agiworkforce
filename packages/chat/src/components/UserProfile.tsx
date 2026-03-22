@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useSettingsStore } from '../stores/settingsStore';
-
+import { useUIStore } from '../stores/uiStore';
 import { Tooltip } from './ui/Tooltip';
 
 interface UserProfileProps {
@@ -46,6 +46,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const profile = useSettingsStore((s) => s.profile);
+  const openSettings = useUIStore((s) => s.openSettings);
 
   const initials = getInitials(profile.fullName || 'User');
   const avatarColor = getAvatarColor(profile.fullName || 'user');
@@ -159,11 +160,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               label="Settings"
               shortcut="⌘,"
               onClick={() => {
-                window.dispatchEvent(
-                  new CustomEvent('chat:action', {
-                    detail: { type: 'open-settings', tab: 'general' },
-                  }),
-                );
+                openSettings('general');
                 setOpen(false);
               }}
             />
@@ -174,11 +171,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               label="Language"
               suffix={<ChevronRight size={12} className="text-[var(--chat-text-muted)]" />}
               onClick={() => {
-                window.dispatchEvent(
-                  new CustomEvent('chat:action', {
-                    detail: { type: 'open-settings', tab: 'appearance' },
-                  }),
-                );
+                openSettings('general');
                 setOpen(false);
               }}
             />
@@ -200,11 +193,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               icon={<CreditCard size={13} />}
               label="View all plans"
               onClick={() => {
-                window.dispatchEvent(
-                  new CustomEvent('chat:action', {
-                    detail: { type: 'open-settings', tab: 'account' },
-                  }),
-                );
+                openSettings('billing');
                 setOpen(false);
               }}
             />
@@ -214,7 +203,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               icon={<Smartphone size={13} />}
               label="Get apps"
               onClick={() => {
-                window.open('https://agiworkforce.com/apps', '_blank');
+                window.open('https://agiworkforce.com/download', '_blank');
                 setOpen(false);
               }}
             />
@@ -224,9 +213,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               icon={<Keyboard size={13} />}
               label="Keyboard shortcuts"
               onClick={() => {
-                window.dispatchEvent(
-                  new CustomEvent('chat:action', { detail: { type: 'keyboard-shortcuts' } }),
-                );
+                openSettings('general');
                 setOpen(false);
               }}
             />
