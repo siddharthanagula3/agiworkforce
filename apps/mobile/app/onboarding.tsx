@@ -3,50 +3,42 @@ import { View, Pressable, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { Sparkles, Mic, Smartphone, FolderOpen, Rocket } from 'lucide-react-native';
+import { Sparkles, Cpu, Smartphone, Monitor, ArrowLeftRight } from 'lucide-react-native';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
 
 // ---------------------------------------------------------------------------
-// Slide definitions
+// Slide definitions — 3 screens per spec
 // ---------------------------------------------------------------------------
 
 interface Slide {
   icon: React.ComponentType<{ size: number; color: string }>;
+  secondaryIcon?: React.ComponentType<{ size: number; color: string }>;
   title: string;
+  subtitle: string;
   description: string;
 }
 
 const SLIDES: Slide[] = [
   {
     icon: Sparkles,
-    title: 'Welcome to AGI Workforce',
-    description:
-      'Chat with 20+ models from 7 providers. Pick the right model for every task, all in one place.',
+    title: 'AGI Workforce',
+    subtitle: 'One app, every model, total control.',
+    description: '',
   },
   {
-    icon: Mic,
-    title: 'Talk Naturally',
-    description:
-      'Full voice conversation mode with push-to-talk, auto-listen, and customizable AI voices.',
+    icon: Cpu,
+    title: 'Every AI model, one app',
+    subtitle: '',
+    description: 'Claude, GPT, Gemini, Grok, DeepSeek & more. 9+ providers.',
   },
   {
     icon: Smartphone,
-    title: 'Control from Anywhere',
-    description:
-      'Pair with your desktop via QR code. Approve agent actions, monitor progress, all from your phone.',
-  },
-  {
-    icon: FolderOpen,
-    title: 'Organize with Projects',
-    description:
-      'Create projects with custom instructions. Your AI adapts its behavior to each context.',
-  },
-  {
-    icon: Rocket,
-    title: 'Ready to Go',
-    description: 'Everything is set up. Start a conversation to try it out.',
+    secondaryIcon: Monitor,
+    title: 'Control your desktop from your phone',
+    subtitle: '',
+    description: 'Assign tasks, approve actions, get results. All from your pocket.',
   },
 ];
 
@@ -60,7 +52,12 @@ export default function OnboardingScreen() {
 
   const finish = () => {
     storage.set('onboarding-done', 'true');
-    router.replace('/(app)');
+    router.replace('/(auth)/login');
+  };
+
+  const signIn = () => {
+    storage.set('onboarding-done', 'true');
+    router.replace('/(auth)/login');
   };
 
   const next = () => {
@@ -71,22 +68,11 @@ export default function OnboardingScreen() {
     }
   };
 
+  const isFirstSlide = slide === 0;
   const isLastSlide = slide === SLIDES.length - 1;
 
   return (
     <SafeAreaView className="flex-1 bg-[#0f1012]">
-      {/* Skip button — only visible on slides 1-4 */}
-      {!isLastSlide && (
-        <Pressable
-          onPress={finish}
-          className="absolute top-4 right-4 p-3 z-10"
-          accessibilityLabel="Skip onboarding"
-          accessibilityRole="button"
-        >
-          <Text className="text-white/40 text-sm">Skip</Text>
-        </Pressable>
-      )}
-
       {/* Slide content */}
       <Reanimated.View
         key={slide}
@@ -100,17 +86,32 @@ export default function OnboardingScreen() {
       {/* Dot indicators */}
       <DotIndicator count={SLIDES.length} active={slide} />
 
-      {/* Action button */}
-      <Pressable
-        onPress={isLastSlide ? finish : next}
-        className="mx-6 mb-8 rounded-2xl bg-teal-500 py-4 items-center active:opacity-90"
-        accessibilityLabel={isLastSlide ? 'Get Started' : 'Next slide'}
-        accessibilityRole="button"
-      >
-        <Text className="text-black font-semibold text-base">
-          {isLastSlide ? 'Get Started' : 'Next'}
-        </Text>
-      </Pressable>
+      {/* Action buttons */}
+      <View className="mx-6 mb-8 gap-3">
+        {/* Primary button */}
+        <Pressable
+          onPress={isLastSlide ? finish : next}
+          className="rounded-2xl bg-teal-500 py-4 items-center active:opacity-90"
+          accessibilityLabel={isLastSlide || isFirstSlide ? 'Get Started' : 'Next'}
+          accessibilityRole="button"
+        >
+          <Text className="text-black font-semibold text-base">
+            {isLastSlide || isFirstSlide ? 'Get Started' : 'Next'}
+          </Text>
+        </Pressable>
+
+        {/* Sign In link — only on first screen */}
+        {isFirstSlide && (
+          <Pressable
+            onPress={signIn}
+            className="py-3 items-center active:opacity-70"
+            accessibilityLabel="Sign in to existing account"
+            accessibilityRole="button"
+          >
+            <Text className="text-white/60 text-sm">Sign In</Text>
+          </Pressable>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -121,6 +122,7 @@ export default function OnboardingScreen() {
 
 function SlideContent({ slide }: { slide: Slide }) {
   const IconComponent = slide.icon;
+  const SecondaryIcon = slide.secondaryIcon;
 
   return (
     <View className="items-center">
@@ -129,12 +131,28 @@ function SlideContent({ slide }: { slide: Slide }) {
         style={{ backgroundColor: 'rgba(33, 128, 141, 0.15)' }}
         className="w-24 h-24 rounded-full items-center justify-center mb-8"
       >
-        <IconComponent size={48} color={colors.teal} />
+        {SecondaryIcon ? (
+          <View className="flex-row items-center gap-2">
+            <IconComponent size={28} color={colors.teal} />
+            <ArrowLeftRight size={20} color={colors.teal} />
+            <SecondaryIcon size={28} color={colors.teal} />
+          </View>
+        ) : (
+          <IconComponent size={48} color={colors.teal} />
+        )}
       </View>
 
       <Text className="text-white text-3xl font-bold text-center mb-4">{slide.title}</Text>
 
-      <Text className="text-white/70 text-base text-center leading-6">{slide.description}</Text>
+      {slide.subtitle ? (
+        <Text className="text-white/70 text-base text-center leading-6">{slide.subtitle}</Text>
+      ) : null}
+
+      {slide.description ? (
+        <Text className="text-white/50 text-base text-center leading-6 mt-2">
+          {slide.description}
+        </Text>
+      ) : null}
     </View>
   );
 }

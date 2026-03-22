@@ -1,88 +1,128 @@
-import { useRef } from 'react';
-import { View, ScrollView, Pressable, Alert, Linking } from 'react-native';
+/**
+ * Settings Screen — 5 groups, 18 items
+ *
+ * Organized per the mobile app spec: Account, AI Configuration,
+ * Connections, Preferences, and About.
+ */
+import { useCallback, useRef } from 'react';
+import { View, SectionList, Pressable, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import {
-  LogOut,
-  Bell,
-  Vibrate,
-  ExternalLink,
-  Key,
-  Brain,
   User,
+  CreditCard,
+  BarChart3,
+  Brain,
+  Zap,
   Shield,
   Smartphone,
-  Calendar,
-  HardDrive,
-  ChevronRight,
-  MessageCircle,
+  Link2,
   Palette,
-  Fingerprint,
+  Volume2,
+  Bell,
+  UserCog,
+  Vibrate,
+  HelpCircle,
+  Lock,
+  FileText,
+  LogOut,
+  ChevronRight,
   Sun,
   Moon,
   Monitor,
-  Volume2,
-  Link2,
-  HelpCircle,
   type LucideIcon,
 } from 'lucide-react-native';
-import { useDemoStore } from '@/components/companion/CompanionDemoWalkthrough';
 import type BottomSheet from '@gorhom/bottom-sheet';
-import type { ThemeMode } from '@/stores/settingsStore';
 import { Text } from '@/components/ui/text';
-import { Separator } from '@/components/ui/separator';
-import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/stores/authStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useModelStore } from '@/stores/modelStore';
 import { api } from '@/services/api';
 import { colors } from '@/lib/theme';
-import { useTheme } from '@/hooks/useTheme';
 import { VoiceSelector } from '@/components/voice/VoiceSelector';
-import type { AutoApproveMode } from '@/types/chat';
 
 // ---------------------------------------------------------------------------
-// Reusable row components
+// Types
 // ---------------------------------------------------------------------------
 
-function SettingRow({
+interface SettingItem {
+  key: string;
+  icon: LucideIcon;
+  label: string;
+  type: 'navigation' | 'toggle' | 'theme' | 'signout' | 'version';
+  value?: string;
+  toggleValue?: boolean;
+  onToggle?: (v: boolean) => void;
+  onPress?: () => void;
+  destructive?: boolean;
+}
+
+interface SettingSection {
+  title: string;
+  data: SettingItem[];
+}
+
+// ---------------------------------------------------------------------------
+// Theme mode labels
+// ---------------------------------------------------------------------------
+
+const THEME_LABELS: Record<ThemeMode, string> = {
+  dark: 'Dark',
+  light: 'Light',
+  system: 'System',
+};
+
+const THEME_ICONS: Record<ThemeMode, LucideIcon> = {
+  dark: Moon,
+  light: Sun,
+  system: Monitor,
+};
+
+// ---------------------------------------------------------------------------
+// Row components
+// ---------------------------------------------------------------------------
+
+function NavigationRow({
   icon: Icon,
   label,
   value,
   onPress,
+  destructive,
 }: {
   icon: LucideIcon;
   label: string;
   value?: string;
   onPress?: () => void;
+  destructive?: boolean;
 }) {
   return (
     <Pressable
-      className="flex-row items-center justify-between py-3 px-1 active:bg-white/5 rounded-lg"
+      className="flex-row items-center justify-between py-3.5 px-4 active:bg-white/5"
       onPress={onPress}
       accessibilityLabel={label}
       accessibilityRole="button"
     >
       <View className="flex-row items-center gap-3">
-        <Icon size={18} color={colors.textSecondary} />
-        <Text className="text-sm text-white">{label}</Text>
+        <Icon size={18} color={destructive ? colors.agentError : colors.textSecondary} />
+        <Text
+          className="text-[15px]"
+          style={{ color: destructive ? colors.agentError : colors.textPrimary }}
+        >
+          {label}
+        </Text>
       </View>
-      {value ? (
-        <View className="flex-row items-center gap-1">
-          <Text className="text-sm text-white/50">{value}</Text>
-          <ChevronRight size={14} color={colors.textMuted} />
-        </View>
-      ) : (
-        <ChevronRight size={14} color={colors.textMuted} />
-      )}
+      <View className="flex-row items-center gap-1.5">
+        {value ? <Text className="text-[13px] text-white/40">{value}</Text> : null}
+        {!destructive && <ChevronRight size={16} color={colors.textMuted} />}
+      </View>
     </Pressable>
   );
 }
 
-function SettingToggle({
+function ToggleRow({
   icon: Icon,
   label,
   value,
@@ -94,137 +134,107 @@ function SettingToggle({
   onValueChange: (v: boolean) => void;
 }) {
   return (
-    <View className="flex-row items-center justify-between py-3 px-1">
+    <View className="flex-row items-center justify-between py-3.5 px-4">
       <View className="flex-row items-center gap-3">
         <Icon size={18} color={colors.textSecondary} />
-        <Text className="text-sm text-white">{label}</Text>
+        <Text className="text-[15px] text-white">{label}</Text>
       </View>
       <Switch value={value} onValueChange={onValueChange} />
     </View>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Auto-approve mode selector
-// ---------------------------------------------------------------------------
-
-const AUTO_APPROVE_OPTIONS: { mode: AutoApproveMode; label: string; description: string }[] = [
-  { mode: 'ask', label: 'Always Ask', description: 'Manually approve every action' },
-  { mode: 'smart', label: 'Smart', description: 'Auto-approve low-risk, ask for high-risk' },
-  { mode: 'full', label: 'Full Auto', description: 'Auto-approve all actions' },
-];
-
-function CompanionWalkthroughRow() {
-  const resetDemo = useDemoStore((s) => s.resetDemo);
-  const hasSeenDemo = useDemoStore((s) => s.hasSeenDemo);
-  const router = useRouter();
-
-  const handlePress = () => {
-    resetDemo();
-    router.push('/(app)/companion' as Parameters<typeof router.push>[0]);
-  };
-
+function ThemeRow({
+  currentMode,
+  onSelect,
+}: {
+  currentMode: ThemeMode;
+  onSelect: (mode: ThemeMode) => void;
+}) {
   return (
-    <Pressable
-      className="flex-row items-center justify-between py-3 px-1 active:bg-white/5 rounded-lg"
-      onPress={handlePress}
-      accessibilityLabel="Companion walkthrough tutorial"
-      accessibilityRole="button"
-    >
-      <View className="flex-row items-center gap-3">
-        <HelpCircle size={18} color={colors.textSecondary} />
-        <Text className="text-sm text-white">Companion Walkthrough</Text>
+    <View className="py-3.5 px-4">
+      <View className="flex-row items-center gap-3 mb-3">
+        <Palette size={18} color={colors.textSecondary} />
+        <Text className="text-[15px] text-white">Appearance</Text>
       </View>
-      <View className="flex-row items-center gap-2">
-        {hasSeenDemo && <Text className="text-[10px] text-white/30">Seen</Text>}
-        <ChevronRight size={14} color={colors.textMuted} />
-      </View>
-    </Pressable>
-  );
-}
-
-function AutoApproveSelector() {
-  const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
-  const setAutoApproveMode = useSettingsStore((s) => s.setAutoApproveMode);
-
-  return (
-    <View>
-      <View className="flex-row items-center gap-2 mb-3">
-        <Shield size={18} color={colors.textSecondary} />
-        <Text className="text-sm text-white">Auto-Approve Mode</Text>
-      </View>
-      <View className="gap-2">
-        {AUTO_APPROVE_OPTIONS.map((opt) => (
-          <Pressable
-            key={opt.mode}
-            onPress={() => setAutoApproveMode(opt.mode)}
-            className="flex-row items-center gap-3 py-2.5 px-3 rounded-lg"
-            style={{
-              backgroundColor:
-                autoApproveMode === opt.mode ? 'rgba(33,128,141,0.15)' : 'transparent',
-              borderWidth: autoApproveMode === opt.mode ? 1 : 0,
-              borderColor: autoApproveMode === opt.mode ? 'rgba(33,128,141,0.3)' : 'transparent',
-            }}
-            accessibilityLabel={opt.label}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: autoApproveMode === opt.mode }}
-          >
-            <View
-              className="w-5 h-5 rounded-full border-2 items-center justify-center"
+      <View className="flex-row gap-2">
+        {(['dark', 'light', 'system'] as ThemeMode[]).map((mode) => {
+          const Icon = THEME_ICONS[mode];
+          const selected = currentMode === mode;
+          return (
+            <Pressable
+              key={mode}
+              onPress={() => onSelect(mode)}
+              className="flex-1 items-center gap-1.5 py-2.5 rounded-lg"
               style={{
-                borderColor: autoApproveMode === opt.mode ? colors.teal : colors.textMuted,
+                backgroundColor: selected ? 'rgba(33,128,141,0.15)' : 'transparent',
+                borderWidth: selected ? 1 : 0,
+                borderColor: selected ? 'rgba(33,128,141,0.3)' : 'transparent',
               }}
+              accessibilityLabel={THEME_LABELS[mode]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
             >
-              {autoApproveMode === opt.mode && (
-                <View className="w-2.5 h-2.5 rounded-full bg-teal-500" />
-              )}
-            </View>
-            <View className="flex-1">
-              <Text className="text-[13px] text-white font-medium">{opt.label}</Text>
-              <Text className="text-[11px] text-white/40">{opt.description}</Text>
-            </View>
-          </Pressable>
-        ))}
+              <Icon size={16} color={selected ? colors.teal : colors.textMuted} />
+              <Text
+                className="text-xs"
+                style={{ color: selected ? colors.teal : colors.textSecondary }}
+              >
+                {THEME_LABELS[mode]}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
 }
 
+function VersionRow() {
+  const version = Constants.expoConfig?.version ?? '1.0.0';
+  const buildNumber =
+    Constants.expoConfig?.ios?.buildNumber ??
+    Constants.expoConfig?.android?.versionCode?.toString() ??
+    '1';
+  return (
+    <View className="items-center py-4">
+      <Text className="text-[11px] text-white/20">
+        v{version} Build {buildNumber}
+      </Text>
+    </View>
+  );
+}
+
 // ---------------------------------------------------------------------------
-// Settings Screen
+// Separator between rows (inside a section)
+// ---------------------------------------------------------------------------
+
+function RowSeparator() {
+  return <View className="h-px mx-4" style={{ backgroundColor: colors.border }} />;
+}
+
+// ---------------------------------------------------------------------------
+// Screen
 // ---------------------------------------------------------------------------
 
 export default function SettingsTabScreen() {
   const router = useRouter();
-  const { user, signOut } = useAuthStore();
+  const { signOut } = useAuthStore();
   const connectionStatus = useConnectionStore((s) => s.status);
   const selectedModel = useModelStore((s) => s.selectedModel);
-  const { colors: themeColors } = useTheme();
   const voiceSelectorRef = useRef<BottomSheet>(null);
-  const {
-    hapticsEnabled,
-    notificationsEnabled,
-    voiceEnabled,
-    backgroundFetchEnabled,
-    themeMode,
-    biometricLockEnabled,
-    selectedVoiceId,
-    setHapticsEnabled,
-    setNotificationsEnabled,
-    setVoiceEnabled,
-    setBackgroundFetchEnabled,
-    setThemeMode,
-    setBiometricLockEnabled,
-  } = useSettingsStore();
+  const { hapticsEnabled, themeMode, setHapticsEnabled, setThemeMode } = useSettingsStore();
 
-  const handleSignOut = () => {
+  // ---- Handlers ----
+
+  const handleSignOut = useCallback(() => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: signOut },
     ]);
-  };
+  }, [signOut]);
 
-  const handleManageSubscription = async () => {
+  const handleManageSubscription = useCallback(async () => {
     try {
       const data = await api.post<{ url: string }>('/api/portal');
       if (data.url) {
@@ -242,233 +252,262 @@ export default function SettingsTabScreen() {
         'Could not open subscription management. Please visit agiworkforce.com/billing in your browser.',
       );
     }
-  };
+  }, []);
+
+  const push = useCallback(
+    (path: string) => () => {
+      router.push(path as Parameters<typeof router.push>[0]);
+    },
+    [router],
+  );
+
+  // ---- Section data ----
+
+  const sections: SettingSection[] = [
+    {
+      title: 'Account',
+      data: [
+        {
+          key: 'profile',
+          icon: User,
+          label: 'Profile',
+          type: 'navigation',
+          onPress: push('/(app)/profile'),
+        },
+        {
+          key: 'subscription',
+          icon: CreditCard,
+          label: 'Subscription',
+          type: 'navigation',
+          onPress: handleManageSubscription,
+        },
+        {
+          key: 'usage',
+          icon: BarChart3,
+          label: 'Usage',
+          type: 'navigation',
+          onPress: push('/(app)/usage'),
+        },
+      ],
+    },
+    {
+      title: 'AI Configuration',
+      data: [
+        {
+          key: 'default-model',
+          icon: Brain,
+          label: 'Default Model',
+          type: 'navigation',
+          value: selectedModel,
+          onPress: () => {
+            router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+          },
+        },
+        {
+          key: 'capabilities',
+          icon: Zap,
+          label: 'Capabilities',
+          type: 'navigation',
+          onPress: push('/(app)/settings/capabilities'),
+        },
+        {
+          key: 'auto-approve',
+          icon: Shield,
+          label: 'Auto-Approve',
+          type: 'navigation',
+          onPress: push('/(app)/settings/auto-approve'),
+        },
+      ],
+    },
+    {
+      title: 'Connections',
+      data: [
+        {
+          key: 'desktop-pairing',
+          icon: Smartphone,
+          label: 'Desktop Pairing',
+          type: 'navigation',
+          value: connectionStatus === 'connected' ? 'Connected' : undefined,
+          onPress: push('/(app)/companion'),
+        },
+        {
+          key: 'connectors',
+          icon: Link2,
+          label: 'Connectors',
+          type: 'navigation',
+          onPress: push('/(app)/connectors'),
+        },
+      ],
+    },
+    {
+      title: 'Preferences',
+      data: [
+        {
+          key: 'appearance',
+          icon: Palette,
+          label: 'Appearance',
+          type: 'theme',
+        },
+        {
+          key: 'voice-language',
+          icon: Volume2,
+          label: 'Voice & Language',
+          type: 'navigation',
+          onPress: () => voiceSelectorRef.current?.snapToIndex(0),
+        },
+        {
+          key: 'notifications',
+          icon: Bell,
+          label: 'Notifications',
+          type: 'navigation',
+          onPress: push('/(app)/settings/notifications'),
+        },
+        {
+          key: 'personalization',
+          icon: UserCog,
+          label: 'Personalization',
+          type: 'navigation',
+          onPress: push('/(app)/settings/personalization'),
+        },
+        {
+          key: 'haptic-feedback',
+          icon: Vibrate,
+          label: 'Haptic Feedback',
+          type: 'toggle',
+          toggleValue: hapticsEnabled,
+          onToggle: setHapticsEnabled,
+        },
+      ],
+    },
+    {
+      title: 'About',
+      data: [
+        {
+          key: 'help-faq',
+          icon: HelpCircle,
+          label: 'Help & FAQ',
+          type: 'navigation',
+          onPress: () => {
+            Linking.openURL('https://agiworkforce.com/help').catch(() => {
+              // silently ignore
+            });
+          },
+        },
+        {
+          key: 'privacy-policy',
+          icon: Lock,
+          label: 'Privacy Policy',
+          type: 'navigation',
+          onPress: () => {
+            Linking.openURL('https://agiworkforce.com/privacy').catch(() => {
+              // silently ignore
+            });
+          },
+        },
+        {
+          key: 'terms-of-service',
+          icon: FileText,
+          label: 'Terms of Service',
+          type: 'navigation',
+          onPress: () => {
+            Linking.openURL('https://agiworkforce.com/terms').catch(() => {
+              // silently ignore
+            });
+          },
+        },
+        {
+          key: 'sign-out',
+          icon: LogOut,
+          label: 'Sign Out',
+          type: 'signout',
+          destructive: true,
+          onPress: handleSignOut,
+        },
+        {
+          key: 'version',
+          icon: HelpCircle, // unused but required by type
+          label: '',
+          type: 'version',
+        },
+      ],
+    },
+  ];
+
+  // ---- Render ----
+
+  const renderItem = useCallback(
+    ({ item, index, section }: { item: SettingItem; index: number; section: SettingSection }) => {
+      const isLast = index === section.data.length - 1;
+      const showSeparator = !isLast && item.type !== 'version';
+
+      // Version row
+      if (item.type === 'version') {
+        return <VersionRow />;
+      }
+
+      return (
+        <>
+          {item.type === 'toggle' && item.onToggle ? (
+            <ToggleRow
+              icon={item.icon}
+              label={item.label}
+              value={item.toggleValue ?? false}
+              onValueChange={item.onToggle}
+            />
+          ) : item.type === 'theme' ? (
+            <ThemeRow currentMode={themeMode} onSelect={setThemeMode} />
+          ) : item.type === 'signout' ? (
+            <NavigationRow icon={item.icon} label={item.label} onPress={item.onPress} destructive />
+          ) : (
+            <NavigationRow
+              icon={item.icon}
+              label={item.label}
+              value={item.value}
+              onPress={item.onPress}
+            />
+          )}
+          {showSeparator && <RowSeparator />}
+        </>
+      );
+    },
+    [themeMode, setThemeMode],
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: SettingSection }) => (
+      <View className="pt-5 pb-1.5 px-4">
+        <Text className="text-[11px] text-white/40 uppercase tracking-wider font-semibold">
+          {section.title}
+        </Text>
+      </View>
+    ),
+    [],
+  );
+
+  const renderSectionFooter = useCallback(() => null, []);
+
+  const keyExtractor = useCallback((item: SettingItem) => item.key, []);
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
+      {/* Header */}
       <View className="flex-row items-center px-4 h-12">
-        <Text variant="subheading" className="text-white">
+        <Text variant="subheading" className="text-white text-lg font-semibold">
           Settings
         </Text>
       </View>
 
-      <ScrollView className="flex-1 px-4" contentContainerClassName="pb-8 gap-5">
-        {/* Account */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
-            Account
-          </Text>
-          <Text className="text-white">{user?.email ?? 'Not signed in'}</Text>
-          <Separator className="my-3" />
-          <SettingRow
-            icon={User}
-            label="Profile"
-            onPress={() => router.push('/(app)/profile' as Parameters<typeof router.push>[0])}
-          />
-        </Card>
-
-        {/* Model Selection */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
-            AI Model
-          </Text>
-          <SettingRow
-            icon={Brain}
-            label="Selected Model"
-            value={selectedModel}
-            onPress={() => {
-              // Model picker is accessible from the chat input
-              Alert.alert(
-                'Model Selection',
-                'Use the model selector in the chat input to change models.',
-              );
-            }}
-          />
-        </Card>
-
-        {/* Desktop Connection */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
-            Desktop Connection
-          </Text>
-          <SettingRow
-            icon={Smartphone}
-            label="Desktop Companion"
-            value={connectionStatus === 'connected' ? 'Connected' : 'Not connected'}
-            onPress={() => router.push('/(app)/companion' as Parameters<typeof router.push>[0])}
-          />
-          <Separator />
-          <CompanionWalkthroughRow />
-        </Card>
-
-        {/* Preferences */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
-            Preferences
-          </Text>
-          <SettingToggle
-            icon={Vibrate}
-            label="Haptic Feedback"
-            value={hapticsEnabled}
-            onValueChange={setHapticsEnabled}
-          />
-          <Separator />
-          <SettingToggle
-            icon={Bell}
-            label="Push Notifications"
-            value={notificationsEnabled}
-            onValueChange={setNotificationsEnabled}
-          />
-          <Separator />
-          <SettingRow
-            icon={Bell}
-            label="Notification Preferences"
-            onPress={() =>
-              router.push('/(app)/settings/notifications' as Parameters<typeof router.push>[0])
-            }
-          />
-          <Separator />
-          <SettingToggle
-            icon={Brain}
-            label="Voice Features"
-            value={voiceEnabled}
-            onValueChange={setVoiceEnabled}
-          />
-          <Separator />
-          <SettingRow
-            icon={Volume2}
-            label="Voice"
-            value={selectedVoiceId ? 'Custom' : 'System Default'}
-            onPress={() => voiceSelectorRef.current?.snapToIndex(0)}
-          />
-          <Separator />
-          <SettingToggle
-            icon={HardDrive}
-            label="Background Agent Sync"
-            value={backgroundFetchEnabled}
-            onValueChange={setBackgroundFetchEnabled}
-          />
-        </Card>
-
-        {/* Appearance */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
-            Appearance
-          </Text>
-          <View className="flex-row items-center gap-2 mb-1">
-            <Palette size={18} color={colors.textSecondary} />
-            <Text className="text-sm text-white">Theme</Text>
-          </View>
-          <View className="flex-row gap-2 mt-2">
-            {[
-              { mode: 'dark' as ThemeMode, label: 'Dark', icon: Moon },
-              { mode: 'light' as ThemeMode, label: 'Light', icon: Sun },
-              { mode: 'system' as ThemeMode, label: 'System', icon: Monitor },
-            ].map((opt) => {
-              const Icon = opt.icon;
-              const selected = themeMode === opt.mode;
-              return (
-                <Pressable
-                  key={opt.mode}
-                  onPress={() => setThemeMode(opt.mode)}
-                  className="flex-1 items-center gap-1.5 py-2.5 rounded-lg"
-                  style={{
-                    backgroundColor: selected ? 'rgba(33,128,141,0.15)' : 'transparent',
-                    borderWidth: selected ? 1 : 0,
-                    borderColor: selected ? 'rgba(33,128,141,0.3)' : 'transparent',
-                  }}
-                  accessibilityLabel={opt.label}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                >
-                  <Icon size={16} color={selected ? colors.teal : colors.textMuted} />
-                  <Text
-                    className="text-xs"
-                    style={{ color: selected ? colors.teal : colors.textSecondary }}
-                  >
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Card>
-
-        {/* Security */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
-            Security
-          </Text>
-          <AutoApproveSelector />
-          <Separator className="my-3" />
-          <SettingToggle
-            icon={Fingerprint}
-            label="Biometric Lock"
-            value={biometricLockEnabled}
-            onValueChange={setBiometricLockEnabled}
-          />
-        </Card>
-
-        {/* Data */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
-            Data
-          </Text>
-          <SettingRow
-            icon={Key}
-            label="Memory"
-            onPress={() =>
-              router.push('/(app)/settings/memory' as Parameters<typeof router.push>[0])
-            }
-          />
-          <Separator />
-          <SettingRow
-            icon={Calendar}
-            label="Schedules"
-            onPress={() => router.push('/(app)/schedules' as Parameters<typeof router.push>[0])}
-          />
-          <Separator />
-          <SettingRow
-            icon={Link2}
-            label="Device Integrations"
-            value="Calendar, Contacts"
-            onPress={() =>
-              router.push('/(app)/settings/integrations' as Parameters<typeof router.push>[0])
-            }
-          />
-        </Card>
-
-        {/* Billing */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
-            Billing
-          </Text>
-          <SettingRow
-            icon={ExternalLink}
-            label="Manage Subscription"
-            onPress={handleManageSubscription}
-          />
-        </Card>
-
-        {/* Feedback */}
-        <Card>
-          <SettingRow
-            icon={MessageCircle}
-            label="Send Feedback"
-            onPress={() => router.push('/(app)/feedback' as Parameters<typeof router.push>[0])}
-          />
-        </Card>
-
-        {/* Sign Out */}
-        <Card>
-          <SettingRow icon={LogOut} label="Sign Out" onPress={handleSignOut} />
-        </Card>
-
-        {/* App version */}
-        <View className="items-center pt-2">
-          <Text className="text-[11px] text-white/20">AGI Workforce Mobile v0.1.0</Text>
-        </View>
-      </ScrollView>
+      <SectionList
+        sections={sections}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        renderSectionFooter={renderSectionFooter}
+        stickySectionHeadersEnabled={false}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        style={{ backgroundColor: colors.surfaceBase }}
+      />
 
       <VoiceSelector ref={voiceSelectorRef} />
     </SafeAreaView>

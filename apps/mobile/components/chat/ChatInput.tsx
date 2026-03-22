@@ -1,15 +1,18 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect, useImperativeHandle } from 'react';
 import { View, TextInput, Pressable } from 'react-native';
-import { AutoApproveToggle } from './AutoApproveToggle';
+import { Plus, Link as LinkIcon } from 'lucide-react-native';
 import { ModelSelectorButton } from './ModelSelectorButton';
-import { AttachmentButton } from './AttachmentButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendButton } from './SendButton';
 import { CommandPalette } from './CommandPalette';
-import { TemporaryChatToggle } from './TemporaryChatToggle';
 import { VoiceInputButton } from '@/components/voice/VoiceInputButton';
 import { RecordingOverlay } from '@/components/voice/RecordingOverlay';
 import * as VoiceService from '@/services/voice';
+import * as Haptics from 'expo-haptics';
+import { useModelStore } from '@/stores/modelStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useTheme } from '@/hooks/useTheme';
+import { getDisplayName } from '@/lib/models';
 import { colors } from '@/lib/theme';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import type { VoiceMeteringEvent } from '@/services/voice';
@@ -20,6 +23,12 @@ interface ChatInputProps {
   onStop?: () => void;
   onOpenModelPicker?: () => void;
   onOpenVoiceMode?: () => void;
+  onOpenAddToChat?: () => void;
+  onOpenConnectors?: () => void;
+  /** When true, input is grayed out and non-interactive (e.g. offline) */
+  disabled?: boolean;
+  /** Ref to imperatively add attachments from outside (e.g. AddToChatSheet pickers) */
+  attachRef?: React.RefObject<{ addAttachments: (items: Attachment[]) => void } | null>;
 }
 
 export function ChatInput({
@@ -28,6 +37,10 @@ export function ChatInput({
   onStop,
   onOpenModelPicker,
   onOpenVoiceMode,
+  onOpenAddToChat,
+  onOpenConnectors,
+  disabled,
+  attachRef,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -38,13 +51,42 @@ export function ChatInput({
   const recordingStartTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const selectedModel = useModelStore((s) => s.selectedModel);
+  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const { colors: themeColors, isDark } = useTheme();
+
+  const modelName = getDisplayName(selectedModel);
+
+  // Expose addAttachments to parent via ref so pickers can forward results
+  useImperativeHandle(
+    attachRef,
+    () => ({
+      addAttachments: (items: Attachment[]) => {
+        setAttachments((prev) => [...prev, ...items]);
+      },
+    }),
+    [],
+  );
+
+  // Clean up duration interval on unmount to prevent leak if user navigates away while recording
+  useEffect(() => {
+    return () => {
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+    };
+  }, []);
+
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed && attachments.length === 0) return;
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
     onSend(trimmed, attachments.length > 0 ? attachments : undefined);
     setText('');
     setAttachments([]);
-  }, [text, attachments, onSend]);
+  }, [text, attachments, onSend, hapticsEnabled]);
 
   const handleAttach = useCallback((newAttachments: Attachment[]) => {
     setAttachments((prev) => [...prev, ...newAttachments]);
@@ -139,9 +181,34 @@ export function ChatInput({
     }
   }, [isStreaming, onStop, handleSend]);
 
+  const handlePlusPress = useCallback(() => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    onOpenAddToChat?.();
+  }, [hapticsEnabled, onOpenAddToChat]);
+
+  const handleConnectorsPress = useCallback(() => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    onOpenConnectors?.();
+  }, [hapticsEnabled, onOpenConnectors]);
+
+  // Streaming placeholder text
+  const placeholder = disabled
+    ? "You're offline"
+    : isStreaming
+      ? `Reply to ${modelName}...`
+      : 'Ask anything...';
+
   return (
-    <View className="px-4 pb-4 pt-2">
-      {/* Recording overlay — shown while recording is active */}
+    <View
+      className="px-4 pb-4 pt-2"
+      style={disabled ? { opacity: 0.5 } : undefined}
+      pointerEvents={disabled ? 'none' : 'auto'}
+    >
+      {/* Recording overlay -- shown while recording is active */}
       <RecordingOverlay
         visible={isRecording}
         audioLevel={audioLevel}
@@ -153,32 +220,36 @@ export function ChatInput({
       {/* Attachment preview strip */}
       <AttachmentPreview attachments={attachments} onRemove={handleRemoveAttachment} />
 
-      {/* Command palette — shown when input starts with "/" */}
+      {/* Command palette -- shown when input starts with "/" */}
       <CommandPalette
         visible={showCommandPalette}
         query={text}
         onSelectCommand={handleSelectCommand}
       />
 
-      <View className="flex-row items-end gap-2 bg-surface-elevated rounded-2xl border border-white/8 px-3 py-2">
-        {/* Attachment button */}
-        <AttachmentButton onAttach={handleAttach} disabled={isStreaming} />
-
-        {/* Auto-approve shield */}
-        <AutoApproveToggle />
-
-        {/* Temporary chat toggle */}
-        <TemporaryChatToggle />
-
-        {/* Model selector */}
-        <ModelSelectorButton onPress={onOpenModelPicker ?? (() => {})} />
-
-        {/* Text input */}
+      <View
+        style={{
+          backgroundColor: themeColors.surfaceElevated,
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+        }}
+      >
+        {/* Text input -- full width, top of the card */}
         <TextInput
           ref={inputRef}
-          className="flex-1 text-white text-[15px] py-1.5 min-h-[24px] max-h-[120px]"
-          placeholder="Message..."
-          placeholderTextColor="rgba(255,255,255,0.3)"
+          style={{
+            color: themeColors.textPrimary,
+            fontSize: 15,
+            paddingVertical: 6,
+            paddingHorizontal: 4,
+            minHeight: 24,
+            maxHeight: 120,
+          }}
+          placeholder={placeholder}
+          placeholderTextColor={themeColors.textMuted}
           value={text}
           onChangeText={setText}
           multiline
@@ -191,22 +262,71 @@ export function ChatInput({
           accessibilityHint="Type your message to the AI assistant"
         />
 
-        {/* Unified voice button — tap to toggle (Whisper), hold for PTT (Deepgram), long-press for voice mode */}
-        <VoiceInputButton
-          onTranscription={handleTranscription}
-          onRecordingStart={handleRecordingStart}
-          onRecordingStop={handleRecordingStop}
-          onMetering={handleMetering}
-          onLongPress={onOpenVoiceMode}
-          disabled={isStreaming}
-        />
+        {/* Bottom toolbar row */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 4,
+          }}
+        >
+          {/* Left group: [+] and [Model] */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+            {/* [+] Add to Chat button */}
+            <Pressable
+              onPress={handlePlusPress}
+              style={{
+                padding: 6,
+                borderRadius: 8,
+              }}
+              accessibilityLabel="Add to chat"
+              accessibilityHint="Opens attachment, mode, and feature options"
+              accessibilityRole="button"
+            >
+              <Plus size={20} color={themeColors.textMuted} />
+            </Pressable>
 
-        {/* Send / Stop button */}
-        <SendButton
-          state={sendButtonState}
-          onPress={handleSendButtonPress}
-          disabled={!hasContent && !isStreaming}
-        />
+            {/* Model pill -- hidden during streaming to save space */}
+            {!isStreaming && <ModelSelectorButton onPress={onOpenModelPicker ?? (() => {})} />}
+          </View>
+
+          {/* Right group: [connectors] [mic] [send/stop] */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+            {/* Connectors link -- hidden during streaming */}
+            {!isStreaming && (
+              <Pressable
+                onPress={handleConnectorsPress}
+                style={{
+                  padding: 6,
+                  borderRadius: 8,
+                }}
+                accessibilityLabel="Sources and connectors"
+                accessibilityHint="Opens connectors page"
+                accessibilityRole="button"
+              >
+                <LinkIcon size={18} color={themeColors.textMuted} />
+              </Pressable>
+            )}
+
+            {/* Voice input button */}
+            <VoiceInputButton
+              onTranscription={handleTranscription}
+              onRecordingStart={handleRecordingStart}
+              onRecordingStop={handleRecordingStop}
+              onMetering={handleMetering}
+              onLongPress={onOpenVoiceMode}
+              disabled={isStreaming}
+            />
+
+            {/* Send / Stop button */}
+            <SendButton
+              state={sendButtonState}
+              onPress={handleSendButtonPress}
+              disabled={!hasContent && !isStreaming}
+            />
+          </View>
+        </View>
       </View>
     </View>
   );

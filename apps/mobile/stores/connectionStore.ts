@@ -24,6 +24,8 @@ interface RTCIceCandidateInit {
 import { WS_URL } from '@/lib/constants';
 import { useAgentStore } from './agentStore';
 import type { Agent } from './agentStore';
+import { useDispatchStore } from './dispatchStore';
+import type { DispatchMessage, TaskStatus, TaskResult } from './dispatchStore';
 import { notifyCompanionMessage } from '@/services/companionNotifications';
 
 export type ConnectionStatus =
@@ -189,6 +191,37 @@ function handleControlMessage(payload: unknown): void {
     case 'heartbeat_lost': {
       // Notify the companion notification bridge — fires local push notification
       notifyCompanionMessage(msg as { action: string; [key: string]: unknown });
+      break;
+    }
+    // --- Dispatch thread messages from desktop ---
+    case 'dispatch_response': {
+      const messageId = (msg['messageId'] as string) || `desktop-${Date.now()}`;
+      const text = (msg['text'] as string) ?? '';
+      const taskStatus = (msg['taskStatus'] as TaskStatus) ?? undefined;
+      const statusDetail = (msg['statusDetail'] as string) ?? undefined;
+      const taskResult = (msg['taskResult'] as TaskResult) ?? undefined;
+      const dispatchMsg: DispatchMessage = {
+        id: messageId,
+        role: 'desktop',
+        text,
+        timestamp: new Date().toISOString(),
+        taskStatus,
+        statusDetail,
+        taskResult,
+      };
+      useDispatchStore.getState().addMessage(dispatchMsg);
+      break;
+    }
+    case 'dispatch_status_update': {
+      const messageId = msg['messageId'] as string | undefined;
+      if (messageId) {
+        const patch: Partial<Omit<DispatchMessage, 'id'>> = {};
+        if (msg['taskStatus'] != null) patch.taskStatus = msg['taskStatus'] as TaskStatus;
+        if (msg['statusDetail'] != null) patch.statusDetail = msg['statusDetail'] as string;
+        if (msg['text'] != null) patch.text = msg['text'] as string;
+        if (msg['taskResult'] != null) patch.taskResult = msg['taskResult'] as TaskResult;
+        useDispatchStore.getState().updateMessage(messageId, patch);
+      }
       break;
     }
     default:
@@ -647,9 +680,8 @@ export const useConnectionStore = create<ConnectionState>()(
       name: 'connection-store',
       storage: createJSONStorage(() => mmkvStorage),
       partialize: (state) => ({
-        // Only persist the pairing code for reconnection
+        // Do NOT persist pairingCode — it's ephemeral and sensitive
         // Do NOT persist connection status or metadata
-        pairingCode: state.pairingCode,
         desktopName: state.desktopName,
       }),
     },
