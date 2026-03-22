@@ -11,7 +11,7 @@ import {
   Wrench,
   MessageSquare,
 } from 'lucide-react';
-import { cn } from '@shared/lib/utils';
+
 import { Header } from '../components/layout/Header';
 import { ApplicationPreview } from '../components/ApplicationPreview';
 import { CtaSection } from '../components/marketing/CtaSection';
@@ -200,37 +200,162 @@ export default function Home() {
             </div>
           </section>
 
-          {/* Provider Trust Bar */}
-          <section className="border-y border-zinc-800/50 bg-zinc-950/50 py-16">
+          {/* Provider Trust Bar — infinite horizontal scroll with real logos */}
+          <section className="border-y border-zinc-800/50 bg-zinc-950/50 py-16 overflow-hidden">
             <div className="container mx-auto px-4">
-              <p className="mb-8 text-center text-sm font-medium uppercase tracking-widest text-zinc-500">
+              <p className="mb-10 text-center text-sm font-medium uppercase tracking-widest text-zinc-500">
                 Works with every major AI provider
               </p>
-              <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
-                {[
-                  { name: 'Anthropic', color: 'text-orange-400' },
-                  { name: 'OpenAI', color: 'text-emerald-400' },
-                  { name: 'Google', color: 'text-blue-400' },
-                  { name: 'xAI', color: 'text-zinc-300' },
-                  { name: 'DeepSeek', color: 'text-cyan-400' },
-                  { name: 'Ollama', color: 'text-zinc-300' },
-                  { name: 'Mistral', color: 'text-amber-400' },
-                  { name: 'Perplexity', color: 'text-teal-400' },
-                  { name: 'Qwen', color: 'text-violet-400' },
-                ].map((provider) => (
-                  <div
-                    key={provider.name}
-                    className="flex items-center gap-2 text-lg font-semibold opacity-70 transition-opacity hover:opacity-100"
-                  >
-                    <Bot className={cn('h-5 w-5', provider.color)} />
-                    <span className="text-zinc-400">{provider.name}</span>
+            </div>
+            <div className="relative">
+              {/* Gradient masks */}
+              <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-zinc-950 to-transparent" />
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-zinc-950 to-transparent" />
+              {/* Scrolling track — duplicated for seamless loop */}
+              <div className="flex animate-marquee items-center gap-16">
+                {[...Array(2)].map((_, setIndex) => (
+                  <div key={setIndex} className="flex shrink-0 items-center gap-16">
+                    {/* Anthropic */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-orange-400">
+                        <path d="M17.304 3.541l-5.17 14.27h3.164l5.17-14.27h-3.164zM6.696 3.541l5.17 14.27H8.702L3.532 3.541h3.164z" />
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">Anthropic</span>
+                    </div>
+                    {/* OpenAI */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-emerald-400">
+                        <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.998 5.998 0 0 0-3.998 2.9 6.042 6.042 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.602 1.5v3.003l-2.602 1.5-2.602-1.5z" />
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">OpenAI</span>
+                    </div>
+                    {/* Google */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        />
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">Google</span>
+                    </div>
+                    {/* xAI */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-zinc-200">
+                        <path d="M3.005 6.3h3.2l5.59 8.24L6.36 22H3.005l5.735-7.735L3.005 6.3zm8.25 0h3.2L22 22h-3.2L11.255 6.3zm5.545 0H20l-3.5 4.7-1.6-2.35L16.8 6.3z" />
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">xAI</span>
+                    </div>
+                    {/* DeepSeek */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-cyan-400">
+                        <circle cx="12" cy="12" r="10" />
+                        <text
+                          x="12"
+                          y="16"
+                          textAnchor="middle"
+                          fill="#0a0a0a"
+                          fontSize="10"
+                          fontWeight="bold"
+                          fontFamily="system-ui"
+                        >
+                          DS
+                        </text>
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">DeepSeek</span>
+                    </div>
+                    {/* Ollama */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-zinc-200">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l7 4.5-7 4.5z" />
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">Ollama</span>
+                    </div>
+                    {/* Mistral */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6">
+                        <rect x="1" y="3" width="5" height="5" fill="#F7D046" />
+                        <rect x="18" y="3" width="5" height="5" fill="#F7D046" />
+                        <rect x="1" y="9" width="5" height="5" fill="#F2A73B" />
+                        <rect x="7" y="9" width="5" height="5" fill="#F2A73B" />
+                        <rect x="18" y="9" width="5" height="5" fill="#F2A73B" />
+                        <rect x="1" y="16" width="5" height="5" fill="#EE792F" />
+                        <rect x="7" y="16" width="5" height="5" fill="#EE792F" />
+                        <rect x="12" y="16" width="5" height="5" fill="#EE792F" />
+                        <rect x="18" y="16" width="5" height="5" fill="#EE792F" />
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">Mistral</span>
+                    </div>
+                    {/* Perplexity */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-teal-400">
+                        <path d="M12 1L4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-4zm0 2.18l6 3v5.82c0 4.53-3.13 8.72-6 9.82-2.87-1.1-6-5.29-6-9.82V6.18l6-3z" />
+                        <path d="M12 6l-4 2v4c0 2.76 1.56 5.34 4 6.47 2.44-1.13 4-3.71 4-6.47V8l-4-2z" />
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">Perplexity</span>
+                    </div>
+                    {/* Groq */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-purple-400">
+                        <circle cx="12" cy="12" r="10" />
+                        <text
+                          x="12"
+                          y="16"
+                          textAnchor="middle"
+                          fill="#0a0a0a"
+                          fontSize="8"
+                          fontWeight="bold"
+                          fontFamily="system-ui"
+                        >
+                          GQ
+                        </text>
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">Groq</span>
+                    </div>
+                    {/* Together */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-blue-400">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">Together</span>
+                    </div>
+                    {/* Qwen */}
+                    <div className="flex shrink-0 items-center gap-3 opacity-70 transition-opacity hover:opacity-100">
+                      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-violet-400">
+                        <circle cx="12" cy="12" r="10" />
+                        <text
+                          x="12"
+                          y="16"
+                          textAnchor="middle"
+                          fill="#0a0a0a"
+                          fontSize="8"
+                          fontWeight="bold"
+                          fontFamily="system-ui"
+                        >
+                          QW
+                        </text>
+                      </svg>
+                      <span className="text-lg font-semibold text-zinc-300">Qwen</span>
+                    </div>
                   </div>
                 ))}
               </div>
-              <p className="mt-8 text-center text-sm text-zinc-500">
-                No vendor lock-in. Switch models anytime. Your keys, your data.
-              </p>
             </div>
+            <p className="mt-10 text-center text-sm text-zinc-500">
+              No vendor lock-in. Switch models anytime. Your keys, your data.
+            </p>
           </section>
 
           {/* Features */}
