@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "bash ../web/scripts/build-chat-spa.sh && next build",
+    "build:next-only": "next build",
     "start": "next start",
     "lint": "eslint . --cache --cache-strategy content --cache-location .cache/eslint",
     "typecheck": "tsc --noEmit",
@@ -18,6 +19,7 @@
   },
   "dependencies": {
     "@agiworkforce/api": "workspace:*",
+    "@agiworkforce/chat": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
     "@agiworkforce/stores": "workspace:*",
     "@agiworkforce/types": "workspace:*",
