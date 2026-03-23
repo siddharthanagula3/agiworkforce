@@ -18,12 +18,13 @@ interface ModelState {
 
 const DEFAULT_MODEL_ID = 'auto-economy';
 
-/** Hobby-tier cloud models — use auto-routing IDs that the backend maps to
- *  actual models based on plan tier. Desktop overrides via setModels(). */
+/** Hobby-tier cloud models — auto-routing + specific agentic models.
+ *  Desktop overrides via setModels() with the full catalog. */
 export const CLOUD_FALLBACK_MODELS: ModelInfo[] = [
+  // Auto-routing tiers (backend maps to best model for plan)
   {
     id: 'auto-economy',
-    name: 'Economy (Fast & Cheap)',
+    name: 'Auto Economy',
     provider: 'managed_cloud',
     tier: 'fast',
     supportsThinking: false,
@@ -35,7 +36,7 @@ export const CLOUD_FALLBACK_MODELS: ModelInfo[] = [
   },
   {
     id: 'auto-balanced',
-    name: 'Balanced (Recommended)',
+    name: 'Auto Balanced',
     provider: 'managed_cloud',
     tier: 'standard',
     supportsThinking: true,
@@ -45,15 +46,52 @@ export const CLOUD_FALLBACK_MODELS: ModelInfo[] = [
     isLocal: false,
     isByok: false,
   },
+  // Specific agentic models — hobby-tier accessible (economy set)
   {
-    id: 'auto-premium',
-    name: 'Premium (Best Quality)',
-    provider: 'managed_cloud',
-    tier: 'flagship',
+    id: 'claude-haiku-4-5-20251001',
+    name: 'Claude Haiku 4.5',
+    provider: 'anthropic',
+    tier: 'fast',
     supportsThinking: true,
     supportsVision: true,
     supportsTools: true,
     contextWindow: 200000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'gpt-5.4-nano',
+    name: 'GPT-5.4 Nano',
+    provider: 'openai',
+    tier: 'fast',
+    supportsThinking: false,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 128000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash Lite',
+    provider: 'google',
+    tier: 'fast',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 1000000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'deepseek-chat',
+    name: 'DeepSeek V3',
+    provider: 'deepseek',
+    tier: 'standard',
+    supportsThinking: false,
+    supportsVision: false,
+    supportsTools: true,
+    contextWindow: 128000,
     isLocal: false,
     isByok: false,
   },
