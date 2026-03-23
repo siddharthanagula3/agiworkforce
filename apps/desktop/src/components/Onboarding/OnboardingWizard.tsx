@@ -34,6 +34,7 @@ import {
 import { useSimpleModeStore } from '../../stores/ui';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import { useAppModeStore } from '../../stores/appModeStore';
+import { isCloudWeb } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -56,7 +57,7 @@ interface Step {
 // Step definitions
 // ---------------------------------------------------------------------------
 
-const STEPS: Step[] = [
+const ALL_STEPS: Step[] = [
   { id: 'mode', label: 'Mode', icon: Shield },
   { id: 'welcome', label: 'Welcome', icon: Sparkles },
   { id: 'api-keys', label: 'API Keys', icon: Key },
@@ -65,8 +66,12 @@ const STEPS: Step[] = [
   { id: 'ready', label: 'Ready', icon: CheckCircle2 },
 ];
 
-// Top 5 recommended models shown in the model-picker step
-const RECOMMENDED_MODELS = [
+// Web is cloud-only — skip mode selection and API keys steps
+const WEB_HIDDEN_STEPS = new Set<StepId>(['mode', 'api-keys']);
+const STEPS: Step[] = isCloudWeb ? ALL_STEPS.filter((s) => !WEB_HIDDEN_STEPS.has(s.id)) : ALL_STEPS;
+
+// Top recommended models shown in the model-picker step
+const ALL_RECOMMENDED_MODELS = [
   {
     id: 'auto',
     label: 'Auto (Recommended)',
@@ -103,6 +108,11 @@ const RECOMMENDED_MODELS = [
     badgeColor: 'bg-amber-500/10 text-amber-400',
   },
 ];
+
+// Web is cloud-only — hide local-only models
+const RECOMMENDED_MODELS = isCloudWeb
+  ? ALL_RECOMMENDED_MODELS.filter((m) => m.id !== 'ollama/llama3')
+  : ALL_RECOMMENDED_MODELS;
 
 // ---------------------------------------------------------------------------
 // Step 0: Mode Selection
@@ -214,7 +224,7 @@ function StepMode({ onSelect }: StepModeProps) {
 // ---------------------------------------------------------------------------
 
 function StepWelcome() {
-  const features = [
+  const desktopFeatures = [
     {
       icon: Cpu,
       color: 'text-purple-400',
@@ -245,6 +255,39 @@ function StepWelcome() {
     },
   ];
 
+  const webFeatures = [
+    {
+      icon: Cpu,
+      color: 'text-purple-400',
+      bg: 'bg-purple-500/10',
+      title: 'Multi-Model Routing',
+      desc: 'Claude, GPT-5, Gemini — all in one place. Pick any model or let Auto choose.',
+    },
+    {
+      icon: Bot,
+      color: 'text-amber-400',
+      bg: 'bg-amber-500/10',
+      title: 'AI Agents',
+      desc: 'Autonomous agents that research, write, analyze, and execute tasks for you.',
+    },
+    {
+      icon: Smartphone,
+      color: 'text-blue-400',
+      bg: 'bg-blue-500/10',
+      title: 'Cross-Device Sync',
+      desc: 'Access your conversations from desktop, web, and mobile — always in sync.',
+    },
+    {
+      icon: Wand2,
+      color: 'text-green-400',
+      bg: 'bg-green-500/10',
+      title: '150+ AI Skills',
+      desc: 'Research, writing, coding, analysis — pre-built skills ready to use.',
+    },
+  ];
+
+  const features = isCloudWeb ? webFeatures : desktopFeatures;
+
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
@@ -255,7 +298,9 @@ function StepWelcome() {
         </div>
         <h2 className="text-2xl font-bold text-foreground">Welcome to AGI Workforce</h2>
         <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-          The multi-model AI desktop that beats Claude Desktop, ChatGPT, and Gemini.
+          {isCloudWeb
+            ? 'Your on-demand AI workforce — multi-model routing, agents, and 150+ skills.'
+            : 'The multi-model AI desktop that beats Claude Desktop, ChatGPT, and Gemini.'}
         </p>
       </div>
 
@@ -291,12 +336,17 @@ function StepWelcome() {
 function StepApiKeys() {
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
 
-  const providers = [
+  const allProviders = [
     { name: 'Anthropic (Claude)', required: false, label: 'Most capable models' },
     { name: 'OpenAI (GPT-5)', required: false, label: 'Best for coding' },
     { name: 'Google (Gemini)', required: false, label: 'Large context window' },
     { name: 'Ollama / LM Studio', required: false, label: 'Free — runs locally, no key needed' },
   ];
+
+  // Web is cloud-only — hide local-only providers
+  const providers = isCloudWeb
+    ? allProviders.filter((p) => !p.name.includes('Ollama'))
+    : allProviders;
 
   return (
     <div className="space-y-5">
@@ -308,7 +358,9 @@ function StepApiKeys() {
         </div>
         <h2 className="text-xl font-bold text-foreground">Connect your AI providers</h2>
         <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-          Add at least one API key to get started. You can also use local models for free.
+          {isCloudWeb
+            ? 'Your cloud plan includes all models. Optionally add your own keys.'
+            : 'Add at least one API key to get started. You can also use local models for free.'}
         </p>
       </div>
 
