@@ -37,6 +37,12 @@ export interface ChatRuntime {
   /** Rename a conversation. */
   renameConversation(conversationId: string, title: string): Promise<void>;
 
+  /** Archive or unarchive a conversation. */
+  archiveConversation?(conversationId: string, userId?: string, archived?: boolean): Promise<void>;
+
+  /** Update only the title of a conversation (alias used by some surfaces). */
+  updateConversationTitle?(conversationId: string, title: string): Promise<void>;
+
   /** Subscribe to streaming events. Returns an unsubscribe function. */
   onStream?(callback: StreamCallback): () => void;
 
