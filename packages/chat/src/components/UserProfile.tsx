@@ -35,7 +35,9 @@ function getAvatarColor(name: string): string {
 }
 
 function getPlanLabel(plan: string): string {
+  if (plan === 'hobby') return 'Hobby';
   if (plan === 'pro') return 'Pro';
+  if (plan === 'max') return 'Max';
   if (plan === 'enterprise') return 'Enterprise';
   return 'Free';
 }

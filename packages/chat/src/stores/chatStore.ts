@@ -14,6 +14,23 @@ const noopStorage: Storage = {
   key: () => null,
 };
 
+export type ActiveMode = 'code' | 'write' | 'research' | 'web' | 'skills' | null;
+
+const MODE_SYSTEM_PROMPTS: Record<NonNullable<ActiveMode>, string> = {
+  code: 'You are an expert coding assistant. Help the user write, debug, and explain code.',
+  write:
+    'You are a professional writing assistant. Help with drafting, editing, and improving text.',
+  research:
+    'You are a research assistant. Provide thorough, well-sourced analysis. Use web search when available.',
+  web: 'You are a research assistant. Provide thorough, well-sourced analysis. Use web search when available.',
+  skills: 'You are a skilled professional assistant with 140+ specialized skills.',
+};
+
+export function getSystemPromptForMode(mode: ActiveMode): string | null {
+  if (!mode) return null;
+  return MODE_SYSTEM_PROMPTS[mode];
+}
+
 interface ChatState {
   conversations: Conversation[];
   messages: Record<string, ChatMessage[]>;
@@ -24,6 +41,8 @@ interface ChatState {
   searchQuery: string;
   searchResults: Conversation[];
   draftContent: string;
+  activeMode: ActiveMode;
+  webSearchEnabled: boolean;
 
   // Actions
   setCurrentConversation: (id: string | null) => void;
@@ -43,6 +62,7 @@ interface ChatState {
   pinConversation: (id: string, pinned: boolean) => void;
   archiveConversation: (id: string) => void;
   getGroupedConversations: () => Record<string, Conversation[]>;
+  setActiveMode: (mode: ActiveMode) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -57,6 +77,8 @@ export const useChatStore = create<ChatState>()(
       searchQuery: '',
       searchResults: [],
       draftContent: '',
+      activeMode: null,
+      webSearchEnabled: false,
 
       setCurrentConversation: (id) => set({ currentConversationId: id }),
 
@@ -126,6 +148,12 @@ export const useChatStore = create<ChatState>()(
       setSearchQuery: (query) => set({ searchQuery: query }),
 
       setDraftContent: (content) => set({ draftContent: content }),
+
+      setActiveMode: (mode) =>
+        set({
+          activeMode: mode,
+          webSearchEnabled: mode === 'web',
+        }),
 
       pinConversation: (id, pinned) =>
         set((state) => {
