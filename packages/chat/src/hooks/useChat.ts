@@ -5,9 +5,11 @@ import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 
 export function useChat(runtime: ChatRuntime | null) {
-  const isStreaming = useChatStore((s) => s.isStreaming);
   const currentConversationId = useChatStore((s) => s.currentConversationId);
   const assistantMessageIdRef = useRef<string | null>(null);
+  // Use ref for isStreaming to avoid stale closures in useCallback
+  const isStreamingRef = useRef(false);
+  isStreamingRef.current = useChatStore((s) => s.isStreaming);
 
   // Register stream callback on runtime to receive assistant responses
   useEffect(() => {
@@ -61,7 +63,7 @@ export function useChat(runtime: ChatRuntime | null) {
 
   const sendMessage = useCallback(
     (content: string) => {
-      if (!runtime || !currentConversationId || isStreaming) return;
+      if (!runtime || !currentConversationId || isStreamingRef.current) return;
 
       const store = useChatStore.getState();
       const systemPrompt = getSystemPromptForMode(store.activeMode);
@@ -94,7 +96,7 @@ export function useChat(runtime: ChatRuntime | null) {
           }
         });
     },
-    [runtime, currentConversationId, isStreaming],
+    [runtime, currentConversationId],
   );
 
   const stopGeneration = useCallback(() => {
@@ -105,5 +107,6 @@ export function useChat(runtime: ChatRuntime | null) {
     }
   }, [runtime, currentConversationId]);
 
+  const isStreaming = useChatStore((s) => s.isStreaming);
   return { sendMessage, stopGeneration, isStreaming };
 }
