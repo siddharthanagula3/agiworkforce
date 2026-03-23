@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "cd ../.. && corepack enable && corepack prepare pnpm@9.15.3 --activate && bash apps/web/scripts/build-with-chat.sh",
   "devCommand": "pnpm dev",
-  "installCommand": "cd ../.. && corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm install",
+  "installCommand": "cd ../.. && corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm install --no-frozen-lockfile",
   "framework": "nextjs",
   "git": {
     "deploymentEnabled": {
