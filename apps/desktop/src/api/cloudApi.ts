@@ -74,23 +74,61 @@ interface UpdateConversationResponse {
 // ============================================================================
 
 /**
- * Retrieves the current Supabase session access token and returns the standard
- * auth + content-type headers required by the API gateway.
+ * Retrieves auth headers for API requests.
  *
- * @throws {Error} When no active session is found
+ * Desktop (Tauri): Uses supabaseAuth.getSession() for Bearer token.
+ * Web (cloud): Session is in httpOnly cookies — browser sends them
+ * automatically. We fetch a CSRF token for state-changing requests.
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  const session = supabaseAuth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error('No active session — user must be signed in to use Cloud API');
-  }
-
-  return {
-    Authorization: `Bearer ${session.access_token}`,
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
   };
+
+  // Desktop mode: add Bearer token from Tauri auth service
+  const session = supabaseAuth.getSession();
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+
+  // Web mode: extract token from Supabase base64 cookie + fetch CSRF
+  if (!session?.access_token && typeof document !== 'undefined') {
+    // Supabase stores session in a base64-encoded cookie
+    const sbCookie = document.cookie
+      .split(';')
+      .find((c) => c.trim().startsWith('sb-') && c.includes('auth-token'));
+    if (sbCookie) {
+      try {
+        const val = sbCookie.split('=').slice(1).join('=');
+        const b64 = val.replace('base64-', '');
+        const decoded = JSON.parse(atob(b64));
+        if (decoded?.access_token) {
+          headers['Authorization'] = `Bearer ${decoded.access_token}`;
+        }
+      } catch {
+        // Cookie decode failed — continue without auth
+      }
+    }
+
+    // Fetch CSRF token for state-changing requests
+    try {
+      const csrfResp = await fetch(`${CLOUD_API_BASE_URL}/api/csrf`, {
+        credentials: 'include',
+      });
+      if (csrfResp.ok) {
+        const csrfData = await csrfResp.json();
+        const csrfToken = csrfData.token ?? csrfData.csrfToken;
+        if (csrfToken) {
+          headers['X-CSRF-Token'] = csrfToken;
+        }
+      }
+    } catch {
+      // CSRF fetch failed — continue without it
+    }
+  }
+
+  return headers;
 }
 
 // ============================================================================
@@ -344,6 +382,7 @@ export async function sendCloudMessage(
       headers,
       body: JSON.stringify(openAiBody),
       signal,
+      credentials: 'include',
     });
   } catch (err) {
     // Network error or abort
