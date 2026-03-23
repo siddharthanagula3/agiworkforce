@@ -823,7 +823,10 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         updated_at: new Date().toISOString(),
       } as T;
 
-    case 'chat_update_conversation':
+    case 'chat_update_conversation_title':
+      return undefined as T;
+
+    case 'chat_archive_conversation':
       return undefined as T;
 
     case 'chat_create_message':

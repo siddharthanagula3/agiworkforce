@@ -173,7 +173,11 @@ export async function chatUpdateConversation(
   id: number,
   request: UpdateConversationRequest,
 ): Promise<void> {
-  return command<void>('chat_update_conversation', { id, request });
+  return command<void>('chat_update_conversation_title', {
+    conversationId: id,
+    title: request.title,
+    userId: request.user_id,
+  });
 }
 
 export async function chatDeleteConversation(id: number, userId: string): Promise<void> {

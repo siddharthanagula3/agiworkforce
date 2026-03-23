@@ -238,7 +238,7 @@ pub fn provider_name(provider: &Provider) -> &'static str {
         Provider::Mistral => "mistral",
         Provider::XAI => "xai",
         Provider::DeepSeek => "deepseek",
-        Provider::OllamaCloud => "ollama-cloud",
+        Provider::OllamaCloud => "ollama_cloud",
     }
 }
 
