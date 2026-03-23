@@ -82,6 +82,7 @@ const ChatCompletionRequestSchema = z.object({
     .optional(),
   seed: z.number().int().optional(),
   // Extended parameters for AGI Workforce
+  web_search: z.boolean().optional(),
   thinking_mode: z.boolean().optional(),
   thinking: z
     .object({
@@ -640,13 +641,33 @@ async function handleChatCompletions(request: NextRequest) {
     tool_call_id: msg.tool_call_id,
   }));
 
+  // Inject provider-specific web search tools when web_search is enabled
+  let resolvedTools = chatRequest.tools;
+  if (chatRequest.web_search) {
+    const providerLower = provider.toLowerCase();
+    if (providerLower === 'anthropic') {
+      // Anthropic: add the web_search tool
+      resolvedTools = [
+        ...(resolvedTools ?? []),
+        { type: 'web_search_20250305', name: 'web_search' },
+      ];
+    } else if (providerLower === 'google') {
+      // Google Gemini: add google_search tool
+      resolvedTools = [...(resolvedTools ?? []), { google_search: {} }];
+    } else if (providerLower === 'openai') {
+      // OpenAI: add web_search_preview tool for Responses API compatibility
+      resolvedTools = [...(resolvedTools ?? []), { type: 'web_search_preview' }];
+    }
+    // For other providers, web search is not supported — proceed without search tools
+  }
+
   const llmRequest = {
     model: chatRequest.model,
     messages: internalMessages,
     temperature: chatRequest.temperature,
     max_tokens: maxTokens,
     stream: chatRequest.stream,
-    tools: chatRequest.tools,
+    tools: resolvedTools,
     tool_choice: chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
     thinking: chatRequest.thinking,
