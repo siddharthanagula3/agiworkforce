@@ -5,6 +5,7 @@
  * Handles: Desktop Notifications, Sound Effects toggles.
  */
 import { Loader2 } from 'lucide-react';
+import { isCloudWeb } from '@/lib/tauri-mock';
 import { Label } from '../ui/Label';
 import { Switch } from '../ui/Switch';
 import type { NotificationSettings } from '../../hooks/useNotifications';
@@ -40,9 +41,10 @@ export function NotificationsSettings({
           )}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Desktop Notifications</Label>
+              <Label>{isCloudWeb ? 'Browser Notifications' : 'Desktop Notifications'}</Label>
               <p className="text-xs text-muted-foreground">
-                Show system notifications for agent completions and alerts
+                Show {isCloudWeb ? 'browser' : 'system'} notifications for agent completions and
+                alerts
               </p>
             </div>
             <Switch
