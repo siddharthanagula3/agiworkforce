@@ -1,4 +1,4 @@
-import { invoke, isTauri } from '@/lib/tauri-mock';
+import { invoke, isTauri, isCloudWeb } from '@/lib/tauri-mock';
 import { analyticsDeleteAllData } from '@/api/analytics';
 import { McpClient } from '@/api/mcp';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
@@ -118,6 +118,12 @@ const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType 
 
 // ── Tabs that manage their own saves (no deferred Save/Cancel footer) ─────────
 const SELF_SAVING_TABS = new Set<CanonicalTab>(['mcp-skills', 'connectors']);
+
+// Web chat is cloud-only — no BYOK, no local LLMs, no voice
+const WEB_HIDDEN_TABS = new Set<CanonicalTab>(['models-keys', 'voice']);
+const visibleNav = isCloudWeb
+  ? SETTINGS_NAV.filter((t) => !WEB_HIDDEN_TABS.has(t.key))
+  : SETTINGS_NAV;
 
 // ── BYOK providers ────────────────────────────────────────────────────────────
 const BYOK_PROVIDERS = [
@@ -438,46 +444,56 @@ function DataPrivacySection() {
 
         <div className="rounded-lg border border-border bg-card p-6">
           <h4 className="font-semibold mb-2">Data Storage</h4>
-          <p className="text-sm text-muted-foreground mb-2">
-            All your data is stored locally on your device at:
-          </p>
-          <code className="block rounded bg-secondary px-3 py-2 text-xs font-mono">
-            {typeof window !== 'undefined' && navigator.platform.startsWith('Win')
-              ? '%APPDATA%\\AGI Workforce\\'
-              : '~/.local/share/agi-workforce/'}
-          </code>
-          <p className="text-xs text-muted-foreground mt-2">
-            Integration credentials (GitHub tokens, MCP server keys, etc.) are stored securely in an
-            encrypted local database.
-          </p>
+          {isTauri ? (
+            <>
+              <p className="text-sm text-muted-foreground mb-2">
+                All your data is stored locally on your device at:
+              </p>
+              <code className="block rounded bg-secondary px-3 py-2 text-xs font-mono">
+                {typeof window !== 'undefined' && navigator.platform.startsWith('Win')
+                  ? '%APPDATA%\\AGI Workforce\\'
+                  : '~/.local/share/agi-workforce/'}
+              </code>
+              <p className="text-xs text-muted-foreground mt-2">
+                Integration credentials (GitHub tokens, MCP server keys, etc.) are stored securely
+                in an encrypted local database.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Stored securely in the cloud. Data is encrypted at rest and in transit.
+            </p>
+          )}
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-6 space-y-4">
-          <div>
-            <h4 className="font-semibold mb-1">Chat History Storage</h4>
-            <p className="text-sm text-muted-foreground">
-              Choose where your chat history is kept. Local storage never leaves your device. Cloud
-              sync backs up your conversations to your account.
-            </p>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <label htmlFor="chatStorageMode" className="text-sm font-medium">
-                Sync chat history to cloud
-              </label>
-              <p className="text-xs text-muted-foreground">
-                {chatStorageMode === 'cloud'
-                  ? 'Conversations are synced to your account after each message.'
-                  : 'Conversations stay on this device only (default).'}
+        {!isCloudWeb && (
+          <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+            <div>
+              <h4 className="font-semibold mb-1">Chat History Storage</h4>
+              <p className="text-sm text-muted-foreground">
+                Choose where your chat history is kept. Local storage never leaves your device.
+                Cloud sync backs up your conversations to your account.
               </p>
             </div>
-            <Switch
-              id="chatStorageMode"
-              checked={chatStorageMode === 'cloud'}
-              onCheckedChange={(checked) => setChatStorageMode(checked ? 'cloud' : 'local')}
-            />
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <label htmlFor="chatStorageMode" className="text-sm font-medium">
+                  Sync chat history to cloud
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  {chatStorageMode === 'cloud'
+                    ? 'Conversations are synced to your account after each message.'
+                    : 'Conversations stay on this device only (default).'}
+                </p>
+              </div>
+              <Switch
+                id="chatStorageMode"
+                checked={chatStorageMode === 'cloud'}
+                onCheckedChange={(checked) => setChatStorageMode(checked ? 'cloud' : 'local')}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-6">
           <div className="flex items-start gap-4">
@@ -876,7 +892,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   ]);
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [activeTab, setActiveTab] = useState<CanonicalTab>(() => resolveTab(initialTab));
+  const [activeTab, setActiveTab] = useState<CanonicalTab>(() => {
+    const resolved = resolveTab(initialTab);
+    return isCloudWeb && WEB_HIDDEN_TABS.has(resolved) ? 'general' : resolved;
+  });
 
   const openGovernanceWorkspace = useCallback(() => {
     onOpenChange(false);
@@ -888,7 +907,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
   useEffect(() => {
     if (open) {
-      setActiveTab(resolveTab(initialTab));
+      const resolved = resolveTab(initialTab);
+      setActiveTab(isCloudWeb && WEB_HIDDEN_TABS.has(resolved) ? 'general' : resolved);
     }
   }, [open, initialTab]);
 
@@ -1040,7 +1060,16 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       case 'general':
         return (
           <>
-            <AppModeSection />
+            {isCloudWeb ? (
+              <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
+                <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
+                <p className="text-sm text-blue-400">
+                  You are using AGI Workforce Cloud. Models and billing are managed by your plan.
+                </p>
+              </div>
+            ) : (
+              <AppModeSection />
+            )}
 
             {isTauri && (
               <div className="pt-6 border-t border-border">
@@ -1659,7 +1688,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               <DialogDescription className="text-xs">Configure your preferences</DialogDescription>
             </DialogHeader>
 
-            {SETTINGS_NAV.map((item) => (
+            {visibleNav.map((item) => (
               <button
                 key={item.key}
                 type="button"
