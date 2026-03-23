@@ -2296,7 +2296,6 @@ pub fn run() {
             crate::sys::commands::chat_delete_message,
             crate::sys::commands::chat_update_conversation_title,
             crate::sys::commands::chat::pending::chat_get_pending_messages,
-            crate::sys::commands::chat_update_conversation,
             crate::sys::commands::chat_update_message,
             crate::sys::commands::check_connectivity,
             crate::sys::commands::clear_model_capability_cache,
