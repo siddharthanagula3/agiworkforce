@@ -16,7 +16,83 @@ interface ModelState {
   getModelsByTier: () => Record<string, ModelInfo[]>;
 }
 
-const DEFAULT_MODEL_ID = 'claude-sonnet-4.6';
+const DEFAULT_MODEL_ID = 'claude-sonnet-4-6';
+
+/** Hobby-tier cloud models used when the host app hasn't populated the store. */
+export const CLOUD_FALLBACK_MODELS: ModelInfo[] = [
+  {
+    id: 'auto',
+    name: 'Auto (Smart Routing)',
+    provider: 'managed_cloud',
+    tier: 'standard',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 200000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
+    provider: 'anthropic',
+    tier: 'standard',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 200000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'claude-haiku-4-5',
+    name: 'Claude Haiku 4.5',
+    provider: 'anthropic',
+    tier: 'fast',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 200000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'gpt-5.4-mini',
+    name: 'GPT-5.4 Mini',
+    provider: 'openai',
+    tier: 'fast',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 128000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'gemini-3.1-flash',
+    name: 'Gemini 3.1 Flash',
+    provider: 'google',
+    tier: 'fast',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 1000000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'deepseek-r1',
+    name: 'DeepSeek R1',
+    provider: 'deepseek',
+    tier: 'standard',
+    supportsThinking: true,
+    supportsVision: false,
+    supportsTools: true,
+    contextWindow: 128000,
+    isLocal: false,
+    isByok: false,
+  },
+];
 
 export const useModelStore = create<ModelState>()(
   persist(
@@ -40,7 +116,11 @@ export const useModelStore = create<ModelState>()(
 
       getSelectedModel: () => {
         const { models, selectedModelId } = get();
-        return models.find((m) => m.id === selectedModelId);
+        // Check store models first, then fallback for web mode
+        return (
+          models.find((m) => m.id === selectedModelId) ??
+          CLOUD_FALLBACK_MODELS.find((m) => m.id === selectedModelId)
+        );
       },
 
       getModelsByTier: () => {
