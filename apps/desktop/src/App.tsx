@@ -530,83 +530,49 @@ const DesktopShell = () => {
           // Cloud API also failed — continue to hardcoded fallback
         }
 
-        // Hardcoded fallback models so the UI is never empty
+        // Build fallback models from models.json catalog (single source of truth)
         try {
           const { useChatModelStore } = await import('@agiworkforce/chat');
-          const fallbackModels: import('@agiworkforce/chat').ModelInfo[] = [
+          const catalog = await import('./constants/models.json');
+          const providers = catalog.providers as Record<
+            string,
+            { label?: string; defaultModel?: string }
+          >;
+          const models = catalog.models as Record<
+            string,
             {
-              id: 'claude-sonnet-4-6',
-              name: 'Claude Sonnet 4.6',
-              provider: 'anthropic',
-              tier: 'standard',
-              supportsThinking: true,
-              supportsVision: true,
-              supportsTools: true,
-              contextWindow: 200000,
-              isLocal: false,
-              isByok: true,
-            },
-            {
-              id: 'claude-haiku-4-5',
-              name: 'Claude Haiku 4.5',
-              provider: 'anthropic',
-              tier: 'fast',
-              supportsThinking: false,
-              supportsVision: true,
-              supportsTools: true,
-              contextWindow: 200000,
-              isLocal: false,
-              isByok: true,
-            },
-            {
-              id: 'gpt-5.4',
-              name: 'GPT-5.4',
-              provider: 'openai',
-              tier: 'standard',
-              supportsThinking: true,
-              supportsVision: true,
-              supportsTools: true,
-              contextWindow: 256000,
-              isLocal: false,
-              isByok: true,
-            },
-            {
-              id: 'gemini-3.1-pro-preview',
-              name: 'Gemini 3.1 Pro',
-              provider: 'google',
-              tier: 'standard',
-              supportsThinking: true,
-              supportsVision: true,
-              supportsTools: true,
-              contextWindow: 2000000,
-              isLocal: false,
-              isByok: true,
-            },
-            {
-              id: 'grok-4',
-              name: 'Grok 4',
-              provider: 'xai',
-              tier: 'standard',
-              supportsThinking: true,
-              supportsVision: true,
-              supportsTools: true,
-              contextWindow: 131072,
-              isLocal: false,
-              isByok: true,
-            },
-            {
-              id: 'llama4-maverick',
-              name: 'Llama 4 Maverick',
-              provider: 'ollama',
-              tier: 'standard',
-              supportsThinking: false,
-              supportsVision: true,
-              supportsTools: true,
-              contextWindow: 1000000,
-              isLocal: true,
-              isByok: false,
-            },
-          ];
+              id: string;
+              name: string;
+              contextWindow?: number;
+              capabilities?: Record<string, boolean>;
+              speed?: string;
+            }
+          >;
+          const fallbackProviders = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'ollama'];
+          const fallbackModels: import('@agiworkforce/chat').ModelInfo[] =
+            fallbackProviders.flatMap((p) => {
+              const prov = providers[p];
+              if (!prov?.defaultModel) return [];
+              const m = models[prov.defaultModel];
+              if (!m) return [];
+              return [
+                {
+                  id: m.id,
+                  name: m.name,
+                  provider: p as import('@agiworkforce/chat').ModelInfo['provider'],
+                  tier:
+                    m.speed === 'very-fast' || m.speed === 'fast'
+                      ? ('fast' as const)
+                      : ('standard' as const),
+                  supportsThinking: m.capabilities?.thinking ?? false,
+                  supportsVision: m.capabilities?.vision ?? false,
+                  supportsTools: m.capabilities?.tools ?? false,
+                  contextWindow: m.contextWindow ?? 128000,
+                  isLocal: p === 'ollama',
+                  isByok: p !== 'ollama',
+                },
+              ];
+            });
           useChatModelStore.getState().setModels(fallbackModels);
           toast.error('Could not load models from backend. Using defaults.');
         } catch {
