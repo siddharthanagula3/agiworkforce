@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useSettingsStore } from '../stores/settingsStore';
-import { useUIStore } from '../stores/uiStore';
 import { Tooltip } from './ui/Tooltip';
 
 interface UserProfileProps {
@@ -48,7 +47,6 @@ export function UserProfile({ collapsed }: UserProfileProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const profile = useSettingsStore((s) => s.profile);
-  const openSettings = useUIStore((s) => s.openSettings);
 
   const initials = getInitials(profile.fullName || 'User');
   const avatarColor = getAvatarColor(profile.fullName || 'user');
@@ -162,7 +160,11 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               label="Settings"
               shortcut="⌘,"
               onClick={() => {
-                openSettings('general');
+                window.dispatchEvent(
+                  new CustomEvent('chat:action', {
+                    detail: { type: 'open-settings', tab: 'general' },
+                  }),
+                );
                 setOpen(false);
               }}
             />
@@ -173,7 +175,11 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               label="Language"
               suffix={<ChevronRight size={12} className="text-[var(--chat-text-muted)]" />}
               onClick={() => {
-                openSettings('general');
+                window.dispatchEvent(
+                  new CustomEvent('chat:action', {
+                    detail: { type: 'open-settings', tab: 'general' },
+                  }),
+                );
                 setOpen(false);
               }}
             />
@@ -195,7 +201,11 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               icon={<CreditCard size={13} />}
               label="View all plans"
               onClick={() => {
-                openSettings('billing');
+                window.dispatchEvent(
+                  new CustomEvent('chat:action', {
+                    detail: { type: 'open-settings', tab: 'account' },
+                  }),
+                );
                 setOpen(false);
               }}
             />
@@ -215,7 +225,11 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               icon={<Keyboard size={13} />}
               label="Keyboard shortcuts"
               onClick={() => {
-                openSettings('general');
+                window.dispatchEvent(
+                  new CustomEvent('chat:action', {
+                    detail: { type: 'open-settings', tab: 'general' },
+                  }),
+                );
                 setOpen(false);
               }}
             />
