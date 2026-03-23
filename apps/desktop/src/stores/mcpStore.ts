@@ -14,6 +14,7 @@
  */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
+import { isTauri } from '../lib/tauri-mock';
 import { McpClient } from '../api/mcp';
 import type { ConnectorManifest } from '../api/mcp';
 import type {
@@ -193,6 +194,7 @@ export const useMcpStore = create<McpState>()(
       searchQuery: '',
 
       initialize: async () => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/initialize/start');
         try {
           await McpClient.initialize();
@@ -220,6 +222,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshServers: async () => {
+        if (!isTauri) return;
         try {
           const servers = await McpClient.listServers();
           set({ servers, error: null }, undefined, 'mcp/refreshServers');
@@ -233,6 +236,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshTools: async () => {
+        if (!isTauri) return;
         try {
           const tools = await McpClient.listTools();
           set({ tools, error: null }, undefined, 'mcp/refreshTools');
@@ -246,6 +250,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshStats: async () => {
+        if (!isTauri) return;
         try {
           const stats = await McpClient.getStats();
           set({ stats, error: null }, undefined, 'mcp/refreshStats');
@@ -259,6 +264,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshHealth: async () => {
+        if (!isTauri) return;
         try {
           const health = await McpClient.getHealth();
           set({ health, error: null }, undefined, 'mcp/refreshHealth');
@@ -272,6 +278,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       checkServerHealth: async (name: string) => {
+        if (!isTauri) return;
         try {
           const health = await McpClient.checkServerHealth(name);
           get().upsertServerHealth(health);
@@ -288,6 +295,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshExecutionHistory: async (limit = 20) => {
+        if (!isTauri) return;
         try {
           const executionHistory = await McpClient.getExecutionHistory(limit);
           set({ executionHistory, error: null }, undefined, 'mcp/refreshExecutionHistory');
@@ -303,6 +311,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshToolExecutionStats: async () => {
+        if (!isTauri) return;
         try {
           const toolExecutionStats = await McpClient.getToolExecutionStats();
           set({ toolExecutionStats, error: null }, undefined, 'mcp/refreshToolExecutionStats');
@@ -321,6 +330,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshRuntimeTelemetry: async () => {
+        if (!isTauri) return;
         await Promise.all([
           get().refreshStats(),
           get().refreshHealth(),
@@ -348,6 +358,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       connectServer: async (name: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/connectServer/start');
         try {
           await McpClient.connect(name);
@@ -368,6 +379,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       disconnectServer: async (name: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/disconnectServer/start');
         try {
           await McpClient.disconnect(name);
@@ -388,6 +400,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       enableServer: async (name: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/enableServer/start');
         try {
           await McpClient.enableServer(name);
@@ -407,6 +420,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       disableServer: async (name: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/disableServer/start');
         try {
           await McpClient.disableServer(name);
@@ -426,6 +440,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       loadConfig: async () => {
+        if (!isTauri) return;
         try {
           const [config, configLocation] = await Promise.all([
             McpClient.getConfig(),
@@ -442,6 +457,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       updateConfig: async (config: McpServersConfig) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/updateConfig/start');
         try {
           await McpClient.updateConfig(config);
@@ -461,6 +477,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       storeCredential: async (serverName: string, key: string, value: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/storeCredential/start');
         try {
           await McpClient.storeCredential(serverName, key, value);
@@ -478,6 +495,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       setCredential: async (serverName: string, key: string, value: string) => {
+        if (!isTauri) return;
         if (!serverName.trim() || !key.trim()) {
           set(
             { error: 'Server name and key are required', isLoading: false },
@@ -503,6 +521,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       deleteCredential: async (serverName: string, key: string) => {
+        if (!isTauri) return;
         if (!serverName.trim() || !key.trim()) {
           set(
             { error: 'Server name and key are required', isLoading: false },
@@ -528,6 +547,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshConfigLocation: async () => {
+        if (!isTauri) return;
         try {
           const configLocation = await McpClient.getConfigLocation();
           set({ configLocation, error: null }, undefined, 'mcp/refreshConfigLocation');
@@ -541,6 +561,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       searchTools: async (query: string) => {
+        if (!isTauri) return;
         set({ searchQuery: query }, undefined, 'mcp/searchTools/start');
         if (!query.trim()) {
           await get().refreshTools();
@@ -561,6 +582,7 @@ export const useMcpStore = create<McpState>()(
       // --- Tool execution ---
 
       callTool: async (toolId: string, args: Record<string, unknown>) => {
+        if (!isTauri) return undefined;
         try {
           const result = await McpClient.callTool(toolId, args);
           await get().refreshRuntimeTelemetry();
@@ -576,6 +598,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshToolSchemas: async () => {
+        if (!isTauri) return;
         try {
           const toolSchemas = await McpClient.getToolSchemas();
           set({ toolSchemas, error: null }, undefined, 'mcp/refreshToolSchemas');
@@ -591,6 +614,7 @@ export const useMcpStore = create<McpState>()(
       // --- Registry/Install ---
 
       refreshRegistry: async () => {
+        if (!isTauri) return;
         try {
           const registry = await McpClient.getRegistry();
           set({ registry, error: null }, undefined, 'mcp/refreshRegistry');
@@ -604,6 +628,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       installServer: async (serverId: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/installServer/start');
         try {
           await McpClient.installServer(serverId);
@@ -626,6 +651,7 @@ export const useMcpStore = create<McpState>()(
       // --- Server logs ---
 
       getServerLogs: async (serverName: string, lines?: number) => {
+        if (!isTauri) return [];
         try {
           return await McpClient.getServerLogs(serverName, lines);
         } catch (error) {
@@ -644,6 +670,7 @@ export const useMcpStore = create<McpState>()(
       // --- OAuth ---
 
       oauthStart: async (provider: McpOAuthProvider) => {
+        if (!isTauri) throw new Error('OAuth not available outside Tauri');
         try {
           return await McpClient.oauthStart(provider);
         } catch (error) {
@@ -660,6 +687,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       oauthCallback: async (provider: McpOAuthProvider, code: string, callbackState: string) => {
+        if (!isTauri) throw new Error('OAuth not available outside Tauri');
         try {
           return await McpClient.oauthCallback(provider, code, callbackState);
         } catch (error) {
@@ -678,6 +706,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       oauthStatus: async (provider: McpOAuthProvider) => {
+        if (!isTauri) return { connected: false, userInfo: null, expiresAt: null };
         try {
           return await McpClient.oauthStatus(provider);
         } catch (error) {
@@ -687,6 +716,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       oauthDisconnect: async (provider: McpOAuthProvider) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/oauthDisconnect/start');
         try {
           await McpClient.oauthDisconnect(provider);
@@ -708,6 +738,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       oauthRefresh: async (provider: McpOAuthProvider) => {
+        if (!isTauri) throw new Error('OAuth not available outside Tauri');
         try {
           return await McpClient.oauthRefresh(provider);
         } catch (error) {
@@ -728,6 +759,7 @@ export const useMcpStore = create<McpState>()(
       // --- Extensions ---
 
       refreshExtensions: async () => {
+        if (!isTauri) return;
         try {
           const extensions = await McpClient.listExtensions();
           set({ extensions, error: null }, undefined, 'mcp/refreshExtensions');
@@ -741,6 +773,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       installExtension: async (filePath: string) => {
+        if (!isTauri) throw new Error('Extensions not available outside Tauri');
         set({ isLoading: true, error: null }, undefined, 'mcp/installExtension/start');
         try {
           const info = await McpClient.installExtension(filePath);
@@ -761,6 +794,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       uninstallExtension: async (extensionId: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/uninstallExtension/start');
         try {
           await McpClient.uninstallExtension(extensionId);
@@ -782,6 +816,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       enableExtension: async (extensionId: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/enableExtension/start');
         try {
           await McpClient.enableExtension(extensionId);
@@ -803,6 +838,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       disableExtension: async (extensionId: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/disableExtension/start');
         try {
           await McpClient.disableExtension(extensionId);
@@ -824,6 +860,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       validateExtensionPackage: async (filePath: string) => {
+        if (!isTauri) throw new Error('Extensions not available outside Tauri');
         try {
           return await McpClient.validateExtensionPackage(filePath);
         } catch (error) {
@@ -837,6 +874,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       startAllExtensions: async () => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/startAllExtensions/start');
         try {
           await McpClient.startAllExtensions();
@@ -855,6 +893,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       stopAllExtensions: async () => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/stopAllExtensions/start');
         try {
           await McpClient.stopAllExtensions();
@@ -875,6 +914,7 @@ export const useMcpStore = create<McpState>()(
       // --- Connectors ---
 
       refreshConnectedProviders: async () => {
+        if (!isTauri) return;
         try {
           const connectedProviders = await McpClient.listConnectedProviders();
           set({ connectedProviders, error: null }, undefined, 'mcp/refreshConnectedProviders');
@@ -890,6 +930,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       connectConnector: async (connectorId: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/connectConnector/start');
         try {
           await McpClient.connectConnector(connectorId);
@@ -913,6 +954,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshConnectorManifests: async () => {
+        if (!isTauri) return;
         try {
           const connectorManifests = await McpClient.getConnectorManifests();
           set({ connectorManifests, error: null }, undefined, 'mcp/refreshConnectorManifests');
@@ -928,6 +970,7 @@ export const useMcpStore = create<McpState>()(
       // --- Runtime server management ---
 
       getRuntimeServerConfig: async () => {
+        if (!isTauri) throw new Error('Runtime server not available outside Tauri');
         try {
           const runtimeServerConfig = await McpClient.getRuntimeServerConfig();
           set({ runtimeServerConfig, error: null }, undefined, 'mcp/getRuntimeServerConfig');
@@ -945,6 +988,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       startRuntimeServer: async () => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/startRuntimeServer/start');
         try {
           await McpClient.startRuntimeServer();
@@ -966,6 +1010,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       stopRuntimeServer: async () => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/stopRuntimeServer/start');
         try {
           await McpClient.stopRuntimeServer();
@@ -987,6 +1032,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       updateRuntimeServerConfig: async (port?: number, enabledTools?: string[]) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/updateRuntimeServerConfig/start');
         try {
           await McpClient.updateRuntimeServerConfig(port, enabledTools);
@@ -1006,6 +1052,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshRuntimeServerStatus: async () => {
+        if (!isTauri) return;
         try {
           const runtimeServerStatus = await McpClient.getRuntimeServerStatus();
           set({ runtimeServerStatus, error: null }, undefined, 'mcp/refreshRuntimeServerStatus');
@@ -1021,6 +1068,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       refreshRuntimeServerTools: async () => {
+        if (!isTauri) return;
         try {
           const result = await McpClient.listRuntimeServerTools();
           set(
@@ -1042,6 +1090,7 @@ export const useMcpStore = create<McpState>()(
       // --- Filesystem directories ---
 
       updateFilesystemDirectories: async (directories: string[]) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/updateFilesystemDirectories/start');
         try {
           await McpClient.updateFilesystemDirectories(directories);
@@ -1063,6 +1112,7 @@ export const useMcpStore = create<McpState>()(
       // --- API key management ---
 
       saveApiKey: async (provider: string, key: string) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/saveApiKey/start');
         try {
           await McpClient.saveApiKey(provider, key);
@@ -1087,6 +1137,7 @@ export const useMcpStore = create<McpState>()(
         clientId: string,
         clientSecret: string,
       ) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/oauthSetCredentials/start');
         try {
           await McpClient.oauthSetCredentials(provider, clientId, clientSecret);
@@ -1107,6 +1158,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       oauthGetAllStatuses: async () => {
+        if (!isTauri) throw new Error('OAuth not available outside Tauri');
         try {
           const statuses = await McpClient.oauthGetAllStatuses();
           set({ error: null }, undefined, 'mcp/oauthGetAllStatuses');
@@ -1124,6 +1176,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       oauthNeedsRefresh: async (provider: McpOAuthProvider) => {
+        if (!isTauri) return false;
         try {
           return await McpClient.oauthNeedsRefresh(provider);
         } catch (error) {
@@ -1139,6 +1192,7 @@ export const useMcpStore = create<McpState>()(
       // --- Extension detail operations ---
 
       getExtension: async (extensionId: string) => {
+        if (!isTauri) throw new Error('Extensions not available outside Tauri');
         try {
           const extension = await McpClient.getExtension(extensionId);
           set({ error: null }, undefined, 'mcp/getExtension');
@@ -1157,6 +1211,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       selectExtensionPackage: async () => {
+        if (!isTauri) return null;
         try {
           return await McpClient.selectExtensionPackage();
         } catch (error) {
@@ -1173,6 +1228,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       listExtensionsByStatus: async (status: string) => {
+        if (!isTauri) return [];
         try {
           return await McpClient.listExtensionsByStatus(status);
         } catch (error) {
@@ -1191,6 +1247,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       getExtensionsDirectory: async () => {
+        if (!isTauri) throw new Error('Extensions not available outside Tauri');
         try {
           return await McpClient.getExtensionsDirectory();
         } catch (error) {
@@ -1206,6 +1263,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       getExtensionConfig: async (extensionId: string) => {
+        if (!isTauri) throw new Error('Extensions not available outside Tauri');
         try {
           return await McpClient.getExtensionConfig(extensionId);
         } catch (error) {
@@ -1224,6 +1282,7 @@ export const useMcpStore = create<McpState>()(
       },
 
       setExtensionConfig: async (extensionId: string, config: Record<string, unknown>) => {
+        if (!isTauri) return;
         set({ isLoading: true, error: null }, undefined, 'mcp/setExtensionConfig/start');
         try {
           await McpClient.setExtensionConfig(extensionId, config);

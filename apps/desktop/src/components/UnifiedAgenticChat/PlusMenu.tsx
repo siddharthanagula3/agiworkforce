@@ -74,6 +74,10 @@ export function PlusMenu({
   const handleSelectFolder = useCallback(async () => {
     setIsOpen(false);
     setShowStashPanel(false);
+    if (!isTauri) {
+      toast.info('Folder selection requires the desktop app');
+      return;
+    }
     try {
       const selected = await open({
         directory: true,

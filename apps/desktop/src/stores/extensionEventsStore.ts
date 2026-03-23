@@ -87,6 +87,7 @@ export const useExtensionEventsStore = create<ExtensionEventsStore>((set) => ({
   },
 
   stopAgent: async () => {
+    if (!isTauri) return;
     try {
       await invoke('agent_stop');
       set((state) => ({
