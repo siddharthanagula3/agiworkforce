@@ -79,7 +79,7 @@ export function Sidebar() {
       id: 'customize',
       icon: <Palette size={16} />,
       label: 'Customize',
-      action: () => openSettings('capabilities'),
+      action: () => openSettings('customize'),
     },
     {
       id: 'chats',
@@ -91,19 +91,19 @@ export function Sidebar() {
       id: 'projects',
       icon: <FolderOpen size={16} />,
       label: 'Projects',
-      action: () => openSettings('general'),
+      action: () => openSettings('account'),
     },
     {
       id: 'skills',
       icon: <Zap size={16} />,
       label: 'Skills',
-      action: () => openSettings('capabilities'),
+      action: () => openSettings('mcp-skills'),
     },
     {
       id: 'connectors',
       icon: <Plug size={16} />,
       label: 'Connectors',
-      action: () => openSettings('connectors'),
+      action: () => openSettings('apps-integrations'),
     },
   ];
 
@@ -222,6 +222,12 @@ export function Sidebar() {
       {/* Recents section */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="px-2 pb-2">
+          {!collapsed && orderedGroups.length === 0 && (
+            <p className="px-2 py-4 text-center text-xs text-[var(--chat-text-muted)]">
+              No conversations yet
+            </p>
+          )}
+
           {!collapsed && orderedGroups.length > 0 && (
             <>
               {orderedGroups.map((group) => (
