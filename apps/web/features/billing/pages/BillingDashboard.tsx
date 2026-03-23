@@ -634,7 +634,10 @@ const BillingPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Used</span>
                   <span className="text-2xl font-bold">
-                    {(billing?.usage?.totalTokens ?? 0).toLocaleString() || 0}
+                    {(Number.isFinite(billing?.usage?.totalTokens)
+                      ? billing!.usage.totalTokens
+                      : 0
+                    ).toLocaleString()}
                   </span>
                 </div>
                 <Progress

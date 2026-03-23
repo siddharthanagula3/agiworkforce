@@ -395,7 +395,10 @@ export function useBillingData(): UseQueryResult<BillingInfo | null, Error> {
       }));
 
       const totalCost = updatedLlmUsage.reduce((sum, llm) => sum + llm.cost, 0);
-      const totalUsed = totalLimit - tokenBalance.currentBalance;
+      const balance = Number.isFinite(tokenBalance.currentBalance)
+        ? tokenBalance.currentBalance
+        : 0;
+      const totalUsed = totalLimit - balance;
 
       // Calculate billing period dates
       const now = new Date();
@@ -525,8 +528,26 @@ export function useTokenAnalytics(
         .order('created_at', { ascending: false });
 
       if (error) {
-        logger.error('[TokenAnalytics] Failed to load data:', error);
-        return { sessions: [], stats: null, dailyUsage: [] };
+        logger.error(
+          '[TokenAnalytics] Failed to load data:',
+          error.message ?? JSON.stringify(error),
+        );
+        return {
+          sessions: [],
+          stats: {
+            totalTokens: 0,
+            totalCost: 0,
+            avgTokensPerSession: 0,
+            sessionsCount: 0,
+            todayTokens: 0,
+            todayCost: 0,
+            weekTokens: 0,
+            weekCost: 0,
+            monthTokens: 0,
+            monthCost: 0,
+          },
+          dailyUsage: [],
+        };
       }
 
       interface SessionWithTokens {
