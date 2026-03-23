@@ -33,6 +33,8 @@ export interface ChatMessage {
   thinking?: string;
   citations?: Citation[];
   toolCalls?: ToolCall[];
+  webSearchResults?: WebSearchResult[];
+  thinkingBlock?: ThinkingBlock;
   attachments?: Attachment[];
   isStreaming?: boolean;
   error?: string;

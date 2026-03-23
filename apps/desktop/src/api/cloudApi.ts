@@ -361,6 +361,7 @@ export async function sendCloudMessage(
   onEvent?: (payload: Record<string, unknown>) => void,
   webSearch?: boolean,
   messageHistory?: Array<{ role: string; content: string }>,
+  thinkingEnabled?: boolean,
 ): Promise<void> {
   let headers: Record<string, string>;
 
@@ -383,6 +384,7 @@ export async function sendCloudMessage(
     messages: chatMessages,
     stream: true,
     ...(webSearch ? { web_search: true } : {}),
+    ...(thinkingEnabled ? { thinking_mode: true } : {}),
   };
 
   let res: Response;
