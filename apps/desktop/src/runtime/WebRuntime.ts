@@ -113,6 +113,7 @@ export class WebRuntime implements ChatRuntime {
         undefined, // onEvent
         options?.webSearch,
         options?.messageHistory,
+        options?.thinkingEnabled,
       );
     } catch (err) {
       // Only emit error if it wasn't an intentional abort
