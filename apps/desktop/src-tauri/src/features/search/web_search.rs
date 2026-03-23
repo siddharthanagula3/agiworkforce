@@ -469,9 +469,14 @@ mod tests {
 
     #[tokio::test]
     async fn web_search_rejects_unsupported_image_search() {
-        let error = execute_web_search(None, "cats".to_string(), Some(5), Some("images".to_string()))
-            .await
-            .expect_err("images search should fail fast");
+        let error = execute_web_search(
+            None,
+            "cats".to_string(),
+            Some(5),
+            Some("images".to_string()),
+        )
+        .await
+        .expect_err("images search should fail fast");
 
         assert!(error.contains("Image search is not available"));
     }

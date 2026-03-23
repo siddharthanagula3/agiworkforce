@@ -1,22 +1,14 @@
-import { cn } from '../lib/utils';
-
-type DisclaimerVariant = 'default' | 'citations' | 'code';
-
-const DISCLAIMER_TEXT: Record<DisclaimerVariant, string> = {
-  default: 'AI can make mistakes. Please double-check responses.',
-  citations: 'AI can make mistakes. Please double-check cited sources.',
-  code: 'AI can make mistakes. Please review generated code.',
-};
-
 interface DisclaimerProps {
-  variant?: DisclaimerVariant;
-  className?: string;
+  variant?: 'default' | 'citations' | 'code';
 }
 
-export function Disclaimer({ variant = 'default', className }: DisclaimerProps) {
-  return (
-    <p className={cn('pb-2 pt-1 text-center text-[12px] text-[var(--chat-text-muted)]', className)}>
-      {DISCLAIMER_TEXT[variant]}
-    </p>
-  );
+export function Disclaimer({ variant = 'default' }: DisclaimerProps) {
+  const text =
+    variant === 'citations'
+      ? 'Sources provided. Verify important information.'
+      : variant === 'code'
+        ? 'Review code before running. AI can make mistakes.'
+        : 'AI can make mistakes. Verify important information.';
+
+  return <p className="text-center text-[10px] text-[var(--chat-text-muted)] pt-1 pb-1">{text}</p>;
 }

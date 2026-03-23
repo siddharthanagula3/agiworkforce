@@ -8,16 +8,21 @@
  *
  * Wired to settingsStore selectors/setters added in Wave 1.
  */
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
+import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Slider } from '../ui/Slider';
+import { Switch } from '../ui/Switch';
 import {
   useSettingsStore,
   type ApprovalTimeoutPolicy,
+  type TerminalSandboxBackend,
+  type TerminalSandboxPolicy,
   selectApprovalTimeoutSeconds,
   selectApprovalTimeoutPolicy,
   selectStreamInactivityTimeoutSeconds,
+  selectTerminalSandbox,
 } from '../../stores/settingsStore';
 
 interface AgentExecutionSettingsProps {
@@ -28,11 +33,19 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
   const approvalTimeoutSeconds = useSettingsStore(selectApprovalTimeoutSeconds);
   const approvalTimeoutPolicy = useSettingsStore(selectApprovalTimeoutPolicy);
   const streamInactivityTimeoutSeconds = useSettingsStore(selectStreamInactivityTimeoutSeconds);
+  const terminalSandbox = useSettingsStore(selectTerminalSandbox);
 
   const setApprovalTimeoutSeconds = useSettingsStore((s) => s.setApprovalTimeoutSeconds);
   const setApprovalTimeoutPolicy = useSettingsStore((s) => s.setApprovalTimeoutPolicy);
   const setStreamInactivityTimeoutSeconds = useSettingsStore(
     (s) => s.setStreamInactivityTimeoutSeconds,
+  );
+  const setTerminalSandboxEnabled = useSettingsStore((s) => s.setTerminalSandboxEnabled);
+  const setTerminalSandboxBackend = useSettingsStore((s) => s.setTerminalSandboxBackend);
+  const setTerminalSandboxPolicy = useSettingsStore((s) => s.setTerminalSandboxPolicy);
+  const setTerminalSandboxExecutable = useSettingsStore((s) => s.setTerminalSandboxExecutable);
+  const setTerminalSandboxAllowedDomains = useSettingsStore(
+    (s) => s.setTerminalSandboxAllowedDomains,
   );
 
   const handleApprovalTimeoutChange = useCallback(
@@ -65,6 +78,46 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
     [setStreamInactivityTimeoutSeconds, onSettingsChange],
   );
 
+  const handleTerminalSandboxEnabledChange = useCallback(
+    (enabled: boolean) => {
+      setTerminalSandboxEnabled(enabled);
+      onSettingsChange?.();
+    },
+    [onSettingsChange, setTerminalSandboxEnabled],
+  );
+
+  const handleTerminalSandboxBackendChange = useCallback(
+    (value: string) => {
+      setTerminalSandboxBackend(value as TerminalSandboxBackend);
+      onSettingsChange?.();
+    },
+    [onSettingsChange, setTerminalSandboxBackend],
+  );
+
+  const handleTerminalSandboxPolicyChange = useCallback(
+    (value: string) => {
+      setTerminalSandboxPolicy(value as TerminalSandboxPolicy);
+      onSettingsChange?.();
+    },
+    [onSettingsChange, setTerminalSandboxPolicy],
+  );
+
+  const handleTerminalSandboxExecutableChange = useCallback(
+    (value: string) => {
+      setTerminalSandboxExecutable(value);
+      onSettingsChange?.();
+    },
+    [onSettingsChange, setTerminalSandboxExecutable],
+  );
+
+  const handleTerminalSandboxAllowedDomainsChange = useCallback(
+    (value: string) => {
+      setTerminalSandboxAllowedDomains(value.split(','));
+      onSettingsChange?.();
+    },
+    [onSettingsChange, setTerminalSandboxAllowedDomains],
+  );
+
   const formatApprovalSeconds = (s: number) => {
     if (s >= 60) {
       const m = Math.floor(s / 60);
@@ -79,6 +132,19 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
     'auto-approve': 'Automatically approve when time runs out — use with caution',
     pause: 'Pause the agent and wait for you to return',
   };
+
+  const SANDBOX_POLICY_DESCRIPTIONS: Record<TerminalSandboxPolicy, string> = {
+    'danger-full-access': 'No OS-level process sandbox. Commands run with the app’s normal access.',
+    'read-only':
+      'Workspace becomes read-only. Network stays blocked unless you explicitly allow domains.',
+    'workspace-write':
+      'Matches CLI-style workspace write access: the current workspace can write, and network is allowlisted.',
+  };
+
+  const allowedDomainsText = useMemo(
+    () => terminalSandbox.allowedDomains.join(', '),
+    [terminalSandbox.allowedDomains],
+  );
 
   return (
     <div className="space-y-6">
@@ -192,6 +258,104 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
             responses. The default of 30s works well for most models.
           </p>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <h4 className="font-semibold text-sm">Terminal Sandbox</h4>
+            <p className="text-xs text-muted-foreground">
+              Wrap terminal commands in an OS-level sandbox. This follows the CLI model and can use
+              `srt` for workspace-write or read-only execution.
+            </p>
+          </div>
+          <Switch
+            checked={terminalSandbox.enabled}
+            onCheckedChange={handleTerminalSandboxEnabledChange}
+            aria-label="Enable terminal sandbox"
+          />
+        </div>
+
+        {terminalSandbox.enabled ? (
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="terminalSandboxBackend">Runtime backend</Label>
+                <Select
+                  value={terminalSandbox.backend}
+                  onValueChange={handleTerminalSandboxBackendChange}
+                >
+                  <SelectTrigger id="terminalSandboxBackend">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="srt">Anthropic Sandbox Runtime (`srt`)</SelectItem>
+                    <SelectItem value="none">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="terminalSandboxPolicy">Access policy</Label>
+                <Select
+                  value={terminalSandbox.policy}
+                  onValueChange={handleTerminalSandboxPolicyChange}
+                >
+                  <SelectTrigger id="terminalSandboxPolicy">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="workspace-write">Workspace write</SelectItem>
+                    <SelectItem value="read-only">Read-only</SelectItem>
+                    <SelectItem value="danger-full-access">Danger full access</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="terminalSandboxExecutable">Runtime executable</Label>
+              <Input
+                id="terminalSandboxExecutable"
+                value={terminalSandbox.executable}
+                onChange={(event) => handleTerminalSandboxExecutableChange(event.target.value)}
+                placeholder="srt"
+              />
+              <p className="text-xs text-muted-foreground">
+                Use `srt` when it is on `PATH`, or provide an absolute path to the binary.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="terminalSandboxDomains">Allowed network domains</Label>
+              <Input
+                id="terminalSandboxDomains"
+                value={allowedDomainsText}
+                onChange={(event) => handleTerminalSandboxAllowedDomainsChange(event.target.value)}
+                placeholder="github.com, api.github.com"
+              />
+              <p className="text-xs text-muted-foreground">
+                Comma-separated allowlist. Leave empty to block all network access inside the
+                sandbox.
+              </p>
+            </div>
+
+            <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              {SANDBOX_POLICY_DESCRIPTIONS[terminalSandbox.policy]}
+            </div>
+
+            {terminalSandbox.backend === 'srt' && terminalSandbox.allowedDomains.length === 0 && (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                Network is currently blocked for sandboxed commands because no domains are
+                allowlisted.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            Terminal commands run without an OS-level sandbox until this is enabled.
+          </div>
+        )}
       </div>
     </div>
   );

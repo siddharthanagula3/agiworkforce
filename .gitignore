@@ -196,3 +196,5 @@ leads/
 # --- Supabase temp files ---
 **/.temp/
 .worktrees/
+.code-review-graph/
+dist-web

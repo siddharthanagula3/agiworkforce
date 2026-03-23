@@ -11,10 +11,20 @@
  * - Closes on Escape or click-outside
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, ChevronDown, Sparkles, X } from 'lucide-react';
+import {
+  ArrowRight,
+  ChevronDown,
+  History,
+  Loader2,
+  MessageSquarePlus,
+  Mic,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useAccountStore } from '../../stores/auth';
+import { type ConversationSearchResult, useChatStore } from '../../stores/chat/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 import {
   MODEL_PRESETS,
@@ -23,16 +33,107 @@ import {
   getBestAutoModeForTier,
 } from '../../constants/llm';
 import type { Provider } from '../../stores/settingsStore';
+import { ScreenCaptureButton } from '../ScreenCapture/ScreenCaptureButton';
+import type { CaptureResult } from '../../types/capture';
+
+interface RecentConversationItem {
+  conversationId: number;
+  title: string;
+  messageCount: number;
+  lastUpdated: string;
+}
+
+function normalizeRecentConversation(
+  value: ConversationSearchResult | Record<string, unknown>,
+): RecentConversationItem | null {
+  const source = value as Record<string, unknown>;
+  const conversationId =
+    typeof source['conversationId'] === 'number'
+      ? source['conversationId']
+      : typeof source['conversation_id'] === 'number'
+        ? source['conversation_id']
+        : null;
+
+  if (conversationId == null) {
+    return null;
+  }
+
+  return {
+    conversationId,
+    title:
+      (typeof source['title'] === 'string' && source['title']) ||
+      (typeof source['conversationTitle'] === 'string' && source['conversationTitle']) ||
+      (typeof source['conversation_title'] === 'string' && source['conversation_title']) ||
+      'Untitled',
+    messageCount:
+      typeof source['messageCount'] === 'number'
+        ? source['messageCount']
+        : typeof source['message_count'] === 'number'
+          ? source['message_count']
+          : 0,
+    lastUpdated:
+      (typeof source['lastUpdated'] === 'string' && source['lastUpdated']) ||
+      (typeof source['timestamp'] === 'string' && source['timestamp']) ||
+      (typeof source['updated_at'] === 'string' && source['updated_at']) ||
+      '',
+  };
+}
+
+function formatRelativeTimestamp(value: string): string {
+  if (!value) {
+    return 'Recent';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Recent';
+  }
+
+  const deltaMs = date.getTime() - Date.now();
+  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  const minutes = Math.round(deltaMs / 60000);
+
+  if (Math.abs(minutes) < 60) {
+    return formatter.format(minutes, 'minute');
+  }
+
+  const hours = Math.round(minutes / 60);
+  if (Math.abs(hours) < 24) {
+    return formatter.format(hours, 'hour');
+  }
+
+  const days = Math.round(hours / 24);
+  if (Math.abs(days) < 30) {
+    return formatter.format(days, 'day');
+  }
+
+  const months = Math.round(days / 30);
+  return formatter.format(months, 'month');
+}
 
 interface QuickQueryProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (query: string, model: string) => void;
+  onOpenConversation?: (conversationDbId: number) => void;
+  onStartNewChat?: () => void;
+  onRequestVoice?: (draft: string) => void;
+  onRequestCapture?: (captureResult: CaptureResult, draft: string) => void;
 }
 
-export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
+export function QuickQuery({
+  open,
+  onClose,
+  onSubmit,
+  onOpenConversation,
+  onStartNewChat,
+  onRequestVoice,
+  onRequestCapture,
+}: QuickQueryProps) {
   const [query, setQuery] = useState('');
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [recentConversations, setRecentConversations] = useState<RecentConversationItem[]>([]);
+  const [isLoadingRecent, setIsLoadingRecent] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -44,6 +145,8 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
     })),
   );
   const account = useAccountStore((state) => state.account);
+  const getRecentConversations = useChatStore((state) => state.getRecentConversations);
+  const canOpenRecentChats = typeof onOpenConversation === 'function';
   const planTier = account.plan ?? 'hobby';
   const allowedAutoModes = getAllowedAutoModesForTier(planTier);
   const defaultModel = getBestAutoModeForTier(planTier);
@@ -55,13 +158,37 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
       const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
+
+      if (canOpenRecentChats) {
+        setIsLoadingRecent(true);
+        void getRecentConversations(6)
+          .then((results) => {
+            setRecentConversations(
+              (results ?? [])
+                .map((item) =>
+                  normalizeRecentConversation(item as unknown as Record<string, unknown>),
+                )
+                .filter((item): item is RecentConversationItem => item !== null),
+            );
+          })
+          .catch((error) => {
+            console.error('[QuickQuery] Failed to load recent conversations:', error);
+            setRecentConversations([]);
+          })
+          .finally(() => {
+            setIsLoadingRecent(false);
+          });
+      }
+
       return () => clearTimeout(timer);
     }
     // Reset state when closing
     setQuery('');
     setModelDropdownOpen(false);
+    setRecentConversations([]);
+    setIsLoadingRecent(false);
     return undefined;
-  }, [open]);
+  }, [canOpenRecentChats, getRecentConversations, open]);
 
   // Close on Escape
   useEffect(() => {
@@ -129,6 +256,32 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
       }
     },
     [handleSubmit],
+  );
+
+  const handleOpenConversation = useCallback(
+    (conversationDbId: number) => {
+      onOpenConversation?.(conversationDbId);
+      onClose();
+    },
+    [onClose, onOpenConversation],
+  );
+
+  const handleStartNewChat = useCallback(() => {
+    onStartNewChat?.();
+    onClose();
+  }, [onClose, onStartNewChat]);
+
+  const handleRequestVoice = useCallback(() => {
+    onRequestVoice?.(query.trim());
+    onClose();
+  }, [onClose, onRequestVoice, query]);
+
+  const handleRequestCapture = useCallback(
+    (result: CaptureResult) => {
+      onRequestCapture?.(result, query.trim());
+      onClose();
+    },
+    [onClose, onRequestCapture, query],
   );
 
   // Build flat list of model options for the dropdown
@@ -201,7 +354,7 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
         </div>
 
         {/* Input area */}
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-2">
           <input
             ref={inputRef}
             type="text"
@@ -220,6 +373,89 @@ export function QuickQuery({ open, onClose, onSubmit }: QuickQueryProps) {
             spellCheck={false}
           />
         </div>
+
+        <div className="flex items-center gap-2 px-4 pb-3">
+          <button
+            type="button"
+            onClick={handleStartNewChat}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.04] px-2.5 py-1.5',
+              'text-xs font-medium text-zinc-300 transition-colors hover:bg-white/[0.08]',
+            )}
+          >
+            <MessageSquarePlus className="h-3.5 w-3.5" />
+            <span>New chat</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleRequestVoice}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.04] px-2.5 py-1.5',
+              'text-xs font-medium text-zinc-300 transition-colors hover:bg-white/[0.08]',
+            )}
+          >
+            <Mic className="h-3.5 w-3.5" />
+            <span>Voice</span>
+          </button>
+
+          <ScreenCaptureButton
+            mode="quick"
+            variant="ghost"
+            size="icon"
+            suppressToasts
+            className="h-8 w-8 rounded-lg border border-white/[0.06] bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]"
+            onCaptureComplete={(result) => {
+              void Promise.resolve(handleRequestCapture(result));
+            }}
+          />
+        </div>
+
+        {canOpenRecentChats && (
+          <div className="border-t border-white/[0.04] px-3 py-2">
+            <div className="mb-2 flex items-center gap-2 px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+              <History className="h-3 w-3" />
+              <span>Recent chats</span>
+            </div>
+
+            <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
+              {isLoadingRecent ? (
+                <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-500">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Loading recent chats…</span>
+                </div>
+              ) : recentConversations.length > 0 ? (
+                recentConversations.map((conversation) => (
+                  <button
+                    type="button"
+                    key={conversation.conversationId}
+                    onClick={() => handleOpenConversation(conversation.conversationId)}
+                    className={cn(
+                      'w-full rounded-xl border border-transparent px-3 py-2 text-left transition-colors',
+                      'hover:border-white/[0.06] hover:bg-white/[0.04]',
+                    )}
+                  >
+                    <div className="truncate text-sm font-medium text-zinc-200">
+                      {conversation.title}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
+                      <span>{formatRelativeTimestamp(conversation.lastUpdated)}</span>
+                      <span>•</span>
+                      <span>
+                        {conversation.messageCount} message
+                        {conversation.messageCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="rounded-lg px-3 py-2 text-xs text-zinc-500">
+                  No recent chats yet.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Bottom bar: model selector + send */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.06]">

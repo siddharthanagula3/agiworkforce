@@ -105,6 +105,59 @@ pub fn chat_delete_conversation(
         .map_err(|e| format!("Failed to delete conversation {}: {e}", id))
 }
 
+/// Archive or unarchive a conversation by setting its `archived` flag.
+#[tauri::command]
+pub fn chat_archive_conversation(
+    db: State<'_, AppDatabase>,
+    id: i64,
+    user_id: String,
+    archived: bool,
+) -> Result<(), String> {
+    if id <= 0 {
+        return Err(format!(
+            "Invalid conversation ID: {}. ID must be positive",
+            id
+        ));
+    }
+    if user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
+
+    let conn = db.connection()?;
+    repository::archive_conversation(&conn, id, &user_id, archived)
+        .map_err(|e| format!("Failed to archive conversation {}: {e}", id))
+}
+
+/// Update only the title of a conversation.
+#[tauri::command]
+pub fn chat_update_conversation_title(
+    db: State<'_, AppDatabase>,
+    id: i64,
+    user_id: String,
+    title: String,
+) -> Result<(), String> {
+    if id <= 0 {
+        return Err(format!(
+            "Invalid conversation ID: {}. ID must be positive",
+            id
+        ));
+    }
+    if user_id.is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
+    let trimmed_title = title.trim();
+    if trimmed_title.is_empty() {
+        return Err("Title cannot be empty".to_string());
+    }
+    if trimmed_title.len() > 500 {
+        return Err("Title cannot exceed 500 characters".to_string());
+    }
+
+    let conn = db.connection()?;
+    repository::update_conversation_title(&conn, id, &user_id, trimmed_title.to_string())
+        .map_err(|e| format!("Failed to update conversation title {}: {e}", id))
+}
+
 #[tauri::command]
 pub fn chat_create_message(
     db: State<'_, AppDatabase>,

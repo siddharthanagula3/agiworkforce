@@ -41,7 +41,7 @@ function FallbackIcon({ name, color }: { name: string; color: string }) {
       style={{ backgroundColor: `${color}20` }}
     >
       <Text className="text-base font-bold" style={{ color }}>
-        {name.charAt(0).toUpperCase()}
+        {name.charAt(0).toUpperCase() || '?'}
       </Text>
     </View>
   );

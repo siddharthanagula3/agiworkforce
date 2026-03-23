@@ -21,6 +21,17 @@ interface CollapsibleSourcesProps {
   sources: Source[];
 }
 
+const ALLOWED_SCHEMES = ['http:', 'https:'];
+
+function isValidExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return ALLOWED_SCHEMES.includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
 function getDomain(url: string): string {
   try {
     const hostname = new URL(url).hostname;
@@ -62,7 +73,9 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
   }));
 
   const handleSourcePress = useCallback((url: string) => {
-    Linking.openURL(url);
+    if (isValidExternalUrl(url)) {
+      Linking.openURL(url);
+    }
   }, []);
 
   if (sources.length === 0) return null;
@@ -87,7 +100,9 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
           paddingHorizontal: 12,
         }}
         accessibilityLabel={
-          expanded ? `Hide ${sources.length} sources` : `View ${sources.length} sources`
+          expanded
+            ? `Hide ${sources.length} ${sources.length === 1 ? 'source' : 'sources'}`
+            : `View ${sources.length} ${sources.length === 1 ? 'source' : 'sources'}`
         }
         accessibilityRole="button"
       >

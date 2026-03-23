@@ -27,6 +27,7 @@ pub enum Provider {
     Mistral,
     XAI,
     DeepSeek,
+    OllamaCloud,
 }
 
 /// A content block within a message (supports text and tool interactions).
@@ -136,6 +137,24 @@ pub struct CompletionResult {
 // Provider detection
 // ---------------------------------------------------------------------------
 
+/// Resolve a `Provider` from a config provider name string.
+///
+/// Returns `None` if the name is not recognized, in which case callers
+/// should fall back to [`detect_provider`] for model-name-based detection.
+pub fn provider_from_name(name: &str) -> Option<Provider> {
+    match name.to_lowercase().as_str() {
+        "anthropic" => Some(Provider::Anthropic),
+        "openai" => Some(Provider::OpenAI),
+        "google" => Some(Provider::Google),
+        "ollama" => Some(Provider::Ollama),
+        "mistral" => Some(Provider::Mistral),
+        "xai" => Some(Provider::XAI),
+        "deepseek" => Some(Provider::DeepSeek),
+        "ollama-cloud" | "ollama_cloud" | "ollamacloud" => Some(Provider::OllamaCloud),
+        _ => None,
+    }
+}
+
 /// Detect the provider from a model name string.
 pub fn detect_provider(model: &str) -> Provider {
     let m = model.to_lowercase();
@@ -174,6 +193,20 @@ fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Option<String>
     let name = provider_name(provider);
     match provider {
         Provider::Ollama => Ok(None), // no key needed
+        Provider::OllamaCloud => {
+            // Ollama Cloud requires OLLAMA_API_KEY. Fall back to env var if not in config.
+            let key = config
+                .resolve_api_key(name)
+                .or_else(|| std::env::var("OLLAMA_API_KEY").ok().filter(|k| !k.is_empty()));
+            if key.is_none() {
+                return Err(CliError::auth(
+                    name,
+                    "No API key found. Set the OLLAMA_API_KEY environment variable.".to_string(),
+                )
+                .into());
+            }
+            Ok(key)
+        }
         _ => {
             let key = config.resolve_api_key(name);
             if key.is_none() {
@@ -205,6 +238,7 @@ pub fn provider_name(provider: &Provider) -> &'static str {
         Provider::Mistral => "mistral",
         Provider::XAI => "xai",
         Provider::DeepSeek => "deepseek",
+        Provider::OllamaCloud => "ollama-cloud",
     }
 }
 
@@ -419,6 +453,24 @@ pub async fn stream_completion(
                 &client,
                 api_key.as_deref().unwrap_or_default(),
                 "https://api.deepseek.com/chat/completions",
+                model,
+                messages,
+                max_tokens,
+                temperature,
+                tools,
+                &mut on_chunk,
+            )
+            .await
+        }
+        Provider::OllamaCloud => {
+            let base_url = config
+                .base_url("ollama-cloud")
+                .unwrap_or_else(|| "https://api.ollama.com/v1".to_string());
+            let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+            stream_openai_compatible(
+                &client,
+                api_key.as_deref().unwrap_or_default(),
+                &url,
                 model,
                 messages,
                 max_tokens,

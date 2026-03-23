@@ -168,6 +168,13 @@ impl Default for CliConfig {
                 base_url: None,
             },
         );
+        providers.insert(
+            "ollama-cloud".to_string(),
+            ProviderConfig {
+                api_key_env: Some("OLLAMA_API_KEY".to_string()),
+                base_url: Some("https://api.ollama.com/v1".to_string()),
+            },
+        );
 
         Self {
             default: DefaultConfig::new(),
@@ -523,6 +530,7 @@ mod tests {
         assert!(config.providers.contains_key("mistral"));
         assert!(config.providers.contains_key("xai"));
         assert!(config.providers.contains_key("deepseek"));
+        assert!(config.providers.contains_key("ollama-cloud"));
     }
 
     #[test]

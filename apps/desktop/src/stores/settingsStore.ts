@@ -138,6 +138,22 @@ export interface ChatPreferences {
  */
 export type ApprovalTimeoutPolicy = 'auto-deny' | 'auto-approve' | 'pause';
 
+export type TerminalSandboxPolicy = 'danger-full-access' | 'read-only' | 'workspace-write';
+export type TerminalSandboxBackend = 'none' | 'srt';
+
+export interface TerminalSandboxPreferences {
+  /** Whether terminal commands should be wrapped in an OS-level sandbox runtime */
+  enabled: boolean;
+  /** Backend used to enforce sandboxing */
+  backend: TerminalSandboxBackend;
+  /** Filesystem access preset */
+  policy: TerminalSandboxPolicy;
+  /** Executable name or absolute path for the sandbox runtime */
+  executable: string;
+  /** Domain allowlist passed to the sandbox runtime; empty blocks all network access */
+  allowedDomains: string[];
+}
+
 export interface ExecutionPreferences {
   /** Maximum task timeout in minutes (1-4320, default 1440=24hrs) */
   maxTimeoutMinutes: number;
@@ -155,6 +171,8 @@ export interface ExecutionPreferences {
   approvalTimeoutPolicy: ApprovalTimeoutPolicy;
   /** Duration (seconds) of inactivity on an active stream before triggering timeout recovery */
   streamInactivityTimeoutSeconds: number;
+  /** OS-level sandbox wrapper for terminal command execution */
+  terminalSandbox: TerminalSandboxPreferences;
 }
 
 export interface GlobalHotkeyPreferences {
@@ -241,6 +259,11 @@ interface SettingsState {
   setApprovalTimeoutSeconds: (seconds: number) => void;
   setApprovalTimeoutPolicy: (policy: ApprovalTimeoutPolicy) => void;
   setStreamInactivityTimeoutSeconds: (seconds: number) => void;
+  setTerminalSandboxEnabled: (enabled: boolean) => void;
+  setTerminalSandboxBackend: (backend: TerminalSandboxBackend) => void;
+  setTerminalSandboxPolicy: (policy: TerminalSandboxPolicy) => void;
+  setTerminalSandboxExecutable: (executable: string) => void;
+  setTerminalSandboxAllowedDomains: (domains: string[]) => void;
 
   setPersonalization: (updates: Partial<PersonalizationPreferences>) => void;
 
@@ -275,6 +298,14 @@ const defaultPersonalization: PersonalizationPreferences = {
   warmth: 3,
   detail: 3,
   emojiUsage: 'sometimes',
+};
+
+export const defaultTerminalSandboxPreferences: TerminalSandboxPreferences = {
+  enabled: false,
+  backend: 'srt',
+  policy: 'workspace-write',
+  executable: 'srt',
+  allowedDomains: [],
 };
 
 const defaultSettings: Pick<
@@ -335,6 +366,7 @@ const defaultSettings: Pick<
     approvalTimeoutSeconds: 300, // 5 minutes default
     approvalTimeoutPolicy: 'auto-deny' as ApprovalTimeoutPolicy,
     streamInactivityTimeoutSeconds: 30, // 30 seconds default
+    terminalSandbox: { ...defaultTerminalSandboxPreferences },
   },
   globalHotkeyPreferences: {
     enabled: true, // Enabled by default — competitive parity with Claude Desktop / ChatGPT Desktop
@@ -382,7 +414,8 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v20: Added approvalTimeoutSeconds, approvalTimeoutPolicy, streamInactivityTimeoutSeconds
 // v21: Added chatFont to windowPreferences for chat font selector tiles
 // v22: Added personalization preferences (name, occupation, bio, formality, warmth, detail, emojiUsage)
-const SETTINGS_STORE_VERSION = 22;
+// v23: Added terminalSandbox execution preferences
+const SETTINGS_STORE_VERSION = 23;
 
 export function isTaskRoutingModelAllowedForTier(
   category: TaskCategory,
@@ -550,6 +583,89 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setStreamInactivityTimeoutSeconds',
+          );
+        },
+
+        setTerminalSandboxEnabled: (enabled: boolean) => {
+          set(
+            (state) => ({
+              executionPreferences: {
+                ...state.executionPreferences,
+                terminalSandbox: {
+                  ...state.executionPreferences.terminalSandbox,
+                  enabled,
+                },
+              },
+            }),
+            undefined,
+            'settings/setTerminalSandboxEnabled',
+          );
+        },
+
+        setTerminalSandboxBackend: (backend: TerminalSandboxBackend) => {
+          set(
+            (state) => ({
+              executionPreferences: {
+                ...state.executionPreferences,
+                terminalSandbox: {
+                  ...state.executionPreferences.terminalSandbox,
+                  backend,
+                },
+              },
+            }),
+            undefined,
+            'settings/setTerminalSandboxBackend',
+          );
+        },
+
+        setTerminalSandboxPolicy: (policy: TerminalSandboxPolicy) => {
+          set(
+            (state) => ({
+              executionPreferences: {
+                ...state.executionPreferences,
+                terminalSandbox: {
+                  ...state.executionPreferences.terminalSandbox,
+                  policy,
+                },
+              },
+            }),
+            undefined,
+            'settings/setTerminalSandboxPolicy',
+          );
+        },
+
+        setTerminalSandboxExecutable: (executable: string) => {
+          set(
+            (state) => ({
+              executionPreferences: {
+                ...state.executionPreferences,
+                terminalSandbox: {
+                  ...state.executionPreferences.terminalSandbox,
+                  executable,
+                },
+              },
+            }),
+            undefined,
+            'settings/setTerminalSandboxExecutable',
+          );
+        },
+
+        setTerminalSandboxAllowedDomains: (domains: string[]) => {
+          const normalized = Array.from(
+            new Set(domains.map((domain) => domain.trim()).filter(Boolean)),
+          );
+          set(
+            (state) => ({
+              executionPreferences: {
+                ...state.executionPreferences,
+                terminalSandbox: {
+                  ...state.executionPreferences.terminalSandbox,
+                  allowedDomains: normalized,
+                },
+              },
+            }),
+            undefined,
+            'settings/setTerminalSandboxAllowedDomains',
           );
         },
 
@@ -1079,6 +1195,16 @@ export const useSettingsStore = create<SettingsState>()(
             const mergedExecutionPreferences: ExecutionPreferences = {
               ...defaultSettings.executionPreferences,
               ...(settings.executionPreferences ?? defaultSettings.executionPreferences),
+              terminalSandbox: {
+                ...defaultSettings.executionPreferences.terminalSandbox,
+                ...(settings.executionPreferences?.terminalSandbox ??
+                  defaultSettings.executionPreferences.terminalSandbox),
+                allowedDomains: Array.isArray(
+                  settings.executionPreferences?.terminalSandbox?.allowedDomains,
+                )
+                  ? settings.executionPreferences?.terminalSandbox?.allowedDomains
+                  : defaultSettings.executionPreferences.terminalSandbox.allowedDomains,
+              },
             };
 
             const mergedGlobalHotkeyPreferences: GlobalHotkeyPreferences = {
@@ -1268,24 +1394,40 @@ export const useSettingsStore = create<SettingsState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
-        partialize: (state) => ({
-          llmConfig: state.llmConfig,
-          windowPreferences: {
-            theme: state.windowPreferences.theme,
-            language: state.windowPreferences.language,
-            startupPosition: state.windowPreferences.startupPosition,
-            dockOnStartup: state.windowPreferences.dockOnStartup,
-            selectedTheme: state.windowPreferences.selectedTheme,
-            chatFont: state.windowPreferences.chatFont,
-          },
-          chatPreferences: state.chatPreferences,
-          executionPreferences: state.executionPreferences,
-          globalHotkeyPreferences: state.globalHotkeyPreferences,
-          personalization: state.personalization,
-          allowedDirectories: state.allowedDirectories,
-          customModels: state.customModels,
-          customKeybindings: state.customKeybindings,
-        }),
+        partialize: (state) => {
+          // Fields that apply in both Tauri (desktop) and web environments.
+          const base = {
+            llmConfig: state.llmConfig,
+            windowPreferences: {
+              theme: state.windowPreferences.theme,
+              language: state.windowPreferences.language,
+              selectedTheme: state.windowPreferences.selectedTheme,
+              chatFont: state.windowPreferences.chatFont,
+              dyslexicFont: state.windowPreferences.dyslexicFont,
+            },
+            chatPreferences: state.chatPreferences,
+            executionPreferences: state.executionPreferences,
+            personalization: state.personalization,
+            allowedDirectories: state.allowedDirectories,
+            customModels: state.customModels,
+            customKeybindings: state.customKeybindings,
+          };
+
+          // Fields that are only meaningful in the native desktop (Tauri) environment.
+          if (isTauriContext()) {
+            return {
+              ...base,
+              windowPreferences: {
+                ...base.windowPreferences,
+                startupPosition: state.windowPreferences.startupPosition,
+                dockOnStartup: state.windowPreferences.dockOnStartup,
+              },
+              globalHotkeyPreferences: state.globalHotkeyPreferences,
+            };
+          }
+
+          return base;
+        },
         merge: (persistedState, currentState) => {
           const persisted = persistedState as Partial<SettingsState> | undefined;
 
@@ -1331,6 +1473,15 @@ export const useSettingsStore = create<SettingsState>()(
           const mergedExecutionPreferences: ExecutionPreferences = {
             ...currentState.executionPreferences,
             ...(persisted?.executionPreferences ?? {}),
+            terminalSandbox: {
+              ...currentState.executionPreferences.terminalSandbox,
+              ...(persisted?.executionPreferences?.terminalSandbox ?? {}),
+              allowedDomains: Array.isArray(
+                persisted?.executionPreferences?.terminalSandbox?.allowedDomains,
+              )
+                ? persisted.executionPreferences.terminalSandbox.allowedDomains
+                : currentState.executionPreferences.terminalSandbox.allowedDomains,
+            },
           };
 
           const mergedGlobalHotkeyPreferences: GlobalHotkeyPreferences = {
@@ -1422,6 +1573,7 @@ export const useSettingsStore = create<SettingsState>()(
                 approvalTimeoutSeconds: 300,
                 approvalTimeoutPolicy: 'auto-deny' as ApprovalTimeoutPolicy,
                 streamInactivityTimeoutSeconds: 30,
+                terminalSandbox: { ...defaultTerminalSandboxPreferences },
               };
             }
           }
@@ -1601,6 +1753,18 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
+          // Migration from v22 to v23: Add terminal sandbox preferences
+          if (version < 23 && state.executionPreferences) {
+            const ep = state.executionPreferences as Partial<ExecutionPreferences>;
+            ep.terminalSandbox = {
+              ...defaultTerminalSandboxPreferences,
+              ...(ep.terminalSandbox ?? {}),
+              allowedDomains: Array.isArray(ep.terminalSandbox?.allowedDomains)
+                ? ep.terminalSandbox.allowedDomains
+                : defaultTerminalSandboxPreferences.allowedDomains,
+            };
+          }
+
           return state as SettingsState;
         },
         // Called when rehydration finishes (with or without errors)
@@ -1725,6 +1889,8 @@ export const selectApprovalTimeoutPolicy = (state: SettingsState) =>
   state.executionPreferences.approvalTimeoutPolicy;
 export const selectStreamInactivityTimeoutSeconds = (state: SettingsState) =>
   state.executionPreferences.streamInactivityTimeoutSeconds;
+export const selectTerminalSandbox = (state: SettingsState) =>
+  state.executionPreferences.terminalSandbox;
 
 export const selectAllowedDirectories = (state: SettingsState) => state.allowedDirectories;
 export const selectSettingsLoading = (state: SettingsState) => state.loading;

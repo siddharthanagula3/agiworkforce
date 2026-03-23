@@ -34,7 +34,7 @@ export const ToolAccessSelector = forwardRef<BottomSheet>(function ToolAccessSel
 
   const haptic = useCallback(() => {
     if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
   }, [hapticsEnabled]);
 

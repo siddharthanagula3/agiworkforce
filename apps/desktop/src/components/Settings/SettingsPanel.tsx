@@ -76,13 +76,12 @@ import { AccountSettings } from './AccountSettings';
 import { FeaturesPrivacySettings } from './FeaturesPrivacySettings';
 import { OAuthCredentialsPanel } from './OAuthCredentialsPanel';
 import { SafetyPolicies } from '../Governance/SafetyPolicies';
-import { AuditLog } from '../Governance/AuditLog';
-import { ToolHistoryTable } from '../Governance/ToolHistoryTable';
 import { AgentExecutionSettings } from './AgentExecutionSettings';
 import { PersonalizationSettings } from './PersonalizationSettings';
 import { TeamAccountSettings } from './TeamAccountSettings';
 import { UsageDashboard } from './UsageDashboard';
 import { useSimpleModeStore } from '../../stores/ui';
+import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { cn } from '@/lib/utils';
 import { useAppModeStore, selectMode, selectIsCloud } from '../../stores/appModeStore';
 
@@ -111,8 +110,8 @@ const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType 
   { key: 'privacy', label: 'Privacy', icon: Shield },
   { key: 'models-keys', label: 'Models & Keys', icon: Server },
   { key: 'agents', label: 'Agents', icon: Zap },
-  { key: 'mcp-skills', label: 'MCP & Skills', icon: Wrench },
-  { key: 'connectors', label: 'Connectors', icon: Plug },
+  { key: 'mcp-skills', label: 'Customize', icon: Wrench },
+  { key: 'connectors', label: 'Apps & Integrations', icon: Plug },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'voice', label: 'Voice', icon: Mic },
 ];
@@ -879,6 +878,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<CanonicalTab>(() => resolveTab(initialTab));
 
+  const openGovernanceWorkspace = useCallback(() => {
+    onOpenChange(false);
+    useUnifiedChatStore.getState().openSidecar('governance');
+  }, [onOpenChange]);
+
   // Tabs that skip the deferred Save/Cancel footer
   const requiresDeferredSave = !SELF_SAVING_TABS.has(activeTab);
 
@@ -1218,14 +1222,25 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             <div className="pt-6 border-t border-border">
               <h3 className="text-lg font-semibold mb-1">Governance &amp; Compliance</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Manage tool approval policies, audit trails, and security settings.
+                Governance now lives in a dedicated workspace. Keep policy controls here and open
+                the right panel for approvals, audit events, and execution history.
               </p>
-              <SafetyPolicies />
-              <div className="pt-6">
-                <AuditLog />
+              <div className="rounded-lg border border-border bg-card/60 p-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium">Open governance workspace</h4>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Review pending approvals, audit integrity, and tool history without
+                      duplicating those views inside Settings.
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={openGovernanceWorkspace}>
+                    Open Workspace
+                  </Button>
+                </div>
               </div>
               <div className="pt-6">
-                <ToolHistoryTable />
+                <SafetyPolicies />
               </div>
             </div>
           </>
@@ -1483,6 +1498,69 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       case 'mcp-skills':
         return (
           <div className="space-y-6">
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Customize your workforce</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Manage the skills, tools, research defaults, and integrations your agents can
+                    use.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('connectors')}
+                  disabled={isBusy}
+                >
+                  <Plug className="mr-2 h-4 w-4" />
+                  Open integrations
+                </Button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  {
+                    title: 'Skills & Plugins',
+                    description: 'Install reusable capabilities and project-specific helpers.',
+                    icon: Zap,
+                  },
+                  {
+                    title: 'MCP Tools',
+                    description: 'Control which tools and servers are available to agents.',
+                    icon: Wrench,
+                  },
+                  {
+                    title: 'Research Defaults',
+                    description: 'Tune search, sources, and retrieval behavior.',
+                    icon: Database,
+                  },
+                  {
+                    title: 'Integrations',
+                    description: 'Connect the apps and services your workforce can reach.',
+                    icon: Plug,
+                    action: () => setActiveTab('connectors'),
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.title}
+                    type="button"
+                    onClick={item.action}
+                    disabled={!item.action || isBusy}
+                    className={cn(
+                      'rounded-lg border border-border bg-background p-3 text-left transition-colors',
+                      item.action ? 'hover:border-primary/40 hover:bg-muted/40' : 'cursor-default',
+                      !item.action && 'opacity-90',
+                    )}
+                  >
+                    <item.icon className="h-4 w-4 text-primary" />
+                    <div className="mt-3 text-sm font-medium">{item.title}</div>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <MCPToolsSettings />
             <div className="pt-6 border-t border-border">
               <SkillsPluginsSettings />
@@ -1508,6 +1586,27 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       case 'connectors':
         return (
           <div className="space-y-6">
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Apps & integrations</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Connect your accounts, monitor connector health, and manage OAuth or extension
+                    access from one place.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('mcp-skills')}
+                  disabled={isBusy}
+                >
+                  <Wrench className="mr-2 h-4 w-4" />
+                  Open customize
+                </Button>
+              </div>
+            </div>
+
             <ConnectorGallery />
             <ConnectorHealthDashboard />
             <div className="pt-6 border-t border-border">

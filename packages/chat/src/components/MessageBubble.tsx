@@ -235,7 +235,7 @@ export function MessageBubble({
           {message.content}
         </div>
         <span className="text-[12px] text-[var(--chat-text-muted)] pr-1">
-          {formatTime(message.createdAt)}
+          {message.createdAt ? formatTime(message.createdAt) : ''}
         </span>
       </div>
     );

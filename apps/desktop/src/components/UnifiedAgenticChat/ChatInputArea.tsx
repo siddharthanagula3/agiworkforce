@@ -19,6 +19,10 @@ import { getModelMetadata } from '../../constants/llm';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useVoiceTranscription } from '../../hooks/useVoiceTranscription';
 import { useVoiceInputStore } from '../../stores/voiceInputStore';
+import {
+  CHAT_COMPOSER_CAPTURE_EVENT,
+  type ChatComposerCaptureRequestDetail,
+} from '../../lib/chatComposerEvents';
 import { cn } from '../../lib/utils';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { useAccountStore } from '../../stores/auth';
@@ -103,7 +107,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
   onStopGeneration,
   disabled = false,
-  placeholder: defaultPlaceholder = 'Ask anything...',
+  placeholder: defaultPlaceholder = 'How can I help you today?',
   maxLength = DEFAULT_CHAT_MAX_LENGTH,
   enableAttachments = true,
   className = '',
@@ -382,7 +386,10 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const isEmptyState = messages.length === 0;
   const showFocusModeButtons = !isSimpleMode && isEmptyState;
   const showStopButton = (isStreaming || isLoading) && onStopGeneration;
-  const placeholder = getFocusModePlaceholder(focusMode, defaultPlaceholder);
+  const basePlaceholder = isEmptyState ? defaultPlaceholder : 'Reply...';
+  const placeholder = isEmptyState
+    ? getFocusModePlaceholder(focusMode, basePlaceholder)
+    : basePlaceholder;
   const sidebarOffset = sidebarCollapsed ? 64 : sidebarWidth;
 
   // Model display name
@@ -784,6 +791,34 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     },
     [setAttachments],
   );
+
+  useEffect(() => {
+    const handleComposerCaptureRequest = async (event: Event) => {
+      const customEvent = event as CustomEvent<ChatComposerCaptureRequestDetail>;
+      const captureResult = customEvent.detail?.captureResult;
+
+      try {
+        const result =
+          captureResult ??
+          (await invoke<CaptureResult>('capture_screen_full', {
+            conversationId: activeConversationDbId ?? undefined,
+          }));
+
+        await handleScreenCapture(result);
+        textareaRef.current?.focus();
+      } catch (error) {
+        console.error('[ChatInputArea] External capture request failed:', error);
+        const message = getSimpleErrorMessage(error) || 'Failed to capture screen';
+        setSubmitError(message);
+        toast.error(message);
+      }
+    };
+
+    window.addEventListener(CHAT_COMPOSER_CAPTURE_EVENT, handleComposerCaptureRequest);
+    return () => {
+      window.removeEventListener(CHAT_COMPOSER_CAPTURE_EVENT, handleComposerCaptureRequest);
+    };
+  }, [activeConversationDbId, handleScreenCapture]);
 
   // Detect "what's on my screen?" patterns and auto-capture
   const detectAndCaptureScreen = useCallback(
