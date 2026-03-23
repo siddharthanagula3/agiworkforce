@@ -33,7 +33,10 @@ export type SettingsTab =
   | 'tools' // → mcp-skills
   | 'research' // → mcp-skills
   | 'keybindings' // → general
-  | 'themes'; // → appearance
+  | 'themes' // → appearance
+  | 'apps-integrations' // → connectors
+  | 'customize' // → mcp-skills
+  | 'billing'; // → account
 
 /** Map legacy/alias tab IDs to their new canonical parent tab. */
 export const LEGACY_TAB_MAP: Partial<Record<SettingsTab, SettingsTab>> = {
@@ -52,6 +55,9 @@ export const LEGACY_TAB_MAP: Partial<Record<SettingsTab, SettingsTab>> = {
   research: 'mcp-skills',
   keybindings: 'general',
   themes: 'appearance',
+  'apps-integrations': 'connectors',
+  customize: 'mcp-skills',
+  billing: 'account',
 };
 
 interface SettingsDialogState {
