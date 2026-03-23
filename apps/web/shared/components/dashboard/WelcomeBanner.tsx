@@ -62,7 +62,7 @@ const CHECKLIST: ChecklistItem[] = [
     description: 'Welcome aboard! Your account is ready.',
     icon: Sparkles,
     href: '/chat',
-    actionLabel: 'Dashboard',
+    actionLabel: 'Open Chat',
   },
   {
     id: 'first_chat',
