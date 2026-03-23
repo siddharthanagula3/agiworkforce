@@ -8,8 +8,7 @@ use tauri::State;
 
 use super::{
     state::{AppDatabase, DEFAULT_CONVERSATION_LIST_LIMIT},
-    ConversationStats, CreateConversationRequest, CreateMessageRequest, UpdateConversationRequest,
-    Validate,
+    ConversationStats, CreateConversationRequest, CreateMessageRequest, Validate,
 };
 
 #[tauri::command]
@@ -63,27 +62,6 @@ pub fn chat_get_conversation(
 }
 
 #[tauri::command]
-pub fn chat_update_conversation(
-    db: State<'_, AppDatabase>,
-    id: i64,
-    request: UpdateConversationRequest,
-) -> Result<(), String> {
-    if id <= 0 {
-        return Err(format!(
-            "Invalid conversation ID: {}. ID must be positive",
-            id
-        ));
-    }
-
-    request.validate().map_err(|e| e.to_string())?;
-    let trimmed_title = request.title.trim();
-
-    let conn = db.connection()?;
-    repository::update_conversation_title(&conn, id, &request.user_id, trimmed_title.to_string())
-        .map_err(|e| format!("Failed to update conversation {}: {e}", id))
-}
-
-#[tauri::command]
 pub fn chat_delete_conversation(
     db: State<'_, AppDatabase>,
     id: i64,
@@ -109,14 +87,14 @@ pub fn chat_delete_conversation(
 #[tauri::command]
 pub fn chat_archive_conversation(
     db: State<'_, AppDatabase>,
-    id: i64,
+    conversation_id: i64,
     user_id: String,
-    archived: bool,
+    archived: Option<bool>,
 ) -> Result<(), String> {
-    if id <= 0 {
+    if conversation_id <= 0 {
         return Err(format!(
             "Invalid conversation ID: {}. ID must be positive",
-            id
+            conversation_id
         ));
     }
     if user_id.is_empty() {
@@ -124,25 +102,26 @@ pub fn chat_archive_conversation(
     }
 
     let conn = db.connection()?;
-    repository::archive_conversation(&conn, id, &user_id, archived)
-        .map_err(|e| format!("Failed to archive conversation {}: {e}", id))
+    repository::archive_conversation(&conn, conversation_id, &user_id, archived.unwrap_or(true))
+        .map_err(|e| format!("Failed to archive conversation {}: {e}", conversation_id))
 }
 
 /// Update only the title of a conversation.
 #[tauri::command]
 pub fn chat_update_conversation_title(
     db: State<'_, AppDatabase>,
-    id: i64,
-    user_id: String,
+    conversation_id: i64,
+    user_id: Option<String>,
     title: String,
 ) -> Result<(), String> {
-    if id <= 0 {
+    if conversation_id <= 0 {
         return Err(format!(
             "Invalid conversation ID: {}. ID must be positive",
-            id
+            conversation_id
         ));
     }
-    if user_id.is_empty() {
+    let uid = user_id.unwrap_or_default();
+    if uid.is_empty() {
         return Err("User ID cannot be empty".to_string());
     }
     let trimmed_title = title.trim();
@@ -154,8 +133,8 @@ pub fn chat_update_conversation_title(
     }
 
     let conn = db.connection()?;
-    repository::update_conversation_title(&conn, id, &user_id, trimmed_title.to_string())
-        .map_err(|e| format!("Failed to update conversation title {}: {e}", id))
+    repository::update_conversation_title(&conn, conversation_id, &uid, trimmed_title.to_string())
+        .map_err(|e| format!("Failed to update conversation title {}: {e}", conversation_id))
 }
 
 #[tauri::command]
