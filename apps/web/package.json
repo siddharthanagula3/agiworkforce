@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "cd ../.. && VITE_BUILD_TARGET=web pnpm --filter @agiworkforce/desktop exec vite build --outDir dist-web --base /chat/ && rm -rf apps/web/public/chat && cp -r apps/desktop/dist-web apps/web/public/chat && cd apps/web && next build",
     "build:next-only": "next build",
     "start": "next start",
     "lint": "eslint . --cache --cache-strategy content --cache-location .cache/eslint",
