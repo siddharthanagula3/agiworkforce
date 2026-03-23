@@ -5,10 +5,12 @@
  * Handles conversation CRUD and LLM message sending via SSE streaming.
  */
 
+import { isTauri } from '../lib/tauri-mock';
 import { supabaseAuth } from '../services/supabaseAuth';
 import { API_BASE_URL } from './config';
 
-const CLOUD_API_BASE_URL = API_BASE_URL;
+// Desktop uses the full API URL; web uses relative paths (same-origin) to avoid CORS
+const CLOUD_API_BASE_URL = isTauri ? API_BASE_URL : '';
 
 // ============================================================================
 // Type Definitions
