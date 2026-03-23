@@ -15,6 +15,6 @@ cp -r apps/desktop/dist-web apps/web/public/chat
 
 # Build Next.js
 echo "Building Next.js..."
-pnpm --filter web build
+pnpm --filter web build:next-only
 
 echo "Build complete!"
