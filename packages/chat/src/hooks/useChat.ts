@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { ChatRuntime } from '../lib/runtime';
-import { useChatStore } from '../stores/chatStore';
+import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 
 export function useChat(runtime: ChatRuntime | null) {
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -11,6 +11,8 @@ export function useChat(runtime: ChatRuntime | null) {
       if (!runtime || !currentConversationId || isStreaming) return;
 
       const store = useChatStore.getState();
+      const systemPrompt = getSystemPromptForMode(store.activeMode);
+
       store.addMessage(currentConversationId, {
         id: crypto.randomUUID(),
         role: 'user',
@@ -19,9 +21,11 @@ export function useChat(runtime: ChatRuntime | null) {
       });
       store.startStreaming();
 
-      void runtime.sendMessage(currentConversationId, content).finally(() => {
-        store.stopStreaming();
-      });
+      void runtime
+        .sendMessage(currentConversationId, content, systemPrompt ? { systemPrompt } : undefined)
+        .finally(() => {
+          store.stopStreaming();
+        });
     },
     [runtime, currentConversationId, isStreaming],
   );

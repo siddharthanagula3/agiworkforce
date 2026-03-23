@@ -1,4 +1,4 @@
-import { invoke } from '@/lib/tauri-mock';
+import { invoke, isTauri } from '@/lib/tauri-mock';
 import { analyticsDeleteAllData } from '@/api/analytics';
 import { McpClient } from '@/api/mcp';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
@@ -1042,104 +1042,112 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           <>
             <AppModeSection />
 
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                Customize window behavior and appearance
-              </p>
-              <div className="space-y-6">
-                <div className="rounded-lg border border-border bg-card p-6 space-y-4">
-                  <h4 className="font-semibold">Global Hotkey</h4>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="globalHotkeyEnabled">Enable Global Hotkey</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Open AGI Workforce from anywhere with a keyboard shortcut.
-                      </p>
-                    </div>
-                    <Switch
-                      id="globalHotkeyEnabled"
-                      checked={resolvedGlobalHotkeyPreferences.enabled}
-                      onCheckedChange={handleGlobalHotkeyEnabledChange}
-                    />
-                  </div>
-                  {resolvedGlobalHotkeyPreferences.enabled && (
-                    <div className="space-y-2">
-                      <Label htmlFor="globalHotkeyCombo">Key Combination</Label>
-                      <input
-                        id="globalHotkeyCombo"
-                        type="text"
-                        value={resolvedGlobalHotkeyPreferences.combo}
-                        onChange={(e) => handleGlobalHotkeyComboChange(e.target.value)}
-                        placeholder={defaultGlobalHotkeyCombo}
-                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            {isTauri && (
+              <div className="pt-6 border-t border-border">
+                <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Customize window behavior and appearance
+                </p>
+                <div className="space-y-6">
+                  <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+                    <h4 className="font-semibold">Global Hotkey</h4>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="globalHotkeyEnabled">Enable Global Hotkey</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Open AGI Workforce from anywhere with a keyboard shortcut.
+                        </p>
+                      </div>
+                      <Switch
+                        id="globalHotkeyEnabled"
+                        checked={resolvedGlobalHotkeyPreferences.enabled}
+                        onCheckedChange={handleGlobalHotkeyEnabledChange}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Use Tauri accelerator format, e.g.{' '}
-                        <code className="rounded bg-muted px-1 py-0.5">
-                          {defaultGlobalHotkeyCombo}
-                        </code>
-                      </p>
                     </div>
-                  )}
-                </div>
+                    {resolvedGlobalHotkeyPreferences.enabled && (
+                      <div className="space-y-2">
+                        <Label htmlFor="globalHotkeyCombo">Key Combination</Label>
+                        <input
+                          id="globalHotkeyCombo"
+                          type="text"
+                          value={resolvedGlobalHotkeyPreferences.combo}
+                          onChange={(e) => handleGlobalHotkeyComboChange(e.target.value)}
+                          placeholder={defaultGlobalHotkeyCombo}
+                          className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Use Tauri accelerator format, e.g.{' '}
+                          <code className="rounded bg-muted px-1 py-0.5">
+                            {defaultGlobalHotkeyCombo}
+                          </code>
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="theme">Theme</Label>
-                  <Select
-                    value={resolvedWindowPreferences.theme}
-                    onValueChange={(value) =>
-                      handleThemeChange(value as 'light' | 'dark' | 'system')
-                    }
-                  >
-                    <SelectTrigger id="theme">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="dark">Dark</SelectItem>
-                      <SelectItem value="system">System</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="theme">Theme</Label>
+                    <Select
+                      value={resolvedWindowPreferences.theme}
+                      onValueChange={(value) =>
+                        handleThemeChange(value as 'light' | 'dark' | 'system')
+                      }
+                    >
+                      <SelectTrigger id="theme">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="language">Language</Label>
-                  <Select
-                    value={resolvedWindowPreferences.language}
-                    onValueChange={(value) => handleLanguageChange(value as Language)}
-                  >
-                    <SelectTrigger id="language">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SUPPORTED_LANGUAGES.map((lang) => (
-                        <SelectItem key={lang.code} value={lang.code}>
-                          {lang.nativeName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <Label htmlFor="language">Language</Label>
+                    <Select
+                      value={resolvedWindowPreferences.language}
+                      onValueChange={(value) => handleLanguageChange(value as Language)}
+                    >
+                      <SelectTrigger id="language">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SUPPORTED_LANGUAGES.map((lang) => (
+                          <SelectItem key={lang.code} value={lang.code}>
+                            {lang.nativeName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">System Resources</h3>
-              <ResourceMonitor showTools={true} />
-            </div>
+            {isTauri && (
+              <div className="pt-6 border-t border-border">
+                <h3 className="text-lg font-semibold mb-4">System Resources</h3>
+                <ResourceMonitor showTools={true} />
+              </div>
+            )}
 
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">Agent Permissions</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                macOS system permissions required for agent mode automation.
-              </p>
-              <AutomationPermissionsSettings />
-            </div>
+            {isTauri && (
+              <div className="pt-6 border-t border-border">
+                <h3 className="text-lg font-semibold mb-4">Agent Permissions</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  macOS system permissions required for agent mode automation.
+                </p>
+                <AutomationPermissionsSettings />
+              </div>
+            )}
 
-            <div className="pt-6 border-t border-border">
-              <UpdateSettings />
-            </div>
+            {isTauri && (
+              <div className="pt-6 border-t border-border">
+                <UpdateSettings />
+              </div>
+            )}
 
             <div className="pt-6 border-t border-border">
               <RestartOnboardingSection />
