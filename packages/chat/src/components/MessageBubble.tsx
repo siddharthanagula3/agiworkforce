@@ -3,6 +3,9 @@ import { Copy } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/Button';
 import { ActionBar } from './ActionBar';
+import { ThinkingBlock } from './ThinkingBlock';
+import { WebSearchCard } from './WebSearchCard';
+import { CitationPill } from './CitationPill';
 import type { ChatMessage, Artifact } from '../lib/types';
 
 interface MessageBubbleProps {
@@ -80,8 +83,8 @@ function CodeBlock({ code, language }: CodeBlockProps) {
   );
 }
 
-// Lightweight markdown renderer — handles code blocks, tables, bold, italic, inline code
-// Full markdown library can replace this later
+// Lightweight markdown renderer — handles code blocks, tables, headers, lists,
+// blockquotes, bold, italic, inline code, links, and strikethrough.
 function renderContent(content: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   // Split on fenced code blocks
@@ -101,6 +104,7 @@ function renderContent(content: string): React.ReactNode[] {
       // Detect table rows (lines starting with |)
       const lines = part.split('\n');
       let tableBuffer: string[] = [];
+      let listBuffer: { ordered: boolean; items: string[] } | null = null;
 
       const flushTable = (keyPrefix: string | number) => {
         if (tableBuffer.length === 0) return;
@@ -150,13 +154,95 @@ function renderContent(content: string): React.ReactNode[] {
         tableBuffer = [];
       };
 
+      const flushList = (keyPrefix: string | number) => {
+        if (!listBuffer) return;
+        const Tag = listBuffer.ordered ? 'ol' : 'ul';
+        const listClass = listBuffer.ordered
+          ? 'list-decimal pl-6 my-2 space-y-1 text-[15px] text-[var(--chat-text-primary)]'
+          : 'list-disc pl-6 my-2 space-y-1 text-[15px] text-[var(--chat-text-primary)]';
+        nodes.push(
+          <Tag key={`${keyPrefix}-list`} className={listClass}>
+            {listBuffer.items.map((item, idx) => (
+              <li key={idx} className="leading-relaxed">
+                {renderInline(item)}
+              </li>
+            ))}
+          </Tag>,
+        );
+        listBuffer = null;
+      };
+
       lines.forEach((line, li) => {
+        // Ordered list item: "1. text" or "1) text"
+        const orderedMatch = /^\s*\d+[.)]\s+(.*)$/.exec(line);
+        // Unordered list item: "- text" or "* text" (but not ** which is bold)
+        const unorderedMatch = /^\s*[-*]\s+(.*)$/.exec(line);
+        // Avoid matching "* text *" patterns as list items when they look like emphasis
+        const isUnorderedList =
+          unorderedMatch && !(line.trim().startsWith('*') && !line.trim().startsWith('* '));
+
         if (line.startsWith('|')) {
+          flushList(`${i}-${li}`);
           tableBuffer.push(line);
+        } else if (orderedMatch) {
+          flushTable(`${i}-${li}`);
+          if (listBuffer && listBuffer.ordered) {
+            listBuffer.items.push(orderedMatch[1] ?? '');
+          } else {
+            flushList(`${i}-${li}`);
+            listBuffer = { ordered: true, items: [orderedMatch[1] ?? ''] };
+          }
+        } else if (isUnorderedList && unorderedMatch) {
+          flushTable(`${i}-${li}`);
+          if (listBuffer && !listBuffer.ordered) {
+            listBuffer.items.push(unorderedMatch[1] ?? '');
+          } else {
+            flushList(`${i}-${li}`);
+            listBuffer = { ordered: false, items: [unorderedMatch[1] ?? ''] };
+          }
         } else {
           flushTable(`${i}-${li}`);
+          flushList(`${i}-${li}`);
+
           if (line === '') {
             nodes.push(<span key={`${i}-${li}-br`} className="block h-3" />);
+          } else if (/^#{1,6}\s/.test(line)) {
+            // Headers
+            const hashMatch = /^(#{1,6})\s+(.*)$/.exec(line);
+            if (hashMatch) {
+              const level = hashMatch[1]!.length;
+              const text = hashMatch[2] ?? '';
+              const headerClasses: Record<number, string> = {
+                1: 'text-2xl font-bold mt-4 mb-2',
+                2: 'text-xl font-semibold mt-3 mb-2',
+                3: 'text-lg font-semibold mt-3 mb-1',
+                4: 'text-base font-semibold mt-2 mb-1',
+                5: 'text-sm font-semibold mt-2 mb-1',
+                6: 'text-sm font-medium mt-2 mb-1',
+              };
+              nodes.push(
+                <div
+                  key={`${i}-${li}`}
+                  className={cn(
+                    headerClasses[level],
+                    'text-[var(--chat-text-primary)] leading-tight',
+                  )}
+                >
+                  {renderInline(text)}
+                </div>,
+              );
+            }
+          } else if (line.startsWith('> ')) {
+            // Blockquote
+            const quoteText = line.slice(2);
+            nodes.push(
+              <blockquote
+                key={`${i}-${li}`}
+                className="border-l-3 border-[var(--chat-text-muted)] pl-3 my-2 text-[15px] text-[var(--chat-text-secondary)] italic leading-relaxed"
+              >
+                {renderInline(quoteText)}
+              </blockquote>,
+            );
           } else {
             nodes.push(
               <p
@@ -170,17 +256,18 @@ function renderContent(content: string): React.ReactNode[] {
         }
       });
       flushTable(`${i}-end`);
+      flushList(`${i}-end`);
     }
   });
 
   return nodes;
 }
 
-// Inline rendering: bold, italic, inline code
+// Inline rendering: bold, italic, inline code, links, strikethrough
 function renderInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  // Handle **bold**, *italic*, `code`
-  const regex = /(\*\*.*?\*\*|\*.*?\*|`[^`]+`)/g;
+  // Handle [text](url), ~~strikethrough~~, **bold**, *italic*, `code`
+  const regex = /(\[([^\]]+)\]\(([^)]+)\)|~~.+?~~|\*\*.*?\*\*|\*.*?\*|`[^`]+`)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
@@ -189,7 +276,26 @@ function renderInline(text: string): React.ReactNode {
       parts.push(text.slice(last, match.index));
     }
     const token = match[0];
-    if (token.startsWith('**')) {
+    if (token.startsWith('[') && match[2] && match[3]) {
+      // Link: [text](url)
+      parts.push(
+        <a
+          key={match.index}
+          href={match[3]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[var(--chat-accent-primary)] underline underline-offset-2 hover:opacity-80"
+        >
+          {match[2]}
+        </a>,
+      );
+    } else if (token.startsWith('~~')) {
+      parts.push(
+        <del key={match.index} className="text-[var(--chat-text-muted)]">
+          {token.slice(2, -2)}
+        </del>,
+      );
+    } else if (token.startsWith('**')) {
       parts.push(<strong key={match.index}>{token.slice(2, -2)}</strong>);
     } else if (token.startsWith('*')) {
       parts.push(<em key={match.index}>{token.slice(1, -1)}</em>);
@@ -244,6 +350,14 @@ export function MessageBubble({
   // Assistant message
   return (
     <div className="message-enter flex flex-col gap-1">
+      {/* Thinking block — rendered above text content */}
+      {message.thinkingBlock && <ThinkingBlock block={message.thinkingBlock} />}
+
+      {/* Web search results — rendered above text content */}
+      {message.webSearchResults?.map((search) => (
+        <WebSearchCard key={search.id} search={search} />
+      ))}
+
       <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] break-words">
         {renderContent(message.content)}
         {isStreaming && (
@@ -253,6 +367,15 @@ export function MessageBubble({
           />
         )}
       </div>
+
+      {/* Citations — rendered below text content */}
+      {message.citations && message.citations.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-1">
+          {message.citations.map((citation, idx) => (
+            <CitationPill key={citation.id ?? idx} citation={citation} />
+          ))}
+        </div>
+      )}
 
       {!isStreaming && isLast && (
         <ActionBar messageId={message.id} content={message.content} onRetry={onRetry} />
