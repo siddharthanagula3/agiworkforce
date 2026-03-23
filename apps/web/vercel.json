@@ -12,7 +12,7 @@
   "rewrites": [
     {
       "source": "/chat/:path*",
-      "destination": "/api/chat-proxy/:path*"
+      "destination": "/chat/index.html"
     },
     {
       "source": "/v1/chat/completions",
