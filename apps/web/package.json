@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "bash ./scripts/build-chat-spa.sh && next build",
+    "build": "next build",
     "build:next-only": "next build",
     "start": "next start",
     "lint": "eslint . --cache --cache-strategy content --cache-location .cache/eslint",
