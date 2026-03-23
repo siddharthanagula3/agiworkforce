@@ -12,6 +12,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import {
+  Brain,
   Layers,
   Plus,
   Search,
@@ -72,6 +73,7 @@ export function ProjectsView() {
   const unarchiveProject = useProjectStore((state) => state.unarchiveProject);
   const setActiveProject = useProjectStore((state) => state.setActiveProject);
   const setActiveView = useUnifiedChatStore((state) => state.setActiveView);
+  const selectConversation = useUnifiedChatStore((state) => state.selectConversation);
 
   // Load projects on mount
   useEffect(() => {
@@ -141,6 +143,12 @@ export function ProjectsView() {
 
   const handleOpenProject = (project: Project) => {
     setActiveProject(project.id);
+    setActiveView('chat');
+  };
+
+  const handleOpenConversation = (projectId: string, conversationId: string) => {
+    setActiveProject(projectId);
+    selectConversation(conversationId);
     setActiveView('chat');
   };
 
@@ -272,6 +280,9 @@ export function ProjectsView() {
             project={selectedProject}
             onEdit={() => handleEditProject(selectedProject)}
             onOpen={() => handleOpenProject(selectedProject)}
+            onOpenConversation={(conversationId) =>
+              handleOpenConversation(selectedProject.id, conversationId)
+            }
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-zinc-500">
@@ -412,9 +423,10 @@ interface ProjectDetailsProps {
   project: Project;
   onEdit: () => void;
   onOpen: () => void;
+  onOpenConversation: (conversationId: string) => void;
 }
 
-function ProjectDetails({ project, onEdit, onOpen }: ProjectDetailsProps) {
+function ProjectDetails({ project, onEdit, onOpen, onOpenConversation }: ProjectDetailsProps) {
   const conversations = useUnifiedChatStore((state) => state.conversations);
 
   // Get linked conversations
@@ -469,6 +481,37 @@ function ProjectDetails({ project, onEdit, onOpen }: ProjectDetailsProps) {
 
       {/* Content */}
       <div className="p-6 grid grid-cols-2 gap-6">
+        <div className="col-span-2 grid gap-4 md:grid-cols-3">
+          {[
+            {
+              label: 'Conversations',
+              value: linkedConversations.length,
+              icon: MessageSquare,
+              tone: 'text-blue-400',
+            },
+            {
+              label: 'Project Files',
+              value: project.files.length,
+              icon: File,
+              tone: 'text-green-400',
+            },
+            {
+              label: 'Knowledge Files',
+              value: project.knowledgeBaseFiles?.length ?? 0,
+              icon: Brain,
+              tone: 'text-purple-400',
+            },
+          ].map((item) => (
+            <div key={item.label} className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+              <div className="flex items-center gap-2 text-sm text-zinc-400">
+                <item.icon className={cn('h-4 w-4', item.tone)} />
+                <span>{item.label}</span>
+              </div>
+              <div className="mt-2 text-2xl font-semibold text-white">{item.value}</div>
+            </div>
+          ))}
+        </div>
+
         {/* Custom Instructions */}
         <div className="col-span-2 bg-zinc-900 rounded-lg p-4 border border-zinc-800">
           <h3 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
@@ -496,16 +539,18 @@ function ProjectDetails({ project, onEdit, onOpen }: ProjectDetailsProps) {
           {linkedConversations.length > 0 ? (
             <div className="space-y-2 max-h-60 overflow-auto">
               {linkedConversations.map((conv) => (
-                <div
+                <button
+                  type="button"
                   key={conv.id}
-                  className="flex items-center gap-2 p-2 bg-zinc-800 rounded-md text-sm"
+                  onClick={() => onOpenConversation(conv.id)}
+                  className="flex w-full items-center gap-2 rounded-md bg-zinc-800 p-2 text-sm transition-colors hover:bg-zinc-700/80"
                 >
                   <MessageSquare className="w-4 h-4 text-zinc-500" />
                   <span className="text-zinc-300 truncate">
                     {conv.title || 'Untitled Conversation'}
                   </span>
                   <ChevronRight className="w-4 h-4 text-zinc-600 ml-auto" />
-                </div>
+                </button>
               ))}
             </div>
           ) : (
@@ -537,6 +582,39 @@ function ProjectDetails({ project, onEdit, onOpen }: ProjectDetailsProps) {
             </div>
           ) : (
             <p className="text-sm text-zinc-500 italic">No files added yet</p>
+          )}
+        </div>
+
+        <div className="col-span-2 bg-zinc-900 rounded-lg p-4 border border-zinc-800">
+          <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
+            <Brain className="w-4 h-4 text-purple-400" />
+            Knowledge Base
+            <Badge variant="secondary" className="bg-zinc-800 text-zinc-400 ml-auto">
+              {project.knowledgeBaseFiles?.length ?? 0}
+            </Badge>
+          </h3>
+          {project.knowledgeBaseFiles && project.knowledgeBaseFiles.length > 0 ? (
+            <div className="space-y-2 max-h-60 overflow-auto">
+              {project.knowledgeBaseFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-2 rounded-md bg-zinc-800 p-2 text-sm"
+                >
+                  <Brain className="w-4 h-4 text-zinc-500" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-zinc-300">{file.name}</div>
+                    <div className="truncate text-xs text-zinc-500">{file.path}</div>
+                  </div>
+                  {file.size != null && (
+                    <span className="text-xs text-zinc-500">
+                      {(file.size / 1024).toFixed(0)} KB
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-500 italic">No knowledge base files added yet</p>
           )}
         </div>
       </div>

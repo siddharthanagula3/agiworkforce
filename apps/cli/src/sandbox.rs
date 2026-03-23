@@ -1,25 +1,9 @@
 #![allow(dead_code, unused_imports)]
+pub use agiworkforce_sandbox_policy::SandboxPolicy;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum SandboxPolicy {
-    DangerFullAccess,
-    ReadOnly,
-    WorkspaceWrite { writable_roots: Vec<PathBuf> },
-    ExternalSandbox,
-}
-
-impl Default for SandboxPolicy {
-    fn default() -> Self {
-        Self::WorkspaceWrite {
-            writable_roots: vec![],
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxType {
@@ -74,9 +58,7 @@ impl SandboxManager {
     pub fn full_auto(workspace_dir: PathBuf) -> Self {
         Self {
             sandbox_type: SandboxType::detect(),
-            policy: SandboxPolicy::WorkspaceWrite {
-                writable_roots: vec![],
-            },
+            policy: SandboxPolicy::default(),
             workspace_dir,
         }
     }

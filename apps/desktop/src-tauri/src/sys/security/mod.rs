@@ -24,6 +24,7 @@ pub mod prompt_injection;
 pub mod rate_limit;
 pub mod rbac;
 pub mod sandbox;
+pub mod sandbox_runtime;
 pub mod secret_manager;
 pub mod storage;
 pub mod tool_guard;

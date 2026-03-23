@@ -1,4 +1,14 @@
-import { createContext, useContext, useMemo, useCallback, useRef, useEffect } from 'react';
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+  Component,
+  type ErrorInfo,
+  type ReactNode,
+} from 'react';
 import type { ChatRuntime } from '../lib/runtime';
 import type { ChatMessage } from '../lib/types';
 import type { ChipType } from './QuickChips';
@@ -18,17 +28,65 @@ import { useArtifact } from '../hooks/useArtifact';
 import { SettingsModal } from './SettingsModal';
 import { cn } from '../lib/utils';
 
+// ---------------------------------------------------------------------------
+// ErrorBoundary — catches render errors in the chat content area
+// ---------------------------------------------------------------------------
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class ChatErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  override componentDidCatch(error: Error, info: ErrorInfo): void {
+    // Log to console in development; in production this would go to an error service
+    if (process.env['NODE_ENV'] !== 'production') {
+      console.error('[ChatInterface] render error:', error, info.componentStack);
+    }
+  }
+
+  override render(): ReactNode {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+          <p className="text-sm font-medium text-[var(--chat-text-primary)]">
+            Something went wrong in the chat.
+          </p>
+          <p className="text-xs text-[var(--chat-text-muted)]">
+            {this.state.error?.message ?? 'An unexpected error occurred.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => this.setState({ hasError: false, error: undefined })}
+            className="rounded-lg px-3 py-1.5 text-xs bg-[var(--chat-surface-hover)] hover:bg-[var(--chat-accent-primary)]/10 transition-colors"
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Runtime context — lets deeply nested components access the runtime without prop drilling
 const RuntimeContext = createContext<ChatRuntime | null>(null);
 
-export function useRuntime(): ChatRuntime {
-  const ctx = useContext(RuntimeContext);
-  if (!ctx) throw new Error('useRuntime must be used inside <ChatInterface>');
-  return ctx;
+export function useRuntime(): ChatRuntime | null {
+  return useContext(RuntimeContext);
 }
 
 export interface ChatInterfaceProps {
-  runtime: ChatRuntime;
+  runtime: ChatRuntime | null;
   className?: string;
   /**
    * When true the chat package manages theme on document.documentElement.
@@ -230,6 +288,8 @@ export function ChatInterface({
             onModelSelectorClick={handleModelSelectorClick}
             onVoiceClick={handleVoiceClick}
             hasMessages={hasMessages}
+            disabled={!runtime}
+            disabledMessage="Connect to start chatting"
           />
           <Disclaimer variant={disclaimerVariant} />
         </div>
@@ -249,8 +309,10 @@ export function ChatInterface({
         {/* Left: collapsible sidebar */}
         <Sidebar />
 
-        {/* Center: main content — min-w-0 prevents flex children from overflowing */}
-        <main className="flex flex-1 min-w-0 flex-col overflow-hidden">{renderMainContent()}</main>
+        {/* Center: main content — wrapped in ErrorBoundary to catch render errors */}
+        <main className="flex flex-1 min-w-0 flex-col overflow-hidden">
+          <ChatErrorBoundary>{renderMainContent()}</ChatErrorBoundary>
+        </main>
 
         {/* Right: artifact panel — only mounted when open (Phase 3) */}
         {artifactOpen && (

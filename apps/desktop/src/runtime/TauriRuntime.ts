@@ -16,8 +16,14 @@
  *     through an async generator, which the ChatRuntime consumer iterates
  */
 
-import type { ChatRuntime, FileRef } from '@agiworkforce/chat';
-import type { Conversation, ChatMessage, SendMessageParams, StreamChunk } from '@agiworkforce/chat';
+import type {
+  ChatRuntime,
+  FileRef,
+  SendMessageOptions,
+  SendMessageParams,
+  StreamChunk,
+} from '@agiworkforce/chat';
+import type { Conversation, ChatMessage } from '@agiworkforce/chat';
 import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
 
@@ -145,7 +151,64 @@ export class TauriRuntime implements ChatRuntime {
   // can resolve the generator without waiting for Tauri to respond.
   private readonly _stopFlags = new Map<string, boolean>();
 
-  async *sendMessage(params: SendMessageParams): AsyncIterable<StreamChunk> {
+  // Registered onStream callbacks
+  private readonly _streamCallbacks = new Set<
+    (event: import('@agiworkforce/chat').StreamEvent) => void
+  >();
+
+  // ---------------------------------------------------------------------------
+  // ChatRuntime.sendMessage — drives the internal generator and dispatches
+  // chunks to all registered onStream callbacks.
+  // ---------------------------------------------------------------------------
+
+  async sendMessage(
+    conversationId: string,
+    content: string,
+    options?: SendMessageOptions,
+  ): Promise<void> {
+    const params: SendMessageParams = {
+      conversationId,
+      content,
+      model: options?.model,
+      attachments: undefined,
+      signal: options?.signal,
+    };
+    for await (const chunk of this._streamMessage(params)) {
+      if (this._streamCallbacks.size > 0) {
+        let event: import('@agiworkforce/chat').StreamEvent | null = null;
+        if (chunk.type === 'text') event = { type: 'content', content: chunk.content };
+        else if (chunk.type === 'thinking') event = { type: 'thinking', content: chunk.content };
+        else if (chunk.type === 'done') event = { type: 'done' };
+        else if (chunk.type === 'error') event = { type: 'error', error: chunk.content };
+        if (event) {
+          for (const cb of this._streamCallbacks) {
+            cb(event);
+          }
+        }
+      }
+    }
+  }
+
+  onStream(callback: (event: import('@agiworkforce/chat').StreamEvent) => void): () => void {
+    this._streamCallbacks.add(callback);
+    return () => this._streamCallbacks.delete(callback);
+  }
+
+  // Aliases so the optional interface methods work
+  async getMessages(conversationId: string): Promise<ChatMessage[]> {
+    return this.loadMessages(conversationId);
+  }
+
+  async listConversations(): Promise<{ id: string; title: string; updatedAt: string }[]> {
+    const convs = await this.loadConversations();
+    return convs.map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt }));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal async generator — yields raw StreamChunk objects
+  // ---------------------------------------------------------------------------
+
+  private async *_streamMessage(params: SendMessageParams): AsyncIterable<StreamChunk> {
     const { conversationId, content, model, attachments, signal } = params;
 
     // Mark this conversation as not stopped before we start

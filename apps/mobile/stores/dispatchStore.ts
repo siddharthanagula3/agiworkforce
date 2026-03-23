@@ -73,11 +73,14 @@ export const useDispatchStore = create<DispatchState>()(
         })),
 
       sendTask: (text: string) => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+
         const id = generateMessageId();
         const userMessage: DispatchMessage = {
           id,
           role: 'user',
-          text,
+          text: trimmed,
           timestamp: new Date().toISOString(),
         };
 
@@ -90,15 +93,23 @@ export const useDispatchStore = create<DispatchState>()(
         const { sendControl, status, queueControl } = useConnectionStore.getState();
         const payload = {
           messageId: id,
-          text,
+          text: trimmed,
           sentAt: new Date().toISOString(),
         };
 
-        if (status === 'connected') {
-          sendControl('dispatch_task', payload);
-        } else {
-          // Queue for delivery when reconnected
-          queueControl('dispatch_task', payload);
+        try {
+          if (status === 'connected') {
+            sendControl('dispatch_task', payload);
+          } else {
+            // Queue for delivery when reconnected
+            queueControl('dispatch_task', payload);
+          }
+        } catch {
+          set((state) => ({
+            messages: state.messages.map((m) =>
+              m.id === id ? { ...m, taskStatus: 'failed' as TaskStatus } : m,
+            ),
+          }));
         }
       },
 

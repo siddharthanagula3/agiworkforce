@@ -14,7 +14,9 @@ use tokio::sync::RwLock;
 pub enum AppServerTransport {
     #[default]
     Stdio,
-    WebSocket { addr: SocketAddr },
+    WebSocket {
+        addr: SocketAddr,
+    },
 }
 
 #[derive(Debug, Clone)]

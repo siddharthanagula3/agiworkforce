@@ -1,25 +1,18 @@
-import { useMemo } from 'react';
-import { useUIStore } from '../stores/uiStore';
+import { useState, useCallback } from 'react';
 import { tokens } from '../lib/tokens';
 
+/**
+ * Manages sidebar collapsed/expanded state.
+ * Returns `collapsed`, `toggleSidebar`, and `width` for use in Sidebar.tsx.
+ */
 export function useSidebar() {
-  const collapsed = useUIStore((s) => s.sidebarCollapsed);
-  const width = useUIStore((s) => s.sidebarWidth);
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const setSidebarCollapsed = useUIStore((s) => s.setSidebarCollapsed);
-  const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
+  const [collapsed, setCollapsed] = useState(false);
 
-  const currentWidth = collapsed ? tokens.sidebar.collapsedWidth : width;
+  const toggleSidebar = useCallback(() => {
+    setCollapsed((prev) => !prev);
+  }, []);
 
-  return useMemo(
-    () => ({
-      collapsed,
-      width: currentWidth,
-      expandedWidth: width,
-      toggleSidebar,
-      setSidebarCollapsed,
-      setSidebarWidth,
-    }),
-    [collapsed, currentWidth, width, toggleSidebar, setSidebarCollapsed, setSidebarWidth],
-  );
+  const width = collapsed ? tokens.spacing.sidebarCollapsedWidth : tokens.spacing.sidebarWidth;
+
+  return { collapsed, toggleSidebar, width };
 }

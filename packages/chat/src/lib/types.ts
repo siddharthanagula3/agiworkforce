@@ -1,26 +1,70 @@
-export type Provider =
-  | 'anthropic'
-  | 'openai'
-  | 'google'
-  | 'mistral'
-  | 'meta'
-  | 'xai'
-  | 'deepseek'
-  | 'local';
+/**
+ * Chat Package Types
+ *
+ * Local type definitions for the `packages/chat` shared component library.
+ * `Provider` is imported from `@agiworkforce/types` — the single source of truth
+ * for all LLM provider identifiers across the monorepo.
+ *
+ * `Conversation`, `ChatMessage`, and `ModelInfo` extend the shared base shapes
+ * with fields specific to the chat package's UI concerns (pinning, archiving,
+ * inline citations, streaming state, and the full provider union).
+ *
+ * @module types
+ */
 
-export type ModelTier = 'flagship' | 'standard' | 'fast' | 'local';
+import type { Provider } from '@agiworkforce/types';
 
-export interface ModelInfo {
+// Re-export Provider so components inside this package can import it from
+// the local barrel rather than reaching into @agiworkforce/types directly.
+export type { Provider };
+
+export interface ChatMessage {
+  id: string;
+  /** Conversation this message belongs to. */
+  conversationId?: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  /** ISO 8601 timestamp when the message was created. */
+  createdAt?: string;
+  /** @deprecated Use `createdAt`. Kept for backwards compatibility. */
+  timestamp?: string;
+  model?: string;
+  provider?: Provider | string;
+  thinking?: string;
+  citations?: Citation[];
+  toolCalls?: ToolCall[];
+  attachments?: Attachment[];
+  isStreaming?: boolean;
+  error?: string;
+}
+
+export interface Citation {
+  id?: string;
+  url: string;
+  title?: string;
+  snippet?: string;
+  /** Extracted hostname/domain for display (e.g. "wikipedia.org"). */
+  domain?: string;
+  /** URL of the site's favicon for display next to the citation. */
+  faviconUrl?: string;
+  /** When a citation pill groups multiple sources, the overflow count. */
+  additionalCount?: number;
+}
+
+export interface ToolCall {
   id: string;
   name: string;
-  provider: Provider;
-  tier: ModelTier;
-  supportsThinking: boolean;
-  supportsVision: boolean;
-  supportsTools: boolean;
-  contextWindow: number;
-  isLocal: boolean;
-  isByok: boolean;
+  args: Record<string, unknown>;
+  result?: string;
+  status?: 'pending' | 'running' | 'completed' | 'failed';
+}
+
+export interface Attachment {
+  id: string;
+  name: string;
+  type: string;
+  url?: string;
+  size?: number;
 }
 
 export interface Conversation {
@@ -28,98 +72,17 @@ export interface Conversation {
   title: string;
   createdAt: string;
   updatedAt: string;
-  pinned: boolean;
+  model?: string;
+  provider?: Provider | string;
+  pinned?: boolean;
+  archived?: boolean;
+  messageCount?: number;
+  /** ID of the project this conversation belongs to. */
   projectId?: string;
-  model?: string;
-  messageCount: number;
+  /** Preview text of the last message in the conversation. */
   lastMessage?: string;
+  /** Optional tags for filtering/categorisation. */
   tags?: string[];
-  archived: boolean;
-}
-
-export interface ChatMessage {
-  id: string;
-  conversationId: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  createdAt: string;
-  model?: string;
-  provider?: Provider;
-  attachments?: Attachment[];
-  thinkingBlocks?: ThinkingBlock[];
-  toolCalls?: ToolCall[];
-  citations?: Citation[];
-  artifacts?: Artifact[];
-  imageUrl?: string;
-  videoUrl?: string;
-  isStreaming?: boolean;
-}
-
-export interface Attachment {
-  id: string;
-  type: 'image' | 'document' | 'code' | 'audio';
-  name: string;
-  url: string;
-  mimeType: string;
-  size: number;
-}
-
-export interface ThinkingBlock {
-  id: string;
-  summary: string;
-  steps: ThinkingStep[];
-  collapsed: boolean;
-  durationMs?: number;
-}
-
-export interface ThinkingStep {
-  id: string;
-  type: 'thinking' | 'reading' | 'script' | 'creating' | 'search' | 'tool' | 'done';
-  content: string;
-  badge?: string;
-  badgeType?: 'result' | 'script' | 'file';
-  result?: string;
-  resultCollapsed?: boolean;
-}
-
-export interface ToolCall {
-  id: string;
-  name: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  input?: Record<string, unknown>;
-  output?: string;
-  durationMs?: number;
-  requiresApproval?: boolean;
-  riskLevel?: 'low' | 'medium' | 'high';
-}
-
-export interface Citation {
-  id: string;
-  url: string;
-  title: string;
-  domain: string;
-  faviconUrl?: string;
-  additionalCount?: number;
-}
-
-export interface Artifact {
-  id: string;
-  type: 'html' | 'react' | 'code' | 'document' | 'research' | 'image' | 'svg' | 'mermaid';
-  title: string;
-  content: string;
-  language?: string;
-  mimeType?: string;
-}
-
-export interface WebSearchResult {
-  query: string;
-  resultCount: number;
-  results: Array<{
-    title: string;
-    url: string;
-    domain: string;
-    faviconUrl?: string;
-  }>;
 }
 
 export interface Project {
@@ -128,89 +91,111 @@ export interface Project {
   description?: string;
   createdAt: string;
   updatedAt: string;
-  starred: boolean;
-  conversationIds: string[];
-  memory?: string;
+  starred?: boolean;
+  conversationIds?: string[];
   instructions?: string;
-  files?: ProjectFile[];
 }
 
-export interface ProjectFile {
-  id: string;
-  name: string;
-  type: string;
-  size: number;
-  url?: string;
-  source?: 'upload' | 'github';
-}
+// ---------------------------------------------------------------------------
+// Artifact — inline renderable content (code, HTML, React component, etc.)
+// ---------------------------------------------------------------------------
 
-export interface Skill {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  addedBy: 'user' | 'system';
-  updatedAt: string;
-  invokedBy: 'user' | 'ai' | 'both';
-  allowedTools: string[];
-  content: string;
-  files?: string[];
-}
-
-export interface Connector {
-  id: string;
-  name: string;
-  description: string;
-  icon?: string;
-  connected: boolean;
-  category: ConnectorCategory;
-  popularity?: number;
-  tools?: ConnectorTool[];
-}
-
-export type ConnectorCategory =
+export type ArtifactType =
   | 'code'
-  | 'communication'
-  | 'data'
-  | 'design'
-  | 'development'
-  | 'financial'
-  | 'health'
-  | 'productivity'
-  | 'sales';
+  | 'html'
+  | 'react'
+  | 'markdown'
+  | 'svg'
+  | 'mermaid'
+  | 'json'
+  | 'document'
+  | 'research'
+  | 'image';
 
-export interface ConnectorTool {
+export interface Artifact {
+  id: string;
+  type: ArtifactType;
+  title: string;
+  content: string;
+  language?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Thinking / reasoning trace types
+// ---------------------------------------------------------------------------
+
+export type ThinkingStepType =
+  | 'thinking'
+  | 'reading'
+  | 'writing'
+  | 'terminal'
+  | 'search'
+  | 'link'
+  | 'complete'
+  | 'script'
+  | 'creating'
+  | 'tool'
+  | 'done';
+
+export interface ThinkingStep {
+  id: string;
+  type: ThinkingStepType;
+  /** Primary text content displayed next to the step icon. */
+  content: string;
+  /** Optional badge variant to render beneath the step content. */
+  badgeType?: 'result' | 'script' | 'file';
+  /** Badge label text when badgeType is 'file'. */
+  badge?: string;
+  /** Collapsible result/output content for the step. */
+  result?: string;
+}
+
+export interface ThinkingBlock {
+  id: string;
+  steps: ThinkingStep[];
+  summary?: string;
+  collapsed?: boolean;
+  /** Elapsed time in milliseconds shown in the header. */
+  durationMs?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Web search result card
+// ---------------------------------------------------------------------------
+
+export interface WebSearchResultItem {
+  url: string;
+  title: string;
+  snippet?: string;
+  faviconUrl?: string;
+  domain?: string;
+}
+
+export interface WebSearchResult {
+  id: string;
+  query: string;
+  results: WebSearchResultItem[];
+  /** Total number of results found (may be more than results.length). */
+  resultCount: number;
+  status?: 'pending' | 'running' | 'completed' | 'failed';
+}
+
+/**
+ * Model metadata used by the chat package's model selector.
+ *
+ * `provider` uses the canonical `Provider` union from `@agiworkforce/types`
+ * so the model selector is always in sync with the platform's full provider list.
+ */
+export interface ModelInfo {
   id: string;
   name: string;
-  type: 'read' | 'write' | 'other';
-  permission: 'auto' | 'ask' | 'blocked';
-}
-
-export interface StreamChunk {
-  type:
-    | 'text'
-    | 'thinking'
-    | 'tool_call'
-    | 'tool_result'
-    | 'citation'
-    | 'artifact'
-    | 'image'
-    | 'video'
-    | 'search'
-    | 'done'
-    | 'error';
-  content?: string;
-  data?: Record<string, unknown>;
-}
-
-export interface SendMessageParams {
-  conversationId: string;
-  content: string;
-  model: string;
-  provider: Provider;
-  attachments?: Attachment[];
-  enableThinking?: boolean;
-  enableWebSearch?: boolean;
-  projectInstructions?: string;
-  signal?: AbortSignal;
+  /** LLM provider identifier — canonical union from `@agiworkforce/types`. */
+  provider: Provider | string;
+  tier: 'flagship' | 'standard' | 'fast';
+  supportsThinking: boolean;
+  supportsVision: boolean;
+  supportsTools: boolean;
+  contextWindow: number;
+  isLocal: boolean;
+  isByok: boolean;
 }
