@@ -5,7 +5,7 @@ import { getSafeRedirectUrl } from '@/lib/safe-redirect';
 import { Bot, Building2, Github, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useState, useMemo, useRef } from 'react';
+import { Suspense, useState, useMemo, useRef, useEffect } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
 
 // Get the app URL for redirects - use env var for production, fallback to window for dev
@@ -46,6 +46,24 @@ function LoginForm() {
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(
     initialMessage,
   );
+
+  // Auto-redirect if already authenticated (e.g. user has SSR cookies)
+  // Passes session tokens via hash so the Vite SPA at /chat can use them
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.access_token && redirectTo.includes('/chat')) {
+        const hashParams = new URLSearchParams({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+          type: 'bearer',
+        });
+        window.location.href = `${redirectTo}#${hashParams.toString()}`;
+      } else if (session?.access_token) {
+        window.location.href = redirectTo;
+      }
+    });
+  }, [redirectTo]);
 
   // Debounce SSO domain check — only fire after user stops typing
   const ssoCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
