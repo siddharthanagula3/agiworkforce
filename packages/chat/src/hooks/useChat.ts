@@ -63,16 +63,32 @@ export function useChat(runtime: ChatRuntime | null) {
 
   const sendMessage = useCallback(
     (content: string) => {
-      if (!runtime || !currentConversationId || isStreamingRef.current) return;
+      if (!runtime || isStreamingRef.current) return;
 
       const store = useChatStore.getState();
+
+      // Auto-create conversation if none exists
+      let convId = store.currentConversationId;
+      if (!convId) {
+        convId = crypto.randomUUID();
+        store.addConversation({
+          id: convId,
+          title: content.substring(0, 50) || 'New Chat',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          archived: false,
+          pinned: false,
+        });
+        store.setCurrentConversation(convId);
+      }
+
       const systemPrompt = getSystemPromptForMode(store.activeMode);
       const selectedModelId = useModelStore.getState().selectedModelId;
 
       // Reset assistant message ref for new response
       assistantMessageIdRef.current = null;
 
-      store.addMessage(currentConversationId, {
+      store.addMessage(convId, {
         id: crypto.randomUUID(),
         role: 'user',
         content,
@@ -81,7 +97,7 @@ export function useChat(runtime: ChatRuntime | null) {
       store.startStreaming();
 
       void runtime
-        .sendMessage(currentConversationId, content, {
+        .sendMessage(convId, content, {
           ...(systemPrompt ? { systemPrompt } : {}),
           model: selectedModelId,
         })
@@ -96,7 +112,7 @@ export function useChat(runtime: ChatRuntime | null) {
           }
         });
     },
-    [runtime, currentConversationId],
+    [runtime],
   );
 
   const stopGeneration = useCallback(() => {
