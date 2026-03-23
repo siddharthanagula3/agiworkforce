@@ -2134,9 +2134,10 @@ export const useChatStore = create<ChatState>()(
 
           renameConversationInBackend: async (dbId: number, title: string, userId: string) => {
             try {
-              await invoke('chat_update_conversation', {
-                id: dbId,
-                request: { title, user_id: userId },
+              await invoke('chat_update_conversation_title', {
+                conversationId: dbId,
+                title,
+                userId,
               });
               return true;
             } catch (error) {

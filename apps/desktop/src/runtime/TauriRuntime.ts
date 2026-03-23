@@ -392,12 +392,20 @@ export class TauriRuntime implements ChatRuntime {
     await invoke('chat_delete_conversation', { conversationId: id });
   }
 
-  async archiveConversation(id: string): Promise<void> {
-    await invoke('chat_archive_conversation', { conversationId: id });
+  async archiveConversation(id: string, userId?: string, archived?: boolean): Promise<void> {
+    await invoke('chat_archive_conversation', {
+      conversationId: id,
+      userId: userId ?? '',
+      archived: archived ?? true,
+    });
   }
 
-  async renameConversation(id: string, title: string): Promise<void> {
-    await invoke('chat_update_conversation_title', { conversationId: id, title });
+  async renameConversation(id: string, title: string, userId?: string): Promise<void> {
+    await invoke('chat_update_conversation_title', {
+      conversationId: id,
+      title,
+      userId: userId ?? '',
+    });
   }
 
   async uploadFile(file: File): Promise<FileRef> {
