@@ -10,7 +10,8 @@ import {
   Check,
 } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
-import { invoke } from '../../lib/tauri-mock';
+import { toast } from 'sonner';
+import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useDocumentStore } from '../../stores/documentStore';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
@@ -89,6 +90,11 @@ export function DocumentGenerator({
 
   const handleGenerate = async () => {
     if (!title.trim()) return;
+
+    if (!isTauri) {
+      toast.info('Document generation requires the desktop app');
+      return;
+    }
 
     const ext = getExtension();
     const defaultName = `${title.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`;

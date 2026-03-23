@@ -91,6 +91,20 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
 
       // Configuration
       loadConfig: async () => {
+        if (!isTauri) {
+          set((state) => {
+            state.isConfigLoading = false;
+          });
+          return (
+            get().config ?? {
+              enabled: false,
+              budget: 'medium',
+              budget_tokens: 10000,
+              emit_thinking_events: false,
+              include_thinking_summary: false,
+            }
+          );
+        }
         set((state) => {
           state.isConfigLoading = true;
         });
@@ -112,6 +126,17 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
       },
 
       setConfig: async (request: SetThinkingConfigRequest) => {
+        if (!isTauri) {
+          return (
+            get().config ?? {
+              enabled: false,
+              budget: 'medium',
+              budget_tokens: 10000,
+              emit_thinking_events: false,
+              include_thinking_summary: false,
+            }
+          );
+        }
         try {
           // Rust struct SetThinkingConfigRequest uses default serde (snake_case fields)
           const config = await invoke<ThinkingConfigResponse>('thinking_set_config', {
@@ -134,6 +159,13 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
 
       // Toggle
       toggle: async () => {
+        if (!isTauri) {
+          const newEnabled = !(get().config?.enabled ?? false);
+          set((state) => {
+            if (state.config) state.config.enabled = newEnabled;
+          });
+          return newEnabled;
+        }
         try {
           const enabled = await invoke<boolean>('thinking_toggle');
           set((state) => {
@@ -150,6 +182,17 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
 
       // Budget
       setBudget: async (budget: string) => {
+        if (!isTauri) {
+          return (
+            get().config ?? {
+              enabled: false,
+              budget,
+              budget_tokens: 10000,
+              emit_thinking_events: false,
+              include_thinking_summary: false,
+            }
+          );
+        }
         try {
           const config = await invoke<ThinkingConfigResponse>('thinking_set_budget', { budget });
           set((state) => {
@@ -164,6 +207,17 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
 
       // Detection
       detectTrigger: async (message: string) => {
+        if (!isTauri) {
+          return (
+            get().config ?? {
+              enabled: false,
+              budget: 'medium',
+              budget_tokens: 10000,
+              emit_thinking_events: false,
+              include_thinking_summary: false,
+            }
+          );
+        }
         try {
           const config = await invoke<ThinkingConfigResponse>('thinking_detect_trigger', {
             message,
@@ -177,6 +231,7 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
 
       // Model support
       checkModelSupport: async (model: string) => {
+        if (!isTauri) return false;
         // Check cache first
         const cached = get().modelSupport[model];
         if (cached !== undefined) {
@@ -197,6 +252,7 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
 
       // Current thinking
       getCurrentThinking: async () => {
+        if (!isTauri) return get().currentThinking;
         try {
           const thinking = await invoke<ThinkingContent | null>('thinking_get_current');
           set((state) => {

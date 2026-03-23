@@ -1,4 +1,4 @@
-import { invoke } from '@/lib/tauri-mock';
+import { invoke, isTauri } from '@/lib/tauri-mock';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { save } from '@tauri-apps/plugin-dialog';
 import { CheckCircle, Download, File, FileText, Image as ImageIcon } from 'lucide-react';
@@ -53,6 +53,25 @@ export const FileDownloadButton: React.FC<FileDownloadButtonProps> = ({
   const handleDownload = async () => {
     try {
       setIsDownloading(true);
+
+      // Web fallback: use blob download
+      if (!isTauri) {
+        const content = file.content ?? '';
+        if (!content && !file.path) {
+          throw new Error('No file content available for web download');
+        }
+        const blob = new Blob([content], { type: file.type || 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(url);
+        setIsDownloaded(true);
+        onDownloadComplete?.(file.name);
+        setTimeout(() => setIsDownloaded(false), 3000);
+        return;
+      }
 
       const savePath = await save({
         defaultPath: file.name,

@@ -1,4 +1,4 @@
-import { invoke } from '@/lib/tauri-mock';
+import { invoke, isTauri } from '@/lib/tauri-mock';
 import { save } from '@tauri-apps/plugin-dialog';
 import {
   AlertTriangle,
@@ -176,6 +176,10 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   };
 
   const handleExportPdf = async () => {
+    if (!isTauri) {
+      toast.info('PDF export requires the desktop app');
+      return;
+    }
     try {
       const savePath = await save({
         defaultPath: `${artifact.title || 'document'}.pdf`,
@@ -202,6 +206,10 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   };
 
   const handleExportWord = async () => {
+    if (!isTauri) {
+      toast.info('Word export requires the desktop app');
+      return;
+    }
     try {
       const savePath = await save({
         defaultPath: `${artifact.title || 'document'}.docx`,
@@ -229,6 +237,11 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 
   const handleExportExcel = async () => {
     if (artifact.type !== 'spreadsheet' && artifact.type !== 'table') return;
+
+    if (!isTauri) {
+      toast.info('Excel export requires the desktop app');
+      return;
+    }
 
     try {
       const savePath = await save({
@@ -308,6 +321,18 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 
       const svgString = new XMLSerializer().serializeToString(clonedSvg);
       const blob = new Blob([svgString], { type: 'image/svg+xml' });
+
+      // Web fallback: use blob download
+      if (!isTauri) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${artifact.title || 'chart'}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success('Exported as SVG');
+        return;
+      }
 
       const savePath = await save({
         defaultPath: `${artifact.title || 'chart'}.svg`,
