@@ -83,6 +83,7 @@ const ChatCompletionRequestSchema = z.object({
   seed: z.number().int().optional(),
   // Extended parameters for AGI Workforce
   web_search: z.boolean().optional(),
+  code_execution: z.boolean().optional(),
   thinking_mode: z.boolean().optional(),
   thinking: z
     .object({
@@ -641,24 +642,36 @@ async function handleChatCompletions(request: NextRequest) {
     tool_call_id: msg.tool_call_id,
   }));
 
-  // Inject provider-specific web search tools when web_search is enabled
+  // Inject provider-specific built-in tools when enabled
   let resolvedTools = chatRequest.tools;
+  const providerLower = provider.toLowerCase();
+
+  // Web Search — each provider has a native search tool
   if (chatRequest.web_search) {
-    const providerLower = provider.toLowerCase();
     if (providerLower === 'anthropic') {
-      // Anthropic: add the web_search tool
       resolvedTools = [
         ...(resolvedTools ?? []),
-        { type: 'web_search_20250305', name: 'web_search' },
+        { type: 'web_search_20260209', name: 'web_search' },
       ];
     } else if (providerLower === 'google') {
-      // Google Gemini: add google_search tool
       resolvedTools = [...(resolvedTools ?? []), { google_search: {} }];
     } else if (providerLower === 'openai') {
-      // OpenAI: add web_search_preview tool for Responses API compatibility
       resolvedTools = [...(resolvedTools ?? []), { type: 'web_search_preview' }];
     }
-    // For other providers, web search is not supported — proceed without search tools
+  }
+
+  // Code Execution — sandboxed Python/code execution
+  if (chatRequest.code_execution) {
+    if (providerLower === 'anthropic') {
+      resolvedTools = [
+        ...(resolvedTools ?? []),
+        { type: 'code_execution_20260120', name: 'code_execution' },
+      ];
+    } else if (providerLower === 'google') {
+      resolvedTools = [...(resolvedTools ?? []), { code_execution: {} }];
+    } else if (providerLower === 'openai') {
+      resolvedTools = [...(resolvedTools ?? []), { type: 'code_interpreter' }];
+    }
   }
 
   const llmRequest = {
