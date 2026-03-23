@@ -94,4 +94,5 @@ export type Provider =
   | 'ai21'
   | 'sambanova'
   | 'azure'
-  | 'bedrock';
+  | 'bedrock'
+  | 'ollama_cloud';
