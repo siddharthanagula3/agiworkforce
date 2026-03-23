@@ -4,7 +4,7 @@
  * - Rate limiting: Applied per-endpoint based on operation type
  * - Input validation: Zod schemas with .strict() to reject unexpected fields
  * - Authentication: JWT required (via authenticateToken)
- * - Plan enforcement: Pro/Max/Enterprise required (via requireProPlan)
+ * - Plan enforcement: Hobby/Pro/Max/Enterprise required (via requireProPlan)
  * - Ownership validation: Users can only access their own conversations
  *
  * Rate limit rationale (OWASP compliant):
