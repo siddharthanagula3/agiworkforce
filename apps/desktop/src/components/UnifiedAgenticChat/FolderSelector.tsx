@@ -9,8 +9,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { ChevronDown, Folder, FolderOpen, X, Clock, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
-import { invoke } from '../../lib/tauri-mock';
+import { invoke, isTauri } from '../../lib/tauri-mock';
 import {
   useProjectStore,
   selectCurrentFolder,
@@ -68,6 +69,11 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
   // Handle folder selection via native dialog
   const handleSelectFolder = useCallback(async () => {
     if (isSelecting) return;
+
+    if (!isTauri) {
+      toast.info('Folder selection requires the desktop app');
+      return;
+    }
 
     setIsSelecting(true);
     setIsOpen(false);

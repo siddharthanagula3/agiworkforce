@@ -2190,6 +2190,68 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'list_autonomous_task_checkpoints_by_task':
       return [] as T;
 
+    // ── Batch: 51 missing commands (write, account, settings, etc.) ───
+    case 'file_write':
+    case 'account_disconnect_device':
+    case 'settings_save':
+    case 'calendar_delete_event':
+    case 'terminal_kill':
+    case 'account_store_api_base_url':
+    case 'account_store_access_token':
+    case 'account_store_refresh_token':
+    case 'llm_ensure_managed_cloud':
+    case 'secret_manager_set':
+    case 'secret_manager_delete':
+    case 'on_file_changed':
+    case 'on_file_deleted':
+    case 'ollama_pull_model':
+    case 'ollama_delete_model':
+    case 'cloud_complete_oauth':
+    case 'cloud_download':
+    case 'cloud_delete':
+    case 'cancel_subscription':
+    case 'chat_set_monthly_budget':
+    case 'error_report':
+    case 'api_oauth_create_client':
+    case 'computer_use_click':
+    case 'computer_use_move_mouse':
+    case 'computer_use_stop_session':
+    case 'save_custom_agent':
+    case 'delete_custom_agent':
+    case 'shortcut_register':
+    case 'terminal_send_input':
+    case 'terminal_resize':
+    case 'terminal_clear_history':
+    case 'terminal_set_env':
+    case 'terminal_unset_env':
+    case 'update_trigger':
+    case 'unregister_trigger':
+    case 'toggle_trigger':
+    case 'productivity_trello_move_card':
+    case 'productivity_asana_assign_task':
+    case 'productivity_asana_mark_complete':
+    case 'save_custom_instructions':
+    case 'canvas_set_active':
+    case 'canvas_add_element':
+    case 'canvas_clear':
+    case 'log_tool_execution':
+    case 'log_workflow_execution':
+    case 'approve_request':
+    case 'reject_request':
+    case 'cancel_tool_execution':
+    case 'update_allowed_directories':
+    case 'agent_stop':
+    case 'agi_extend_timeout':
+    case 'timeout_set_config':
+    case 'index_file':
+      return undefined as T;
+
+    case 'index_workspace':
+      return { files: [], symbols: [] } as T;
+
+    case 'api_validate_template':
+      return { valid: true } as T;
+
     default:
       // AUDIT-MOCK-088 fix: Throw error for unregistered commands to surface wiring issues
       console.error(`[Tauri] Unregistered command in test mode: ${command}`);
