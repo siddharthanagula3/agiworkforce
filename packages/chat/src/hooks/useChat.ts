@@ -84,6 +84,7 @@ export function useChat(runtime: ChatRuntime | null) {
 
       const systemPrompt = getSystemPromptForMode(store.activeMode);
       const selectedModelId = useModelStore.getState().selectedModelId;
+      const webSearchEnabled = store.webSearchEnabled;
 
       // Reset assistant message ref for new response
       assistantMessageIdRef.current = null;
@@ -100,6 +101,7 @@ export function useChat(runtime: ChatRuntime | null) {
         .sendMessage(convId, content, {
           ...(systemPrompt ? { systemPrompt } : {}),
           model: selectedModelId,
+          webSearch: webSearchEnabled,
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
