@@ -1,0 +1,45 @@
+{
+  "name": "agiworkforce",
+  "displayName": "AGI Workforce",
+  "description": "Multi-model AI agent — 24 providers, desktop automation, 150+ skills, BYOK",
+  "version": "0.1.0",
+  "install": {
+    "npm": "@agiworkforce/cli",
+    "curl": "https://agiworkforce.com/install.sh",
+    "cargo": "agiworkforce-cli"
+  },
+  "launch": {
+    "command": "agiworkforce",
+    "args": ["--provider", "ollama"],
+    "env": {
+      "OLLAMA_HOST": "{{host}}"
+    }
+  },
+  "config": {
+    "command": "agiworkforce",
+    "args": ["ollama-setup"]
+  },
+  "headless": {
+    "command": "agiworkforce",
+    "args": ["--provider", "ollama", "--yes", "--model", "{{model}}"],
+    "flag": "--yes"
+  },
+  "models": {
+    "recommended": ["qwen3-coder", "glm-4.7-flash", "llama3.2", "qwen3.5"],
+    "cloud": ["kimi-k2.5:cloud", "glm-5:cloud", "minimax-m2.7:cloud", "qwen3.5:cloud"]
+  },
+  "minContextLength": 65536,
+  "capabilities": [
+    "code",
+    "tool-use",
+    "web-search",
+    "multi-model",
+    "voice",
+    "desktop-automation",
+    "mcp"
+  ],
+  "homepage": "https://agiworkforce.com",
+  "repository": "https://github.com/siddharthanagula3/agiworkforce-desktop-app",
+  "license": "Proprietary",
+  "categories": ["coding-agents", "assistants"]
+}
