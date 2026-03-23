@@ -359,6 +359,7 @@ export async function sendCloudMessage(
   onError: (err: Error) => void,
   signal?: AbortSignal,
   onEvent?: (payload: Record<string, unknown>) => void,
+  webSearch?: boolean,
 ): Promise<void> {
   let headers: Record<string, string>;
 
@@ -370,10 +371,11 @@ export async function sendCloudMessage(
   }
 
   // Use the OpenAI-compatible endpoint deployed on Vercel
-  const openAiBody = {
+  const openAiBody: Record<string, unknown> = {
     model,
     messages: [{ role: 'user' as const, content }],
     stream: true,
+    ...(webSearch ? { web_search: true } : {}),
   };
 
   let res: Response;

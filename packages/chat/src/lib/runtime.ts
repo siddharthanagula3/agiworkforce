@@ -58,6 +58,7 @@ export interface SendMessageOptions {
   provider?: string;
   attachments?: File[];
   thinkingEnabled?: boolean;
+  webSearch?: boolean;
   signal?: AbortSignal;
   systemPrompt?: string;
 }
