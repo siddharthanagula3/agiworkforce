@@ -109,8 +109,8 @@ function useCommands(
 
     // ---------- Navigate ----------
     {
-      id: 'go-dashboard',
-      title: 'Go to Dashboard',
+      id: 'go-chat',
+      title: 'Go to Chat',
       group: 'Navigate',
       icon: LayoutDashboard,
       shortcut: `${mod}D`,
