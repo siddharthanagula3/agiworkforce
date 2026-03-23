@@ -195,7 +195,7 @@ export const useChatStore = create<ChatState>()(
       },
     })),
     {
-      name: 'agiworkforce-chat-storage',
+      name: 'chat-storage',
       version: 1,
       storage: createJSONStorage(() =>
         typeof window === 'undefined' ? noopStorage : window.localStorage,
