@@ -7,7 +7,6 @@ type ActiveRightPanel = 'artifact' | null;
 
 interface UIState {
   sidebarCollapsed: boolean;
-  sidebarWidth: number;
   activeView: ActiveView;
   activeRightPanel: ActiveRightPanel;
   artifactPanelWidth: number;
@@ -19,7 +18,6 @@ interface UIState {
 
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
-  setSidebarWidth: (width: number) => void;
   setActiveView: (view: ActiveView) => void;
   openArtifactPanel: () => void;
   closeArtifactPanel: () => void;
@@ -35,7 +33,6 @@ export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
       sidebarCollapsed: false,
-      sidebarWidth: 260,
       activeView: 'chat' as ActiveView,
       activeRightPanel: null,
       artifactPanelWidth: 400,
@@ -48,8 +45,6 @@ export const useUIStore = create<UIState>()(
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-
-      setSidebarWidth: (width) => set({ sidebarWidth: Math.max(200, Math.min(400, width)) }),
 
       setActiveView: (view) => set({ activeView: view }),
 
@@ -75,7 +70,6 @@ export const useUIStore = create<UIState>()(
       name: 'chat-ui-store',
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
-        sidebarWidth: state.sidebarWidth,
         themeMode: state.themeMode,
         artifactPanelWidth: state.artifactPanelWidth,
       }),

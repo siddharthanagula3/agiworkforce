@@ -2,6 +2,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { exists } from '@tauri-apps/plugin-fs';
 import { AlertCircle, FolderPlus, FolderX } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
+import { isTauri } from '../../lib/tauri-mock';
 import { useSettingsStore } from '../../stores/settingsStore';
 import {
   AlertDialog,
@@ -33,6 +35,17 @@ export function AllowedDirectoriesSettings() {
 
     const path = manualPath.trim();
 
+    // On web, skip filesystem validation and just add the path
+    if (!isTauri) {
+      if (allowedDirectories.includes(path)) {
+        setError('Directory already added');
+        return;
+      }
+      addAllowedDirectory(path);
+      setManualPath('');
+      return;
+    }
+
     try {
       const pathExists = await exists(path);
       if (!pathExists) {
@@ -58,6 +71,10 @@ export function AllowedDirectoriesSettings() {
 
   const handleBrowse = async () => {
     setError(null);
+    if (!isTauri) {
+      toast.info('Folder selection requires the desktop app');
+      return;
+    }
     try {
       const selected = await open({
         directory: true,
