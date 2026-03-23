@@ -3,52 +3,14 @@ import { Check, ChevronDown, Settings, Zap, Star, Cpu } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useModel } from '../hooks/useModel';
 import type { ModelInfo } from '../lib/types';
-import modelCatalog from '@agiworkforce/types/models.json';
-
 // ---------------------------------------------------------------------------
-// Build fallback models from the canonical models.json catalog.
-// Pick each provider's defaultModel so we never hardcode model IDs.
-// Exclude local-only providers (ollama) since web has no local inference.
+// Fallback models — shown only when modelStore has no models loaded.
+// The host app (desktop/web) is responsible for loading the real model list
+// from models.json or the backend. This is an emergency fallback only.
+// NOTE: Keep this empty — the host app populates modelStore from models.json.
+// If modelStore is empty, the selector shows "No models available".
 // ---------------------------------------------------------------------------
-const CLOUD_PROVIDERS = ['anthropic', 'openai', 'google', 'xai', 'deepseek'] as const;
-
-const FALLBACK_MODELS: ModelInfo[] = CLOUD_PROVIDERS.flatMap((providerKey) => {
-  const providerConfig = (
-    modelCatalog.providers as Record<string, { label?: string; defaultModel?: string }>
-  )[providerKey];
-  if (!providerConfig?.defaultModel) return [];
-  const modelId = providerConfig.defaultModel;
-  const modelDef = (
-    modelCatalog.models as Record<
-      string,
-      {
-        id: string;
-        name: string;
-        contextWindow?: number;
-        capabilities?: Record<string, boolean>;
-        speed?: string;
-      }
-    >
-  )[modelId];
-  if (!modelDef) return [];
-  return [
-    {
-      id: modelDef.id,
-      name: modelDef.name,
-      provider: providerKey,
-      tier:
-        modelDef.speed === 'very-fast' || modelDef.speed === 'fast'
-          ? ('fast' as const)
-          : ('standard' as const),
-      supportsThinking: modelDef.capabilities?.thinking ?? false,
-      supportsVision: modelDef.capabilities?.vision ?? false,
-      supportsTools: modelDef.capabilities?.tools ?? false,
-      contextWindow: modelDef.contextWindow ?? 128000,
-      isLocal: false,
-      isByok: false,
-    },
-  ];
-});
+const FALLBACK_MODELS: ModelInfo[] = [];
 
 // ---------------------------------------------------------------------------
 // Provider display config

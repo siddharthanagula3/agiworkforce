@@ -176,7 +176,7 @@ export async function chatUpdateConversation(
   return command<void>('chat_update_conversation_title', {
     conversationId: id,
     title: request.title,
-    userId: request.user_id,
+    userId: request.userId,
   });
 }
 
