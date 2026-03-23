@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { isTauri } from '../../lib/tauri-mock';
 import {
   ClipboardCopy,
   Download,
@@ -155,6 +156,10 @@ export function CloudStoragePanel() {
   };
 
   const handleUpload = async () => {
+    if (!isTauri) {
+      toast.info('File upload requires the desktop app');
+      return;
+    }
     const file = await openDialog({
       title: 'Choose a file to upload',
       multiple: false,
@@ -176,6 +181,10 @@ export function CloudStoragePanel() {
   };
 
   const handleDownload = async (path: string, name: string) => {
+    if (!isTauri) {
+      toast.info('File download requires the desktop app');
+      return;
+    }
     const savePath = await saveDialog({
       defaultPath: name,
       title: 'Save file as',
