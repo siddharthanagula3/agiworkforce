@@ -56,8 +56,8 @@ LICENSE
 *~
 .DS_Store
 
-# Monorepo - Only include web app
-/apps/desktop
+# Monorepo - Include web + desktop (desktop needed for Vite SPA build)
+# /apps/desktop — KEPT: needed for build-with-chat.sh Vite SPA build
 /apps/cli
 /apps/mobile
 /services
