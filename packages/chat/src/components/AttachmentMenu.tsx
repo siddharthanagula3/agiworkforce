@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Check,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '../lib/utils';
 
 export type StyleOption = 'formal' | 'casual' | 'concise' | 'detailed';
@@ -200,15 +201,68 @@ export function AttachmentMenu({
           <Divider />
 
           {/* Group 2: Sources */}
-          <MenuItem icon={<FolderPlus size={15} />} label="Add to project" hasSubmenu />
-          <MenuItem icon={<HardDrive size={15} />} label="Add from Google Drive" hasSubmenu />
-          <MenuItem icon={<Github size={15} />} label="Add from GitHub" hasSubmenu />
+          <MenuItem
+            icon={<FolderPlus size={15} />}
+            label="Add to project"
+            onClick={() => {
+              toast.info('Projects coming soon');
+              onOpenChange(false);
+            }}
+          />
+          <MenuItem
+            icon={<HardDrive size={15} />}
+            label="Add from Google Drive"
+            onClick={() => {
+              window.dispatchEvent(
+                new CustomEvent('chat:action', {
+                  detail: { type: 'open-settings', tab: 'connectors' },
+                }),
+              );
+              toast.info('Connect Google Drive in Settings first');
+              onOpenChange(false);
+            }}
+          />
+          <MenuItem
+            icon={<Github size={15} />}
+            label="Add from GitHub"
+            onClick={() => {
+              window.dispatchEvent(
+                new CustomEvent('chat:action', {
+                  detail: { type: 'open-settings', tab: 'connectors' },
+                }),
+              );
+              toast.info('Connect GitHub in Settings first');
+              onOpenChange(false);
+            }}
+          />
 
           <Divider />
 
           {/* Group 3: Capabilities */}
-          <MenuItem icon={<Sparkles size={15} />} label="Skills" hasSubmenu />
-          <MenuItem icon={<Plug size={15} />} label="Connectors" hasSubmenu />
+          <MenuItem
+            icon={<Sparkles size={15} />}
+            label="Skills"
+            onClick={() => {
+              window.dispatchEvent(
+                new CustomEvent('chat:action', {
+                  detail: { type: 'open-settings', tab: 'mcp-skills' },
+                }),
+              );
+              onOpenChange(false);
+            }}
+          />
+          <MenuItem
+            icon={<Plug size={15} />}
+            label="Connectors"
+            onClick={() => {
+              window.dispatchEvent(
+                new CustomEvent('chat:action', {
+                  detail: { type: 'open-settings', tab: 'connectors' },
+                }),
+              );
+              onOpenChange(false);
+            }}
+          />
 
           <Divider />
 

@@ -93,10 +93,7 @@ export function Sidebar() {
       id: 'projects',
       icon: <FolderOpen size={16} />,
       label: 'Projects',
-      action: () =>
-        window.dispatchEvent(
-          new CustomEvent('chat:action', { detail: { type: 'open-settings', tab: 'account' } }),
-        ),
+      action: () => setActiveView('projects'),
     },
     {
       id: 'skills',
