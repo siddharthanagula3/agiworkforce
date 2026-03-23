@@ -6,7 +6,7 @@ use crate::sys::security::command_validator::{
 };
 use crate::sys::security::log_redaction::redact_secrets;
 use std::time::Instant;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -223,8 +223,29 @@ pub async fn execute_terminal_command(
         }
     };
 
-    let mut cmd = Command::new(&program);
-    for arg in &args {
+    let sandbox_launch = {
+        let settings_state = app.state::<crate::sys::commands::settings::SettingsState>();
+        let settings = settings_state.settings.lock().await;
+        let execution_preferences = settings.execution_preferences.clone().unwrap_or_default();
+        let allowed_directories = settings.allowed_directories.clone();
+        drop(settings);
+
+        crate::sys::security::sandbox_runtime::build_sandboxed_command(
+            &program,
+            &args,
+            cwd.as_deref(),
+            &allowed_directories,
+            &execution_preferences.terminal_sandbox,
+        )?
+    };
+
+    let (launch_program, launch_args) = match sandbox_launch.as_ref() {
+        Some(spec) => (&spec.program, &spec.args),
+        None => (&program, &args),
+    };
+
+    let mut cmd = Command::new(launch_program);
+    for arg in launch_args {
         cmd.arg(arg);
     }
 

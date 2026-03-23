@@ -1,7 +1,8 @@
 [workspace]
 members = [
   "apps/desktop/src-tauri",
-  "apps/cli"
+  "apps/cli",
+  "crates/sandbox-policy",
 ]
 resolver = "2"
 

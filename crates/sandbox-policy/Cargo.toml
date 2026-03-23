@@ -1,0 +1,18 @@
+[package]
+name = "agiworkforce-sandbox-policy"
+version = "0.1.0"
+edition = "2021"
+license = "Proprietary"
+description = "Shared sandbox policy model for AGI Workforce surfaces"
+
+[lints.rust]
+warnings = "warn"
+unsafe_code = "deny"
+unused = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
+unused_mut = "deny"
+dead_code = "deny"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

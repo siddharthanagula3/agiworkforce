@@ -19,6 +19,12 @@ export interface ChatInputProps {
   onVoiceClick: () => void;
   hasMessages: boolean;
   className?: string;
+  /**
+   * When true the textarea and send path are disabled.
+   * `disabledMessage` is shown as the placeholder text.
+   */
+  disabled?: boolean;
+  disabledMessage?: string;
 }
 
 export function ChatInput({
@@ -29,6 +35,8 @@ export function ChatInput({
   onVoiceClick,
   hasMessages,
   className,
+  disabled = false,
+  disabledMessage,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -84,6 +92,7 @@ export function ChatInput({
   );
 
   const handleSend = useCallback(() => {
+    if (disabled) return;
     const el = textareaRef.current;
     if (!el) return;
     const content = el.value.trim();
@@ -92,7 +101,7 @@ export function ChatInput({
     el.value = '';
     el.style.height = 'auto';
     setAttachedFiles([]);
-  }, [isStreaming, onSend]);
+  }, [disabled, isStreaming, onSend]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -104,7 +113,11 @@ export function ChatInput({
     [handleSend],
   );
 
-  const placeholder = hasMessages ? 'Reply...' : 'How can I help you today?';
+  const placeholder = disabled
+    ? (disabledMessage ?? 'Connect to start chatting')
+    : hasMessages
+      ? 'Reply...'
+      : 'How can I help you today?';
 
   return (
     <div className={cn('mx-auto w-full max-w-3xl px-4 pb-2', className)}>
@@ -143,11 +156,13 @@ export function ChatInput({
           placeholder={placeholder}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          disabled={disabled}
           className={cn(
             'w-full resize-none border-0 bg-transparent px-4 pt-3 pb-1',
             'text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)]',
             'focus:outline-none',
             'min-h-[44px]',
+            disabled && 'cursor-not-allowed opacity-50',
           )}
           style={{ maxHeight: 200 }}
           aria-label="Chat message input"

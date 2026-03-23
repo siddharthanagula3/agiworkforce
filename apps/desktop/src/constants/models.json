@@ -600,6 +600,30 @@
         "long_context": "llama4-maverick"
       },
       "canonicalization": {}
+    },
+    "ollama_cloud": {
+      "label": "Ollama Cloud",
+      "sseDelimiter": "\n\n",
+      "tokenMultiplier": {
+        "prompt": 1.0,
+        "completion": 1.0
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.0,
+        "outputPerMillion": 0.0
+      },
+      "modelPrefixes": [],
+      "aliases": ["ollama-cloud", "ollamacloud"],
+      "defaultModel": "llama3.2",
+      "taskRouting": {
+        "fast_completion": "llama3.2",
+        "code_generation": "llama4-maverick",
+        "complex_reasoning": "llama4-maverick",
+        "chat": "llama3.2",
+        "vision": "llama4-maverick",
+        "long_context": "llama4-maverick"
+      },
+      "canonicalization": {}
     }
   },
   "models": {
@@ -3026,6 +3050,7 @@
       }
     ],
     "ollama": [],
+    "ollama_cloud": [],
     "openai": [
       {
         "value": "gpt-5.4-pro",
@@ -3257,6 +3282,7 @@
     "mistral",
     "qwen",
     "ollama",
+    "ollama_cloud",
     "moonshot",
     "perplexity",
     "zhipu"

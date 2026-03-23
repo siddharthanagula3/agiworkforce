@@ -24,6 +24,7 @@ dead_code = "deny"
 await_holding_lock = "allow"
 
 [dependencies]
+agiworkforce-sandbox-policy = { path = "../../crates/sandbox-policy" }
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 tokio = { version = "1", features = ["full"] }

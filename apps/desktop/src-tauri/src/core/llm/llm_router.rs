@@ -2108,6 +2108,12 @@ impl LLMRouter {
                 TaskCategory::Complex => "meta-llama/llama-3.3-70b-instruct:free".to_string(),
                 TaskCategory::Creative => "meta-llama/llama-3.3-70b-instruct:free".to_string(),
             },
+            // Ollama Cloud uses the same models as local Ollama but served remotely.
+            Provider::OllamaCloud => match task {
+                TaskCategory::Simple => "llama3.2".to_string(),
+                TaskCategory::Complex => "llama4-maverick".to_string(),
+                TaskCategory::Creative => "llama4-maverick".to_string(),
+            },
         }
     }
 

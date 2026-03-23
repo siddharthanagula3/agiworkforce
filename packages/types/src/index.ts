@@ -42,6 +42,9 @@ export * from './conversation';
 // Workflow engine types (nodes, edges, triggers, execution)
 export * from './workflow';
 
+// Provider type — canonical union of all LLM provider identifiers
+export * from './provider';
+
 // Model catalog types (metadata, capabilities, provider config)
 export * from './model-catalog';
 

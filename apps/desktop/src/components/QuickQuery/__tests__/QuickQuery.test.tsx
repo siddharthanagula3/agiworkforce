@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 import { QuickQuery } from '../index';
 import { useModelStore } from '../../../stores/modelStore';
 import { useAccountStore } from '../../../stores/auth';
+import { TooltipProvider } from '../../ui/Tooltip';
+
+function renderQuickQuery(props: ComponentProps<typeof QuickQuery>) {
+  return render(
+    <TooltipProvider>
+      <QuickQuery {...props} />
+    </TooltipProvider>,
+  );
+}
 
 describe('QuickQuery', () => {
   beforeEach(() => {
@@ -21,7 +31,7 @@ describe('QuickQuery', () => {
   });
 
   it('shows only hobby-tier auto modes for hobby users', async () => {
-    render(<QuickQuery open={true} onClose={vi.fn()} onSubmit={vi.fn()} />);
+    renderQuickQuery({ open: true, onClose: vi.fn(), onSubmit: vi.fn() });
 
     fireEvent.click(screen.getByRole('button', { name: /auto \(economy\)/i }));
 
@@ -32,7 +42,7 @@ describe('QuickQuery', () => {
 
   it('submits with the best allowed auto mode when nothing is selected', async () => {
     const onSubmit = vi.fn();
-    render(<QuickQuery open={true} onClose={vi.fn()} onSubmit={onSubmit} />);
+    renderQuickQuery({ open: true, onClose: vi.fn(), onSubmit });
 
     fireEvent.change(screen.getByPlaceholderText('Ask anything...'), {
       target: { value: 'hello from hobby' },
@@ -53,7 +63,7 @@ describe('QuickQuery', () => {
       },
     });
 
-    render(<QuickQuery open={true} onClose={vi.fn()} onSubmit={vi.fn()} />);
+    renderQuickQuery({ open: true, onClose: vi.fn(), onSubmit: vi.fn() });
 
     fireEvent.click(screen.getByRole('button', { name: /auto balanced/i }));
 

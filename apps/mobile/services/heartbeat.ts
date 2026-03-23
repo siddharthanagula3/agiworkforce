@@ -21,7 +21,7 @@ const HEARTBEAT_INTERVAL_MS = 60_000; // 60 seconds
 async function sendMobileHeartbeat(): Promise<void> {
   const { data } = await supabase.auth.getSession();
   const userId = data.session?.user?.id;
-  if (!userId) return;
+  if (!userId || !data.session?.access_token) return;
 
   try {
     // surface_heartbeats is not in the generated DB types yet — cast to any
@@ -30,10 +30,10 @@ async function sendMobileHeartbeat(): Promise<void> {
     await client.from('surface_heartbeats').upsert(
       {
         user_id: userId,
-        surface: 'mobile',
+        surface_id: 'mobile',
         last_seen_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id,surface' },
+      { onConflict: 'user_id,surface_id' },
     );
   } catch (err) {
     // Non-fatal — table may not be migrated in all envs
