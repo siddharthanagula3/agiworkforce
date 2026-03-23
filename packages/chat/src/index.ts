@@ -37,6 +37,9 @@ export { QuickChips } from './components/QuickChips';
 export type { ChipType } from './components/QuickChips';
 export { ChatInput } from './components/ChatInput';
 export type { ChatInputProps } from './components/ChatInput';
+export { ModelSelector } from './components/ModelSelector';
+export type { ModelSelectorProps } from './components/ModelSelector';
+export { AttachmentMenu } from './components/AttachmentMenu';
 export { Disclaimer } from './components/Disclaimer';
 
 // Sidebar components

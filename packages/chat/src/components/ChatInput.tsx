@@ -6,17 +6,19 @@ import {
   type KeyboardEvent,
   type ChangeEvent,
 } from 'react';
-import { Mic, Plus, Square, ChevronDown, Check, Settings } from 'lucide-react';
+import { Mic, Plus, Square } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
-import { useModel } from '../hooks/useModel';
+import { AttachmentMenu } from './AttachmentMenu';
+import { ModelSelector } from './ModelSelector';
+import { useVoiceInput } from '../hooks/useVoiceInput';
 
 export interface ChatInputProps {
   onSend: (content: string) => void;
   onStop: () => void;
   onPlusClick: () => void;
   onModelSelectorClick: () => void;
-  onVoiceClick: () => void;
+  onVoiceClick?: () => void;
   hasMessages: boolean;
   className?: string;
   /**
@@ -32,7 +34,7 @@ export function ChatInput({
   onStop,
   onPlusClick: _onPlusClick,
   onModelSelectorClick,
-  onVoiceClick,
+  onVoiceClick: _onVoiceClick,
   hasMessages,
   className,
   disabled = false,
@@ -40,11 +42,25 @@ export function ChatInput({
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const { displayName, models, selectedModelId, selectModel } = useModel();
-  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const modelDropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const plusButtonRef = useRef<HTMLButtonElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(true);
+  const [researchEnabled, setResearchEnabled] = useState(false);
+  const [activeStyle, setActiveStyle] = useState<
+    'formal' | 'casual' | 'concise' | 'detailed' | null
+  >(null);
+  const { state: voiceState, start: startVoice } = useVoiceInput({
+    onTranscript: (text) => {
+      const el = textareaRef.current;
+      if (!el) return;
+      const current = el.value;
+      el.value = current ? `${current} ${text}` : text;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.focus();
+    },
+  });
 
   const draftContent = useChatStore((s) => s.draftContent);
   const setDraftContent = useChatStore((s) => s.setDraftContent);
@@ -61,18 +77,6 @@ export function ChatInput({
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, []);
-
-  // Close model dropdown on outside click
-  useEffect(() => {
-    if (!modelDropdownOpen) return;
-    const handleOutside = (e: MouseEvent) => {
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
-        setModelDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, [modelDropdownOpen]);
 
   // Apply draft content from store (e.g. from chip clicks)
   useEffect(() => {
@@ -170,7 +174,7 @@ export function ChatInput({
 
         {/* Bottom toolbar */}
         <div className="flex items-center justify-between px-3 py-2">
-          {/* Left: Plus button — opens file picker */}
+          {/* Left: Plus button — opens attachment menu */}
           <input
             ref={fileInputRef}
             type="file"
@@ -185,107 +189,45 @@ export function ChatInput({
               e.target.value = '';
             }}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            aria-label="Add attachment"
-            className={cn(
-              'flex h-8 w-8 items-center justify-center rounded-lg',
-              'text-[var(--chat-text-secondary)] transition-colors duration-150',
-              'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-              attachedFiles.length > 0 && 'text-[var(--chat-accent-primary)]',
-            )}
+          <AttachmentMenu
+            open={attachmentMenuOpen}
+            onOpenChange={setAttachmentMenuOpen}
+            onAddFiles={() => fileInputRef.current?.click()}
+            webSearchEnabled={webSearchEnabled}
+            onWebSearchToggle={() => setWebSearchEnabled((v) => !v)}
+            researchEnabled={researchEnabled}
+            onResearchToggle={() => setResearchEnabled((v) => !v)}
+            activeStyle={activeStyle}
+            onStyleChange={setActiveStyle}
+            onScreenshot={(file) => setAttachedFiles((prev) => [...prev, file])}
           >
-            <Plus size={16} />
-            {attachedFiles.length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[8px] font-bold text-white">
-                {attachedFiles.length}
-              </span>
-            )}
-          </button>
+            <button
+              ref={plusButtonRef}
+              type="button"
+              aria-label="Add attachment"
+              aria-expanded={attachmentMenuOpen}
+              className={cn(
+                'relative flex h-8 w-8 items-center justify-center rounded-lg',
+                'text-[var(--chat-text-secondary)] transition-colors duration-150',
+                'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                (attachedFiles.length > 0 || attachmentMenuOpen) &&
+                  'text-[var(--chat-accent-primary)]',
+              )}
+            >
+              <Plus size={16} />
+              {attachedFiles.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[8px] font-bold text-white">
+                  {attachedFiles.length}
+                </span>
+              )}
+            </button>
+          </AttachmentMenu>
 
           {/* Right: Model selector + mic/stop */}
           <div className="flex items-center gap-2">
-            {/* Model selector with dropdown */}
-            <div className="relative" ref={modelDropdownRef}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (models.length > 0) {
-                    setModelDropdownOpen((prev) => !prev);
-                  } else {
-                    onModelSelectorClick();
-                  }
-                }}
-                aria-label="Select model"
-                aria-expanded={modelDropdownOpen}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-lg px-2.5 py-1',
-                  'text-xs text-[var(--chat-text-secondary)] transition-colors duration-150',
-                  'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-                )}
-              >
-                <span className="max-w-[140px] truncate font-medium">{displayName}</span>
-                <ChevronDown size={12} className="shrink-0 opacity-60" />
-              </button>
-
-              {modelDropdownOpen && models.length > 0 && (
-                <div className="absolute bottom-full mb-1 right-0 z-50 w-64 max-h-80 overflow-y-auto rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-lg">
-                  <div className="p-1">
-                    {/* Group models by provider */}
-                    {Object.entries(
-                      models.reduce<Record<string, typeof models>>((acc, m) => {
-                        const key = m.provider.charAt(0).toUpperCase() + m.provider.slice(1);
-                        if (!acc[key]) acc[key] = [];
-                        acc[key].push(m);
-                        return acc;
-                      }, {}),
-                    ).map(([provider, providerModels]) => (
-                      <div key={provider}>
-                        <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-[var(--chat-text-muted)]">
-                          {provider}
-                        </p>
-                        {providerModels.map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => {
-                              selectModel(m.id);
-                              setModelDropdownOpen(false);
-                            }}
-                            className={cn(
-                              'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors',
-                              m.id === selectedModelId
-                                ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
-                                : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
-                            )}
-                          >
-                            <span className="flex-1 truncate">{m.name}</span>
-                            {m.id === selectedModelId && <Check size={14} className="shrink-0" />}
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                  {/* Settings link at bottom */}
-                  <div className="border-t border-[var(--chat-border)] p-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setModelDropdownOpen(false);
-                        onModelSelectorClick();
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
-                    >
-                      <Settings size={13} />
-                      <span>Manage API Keys</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Inline model selector popover */}
+            <ModelSelector onSettingsClick={onModelSelectorClick} />
 
             {/* Mic / Stop */}
             {isStreaming ? (
@@ -302,21 +244,23 @@ export function ChatInput({
               >
                 <Square size={15} />
               </button>
-            ) : (
+            ) : voiceState !== 'unsupported' ? (
               <button
                 type="button"
-                onClick={onVoiceClick}
-                aria-label="Voice input"
+                onClick={startVoice}
+                aria-label={voiceState === 'listening' ? 'Stop recording' : 'Voice input'}
                 className={cn(
                   'flex h-8 w-8 items-center justify-center rounded-lg',
-                  'text-[var(--chat-text-secondary)] transition-colors duration-150',
-                  'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
+                  'transition-colors duration-150',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                  voiceState === 'listening'
+                    ? 'text-[var(--chat-accent-primary)] animate-pulse hover:bg-[var(--chat-accent-primary)]/10'
+                    : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
                 )}
               >
                 <Mic size={15} />
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

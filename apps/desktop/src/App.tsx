@@ -8,6 +8,7 @@ import { API_BASE_URL } from './api/client';
 
 import { ChatInterface } from '@agiworkforce/chat';
 import { TauriRuntime } from './runtime/TauriRuntime';
+import { WebRuntime } from './runtime/WebRuntime';
 import { CommandPalette, type CommandOption } from './components/UnifiedAgenticChat/CommandPalette';
 import { SearchModal } from './components/UnifiedAgenticChat/SearchModal';
 import { useSearchModal } from './hooks/useSearchModal';
@@ -961,7 +962,7 @@ const DesktopShell = () => {
     setTimeoutWarning(null);
   }, []);
 
-  const tauriRuntime = useMemo(() => (isTauri ? new TauriRuntime() : null), []);
+  const tauriRuntime = useMemo(() => (isTauri ? new TauriRuntime() : new WebRuntime()), []);
 
   const commandOptions = useMemo(() => {
     const buildOption = (definition: {
