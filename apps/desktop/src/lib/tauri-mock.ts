@@ -2049,6 +2049,22 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         decisions_count: 0,
       } as T;
 
+    // ── Privacy / data export / cache commands ─────────────────────
+    case 'export_user_data':
+      return '{}' as T;
+
+    case 'clear_local_database':
+    case 'cache_clear_all':
+    case 'settings_v2_clear_cache':
+      return undefined as T;
+
+    // ── User preference commands ─────────────────────────────────
+    case 'set_user_preference':
+      return undefined as T;
+
+    case 'get_user_preference':
+      return null as T;
+
     // ── Misc/catch-all for remaining newly registered commands ──────
     case 'auth_store_session':
     case 'auth_retrieve_session':
