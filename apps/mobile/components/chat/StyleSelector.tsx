@@ -31,7 +31,7 @@ export const StyleSelector = forwardRef<BottomSheet>(function StyleSelector(_pro
 
   const haptic = useCallback(() => {
     if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
   }, [hapticsEnabled]);
 

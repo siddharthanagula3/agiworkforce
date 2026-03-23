@@ -90,6 +90,7 @@ dependencies = [
 name = "agiworkforce-cli"
 version = "0.1.0"
 dependencies = [
+ "agiworkforce-sandbox-policy",
  "anyhow",
  "axum",
  "bytes",
@@ -130,6 +131,7 @@ version = "1.1.5"
 dependencies = [
  "accessibility-sys",
  "aes-gcm",
+ "agiworkforce-sandbox-policy",
  "anyhow",
  "arboard",
  "argon2",
@@ -251,6 +253,13 @@ dependencies = [
  "windows 0.56.0",
  "xcap",
  "zip 1.1.4",
+]
+
+[[package]]
+name = "agiworkforce-sandbox-policy"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

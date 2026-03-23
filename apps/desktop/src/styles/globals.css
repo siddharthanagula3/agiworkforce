@@ -291,6 +291,36 @@
     --ring: 221.2 83.2% 53.3%;
 
     --radius: 0.5rem;
+
+    /* Chat package theme vars (warm light) */
+    --chat-bg: #faf9f7;
+    --chat-fg: #1a1915;
+    --chat-surface-base: #faf9f7;
+    --chat-surface-elevated: #ffffff;
+    --chat-surface-overlay: #ffffff;
+    --chat-surface-hover: #f0eeeb;
+    --chat-text-primary: #1a1915;
+    --chat-text-secondary: #6b6560;
+    --chat-text-muted: #8b8680;
+    --chat-text-placeholder: #9b9590;
+    --chat-border: rgba(26, 25, 21, 0.08);
+    --chat-border-strong: rgba(26, 25, 21, 0.15);
+    --chat-accent-primary: #da7756;
+    --chat-accent-secondary: #21808d;
+    --chat-user-bubble-bg: #f0eeeb;
+    --chat-thinking-text: #6b6560;
+    --chat-thinking-line: rgba(26, 25, 21, 0.08);
+    --chat-badge-result: #16a34a;
+    --chat-badge-neutral: #8b8680;
+    --chat-destructive: #dc2626;
+    --chat-info: #2563eb;
+    --chat-success: #16a34a;
+    --chat-warning: #d97706;
+    --chat-radius-sm: 6px;
+    --chat-radius-md: 8px;
+    --chat-radius-lg: 12px;
+    --chat-radius-xl: 16px;
+    --chat-radius-2xl: 24px;
   }
 
   .dark {
@@ -323,6 +353,36 @@
     --border: 0 0% 22%;
     --input: 0 0% 22%;
     --ring: 0 0% 40%;
+
+    /* Chat package theme vars (warm dark) */
+    --chat-bg: #1a1915;
+    --chat-fg: #e8e4db;
+    --chat-surface-base: #1a1915;
+    --chat-surface-elevated: #242220;
+    --chat-surface-overlay: #2e2b28;
+    --chat-surface-hover: #363330;
+    --chat-text-primary: #e8e4db;
+    --chat-text-secondary: #8b8680;
+    --chat-text-muted: #5c5955;
+    --chat-text-placeholder: #6b6560;
+    --chat-border: rgba(255, 235, 205, 0.08);
+    --chat-border-strong: rgba(255, 235, 205, 0.15);
+    --chat-accent-primary: #da7756;
+    --chat-accent-secondary: #21808d;
+    --chat-user-bubble-bg: #2a2724;
+    --chat-thinking-text: #8b8680;
+    --chat-thinking-line: rgba(255, 235, 205, 0.08);
+    --chat-badge-result: #22c55e;
+    --chat-badge-neutral: #6b6560;
+    --chat-destructive: #ef4444;
+    --chat-info: #3b82f6;
+    --chat-success: #22c55e;
+    --chat-warning: #f59e0b;
+    --chat-radius-sm: 6px;
+    --chat-radius-md: 8px;
+    --chat-radius-lg: 12px;
+    --chat-radius-xl: 16px;
+    --chat-radius-2xl: 24px;
   }
 }
 

@@ -525,6 +525,16 @@ impl AgentSession {
         self.provider = models::detect_provider(model);
     }
 
+    /// Override the provider (e.g. from config `default.provider`).
+    ///
+    /// Call after `new()` to apply a config-based provider override
+    /// that takes precedence over model-name-based detection.
+    pub fn set_provider_override(&mut self, provider_name: &str) {
+        if let Some(p) = models::provider_from_name(provider_name) {
+            self.provider = p;
+        }
+    }
+
     /// Clear the conversation history (keeps system prompt).
     pub fn clear(&mut self) {
         self.messages.truncate(1); // keep system prompt

@@ -245,6 +245,8 @@ fn default_base_url(provider: Provider) -> &'static str {
         Provider::ManagedCloud => "https://api.agiworkforce.com",
         Provider::NvidiaNim => "https://integrate.api.nvidia.com/v1",
         Provider::OpenRouter => "https://openrouter.ai/api/v1",
+        // Ollama Cloud exposes an OpenAI-compatible endpoint.
+        Provider::OllamaCloud => "https://api.ollama.com/v1",
     }
 }
 
@@ -371,6 +373,7 @@ impl LLMProvider for DirectApiProvider {
             Provider::Bedrock => "DirectBedrock",
             Provider::NvidiaNim => "DirectNvidiaNim",
             Provider::OpenRouter => "DirectOpenRouter",
+            Provider::OllamaCloud => "DirectOllamaCloud",
         }
     }
 

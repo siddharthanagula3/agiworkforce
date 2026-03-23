@@ -1087,6 +1087,9 @@ async fn run_oneshot(
     quiet: bool,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
+    // Apply config-based provider override (e.g. "ollama-cloud") when the
+    // configured provider differs from the model-name-based detection.
+    session.set_provider_override(&config.default.provider);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;

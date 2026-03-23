@@ -275,20 +275,26 @@ const DesktopShell = () => {
     });
     registerCleanup(() => cleanupSyncManager());
 
-    void runStartupStep('Agent status listener', () => initializeAgentStatusListener());
-    void runStartupStep('Tool event listener', () => initializeToolEventListener());
+    if (isTauri) {
+      void runStartupStep('Agent status listener', () => initializeAgentStatusListener());
+      void runStartupStep('Tool event listener', () => initializeToolEventListener());
+    }
 
-    // Wire up mcpb:install_progress Tauri event into the MCPB store
-    void (async () => {
-      try {
-        const { initializeMcpbInstallListener } = await import('./stores/mcpbStore');
-        await runStartupStep('MCP bundle install listener', () => initializeMcpbInstallListener());
-      } catch (error) {
-        if (!disposed) {
-          reportStartupFailure('MCP bundle install listener', error);
+    // Wire up mcpb:install_progress Tauri event into the MCPB store (Tauri-only)
+    if (isTauri) {
+      void (async () => {
+        try {
+          const { initializeMcpbInstallListener } = await import('./stores/mcpbStore');
+          await runStartupStep('MCP bundle install listener', () =>
+            initializeMcpbInstallListener(),
+          );
+        } catch (error) {
+          if (!disposed) {
+            reportStartupFailure('MCP bundle install listener', error);
+          }
         }
-      }
-    })();
+      })();
+    }
 
     void (async () => {
       try {
@@ -491,7 +497,84 @@ const DesktopShell = () => {
         }));
         useChatModelStore.getState().setModels(chatModels);
       } catch {
-        // Non-fatal — model list will be empty but chat still works with default model
+        // Backend unavailable — try cloud API in web mode, then fall back to hardcoded defaults
+        try {
+          if (!isTauri) {
+            const res = await fetch(`${API_BASE_URL}/api/models`);
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data?.models) && data.models.length > 0) {
+                const { useChatModelStore } = await import('@agiworkforce/chat');
+                useChatModelStore.getState().setModels(
+                  data.models.map((m: { id: string; name: string; provider: string }) => ({
+                    id: m.id,
+                    name: m.name,
+                    provider: (m.provider ||
+                      'openai') as import('@agiworkforce/chat').ModelInfo['provider'],
+                    tier: 'standard' as const,
+                    supportsThinking: false,
+                    supportsVision: true,
+                    supportsTools: true,
+                    contextWindow: 128000,
+                    isLocal: false,
+                    isByok: false,
+                  })),
+                );
+                toast.info('Loaded models from cloud API.');
+                return; // cloud API succeeded, skip hardcoded fallback
+              }
+            }
+          }
+        } catch {
+          // Cloud API also failed — continue to hardcoded fallback
+        }
+
+        // Hardcoded fallback models so the UI is never empty
+        try {
+          const { useChatModelStore } = await import('@agiworkforce/chat');
+          const fallbackModels: import('@agiworkforce/chat').ModelInfo[] = [
+            {
+              id: 'claude-haiku-4-5',
+              name: 'Claude 3.5 Haiku',
+              provider: 'anthropic',
+              tier: 'fast',
+              supportsThinking: true,
+              supportsVision: true,
+              supportsTools: true,
+              contextWindow: 200000,
+              isLocal: false,
+              isByok: true,
+            },
+            {
+              id: 'gpt-4o-mini',
+              name: 'GPT-4o Mini',
+              provider: 'openai',
+              tier: 'fast',
+              supportsThinking: false,
+              supportsVision: true,
+              supportsTools: true,
+              contextWindow: 128000,
+              isLocal: false,
+              isByok: true,
+            },
+            {
+              id: 'llama3.2',
+              name: 'Llama 3.2',
+              provider: 'local' as import('@agiworkforce/chat').ModelInfo['provider'],
+              tier: 'standard',
+              supportsThinking: false,
+              supportsVision: false,
+              supportsTools: false,
+              contextWindow: 128000,
+              isLocal: true,
+              isByok: false,
+            },
+          ];
+          useChatModelStore.getState().setModels(fallbackModels);
+          toast.error('Could not load models from backend. Using defaults.');
+        } catch {
+          // Even the fallback import failed — chat will use its own internal default
+        }
       }
     }
     void initModels();
@@ -878,7 +961,7 @@ const DesktopShell = () => {
     setTimeoutWarning(null);
   }, []);
 
-  const tauriRuntime = useMemo(() => new TauriRuntime(), []);
+  const tauriRuntime = useMemo(() => (isTauri ? new TauriRuntime() : null), []);
 
   const commandOptions = useMemo(() => {
     const buildOption = (definition: {

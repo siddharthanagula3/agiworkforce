@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 60;
+const CURRENT_VERSION: i32 = 61;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -558,6 +558,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 60 {
         run_migration_in_transaction(conn, 60, apply_migration_v60)?;
+    }
+
+    if current_version < 61 {
+        run_migration_in_transaction(conn, 61, apply_migration_v61)?;
     }
 
     Ok(())
@@ -5238,6 +5242,18 @@ fn apply_migration_v60(conn: &Connection) -> Result<()> {
             FOREIGN KEY (artifact_id) REFERENCES artifacts(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_artifact_versions_artifact ON artifact_versions(artifact_id);",
+    )?;
+
+    Ok(())
+}
+
+/// Migration v61: Add `archived` column to conversations table for soft-archive support.
+fn apply_migration_v61(conn: &Connection) -> Result<()> {
+    ensure_column(
+        conn,
+        "conversations",
+        "archived",
+        "archived INTEGER NOT NULL DEFAULT 0",
     )?;
 
     Ok(())
