@@ -6,7 +6,7 @@
  * - Attaches planTier to request for downstream route use
  *
  * Tier hierarchy: free < hobby < pro < max < enterprise
- * Cloud models require pro or above.
+ * Cloud models require hobby or above.
  */
 
 import type { NextFunction, Request, Response } from 'express';
@@ -15,9 +15,10 @@ import { logger } from '../lib/logger';
 
 /**
  * Subscription tiers that are allowed to access cloud models.
- * All others (free, hobby, or unknown) receive a 403.
+ * Hobby plan has limited credits; Pro/Max/Enterprise have full access.
+ * Only "free" and unknown tiers are blocked.
  */
-const ALLOWED_TIERS = new Set(['pro', 'max', 'enterprise']);
+const ALLOWED_TIERS = new Set(['hobby', 'pro', 'max', 'enterprise']);
 
 declare global {
   namespace Express {
@@ -33,7 +34,7 @@ declare global {
  * Prerequisites: `authenticateToken` must have run first — `req.user` must be set.
  *
  * On success: attaches `req.planTier` and calls `next()`.
- * On free/hobby plan: returns 403 with upgrade_url.
+ * On free plan: returns 403 with upgrade_url.
  * On DB error or missing subscription: returns 503 (fail closed).
  */
 export async function requireProPlan(
@@ -73,7 +74,7 @@ export async function requireProPlan(
 
     if (!ALLOWED_TIERS.has(tier)) {
       res.status(403).json({
-        error: 'Cloud models require a Pro or Max subscription',
+        error: 'Cloud models require a Hobby plan or above. Upgrade to get started.',
         upgrade_url: '/dashboard/billing',
         current_tier: tier,
       });
