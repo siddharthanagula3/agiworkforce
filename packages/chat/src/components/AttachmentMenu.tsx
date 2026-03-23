@@ -173,7 +173,7 @@ export function AttachmentMenu({
           align="start"
           sideOffset={8}
           className={cn(
-            'z-50 w-64 rounded-xl border border-[var(--chat-border)]',
+            'z-50 w-64 max-h-[70vh] overflow-y-auto rounded-xl border border-[var(--chat-border)]',
             'bg-[var(--chat-surface-elevated)] shadow-xl',
             'p-1.5',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
