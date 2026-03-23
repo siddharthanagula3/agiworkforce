@@ -198,3 +198,5 @@ leads/
 .worktrees/
 .code-review-graph/
 dist-web
+# Build artifacts (Vite SPA output)
+apps/web/public/chat
