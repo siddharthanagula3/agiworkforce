@@ -564,9 +564,9 @@ const DesktopShell = () => {
                     m.speed === 'very-fast' || m.speed === 'fast'
                       ? ('fast' as const)
                       : ('standard' as const),
-                  supportsThinking: m.capabilities?.thinking ?? false,
-                  supportsVision: m.capabilities?.vision ?? false,
-                  supportsTools: m.capabilities?.tools ?? false,
+                  supportsThinking: m.capabilities?.['thinking'] ?? false,
+                  supportsVision: m.capabilities?.['vision'] ?? false,
+                  supportsTools: m.capabilities?.['tools'] ?? false,
                   contextWindow: m.contextWindow ?? 128000,
                   isLocal: p === 'ollama',
                   isByok: p !== 'ollama',
