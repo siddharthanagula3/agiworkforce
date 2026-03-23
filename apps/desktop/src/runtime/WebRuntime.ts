@@ -112,6 +112,7 @@ export class WebRuntime implements ChatRuntime {
         controller.signal,
         undefined, // onEvent
         options?.webSearch,
+        options?.messageHistory,
       );
     } catch (err) {
       // Only emit error if it wasn't an intentional abort
