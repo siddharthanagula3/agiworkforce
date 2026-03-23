@@ -170,8 +170,8 @@ describe('POST /api/credit-topup — authentication', () => {
 
   it('returns 401 when there is no authenticated user', async () => {
     mockGetUser.mockResolvedValueOnce({
-      data: { user: null },
-      error: { message: 'Not authenticated' },
+      data: { user: null as unknown as { id: string; email: string } },
+      error: { message: 'Not authenticated' } as unknown as null,
     });
 
     const response = await POST(makeRequest({ amount_cents: 5000 }));
@@ -182,7 +182,10 @@ describe('POST /api/credit-topup — authentication', () => {
   });
 
   it('returns 401 when getUser returns null user with no error', async () => {
-    mockGetUser.mockResolvedValueOnce({ data: { user: null }, error: null });
+    mockGetUser.mockResolvedValueOnce({
+      data: { user: null as unknown as { id: string; email: string } },
+      error: null,
+    });
 
     const response = await POST(makeRequest({ amount_cents: 5000 }));
     const data = await response.json();
