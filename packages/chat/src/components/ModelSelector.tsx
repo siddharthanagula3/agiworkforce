@@ -2,87 +2,10 @@ import * as Popover from '@radix-ui/react-popover';
 import { Check, ChevronDown, Settings, Zap, Star, Cpu } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useModel } from '../hooks/useModel';
+import { CLOUD_FALLBACK_MODELS } from '../stores/modelStore';
 import type { ModelInfo } from '../lib/types';
-// ---------------------------------------------------------------------------
-// Fallback models — shown when modelStore has no models loaded (web mode).
-// These are cost-effective models for Hobby plan (<$5/M tokens). Desktop
-// overrides this via setModels() with the full catalog. Pro/Max plans get
-// flagship models via the backend model loader.
-// ---------------------------------------------------------------------------
-const FALLBACK_MODELS: ModelInfo[] = [
-  {
-    id: 'auto',
-    name: 'Auto (Smart Routing)',
-    provider: 'managed_cloud',
-    tier: 'standard',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 200000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'claude-sonnet-4-6',
-    name: 'Claude Sonnet 4.6',
-    provider: 'anthropic',
-    tier: 'standard',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 200000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'claude-haiku-4-5',
-    name: 'Claude Haiku 4.5',
-    provider: 'anthropic',
-    tier: 'fast',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 200000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'gpt-5.4-mini',
-    name: 'GPT-5.4 Mini',
-    provider: 'openai',
-    tier: 'fast',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 128000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'gemini-3.1-flash',
-    name: 'Gemini 3.1 Flash',
-    provider: 'google',
-    tier: 'fast',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 1000000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'deepseek-r1',
-    name: 'DeepSeek R1',
-    provider: 'deepseek',
-    tier: 'standard',
-    supportsThinking: true,
-    supportsVision: false,
-    supportsTools: true,
-    contextWindow: 128000,
-    isLocal: false,
-    isByok: false,
-  },
-];
+// Fallback models are defined in modelStore.ts (CLOUD_FALLBACK_MODELS) and
+// imported above. They are used when the store has no models loaded (web mode).
 
 // ---------------------------------------------------------------------------
 // Provider display config
@@ -210,7 +133,7 @@ export function ModelSelector({ onSettingsClick, className }: ModelSelectorProps
   const { models, selectedModelId, displayName, selectModel } = useModel();
 
   const usingFallback = models.length === 0;
-  const displayModels = usingFallback ? FALLBACK_MODELS : models;
+  const displayModels = usingFallback ? CLOUD_FALLBACK_MODELS : models;
 
   // Group by provider, preserving insertion order
   const grouped = displayModels.reduce<Record<string, ModelInfo[]>>((acc, m) => {
