@@ -89,6 +89,7 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   return {
     Authorization: `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
   };
 }
 
@@ -310,7 +311,7 @@ export async function getCloudModels(planTier?: 'pro' | 'max'): Promise<CloudMod
  * @param signal         - Optional AbortSignal for cancellation
  */
 export async function sendCloudMessage(
-  conversationId: string,
+  _conversationId: string,
   content: string,
   model: string,
   onChunk: (text: string) => void,
@@ -328,19 +329,20 @@ export async function sendCloudMessage(
     return;
   }
 
-  const body: SendMessageRequest = {
-    conversation_id: conversationId || undefined,
-    message: content,
+  // Use the OpenAI-compatible endpoint deployed on Vercel
+  const openAiBody = {
     model,
+    messages: [{ role: 'user' as const, content }],
+    stream: true,
   };
 
   let res: Response;
 
   try {
-    res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/send`, {
+    res = await fetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(openAiBody),
       signal,
     });
   } catch (err) {
