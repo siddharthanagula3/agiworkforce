@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm Light Theme (Dawn) */
+    --chat-bg: #faf9f7;
+    --chat-fg: #1a1915;
+    --chat-surface-base: #faf9f7;
+    --chat-surface-elevated: #ffffff;
+    --chat-surface-overlay: #ffffff;
+    --chat-surface-hover: #f0eeeb;
+    --chat-text-primary: #1a1915;
+    --chat-text-secondary: #6b6560;
+    --chat-text-muted: #8b8680;
+    --chat-text-placeholder: #9b9590;
+    --chat-border: rgba(26, 25, 21, 0.08);
+    --chat-border-strong: rgba(26, 25, 21, 0.15);
+    --chat-accent-primary: #da7756;
+    --chat-accent-secondary: #21808d;
+    --chat-user-bubble-bg: #f0eeeb;
+    --chat-thinking-text: #6b6560;
+    --chat-thinking-line: rgba(26, 25, 21, 0.08);
+    --chat-badge-result: #16a34a;
+    --chat-badge-neutral: #8b8680;
+    --chat-destructive: #dc2626;
+    --chat-info: #2563eb;
+    --chat-success: #16a34a;
+    --chat-warning: #d97706;
+    --chat-radius-sm: 6px;
+    --chat-radius-md: 8px;
+    --chat-radius-lg: 12px;
+    --chat-radius-xl: 16px;
+    --chat-radius-2xl: 24px;
+  }
+
+  .dark {
+    /* Warm Dark Theme (Dusk) */
+    --chat-bg: #1a1915;
+    --chat-fg: #e8e4db;
+    --chat-surface-base: #1a1915;
+    --chat-surface-elevated: #242220;
+    --chat-surface-overlay: #2e2b28;
+    --chat-surface-hover: #363330;
+    --chat-text-primary: #e8e4db;
+    --chat-text-secondary: #8b8680;
+    --chat-text-muted: #5c5955;
+    --chat-text-placeholder: #6b6560;
+    --chat-border: rgba(255, 235, 205, 0.08);
+    --chat-border-strong: rgba(255, 235, 205, 0.15);
+    --chat-accent-primary: #da7756;
+    --chat-accent-secondary: #21808d;
+    --chat-user-bubble-bg: #2a2724;
+    --chat-thinking-text: #8b8680;
+    --chat-thinking-line: rgba(255, 235, 205, 0.08);
+    --chat-badge-result: #22c55e;
+    --chat-badge-neutral: #6b6560;
+    --chat-destructive: #ef4444;
+    --chat-info: #3b82f6;
+    --chat-success: #22c55e;
+    --chat-warning: #f59e0b;
+  }
+}
+
+/* Animations */
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes spinnerPulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes cursorBlink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Utility classes */
+.message-enter {
+  animation: messageIn 200ms ease-out;
+}
+
+.fade-in {
+  animation: fadeIn 200ms ease-out;
+}
+
+.thinking-spinner {
+  animation: spinnerPulse 1.5s ease-in-out infinite;
+}
+
+.streaming-cursor {
+  animation: cursorBlink 1s step-end infinite;
+}
+
+/* Scrollbar styling */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--chat-border-strong);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--chat-text-muted);
+}
