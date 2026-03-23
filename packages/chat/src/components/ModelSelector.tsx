@@ -4,28 +4,17 @@ import { cn } from '../lib/utils';
 import { useModel } from '../hooks/useModel';
 import type { ModelInfo } from '../lib/types';
 // ---------------------------------------------------------------------------
-// Fallback models — shown when modelStore has no models loaded (e.g. web mode
-// where the host app may not initialize the store). These are the core cloud
-// models available on all plans. Desktop overrides this via setModels().
+// Fallback models — shown when modelStore has no models loaded (web mode).
+// These are cost-effective models for Hobby plan (<$5/M tokens). Desktop
+// overrides this via setModels() with the full catalog. Pro/Max plans get
+// flagship models via the backend model loader.
 // ---------------------------------------------------------------------------
 const FALLBACK_MODELS: ModelInfo[] = [
   {
     id: 'auto',
     name: 'Auto (Smart Routing)',
     provider: 'managed_cloud',
-    tier: 'flagship',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 200000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'claude-opus-4-6',
-    name: 'Claude Opus 4.6',
-    provider: 'anthropic',
-    tier: 'flagship',
+    tier: 'standard',
     supportsThinking: true,
     supportsVision: true,
     supportsTools: true,
@@ -46,14 +35,14 @@ const FALLBACK_MODELS: ModelInfo[] = [
     isByok: false,
   },
   {
-    id: 'gpt-5.4',
-    name: 'GPT-5.4',
-    provider: 'openai',
-    tier: 'flagship',
+    id: 'claude-haiku-4-5',
+    name: 'Claude Haiku 4.5',
+    provider: 'anthropic',
+    tier: 'fast',
     supportsThinking: true,
     supportsVision: true,
     supportsTools: true,
-    contextWindow: 128000,
+    contextWindow: 200000,
     isLocal: false,
     isByok: false,
   },
@@ -70,18 +59,6 @@ const FALLBACK_MODELS: ModelInfo[] = [
     isByok: false,
   },
   {
-    id: 'gemini-3.1-pro',
-    name: 'Gemini 3.1 Pro',
-    provider: 'google',
-    tier: 'flagship',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 2000000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
     id: 'gemini-3.1-flash',
     name: 'Gemini 3.1 Flash',
     provider: 'google',
@@ -90,18 +67,6 @@ const FALLBACK_MODELS: ModelInfo[] = [
     supportsVision: true,
     supportsTools: true,
     contextWindow: 1000000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'grok-4',
-    name: 'Grok 4',
-    provider: 'xai',
-    tier: 'flagship',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 131072,
     isLocal: false,
     isByok: false,
   },
@@ -287,8 +252,8 @@ export function ModelSelector({ onSettingsClick, className }: ModelSelectorProps
             'data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2',
           )}
         >
-          {/* Scrollable model list */}
-          <div className="max-h-80 overflow-y-auto p-1">
+          {/* Scrollable model list — constrained to avoid overlapping chat */}
+          <div className="max-h-64 overflow-y-auto p-1">
             {Object.entries(grouped).map(([providerKey, providerModels]) => {
               const config = getProviderConfig(providerKey);
               return (
