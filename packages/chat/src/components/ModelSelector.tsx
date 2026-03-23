@@ -4,13 +4,120 @@ import { cn } from '../lib/utils';
 import { useModel } from '../hooks/useModel';
 import type { ModelInfo } from '../lib/types';
 // ---------------------------------------------------------------------------
-// Fallback models — shown only when modelStore has no models loaded.
-// The host app (desktop/web) is responsible for loading the real model list
-// from models.json or the backend. This is an emergency fallback only.
-// NOTE: Keep this empty — the host app populates modelStore from models.json.
-// If modelStore is empty, the selector shows "No models available".
+// Fallback models — shown when modelStore has no models loaded (e.g. web mode
+// where the host app may not initialize the store). These are the core cloud
+// models available on all plans. Desktop overrides this via setModels().
 // ---------------------------------------------------------------------------
-const FALLBACK_MODELS: ModelInfo[] = [];
+const FALLBACK_MODELS: ModelInfo[] = [
+  {
+    id: 'auto',
+    name: 'Auto (Smart Routing)',
+    provider: 'managed_cloud',
+    tier: 'flagship',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 200000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'claude-opus-4-6',
+    name: 'Claude Opus 4.6',
+    provider: 'anthropic',
+    tier: 'flagship',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 200000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
+    provider: 'anthropic',
+    tier: 'standard',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 200000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'gpt-5.4',
+    name: 'GPT-5.4',
+    provider: 'openai',
+    tier: 'flagship',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 128000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'gpt-5.4-mini',
+    name: 'GPT-5.4 Mini',
+    provider: 'openai',
+    tier: 'fast',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 128000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'gemini-3.1-pro',
+    name: 'Gemini 3.1 Pro',
+    provider: 'google',
+    tier: 'flagship',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 2000000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'gemini-3.1-flash',
+    name: 'Gemini 3.1 Flash',
+    provider: 'google',
+    tier: 'fast',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 1000000,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'grok-4',
+    name: 'Grok 4',
+    provider: 'xai',
+    tier: 'flagship',
+    supportsThinking: true,
+    supportsVision: true,
+    supportsTools: true,
+    contextWindow: 131072,
+    isLocal: false,
+    isByok: false,
+  },
+  {
+    id: 'deepseek-r1',
+    name: 'DeepSeek R1',
+    provider: 'deepseek',
+    tier: 'standard',
+    supportsThinking: true,
+    supportsVision: false,
+    supportsTools: true,
+    contextWindow: 128000,
+    isLocal: false,
+    isByok: false,
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Provider display config
@@ -137,7 +244,8 @@ export interface ModelSelectorProps {
 export function ModelSelector({ onSettingsClick, className }: ModelSelectorProps) {
   const { models, selectedModelId, displayName, selectModel } = useModel();
 
-  const displayModels = models.length > 0 ? models : FALLBACK_MODELS;
+  const usingFallback = models.length === 0;
+  const displayModels = usingFallback ? FALLBACK_MODELS : models;
 
   // Group by provider, preserving insertion order
   const grouped = displayModels.reduce<Record<string, ModelInfo[]>>((acc, m) => {
@@ -244,8 +352,8 @@ export function ModelSelector({ onSettingsClick, className }: ModelSelectorProps
             })}
           </div>
 
-          {/* Footer — manage API keys */}
-          {onSettingsClick && (
+          {/* Footer — manage API keys (hidden when using fallback/cloud models) */}
+          {onSettingsClick && !usingFallback && (
             <div className="border-t border-[var(--chat-border)] p-1">
               <Popover.Close asChild>
                 <button
