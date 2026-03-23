@@ -3,72 +3,52 @@ import { Check, ChevronDown, Settings, Zap, Star, Cpu } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useModel } from '../hooks/useModel';
 import type { ModelInfo } from '../lib/types';
+import modelCatalog from '@agiworkforce/types/models.json';
 
 // ---------------------------------------------------------------------------
-// Fallback models shown when no models have been loaded from the store
+// Build fallback models from the canonical models.json catalog.
+// Pick each provider's defaultModel so we never hardcode model IDs.
+// Exclude local-only providers (ollama) since web has no local inference.
 // ---------------------------------------------------------------------------
-const FALLBACK_MODELS: ModelInfo[] = [
-  {
-    id: 'claude-sonnet-4-6',
-    name: 'Claude Sonnet 4.6',
-    provider: 'anthropic',
-    tier: 'standard',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 200000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'claude-haiku-4-5',
-    name: 'Claude Haiku 4.5',
-    provider: 'anthropic',
-    tier: 'fast',
-    supportsThinking: false,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 200000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'gpt-5.4',
-    name: 'GPT-5.4',
-    provider: 'openai',
-    tier: 'standard',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 256000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'gemini-3.1-pro-preview',
-    name: 'Gemini 3.1 Pro',
-    provider: 'google',
-    tier: 'standard',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 2000000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'grok-4',
-    name: 'Grok 4',
-    provider: 'xai',
-    tier: 'standard',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 131072,
-    isLocal: false,
-    isByok: false,
-  },
-];
+const CLOUD_PROVIDERS = ['anthropic', 'openai', 'google', 'xai', 'deepseek'] as const;
+
+const FALLBACK_MODELS: ModelInfo[] = CLOUD_PROVIDERS.flatMap((providerKey) => {
+  const providerConfig = (
+    modelCatalog.providers as Record<string, { label?: string; defaultModel?: string }>
+  )[providerKey];
+  if (!providerConfig?.defaultModel) return [];
+  const modelId = providerConfig.defaultModel;
+  const modelDef = (
+    modelCatalog.models as Record<
+      string,
+      {
+        id: string;
+        name: string;
+        contextWindow?: number;
+        capabilities?: Record<string, boolean>;
+        speed?: string;
+      }
+    >
+  )[modelId];
+  if (!modelDef) return [];
+  return [
+    {
+      id: modelDef.id,
+      name: modelDef.name,
+      provider: providerKey,
+      tier:
+        modelDef.speed === 'very-fast' || modelDef.speed === 'fast'
+          ? ('fast' as const)
+          : ('standard' as const),
+      supportsThinking: modelDef.capabilities?.thinking ?? false,
+      supportsVision: modelDef.capabilities?.vision ?? false,
+      supportsTools: modelDef.capabilities?.tools ?? false,
+      contextWindow: modelDef.contextWindow ?? 128000,
+      isLocal: false,
+      isByok: false,
+    },
+  ];
+});
 
 // ---------------------------------------------------------------------------
 // Provider display config
