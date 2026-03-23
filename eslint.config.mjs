@@ -53,6 +53,9 @@ export default [
       '.codex/**',
       '.cursor/**',
       '**/.vercel/**',
+      // Build artifacts (Vite SPA output served as static files)
+      '**/public/chat/**',
+      '**/dist-web/**',
     ],
   },
 
