@@ -360,6 +360,7 @@ export async function sendCloudMessage(
   signal?: AbortSignal,
   onEvent?: (payload: Record<string, unknown>) => void,
   webSearch?: boolean,
+  messageHistory?: Array<{ role: string; content: string }>,
 ): Promise<void> {
   let headers: Record<string, string>;
 
@@ -370,10 +371,16 @@ export async function sendCloudMessage(
     return;
   }
 
+  // Build message history — use provided history or fall back to single message
+  const chatMessages =
+    messageHistory && messageHistory.length > 0
+      ? messageHistory
+      : [{ role: 'user' as const, content }];
+
   // Use the OpenAI-compatible endpoint deployed on Vercel
   const openAiBody: Record<string, unknown> = {
     model,
-    messages: [{ role: 'user' as const, content }],
+    messages: chatMessages,
     stream: true,
     ...(webSearch ? { web_search: true } : {}),
   };

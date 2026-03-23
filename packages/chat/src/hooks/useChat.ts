@@ -97,11 +97,19 @@ export function useChat(runtime: ChatRuntime | null) {
       });
       store.startStreaming();
 
+      // Build full conversation history for multi-turn context
+      const allMessages = store.messages[convId] ?? [];
+      const messageHistory = allMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
       void runtime
         .sendMessage(convId, content, {
           ...(systemPrompt ? { systemPrompt } : {}),
           model: selectedModelId,
           webSearch: webSearchEnabled,
+          messageHistory,
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
