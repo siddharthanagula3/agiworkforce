@@ -30,7 +30,7 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
-import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
+import { invoke, listen, isTauri, type UnlistenFn } from '../lib/tauri-mock';
 import {
   voiceGetCapabilities,
   voiceGetSettings,
@@ -475,6 +475,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         stopListeningAndProcess: async (onSend?: (text: string) => void) => {
+          if (!isTauri) return;
           const { phase, _recorder, _mediaStream, _audioContext, _animFrameId } = get();
 
           if (phase !== 'listening' || !_recorder) {
@@ -655,6 +656,10 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         stopSpeaking: async () => {
+          if (!isTauri) {
+            set({ phase: 'idle', _isSpeaking: false });
+            return;
+          }
           // Stop backend TTS playback
           try {
             await voiceTtsStop();
@@ -725,6 +730,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         // =====================================================================
 
         fetchCapabilities: async () => {
+          if (!isTauri) return null;
           try {
             const caps = await voiceGetCapabilities();
             set({
@@ -740,6 +746,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         getBackendSettings: async () => {
+          if (!isTauri) return null;
           try {
             return await voiceGetSettings();
           } catch (error) {
@@ -749,6 +756,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         configureBackend: async (provider?: string, model?: string, language?: string) => {
+          if (!isTauri) return;
           try {
             await voiceConfigure(provider, model, language);
           } catch (e) {
@@ -759,6 +767,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         // -- TTS commands --
 
         speakWithBargeIn: async (text: string) => {
+          if (!isTauri) return;
           set({ phase: 'speaking', _isSpeaking: true });
           try {
             await voiceTtsSpeakWithBargeIn(text);
@@ -780,6 +789,10 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         stopTts: async () => {
+          if (!isTauri) {
+            set({ _isSpeaking: false });
+            return false;
+          }
           try {
             const stopped = await voiceTtsStop();
             set({ _isSpeaking: false });
@@ -794,6 +807,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         isTtsPlaying: async () => {
+          if (!isTauri) return false;
           try {
             return await voiceTtsIsPlaying();
           } catch {
@@ -802,6 +816,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         listTtsVoices: async () => {
+          if (!isTauri) return [];
           try {
             return await voiceTtsListVoices();
           } catch {
@@ -810,6 +825,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         configureTts: async (config: TtsConfig) => {
+          if (!isTauri) return;
           try {
             await voiceTtsConfigure(config);
           } catch (e) {
@@ -818,6 +834,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         speakLocal: async (text: string, rate?: number, volume?: number) => {
+          if (!isTauri) return;
           try {
             await voiceTtsSpeakLocal(text, rate, volume);
           } catch (e) {
@@ -828,6 +845,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         // -- Wake word commands --
 
         enableWakeWord: async (config?: WakeWordConfig) => {
+          if (!isTauri) return;
           try {
             await voiceWakeEnable(config);
             set({ wakeWordActive: true });
@@ -837,6 +855,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         disableWakeWord: async () => {
+          if (!isTauri) return;
           try {
             await voiceWakeDisable();
             set({ wakeWordActive: false });
@@ -846,6 +865,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         getWakeWordStatus: async () => {
+          if (!isTauri) return false;
           try {
             const active = await voiceWakeStatus();
             set({ wakeWordActive: active });
@@ -856,6 +876,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         configureWakeWord: async (config: WakeWordConfig) => {
+          if (!isTauri) return;
           try {
             await voiceWakeConfigure(config);
           } catch (e) {
@@ -866,6 +887,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         // -- PTT commands --
 
         configurePtt: async (config: PttConfig) => {
+          if (!isTauri) return;
           try {
             await voicePttConfigure(config);
           } catch (e) {
@@ -874,6 +896,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         getPttState: async () => {
+          if (!isTauri) return 'idle';
           try {
             return await voicePttState();
           } catch {
@@ -882,6 +905,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         pttKeyDown: async () => {
+          if (!isTauri) return;
           try {
             await voicePttKeyDown();
           } catch (e) {
@@ -890,6 +914,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         pttKeyUp: async () => {
+          if (!isTauri) return null;
           try {
             return await voicePttKeyUp();
           } catch {
@@ -900,6 +925,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         // -- Global PTT commands --
 
         startGlobalPtt: async () => {
+          if (!isTauri) return;
           try {
             await voiceStartGlobalPtt();
             set({ globalPttActive: true });
@@ -909,6 +935,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         stopGlobalPtt: async () => {
+          if (!isTauri) return;
           try {
             await voiceStopGlobalPtt();
             set({ globalPttActive: false });
@@ -918,6 +945,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         injectText: async (text: string) => {
+          if (!isTauri) return;
           try {
             await voiceInjectText(text);
           } catch (e) {
@@ -928,6 +956,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         // -- Deepgram streaming commands --
 
         configureDeepgram: async (config: DeepgramConfig) => {
+          if (!isTauri) return;
           try {
             await voiceDeepgramConfigure(config);
           } catch (e) {
@@ -936,6 +965,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         startDeepgramStream: async () => {
+          if (!isTauri) return;
           try {
             get()._deepgramUnlisten?.();
 
@@ -969,6 +999,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         stopDeepgramStream: async () => {
+          if (!isTauri) return null;
           try {
             const stats = await voiceStopDeepgramStream();
             get()._deepgramUnlisten?.();
@@ -982,6 +1013,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         sendDeepgramAudio: async (audioData: number[]) => {
+          if (!isTauri) return;
           try {
             await voiceDeepgramSendAudio(audioData);
           } catch (e) {
@@ -990,6 +1022,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         getDeepgramStatus: async () => {
+          if (!isTauri) return null;
           try {
             const status = await voiceDeepgramStatus();
             if (status) {
@@ -1004,6 +1037,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         // -- Barge-in commands --
 
         enableBargeIn: async (enabled: boolean) => {
+          if (!isTauri) return false;
           try {
             const result = await voiceEnableBargeIn(enabled);
             set({ bargeInEnabled: result });
@@ -1015,6 +1049,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         getBargeInStatus: async () => {
+          if (!isTauri) return null;
           try {
             const status = await voiceGetBargeInStatus();
             if (status) {
@@ -1031,6 +1066,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
           minSpeechMs?: number,
           consecutiveFramesThreshold?: number,
         ) => {
+          if (!isTauri) return null;
           try {
             return await voiceConfigureBargeIn(
               sensitivity,
@@ -1044,6 +1080,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         startBargeInMonitoring: async () => {
+          if (!isTauri) return false;
           try {
             return await voiceStartBargeInMonitoring();
           } catch (e) {
@@ -1053,6 +1090,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         stopBargeInMonitoring: async () => {
+          if (!isTauri) return false;
           try {
             return await voiceStopBargeInMonitoring();
           } catch {
@@ -1063,6 +1101,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         // -- Native speech recording commands (Wispr Flow) --
 
         startNativeRecording: async (provider?: string) => {
+          if (!isTauri) return;
           try {
             await speechStartRecording(provider ?? 'cloud');
           } catch (e) {
@@ -1071,6 +1110,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         stopNativeRecordingAndTranscribe: async (provider?: string, language?: string) => {
+          if (!isTauri) return null;
           try {
             return await speechStopAndTranscribe(provider ?? 'cloud', language ?? 'en');
           } catch (e) {
@@ -1082,6 +1122,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         // -- Local model management --
 
         listLocalModels: async () => {
+          if (!isTauri) return null;
           try {
             return await voiceListLocalModels();
           } catch {
@@ -1090,6 +1131,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         downloadWhisperModel: async (modelSize: string) => {
+          if (!isTauri) return null;
           try {
             const path = await voiceDownloadWhisperModel(modelSize);
             return path || null;
@@ -1100,6 +1142,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         listWhisperModels: async () => {
+          if (!isTauri) return [];
           try {
             return await voiceListWhisperModels();
           } catch {
@@ -1108,6 +1151,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         setWhisperModel: async (modelSize: string) => {
+          if (!isTauri) return;
           try {
             await voiceSetWhisperModel(modelSize);
           } catch (e) {
@@ -1116,6 +1160,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         downloadPiperVoice: async (voiceId: string) => {
+          if (!isTauri) return null;
           try {
             const path = await voiceDownloadPiperVoice(voiceId);
             return path || null;
@@ -1126,6 +1171,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         listPiperVoices: async () => {
+          if (!isTauri) return [];
           try {
             return await voiceListPiperVoices();
           } catch {
@@ -1134,6 +1180,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         },
 
         setPiperVoice: async (voiceId: string) => {
+          if (!isTauri) return;
           try {
             await voiceSetPiperVoice(voiceId);
           } catch (e) {

@@ -2,7 +2,7 @@ import { Copy, Download, File, FileSpreadsheet, FileText, FolderOpen, Loader2 } 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';
-import { invoke } from '../../../lib/tauri-mock';
+import { invoke, isTauri } from '../../../lib/tauri-mock';
 import type { ToolResultProps } from './index';
 import { Button } from '../../ui/Button';
 
@@ -170,6 +170,19 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
 
   const handleSaveAs = async () => {
     try {
+      // Web fallback: use blob download or link
+      if (!isTauri) {
+        if (downloadUrl) {
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = fileName;
+          link.click();
+        } else {
+          toast.info('Save As requires the desktop app');
+        }
+        return;
+      }
+
       const targetPath = await save({
         defaultPath: fileName,
         filters: [{ name: 'Generated Document', extensions: [extension] }],

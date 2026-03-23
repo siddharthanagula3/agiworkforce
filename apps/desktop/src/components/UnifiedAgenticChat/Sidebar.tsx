@@ -459,6 +459,10 @@ export function Sidebar({
   );
 
   const handleExportPdf = useCallback(async (id: string, title: string) => {
+    if (!isTauri) {
+      toast.info('PDF export requires the desktop app');
+      return;
+    }
     try {
       const safeName = title
         .replace(/[^a-zA-Z0-9 _-]/g, '')

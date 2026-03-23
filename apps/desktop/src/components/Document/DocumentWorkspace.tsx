@@ -4,6 +4,7 @@ import { FileText, Search, FileSearch, Download, AlertCircle } from 'lucide-reac
 import { toast } from 'sonner';
 import { open } from '@tauri-apps/plugin-dialog';
 
+import { isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -43,6 +44,10 @@ export function DocumentWorkspace({ className }: DocumentWorkspaceProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleOpenDocument = async () => {
+    if (!isTauri) {
+      toast.info('Document opening requires the desktop app');
+      return;
+    }
     try {
       const selected = await open({
         title: 'Select Document',

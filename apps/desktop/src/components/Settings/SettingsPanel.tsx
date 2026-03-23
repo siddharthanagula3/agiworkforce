@@ -374,15 +374,30 @@ function DataPrivacySection() {
 
     try {
       const exportData = await invoke<string>('export_user_data');
-      const savePath = await save({
-        defaultPath: `agi-workforce-export-${new Date().toISOString().split('T')[0]}.json`,
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-      });
-      if (savePath) {
-        await writeTextFile(savePath, exportData);
+
+      // Web fallback: use blob download
+      if (!isTauri) {
+        const blob = new Blob([exportData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `agi-workforce-export-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
         setExportSuccess(true);
         if (exportSuccessTimerRef.current) window.clearTimeout(exportSuccessTimerRef.current);
         exportSuccessTimerRef.current = window.setTimeout(() => setExportSuccess(false), 5000);
+      } else {
+        const savePath = await save({
+          defaultPath: `agi-workforce-export-${new Date().toISOString().split('T')[0]}.json`,
+          filters: [{ name: 'JSON', extensions: ['json'] }],
+        });
+        if (savePath) {
+          await writeTextFile(savePath, exportData);
+          setExportSuccess(true);
+          if (exportSuccessTimerRef.current) window.clearTimeout(exportSuccessTimerRef.current);
+          exportSuccessTimerRef.current = window.setTimeout(() => setExportSuccess(false), 5000);
+        }
       }
     } catch (err) {
       console.error('Failed to export data:', err);
@@ -758,6 +773,19 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         null,
         2,
       );
+
+      // Web fallback: use blob download
+      if (!isTauri) {
+        const blob = new Blob([exportData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+
       const savePath = await save({
         defaultPath: `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`,
         filters: [{ name: 'JSON', extensions: ['json'] }],
