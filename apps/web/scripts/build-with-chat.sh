@@ -6,7 +6,7 @@ cd ../..
 
 # Build Vite chat app with /chat/ base path
 echo "Building Vite chat app..."
-VITE_BUILD_TARGET=web pnpm --filter @agiworkforce/desktop exec vite build --outDir dist-web --base /chat/
+NODE_OPTIONS="--max-old-space-size=8192" VITE_BUILD_TARGET=web pnpm --filter @agiworkforce/desktop exec vite build --outDir dist-web --base /chat/
 
 # Copy to Next.js public directory
 echo "Copying chat build to public/chat/..."
