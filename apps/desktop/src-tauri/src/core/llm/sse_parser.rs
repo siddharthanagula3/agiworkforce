@@ -301,6 +301,7 @@ pub(crate) fn parse_sse_event(
         crate::core::llm::Provider::Bedrock => parse_openai_sse(event),
         crate::core::llm::Provider::NvidiaNim => parse_openai_sse(event), // NVIDIA NIM uses OpenAI-compatible format
         crate::core::llm::Provider::OpenRouter => parse_openai_sse(event), // OpenRouter uses OpenAI-compatible format
+        crate::core::llm::Provider::OllamaCloud => parse_openai_sse(event), // Ollama Cloud uses OpenAI-compatible format
     }
 }
 

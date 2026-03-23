@@ -188,7 +188,7 @@ describe('Personalization page', () => {
     expect(mockBack).toHaveBeenCalled();
   });
 
-  it('renders the Save button with teal color', () => {
+  it('renders the Save button', () => {
     const { getByText } = render(<PersonalizationScreen />);
 
     const saveText = getByText('Save');

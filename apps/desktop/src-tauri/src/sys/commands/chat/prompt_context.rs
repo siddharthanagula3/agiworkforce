@@ -227,7 +227,12 @@ pub fn build_coding_system_prompt(folder: &std::path::Path) -> String {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
             // Skip hidden files and common noise
-            if name.starts_with('.') || name == "node_modules" || name == "target" || name == "dist" || name == ".next" {
+            if name.starts_with('.')
+                || name == "node_modules"
+                || name == "target"
+                || name == "dist"
+                || name == ".next"
+            {
                 continue;
             }
             if entry.path().is_dir() {

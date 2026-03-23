@@ -59,9 +59,16 @@ async function handleCreditTopup(request: NextRequest) {
 
   const amount_cents = (body as { amount_cents?: unknown } | null | undefined)?.amount_cents;
 
-  // Validate amount (default to $100 if not specified)
-  const creditAmount =
-    typeof amount_cents === 'number' && Number.isFinite(amount_cents) ? amount_cents : 10000; // 10000 cents = $100
+  // Require amount_cents — never silently default to avoid accidental charges
+  if (amount_cents === undefined || amount_cents === null) {
+    throw createError.validation('amount_cents is required');
+  }
+
+  if (typeof amount_cents !== 'number' || !Number.isFinite(amount_cents)) {
+    throw createError.validation('amount_cents must be a finite number');
+  }
+
+  const creditAmount = amount_cents;
 
   // Validate amount is reasonable ($10 min, $1000 max)
   if (!Number.isInteger(creditAmount) || creditAmount < 1000 || creditAmount > 100000) {

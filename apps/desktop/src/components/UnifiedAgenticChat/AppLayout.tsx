@@ -27,6 +27,7 @@ import { ImagesGallery } from '../Images/ImagesGallery';
 import { SkillMarketplace } from '../SkillMarketplace/SkillMarketplace';
 import { ScheduledTasksPanel } from '../Scheduler/ScheduledTasksPanel';
 import { ArtifactsGallery } from '../Artifacts/ArtifactsGallery';
+import { ShareConversationDialog } from './ShareConversationDialog';
 
 // Lazy load MediaLab for code splitting
 const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
@@ -41,6 +42,7 @@ const ARTIFACT_PANEL_MAX_WIDTH = 900;
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const shortcutsDialogOpen = useSettingsDialogStore((s) => s.shortcutsOpen);
   const setShortcutsDialogOpen = useCallback((open: boolean) => {
     if (open) useSettingsDialogStore.getState().openShortcuts();
@@ -120,6 +122,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [isResizing, setIsResizing] = useState(false);
 
   const messages = useUnifiedChatStore((state) => state.messages);
+  const activeConversation = useUnifiedChatStore(
+    (state) =>
+      state.conversations.find((conversation) => conversation.id === state.activeConversationId) ??
+      null,
+  );
   const isStreaming = useUnifiedChatStore((state) => state.isStreaming);
   const activeConversationId = useUnifiedChatStore((state) => state.activeConversationId);
   const createConversation = useUnifiedChatStore((state) => state.createConversation);
@@ -180,6 +187,11 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const lastMessage = messages[messages.length - 1];
   const lastMessageContent = lastMessage?.content || '';
+  const hasShareableResponse = useMemo(
+    () =>
+      messages.some((message) => message.role === 'assistant' && message.content.trim().length > 0),
+    [messages],
+  );
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -322,6 +334,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         <Breadcrumb
           activeView={activeRightPanel}
           onNavigateHome={() => setActiveRightPanel(null)}
+          conversationTitle={activeConversation?.title}
+          showShareAction={Boolean(activeConversationId && hasShareableResponse)}
+          onShare={() => setShareDialogOpen(true)}
         />
         {}
         <div className="relative flex h-full flex-col">
@@ -375,6 +390,14 @@ export function AppLayout({ children }: AppLayoutProps) {
         onOpenChange={setCustomInstructionsOpen}
         conversationId={customInstructionsConversationId}
       />
+      {activeConversationId && (
+        <ShareConversationDialog
+          conversationId={activeConversationId}
+          conversationTitle={activeConversation?.title}
+          isOpen={shareDialogOpen}
+          onClose={() => setShareDialogOpen(false)}
+        />
+      )}
 
       {/* Artifact Panel */}
       {isArtifactPanelOpen && (

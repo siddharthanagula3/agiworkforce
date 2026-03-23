@@ -10,12 +10,12 @@ AGI Workforce is an open, model-agnostic AI desktop platform. Users connect any 
 
 ## Model Recommendations
 
-| Task Type | Recommended Model |
-|-----------|------------------|
-| Routine coding, tests, formatting | o4-mini |
-| Complex features, architecture | o4-mini |
-| Debugging, refactoring | o4-mini |
-| Security review | o4-mini |
+| Task Type                         | Recommended Model                |
+| --------------------------------- | -------------------------------- |
+| Routine coding, tests, formatting | claude-3-5-sonnet or gpt-4o-mini |
+| Complex features, architecture    | claude-3-7-opus or gpt-4o        |
+| Debugging, refactoring            | claude-3-5-sonnet or gpt-4o-mini |
+| Security review                   | claude-3-7-opus or gpt-4o        |
 
 ## Monorepo Structure
 
@@ -31,6 +31,11 @@ apps/
 packages/
   types/             # Shared TypeScript types
   utils/             # Shared utilities
+  api/               # ~1,061 typed API wrappers for all Tauri command domains
+  runtime/           # Runtime detection + capability-aware command routing
+  stores/            # Shared Zustand stores
+  chat/              # Shared chat components
+  react-native-worklets/ # React Native Reanimated worklets for mobile
 services/
   api-gateway/       # Express API for mobile + external integrations
   signaling-server/  # WebSocket signaling
@@ -78,6 +83,7 @@ pnpm lint                             # ESLint
 ## MCP Servers
 
 Configured in `.codex/config.toml` under `[mcp_servers]`:
+
 - **GitHub** -- Repository operations and PR management
 - **Context7** -- Library documentation lookup
 - **Memory** -- Persistent knowledge graph
@@ -87,19 +93,20 @@ Configured in `.codex/config.toml` under `[mcp_servers]`:
 
 ## Key Differences from Claude Code
 
-| Feature | Claude Code | Codex CLI |
-|---------|------------|-----------|
-| Hooks | 8+ event types | Not yet supported |
-| Context file | CLAUDE.md + AGENTS.md | AGENTS.md only |
-| Skills | Skills loaded via plugin | `.agents/skills/` directory |
-| Commands | `/slash` commands | Instruction-based |
-| Agents | Subagent Task tool | Single agent model |
-| Security | Hook-based enforcement | Instruction + sandbox |
-| MCP | Full support (stdio, SSE, HTTP) | Command-based only |
+| Feature      | Claude Code                     | Codex CLI                   |
+| ------------ | ------------------------------- | --------------------------- |
+| Hooks        | 8+ event types                  | Not yet supported           |
+| Context file | CLAUDE.md + AGENTS.md           | AGENTS.md only              |
+| Skills       | Skills loaded via plugin        | `.agents/skills/` directory |
+| Commands     | `/slash` commands               | Instruction-based           |
+| Agents       | Subagent Task tool              | Single agent model          |
+| Security     | Hook-based enforcement          | Instruction + sandbox       |
+| MCP          | Full support (stdio, SSE, HTTP) | Command-based only          |
 
 ## Security Without Hooks
 
 Since Codex lacks hooks, security enforcement is instruction-based:
+
 1. All secrets through SecretManager (Argon2id + AES-GCM + SQLite/keychain)
 2. Never hardcode API keys or credentials in source
 3. Use ToolGuard for all tool execution sandboxing
@@ -113,12 +120,12 @@ Since Codex lacks hooks, security enforcement is instruction-based:
 
 When working on tasks, be aware of module boundaries:
 
-| Zone | Files |
-|------|-------|
-| Frontend | `apps/desktop/src/components/**`, `apps/desktop/src/pages/**` |
-| Services | `apps/desktop/src/services/**`, `apps/web/api/**`, `services/**` |
-| Data | `apps/web/core/storage/**`, `supabase/migrations/**` |
-| MCP/Extensions | `apps/desktop/src/stores/mcpStore*`, `apps/extension/**` |
-| DevOps | `Dockerfile`, `.github/**`, `scripts/**` |
-| Rust Backend | `apps/desktop/src-tauri/**` |
-| Shared | `package.json`, `tsconfig.json`, `packages/**` |
+| Zone           | Files                                                            |
+| -------------- | ---------------------------------------------------------------- |
+| Frontend       | `apps/desktop/src/components/**`, `apps/desktop/src/pages/**`    |
+| Services       | `apps/desktop/src/services/**`, `apps/web/api/**`, `services/**` |
+| Data           | `apps/web/core/storage/**`, `supabase/migrations/**`             |
+| MCP/Extensions | `apps/desktop/src/stores/mcpStore*`, `apps/extension/**`         |
+| DevOps         | `Dockerfile`, `.github/**`, `scripts/**`                         |
+| Rust Backend   | `apps/desktop/src-tauri/**`                                      |
+| Shared         | `package.json`, `tsconfig.json`, `packages/**`                   |

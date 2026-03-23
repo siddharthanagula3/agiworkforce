@@ -81,6 +81,19 @@ pub fn update_conversation_title(
     Ok(())
 }
 
+/// Set the `archived` flag on a conversation (1 = archived, 0 = active).
+pub fn archive_conversation(conn: &Connection, id: i64, user_id: &str, archived: bool) -> Result<()> {
+    let flag: i32 = if archived { 1 } else { 0 };
+    let updated = conn.execute(
+        "UPDATE conversations SET archived = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2 AND user_id = ?3",
+        params![flag, id, user_id],
+    )?;
+    if updated == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
+    Ok(())
+}
+
 pub fn delete_conversation(conn: &Connection, id: i64, user_id: &str) -> Result<usize> {
     let rows_affected = conn.execute(
         "DELETE FROM conversations WHERE id = ?1 AND user_id = ?2",

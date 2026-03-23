@@ -26,10 +26,10 @@ async function sendHeartbeat(userId: string): Promise<void> {
     await untypedClient.from('surface_heartbeats').upsert(
       {
         user_id: userId,
-        surface: 'desktop',
+        surface_id: 'desktop',
         last_seen_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id,surface' },
+      { onConflict: 'user_id,surface_id' },
     );
   } catch {
     // Non-fatal — silently ignore

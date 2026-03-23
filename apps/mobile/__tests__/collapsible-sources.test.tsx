@@ -157,7 +157,7 @@ describe('CollapsibleSources', () => {
     const { getByLabelText } = render(<CollapsibleSources sources={sourcesNoTitle} />);
 
     // Expand — accessibility label always uses "sources" (plural) per the source
-    fireEvent.press(getByLabelText('View 1 sources'));
+    fireEvent.press(getByLabelText('View 1 source'));
 
     // Accessibility label falls back to domain
     expect(getByLabelText('Source 1: example.com')).toBeTruthy();

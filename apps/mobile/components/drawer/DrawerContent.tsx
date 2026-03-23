@@ -105,9 +105,9 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
   );
 
   const displayName =
-    user?.user_metadata?.full_name ??
-    user?.user_metadata?.name ??
-    user?.email?.split('@')[0] ??
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split('@')[0] ||
     'User';
 
   const avatarInitial = displayName.charAt(0).toUpperCase();

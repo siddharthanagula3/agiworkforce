@@ -23,6 +23,7 @@ unused_results = "allow"
 await_holding_lock = "allow"
 
 [dependencies]
+agiworkforce-sandbox-policy = { path = "../../../crates/sandbox-policy" }
 
 tauri = { version = "2.9.3", features = ["tray-icon"] }
 tauri-plugin-shell = { version = "2.3.3", optional = true }

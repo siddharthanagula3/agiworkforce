@@ -12,8 +12,8 @@ pub use models::{
 };
 
 pub use repository::{
-    create_automation_history, create_branch, create_conversation, create_message,
-    create_overlay_event, delete_branch, delete_conversation, delete_message,
+    archive_conversation, create_automation_history, create_branch, create_conversation,
+    create_message, create_overlay_event, delete_branch, delete_conversation, delete_message,
     delete_overlay_events_before, delete_setting, get_automation_history, get_automation_stats,
     get_conversation, get_message, get_overlay_event, get_setting, list_automation_history,
     list_branches, list_conversations, list_messages, list_messages_by_branch, list_overlay_events,
