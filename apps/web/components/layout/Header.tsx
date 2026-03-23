@@ -263,7 +263,7 @@ export function Header() {
           ))}
           {userEmail && (
             <Link href="/chat" className="hover:text-white transition-colors">
-              Dashboard
+              Chat
             </Link>
           )}
         </nav>
@@ -282,7 +282,7 @@ export function Header() {
                 href="/chat"
                 className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
               >
-                Dashboard
+                Chat
               </Link>
             </div>
           ) : (
@@ -368,7 +368,7 @@ export function Header() {
                 className="hover:text-white transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Dashboard
+                Chat
               </Link>
             )}
             <hr className="border-white/10 my-2" />
