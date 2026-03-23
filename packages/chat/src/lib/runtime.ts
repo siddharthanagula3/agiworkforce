@@ -59,8 +59,11 @@ export interface SendMessageOptions {
   attachments?: File[];
   thinkingEnabled?: boolean;
   webSearch?: boolean;
+  codeExecution?: boolean;
   signal?: AbortSignal;
   systemPrompt?: string;
+  /** Full conversation message history for multi-turn context. */
+  messageHistory?: Array<{ role: string; content: string }>;
 }
 
 /**
