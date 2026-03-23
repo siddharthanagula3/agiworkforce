@@ -5,10 +5,12 @@ import {
   useCallback,
   useRef,
   useEffect,
+  useState,
   Component,
   type ErrorInfo,
   type ReactNode,
 } from 'react';
+import { Search, X } from 'lucide-react';
 import type { ChatRuntime } from '../lib/runtime';
 import type { ChatMessage } from '../lib/types';
 import type { ChipType } from './QuickChips';
@@ -85,6 +87,133 @@ export function useRuntime(): ChatRuntime | null {
   return useContext(RuntimeContext);
 }
 
+// ---------------------------------------------------------------------------
+// SearchOverlay — lightweight search modal triggered by Cmd+F / sidebar Search
+// ---------------------------------------------------------------------------
+
+interface SearchOverlayProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+function SearchOverlay({ open, onClose }: SearchOverlayProps) {
+  const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const conversations = useChatStore((s) => s.conversations);
+  const setCurrentConversation = useChatStore((s) => s.setCurrentConversation);
+
+  const results = useMemo(() => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase();
+    return conversations
+      .filter((c) => !c.archived && c.title.toLowerCase().includes(q))
+      .slice(0, 20);
+  }, [conversations, query]);
+
+  useEffect(() => {
+    if (open) {
+      setQuery('');
+      // Focus after animation frame so the input is mounted
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKey, { capture: true });
+    return () => window.removeEventListener('keydown', handleKey, { capture: true });
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+      aria-modal="true"
+      role="dialog"
+      aria-label="Search conversations"
+    >
+      <div
+        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        className={cn(
+          'relative z-10 w-full max-w-lg overflow-hidden rounded-xl',
+          'bg-[var(--chat-surface-base)] border border-[var(--chat-border)]',
+          'shadow-xl',
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Search input */}
+        <div className="flex items-center gap-2.5 border-b border-[var(--chat-border)] px-3.5 py-3">
+          <Search size={15} className="shrink-0 text-[var(--chat-text-muted)]" aria-hidden="true" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search conversations..."
+            className={cn(
+              'flex-1 bg-transparent text-sm text-[var(--chat-text-primary)]',
+              'placeholder:text-[var(--chat-text-muted)]',
+              'focus:outline-none',
+            )}
+          />
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-6 w-6 items-center justify-center rounded text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)] transition-colors"
+            aria-label="Close search"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Results */}
+        <div className="max-h-72 overflow-y-auto py-1.5">
+          {query.trim() && results.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-[var(--chat-text-muted)]">
+              No conversations found.
+            </p>
+          )}
+          {!query.trim() && (
+            <p className="px-4 py-6 text-center text-sm text-[var(--chat-text-muted)]">
+              Type to search your conversations.
+            </p>
+          )}
+          {results.map((conv) => (
+            <button
+              key={conv.id}
+              type="button"
+              onClick={() => {
+                setCurrentConversation(conv.id);
+                onClose();
+              }}
+              className={cn(
+                'flex w-full items-center gap-3 px-3.5 py-2 text-sm text-left',
+                'text-[var(--chat-text-primary)] transition-colors',
+                'hover:bg-[var(--chat-surface-hover)]',
+              )}
+            >
+              <span className="flex-1 truncate">{conv.title}</span>
+              <span className="shrink-0 text-[11px] text-[var(--chat-text-muted)]">
+                {new Date(conv.updatedAt).toLocaleDateString()}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export interface ChatInterfaceProps {
   runtime: ChatRuntime | null;
   className?: string;
@@ -151,6 +280,8 @@ export function ChatInterface({
     currentConversationId ? (s.messages[currentConversationId] ?? emptyMessages) : emptyMessages,
   );
   const activeView = useUIStore((s) => s.activeView);
+  const searchModalOpen = useUIStore((s) => s.searchModalOpen);
+  const toggleSearchModal = useUIStore((s) => s.toggleSearchModal);
 
   const hasMessages = messages.length > 0;
 
@@ -326,6 +457,9 @@ export function ChatInterface({
           </div>
         )}
       </div>
+
+      {/* Search overlay — triggered by sidebar Search button or Cmd+F */}
+      <SearchOverlay open={searchModalOpen} onClose={toggleSearchModal} />
 
       {/* Settings modal — shared across desktop & web */}
       <SettingsModal />
