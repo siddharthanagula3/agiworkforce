@@ -149,6 +149,20 @@ function LoginForm() {
         setMessage({ type: 'error', text: error.message });
       }
     } else {
+      // If redirecting to /chat (Vite SPA), pass session tokens via hash
+      // so the SPA can pick them up (it can't read Next.js SSR cookies)
+      if (redirectTo.includes('/chat')) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session) {
+          const hashParams = new URLSearchParams({
+            access_token: sessionData.session.access_token,
+            refresh_token: sessionData.session.refresh_token,
+            type: 'bearer',
+          });
+          window.location.href = `${redirectTo}#${hashParams.toString()}`;
+          return;
+        }
+      }
       window.location.href = redirectTo;
     }
     setLoading(false);

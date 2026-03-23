@@ -1351,6 +1351,27 @@ export const supabaseAuth = SupabaseAuthService.getInstance();
 export async function initializeWebAuth(): Promise<boolean> {
   try {
     const supabase = getSupabase();
+
+    // Check for session tokens passed via URL hash (from login redirect)
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      const hashParams = new URLSearchParams(hash);
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      if (accessToken && refreshToken) {
+        const { error: setError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        // Clear hash from URL without triggering navigation
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        if (!setError) {
+          return true;
+        }
+        console.error('[WebAuth] Failed to set session from hash:', setError.message);
+      }
+    }
+
     const {
       data: { session },
       error,
@@ -1361,25 +1382,23 @@ export async function initializeWebAuth(): Promise<boolean> {
     }
 
     if (session?.access_token) {
-      // Valid session exists — sync with auth stores
       return true;
     }
 
-    // No session — redirect to login
-    const currentUrl = window.location.href;
+    // No session — redirect to login (use redirectTo param, not redirect)
+    const chatUrl = `${window.location.origin}/chat`;
     const loginBase =
       (import.meta.env['VITE_LOGIN_URL'] as string | undefined) ?? 'https://agiworkforce.com/login';
     const loginUrl = new URL(loginBase);
-    loginUrl.searchParams.set('redirect', currentUrl);
+    loginUrl.searchParams.set('redirectTo', chatUrl);
 
     window.location.href = loginUrl.toString();
     return false;
   } catch (err) {
     console.error('[WebAuth] Auth initialization failed:', err);
-    // On error, redirect to login as a safety measure
     const loginUrl =
       (import.meta.env['VITE_LOGIN_URL'] as string | undefined) ?? 'https://agiworkforce.com/login';
-    window.location.href = `${loginUrl}?redirect=${encodeURIComponent(window.location.href)}`;
+    window.location.href = `${loginUrl}?redirectTo=${encodeURIComponent(`${window.location.origin}/chat`)}`;
     return false;
   }
 }
