@@ -61,6 +61,9 @@ Decisions: Web = cloud-only SaaS. No BYOK. No local LLMs. No desktop-native feat
 - [ ] **WEB-021: User profile shows "Hobby plan"** — Should match Account page "HOBBY" badge styling consistently
 - [ ] **WEB-022: No conversation list in sidebar** — Shows "No conversations yet" — correct when empty but need list after conversations exist
 - [ ] **WEB-023: OAuth connector flows unverified** — Apps & Integrations shows 12+ connectors (Gmail, Calendar, Notion, Figma, Slack, etc.) with Connect buttons — need to verify OAuth redirects work
+- [ ] **WEB-026: Model selector shows "Manage API Keys" instead of model dropdown** — No models loaded from backend, shows only a "Manage API Keys" button inside the input box. Should show inline cloud model dropdown. The "Manage API Keys" link is now broken since Models & Keys tab is hidden on web
+- [ ] **WEB-027: + menu items don't trigger actions** — "Add files or photos" has a hidden file input but click doesn't reliably open OS dialog. "Add to project", "Google Drive", "GitHub" submenu items are stubs (no handlers). "Research" and "Web search" toggle internal state only (no visible feedback). "Skills" and "Connectors" submenus are stubs
+- [ ] **WEB-028: Model list z-index/positioning** — When model list IS populated, the dropdown renders inside the input box area rather than as a proper popover above it
 
 ### Critical Codebase Finding: Two Sidebar Implementations
 
