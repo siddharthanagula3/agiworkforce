@@ -1,4 +1,5 @@
 import { AlertCircle, FileCode2, FolderOpen, RefreshCw, Server, Wrench } from 'lucide-react';
+import { isTauri } from '@/lib/tauri-mock';
 import { useCallback, useEffect, useState } from 'react';
 
 import MCPConfigEditor from '../MCP/MCPConfigEditor';
@@ -126,40 +127,42 @@ export function MCPToolsSettings() {
         </Alert>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <FileCode2 className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">MCP Config Source</CardTitle>
+      {isTauri && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <FileCode2 className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-base">MCP Config Source</CardTitle>
+              </div>
+              <Badge variant={configLocation?.source === 'project' ? 'default' : 'secondary'}>
+                {sourceLabel}
+              </Badge>
             </div>
-            <Badge variant={configLocation?.source === 'project' ? 'default' : 'secondary'}>
-              {sourceLabel}
-            </Badge>
-          </div>
-          <CardDescription>
-            Uses project-level config with this precedence when a project folder is active:
-            <code> .mcp.json </code>, <code>mcp.json</code>, <code>.vscode/mcp.json</code>. Falls
-            back to global desktop config when no project folder is active.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="rounded-md border bg-card px-3 py-2 font-mono text-xs break-all">
-            {configLocation?.path || 'Resolving MCP config path...'}
-          </div>
-          {configLocation?.source !== 'project' && (
-            <p className="text-xs text-muted-foreground">
-              Select a project folder in the chat composer to activate project-scoped MCP config.
-            </p>
-          )}
-          {configLocation?.projectFolder && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <FolderOpen className="h-3.5 w-3.5" />
-              <span className="truncate">{configLocation.projectFolder}</span>
+            <CardDescription>
+              Uses project-level config with this precedence when a project folder is active:
+              <code> .mcp.json </code>, <code>mcp.json</code>, <code>.vscode/mcp.json</code>. Falls
+              back to global desktop config when no project folder is active.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="rounded-md border bg-card px-3 py-2 font-mono text-xs break-all">
+              {configLocation?.path || 'Resolving MCP config path...'}
             </div>
-          )}
-        </CardContent>
-      </Card>
+            {configLocation?.source !== 'project' && (
+              <p className="text-xs text-muted-foreground">
+                Select a project folder in the chat composer to activate project-scoped MCP config.
+              </p>
+            )}
+            {configLocation?.projectFolder && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <FolderOpen className="h-3.5 w-3.5" />
+                <span className="truncate">{configLocation.projectFolder}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>

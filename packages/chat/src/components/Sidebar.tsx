@@ -43,7 +43,6 @@ export function Sidebar() {
   const setActiveView = useUIStore((s) => s.setActiveView);
   const activeView = useUIStore((s) => s.activeView);
   const toggleSearchModal = useUIStore((s) => s.toggleSearchModal);
-  const openSettings = useUIStore((s) => s.openSettings);
 
   const handleNewChat = useCallback(() => {
     const now = new Date().toISOString();
@@ -79,7 +78,10 @@ export function Sidebar() {
       id: 'customize',
       icon: <Palette size={16} />,
       label: 'Customize',
-      action: () => openSettings('customize'),
+      action: () =>
+        window.dispatchEvent(
+          new CustomEvent('chat:action', { detail: { type: 'open-settings', tab: 'mcp-skills' } }),
+        ),
     },
     {
       id: 'chats',
@@ -91,19 +93,30 @@ export function Sidebar() {
       id: 'projects',
       icon: <FolderOpen size={16} />,
       label: 'Projects',
-      action: () => openSettings('account'),
+      action: () =>
+        window.dispatchEvent(
+          new CustomEvent('chat:action', { detail: { type: 'open-settings', tab: 'account' } }),
+        ),
     },
     {
       id: 'skills',
       icon: <Zap size={16} />,
       label: 'Skills',
-      action: () => openSettings('mcp-skills'),
+      action: () =>
+        window.dispatchEvent(
+          new CustomEvent('chat:action', { detail: { type: 'open-settings', tab: 'mcp-skills' } }),
+        ),
     },
     {
       id: 'connectors',
       icon: <Plug size={16} />,
       label: 'Connectors',
-      action: () => openSettings('apps-integrations'),
+      action: () =>
+        window.dispatchEvent(
+          new CustomEvent('chat:action', {
+            detail: { type: 'open-settings', tab: 'connectors' },
+          }),
+        ),
     },
   ];
 
