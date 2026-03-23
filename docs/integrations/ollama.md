@@ -50,17 +50,21 @@ ollama launch agiworkforce --config
 
 **Local models:**
 
-- `qwen3-coder` — Code generation and analysis
-- `glm-4.7-flash` — Fast reasoning and code generation (~25 GB VRAM)
-- `llama3.2` — General purpose
-- `qwen3.5` — Balanced performance
+| Model           | Best for                           | VRAM   |
+| --------------- | ---------------------------------- | ------ |
+| `qwen3-coder`   | Code generation and analysis       | ~16 GB |
+| `glm-4.7-flash` | Fast reasoning and code generation | ~25 GB |
+| `llama3.2`      | General purpose tasks              | ~4 GB  |
+| `qwen3.5`       | Balanced performance               | ~16 GB |
 
 **Cloud models** (available at [ollama.com/search?c=cloud](https://ollama.com/search?c=cloud)):
 
-- `kimi-k2.5:cloud` — Multimodal reasoning
-- `glm-5:cloud` — Reasoning and code generation
-- `minimax-m2.7:cloud` — Fast coding and productivity
-- `qwen3.5:cloud` — Balanced cloud performance
+| Model                | Best for                      |
+| -------------------- | ----------------------------- |
+| `kimi-k2.5:cloud`    | Multimodal reasoning          |
+| `glm-5:cloud`        | Reasoning and code generation |
+| `minimax-m2.7:cloud` | Fast coding and productivity  |
+| `qwen3.5:cloud`      | Balanced cloud performance    |
 
 ## Non-interactive (headless) mode
 

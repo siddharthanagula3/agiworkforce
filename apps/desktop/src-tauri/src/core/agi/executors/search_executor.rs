@@ -697,9 +697,10 @@ impl ToolExecutor for SearchExecutor {
         _execution_context: &ExecutionContext,
     ) -> Result<Value> {
         match tool_name {
-            "search_web" => self
-                .execute_search(parameters, context.app_handle.as_ref())
-                .await,
+            "search_web" => {
+                self.execute_search(parameters, context.app_handle.as_ref())
+                    .await
+            }
             _ => Err(anyhow!("Unknown search tool: {}", tool_name)),
         }
     }

@@ -73,7 +73,7 @@ import { getSkillById } from '../../lib/skillLoader';
 // import { MarketplacePage } from '../Marketplace/MarketplacePage';
 // import { WorkflowPanel } from '../Workflows';
 // import { ImagesGallery } from '../Images/ImagesGallery';
-import { SkillsMarketplace } from '../Skills/SkillsMarketplace';
+import { SkillMarketplace } from '../SkillMarketplace/SkillMarketplace';
 // import { ScheduledTasksPage } from '../Schedules/ScheduledTasksPage';
 // import { ArtifactsGallery } from '../Artifacts/ArtifactsGallery';
 // import { DeepResearchPage } from '../Research/DeepResearchPage';
@@ -1651,13 +1651,37 @@ export const UnifiedAgenticChat: React.FC<{
               {/* Empty state UI — branded greeting, quick-start pills, prompt suggestions, connector bar */}
               {showEmptyStateUI && (
                 <div className="flex flex-col items-center gap-4 px-4 pb-3">
+                  {isActiveConversationIncognito && (
+                    <div className="flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-200">
+                      <EyeOff className="h-3.5 w-3.5" />
+                      <span>Incognito chat — this conversation is not saved to disk.</span>
+                    </div>
+                  )}
+
                   {/* Personalized branded greeting */}
                   <BrandedGreeting className="mt-2" />
 
                   {/* Quick-start action pills — populate input or trigger features */}
                   <QuickStartPills
-                    onPillClick={(_action, prompt) => {
-                      useUnifiedChatStore.getState().setDraftContent(prompt);
+                    onPillClick={(action, prompt) => {
+                      const store = useUnifiedChatStore.getState();
+
+                      if (action === 'skills') {
+                        store.setActiveView('skills');
+                        return;
+                      }
+
+                      if (action === 'web') {
+                        store.setFocusMode('web');
+                      } else if (action === 'code') {
+                        store.setFocusMode('code');
+                      } else if (action === 'write') {
+                        store.setFocusMode('reasoning');
+                      } else if (action === 'research') {
+                        store.setFocusMode('deep-research');
+                      }
+
+                      store.setDraftContent(prompt);
                     }}
                   />
 
@@ -1679,7 +1703,7 @@ export const UnifiedAgenticChat: React.FC<{
             <ProjectsView />
           ) : activeView === 'skills' ? (
             <div className="flex-1 overflow-hidden">
-              <SkillsMarketplace />
+              <SkillMarketplace />
             </div>
           ) : null}
         </AppLayout>

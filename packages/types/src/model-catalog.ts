@@ -18,32 +18,11 @@
  *   - apps/mobile/ (via API responses)
  */
 
-/** Provider identifiers used across the platform. */
-export type Provider =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'ollama'
-  | 'xai'
-  | 'deepseek'
-  | 'qwen'
-  | 'moonshot'
-  | 'perplexity'
-  | 'zhipu'
-  | 'managed_cloud'
-  | 'mistral'
-  | 'groq'
-  | 'together'
-  | 'fireworks'
-  | 'cerebras'
-  | 'deepinfra'
-  | 'nvidia_nim'
-  | 'open_router'
-  | 'cohere'
-  | 'ai21'
-  | 'sambanova'
-  | 'azure'
-  | 'bedrock';
+// Provider is the canonical union type for all LLM provider identifiers.
+// It lives in its own module so surfaces can import it without pulling in
+// the full model catalog schema.
+import type { Provider } from './provider';
+export type { Provider };
 
 /** Boolean capability flags for a model. */
 export interface ModelCapabilities {

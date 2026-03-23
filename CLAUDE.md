@@ -18,9 +18,12 @@ apps/extension/                # Chrome MV3 (native messaging, DOM automation)
 apps/extension-vscode/         # VS Code (chat participant, agent mode, inline completions)
 packages/types/                # Shared TS types: a2a, cross-device, mcp-apps, event-triggers, audit
 packages/utils/                # Shared utilities
-packages/api/                  # 1,061 typed API wrappers for all Tauri command domains
+packages/api/                  # ~1,061 typed API wrappers for all Tauri command domains
 packages/runtime/              # Runtime detection + capability-aware command routing
 packages/stores/               # Shared Zustand stores
+packages/chat/                 # Shared chat components
+packages/react-native-worklets/ # React Native Reanimated worklets for mobile
+crates/sandbox-policy/         # Rust crate: OS-level sandbox policy (Seatbelt/Bubblewrap/Landlock)
 services/api-gateway/          # Express API for mobile + integrations + cloud chat SSE
 services/signaling-server/     # WebSocket signaling for cross-device streams
 ```
@@ -42,7 +45,7 @@ pnpm lint                                       # ESLint (max-warnings=0, exclud
 pnpm lint:extension                             # ESLint for Chrome extension only
 pnpm format:check                               # Prettier check
 pnpm format                                     # Prettier fix
-cargo check                                     # Rust type check (both crates)
+cargo check                                     # Rust type check (all crates)
 cargo clippy                                    # Rust linting
 cargo check -p agiworkforce-cli                 # CLI crate only
 cd apps/desktop && pnpm test                    # Vitest (only when asked)
@@ -73,7 +76,7 @@ The #1 source of silent bugs. Tauri auto-converts param names at the boundary.
 
 ## Architecture
 
-- **Rust backend**: `core/` (LLM router, agents, swarm, MCP, embeddings, triggers), `sys/` (1415 commands, security), `automation/` (screen, input, browser, OCR), `features/` (terminal, speech, calendar), `data/` (SQLite, settings, cache), `integrations/` (cloud sync, APIs), `ui/` (tray, windows, overlay), `models/` (shared structs)
+- **Rust backend**: `core/` (LLM router, agents, swarm, MCP, embeddings, triggers), `sys/` (commands, security), `automation/` (screen, input, browser, OCR), `features/` (terminal, speech, calendar), `data/` (SQLite, settings, cache), `integrations/` (cloud sync, APIs), `ui/` (tray, windows, overlay), `models/` (shared structs)
 - **Rust entry**: `main.rs` → `lib.rs::run()` → Tauri setup with plugins + managed state
 - **Frontend**: Zustand v5 + Immer + Persist. 100+ component dirs. Radix UI + Tailwind 4 + Lucide + Sonner toasts
 - **Frontend↔Backend**: `invoke()` for commands, Tauri event channels for streaming (`tool:event`, `agentic:*`)
@@ -194,5 +197,5 @@ The #1 source of silent bugs. Tauri auto-converts param names at the boundary.
 | B      | `apps/desktop/src/services/**`, `apps/web/api/**`, `services/**` |
 | C      | `supabase/migrations/**`                                         |
 | D      | `apps/desktop/src/stores/mcpStore*`, `apps/extension/**`         |
-| SYSTEM | `apps/desktop/src-tauri/**`, `apps/cli/**`                       |
+| SYSTEM | `apps/desktop/src-tauri/**`, `apps/cli/**`, `crates/**`          |
 | SHARED | `package.json`, `tsconfig.json`, `CLAUDE.md`, `packages/**`      |

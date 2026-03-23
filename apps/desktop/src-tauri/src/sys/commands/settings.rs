@@ -68,6 +68,47 @@ pub struct ChatPreferences {
     pub chat_storage_mode: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSandboxPreferences {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_terminal_sandbox_backend")]
+    pub backend: String,
+    #[serde(default = "default_terminal_sandbox_policy")]
+    pub policy: String,
+    #[serde(default = "default_terminal_sandbox_executable")]
+    pub executable: String,
+    #[serde(default)]
+    pub allowed_domains: Vec<String>,
+}
+
+fn default_terminal_sandbox_backend() -> String {
+    "srt".to_string()
+}
+
+fn default_terminal_sandbox_policy() -> String {
+    agiworkforce_sandbox_policy::SandboxPolicy::default()
+        .mode_name()
+        .to_string()
+}
+
+fn default_terminal_sandbox_executable() -> String {
+    "srt".to_string()
+}
+
+impl Default for TerminalSandboxPreferences {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            backend: default_terminal_sandbox_backend(),
+            policy: default_terminal_sandbox_policy(),
+            executable: default_terminal_sandbox_executable(),
+            allowed_domains: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionPreferences {
@@ -81,6 +122,8 @@ pub struct ExecutionPreferences {
     pub auto_resume_on_restart: bool,
     #[serde(default = "default_enable_timeout_warnings")]
     pub enable_timeout_warnings: bool,
+    #[serde(default)]
+    pub terminal_sandbox: TerminalSandboxPreferences,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -240,6 +283,7 @@ impl SettingsState {
                     checkpoint_interval: default_checkpoint_interval(),
                     auto_resume_on_restart: default_auto_resume_on_restart(),
                     enable_timeout_warnings: default_enable_timeout_warnings(),
+                    terminal_sandbox: TerminalSandboxPreferences::default(),
                 }),
                 global_hotkey_preferences: default_global_hotkey_preferences(),
                 allowed_directories: default_allowed_directories(),

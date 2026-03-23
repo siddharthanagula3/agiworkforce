@@ -211,7 +211,7 @@ describe('Settings page', () => {
     expect(getByText('Auto-Approve')).toBeTruthy();
   });
 
-  it('has exactly 5 section titles in the section data', () => {
+  it('renders Account and AI Configuration section headers', () => {
     // We can verify the structure by checking the SectionList is passed 5 sections.
     // Since SectionList virtualizes, we test the data shape indirectly.
     // The component creates 5 sections: Account, AI Configuration, Connections, Preferences, About

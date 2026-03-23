@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Pressable, Alert, Platform, Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Archive, MessageSquare, Pin, Trash2 } from 'lucide-react-native';
+import { MessageSquare, Pin, Trash2 } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';

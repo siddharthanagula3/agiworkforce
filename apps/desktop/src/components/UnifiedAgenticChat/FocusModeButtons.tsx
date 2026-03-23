@@ -17,19 +17,18 @@ export interface FocusModeOption {
 
 export const FOCUS_MODES: FocusModeOption[] = [
   { value: 'web', label: 'Web', placeholder: 'Search the web for information...' },
-  { value: 'academic', label: 'Academic', placeholder: 'Search academic papers and research...' },
   {
     value: 'code',
     label: 'Code',
-    placeholder: 'Ask about code, GitHub repos, or technical docs...',
+    placeholder: 'Ask about code, repositories, or debugging...',
   },
-  { value: 'reasoning', label: 'Writing', placeholder: 'Help me write or edit content...' },
+  { value: 'reasoning', label: 'Write', placeholder: 'Help me write or edit content...' },
   {
     value: 'deep-research',
-    label: 'Deep Research',
-    placeholder: 'Conduct in-depth research on a topic...',
+    label: 'Research',
+    placeholder: 'Research a topic in depth...',
   },
-  { value: null, label: 'All', placeholder: 'Ask me anything...' },
+  { value: null, label: 'All', placeholder: 'How can I help you today?' },
 ];
 
 export interface FocusModeButtonsProps {
@@ -79,7 +78,7 @@ export const FocusModeButtons: React.FC<FocusModeButtonsProps> = ({
  */
 export function getFocusModePlaceholder(
   focusMode: FocusMode,
-  defaultPlaceholder: string = 'Ask me anything...',
+  defaultPlaceholder: string = 'How can I help you today?',
 ): string {
   return FOCUS_MODES.find((m) => m.value === focusMode)?.placeholder || defaultPlaceholder;
 }

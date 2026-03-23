@@ -669,6 +669,7 @@ pub enum Provider {
     Bedrock,
     NvidiaNim,
     OpenRouter,
+    OllamaCloud,
 }
 
 impl Provider {
@@ -699,6 +700,7 @@ impl Provider {
             Provider::Bedrock => "bedrock",
             Provider::NvidiaNim => "nvidia_nim",
             Provider::OpenRouter => "open_router",
+            Provider::OllamaCloud => "ollama_cloud",
         }
     }
 
@@ -731,6 +733,7 @@ impl Provider {
             "bedrock" | "aws-bedrock" | "aws_bedrock" => Some(Provider::Bedrock),
             "nvidia_nim" | "nvidia-nim" | "nvidia" | "nim" => Some(Provider::NvidiaNim),
             "open_router" | "openrouter" | "open-router" => Some(Provider::OpenRouter),
+            "ollama_cloud" | "ollama-cloud" | "ollamacloud" => Some(Provider::OllamaCloud),
             _ => None,
         }
     }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   createDefaultLLMConfig,
   createDefaultWindowPreferences,
+  defaultTerminalSandboxPreferences,
   useSettingsStore,
 } from '../settingsStore';
 
@@ -62,6 +63,17 @@ describe('settingsStore', () => {
         agentMode: 'build',
         chatStorageMode: 'local',
       },
+      executionPreferences: {
+        maxTimeoutMinutes: 1440,
+        enableCheckpointing: true,
+        checkpointInterval: 5,
+        autoResumeOnRestart: true,
+        enableTimeoutWarnings: true,
+        approvalTimeoutSeconds: 300,
+        approvalTimeoutPolicy: 'auto-deny',
+        streamInactivityTimeoutSeconds: 30,
+        terminalSandbox: { ...defaultTerminalSandboxPreferences },
+      },
       allowedDirectories: [],
       loading: false,
       error: null,
@@ -93,6 +105,20 @@ describe('settingsStore', () => {
   it('should have empty favorite models by default', () => {
     const state = useSettingsStore.getState();
     expect(state.llmConfig.favoriteModels).toEqual([]);
+  });
+
+  it('should initialize terminal sandbox defaults', () => {
+    const { terminalSandbox } = useSettingsStore.getState().executionPreferences;
+    expect(terminalSandbox).toEqual(defaultTerminalSandboxPreferences);
+  });
+
+  it('should normalize terminal sandbox allowlisted domains', () => {
+    const { setTerminalSandboxAllowedDomains } = useSettingsStore.getState();
+    setTerminalSandboxAllowedDomains([' github.com ', 'api.github.com', 'github.com']);
+
+    expect(useSettingsStore.getState().executionPreferences.terminalSandbox.allowedDomains).toEqual(
+      ['github.com', 'api.github.com'],
+    );
   });
 
   it('should update theme', () => {
@@ -373,6 +399,13 @@ type MigrateState = {
     checkpointInterval?: number;
     autoResumeOnRestart?: boolean;
     enableTimeoutWarnings?: boolean;
+    terminalSandbox?: {
+      enabled?: boolean;
+      backend?: string;
+      policy?: string;
+      executable?: string;
+      allowedDomains?: string[];
+    };
   };
   windowPreferences?: {
     theme?: string;
@@ -454,6 +487,7 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
         checkpointInterval: 5,
         autoResumeOnRestart: true,
         enableTimeoutWarnings: true,
+        terminalSandbox: { ...defaultTerminalSandboxPreferences },
       };
     }
   }
@@ -515,6 +549,16 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
     if (!state.features || typeof state.features !== 'object') {
       state.features = { ...DEFAULT_FEATURES };
     }
+  }
+
+  if (version < 23 && state.executionPreferences) {
+    state.executionPreferences.terminalSandbox = {
+      ...defaultTerminalSandboxPreferences,
+      ...(state.executionPreferences.terminalSandbox ?? {}),
+      allowedDomains: Array.isArray(state.executionPreferences.terminalSandbox?.allowedDomains)
+        ? state.executionPreferences.terminalSandbox.allowedDomains
+        : defaultTerminalSandboxPreferences.allowedDomains,
+    };
   }
 
   return state;
@@ -589,6 +633,9 @@ describe('settingsStore migrate() boundaries (H16)', () => {
       expect(result.executionPreferences?.checkpointInterval).toBe(5);
       expect(result.executionPreferences?.autoResumeOnRestart).toBe(true);
       expect(result.executionPreferences?.enableTimeoutWarnings).toBe(true);
+      expect(result.executionPreferences?.terminalSandbox).toEqual(
+        defaultTerminalSandboxPreferences,
+      );
     });
 
     it('does not overwrite existing executionPreferences', () => {
@@ -626,6 +673,7 @@ describe('settingsStore migrate() boundaries (H16)', () => {
       expect(result.llmConfig?.defaultProvider).toBe('managed_cloud');
       expect(result.chatPreferences?.alwaysUseAgentMode).toBe(false);
       expect(result.executionPreferences?.maxTimeoutMinutes).toBe(1440);
+      expect(result.executionPreferences?.terminalSandbox?.policy).toBe('workspace-write');
       expect(result.chatPreferences?.compactMode).toBe(true);
       expect(result.globalHotkeyPreferences?.enabled).toBe(true);
       expect(Array.isArray(result.customModels)).toBe(true);

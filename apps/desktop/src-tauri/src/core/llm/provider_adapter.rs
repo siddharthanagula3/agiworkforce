@@ -268,6 +268,7 @@ impl ProviderAdapterFactory {
             Provider::Bedrock => Box::new(BedrockAdapter), // Bedrock Converse API format
             Provider::NvidiaNim => Box::new(OpenAIAdapter), // NVIDIA NIM uses OpenAI-compatible format
             Provider::OpenRouter => Box::new(OpenAIAdapter), // OpenRouter uses OpenAI-compatible format
+            Provider::OllamaCloud => Box::new(OpenAIAdapter), // Ollama Cloud uses OpenAI-compatible format
         }
     }
 }

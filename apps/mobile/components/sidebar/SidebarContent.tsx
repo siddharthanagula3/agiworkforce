@@ -67,7 +67,7 @@ function FooterItem({ icon, label, onPress }: FooterItemProps) {
 
   const handlePress = useCallback(() => {
     if (hapticsEnabled) {
-      Haptics.selectionAsync();
+      Haptics.selectionAsync().catch(() => {});
     }
     onPress();
   }, [hapticsEnabled, onPress]);
