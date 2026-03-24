@@ -10,8 +10,15 @@ import { logger } from '@/lib/logger';
 
 /**
  * Transform tools from OpenAI format to Anthropic format.
- * Handles three cases: already-Anthropic format, OpenAI function format, and bare format.
+ * Handles four cases:
+ *   1. Anthropic server-managed tools (web_search, code_execution) — pass through as-is
+ *   2. Already-Anthropic custom tools (has input_schema) — pass through as-is
+ *   3. OpenAI function format (type: 'function', function: {...}) — transform
+ *   4. Bare format — transform with fallback input_schema
  */
+
+/** Anthropic server-managed tool type prefixes (e.g. web_search_20260209, code_execution_20260120) */
+const ANTHROPIC_SERVER_TOOL_PREFIXES = ['web_search_', 'code_execution_'];
 
 interface OpenAITool {
   type?: string;
@@ -20,21 +27,36 @@ interface OpenAITool {
   description?: string;
   parameters?: unknown;
   input_schema?: unknown;
+  // Server-managed tool fields (Anthropic-specific)
+  [key: string]: unknown;
 }
 
 interface AnthropicTool {
   name?: string;
+  type?: string;
   description?: string;
-  input_schema: unknown;
+  input_schema?: unknown;
+  [key: string]: unknown;
 }
 
 function transformTools(tools: OpenAITool[]): AnthropicTool[] {
   return tools.map((tool) => {
-    // If tool is already in Anthropic format (has input_schema), use as-is
+    // 1. Anthropic server-managed tools: type starts with a known server-tool prefix.
+    //    These must be passed through exactly as-is — they have no input_schema.
+    //    Examples: { type: 'web_search_20260209', name: 'web_search' }
+    //             { type: 'code_execution_20260120', name: 'code_execution' }
+    if (
+      tool.type &&
+      ANTHROPIC_SERVER_TOOL_PREFIXES.some((prefix) => (tool.type as string).startsWith(prefix))
+    ) {
+      return tool as unknown as AnthropicTool;
+    }
+
+    // 2. If tool is already in Anthropic custom tool format (has input_schema), use as-is
     if (tool.input_schema) {
       return tool as unknown as AnthropicTool;
     }
-    // Transform from OpenAI format (type: 'function', function: {...}) to Anthropic format
+    // 3. Transform from OpenAI format (type: 'function', function: {...}) to Anthropic format
     if (tool.type === 'function' && tool.function) {
       return {
         name: tool.function.name,
@@ -46,7 +68,7 @@ function transformTools(tools: OpenAITool[]): AnthropicTool[] {
         },
       };
     }
-    // Fallback: assume it's missing input_schema, use parameters if available
+    // 4. Fallback: assume it's missing input_schema, use parameters if available
     return {
       name: tool.name,
       description: tool.description,
@@ -205,10 +227,36 @@ export class AnthropicProvider extends BaseLLMProvider {
       }
 
       // Extract text content from content array
-      const textContent =
-        data.content?.find((block: { type: string }) => block.type === 'text')?.text || '';
+      // Concatenate ALL text blocks (web search responses may have multiple text blocks)
+      const textBlocks = (data.content || []).filter(
+        (block: { type: string }) => block.type === 'text',
+      );
+      const textContent = textBlocks.map((block: { text: string }) => block.text || '').join('');
 
-      // Extract tool_use blocks and map to OpenAI-format tool_calls
+      // Extract citations from text blocks (Anthropic web_search returns citations in text blocks)
+      const citations: Array<{
+        type: string;
+        cited_text: string;
+        title?: string;
+        url?: string;
+      }> = [];
+      for (const block of textBlocks) {
+        const typedBlock = block as {
+          citations?: Array<{ type: string; cited_text: string; title?: string; url?: string }>;
+        };
+        if (typedBlock.citations && Array.isArray(typedBlock.citations)) {
+          citations.push(...typedBlock.citations);
+        }
+      }
+
+      // Extract web_search_tool_result blocks for passing search results to the client
+      const searchResultBlocks = (data.content || []).filter(
+        (block: { type: string }) => block.type === 'web_search_tool_result',
+      );
+
+      // Extract tool_use blocks (client-executed tools) and map to OpenAI-format tool_calls
+      // Note: server_tool_use blocks (like web_search) are server-executed and do NOT
+      // need client-side execution — Anthropic handles them internally
       const toolUseBlocks = (data.content || []).filter(
         (block: { type: string }) => block.type === 'tool_use',
       );
@@ -228,9 +276,13 @@ export class AnthropicProvider extends BaseLLMProvider {
           : undefined;
 
       // Map Anthropic stop_reason to OpenAI finish_reason
-      const finishReason = stopReason === 'tool_use' ? 'tool_calls' : stopReason;
+      // server_tool_use stop_reason means Anthropic executed tools server-side and
+      // returned results in the same response — this is a completed turn, map to 'stop'
+      const finishReason =
+        stopReason === 'tool_use' ? 'tool_calls' : stopReason === 'end_turn' ? 'stop' : stopReason;
 
-      return {
+      // Build response with optional web search metadata
+      const result: LLMProviderResponse = {
         content: textContent,
         model: data.model || request.model,
         promptTokens: data.usage?.input_tokens || 0,
@@ -241,6 +293,16 @@ export class AnthropicProvider extends BaseLLMProvider {
         cachedInputTokens: data.usage?.cache_read_input_tokens,
         tool_calls: toolCalls,
       };
+
+      // Attach web search citations and search results as extended metadata
+      if (citations.length > 0) {
+        result.citations = citations;
+      }
+      if (searchResultBlocks.length > 0) {
+        result.search_results = searchResultBlocks;
+      }
+
+      return result;
     } catch (error) {
       logger.error({ error, model: request.model }, 'Anthropic request failed');
       throw error;
