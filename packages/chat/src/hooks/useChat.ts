@@ -5,20 +5,13 @@ import type { ChatMessage } from '../lib/types';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 
-/**
- * Bridge for addMessage — handles both package store signature (convId, msg)
- * and desktop store signature (msg only). In the Vite SPA build, the desktop
- * store runs, so we call with just the message when possible.
- */
+/** Add message to the package chat store using the correct 2-arg signature. */
 function storeAddMessage(msg: Partial<ChatMessage> & { role: string; content: string }) {
   const store = useChatStore.getState();
-  // The desktop chatStore's addMessage takes (message) with no conversationId.
-  // The package chatStore's addMessage takes (conversationId, message).
-  // In the Vite SPA, the desktop store runs. Call with just the message.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const addMsg = store.addMessage as any;
-  // Desktop store addMessage expects { role, content } minimum
-  addMsg({ role: msg.role, content: msg.content, id: msg.id });
+  const convId = store.activeConversationId;
+  if (convId) {
+    store.addMessage(convId, msg as ChatMessage);
+  }
 }
 
 export function useChat(runtime: ChatRuntime | null) {
@@ -238,22 +231,28 @@ export function useChat(runtime: ChatRuntime | null) {
 
       const store = useChatStore.getState();
 
-      // Add user message — the store auto-creates a conversation if needed.
-      // NOTE: addMessage signature differs between package store (convId, msg)
-      // and desktop store (msg only). We call with both args — package store
-      // uses convId, desktop store ignores it and uses activeConversationId.
+      // Create conversation if needed, then add user message
       let convId = store.activeConversationId;
-      const userMsgId = crypto.randomUUID();
-      const userMsg = {
-        id: userMsgId,
-        role: 'user' as const,
+      if (!convId) {
+        convId = crypto.randomUUID();
+        store.addConversation({
+          id: convId,
+          title: content.substring(0, 50) || 'New Chat',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          archived: false,
+          pinned: false,
+        });
+        store.setActiveConversation(convId);
+      }
+
+      // Add user message using the package store's 2-arg signature
+      store.addMessage(convId, {
+        id: crypto.randomUUID(),
+        role: 'user',
         content,
         timestamp: new Date().toISOString(),
-      };
-
-      storeAddMessage(userMsg);
-      // After addMessage, the desktop store may have set activeConversationId
-      convId = useChatStore.getState().activeConversationId;
+      } as ChatMessage);
 
       if (!convId) {
         toast.error('Failed to create conversation');
