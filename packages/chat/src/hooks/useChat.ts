@@ -12,25 +12,52 @@ export function useChat(
   const externalAddMessageRef = useRef(externalAddMessage);
   externalAddMessageRef.current = externalAddMessage;
 
-  /** Add message — tries: 1) external prop, 2) window global desktop store, 3) package store. */
+  /** Add message to desktop store (persistence) AND package store (rendering). */
   const addMsg = useCallback((msg: Partial<ChatMessage> & { role: string; content: string }) => {
-    // 1. Try external prop (passed from App.tsx)
-    if (externalAddMessageRef.current) {
-      externalAddMessageRef.current({ role: msg.role, content: msg.content, id: msg.id });
-      return;
-    }
-    // 2. Try window global desktop store
+    const msgId = msg.id ?? crypto.randomUUID();
+    const timestamp = new Date().toISOString();
+
+    // Write to desktop store (for persistence to chat-storage)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const desktopStore = (window as any).__AGI_DESKTOP_CHAT_STORE__;
     if (desktopStore) {
-      desktopStore.getState().addMessage({ role: msg.role, content: msg.content, id: msg.id });
-      return;
+      desktopStore.getState().addMessage({ role: msg.role, content: msg.content, id: msgId });
+    } else if (externalAddMessageRef.current) {
+      externalAddMessageRef.current({ role: msg.role, content: msg.content, id: msgId });
     }
-    // 3. Fallback: package store
-    const store = useChatStore.getState();
-    const convId = store.activeConversationId;
+
+    // ALSO write to package store (for ChatInterface rendering)
+    const pkgStore = useChatStore.getState();
+    let convId = pkgStore.activeConversationId;
+
+    // Sync conversation from desktop store if needed
+    if (!convId && desktopStore) {
+      const dsState = desktopStore.getState();
+      convId = dsState.activeConversationId as string | null;
+      if (convId) {
+        // Create the conversation in the package store too
+        const dsConv = dsState.conversations?.find?.((c: { id: string }) => c.id === convId);
+        if (dsConv) {
+          pkgStore.addConversation({
+            id: convId,
+            title: dsConv.title ?? 'New Chat',
+            createdAt: String(dsConv.createdAt ?? timestamp),
+            updatedAt: String(dsConv.updatedAt ?? timestamp),
+            archived: false,
+            pinned: false,
+          });
+        }
+        pkgStore.setActiveConversation(convId);
+      }
+    }
+
     if (convId) {
-      store.addMessage(convId, msg as ChatMessage);
+      pkgStore.addMessage(convId, {
+        id: msgId,
+        role: msg.role,
+        content: msg.content,
+        timestamp,
+      } as ChatMessage);
     }
   }, []);
 
@@ -257,11 +284,8 @@ export function useChat(
         content,
       });
 
-      // Get activeConversationId — check desktop store global first, then package store
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const desktopState = (window as any).__AGI_DESKTOP_CHAT_STORE__?.getState?.();
-      const convId =
-        (desktopState?.activeConversationId as string | undefined) ?? store.activeConversationId;
+      // Re-read after addMsg (which may have synced the convId from desktop store)
+      const convId = useChatStore.getState().activeConversationId;
 
       if (!convId) {
         toast.error('Failed to create conversation');
