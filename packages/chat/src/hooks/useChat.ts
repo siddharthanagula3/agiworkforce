@@ -5,8 +5,25 @@ import type { ChatMessage } from '../lib/types';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 
-/** Add message to the package chat store using the correct 2-arg signature. */
+/**
+ * Get the desktop chat store if available (exposed via window.__AGI_DESKTOP_CHAT_STORE__).
+ * Falls back to the package chat store.
+ */
+function getDesktopStore() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const desktopStore = (window as any).__AGI_DESKTOP_CHAT_STORE__;
+  return desktopStore?.getState?.() ?? null;
+}
+
+/** Add message using the desktop store (1-arg) or package store (2-arg). */
 function storeAddMessage(msg: Partial<ChatMessage> & { role: string; content: string }) {
+  const desktop = getDesktopStore();
+  if (desktop?.addMessage) {
+    // Desktop store: addMessage({ role, content }) — auto-creates conversation
+    desktop.addMessage({ role: msg.role, content: msg.content, id: msg.id });
+    return;
+  }
+  // Fallback: package store
   const store = useChatStore.getState();
   const convId = store.activeConversationId;
   if (convId) {
@@ -231,28 +248,16 @@ export function useChat(runtime: ChatRuntime | null) {
 
       const store = useChatStore.getState();
 
-      // Create conversation if needed, then add user message
-      let convId = store.activeConversationId;
-      if (!convId) {
-        convId = crypto.randomUUID();
-        store.addConversation({
-          id: convId,
-          title: content.substring(0, 50) || 'New Chat',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          archived: false,
-          pinned: false,
-        });
-        store.setActiveConversation(convId);
-      }
-
-      // Add user message using the package store's 2-arg signature
-      store.addMessage(convId, {
+      // Add user message — desktop store auto-creates conversation if needed
+      storeAddMessage({
         id: crypto.randomUUID(),
         role: 'user',
         content,
-        timestamp: new Date().toISOString(),
-      } as ChatMessage);
+      });
+
+      // Get activeConversationId from desktop store (it may have just been created)
+      const desktop = getDesktopStore();
+      const convId = desktop?.activeConversationId ?? store.activeConversationId;
 
       if (!convId) {
         toast.error('Failed to create conversation');
