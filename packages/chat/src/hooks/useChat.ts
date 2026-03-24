@@ -12,16 +12,25 @@ export function useChat(
   const externalAddMessageRef = useRef(externalAddMessage);
   externalAddMessageRef.current = externalAddMessage;
 
-  /** Add message — uses external (desktop store) addMessage if available, else package store. */
+  /** Add message — tries: 1) external prop, 2) window global desktop store, 3) package store. */
   const addMsg = useCallback((msg: Partial<ChatMessage> & { role: string; content: string }) => {
+    // 1. Try external prop (passed from App.tsx)
     if (externalAddMessageRef.current) {
       externalAddMessageRef.current({ role: msg.role, content: msg.content, id: msg.id });
-    } else {
-      const store = useChatStore.getState();
-      const convId = store.activeConversationId;
-      if (convId) {
-        store.addMessage(convId, msg as ChatMessage);
-      }
+      return;
+    }
+    // 2. Try window global desktop store
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const desktopStore = (window as any).__AGI_DESKTOP_CHAT_STORE__;
+    if (desktopStore) {
+      desktopStore.getState().addMessage({ role: msg.role, content: msg.content, id: msg.id });
+      return;
+    }
+    // 3. Fallback: package store
+    const store = useChatStore.getState();
+    const convId = store.activeConversationId;
+    if (convId) {
+      store.addMessage(convId, msg as ChatMessage);
     }
   }, []);
 
