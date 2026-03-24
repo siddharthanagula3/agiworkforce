@@ -1089,7 +1089,7 @@ const DesktopShell = () => {
           </div>
         )}
         {isTauri && <VoiceInputOverlay />}
-        {showOnboarding && !onboardingCompleted && (
+        {isTauri && showOnboarding && !onboardingCompleted && (
           <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
         )}
         <div className="flex flex-col gap-1">
