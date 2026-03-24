@@ -6,7 +6,7 @@ import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 
 export function useChat(runtime: ChatRuntime | null) {
-  const currentConversationId = useChatStore((s) => s.currentConversationId);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
   const assistantMessageIdRef = useRef<string | null>(null);
   // Use ref for isStreaming to avoid stale closures in useCallback
   const isStreamingRef = useRef(false);
@@ -18,7 +18,7 @@ export function useChat(runtime: ChatRuntime | null) {
 
     const unsubscribe = runtime.onStream((event) => {
       const store = useChatStore.getState();
-      const convId = store.currentConversationId;
+      const convId = store.activeConversationId;
       if (!convId) return;
 
       switch (event.type) {
@@ -36,7 +36,7 @@ export function useChat(runtime: ChatRuntime | null) {
             });
           } else {
             // Append content to existing assistant message
-            const msgs = store.messages[convId];
+            const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
             if (msg) {
               store.updateMessage(convId, assistantMessageIdRef.current, {
@@ -71,7 +71,7 @@ export function useChat(runtime: ChatRuntime | null) {
               },
             });
           } else {
-            const msgs = store.messages[convId];
+            const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
             if (msg) {
               const existingThinking = msg.thinking ?? '';
@@ -127,7 +127,7 @@ export function useChat(runtime: ChatRuntime | null) {
               ],
             });
           } else {
-            const msgs = store.messages[convId];
+            const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
             if (msg) {
               const existingCalls = msg.toolCalls ?? [];
@@ -152,7 +152,7 @@ export function useChat(runtime: ChatRuntime | null) {
         case 'tool_result': {
           // Update an existing tool call with its result
           if (assistantMessageIdRef.current) {
-            const msgs = store.messages[convId];
+            const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
             if (msg) {
               const updatedCalls = (msg.toolCalls ?? []).map((tc) =>
@@ -170,7 +170,7 @@ export function useChat(runtime: ChatRuntime | null) {
         case 'done': {
           // Mark the message as no longer streaming
           if (assistantMessageIdRef.current) {
-            const msgs = store.messages[convId];
+            const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
             if (msg) {
               const doneUpdates: Partial<ChatMessage> = { isStreaming: false };
@@ -223,7 +223,7 @@ export function useChat(runtime: ChatRuntime | null) {
       const store = useChatStore.getState();
 
       // Auto-create conversation if none exists — single batch set for atomicity
-      let convId = store.currentConversationId;
+      let convId = store.activeConversationId;
       if (!convId) {
         convId = crypto.randomUUID();
         const now = new Date().toISOString();
@@ -238,11 +238,11 @@ export function useChat(runtime: ChatRuntime | null) {
             pinned: false,
           };
           state.conversations.push(newConv);
-          state.currentConversationId = convId!;
-          if (!state.messages[convId!]) {
-            state.messages[convId!] = [];
+          state.activeConversationId = convId!;
+          if (!state.messagesByConversation[convId!]) {
+            state.messagesByConversation[convId!] = [];
           }
-          state.messages[convId!]!.push({
+          state.messagesByConversation[convId!]!.push({
             id: crypto.randomUUID(),
             role: 'user' as const,
             content,
@@ -272,7 +272,7 @@ export function useChat(runtime: ChatRuntime | null) {
       assistantMessageIdRef.current = null;
 
       // Build full conversation history for multi-turn context
-      const allMessages = store.messages[convId] ?? [];
+      const allMessages = store.messagesByConversation[convId] ?? [];
       const messageHistory = allMessages.map((m) => ({
         role: m.role,
         content: m.content,
@@ -301,12 +301,12 @@ export function useChat(runtime: ChatRuntime | null) {
   );
 
   const stopGeneration = useCallback(() => {
-    if (runtime && currentConversationId) {
-      runtime.stopGeneration(currentConversationId);
+    if (runtime && activeConversationId) {
+      runtime.stopGeneration(activeConversationId);
       assistantMessageIdRef.current = null;
       useChatStore.getState().stopStreaming();
     }
-  }, [runtime, currentConversationId]);
+  }, [runtime, activeConversationId]);
 
   const isStreaming = useChatStore((s) => s.isStreaming);
   return { sendMessage, stopGeneration, isStreaming };
