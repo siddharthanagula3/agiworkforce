@@ -1,7 +1,7 @@
 import { useChatStore } from '../stores/chatStore';
 
 export function ConversationHeader() {
-  const currentId = useChatStore((s) => s.currentConversationId);
+  const currentId = useChatStore((s) => s.activeConversationId);
   const conversation = useChatStore((s) => s.conversations.find((c) => c.id === currentId));
 
   if (!conversation) return null;

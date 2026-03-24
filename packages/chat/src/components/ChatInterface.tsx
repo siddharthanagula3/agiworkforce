@@ -100,7 +100,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const conversations = useChatStore((s) => s.conversations);
-  const setCurrentConversation = useChatStore((s) => s.setCurrentConversation);
+  const setActiveConversation = useChatStore((s) => s.setActiveConversation);
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
@@ -193,7 +193,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
               key={conv.id}
               type="button"
               onClick={() => {
-                setCurrentConversation(conv.id);
+                setActiveConversation(conv.id);
                 onClose();
               }}
               className={cn(
@@ -272,12 +272,14 @@ export function ChatInterface({
   const { isOpen: artifactOpen, panelWidth: artifactPanelWidth } = useArtifact();
 
   // Store state
-  const currentConversationId = useChatStore((s) => s.currentConversationId);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
   // FIX: Stable empty array reference to prevent React 19 useSyncExternalStore
   // infinite loop — [] !== [] on consecutive getSnapshot calls.
   const emptyMessages = useRef<ChatMessage[]>([]).current;
   const messages = useChatStore((s) =>
-    currentConversationId ? (s.messages[currentConversationId] ?? emptyMessages) : emptyMessages,
+    activeConversationId
+      ? (s.messagesByConversation[activeConversationId] ?? emptyMessages)
+      : emptyMessages,
   );
   const activeView = useUIStore((s) => s.activeView);
   const searchModalOpen = useUIStore((s) => s.searchModalOpen);
@@ -396,13 +398,13 @@ export function ChatInterface({
     return (
       <div className="flex h-full flex-col">
         {/* Header — only rendered when a conversation with messages is active */}
-        {hasMessages && currentConversationId && <ConversationHeader />}
+        {hasMessages && activeConversationId && <ConversationHeader />}
 
         {/* Content area — grows to fill remaining vertical space, hides overflow for
             MessageList's own internal scroll container */}
         <div className="flex-1 overflow-hidden">
-          {hasMessages && currentConversationId ? (
-            <MessageList conversationId={currentConversationId} />
+          {hasMessages && activeConversationId ? (
+            <MessageList conversationId={activeConversationId} />
           ) : (
             <EmptyState />
           )}

@@ -33,8 +33,8 @@ export function getSystemPromptForMode(mode: ActiveMode): string | null {
 
 interface ChatState {
   conversations: Conversation[];
-  messages: Record<string, ChatMessage[]>;
-  currentConversationId: string | null;
+  messagesByConversation: Record<string, ChatMessage[]>;
+  activeConversationId: string | null;
   isStreaming: boolean;
   streamingContent: string;
   streamingReasoning: string;
@@ -45,7 +45,7 @@ interface ChatState {
   webSearchEnabled: boolean;
 
   // Actions
-  setCurrentConversation: (id: string | null) => void;
+  setActiveConversation: (id: string | null) => void;
   addConversation: (conv: Conversation) => void;
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   removeConversation: (id: string) => void;
@@ -69,8 +69,8 @@ export const useChatStore = create<ChatState>()(
   persist(
     immer((set, get) => ({
       conversations: [],
-      messages: {},
-      currentConversationId: null,
+      messagesByConversation: {},
+      activeConversationId: null,
       isStreaming: false,
       streamingContent: '',
       streamingReasoning: '',
@@ -80,7 +80,7 @@ export const useChatStore = create<ChatState>()(
       activeMode: null,
       webSearchEnabled: false,
 
-      setCurrentConversation: (id) => set({ currentConversationId: id }),
+      setActiveConversation: (id) => set({ activeConversationId: id }),
 
       addConversation: (conv) =>
         set((state) => {
@@ -98,9 +98,9 @@ export const useChatStore = create<ChatState>()(
       removeConversation: (id) =>
         set((state) => {
           state.conversations = state.conversations.filter((c) => c.id !== id);
-          delete state.messages[id];
-          if (state.currentConversationId === id) {
-            state.currentConversationId = null;
+          delete state.messagesByConversation[id];
+          if (state.activeConversationId === id) {
+            state.activeConversationId = null;
           }
         }),
 
@@ -108,15 +108,15 @@ export const useChatStore = create<ChatState>()(
 
       addMessage: (conversationId, message) =>
         set((state) => {
-          if (!state.messages[conversationId]) {
-            state.messages[conversationId] = [];
+          if (!state.messagesByConversation[conversationId]) {
+            state.messagesByConversation[conversationId] = [];
           }
-          state.messages[conversationId]!.push(message);
+          state.messagesByConversation[conversationId]!.push(message);
         }),
 
       updateMessage: (conversationId, messageId, updates) =>
         set((state) => {
-          const msgs = state.messages[conversationId];
+          const msgs = state.messagesByConversation[conversationId];
           if (msgs) {
             const idx = msgs.findIndex((m) => m.id === messageId);
             if (idx !== -1) {
@@ -142,7 +142,7 @@ export const useChatStore = create<ChatState>()(
 
       setMessages: (conversationId, messages) =>
         set((state) => {
-          state.messages[conversationId] = messages;
+          state.messagesByConversation[conversationId] = messages;
         }),
 
       setSearchQuery: (query) => set({ searchQuery: query }),
@@ -196,17 +196,30 @@ export const useChatStore = create<ChatState>()(
     })),
     {
       name: 'chat-storage',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() =>
         typeof window === 'undefined' ? noopStorage : window.localStorage,
       ),
       partialize: (state) => ({
         conversations: state.conversations,
-        messages: state.messages,
-        currentConversationId: state.currentConversationId,
+        messagesByConversation: state.messagesByConversation,
+        activeConversationId: state.activeConversationId,
       }),
-      migrate: (persistedState: unknown, _version: number) => {
-        return persistedState as ChatState;
+      migrate: (persistedState: unknown, version: number) => {
+        const state = persistedState as Record<string, unknown>;
+        if (version < 2) {
+          // v1 used `messages` and `currentConversationId`; v2 renames them to
+          // match the desktop chatStore so both share the same localStorage key.
+          if ('messages' in state && !('messagesByConversation' in state)) {
+            state['messagesByConversation'] = state['messages'];
+            delete state['messages'];
+          }
+          if ('currentConversationId' in state && !('activeConversationId' in state)) {
+            state['activeConversationId'] = state['currentConversationId'];
+            delete state['currentConversationId'];
+          }
+        }
+        return state as unknown as ChatState;
       },
     },
   ),

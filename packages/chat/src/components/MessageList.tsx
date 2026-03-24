@@ -7,7 +7,7 @@ interface MessageListProps {
 }
 
 export function MessageList({ conversationId }: MessageListProps) {
-  const messages = useChatStore((s) => s.messages[conversationId] ?? []);
+  const messages = useChatStore((s) => s.messagesByConversation[conversationId] ?? []);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
