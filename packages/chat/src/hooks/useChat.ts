@@ -222,19 +222,43 @@ export function useChat(runtime: ChatRuntime | null) {
 
       const store = useChatStore.getState();
 
-      // Auto-create conversation if none exists
+      // Auto-create conversation if none exists — single batch set for atomicity
       let convId = store.currentConversationId;
       if (!convId) {
         convId = crypto.randomUUID();
-        store.addConversation({
-          id: convId,
-          title: content.substring(0, 50) || 'New Chat',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          archived: false,
-          pinned: false,
+        const now = new Date().toISOString();
+        // Batch: create conversation + set current + add user message + start streaming
+        useChatStore.setState((state) => {
+          const newConv = {
+            id: convId!,
+            title: content.substring(0, 50) || 'New Chat',
+            createdAt: now,
+            updatedAt: now,
+            archived: false,
+            pinned: false,
+          };
+          state.conversations.push(newConv);
+          state.currentConversationId = convId!;
+          state.messages[convId!] = [
+            {
+              id: crypto.randomUUID(),
+              role: 'user',
+              content,
+              timestamp: now,
+            },
+          ];
+          state.isStreaming = true;
+          state.streamingContent = '';
+          state.streamingReasoning = '';
         });
-        store.setCurrentConversation(convId);
+      } else {
+        store.addMessage(convId, {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content,
+          timestamp: new Date().toISOString(),
+        });
+        store.startStreaming();
       }
 
       const systemPrompt = getSystemPromptForMode(store.activeMode);
@@ -245,14 +269,6 @@ export function useChat(runtime: ChatRuntime | null) {
 
       // Reset assistant message ref for new response
       assistantMessageIdRef.current = null;
-
-      store.addMessage(convId, {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content,
-        timestamp: new Date().toISOString(),
-      });
-      store.startStreaming();
 
       // Build full conversation history for multi-turn context
       const allMessages = store.messages[convId] ?? [];
