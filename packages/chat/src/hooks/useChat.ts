@@ -12,16 +12,13 @@ import { useModelStore } from '../stores/modelStore';
  */
 function storeAddMessage(msg: Partial<ChatMessage> & { role: string; content: string }) {
   const store = useChatStore.getState();
-  // Try desktop-style (1 arg) first, fall back to package-style (2 args)
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (store.addMessage as any)(msg);
-  } catch {
-    const convId = store.activeConversationId;
-    if (convId) {
-      store.addMessage(convId, msg as ChatMessage);
-    }
-  }
+  // The desktop chatStore's addMessage takes (message) with no conversationId.
+  // The package chatStore's addMessage takes (conversationId, message).
+  // In the Vite SPA, the desktop store runs. Call with just the message.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const addMsg = store.addMessage as any;
+  // Desktop store addMessage expects { role, content } minimum
+  addMsg({ role: msg.role, content: msg.content, id: msg.id });
 }
 
 export function useChat(runtime: ChatRuntime | null) {
