@@ -222,45 +222,29 @@ export function useChat(runtime: ChatRuntime | null) {
 
       const store = useChatStore.getState();
 
-      // Auto-create conversation if none exists — single batch set for atomicity
+      // Auto-create conversation if none exists
       let convId = store.activeConversationId;
       if (!convId) {
         convId = crypto.randomUUID();
         const now = new Date().toISOString();
-        // Batch: create conversation + set current + add user message + start streaming
-        useChatStore.setState((state) => {
-          const newConv = {
-            id: convId!,
-            title: content.substring(0, 50) || 'New Chat',
-            createdAt: now,
-            updatedAt: now,
-            archived: false,
-            pinned: false,
-          };
-          state.conversations.push(newConv);
-          state.activeConversationId = convId!;
-          if (!state.messagesByConversation[convId!]) {
-            state.messagesByConversation[convId!] = [];
-          }
-          state.messagesByConversation[convId!]!.push({
-            id: crypto.randomUUID(),
-            role: 'user' as const,
-            content,
-            timestamp: now,
-          });
-          state.isStreaming = true;
-          state.streamingContent = '';
-          state.streamingReasoning = '';
+        store.addConversation({
+          id: convId,
+          title: content.substring(0, 50) || 'New Chat',
+          createdAt: now,
+          updatedAt: now,
+          archived: false,
+          pinned: false,
         });
-      } else {
-        store.addMessage(convId, {
-          id: crypto.randomUUID(),
-          role: 'user',
-          content,
-          timestamp: new Date().toISOString(),
-        });
-        store.startStreaming();
+        store.setActiveConversation(convId);
       }
+
+      store.addMessage(convId, {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content,
+        timestamp: new Date().toISOString(),
+      });
+      store.startStreaming();
 
       const systemPrompt = getSystemPromptForMode(store.activeMode);
       const modelState = useModelStore.getState();
