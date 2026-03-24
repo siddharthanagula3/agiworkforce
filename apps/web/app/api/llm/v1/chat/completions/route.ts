@@ -651,7 +651,7 @@ async function handleChatCompletions(request: NextRequest) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
         ...(resolvedTools ?? []),
-        { type: 'web_search_20260209', name: 'web_search' },
+        { type: 'web_search_20260209', name: 'web_search', allowed_callers: ['direct'] },
       ];
     } else if (providerLower === 'google') {
       resolvedTools = [...(resolvedTools ?? []), { google_search: {} }];
@@ -665,7 +665,7 @@ async function handleChatCompletions(request: NextRequest) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
         ...(resolvedTools ?? []),
-        { type: 'code_execution_20260120', name: 'code_execution' },
+        { type: 'code_execution_20260120', name: 'code_execution', allowed_callers: ['direct'] },
       ];
     } else if (providerLower === 'google') {
       resolvedTools = [...(resolvedTools ?? []), { code_execution: {} }];
