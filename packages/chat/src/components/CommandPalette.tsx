@@ -29,7 +29,7 @@ export function CommandPalette() {
   const setThemeMode = useUIStore((s) => s.setThemeMode);
 
   const addConversation = useChatStore((s) => s.addConversation);
-  const setCurrentConversation = useChatStore((s) => s.setCurrentConversation);
+  const setActiveConversation = useChatStore((s) => s.setActiveConversation);
 
   const close = useCallback(() => {
     if (commandPaletteOpen) toggleCommandPalette();
@@ -47,10 +47,10 @@ export function CommandPalette() {
       archived: false,
     };
     addConversation(conv);
-    setCurrentConversation(conv.id);
+    setActiveConversation(conv.id);
     setActiveView('chat');
     close();
-  }, [addConversation, setCurrentConversation, setActiveView, close]);
+  }, [addConversation, setActiveConversation, setActiveView, close]);
 
   const handleSettings = useCallback(() => {
     openSettings();

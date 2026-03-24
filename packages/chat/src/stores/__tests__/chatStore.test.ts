@@ -7,7 +7,7 @@
  * - messages: addMessage, updateMessage, setMessages — keyed by conversationId
  * - streaming: startStreaming resets content, appendToStreamingContent accumulates,
  *   stopStreaming clears isStreaming flag
- * - removeConversation clears currentConversationId when removed id is active
+ * - removeConversation clears activeConversationId when removed id is active
  * - pinConversation / archiveConversation update flags correctly
  * - getGroupedConversations: search filter, archived exclusion, pinned separation,
  *   temporal grouping
@@ -48,8 +48,8 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
 function resetStore() {
   useChatStore.setState({
     conversations: [],
-    messages: {},
-    currentConversationId: null,
+    messagesByConversation: {},
+    activeConversationId: null,
     isStreaming: false,
     streamingContent: '',
     streamingReasoning: '',
@@ -120,23 +120,23 @@ describe('useChatStore — conversations', () => {
     useChatStore.getState().addConversation(makeConversation({ id: 'c1' }));
     useChatStore.getState().addMessage('c1', makeMessage({ id: 'm1' }));
     useChatStore.getState().removeConversation('c1');
-    expect(useChatStore.getState().messages['c1']).toBeUndefined();
+    expect(useChatStore.getState().messagesByConversation['c1']).toBeUndefined();
   });
 
-  it('removeConversation clears currentConversationId when it matches the removed id', () => {
+  it('removeConversation clears activeConversationId when it matches the removed id', () => {
     useChatStore.getState().addConversation(makeConversation({ id: 'active' }));
-    useChatStore.getState().setCurrentConversation('active');
-    expect(useChatStore.getState().currentConversationId).toBe('active');
+    useChatStore.getState().setActiveConversation('active');
+    expect(useChatStore.getState().activeConversationId).toBe('active');
     useChatStore.getState().removeConversation('active');
-    expect(useChatStore.getState().currentConversationId).toBeNull();
+    expect(useChatStore.getState().activeConversationId).toBeNull();
   });
 
-  it('removeConversation does not clear currentConversationId for a different id', () => {
+  it('removeConversation does not clear activeConversationId for a different id', () => {
     useChatStore.getState().addConversation(makeConversation({ id: 'a' }));
     useChatStore.getState().addConversation(makeConversation({ id: 'b' }));
-    useChatStore.getState().setCurrentConversation('a');
+    useChatStore.getState().setActiveConversation('a');
     useChatStore.getState().removeConversation('b');
-    expect(useChatStore.getState().currentConversationId).toBe('a');
+    expect(useChatStore.getState().activeConversationId).toBe('a');
   });
 
   it('state persists correctly through multiple sequential mutations (rehydration simulation)', () => {
@@ -169,28 +169,28 @@ describe('useChatStore — messages', () => {
   it('addMessage creates a new array for an unseen conversationId', () => {
     const msg = makeMessage({ id: 'm1', content: 'First' });
     useChatStore.getState().addMessage('conv-x', msg);
-    expect(useChatStore.getState().messages['conv-x']).toEqual([msg]);
+    expect(useChatStore.getState().messagesByConversation['conv-x']).toEqual([msg]);
   });
 
   it('addMessage appends to an existing message array', () => {
     useChatStore.getState().addMessage('conv-x', makeMessage({ id: 'm1' }));
     useChatStore.getState().addMessage('conv-x', makeMessage({ id: 'm2' }));
-    expect(useChatStore.getState().messages['conv-x']).toHaveLength(2);
-    expect(useChatStore.getState().messages['conv-x']?.[1]?.id).toBe('m2');
+    expect(useChatStore.getState().messagesByConversation['conv-x']).toHaveLength(2);
+    expect(useChatStore.getState().messagesByConversation['conv-x']?.[1]?.id).toBe('m2');
   });
 
   it('addMessage keeps separate buckets for different conversationIds', () => {
     useChatStore.getState().addMessage('conv-a', makeMessage({ id: 'ma' }));
     useChatStore.getState().addMessage('conv-b', makeMessage({ id: 'mb' }));
-    expect(useChatStore.getState().messages['conv-a']).toHaveLength(1);
-    expect(useChatStore.getState().messages['conv-b']).toHaveLength(1);
+    expect(useChatStore.getState().messagesByConversation['conv-a']).toHaveLength(1);
+    expect(useChatStore.getState().messagesByConversation['conv-b']).toHaveLength(1);
   });
 
   it('updateMessage patches specific fields without touching other messages', () => {
     useChatStore.getState().addMessage('c1', makeMessage({ id: 'm1', content: 'Original' }));
     useChatStore.getState().addMessage('c1', makeMessage({ id: 'm2', content: 'Other' }));
     useChatStore.getState().updateMessage('c1', 'm1', { content: 'Patched' });
-    const msgs = useChatStore.getState().messages['c1']!;
+    const msgs = useChatStore.getState().messagesByConversation['c1']!;
     expect(msgs.find((m) => m.id === 'm1')?.content).toBe('Patched');
     expect(msgs.find((m) => m.id === 'm2')?.content).toBe('Other');
   });
@@ -198,14 +198,14 @@ describe('useChatStore — messages', () => {
   it('updateMessage is a no-op for an unknown messageId', () => {
     useChatStore.getState().addMessage('c1', makeMessage({ id: 'm1', content: 'Intact' }));
     useChatStore.getState().updateMessage('c1', 'ghost-id', { content: 'Overwrite' });
-    expect(useChatStore.getState().messages['c1']?.[0]?.content).toBe('Intact');
+    expect(useChatStore.getState().messagesByConversation['c1']?.[0]?.content).toBe('Intact');
   });
 
   it('setMessages replaces the entire array for a conversationId', () => {
     useChatStore.getState().addMessage('c1', makeMessage({ id: 'old' }));
     const replacement = [makeMessage({ id: 'new-1' }), makeMessage({ id: 'new-2' })];
     useChatStore.getState().setMessages('c1', replacement);
-    expect(useChatStore.getState().messages['c1']).toEqual(replacement);
+    expect(useChatStore.getState().messagesByConversation['c1']).toEqual(replacement);
   });
 });
 
@@ -355,15 +355,15 @@ describe('useChatStore — getGroupedConversations', () => {
 describe('useChatStore — misc state actions', () => {
   beforeEach(resetStore);
 
-  it('setCurrentConversation stores the provided id', () => {
-    useChatStore.getState().setCurrentConversation('conv-42');
-    expect(useChatStore.getState().currentConversationId).toBe('conv-42');
+  it('setActiveConversation stores the provided id', () => {
+    useChatStore.getState().setActiveConversation('conv-42');
+    expect(useChatStore.getState().activeConversationId).toBe('conv-42');
   });
 
-  it('setCurrentConversation accepts null to clear selection', () => {
-    useChatStore.getState().setCurrentConversation('conv-42');
-    useChatStore.getState().setCurrentConversation(null);
-    expect(useChatStore.getState().currentConversationId).toBeNull();
+  it('setActiveConversation accepts null to clear selection', () => {
+    useChatStore.getState().setActiveConversation('conv-42');
+    useChatStore.getState().setActiveConversation(null);
+    expect(useChatStore.getState().activeConversationId).toBeNull();
   });
 
   it('setDraftContent stores and returns the draft', () => {
