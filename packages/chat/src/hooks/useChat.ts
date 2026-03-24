@@ -5,6 +5,25 @@ import type { ChatMessage } from '../lib/types';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 
+/**
+ * Bridge for addMessage — handles both package store signature (convId, msg)
+ * and desktop store signature (msg only). In the Vite SPA build, the desktop
+ * store runs, so we call with just the message when possible.
+ */
+function storeAddMessage(msg: Partial<ChatMessage> & { role: string; content: string }) {
+  const store = useChatStore.getState();
+  // Try desktop-style (1 arg) first, fall back to package-style (2 args)
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (store.addMessage as any)(msg);
+  } catch {
+    const convId = store.activeConversationId;
+    if (convId) {
+      store.addMessage(convId, msg as ChatMessage);
+    }
+  }
+}
+
 export function useChat(runtime: ChatRuntime | null) {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const assistantMessageIdRef = useRef<string | null>(null);
@@ -27,7 +46,7 @@ export function useChat(runtime: ChatRuntime | null) {
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
-            store.addMessage(convId, {
+            storeAddMessage({
               id,
               role: 'assistant',
               content: event.content,
@@ -51,7 +70,7 @@ export function useChat(runtime: ChatRuntime | null) {
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
-            store.addMessage(convId, {
+            storeAddMessage({
               id,
               role: 'assistant',
               content: '',
@@ -111,7 +130,7 @@ export function useChat(runtime: ChatRuntime | null) {
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
-            store.addMessage(convId, {
+            storeAddMessage({
               id,
               role: 'assistant',
               content: '',
@@ -222,28 +241,28 @@ export function useChat(runtime: ChatRuntime | null) {
 
       const store = useChatStore.getState();
 
-      // Auto-create conversation if none exists
+      // Add user message — the store auto-creates a conversation if needed.
+      // NOTE: addMessage signature differs between package store (convId, msg)
+      // and desktop store (msg only). We call with both args — package store
+      // uses convId, desktop store ignores it and uses activeConversationId.
       let convId = store.activeConversationId;
-      if (!convId) {
-        convId = crypto.randomUUID();
-        const now = new Date().toISOString();
-        store.addConversation({
-          id: convId,
-          title: content.substring(0, 50) || 'New Chat',
-          createdAt: now,
-          updatedAt: now,
-          archived: false,
-          pinned: false,
-        });
-        store.setActiveConversation(convId);
-      }
-
-      store.addMessage(convId, {
-        id: crypto.randomUUID(),
-        role: 'user',
+      const userMsgId = crypto.randomUUID();
+      const userMsg = {
+        id: userMsgId,
+        role: 'user' as const,
         content,
         timestamp: new Date().toISOString(),
-      });
+      };
+
+      storeAddMessage(userMsg);
+      // After addMessage, the desktop store may have set activeConversationId
+      convId = useChatStore.getState().activeConversationId;
+
+      if (!convId) {
+        toast.error('Failed to create conversation');
+        return;
+      }
+
       store.startStreaming();
 
       const systemPrompt = getSystemPromptForMode(store.activeMode);
