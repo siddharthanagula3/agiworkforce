@@ -10,16 +10,16 @@ export interface ConversationItemProps {
 }
 
 export function ConversationItem({ conversation, collapsed = false }: ConversationItemProps) {
-  const currentConversationId = useChatStore((s) => s.currentConversationId);
-  const setCurrentConversation = useChatStore((s) => s.setCurrentConversation);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const setActiveConversation = useChatStore((s) => s.setActiveConversation);
 
-  const isActive = currentConversationId === conversation.id;
+  const isActive = activeConversationId === conversation.id;
   const initial = (conversation.title.trim()[0] ?? 'C').toUpperCase();
 
   const button = (
     <button
       type="button"
-      onClick={() => setCurrentConversation(conversation.id)}
+      onClick={() => setActiveConversation(conversation.id)}
       className={cn(
         'flex w-full items-center rounded-[var(--chat-radius-md)] transition-colors',
         collapsed ? 'h-8 justify-center px-0' : 'h-8 gap-2 px-2',
