@@ -274,66 +274,14 @@ export function ChatInterface({
   // Artifact panel state (single source — must not be called in child components separately)
   const { isOpen: artifactOpen, panelWidth: artifactPanelWidth } = useArtifact();
 
-  // Subscribe to the desktop chat store for conversations and messages.
-  // The desktop store is the source of truth in the Vite SPA build.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const desktopStoreHook = useRef((window as any).__AGI_DESKTOP_CHAT_STORE__).current;
-  const [desktopMessages, setDesktopMessages] = useState<ChatMessage[]>([]);
-  const [desktopConvId, setDesktopConvId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!desktopStoreHook) return;
-
-    // Safely convert desktop EnhancedMessage[] → ChatMessage[]
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const convertMessages = (msgs: any[]): ChatMessage[] =>
-      msgs.map((m) => ({
-        id: m.id ?? '',
-        role: m.role ?? 'assistant',
-        content: m.content ?? '',
-        timestamp:
-          m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp ?? ''),
-      }));
-
-    let prevConvId: string | null = null;
-    let prevMsgCount = -1;
-
-    const syncState = (state: Record<string, unknown>) => {
-      try {
-        const convId = state['activeConversationId'] as string | null;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const byConv = state['messagesByConversation'] as Record<string, any[]> | undefined;
-        const raw = convId ? (byConv?.[convId] ?? []) : [];
-        const msgCount = raw.length;
-
-        // Only update React state when data actually changed
-        if (convId !== prevConvId) {
-          prevConvId = convId;
-          setDesktopConvId(convId);
-        }
-        if (msgCount !== prevMsgCount || convId !== prevConvId) {
-          prevMsgCount = msgCount;
-          setDesktopMessages(convId ? convertMessages(raw) : []);
-        }
-      } catch {
-        // Silently handle any conversion errors
-      }
-    };
-
-    const unsub = desktopStoreHook.subscribe(syncState);
-    syncState(desktopStoreHook.getState() as Record<string, unknown>);
-    return unsub;
-  }, [desktopStoreHook]);
-
-  // Store state — prefer desktop store data when available
-  const packageConvId = useChatStore((s) => s.activeConversationId);
-  const activeConversationId = desktopConvId ?? packageConvId;
-
+  // Store state
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
   const emptyMessages = useRef<ChatMessage[]>([]).current;
-  const packageMessages = useChatStore((s) =>
-    packageConvId ? (s.messagesByConversation[packageConvId] ?? emptyMessages) : emptyMessages,
+  const messages = useChatStore((s) =>
+    activeConversationId
+      ? (s.messagesByConversation[activeConversationId] ?? emptyMessages)
+      : emptyMessages,
   );
-  const messages = desktopMessages.length > 0 ? desktopMessages : packageMessages;
   const activeView = useUIStore((s) => s.activeView);
   const searchModalOpen = useUIStore((s) => s.searchModalOpen);
   const toggleSearchModal = useUIStore((s) => s.toggleSearchModal);
