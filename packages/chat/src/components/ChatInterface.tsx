@@ -236,6 +236,8 @@ export interface ChatInterfaceProps {
   onVoiceClick?: () => void;
   /** Called when the user navigates to a sidebar view (customize, projects, skills, connectors) */
   onNavigateView?: (view: string) => void;
+  /** External addMessage function (from the host app's chat store). */
+  onAddMessage?: (msg: { role: string; content: string; id?: string }) => void;
 }
 
 export function ChatInterface({
@@ -247,6 +249,7 @@ export function ChatInterface({
   onModelSelectorClick: onModelSelectorClickProp,
   onVoiceClick: onVoiceClickProp,
   onNavigateView,
+  onAddMessage,
 }: ChatInterfaceProps) {
   // Side-effect hooks — theme management is opt-in; shortcuts are opt-out
   useTheme();
@@ -266,7 +269,7 @@ export function ChatInterface({
   }
 
   // Chat logic
-  const { sendMessage, stopGeneration } = useChat(runtime);
+  const { sendMessage, stopGeneration } = useChat(runtime, onAddMessage);
 
   // Artifact panel state (single source — must not be called in child components separately)
   const { isOpen: artifactOpen, panelWidth: artifactPanelWidth } = useArtifact();
