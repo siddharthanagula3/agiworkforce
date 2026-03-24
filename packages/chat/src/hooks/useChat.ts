@@ -5,33 +5,26 @@ import type { ChatMessage } from '../lib/types';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 
-/**
- * Get the desktop chat store if available (exposed via window.__AGI_DESKTOP_CHAT_STORE__).
- * Falls back to the package chat store.
- */
-function getDesktopStore() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const desktopStore = (window as any).__AGI_DESKTOP_CHAT_STORE__;
-  return desktopStore?.getState?.() ?? null;
-}
+export function useChat(
+  runtime: ChatRuntime | null,
+  externalAddMessage?: (msg: { role: string; content: string; id?: string }) => void,
+) {
+  const externalAddMessageRef = useRef(externalAddMessage);
+  externalAddMessageRef.current = externalAddMessage;
 
-/** Add message using the desktop store (1-arg) or package store (2-arg). */
-function storeAddMessage(msg: Partial<ChatMessage> & { role: string; content: string }) {
-  const desktop = getDesktopStore();
-  if (desktop?.addMessage) {
-    // Desktop store: addMessage({ role, content }) — auto-creates conversation
-    desktop.addMessage({ role: msg.role, content: msg.content, id: msg.id });
-    return;
-  }
-  // Fallback: package store
-  const store = useChatStore.getState();
-  const convId = store.activeConversationId;
-  if (convId) {
-    store.addMessage(convId, msg as ChatMessage);
-  }
-}
+  /** Add message — uses external (desktop store) addMessage if available, else package store. */
+  const addMsg = useCallback((msg: Partial<ChatMessage> & { role: string; content: string }) => {
+    if (externalAddMessageRef.current) {
+      externalAddMessageRef.current({ role: msg.role, content: msg.content, id: msg.id });
+    } else {
+      const store = useChatStore.getState();
+      const convId = store.activeConversationId;
+      if (convId) {
+        store.addMessage(convId, msg as ChatMessage);
+      }
+    }
+  }, []);
 
-export function useChat(runtime: ChatRuntime | null) {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const assistantMessageIdRef = useRef<string | null>(null);
   // Use ref for isStreaming to avoid stale closures in useCallback
@@ -53,7 +46,7 @@ export function useChat(runtime: ChatRuntime | null) {
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
-            storeAddMessage({
+            addMsg({
               id,
               role: 'assistant',
               content: event.content,
@@ -77,7 +70,7 @@ export function useChat(runtime: ChatRuntime | null) {
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
-            storeAddMessage({
+            addMsg({
               id,
               role: 'assistant',
               content: '',
@@ -137,7 +130,7 @@ export function useChat(runtime: ChatRuntime | null) {
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
-            storeAddMessage({
+            addMsg({
               id,
               role: 'assistant',
               content: '',
@@ -240,7 +233,7 @@ export function useChat(runtime: ChatRuntime | null) {
     });
 
     return unsubscribe;
-  }, [runtime]);
+  }, [runtime, addMsg]);
 
   const sendMessage = useCallback(
     (content: string) => {
@@ -249,15 +242,17 @@ export function useChat(runtime: ChatRuntime | null) {
       const store = useChatStore.getState();
 
       // Add user message — desktop store auto-creates conversation if needed
-      storeAddMessage({
+      addMsg({
         id: crypto.randomUUID(),
         role: 'user',
         content,
       });
 
-      // Get activeConversationId from desktop store (it may have just been created)
-      const desktop = getDesktopStore();
-      const convId = desktop?.activeConversationId ?? store.activeConversationId;
+      // Get activeConversationId — check desktop store global first, then package store
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const desktopState = (window as any).__AGI_DESKTOP_CHAT_STORE__?.getState?.();
+      const convId =
+        (desktopState?.activeConversationId as string | undefined) ?? store.activeConversationId;
 
       if (!convId) {
         toast.error('Failed to create conversation');
@@ -301,7 +296,7 @@ export function useChat(runtime: ChatRuntime | null) {
           }
         });
     },
-    [runtime],
+    [runtime, addMsg],
   );
 
   const stopGeneration = useCallback(() => {
