@@ -1145,6 +1145,12 @@ const DesktopShell = () => {
                 className="h-full w-full"
                 manageTheme={false}
                 enableShortcuts={true}
+                onAddMessage={(msg) =>
+                  useDesktopChatStore.getState().addMessage({
+                    ...msg,
+                    role: msg.role as 'user' | 'assistant' | 'system',
+                  })
+                }
                 onModelSelectorClick={() => openSettingsDialog('models-keys')}
                 onVoiceClick={() => {
                   // Toggle voice input overlay
