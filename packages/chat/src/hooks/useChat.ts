@@ -239,14 +239,15 @@ export function useChat(runtime: ChatRuntime | null) {
           };
           state.conversations.push(newConv);
           state.currentConversationId = convId!;
-          state.messages[convId!] = [
-            {
-              id: crypto.randomUUID(),
-              role: 'user',
-              content,
-              timestamp: now,
-            },
-          ];
+          if (!state.messages[convId!]) {
+            state.messages[convId!] = [];
+          }
+          state.messages[convId!]!.push({
+            id: crypto.randomUUID(),
+            role: 'user' as const,
+            content,
+            timestamp: now,
+          });
           state.isStreaming = true;
           state.streamingContent = '';
           state.streamingReasoning = '';
