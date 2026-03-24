@@ -295,17 +295,25 @@ export function ChatInterface({
           m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp ?? ''),
       }));
 
+    let prevConvId: string | null = null;
+    let prevMsgCount = -1;
+
     const syncState = (state: Record<string, unknown>) => {
       try {
         const convId = state['activeConversationId'] as string | null;
-        setDesktopConvId(convId);
-        if (convId) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const byConv = state['messagesByConversation'] as Record<string, any[]> | undefined;
-          const raw = byConv?.[convId] ?? [];
-          setDesktopMessages(convertMessages(raw));
-        } else {
-          setDesktopMessages([]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const byConv = state['messagesByConversation'] as Record<string, any[]> | undefined;
+        const raw = convId ? (byConv?.[convId] ?? []) : [];
+        const msgCount = raw.length;
+
+        // Only update React state when data actually changed
+        if (convId !== prevConvId) {
+          prevConvId = convId;
+          setDesktopConvId(convId);
+        }
+        if (msgCount !== prevMsgCount || convId !== prevConvId) {
+          prevMsgCount = msgCount;
+          setDesktopMessages(convId ? convertMessages(raw) : []);
         }
       } catch {
         // Silently handle any conversion errors
