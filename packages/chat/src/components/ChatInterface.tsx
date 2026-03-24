@@ -6,7 +6,6 @@ import {
   useRef,
   useEffect,
   useState,
-  useSyncExternalStore,
   Component,
   type ErrorInfo,
   type ReactNode,
@@ -272,37 +271,45 @@ export function ChatInterface({
   // Artifact panel state (single source — must not be called in child components separately)
   const { isOpen: artifactOpen, panelWidth: artifactPanelWidth } = useArtifact();
 
-  // Read from desktop store reactively using useSyncExternalStore
+  // Subscribe to the desktop chat store for conversations and messages.
+  // The desktop store is the source of truth in the Vite SPA build.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const desktopStoreApi = (window as any).__AGI_DESKTOP_CHAT_STORE__;
-  const desktopSnapshot = useSyncExternalStore(
-    desktopStoreApi?.subscribe ?? (() => () => {}),
-    () => {
-      const state = desktopStoreApi?.getState?.();
-      if (!state) return null;
-      const convId = state.activeConversationId as string | null;
-      const msgs = convId
-        ? (state.messagesByConversation?.[convId] as ChatMessage[] | undefined)
-        : undefined;
-      return { convId, msgs: msgs ?? [] };
-    },
-    () => null,
-  );
+  const desktopStoreHook = useRef((window as any).__AGI_DESKTOP_CHAT_STORE__).current;
+  const [desktopMessages, setDesktopMessages] = useState<ChatMessage[]>([]);
+  const [desktopConvId, setDesktopConvId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!desktopStoreHook) return;
+    const unsub = desktopStoreHook.subscribe((state: Record<string, unknown>) => {
+      const convId = state['activeConversationId'] as string | null;
+      setDesktopConvId(convId);
+      if (convId) {
+        const byConv = state['messagesByConversation'] as Record<string, ChatMessage[]> | undefined;
+        setDesktopMessages(byConv?.[convId] ?? []);
+      } else {
+        setDesktopMessages([]);
+      }
+    });
+    // Initialize from current state
+    const state = desktopStoreHook.getState() as Record<string, unknown>;
+    const convId = state['activeConversationId'] as string | null;
+    setDesktopConvId(convId);
+    if (convId) {
+      const byConv = state['messagesByConversation'] as Record<string, ChatMessage[]> | undefined;
+      setDesktopMessages(byConv?.[convId] ?? []);
+    }
+    return unsub;
+  }, [desktopStoreHook]);
 
   // Store state — prefer desktop store data when available
   const packageConvId = useChatStore((s) => s.activeConversationId);
-  const activeConversationId = desktopSnapshot?.convId ?? packageConvId;
+  const activeConversationId = desktopConvId ?? packageConvId;
 
-  // FIX: Stable empty array reference to prevent React 19 useSyncExternalStore
-  // infinite loop — [] !== [] on consecutive getSnapshot calls.
   const emptyMessages = useRef<ChatMessage[]>([]).current;
   const packageMessages = useChatStore((s) =>
     packageConvId ? (s.messagesByConversation[packageConvId] ?? emptyMessages) : emptyMessages,
   );
-  const messages =
-    desktopSnapshot?.msgs && desktopSnapshot.msgs.length > 0
-      ? desktopSnapshot.msgs
-      : packageMessages;
+  const messages = desktopMessages.length > 0 ? desktopMessages : packageMessages;
   const activeView = useUIStore((s) => s.activeView);
   const searchModalOpen = useUIStore((s) => s.searchModalOpen);
   const toggleSearchModal = useUIStore((s) => s.toggleSearchModal);
