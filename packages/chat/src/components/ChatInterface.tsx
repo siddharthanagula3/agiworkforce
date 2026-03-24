@@ -6,6 +6,7 @@ import {
   useRef,
   useEffect,
   useState,
+  useSyncExternalStore,
   Component,
   type ErrorInfo,
   type ReactNode,
@@ -271,16 +272,37 @@ export function ChatInterface({
   // Artifact panel state (single source — must not be called in child components separately)
   const { isOpen: artifactOpen, panelWidth: artifactPanelWidth } = useArtifact();
 
-  // Store state
-  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  // Read from desktop store reactively using useSyncExternalStore
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const desktopStoreApi = (window as any).__AGI_DESKTOP_CHAT_STORE__;
+  const desktopSnapshot = useSyncExternalStore(
+    desktopStoreApi?.subscribe ?? (() => () => {}),
+    () => {
+      const state = desktopStoreApi?.getState?.();
+      if (!state) return null;
+      const convId = state.activeConversationId as string | null;
+      const msgs = convId
+        ? (state.messagesByConversation?.[convId] as ChatMessage[] | undefined)
+        : undefined;
+      return { convId, msgs: msgs ?? [] };
+    },
+    () => null,
+  );
+
+  // Store state — prefer desktop store data when available
+  const packageConvId = useChatStore((s) => s.activeConversationId);
+  const activeConversationId = desktopSnapshot?.convId ?? packageConvId;
+
   // FIX: Stable empty array reference to prevent React 19 useSyncExternalStore
   // infinite loop — [] !== [] on consecutive getSnapshot calls.
   const emptyMessages = useRef<ChatMessage[]>([]).current;
-  const messages = useChatStore((s) =>
-    activeConversationId
-      ? (s.messagesByConversation[activeConversationId] ?? emptyMessages)
-      : emptyMessages,
+  const packageMessages = useChatStore((s) =>
+    packageConvId ? (s.messagesByConversation[packageConvId] ?? emptyMessages) : emptyMessages,
   );
+  const messages =
+    desktopSnapshot?.msgs && desktopSnapshot.msgs.length > 0
+      ? desktopSnapshot.msgs
+      : packageMessages;
   const activeView = useUIStore((s) => s.activeView);
   const searchModalOpen = useUIStore((s) => s.searchModalOpen);
   const toggleSearchModal = useUIStore((s) => s.toggleSearchModal);
