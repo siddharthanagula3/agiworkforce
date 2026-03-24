@@ -36,7 +36,7 @@ export function Sidebar() {
   const { collapsed, width, toggleSidebar } = useSidebar();
 
   const addConversation = useChatStore((s) => s.addConversation);
-  const setCurrentConversation = useChatStore((s) => s.setCurrentConversation);
+  const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const conversations = useChatStore((s) => s.conversations);
   const searchQuery = useChatStore((s) => s.searchQuery);
 
@@ -56,9 +56,9 @@ export function Sidebar() {
       archived: false,
     };
     addConversation(conv);
-    setCurrentConversation(conv.id);
+    setActiveConversation(conv.id);
     setActiveView('chat');
-  }, [addConversation, setCurrentConversation, setActiveView]);
+  }, [addConversation, setActiveConversation, setActiveView]);
 
   const navItems: NavItem[] = [
     {
