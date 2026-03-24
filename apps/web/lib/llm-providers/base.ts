@@ -13,6 +13,8 @@ export interface LLMProviderResponse {
   cacheCreationInputTokens?: number;
   cachedInputTokens?: number;
   tool_calls?: unknown[]; // Tool calls if the model used function calling
+  citations?: unknown[]; // Citations from server-managed tools (e.g., Anthropic web_search)
+  search_results?: unknown[]; // Search result blocks from server-managed web search
 }
 
 export interface LLMProviderRequest {

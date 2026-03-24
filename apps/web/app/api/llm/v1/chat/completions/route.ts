@@ -755,7 +755,13 @@ async function handleChatCompletions(request: NextRequest) {
                     event.type === 'content_block_delta' &&
                     event.delta?.type === 'input_json_delta'
                   ) {
-                    // Transform tool call delta to OpenAI format
+                    // Skip input_json_delta for server-managed tools (web_search, code_execution)
+                    // — the server executes these, so the client doesn't need the tool input
+                    const blockType = activeBlockTypes.get(event.index ?? -1);
+                    if (blockType === 'server_tool_use') {
+                      continue;
+                    }
+                    // Transform client-executed tool call delta to OpenAI format
                     // Anthropic sends: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"..."}}
                     transformedEvent = {
                       choices: [
@@ -801,6 +807,53 @@ async function handleChatCompletions(request: NextRequest) {
                                 },
                               },
                             ],
+                          },
+                          index: 0,
+                        },
+                      ],
+                      model: responseModelName,
+                    };
+                  } else if (
+                    event.type === 'content_block_start' &&
+                    event.content_block?.type === 'server_tool_use'
+                  ) {
+                    // Anthropic server-managed tool execution (e.g., web_search).
+                    // The server executes the tool — no client-side action needed.
+                    // Track block type and skip (the search happens server-side).
+                    if (event.index !== undefined) {
+                      activeBlockTypes.set(event.index, 'server_tool_use');
+                    }
+                    // Emit a status indicator so the client can show "Searching the web..."
+                    transformedEvent = {
+                      choices: [
+                        {
+                          delta: {
+                            x_tool_status: {
+                              type: 'server_tool_use',
+                              name: event.content_block.name || 'web_search',
+                              status: 'searching',
+                            },
+                          },
+                          index: 0,
+                        },
+                      ],
+                      model: responseModelName,
+                    };
+                  } else if (
+                    event.type === 'content_block_start' &&
+                    event.content_block?.type === 'web_search_tool_result'
+                  ) {
+                    // Anthropic web search results block — contains the search results
+                    // that the model will use to generate its response with citations.
+                    if (event.index !== undefined) {
+                      activeBlockTypes.set(event.index, 'web_search_tool_result');
+                    }
+                    // Forward search results as extended metadata for the client
+                    transformedEvent = {
+                      choices: [
+                        {
+                          delta: {
+                            x_search_results: event.content_block,
                           },
                           index: 0,
                         },
@@ -1307,6 +1360,11 @@ async function handleChatCompletions(request: NextRequest) {
         cache_creation_input_tokens: llmResponse.cacheCreationInputTokens,
         cache_read_input_tokens: llmResponse.cachedInputTokens,
       },
+      // Web search citations and results (from Anthropic server-managed web_search tool)
+      ...(llmResponse.citations &&
+        llmResponse.citations.length > 0 && { citations: llmResponse.citations }),
+      ...(llmResponse.search_results &&
+        llmResponse.search_results.length > 0 && { search_results: llmResponse.search_results }),
       // Extended AGI Workforce fields
       x_agi_workforce: {
         provider,
