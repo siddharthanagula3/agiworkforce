@@ -1206,9 +1206,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               </div>
             )}
 
-            <div className="pt-6 border-t border-border">
-              <RestartOnboardingSection />
-            </div>
+            {isTauri && (
+              <div className="pt-6 border-t border-border">
+                <RestartOnboardingSection />
+              </div>
+            )}
 
             {/* Keybindings (merged from old 'keybindings' tab) */}
             <div className="pt-6 border-t border-border">
