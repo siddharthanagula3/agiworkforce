@@ -280,24 +280,37 @@ export function ChatInterface({
 
   useEffect(() => {
     if (!desktopStoreHook) return;
-    const unsub = desktopStoreHook.subscribe((state: Record<string, unknown>) => {
-      const convId = state['activeConversationId'] as string | null;
-      setDesktopConvId(convId);
-      if (convId) {
-        const byConv = state['messagesByConversation'] as Record<string, ChatMessage[]> | undefined;
-        setDesktopMessages(byConv?.[convId] ?? []);
-      } else {
-        setDesktopMessages([]);
+
+    // Safely convert desktop EnhancedMessage[] → ChatMessage[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const convertMessages = (msgs: any[]): ChatMessage[] =>
+      msgs.map((m) => ({
+        id: m.id ?? '',
+        role: m.role ?? 'assistant',
+        content: m.content ?? '',
+        timestamp:
+          m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp ?? ''),
+      }));
+
+    const syncState = (state: Record<string, unknown>) => {
+      try {
+        const convId = state['activeConversationId'] as string | null;
+        setDesktopConvId(convId);
+        if (convId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const byConv = state['messagesByConversation'] as Record<string, any[]> | undefined;
+          const raw = byConv?.[convId] ?? [];
+          setDesktopMessages(convertMessages(raw));
+        } else {
+          setDesktopMessages([]);
+        }
+      } catch {
+        // Silently handle any conversion errors
       }
-    });
-    // Initialize from current state
-    const state = desktopStoreHook.getState() as Record<string, unknown>;
-    const convId = state['activeConversationId'] as string | null;
-    setDesktopConvId(convId);
-    if (convId) {
-      const byConv = state['messagesByConversation'] as Record<string, ChatMessage[]> | undefined;
-      setDesktopMessages(byConv?.[convId] ?? []);
-    }
+    };
+
+    const unsub = desktopStoreHook.subscribe(syncState);
+    syncState(desktopStoreHook.getState() as Record<string, unknown>);
     return unsub;
   }, [desktopStoreHook]);
 
