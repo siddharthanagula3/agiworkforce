@@ -7,8 +7,13 @@ import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
 
 import { ChatInterface } from '@agiworkforce/chat';
+import { useChatStore as useDesktopChatStore } from './stores/chat/chatStore';
 import { TauriRuntime } from './runtime/TauriRuntime';
 import { WebRuntime } from './runtime/WebRuntime';
+
+// Expose desktop chat store globally so packages/chat useChat hook can access it
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).__AGI_DESKTOP_CHAT_STORE__ = useDesktopChatStore;
 import { CommandPalette, type CommandOption } from './components/UnifiedAgenticChat/CommandPalette';
 import { SearchModal } from './components/UnifiedAgenticChat/SearchModal';
 import { useSearchModal } from './hooks/useSearchModal';
