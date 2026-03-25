@@ -1,0 +1,12 @@
+[package]
+name = "agiworkforce-utils-elapsed"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agiworkforce_utils_elapsed"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }

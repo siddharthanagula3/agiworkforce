@@ -1,0 +1,15 @@
+[package]
+name = "agiworkforce-utils-oss"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agiworkforce_utils_oss"
+path = "src/lib.rs"
+
+[dependencies]
+agiworkforce-core = { path = "../agiworkforce-core" }
+agiworkforce-lmstudio = { path = "../agiworkforce-lmstudio" }
+agiworkforce-ollama = { path = "../agiworkforce-ollama" }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
