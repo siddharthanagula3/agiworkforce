@@ -1,0 +1,13 @@
+[package]
+name = "agiworkforce-utils-string"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agiworkforce_utils_string"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+regex-lite = "0.1.8"
