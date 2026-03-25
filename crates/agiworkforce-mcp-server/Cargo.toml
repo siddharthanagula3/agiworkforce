@@ -1,0 +1,42 @@
+[package]
+name = "agiworkforce-mcp-server"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "agiworkforce-mcp-server"
+path = "src/main.rs"
+
+[lib]
+name = "agiworkforce_mcp_server"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+agiworkforce-arg0 = { path = "../agiworkforce-arg0" }
+agiworkforce-core = { path = "../agiworkforce-core" }
+agiworkforce-features = { path = "../agiworkforce-features" }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-shell-command = { path = "../agiworkforce-shell-command" }
+agiworkforce-utils-cli = { path = "../agiworkforce-utils-cli" }
+agiworkforce-utils-json-to-toml = { path = "../agiworkforce-utils-json-to-toml" }
+rmcp = { version = "0.15.0" }
+schemars = "0.8.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+shlex = "1.3.0"
+tokio = { version = "1", features = [
+    "io-std",
+    "macros",
+    "process",
+    "rt-multi-thread",
+    "signal",
+] }
+tracing = { version = "0.1.44", features = ["log"] }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+os_info = "3.12.0"
+pretty_assertions = "1.4.1"
+tempfile = "3.23.0"
+wiremock = "0.6"

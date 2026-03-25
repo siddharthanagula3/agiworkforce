@@ -1,0 +1,18 @@
+[package]
+name = "agiworkforce-tui-app-server"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agiworkforce_tui_app_server"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.44"
+agiworkforce-app-server-protocol = { path = "../agiworkforce-app-server-protocol" }
+agiworkforce-core = { path = "../agiworkforce-core" }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }

@@ -15,7 +15,7 @@
   "dependencies": {
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
-    "zustand": "^5.0.0",
+    "zustand": "^5.0.12",
     "immer": "^11.1.4",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.5.0"

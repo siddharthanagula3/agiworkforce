@@ -1,0 +1,17 @@
+[package]
+name = "agiworkforce-utils-home-dir"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agiworkforce_utils_home_dir"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+dirs = "6"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+pretty_assertions = "1"
+tempfile = "3"
