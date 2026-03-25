@@ -1,0 +1,34 @@
+[package]
+name = "agiworkforce-state"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+chrono = "0.4.43"
+clap = { version = "4", features = ["derive", "env"] }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+dirs = "6"
+log = "0.4"
+owo-colors = "4.3.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8.6", default-features = false, features = [
+    "chrono",
+    "json",
+    "macros",
+    "migrate",
+    "runtime-tokio-rustls",
+    "sqlite",
+    "time",
+    "uuid",
+] }
+strum = { version = "0.27.2", features = ["derive"] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.22"
+uuid = "1"
+
+[dev-dependencies]
+agiworkforce-git-utils = { path = "../agiworkforce-git-utils" }
+pretty_assertions = "1.4.1"

@@ -1,0 +1,15 @@
+[package]
+name = "agiworkforce-skills"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[lib]
+doctest = false
+name = "agiworkforce_skills"
+path = "src/lib.rs"
+
+[dependencies]
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+include_dir = "0.7.4"
+thiserror = "2.0.17"
