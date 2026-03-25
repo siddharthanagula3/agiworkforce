@@ -1,0 +1,16 @@
+[package]
+name = "agiworkforce-utils-cache"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agiworkforce_utils_cache"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+lru = "0.16.3"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["sync", "time", "rt", "rt-multi-thread"] }
+sha1 = "0.10.6"
+tracing = "0.1.44"

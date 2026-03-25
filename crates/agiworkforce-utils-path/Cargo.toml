@@ -1,0 +1,12 @@
+[package]
+name = "agiworkforce-utils-path"
+version = "0.1.0"
+edition = "2024"
+[lib]
+name = "agiworkforce_utils_path"
+path = "src/lib.rs"
+[dependencies]
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+anyhow = "1"
+dunce = "1.0.4"
+tempfile = "3"

@@ -1,0 +1,46 @@
+[package]
+name = "agiworkforce-protocol"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agiworkforce_protocol"
+path = "src/lib.rs"
+
+[dependencies]
+agiworkforce-execpolicy = { path = "../agiworkforce-execpolicy" }
+agiworkforce-git-utils = { path = "../agiworkforce-git-utils" }
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+agiworkforce-utils-image = { path = "../agiworkforce-utils-image" }
+agiworkforce-utils-string = { path = "../agiworkforce-utils-string" }
+base64 = "0.22.1"
+image = { version = "^0.25.9", default-features = false, features = ["jpeg", "png", "webp"] }
+icu_decimal = "2.1"
+icu_locale_core = "2.1"
+icu_provider = { version = "2.1", features = ["sync"] }
+quick-xml = { version = "0.38.4", features = ["serialize"] }
+schemars = "0.8.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = { version = "3.17", features = ["macros", "base64"] }
+strum = "0.27.2"
+strum_macros = "0.28.0"
+sys-locale = "0.3.2"
+tracing = "0.1.44"
+ts-rs = { version = "11", features = [
+    "uuid-impl",
+    "serde-json-impl",
+    "no-serde-warnings",
+] }
+uuid = { version = "1", features = ["serde", "v7", "v4"] }
+
+[dev-dependencies]
+anyhow = "1"
+pretty_assertions = "1.4.1"
+tempfile = "3.23.0"
+
+[package.metadata.cargo-shear]
+# Required because:
+# `icu_provider`: contains a required `sync` feature for `icu_decimal`
+# `strum`: as strum_macros in non-nightly builds
+ignored = ["icu_provider", "strum"]
