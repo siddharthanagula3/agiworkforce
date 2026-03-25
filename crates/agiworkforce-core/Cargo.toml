@@ -1,0 +1,170 @@
+[package]
+name = "agiworkforce-core"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+doctest = false
+name = "agiworkforce_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "agiworkforce-write-config-schema"
+path = "src/bin/config_schema.rs"
+
+[dependencies]
+anyhow = "1"
+agiworkforce-state = { path = "../agiworkforce-state" }
+agiworkforce-rollout = { path = "../agiworkforce-rollout" }
+arc-swap = "1.8.2"
+async-channel = "2.3.1"
+async-trait = "0.1.89"
+askama = "0.15.4"
+base64 = "0.22.1"
+bm25 = "2.3.2"
+chardetng = "0.1.17"
+chrono = { version = "0.4.43", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+csv = "1.3.1"
+dirs = "6"
+dunce = "1.0.4"
+encoding_rs = "0.8.35"
+env-flags = "0.1.1"
+eventsource-stream = "0.2.3"
+futures = { version = "0.3", default-features = false }
+http = "1.3.1"
+iana-time-zone = "0.1.64"
+image = { version = "^0.25.9", default-features = false, features = ["jpeg", "png", "webp"] }
+indexmap = "2.12.0"
+libc = "0.2.182"
+notify = "8.2.0"
+once_cell = "1.20.2"
+rand = "0.9"
+regex-lite = "0.1.8"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+rmcp = { version = "0.15.0", default-features = false, features = [
+    "base64",
+    "macros",
+    "schemars",
+    "server",
+] }
+schemars = "0.8.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sha1 = "0.10.6"
+shlex = "1.3.0"
+similar = "2.7.0"
+tempfile = "3.23.0"
+test-log = "0.2.19"
+thiserror = "2.0.17"
+tokio = { version = "1", features = [
+    "io-std",
+    "macros",
+    "process",
+    "rt-multi-thread",
+    "signal",
+] }
+tokio-util = { version = "0.7.18", features = ["rt"] }
+tokio-tungstenite = { version = "0.28.0", features = [
+    "proxy",
+    "rustls-tls-native-roots",
+] }
+toml = "0.9.5"
+toml_edit = "0.24.0"
+tracing = { version = "0.1.44", features = ["log"] }
+url = "2"
+uuid = { version = "1", features = ["serde", "v4", "v5"] }
+which = "8"
+wildmatch = "2.6.1"
+zip = "2.4.2"
+
+# Internal deps
+agiworkforce-api = { path = "../agiworkforce-api" }
+agiworkforce-app-server-protocol = { path = "../agiworkforce-app-server-protocol" }
+agiworkforce-apply-patch = { path = "../agiworkforce-apply-patch" }
+agiworkforce-async-utils = { path = "../agiworkforce-async-utils" }
+agiworkforce-code-mode = { path = "../agiworkforce-code-mode" }
+agiworkforce-connectors = { path = "../agiworkforce-connectors" }
+agiworkforce-config = { path = "../agiworkforce-config" }
+agiworkforce-exec-server = { path = "../agiworkforce-exec-server" }
+agiworkforce-features = { path = "../agiworkforce-features" }
+agiworkforce-login = { path = "../agiworkforce-login" }
+agiworkforce-shell-command = { path = "../agiworkforce-shell-command" }
+agiworkforce-skills = { path = "../agiworkforce-skills" }
+agiworkforce-execpolicy = { path = "../agiworkforce-execpolicy" }
+agiworkforce-git-utils = { path = "../agiworkforce-git-utils" }
+agiworkforce-hooks = { path = "../agiworkforce-hooks" }
+agiworkforce-network-proxy = { path = "../agiworkforce-network-proxy" }
+agiworkforce-otel = { path = "../agiworkforce-otel" }
+agiworkforce-artifacts = { path = "../agiworkforce-artifacts" }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-rmcp-client = { path = "../agiworkforce-rmcp-client" }
+agiworkforce-sandboxing = { path = "../agiworkforce-sandboxing" }
+agiworkforce-terminal-detection = { path = "../agiworkforce-terminal-detection" }
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+agiworkforce-utils-cache = { path = "../agiworkforce-utils-cache" }
+agiworkforce-utils-image = { path = "../agiworkforce-utils-image" }
+agiworkforce-utils-home-dir = { path = "../agiworkforce-utils-home-dir" }
+agiworkforce-utils-output-truncation = { path = "../agiworkforce-utils-output-truncation" }
+agiworkforce-utils-path = { path = "../agiworkforce-utils-path" }
+agiworkforce-utils-pty = { path = "../agiworkforce-utils-pty" }
+agiworkforce-utils-readiness = { path = "../agiworkforce-utils-readiness" }
+agiworkforce-secrets = { path = "../agiworkforce-secrets" }
+agiworkforce-utils-string = { path = "../agiworkforce-utils-string" }
+agiworkforce-utils-stream-parser = { path = "../agiworkforce-utils-stream-parser" }
+agiworkforce-windows-sandbox = { path = "../agiworkforce-windows-sandbox-rs" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4.4"
+seccompiler = "0.5.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9"
+
+# Build OpenSSL from source for musl builds.
+[target.x86_64-unknown-linux-musl.dependencies]
+openssl-sys = { version = "*", features = ["vendored"] }
+
+# Build OpenSSL from source for musl builds.
+[target.aarch64-unknown-linux-musl.dependencies]
+openssl-sys = { version = "*", features = ["vendored"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+] }
+
+[target.'cfg(unix)'.dependencies]
+agiworkforce-shell-escalation = { path = "../agiworkforce-shell-escalation" }
+
+[dev-dependencies]
+assert_cmd = "2"
+assert_matches = "1.5.0"
+agiworkforce-arg0 = { path = "../agiworkforce-arg0" }
+agiworkforce-otel = { path = "../agiworkforce-otel" }
+agiworkforce-utils-cargo-bin = { path = "../agiworkforce-utils-cargo-bin" }
+ctor = "0.6.3"
+insta = "1.46.3"
+maplit = "1.0.2"
+opentelemetry = "0.31.0"
+predicates = "3"
+pretty_assertions = "1.4.1"
+test-case = "3.3.1"
+opentelemetry_sdk = { version = "0.31.0", features = [
+    "experimental_metrics_custom_reader",
+    "metrics",
+] }
+serial_test = "3.2.0"
+tempfile = "3.23.0"
+tracing-opentelemetry = "0.32.0"
+tracing-subscriber = "0.3.22"
+tracing-test = { version = "0.2.5", features = ["no-env-filter"] }
+walkdir = "2.5.0"
+wiremock = "0.6"
+zstd = "0.13"
+
+[package.metadata.cargo-shear]
+ignored = ["openssl-sys"]

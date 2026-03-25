@@ -1,0 +1,45 @@
+[package]
+name = "agiworkforce-rollout"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+doctest = false
+name = "agiworkforce_rollout"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1.89"
+chrono = { version = "0.4.43", features = ["serde"] }
+agiworkforce-file-search = { path = "../agiworkforce-file-search" }
+agiworkforce-git-utils = { path = "../agiworkforce-git-utils" }
+agiworkforce-login = { path = "../agiworkforce-login" }
+agiworkforce-otel = { path = "../agiworkforce-otel" }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-state = { path = "../agiworkforce-state" }
+agiworkforce-utils-path = { path = "../agiworkforce-utils-path" }
+agiworkforce-utils-string = { path = "../agiworkforce-utils-string" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+time = { version = "0.3.47", features = [
+    "formatting",
+    "local-offset",
+    "macros",
+    "parsing",
+] }
+tokio = { version = "1", features = [
+    "fs",
+    "io-util",
+    "macros",
+    "process",
+    "rt",
+    "sync",
+    "time",
+] }
+tracing = "0.1.44"
+uuid = "1"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+tempfile = "3.23.0"

@@ -1,0 +1,39 @@
+[package]
+name = "agiworkforce-app-server-protocol"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agiworkforce_app_server_protocol"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+agiworkforce-experimental-api-macros = { path = "../agiworkforce-experimental-api-macros" }
+agiworkforce-git-utils = { path = "../agiworkforce-git-utils" }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+schemars = "0.8.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = "3.17"
+shlex = "1.3.0"
+strum_macros = "0.28.0"
+thiserror = "2.0.17"
+rmcp = { version = "0.15.0", default-features = false, features = [
+    "base64",
+    "macros",
+    "schemars",
+    "server",
+] }
+ts-rs = "11"
+inventory = "0.3.19"
+tracing = "0.1.44"
+uuid = { version = "1", features = ["serde", "v7"] }
+
+[dev-dependencies]
+anyhow = "1"
+pretty_assertions = "1.4.1"
+similar = "2.7.0"
+tempfile = "3.23.0"

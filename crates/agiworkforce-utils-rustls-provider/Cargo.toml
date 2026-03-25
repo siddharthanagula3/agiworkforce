@@ -1,0 +1,12 @@
+[package]
+name = "agiworkforce-utils-rustls-provider"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agiworkforce_utils_rustls_provider"
+path = "src/lib.rs"
+
+[dependencies]
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rustls-native-certs = "0.8.3"

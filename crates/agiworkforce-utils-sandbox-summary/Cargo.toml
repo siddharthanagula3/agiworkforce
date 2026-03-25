@@ -1,0 +1,18 @@
+[package]
+name = "agiworkforce-utils-sandbox-summary"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agiworkforce_utils_sandbox_summary"
+path = "src/lib.rs"
+
+[dependencies]
+agiworkforce-core = { path = "../agiworkforce-core" }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+pretty_assertions = "1"
