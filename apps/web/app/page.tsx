@@ -313,10 +313,10 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-
-              <SurfaceShowcase />
             </div>
           </section>
+
+          <SurfaceShowcase />
 
           {/* ── FEATURES ── */}
           <section
