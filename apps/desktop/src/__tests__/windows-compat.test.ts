@@ -620,7 +620,10 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   it('creates a PowerShell session and invokes the correct command', async () => {
     const coreMod = await import('@tauri-apps/api/core');
     const mockInvoke = vi.mocked(coreMod.invoke);
-    mockInvoke.mockResolvedValueOnce('win-session-pwsh-001');
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'terminal_create_session') return 'win-session-pwsh-001';
+      return undefined;
+    });
 
     const { useTerminal } = await import('../hooks/useTerminal');
     const { result } = renderHook(() => useTerminal({ autoConnect: false }));
@@ -640,7 +643,10 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   it('creates a cmd.exe session', async () => {
     const coreMod = await import('@tauri-apps/api/core');
     const mockInvoke = vi.mocked(coreMod.invoke);
-    mockInvoke.mockResolvedValueOnce('win-session-cmd-001');
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'terminal_create_session') return 'win-session-cmd-001';
+      return undefined;
+    });
 
     const { useTerminal } = await import('../hooks/useTerminal');
     const { result } = renderHook(() => useTerminal({ autoConnect: false }));
