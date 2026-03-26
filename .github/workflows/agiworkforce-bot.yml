@@ -252,9 +252,11 @@ jobs:
           steps.parse.outputs.command != 'check' &&
           steps.parse.outputs.command != 'stats'
         uses: actions/github-script@v8
+        env:
+          PARSED_COMMAND: ${{ steps.parse.outputs.command }}
         with:
           script: |
-            const command = '${{ steps.parse.outputs.command }}';
+            const command = process.env.PARSED_COMMAND;
             const response = `Unknown command: ${command}\n\nType /agi help to see available commands.`;
 
             await github.rest.issues.createComment({

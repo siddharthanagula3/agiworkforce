@@ -19,6 +19,8 @@ const router: Router = Router();
 
 // All dotfile endpoints require authentication
 router.use(authenticateToken);
+// SECURITY: Global rate limit for all dotfile config endpoints (60/min per user)
+router.use(createRateLimiter('dotfile-read'));
 
 // =============================================================================
 // CONSTANTS

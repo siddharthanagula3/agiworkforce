@@ -23,6 +23,8 @@ import { logger } from '../lib/logger';
 const router: Router = Router();
 
 router.use(authenticateToken);
+// SECURITY: Baseline rate limit for all LLM endpoints (100/min fallback)
+router.use(createRateLimiter('default'));
 
 // =============================================================================
 // CONSTANTS
