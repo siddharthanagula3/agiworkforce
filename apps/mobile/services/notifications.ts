@@ -540,7 +540,9 @@ export function setupNotificationListeners(): () => void {
       data?.type === 'emergency_stop_triggered' ||
       data?.type === 'approval_pending_escalation'
     ) {
-      Notifications.setBadgeCountAsync(notificationCenterStore.getUnreadCount()).catch(() => {});
+      Notifications.setBadgeCountAsync(notificationCenterStore.getUnreadCount()).catch((err) => {
+        console.warn('[Notifications] Failed to update badge count:', err);
+      });
     }
   });
 

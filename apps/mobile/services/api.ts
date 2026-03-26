@@ -57,8 +57,8 @@ async function tryRefreshToken(): Promise<boolean> {
  */
 function handleUnrecoverableAuth(): void {
   // Clear Supabase session asynchronously — don't block the throw
-  supabase.auth.signOut().catch(() => {
-    // Ignore network errors during sign-out cleanup
+  supabase.auth.signOut().catch((err) => {
+    console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
   });
 
   Alert.alert('Session Expired', 'Your session has expired. Please sign in again to continue.', [

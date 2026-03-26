@@ -1897,7 +1897,9 @@ function initWebMCP(): void {
             url: window.location.href,
             timestamp: Date.now(),
           })
-          .catch(() => {});
+          .catch((err) => {
+            logger.debug('WebMCP tools changed notification failed', err);
+          });
       });
     } catch (err) {
       logger.debug('WebMCP watchForToolChanges failed (non-fatal)', err);
@@ -1920,8 +1922,9 @@ function initWebMCP(): void {
               url: window.location.href,
               timestamp: Date.now(),
             })
-            .catch(() => {
+            .catch((err) => {
               // Background may not be listening yet
+              logger.debug('NLWeb notification to background failed', err);
             });
         }
       })

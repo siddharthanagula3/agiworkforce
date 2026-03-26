@@ -454,7 +454,9 @@ async function handleViaV1Fallback(
   if (isDeterministic) {
     apiCache
       .set(cacheKey, responseBody, { ttl: 10 * 60 * 1000, tags: ['llm-response'] })
-      .catch(() => {});
+      .catch((e: unknown) => {
+        console.error('[LLM-v2] Failed to cache response:', e);
+      });
   }
 
   return NextResponse.json(responseBody, {

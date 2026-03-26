@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! 2-Phase Memory Extraction Pipeline.
 //!
 //! Phase 1 — Session Summary Extraction (on session end):

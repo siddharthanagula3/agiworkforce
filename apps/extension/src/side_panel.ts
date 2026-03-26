@@ -57,8 +57,8 @@ const API_KEY_STORAGE_KEY = 'agi_api_key';
 
 function saveMessages(): void {
   const toSave = messages.slice(-MAX_STORED_MESSAGES);
-  chrome.storage.local.set({ [STORAGE_KEY]: toSave }).catch(() => {
-    // Storage errors must not surface to the user.
+  chrome.storage.local.set({ [STORAGE_KEY]: toSave }).catch((err) => {
+    console.warn('[SidePanel] Failed to persist messages:', err);
   });
 }
 
@@ -81,8 +81,8 @@ async function loadMessages(): Promise<void> {
 }
 
 function clearStoredMessages(): void {
-  chrome.storage.local.remove(STORAGE_KEY).catch(() => {
-    // Ignore storage errors.
+  chrome.storage.local.remove(STORAGE_KEY).catch((err) => {
+    console.warn('[SidePanel] Failed to clear stored messages:', err);
   });
 }
 
@@ -1290,48 +1290,52 @@ function sendMessage(text: string): void {
     saveMessages();
     renderMessages();
 
-    capturePageContext().then((ctx) => {
-      if (ctx) pendingPageContext = ctx;
+    capturePageContext()
+      .then((ctx) => {
+        if (ctx) pendingPageContext = ctx;
 
-      const pageCtx = pendingPageContext;
-      pendingPageContext = null;
-      updateContextButton();
+        const pageCtx = pendingPageContext;
+        pendingPageContext = null;
+        updateContextButton();
 
-      const streamId = `a-${Date.now()}`;
-      currentStreamId = streamId;
-      isStreaming = true;
-      updateSendButton();
+        const streamId = `a-${Date.now()}`;
+        currentStreamId = streamId;
+        isStreaming = true;
+        updateSendButton();
 
-      if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle);
-      streamTimeoutHandle = setTimeout(() => {
-        if (isStreaming && currentStreamId === streamId) {
-          handleStreamError(streamId, 'Response timed out. Please try again.');
-        }
-        streamTimeoutHandle = null;
-      }, 90_000);
-
-      showThinking();
-
-      const history = messages
-        .slice(0, -1)
-        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-
-      chrome.runtime.sendMessage(
-        {
-          type: 'CHAT_MESSAGE',
-          id: streamId,
-          text: actualPrompt,
-          pageContext: pageCtx ?? undefined,
-          conversationHistory: history,
-          apiKey: currentApiKey ?? undefined,
-        },
-        () => {
-          if (chrome.runtime.lastError) {
-            handleStreamError(streamId, chrome.runtime.lastError.message ?? 'Extension error');
+        if (streamTimeoutHandle) clearTimeout(streamTimeoutHandle);
+        streamTimeoutHandle = setTimeout(() => {
+          if (isStreaming && currentStreamId === streamId) {
+            handleStreamError(streamId, 'Response timed out. Please try again.');
           }
-        },
-      );
-    });
+          streamTimeoutHandle = null;
+        }, 90_000);
+
+        showThinking();
+
+        const history = messages
+          .slice(0, -1)
+          .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+        chrome.runtime.sendMessage(
+          {
+            type: 'CHAT_MESSAGE',
+            id: streamId,
+            text: actualPrompt,
+            pageContext: pageCtx ?? undefined,
+            conversationHistory: history,
+            apiKey: currentApiKey ?? undefined,
+          },
+          () => {
+            if (chrome.runtime.lastError) {
+              handleStreamError(streamId, chrome.runtime.lastError.message ?? 'Extension error');
+            }
+          },
+        );
+      })
+      .catch((err) => {
+        console.error('[SidePanel] Failed to capture page context for chat:', err);
+      });
     return;
   }
 
@@ -2614,8 +2618,9 @@ Promise.all([
     // Check for pending chat from context menu (selection, summarize, explain, translate)
     checkPendingChat();
   })
-  .catch(() => {
-    // Boot errors must not surface to the user.
+  .catch((err) => {
+    // Boot errors must not surface to the user, but log for debugging.
+    console.error('[SidePanel] Boot initialization failed:', err);
   });
 
 function checkPendingChat(): void {
@@ -2642,12 +2647,16 @@ function checkPendingChat(): void {
         break;
       case 'summarize':
         // Auto-capture page context then send
-        capturePageContext().then((ctx) => {
-          if (ctx) pendingPageContext = ctx;
-          sendMessage(
-            'Summarize this page concisely. Include key points, main arguments, and any important details.',
-          );
-        });
+        capturePageContext()
+          .then((ctx) => {
+            if (ctx) pendingPageContext = ctx;
+            sendMessage(
+              'Summarize this page concisely. Include key points, main arguments, and any important details.',
+            );
+          })
+          .catch((err) => {
+            console.error('[SidePanel] Failed to capture page context for summarize:', err);
+          });
         return;
       default:
         return;

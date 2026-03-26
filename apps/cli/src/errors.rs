@@ -10,7 +10,7 @@ use std::time::Duration;
 /// Compiled regex patterns that detect context/token overflow errors across
 /// all major LLM providers. Each pattern is case-insensitive.
 ///
-/// Sources (OpenCode research):
+/// Sources:
 /// - Anthropic: "prompt is too long"
 /// - AWS Bedrock: "input is too long"
 /// - OpenAI: "exceeds the context window"

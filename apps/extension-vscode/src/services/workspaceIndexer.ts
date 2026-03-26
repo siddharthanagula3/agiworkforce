@@ -54,10 +54,18 @@ export class WorkspaceIndexer {
     );
 
     const enqueueReindex = (uri: vscode.Uri): void => {
-      this._updateQueue = this._updateQueue.then(() => this._reindexFile(uri)).catch(() => {}); // Errors don't block future updates
+      this._updateQueue = this._updateQueue
+        .then(() => this._reindexFile(uri))
+        .catch((err) => {
+          console.warn('[WorkspaceIndexer] reindex failed for', uri.fsPath, err);
+        });
     };
     const enqueueRemove = (uri: vscode.Uri): void => {
-      this._updateQueue = this._updateQueue.then(() => this._removeFile(uri)).catch(() => {});
+      this._updateQueue = this._updateQueue
+        .then(() => this._removeFile(uri))
+        .catch((err) => {
+          console.warn('[WorkspaceIndexer] remove failed for', uri.fsPath, err);
+        });
     };
 
     disposables.push(

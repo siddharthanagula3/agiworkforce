@@ -170,10 +170,26 @@ export function setupWebSocket(wss: WebSocketServer) {
   });
 
   wss.on('connection', (ws: AuthenticatedWebSocket, request) => {
-    // SECURITY: Validate Origin header to prevent cross-site WebSocket hijacking
+    // SECURITY: Validate Origin header to prevent cross-site WebSocket hijacking.
+    // Uses ALLOWED_ORIGINS (same env var as HTTP CORS) with sensible defaults
+    // so the check is never bypassed when the env var is unset.
     const origin = request.headers['origin'];
-    const corsOrigins = (process.env['CORS_ORIGINS'] ?? '').split(',').filter(Boolean);
-    if (origin && corsOrigins.length > 0 && !corsOrigins.includes(origin)) {
+    const configuredOrigins = process.env['ALLOWED_ORIGINS'];
+    const wsAllowedOrigins = configuredOrigins
+      ? configuredOrigins
+          .split(',')
+          .map((o) => o.trim())
+          .filter(Boolean)
+      : [
+          'http://localhost:3000',
+          'http://localhost:3001',
+          'tauri://localhost',
+          'https://tauri.localhost',
+          'https://chat.agiworkforce.com',
+          'https://www.agiworkforce.com',
+          'https://agiworkforce.com',
+        ];
+    if (origin && !wsAllowedOrigins.includes(origin)) {
       logger.warn({ origin }, 'WebSocket connection rejected: disallowed origin');
       ws.close(1008, 'Forbidden origin');
       return;

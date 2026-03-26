@@ -167,8 +167,8 @@ impl Marketplace {
                 );
                 Ok(Vec::new())
             }
-            Err(_) => {
-                // Registry unreachable — graceful degradation
+            Err(e) => {
+                eprintln!("[marketplace] registry unreachable: {e}");
                 Ok(Vec::new())
             }
         }

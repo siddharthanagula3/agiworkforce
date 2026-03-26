@@ -151,7 +151,7 @@ impl ChatWidget {
         self.set_status_line(line);
     }
 
-    /// Clears the terminal title Codex most recently wrote, if any.
+    /// Clears the terminal title the app most recently wrote, if any.
     ///
     /// This does not attempt to restore the shell or terminal's previous title;
     /// it only clears the managed title and updates the cache after a successful

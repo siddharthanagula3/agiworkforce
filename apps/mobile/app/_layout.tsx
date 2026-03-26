@@ -47,8 +47,9 @@ export default function RootLayout() {
   useEffect(() => {
     initMmkvEncryption()
       .then(() => initialize())
-      .catch(() => {
+      .catch((err) => {
         // Fall through to initialize anyway so auth guard still runs
+        console.warn('[RootLayout] MMKV encryption init failed:', err);
         initialize();
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,7 +77,9 @@ export default function RootLayout() {
     });
 
     return () => {
-      unregisterBackgroundFetch().catch(() => {});
+      unregisterBackgroundFetch().catch((err) => {
+        console.warn('[RootLayout] Background fetch unregister failed:', err);
+      });
     };
   }, [session]);
 
@@ -239,8 +242,9 @@ export default function RootLayout() {
           const id = await createConversation(title);
           sendMessage(id, sharedText, selectedModel);
           router.push(`/(app)/chat/${id}` as Parameters<typeof router.push>[0]);
-        } catch {
+        } catch (err) {
           // Fall through — app opens normally
+          console.warn('[RootLayout] Share intent handling failed:', err);
         }
       }
     };
