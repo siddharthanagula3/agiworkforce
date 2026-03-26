@@ -66,23 +66,25 @@ describe('logger', () => {
 
   it('logger.debug calls console.debug with [AGI Workforce] prefix', () => {
     logger.debug('test message', { key: 'val' });
-    expect(console.debug).toHaveBeenCalledWith('[AGI Workforce] test message', { key: 'val' });
+    expect(console.debug).toHaveBeenCalledWith('[AGI Workforce] %s', 'test message', {
+      key: 'val',
+    });
   });
 
   it('logger.info calls console.info with [AGI Workforce] prefix', () => {
     logger.info('info msg');
-    expect(console.info).toHaveBeenCalledWith('[AGI Workforce] info msg', undefined);
+    expect(console.info).toHaveBeenCalledWith('[AGI Workforce] %s', 'info msg', undefined);
   });
 
   it('logger.warn calls console.warn with [AGI Workforce] prefix', () => {
     logger.warn('warn msg', 'extra');
-    expect(console.warn).toHaveBeenCalledWith('[AGI Workforce] warn msg', 'extra');
+    expect(console.warn).toHaveBeenCalledWith('[AGI Workforce] %s', 'warn msg', 'extra');
   });
 
   it('logger.error calls console.error with [AGI Workforce] prefix', () => {
     const err = new Error('oops');
     logger.error('error msg', err);
-    expect(console.error).toHaveBeenCalledWith('[AGI Workforce] error msg', err);
+    expect(console.error).toHaveBeenCalledWith('[AGI Workforce] %s', 'error msg', err);
   });
 });
 

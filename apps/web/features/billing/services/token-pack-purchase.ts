@@ -189,7 +189,7 @@ export async function addTokensToUserBalance(
         ).insert({
           user_id: userId,
           current_balance: tokens,
-          monthly_allowance: 1000000, // Default free tier
+          monthly_allowance: 0, // Free tier: 0 credits (local LLMs only)
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });

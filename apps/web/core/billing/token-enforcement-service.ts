@@ -281,11 +281,11 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
       if (error) {
         logger.error('[Token Enforcement] Error fetching user:', error);
       }
-      // Return free tier defaults on error
+      // Return free tier defaults on error — 0 credits for free tier
       return {
         allowed: true, // Allow request but with free tier limits
         used: 0,
-        limit: 1000000, // Free tier default: 1M tokens/month
+        limit: 0,
         resetDate,
       };
     }
@@ -317,7 +317,7 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
       return {
         allowed: true, // Allow on error to prevent blocking users
         used: 0,
-        limit: 1000000,
+        limit: 0,
         resetDate,
       };
     }
@@ -328,7 +328,7 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
         0,
       ) || 0,
     );
-    const limit = 1000000; // 1M tokens/month for free tier (matches billing dashboard)
+    const limit = 0; // Free tier: 0 credits (local LLMs only)
 
     return {
       allowed: used < limit,
@@ -345,7 +345,7 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
     return {
       allowed: false,
       used: 0,
-      limit: 1000000,
+      limit: 0,
       resetDate: new Date(),
     };
   }
