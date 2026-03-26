@@ -7,7 +7,7 @@ const productLinks = [
   { label: 'Plugins & MCP', href: '/features/plugins' },
   { label: 'Pricing', href: '/pricing' },
   { label: 'Download', href: '/download' },
-  { label: 'Changelog', href: '/docs' },
+  { label: 'Changelog', href: '/changelog' },
 ];
 
 const companyLinks = [

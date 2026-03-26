@@ -488,7 +488,7 @@ export default function PluginsPage() {
           </section>
 
           <CtaSection
-            icon={Plug}
+            icon="Plug"
             headline="Extend Your AI with Any Tool"
             body="Connect unlimited MCP servers. Use community tools or build your own. No caps, no restrictions — just the full power of the Model Context Protocol."
             secondaryLabel="Read Documentation"
