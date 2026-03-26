@@ -56,9 +56,9 @@ function statusDotClasses(status: StepStatus): string {
     case 'error':
       return 'bg-red-400 border-red-500';
     case 'skipped':
-      return 'bg-slate-600 border-slate-700 opacity-50';
+      return 'bg-muted-foreground border-border opacity-50';
     default:
-      return 'bg-slate-500 border-slate-600';
+      return 'bg-muted-foreground border-border';
   }
 }
 
@@ -189,7 +189,7 @@ function StepItem({ step, isLast, compact }: StepItemProps) {
               }}
               className="overflow-hidden"
             >
-              <p className="mt-1.5 text-[11px] text-slate-400/80 font-mono leading-snug whitespace-pre-wrap bg-slate-900/30 rounded px-2 py-1.5 border border-slate-700/30">
+              <p className="mt-1.5 text-[11px] text-muted-foreground/80 font-mono leading-snug whitespace-pre-wrap bg-card/30 rounded px-2 py-1.5 border border-border/30">
                 {step.details}
               </p>
             </motion.div>

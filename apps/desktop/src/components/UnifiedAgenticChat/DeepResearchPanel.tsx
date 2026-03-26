@@ -190,7 +190,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                         ) : step.status === 'failed' ? (
                           <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
                         ) : (
-                          <div className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
+                          <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
                         )}
                       </div>
 

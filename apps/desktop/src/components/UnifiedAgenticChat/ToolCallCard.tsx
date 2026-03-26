@@ -77,7 +77,7 @@ function ArgsBlock({ args }: { args?: Record<string, unknown> }) {
   const clamped = lines.slice(0, 3).join('\n') + (lines.length > 3 ? '\n  …' : '');
 
   return (
-    <pre className="mt-1.5 text-[10px] text-slate-400/80 font-mono bg-slate-950/40 rounded px-2 py-1.5 overflow-hidden leading-snug">
+    <pre className="mt-1.5 text-[10px] text-muted-foreground/80 font-mono bg-background/40 rounded px-2 py-1.5 overflow-hidden leading-snug">
       {clamped}
     </pre>
   );
@@ -104,7 +104,7 @@ function CollapsibleSection({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-300 transition-colors"
+        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
       >
         <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.15 }}>
           <ChevronDown className="w-3 h-3" />
@@ -126,7 +126,7 @@ function CollapsibleSection({
           >
             <pre
               className={cn(
-                'mt-1 text-[10px] font-mono leading-snug whitespace-pre-wrap px-2 py-1.5 rounded bg-slate-950/40',
+                'mt-1 text-[10px] font-mono leading-snug whitespace-pre-wrap px-2 py-1.5 rounded bg-background/40',
                 contentClassName,
               )}
             >
@@ -146,7 +146,7 @@ function CollapsibleSection({
 function StatusIcon({ status }: { status: ToolCallStatus }) {
   switch (status) {
     case 'pending':
-      return <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 shrink-0" />;
+      return <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground shrink-0" />;
     case 'running':
       return (
         <span className="relative flex h-3.5 w-3.5 shrink-0 items-center justify-center">
@@ -164,7 +164,7 @@ function StatusIcon({ status }: { status: ToolCallStatus }) {
 function borderForStatus(status: ToolCallStatus): string {
   switch (status) {
     case 'pending':
-      return 'border-slate-700';
+      return 'border-border';
     case 'running':
       return 'border-amber-500/40';
     case 'complete':
@@ -221,17 +221,17 @@ export function ToolCallCard({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className={cn('bg-slate-800/50 rounded-lg p-3 text-sm border', borderForStatus(status))}
+      className={cn('bg-muted/50 rounded-lg p-3 text-sm border', borderForStatus(status))}
     >
       {/* Header row */}
       <div className="flex items-center gap-2">
         <StatusIcon status={status} />
-        <Wrench className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        <span className="font-mono text-xs text-slate-200 font-medium truncate flex-1 min-w-0">
+        <Wrench className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <span className="font-mono text-xs text-foreground font-medium truncate flex-1 min-w-0">
           {toolName}
         </span>
         {sourceBadge && (
-          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-700/60 text-slate-300 shrink-0">
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-accent/60 text-foreground shrink-0">
             <sourceBadge.BadgeIcon className="w-2.5 h-2.5" />
             {sourceBadge.label}
           </span>
@@ -240,7 +240,7 @@ export function ToolCallCard({
           <span
             className={cn(
               'text-[10px] font-mono tabular-nums shrink-0',
-              status === 'running' ? 'text-amber-400/80' : 'text-slate-500',
+              status === 'running' ? 'text-amber-400/80' : 'text-muted-foreground',
             )}
           >
             {displayDuration}
@@ -257,7 +257,7 @@ export function ToolCallCard({
           label="Result"
           content={result}
           defaultOpen={false}
-          contentClassName="text-slate-300/80"
+          contentClassName="text-foreground/80"
           sectionId={`${toolCallId}-result`}
         />
       )}

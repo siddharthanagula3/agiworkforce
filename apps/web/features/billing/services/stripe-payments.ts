@@ -106,12 +106,23 @@ export async function upgradeToMaxPlan(data: {
 }
 
 /**
+ * Create Hobby Plan subscription and redirect to Stripe Checkout
+ */
+export async function upgradeToHobbyPlan(data: {
+  userId: string;
+  userEmail: string;
+  billingPeriod?: 'monthly' | 'yearly';
+}): Promise<void> {
+  return upgradeToPlan({ ...data, plan: 'hobby' });
+}
+
+/**
  * Generic function to upgrade to any plan
  */
 async function upgradeToPlan(data: {
   userId: string;
   userEmail: string;
-  plan: 'pro' | 'max';
+  plan: 'hobby' | 'pro' | 'max';
   billingPeriod?: 'monthly' | 'yearly';
 }): Promise<void> {
   void data.userId;

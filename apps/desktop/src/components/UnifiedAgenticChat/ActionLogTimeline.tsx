@@ -37,7 +37,7 @@ const STATUS_ICON_MAP: Record<ActionLogEntry['status'], ElementType> = {
 };
 
 const STATUS_CLASS_MAP: Record<ActionLogEntry['status'], string> = {
-  pending: 'text-slate-400 border-slate-700/60 bg-slate-900/40',
+  pending: 'text-muted-foreground border-border/60 bg-card/40',
   running: 'text-amber-300 border-amber-500/30 bg-amber-500/5',
   success: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/5',
   failed: 'text-red-300 border-red-500/30 bg-red-500/5',
