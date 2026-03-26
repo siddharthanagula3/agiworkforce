@@ -85,8 +85,10 @@ export const errorHandler = (
  * 404 handler for undefined routes
  */
 export const notFoundHandler = (req: Request, res: Response) => {
+  // Truncate and sanitize the reflected path to prevent log injection and content reflection
+  const safePath = req.path.slice(0, 200).replace(/[^\w/.-]/g, '');
   res.status(404).json({
     error: 'Not Found',
-    message: `Route ${req.method} ${req.url} not found`,
+    message: `Route ${req.method} ${safePath} not found`,
   });
 };

@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { logger } from '@/lib/logger';
+import { requireCsrfToken } from '@/lib/csrf';
+import { withRateLimit } from '@/lib/rate-limit';
 
 async function getAuthenticatedSupabase() {
   const cookieStore = await cookies();
@@ -26,7 +28,10 @@ async function getAuthenticatedSupabase() {
   );
 }
 
-export async function GET(_request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) return rateLimitResponse;
+
   const supabase = await getAuthenticatedSupabase();
   const {
     data: { user },
@@ -54,6 +59,13 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
 }
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  // AUDIT-008-006: Enforce CSRF protection for DELETE endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
   const supabase = await getAuthenticatedSupabase();
   const {
     data: { user },

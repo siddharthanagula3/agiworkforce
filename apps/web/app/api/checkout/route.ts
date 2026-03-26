@@ -13,13 +13,14 @@ import { logger } from '@/lib/logger';
 import { CheckoutRequestSchema } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
   if (!stripeClient) {
     stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), {
-      apiVersion: '2026-02-25.clover',
+      apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
     });
   }
   return stripeClient;

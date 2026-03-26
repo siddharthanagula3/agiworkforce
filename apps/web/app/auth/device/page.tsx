@@ -7,7 +7,13 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '../../../services/supabase';
 
-const API_BASE_URL = process.env['NEXT_PUBLIC_API_URL'] || 'http://localhost:3001/api';
+const API_BASE_URL =
+  process.env['NEXT_PUBLIC_API_URL'] ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:3001/api'
+    : (() => {
+        throw new Error('NEXT_PUBLIC_API_URL not configured');
+      })());
 
 function DeviceAuthForm() {
   const searchParams = useSearchParams();
@@ -55,8 +61,12 @@ function DeviceAuthForm() {
    * Strips non-alphanumeric chars, uppercases, inserts hyphen after 4th char.
    */
   const handleCodeChange = useCallback((raw: string) => {
-    const stripped = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 8);
-    const formatted = stripped.length > 4 ? `${stripped.slice(0, 4)}-${stripped.slice(4)}` : stripped;
+    const stripped = raw
+      .replace(/[^A-Za-z0-9]/g, '')
+      .toUpperCase()
+      .slice(0, 8);
+    const formatted =
+      stripped.length > 4 ? `${stripped.slice(0, 4)}-${stripped.slice(4)}` : stripped;
     setUserCode(formatted);
     setError(null);
   }, []);

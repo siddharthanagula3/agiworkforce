@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! 2-Phase Memory Extraction Pipeline.
 //!
 //! Phase 1 — Session Summary Extraction (on session end):
@@ -16,7 +17,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::config::CliConfig;
-use crate::models::{self, Message, Provider, StreamCallback};
+use crate::models::{self, Message};
 
 /// Maximum number of message characters to include in the extraction prompt.
 const MAX_MESSAGE_CHARS: usize = 20_000; // ~5000 tokens at 4 chars/token

@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Download | AGI Workforce',
   description:
-    'Download AGI Workforce for macOS, Windows, and Linux. A native desktop AI assistant with browser automation, multi-model chat, and 140+ AI skills. Free during early access.',
+    'Download AGI Workforce for macOS, Windows, and Linux. A native desktop AI assistant with browser automation, multi-model chat, and AI skills. Free during early access.',
   keywords: [
     'download AI app',
     'AGI Workforce download',
@@ -55,7 +55,7 @@ const downloadJsonLd = {
     availability: 'https://schema.org/InStock',
   },
   description:
-    'Native desktop AI assistant with browser automation, multi-model chat, and 140+ AI skills.',
+    'Native desktop AI assistant with browser automation, multi-model chat, and AI skills.',
 };
 
 export default function DownloadLayout({ children }: { children: React.ReactNode }) {

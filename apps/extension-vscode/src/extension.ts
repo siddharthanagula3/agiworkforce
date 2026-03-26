@@ -22,7 +22,13 @@ import {
   ConversationTreeProvider,
   ConversationTreeItem,
 } from './providers/conversationTreeProvider';
-import { getApiKey, setApiKey, clearApiKey, chatCompletion, type ChatMessage } from './utils/api';
+import {
+  getApiKey,
+  setApiKey,
+  clearApiKey,
+  chatCompletion,
+  type LlmChatMessage,
+} from './utils/api';
 import { applyLlmEdit } from './utils/applyEdit';
 import { AgentModePanel } from './providers/agentModeProvider';
 import { WorkspaceIndexer } from './services/workspaceIndexer';
@@ -37,6 +43,7 @@ import { ModelMetricsPanel, initModelMetrics } from './services/modelMetrics';
 import { ContextPanelProvider, setContextPanelInstance } from './providers/contextPanelProvider';
 import { DiffDecorationProvider } from './providers/diffDecorationProvider';
 import { showOriginalContext, getPatchOutputChannel } from './services/patchEngine';
+import { initCheckpointManager, getCheckpointManager } from './services/checkpointManager';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
@@ -66,7 +73,14 @@ export function activate(context: vscode.ExtensionContext): void {
     );
   }
 
-  // ── 0c. MCP enabled → ensure bridge connects on startup ────────────────────
+  // ── 0c. Checkpoint manager ──────────────────────────────────────────────────
+  try {
+    initCheckpointManager(context);
+  } catch {
+    // Checkpoint manager is non-critical — don't block activation
+  }
+
+  // ── 0d. MCP enabled → ensure bridge connects on startup ────────────────────
   {
     const mcpEnabled =
       vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('mcp.enabled') ?? false;
@@ -797,6 +811,116 @@ export function activate(context: vscode.ExtensionContext): void {
       );
     }),
 
+    // ── agi-workforce.createCheckpoint ──────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.createCheckpoint', async () => {
+      const mgr = getCheckpointManager();
+      if (mgr === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: Checkpoint manager not available.');
+        return;
+      }
+
+      const label = await vscode.window.showInputBox({
+        title: 'AGI Workforce — Create Checkpoint',
+        prompt: 'Enter a label for this checkpoint',
+        placeHolder: 'e.g. Before refactoring auth module',
+        ignoreFocusOut: true,
+        validateInput: (v) => (v.trim() === '' ? 'Label cannot be empty.' : undefined),
+      });
+
+      if (label === undefined) return;
+
+      const id = await mgr.createCheckpoint(label.trim());
+      if (id !== undefined) {
+        vscode.window.showInformationMessage(
+          `AGI Workforce: Checkpoint "${label.trim()}" created.`,
+        );
+      } else {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: Could not create checkpoint. Git may not be available.',
+        );
+      }
+    }),
+
+    // ── agi-workforce.restoreCheckpoint ──────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.restoreCheckpoint', async () => {
+      const mgr = getCheckpointManager();
+      if (mgr === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: Checkpoint manager not available.');
+        return;
+      }
+
+      const checkpoints = mgr.listCheckpoints();
+      if (checkpoints.length === 0) {
+        vscode.window.showInformationMessage('AGI Workforce: No checkpoints available.');
+        return;
+      }
+
+      const items = checkpoints.map((c) => ({
+        label: c.label,
+        description: new Date(c.createdAt).toLocaleString(),
+        detail: c.stashRef === '' ? 'Clean working tree' : `Ref: ${c.stashRef}`,
+        id: c.id,
+      }));
+
+      const picked = await vscode.window.showQuickPick(items, {
+        title: 'AGI Workforce — Restore Checkpoint',
+        placeHolder: 'Select a checkpoint to restore',
+        matchOnDescription: true,
+      });
+
+      if (picked === undefined) return;
+
+      const confirmed = await vscode.window.showWarningMessage(
+        `Restore to checkpoint "${picked.label}"? This will discard current uncommitted changes.`,
+        { modal: true },
+        'Restore',
+      );
+
+      if (confirmed === 'Restore') {
+        await mgr.restoreCheckpoint(picked.id);
+      }
+    }),
+
+    // ── agi-workforce.listCheckpoints ────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.listCheckpoints', async () => {
+      const mgr = getCheckpointManager();
+      if (mgr === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: Checkpoint manager not available.');
+        return;
+      }
+
+      const checkpoints = mgr.listCheckpoints();
+      if (checkpoints.length === 0) {
+        vscode.window.showInformationMessage('AGI Workforce: No checkpoints available.');
+        return;
+      }
+
+      const items = checkpoints.map((c) => ({
+        label: c.label,
+        description: new Date(c.createdAt).toLocaleString(),
+        detail: c.stashRef === '' ? 'Clean working tree' : `Ref: ${c.stashRef}`,
+        id: c.id,
+      }));
+
+      const picked = await vscode.window.showQuickPick(items, {
+        title: `AGI Workforce — ${checkpoints.length} Checkpoint(s)`,
+        placeHolder: 'Select a checkpoint to restore, or press Escape to dismiss',
+        matchOnDescription: true,
+      });
+
+      if (picked === undefined) return;
+
+      const confirmed = await vscode.window.showWarningMessage(
+        `Restore to checkpoint "${picked.label}"? This will discard current uncommitted changes.`,
+        { modal: true },
+        'Restore',
+      );
+
+      if (confirmed === 'Restore') {
+        await mgr.restoreCheckpoint(picked.id);
+      }
+    }),
+
     // ── agi.git.status ───────────────────────────────────────────────────────
     vscode.commands.registerCommand('agi.git.status', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -1022,7 +1146,7 @@ async function runInlineCommand(
     docs: `Generate clear, accurate documentation comments (JSDoc/TSDoc/docstrings as appropriate) for the following ${lang} code:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
   };
 
-  const messages: ChatMessage[] = [
+  const messages: LlmChatMessage[] = [
     {
       role: 'system',
       content:

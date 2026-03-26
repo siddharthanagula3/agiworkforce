@@ -13,7 +13,7 @@
  * - Reconnects automatically on channel error (exponential backoff, max 5 retries)
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useChatStore } from '@/stores/unified/chat';
@@ -66,6 +66,8 @@ export function useConversationRealtime(): {
   connectionState: RealtimeConnectionState;
 } {
   const user = useBillingStore((s) => s.user);
+  const [connectionState, setConnectionState] = useState<RealtimeConnectionState>('disconnected');
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const connectionStateRef = useRef<RealtimeConnectionState>('disconnected');
   const channelsRef = useRef<RealtimeChannel[]>([]);
   const reconnectAttemptsRef = useRef(0);
@@ -76,6 +78,7 @@ export function useConversationRealtime(): {
     }
     channelsRef.current = [];
     connectionStateRef.current = 'disconnected';
+    setConnectionState('disconnected');
   }, []);
 
   useEffect(() => {
@@ -220,14 +223,16 @@ export function useConversationRealtime(): {
       );
       setTimeout(() => {
         cleanup();
-        // Re-trigger effect by no-oping — the effect depends on `user` which hasn't changed,
-        // so we manually re-subscribe by calling the channel setup inline.
-        // In practice, Supabase's built-in reconnect handles most transient errors.
+        // Force the effect to re-run by updating a state trigger.
+        // Without this, cleanup removes channels but the effect never re-subscribes
+        // because its deps (user) haven't changed.
+        setReconnectTrigger((prev) => prev + 1);
       }, delay);
     }
 
     return cleanup;
-  }, [user, cleanup]);
+    // reconnectTrigger forces re-subscription after channel errors
+  }, [user, cleanup, reconnectTrigger]);
 
-  return { connectionState: connectionStateRef.current };
+  return { connectionState };
 }

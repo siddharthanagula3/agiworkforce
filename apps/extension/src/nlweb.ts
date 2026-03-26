@@ -170,12 +170,15 @@ function parseJsonLdSchemaTypes(): string[] {
   return types;
 }
 
-function collectSchemaTypes(data: unknown, out: string[]): void {
+const MAX_JSONLD_RECURSION_DEPTH = 10;
+
+function collectSchemaTypes(data: unknown, out: string[], depth = 0): void {
+  if (depth > MAX_JSONLD_RECURSION_DEPTH) return;
   if (data === null || data === undefined) return;
 
   if (Array.isArray(data)) {
     for (const item of data) {
-      collectSchemaTypes(item, out);
+      collectSchemaTypes(item, out, depth + 1);
     }
     return;
   }
@@ -203,7 +206,7 @@ function collectSchemaTypes(data: unknown, out: string[]): void {
     // Recurse into nested objects
     for (const key of Object.keys(obj)) {
       if (key !== '@type') {
-        collectSchemaTypes(obj[key], out);
+        collectSchemaTypes(obj[key], out, depth + 1);
       }
     }
   }

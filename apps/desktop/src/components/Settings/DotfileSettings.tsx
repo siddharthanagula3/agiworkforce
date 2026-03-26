@@ -1,4 +1,4 @@
-import { invoke } from '@/lib/tauri-mock';
+import { dotfiles } from '@agiworkforce/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -35,14 +35,6 @@ interface DetectedTool {
   skills_paths: string[];
 }
 
-interface ImportedMcpServer {
-  name: string;
-  source: string;
-  original_name: string;
-  command: string | null;
-  url: string | null;
-}
-
 interface SkillEntry {
   name: string;
   description: string;
@@ -64,7 +56,7 @@ function ConfigEditorSection() {
     let mounted = true;
     const load = async () => {
       try {
-        const data = await invoke<Record<string, unknown>>('read_shared_config');
+        const data = await dotfiles.readSharedConfig();
         if (!mounted) return;
         setConfig(data);
         const defaults = (data['default'] ?? {}) as Record<string, unknown>;
@@ -92,7 +84,7 @@ function ConfigEditorSection() {
       if (model) defaults['model'] = model;
       if (provider) defaults['provider'] = provider;
       if (approvalMode) defaults['approval_mode'] = approvalMode;
-      await invoke('write_shared_config', { key: 'default', value: defaults });
+      await dotfiles.writeSharedConfig('default', defaults);
       toast.success('Configuration saved');
     } catch (err) {
       toast.error(`Failed to save config: ${String(err)}`);
@@ -171,7 +163,7 @@ function McpServersSection() {
 
   const loadServers = useCallback(async () => {
     try {
-      const data = await invoke<Record<string, McpServerEntry>>('dotfile_list_mcp_servers');
+      const data = await dotfiles.dotfileListMcpServers();
       setServers(data ?? {});
     } catch (err) {
       toast.error(`Failed to load MCP servers: ${String(err)}`);
@@ -191,7 +183,7 @@ function McpServersSection() {
         command: newCommand || undefined,
         args: newArgs ? newArgs.split(/\s+/) : undefined,
       };
-      await invoke('dotfile_add_mcp_server', { name: newName.trim(), config });
+      await dotfiles.dotfileAddMcpServer(newName.trim(), config);
       toast.success(`Added MCP server: ${newName.trim()}`);
       setNewName('');
       setNewCommand('');
@@ -206,7 +198,7 @@ function McpServersSection() {
   const handleRemove = useCallback(
     async (name: string) => {
       try {
-        await invoke('dotfile_remove_mcp_server', { name });
+        await dotfiles.dotfileRemoveMcpServer(name);
         toast.success(`Removed MCP server: ${name}`);
         await loadServers();
       } catch (err) {
@@ -316,7 +308,7 @@ function EcosystemSection() {
     let mounted = true;
     const load = async () => {
       try {
-        const data = await invoke<DetectedTool[]>('detect_ecosystem_tools');
+        const data = (await dotfiles.detectEcosystemTools()) as unknown as DetectedTool[];
         if (mounted) setTools(data);
       } catch (err) {
         if (mounted) toast.error(`Failed to detect ecosystem: ${String(err)}`);
@@ -333,7 +325,7 @@ function EcosystemSection() {
   const handleImport = useCallback(async () => {
     setImporting(true);
     try {
-      const imported = await invoke<ImportedMcpServer[]>('import_ecosystem_mcp_servers');
+      const imported = await dotfiles.importEcosystemMcpServers();
       toast.success(`Imported ${imported.length} MCP server(s)`);
     } catch (err) {
       toast.error(`Failed to import: ${String(err)}`);
@@ -415,7 +407,7 @@ function SkillsBrowserSection() {
     let mounted = true;
     const load = async () => {
       try {
-        const data = await invoke<SkillEntry[]>('dotfile_list_skills');
+        const data = (await dotfiles.dotfileListSkills()) as unknown as SkillEntry[];
         if (mounted) setSkills(data);
       } catch (err) {
         if (mounted) toast.error(`Failed to load skills: ${String(err)}`);
@@ -476,7 +468,7 @@ function InstructionsEditorSection() {
     let mounted = true;
     const load = async () => {
       try {
-        const data = await invoke<string>('dotfile_read_instructions');
+        const data = await dotfiles.dotfileReadInstructions();
         if (!mounted) return;
         setContent(data);
         baselineRef.current = data;
@@ -495,7 +487,7 @@ function InstructionsEditorSection() {
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await invoke('dotfile_write_instructions', { content });
+      await dotfiles.dotfileWriteInstructions(content);
       baselineRef.current = content;
       toast.success('Instructions saved');
     } catch (err) {
@@ -557,7 +549,7 @@ function MemoryViewerSection() {
     let mounted = true;
     const load = async () => {
       try {
-        const data = await invoke<string>('dotfile_read_memories');
+        const data = await dotfiles.dotfileReadMemories();
         if (mounted) setContent(data);
       } catch (err) {
         if (mounted) toast.error(`Failed to load memories: ${String(err)}`);

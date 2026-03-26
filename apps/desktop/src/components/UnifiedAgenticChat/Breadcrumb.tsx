@@ -16,6 +16,7 @@ interface BreadcrumbProps {
     | 'skills'
     | 'schedules'
     | 'artifacts'
+    | 'reminders'
     | null;
   onNavigateHome: () => void;
   conversationTitle?: string | null;

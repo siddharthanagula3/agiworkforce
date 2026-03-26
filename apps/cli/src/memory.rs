@@ -72,7 +72,8 @@ impl MemoryManager {
     pub fn new(cwd: &Path) -> Self {
         // Global
         let global_path = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("~"))
+            .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
+            .unwrap_or_else(|| PathBuf::from("."))
             .join(".agi")
             .join("CLAUDE.md");
 
@@ -254,6 +255,189 @@ impl MemoryManager {
             MemoryTier::Local => self.local_path.as_deref(),
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Glob-matched rules (.agiworkforce/rules/*.md)
+// ---------------------------------------------------------------------------
+
+/// A rule loaded from a `.md` file with optional YAML frontmatter `globs`.
+#[derive(Debug, Clone)]
+pub struct Rule {
+    /// Glob patterns from YAML frontmatter (empty = always active).
+    pub globs: Vec<String>,
+    /// Markdown body content (without frontmatter).
+    pub body: String,
+    /// Source file path.
+    pub source: PathBuf,
+}
+
+/// Loads rules from `.agiworkforce/rules/` (project) and `~/.agiworkforce/rules/`.
+///
+/// Each `.md` file may have YAML frontmatter with a `globs` field:
+/// ```yaml
+/// ---
+/// globs: ["*.rs", "src/**/*.ts"]
+/// ---
+/// Always use error handling in Rust files.
+/// ```
+///
+/// Rules without a `globs` field are always included.
+pub fn load_rules(cwd: &Path) -> Vec<Rule> {
+    let mut rules = Vec::new();
+
+    // Project-level rules
+    let project_root = find_git_root(cwd);
+    if let Some(ref root) = project_root {
+        load_rules_from_dir(&root.join(".agiworkforce").join("rules"), &mut rules);
+    }
+
+    // Global rules (only .md files, skip .rules which are exec-policy files)
+    if let Some(home) = dirs::home_dir() {
+        load_rules_from_dir(&home.join(".agiworkforce").join("rules"), &mut rules);
+    }
+
+    rules
+}
+
+/// Scan a directory for `.md` rule files and parse each one.
+fn load_rules_from_dir(dir: &Path, rules: &mut Vec<Rule>) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("md") {
+            if let Some(rule) = parse_rule_file(&path) {
+                rules.push(rule);
+            }
+        }
+    }
+}
+
+/// Parse a single `.md` rule file, extracting YAML frontmatter globs.
+fn parse_rule_file(path: &Path) -> Option<Rule> {
+    let content = std::fs::read_to_string(path).ok()?;
+    if content.trim().is_empty() {
+        return None;
+    }
+
+    let trimmed = content.trim_start();
+    if !trimmed.starts_with("---") {
+        // No frontmatter — rule always applies
+        return Some(Rule {
+            globs: Vec::new(),
+            body: content,
+            source: path.to_path_buf(),
+        });
+    }
+
+    let after_first = trimmed[3..].trim_start_matches('\n');
+    let end_pos = after_first.find("\n---")?;
+    let frontmatter_str = &after_first[..end_pos];
+    let body = after_first[end_pos + 4..].trim_start_matches('\n').to_string();
+
+    if body.trim().is_empty() {
+        return None;
+    }
+
+    let globs = parse_globs_field(frontmatter_str);
+    Some(Rule {
+        globs,
+        body,
+        source: path.to_path_buf(),
+    })
+}
+
+/// Extract the `globs` field from YAML frontmatter.
+///
+/// Supports both inline array (`globs: ["*.rs", "*.ts"]`) and multi-line:
+/// ```yaml
+/// globs:
+///   - "*.rs"
+///   - "*.ts"
+/// ```
+fn parse_globs_field(frontmatter: &str) -> Vec<String> {
+    let mut globs = Vec::new();
+    let mut in_globs_list = false;
+
+    for line in frontmatter.lines() {
+        let trimmed = line.trim();
+        if let Some(val) = trimmed.strip_prefix("globs:") {
+            let val = val.trim();
+            if val.starts_with('[') {
+                // Inline array: globs: ["*.rs", "*.ts"]
+                let inner = val.trim_start_matches('[').trim_end_matches(']');
+                for item in inner.split(',') {
+                    let g = item.trim().trim_matches('"').trim_matches('\'').to_string();
+                    if !g.is_empty() {
+                        globs.push(g);
+                    }
+                }
+                return globs;
+            }
+            // Multi-line list follows
+            in_globs_list = true;
+            continue;
+        }
+        if in_globs_list {
+            if let Some(item) = trimmed.strip_prefix("- ") {
+                let g = item.trim().trim_matches('"').trim_matches('\'').to_string();
+                if !g.is_empty() {
+                    globs.push(g);
+                }
+            } else if !trimmed.is_empty() {
+                // End of list (new key)
+                break;
+            }
+        }
+    }
+
+    globs
+}
+
+/// Filter rules that match any of the given file paths using glob patterns.
+///
+/// Rules with no globs are always included. Returns the combined prompt text.
+pub fn rules_context_prompt(rules: &[Rule], active_files: &[&str]) -> String {
+    let matched: Vec<&Rule> = rules
+        .iter()
+        .filter(|rule| {
+            if rule.globs.is_empty() {
+                return true; // No globs = always active
+            }
+            rule.globs.iter().any(|pattern| {
+                let glob_pat = glob::Pattern::new(pattern).ok();
+                glob_pat.is_some_and(|pat| {
+                    active_files.iter().any(|f| {
+                        let p = Path::new(f);
+                        // Match against full path and just the filename
+                        pat.matches_path(p)
+                            || p.file_name()
+                                .and_then(|n| n.to_str())
+                                .is_some_and(|n| pat.matches(n))
+                    })
+                })
+            })
+        })
+        .collect();
+
+    if matched.is_empty() {
+        return String::new();
+    }
+
+    let mut prompt = String::from("<rules>\n");
+    for rule in &matched {
+        prompt.push_str(&format!(
+            "\n## Rule ({})\n\n{}\n",
+            rule.source.display(),
+            rule.body.trim(),
+        ));
+    }
+    prompt.push_str("\n</rules>");
+    prompt
 }
 
 // ---------------------------------------------------------------------------

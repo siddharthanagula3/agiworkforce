@@ -5,7 +5,7 @@
  * Shows a loading spinner while generating, then renders the image(s).
  */
 
-import React, { memo, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { Download, Copy, Check, Loader2, ImageOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { InlinePanel as InlinePanelType } from '../../../stores/unifiedChatStore';
@@ -20,7 +20,14 @@ export interface ImageInlinePanelProps {
 const ImageInlinePanelComponent: React.FC<ImageInlinePanelProps> = memo(
   ({ panel, onToggleCollapse }) => {
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+    const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const imageContent = panel.content.image;
+
+    useEffect(() => {
+      return () => {
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      };
+    }, []);
 
     if (!imageContent) {
       return null;
@@ -31,7 +38,8 @@ const ImageInlinePanelComponent: React.FC<ImageInlinePanelProps> = memo(
         await navigator.clipboard.writeText(url);
         setCopiedIndex(index);
         toast.success('Image URL copied to clipboard');
-        setTimeout(() => setCopiedIndex(null), 2000);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => setCopiedIndex(null), 2000);
       } catch {
         toast.error('Failed to copy URL');
       }

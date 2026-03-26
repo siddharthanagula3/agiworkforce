@@ -49,11 +49,13 @@
     {
       "identifier": "fs:allow-read-file",
       "allow": [
-        { "path": "$HOME/**" },
         { "path": "$DOCUMENT/**" },
         { "path": "$DOWNLOAD/**" },
         { "path": "$APPDATA/**" },
-        { "path": "$APPCONFIG/**" }
+        { "path": "$APPCONFIG/**" },
+        { "path": "$HOME/.agiworkforce/**" },
+        { "path": "$HOME/Desktop/**" },
+        { "path": "$HOME/Projects/**" }
       ],
       "deny": [
         { "path": "$HOME/.ssh/**" },
@@ -83,11 +85,13 @@
     {
       "identifier": "fs:allow-read-dir",
       "allow": [
-        { "path": "$HOME/**" },
         { "path": "$DOCUMENT/**" },
         { "path": "$DOWNLOAD/**" },
         { "path": "$APPDATA/**" },
-        { "path": "$APPCONFIG/**" }
+        { "path": "$APPCONFIG/**" },
+        { "path": "$HOME/.agiworkforce/**" },
+        { "path": "$HOME/Desktop/**" },
+        { "path": "$HOME/Projects/**" }
       ],
       "deny": [
         { "path": "$HOME/.ssh/**" },
@@ -117,11 +121,13 @@
     {
       "identifier": "fs:allow-read-text-file",
       "allow": [
-        { "path": "$HOME/**" },
         { "path": "$DOCUMENT/**" },
         { "path": "$DOWNLOAD/**" },
         { "path": "$APPDATA/**" },
-        { "path": "$APPCONFIG/**" }
+        { "path": "$APPCONFIG/**" },
+        { "path": "$HOME/.agiworkforce/**" },
+        { "path": "$HOME/Desktop/**" },
+        { "path": "$HOME/Projects/**" }
       ],
       "deny": [
         { "path": "$HOME/.ssh/**" },
@@ -151,11 +157,13 @@
     {
       "identifier": "fs:allow-read-text-file-lines",
       "allow": [
-        { "path": "$HOME/**" },
         { "path": "$DOCUMENT/**" },
         { "path": "$DOWNLOAD/**" },
         { "path": "$APPDATA/**" },
-        { "path": "$APPCONFIG/**" }
+        { "path": "$APPCONFIG/**" },
+        { "path": "$HOME/.agiworkforce/**" },
+        { "path": "$HOME/Desktop/**" },
+        { "path": "$HOME/Projects/**" }
       ],
       "deny": [
         { "path": "$HOME/.ssh/**" },
@@ -185,11 +193,13 @@
     {
       "identifier": "fs:allow-read-text-file-lines-next",
       "allow": [
-        { "path": "$HOME/**" },
         { "path": "$DOCUMENT/**" },
         { "path": "$DOWNLOAD/**" },
         { "path": "$APPDATA/**" },
-        { "path": "$APPCONFIG/**" }
+        { "path": "$APPCONFIG/**" },
+        { "path": "$HOME/.agiworkforce/**" },
+        { "path": "$HOME/Desktop/**" },
+        { "path": "$HOME/Projects/**" }
       ],
       "deny": [
         { "path": "$HOME/.ssh/**" },
@@ -375,11 +385,13 @@
     {
       "identifier": "fs:allow-exists",
       "allow": [
-        { "path": "$HOME/**" },
         { "path": "$DOCUMENT/**" },
         { "path": "$DOWNLOAD/**" },
         { "path": "$APPDATA/**" },
-        { "path": "$APPCONFIG/**" }
+        { "path": "$APPCONFIG/**" },
+        { "path": "$HOME/.agiworkforce/**" },
+        { "path": "$HOME/Desktop/**" },
+        { "path": "$HOME/Projects/**" }
       ],
       "deny": [
         { "path": "$HOME/.ssh/**" },

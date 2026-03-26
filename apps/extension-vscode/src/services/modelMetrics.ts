@@ -7,6 +7,7 @@
  */
 
 import * as vscode from 'vscode';
+import { MODEL_COST_BLENDED, DEFAULT_BLENDED_RATE } from './modelConstants';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,25 +19,8 @@ export interface ModelMetricsEntry {
   estimatedCostUsd: number;
 }
 
-// ─── Rough cost estimates (per 1M tokens) ──────────────────────────────────
-
-const COST_PER_MILLION: Record<string, number> = {
-  'claude-opus-4.6': 75.0,
-  'claude-sonnet-4.6': 15.0,
-  'claude-haiku-4.5': 1.0,
-  'gpt-5-pro': 60.0,
-  'gpt-5.4': 10.0,
-  'gpt-5.4-nano': 0.5,
-  'gemini-3-pro-preview': 7.0,
-  'gemini-3-flash-preview': 0.3,
-  'deepseek-r1': 8.0,
-  'deepseek-chat': 2.0,
-  'sonar-pro': 5.0,
-  'grok-4': 10.0,
-};
-
 function estimateCost(model: string, tokens: number): number {
-  const rate = COST_PER_MILLION[model] ?? 5.0;
+  const rate = MODEL_COST_BLENDED[model] ?? DEFAULT_BLENDED_RATE;
   return (tokens / 1_000_000) * rate;
 }
 
@@ -93,7 +77,10 @@ class ModelMetrics {
     for (const [key, value] of this._data) {
       obj[key] = value;
     }
-    void this._context.globalState.update(STORAGE_KEY, obj);
+    void Promise.resolve(this._context.globalState.update(STORAGE_KEY, obj)).catch(() => {
+      // Storage write failed (disk error, permission issue) — log but don't crash.
+      // Metrics accumulate in memory and retry on next persist.
+    });
   }
 }
 

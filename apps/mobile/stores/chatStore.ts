@@ -99,16 +99,17 @@ interface ChatState {
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
 }
 
-/** Abort controllers keyed by conversationId — supports concurrent streams */
+/** Abort controllers keyed by conversationId — supports concurrent streams. Capped to prevent leaks. */
 const abortControllers = new Map<string, AbortController>();
-/** Tracks which conversation is currently streaming (for stopStreaming) */
-let streamingConversationId: string | null = null;
+const MAX_ABORT_CONTROLLERS = 50;
+/** Tracks which conversations are currently streaming — supports concurrent streams. */
+const streamingConversations = new Set<string>();
 /** Debounce timer for search */
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 /** Maximum retry attempts before showing permanent failure */
 const MAX_RETRY_ATTEMPTS = 3;
-/** Tracks when thinking/reasoning started for duration calculation */
-let thinkingStartedAt: number | null = null;
+/** Tracks when thinking/reasoning started, per conversation. */
+const thinkingStartTimes = new Map<string, number>();
 
 function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -438,10 +439,17 @@ export const useChatStore = create<ChatState>()(
           ),
         }));
 
-        // Create abort controller keyed by conversation
+        // Create abort controller keyed by conversation (evict oldest if over cap)
         const controller = new AbortController();
+        if (abortControllers.size >= MAX_ABORT_CONTROLLERS) {
+          const oldestKey = abortControllers.keys().next().value;
+          if (oldestKey) {
+            abortControllers.get(oldestKey)?.abort();
+            abortControllers.delete(oldestKey);
+          }
+        }
         abortControllers.set(conversationId, controller);
-        streamingConversationId = conversationId;
+        streamingConversations.add(conversationId);
 
         try {
           await streamChat(
@@ -463,8 +471,8 @@ export const useChatStore = create<ChatState>()(
                 }
                 if (delta.reasoning) {
                   // Track when thinking first starts for duration calculation
-                  if (!thinkingStartedAt && !state.streamingReasoning) {
-                    thinkingStartedAt = Date.now();
+                  if (!thinkingStartTimes.has(conversationId) && !state.streamingReasoning) {
+                    thinkingStartTimes.set(conversationId, Date.now());
                   }
                   newReasoning += delta.reasoning;
                 }
@@ -491,10 +499,9 @@ export const useChatStore = create<ChatState>()(
 
               onDone: () => {
                 // Compute thinking duration if reasoning was streamed
-                const thinkingDuration = thinkingStartedAt
-                  ? (Date.now() - thinkingStartedAt) / 1000
-                  : undefined;
-                thinkingStartedAt = null;
+                const startedAt = thinkingStartTimes.get(conversationId);
+                const thinkingDuration = startedAt ? (Date.now() - startedAt) / 1000 : undefined;
+                thinkingStartTimes.delete(conversationId);
 
                 const state = get();
                 const msgs = state.messages[conversationId] ?? [];
@@ -515,8 +522,11 @@ export const useChatStore = create<ChatState>()(
                 const finalContent = state.streamingContent;
                 const preview = finalContent.slice(0, 100);
 
+                abortControllers.delete(conversationId);
+                streamingConversations.delete(conversationId);
+
                 set({
-                  isStreaming: false,
+                  isStreaming: streamingConversations.size > 0,
                   streamingContent: '',
                   streamingReasoning: '',
                   messages: { ...state.messages, [conversationId]: updatedMsgs },
@@ -531,13 +541,13 @@ export const useChatStore = create<ChatState>()(
                       : c,
                   ),
                 });
-
-                abortControllers.delete(conversationId);
-                streamingConversationId = null;
               },
 
               onError: (_error: Error) => {
-                thinkingStartedAt = null;
+                thinkingStartTimes.delete(conversationId);
+                abortControllers.delete(conversationId);
+                streamingConversations.delete(conversationId);
+
                 const state = get();
                 const msgs = state.messages[conversationId] ?? [];
                 const updatedMsgs = msgs.map((m) =>
@@ -552,14 +562,11 @@ export const useChatStore = create<ChatState>()(
                 );
 
                 set({
-                  isStreaming: false,
+                  isStreaming: streamingConversations.size > 0,
                   streamingContent: '',
                   streamingReasoning: '',
                   messages: { ...state.messages, [conversationId]: updatedMsgs },
                 });
-
-                abortControllers.delete(conversationId);
-                streamingConversationId = null;
               },
             },
             controller.signal,
@@ -567,9 +574,9 @@ export const useChatStore = create<ChatState>()(
         } catch {
           // Handle synchronous errors from streamChat (e.g., network failure before stream starts)
           // Always clean up streaming state, even on abort
-          thinkingStartedAt = null;
+          thinkingStartTimes.delete(conversationId);
           abortControllers.delete(conversationId);
-          streamingConversationId = null;
+          streamingConversations.delete(conversationId);
 
           if (controller.signal.aborted) {
             // Aborted intentionally (stop button) — streaming state was already cleared by stopStreaming
@@ -591,7 +598,7 @@ export const useChatStore = create<ChatState>()(
           );
 
           set({
-            isStreaming: false,
+            isStreaming: streamingConversations.size > 0,
             streamingContent: '',
             streamingReasoning: '',
             messages: { ...state.messages, [conversationId]: updatedMsgs },
@@ -600,35 +607,56 @@ export const useChatStore = create<ChatState>()(
       },
 
       stopStreaming: () => {
-        // Use the tracked streaming conversation, not currentConversationId
-        const convId = streamingConversationId ?? get().currentConversationId;
-        thinkingStartedAt = null;
+        // Prefer stopping the current conversation's stream; fall back to stopping all
+        const currentId = get().currentConversationId;
+        const targetId =
+          currentId && streamingConversations.has(currentId)
+            ? currentId
+            : (streamingConversations.values().next().value ?? null);
 
-        // Abort the controller for the streaming conversation
-        if (convId) {
-          const ctrl = abortControllers.get(convId);
-          if (ctrl) {
-            ctrl.abort();
-            abortControllers.delete(convId);
+        if (!targetId) {
+          // No tracked streaming conversation — clear global state and finalize
+          // any messages that were marked as streaming (e.g. manually injected state).
+          const state = get();
+          const cid = state.currentConversationId;
+          if (cid) {
+            const msgs = state.messages[cid] ?? [];
+            const hasStreaming = msgs.some((m) => m.isStreaming);
+            if (hasStreaming) {
+              const updatedMsgs = msgs.map((m) =>
+                m.isStreaming ? { ...m, isStreaming: false } : m,
+              );
+              set({
+                isStreaming: false,
+                streamingContent: '',
+                streamingReasoning: '',
+                messages: { ...state.messages, [cid]: updatedMsgs },
+              });
+              return;
+            }
           }
-        }
-        streamingConversationId = null;
-
-        if (!convId) {
           set({ isStreaming: false, streamingContent: '', streamingReasoning: '' });
           return;
         }
 
+        thinkingStartTimes.delete(targetId);
+        const ctrl = abortControllers.get(targetId);
+        if (ctrl) {
+          ctrl.abort();
+          abortControllers.delete(targetId);
+        }
+        streamingConversations.delete(targetId);
+
         // Finalize the streaming message with whatever content we have
         const state = get();
-        const msgs = state.messages[convId] ?? [];
+        const msgs = state.messages[targetId] ?? [];
         const updatedMsgs = msgs.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m));
 
         set({
-          isStreaming: false,
+          isStreaming: streamingConversations.size > 0,
           streamingContent: '',
           streamingReasoning: '',
-          messages: { ...state.messages, [convId]: updatedMsgs },
+          messages: { ...state.messages, [targetId]: updatedMsgs },
         });
       },
 
@@ -685,7 +713,7 @@ export const useChatStore = create<ChatState>()(
           // Search through all messages — capture match position for highlight
           for (const [convId, msgs] of Object.entries(state.messages)) {
             for (const msg of msgs) {
-              const contentLower = msg.content.toLowerCase();
+              const contentLower = (msg.content ?? '').toLowerCase();
               const idx = contentLower.indexOf(lower);
               if (idx !== -1) {
                 const start = Math.max(0, idx - 30);
@@ -730,11 +758,14 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const msgs = state.messages[conversationId];
           if (!msgs) return state;
+          // Also clean up retry count for the deleted message
+          const { [messageId]: _, ...remainingAttempts } = state.retryAttempts;
           return {
             messages: {
               ...state.messages,
               [conversationId]: msgs.filter((m) => m.id !== messageId),
             },
+            retryAttempts: remainingAttempts,
           };
         });
       },
@@ -775,7 +806,7 @@ export const useChatStore = create<ChatState>()(
         const backoffMs = nextAttempt > 1 ? 1000 * Math.pow(2, nextAttempt - 2) : 0;
 
         const userContent = userMsg.content;
-        const userModel = userMsg.model ?? assistantMsg.model ?? 'claude-3-5-sonnet-20241022';
+        const userModel = userMsg.model ?? assistantMsg.model ?? 'auto-balanced';
 
         // Record new attempt count (keyed by the original messageId)
         set((s) => ({
@@ -822,7 +853,7 @@ export const useChatStore = create<ChatState>()(
         const targetMsg = msgs[msgIndex];
         if (!targetMsg || targetMsg.role !== 'user') return;
 
-        const userModel = targetMsg.model ?? 'claude-3-5-sonnet-20241022';
+        const userModel = targetMsg.model ?? 'auto-balanced';
 
         // Set editing state so UI can show loading indicator
         set({ isEditing: true });
@@ -836,6 +867,11 @@ export const useChatStore = create<ChatState>()(
         // Re-send with new content, then clear editing flag
         get()
           .sendMessage(conversationId, newContent, userModel)
+          .catch((err) => {
+            set({
+              error: err instanceof Error ? err.message : 'Failed to re-send edited message',
+            });
+          })
           .finally(() => {
             set({ isEditing: false });
           });
@@ -903,6 +939,9 @@ export const useChatStore = create<ChatState>()(
     {
       name: 'chat-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[chatStore] Hydration failed:', error);
+      },
       partialize: (state) => {
         // Persist conversations list and messages for offline access
         // Do NOT persist streaming state

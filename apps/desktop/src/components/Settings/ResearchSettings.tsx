@@ -9,7 +9,7 @@
  * Persists via the Rust SecretManager (`secret_manager_set`)
  * and a plain user-preference key (`set_user_preference`).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Loader2, AlertCircle, FlaskConical } from 'lucide-react';
 import { Label } from '@/components/ui/Label';
 import { Switch } from '@/components/ui/Switch';
@@ -94,6 +94,15 @@ export function ResearchSettings() {
 
   // Pref save status
   const [prefStatus, setPrefStatus] = useState<SaveStatus>('idle');
+  const keyStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (keyStatusTimerRef.current) clearTimeout(keyStatusTimerRef.current);
+      if (prefStatusTimerRef.current) clearTimeout(prefStatusTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -126,7 +135,8 @@ export function ResearchSettings() {
       setKeyInput('');
       setKeyStatus('saved');
       setPrefs((p) => ({ ...p, perplexityKeySet: true }));
-      setTimeout(() => setKeyStatus('idle'), 2500);
+      if (keyStatusTimerRef.current) clearTimeout(keyStatusTimerRef.current);
+      keyStatusTimerRef.current = setTimeout(() => setKeyStatus('idle'), 2500);
     } catch (err) {
       setKeyStatus('error');
       setKeyError(getSimpleErrorMessage(err));
@@ -160,7 +170,8 @@ export function ResearchSettings() {
           }),
         ]);
         setPrefStatus('saved');
-        setTimeout(() => setPrefStatus('idle'), 2000);
+        if (prefStatusTimerRef.current) clearTimeout(prefStatusTimerRef.current);
+        prefStatusTimerRef.current = setTimeout(() => setPrefStatus('idle'), 2000);
       } catch (err) {
         setPrefStatus('error');
         console.error('[ResearchSettings] Failed to save prefs:', err);

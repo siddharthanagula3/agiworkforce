@@ -35,6 +35,39 @@ const MAX_CONTEXT_HTML_CHARS = 100_000;
 const MAX_CONSOLE_BUFFER = 200;
 const MAX_CONSOLE_ENTRY_CHARS = 1000;
 const PAGE_EXTRACTION_TIMEOUT_MS = 5_000;
+/** Skip outerHTML extraction when the DOM exceeds this many elements to avoid
+ *  multi-second event-loop stalls on pathological SPAs. */
+const MAX_DOM_ELEMENTS_FOR_EXTRACTION = 50_000;
+
+/**
+ * Safely extract the page HTML with two guards:
+ * 1. **Heuristic**: skip if the DOM has more than MAX_DOM_ELEMENTS_FOR_EXTRACTION
+ *    elements — calling outerHTML on such pages can block the JS thread for seconds.
+ * 2. **Elapsed-time**: discard the result if outerHTML itself took longer than
+ *    PAGE_EXTRACTION_TIMEOUT_MS (post-hoc, since DOM access is synchronous and
+ *    cannot be interrupted by a true timeout).
+ *
+ * Returns the truncated HTML string, or empty string on failure.
+ */
+function extractPageHtmlSafely(): string {
+  try {
+    const elementCount = document.querySelectorAll('*').length;
+    if (elementCount > MAX_DOM_ELEMENTS_FOR_EXTRACTION) {
+      logger.debug('Skipping HTML extraction — DOM too large', { elementCount });
+      return '';
+    }
+    const extractStart = Date.now();
+    const rawHtml = document.documentElement.outerHTML;
+    if (Date.now() - extractStart < PAGE_EXTRACTION_TIMEOUT_MS) {
+      return rawHtml.substring(0, MAX_CONTEXT_HTML_CHARS);
+    }
+    logger.warn('HTML extraction timed out, using empty content');
+    return '';
+  } catch (e) {
+    logger.debug('Failed to extract page HTML (CSP or DOM error)', e);
+    return '';
+  }
+}
 
 const consoleLogBuffer: ConsoleLogEntry[] = [];
 
@@ -45,6 +78,11 @@ interface ActionExecutionResult {
   [key: string]: unknown;
 }
 
+/**
+ * Module-level automation state. JavaScript is single-threaded so true data races
+ * are impossible, but async/await yields between message handlers mean interleaving
+ * IS possible. All mutation sites use idempotent guards to tolerate this.
+ */
 const automationState: AutomationState = {
   isControlled: false,
   highlightedElement: null,
@@ -138,7 +176,12 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'CONNECTION_STATUS_CHANGED': {
       const statusMsg = message as ConnectionStatusChangedMessage;
-      automationState.connectionStatus = statusMsg.connected ? 'connected' : 'disconnected';
+      const newStatus = statusMsg.connected ? 'connected' : 'disconnected';
+      // Idempotent: skip redundant updates to avoid unnecessary re-syncs.
+      if (automationState.connectionStatus === newStatus) {
+        return { success: true } as ExtensionResponse;
+      }
+      automationState.connectionStatus = newStatus;
       updateIndicatorStatus();
       if (statusMsg.connected) {
         void syncPageContext('connection_restored');
@@ -272,19 +315,7 @@ function buildCurrentPageContext(): Record<string, unknown> {
     logger.debug('Failed to extract page metadata for context', e);
   }
 
-  // Bound HTML extraction to avoid hanging on pathological DOMs (e.g. huge SPAs).
-  let html = '';
-  try {
-    const extractStart = Date.now();
-    const rawHtml = document.documentElement.outerHTML;
-    if (Date.now() - extractStart < PAGE_EXTRACTION_TIMEOUT_MS) {
-      html = rawHtml.substring(0, MAX_CONTEXT_HTML_CHARS);
-    } else {
-      logger.warn('HTML extraction timed out, using empty content');
-    }
-  } catch (e) {
-    logger.debug('Failed to extract page HTML (CSP or DOM error)', e);
-  }
+  const html = extractPageHtmlSafely();
 
   return {
     url: window.location.href,
@@ -382,7 +413,10 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       })) as unknown as ActionExecutionResult;
       return { type: actionType, ...response };
     }
-    case 'type': {
+    case 'type':
+    case 'input': {
+      // 'input' is recorded by the workflow recorder (change events on inputs);
+      // functionally equivalent to the 'type' action.
       const response = (await handleType({
         type: 'TYPE',
         selector: action.selector ?? '',
@@ -390,6 +424,28 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
         options: { delay: action.delay ?? undefined },
       })) as unknown as ActionExecutionResult;
       return { type: actionType, ...response };
+    }
+    case 'scroll': {
+      // Recorded scroll actions store "scrollX,scrollY" in action.value.
+      // If selector is 'window' (or absent), scroll the viewport; otherwise
+      // scroll the matched element into view.
+      const selector = action.selector ? String(action.selector) : 'window';
+      if (selector === 'window' || selector === 'window.location') {
+        const coords = String(action.value || '0,0').split(',');
+        const x = parseInt(coords[0] ?? '0', 10) || 0;
+        const y = parseInt(coords[1] ?? '0', 10) || 0;
+        window.scrollTo({ left: x, top: y, behavior: 'smooth' });
+        return { type: actionType, success: true };
+      }
+      if (!validators.isValidSelector(selector)) {
+        return { type: actionType, success: false, error: 'Invalid selector for scroll' };
+      }
+      const element = domUtils.querySelector(selector);
+      if (!element) {
+        return { type: actionType, success: false, error: `Element not found: ${selector}` };
+      }
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return { type: actionType, success: true };
     }
     case 'hover': {
       const selector = action.selector ? String(action.selector) : '';
@@ -760,7 +816,20 @@ async function handleType(message: TypeMessage): Promise<ExtensionResponse> {
       element.dispatchEvent(keyEvent);
 
       if ('value' in element) {
-        (element as HTMLInputElement).value += char;
+        // Use the native value setter to bypass React's synthetic property
+        // descriptor so controlled inputs detect the change correctly.
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+          element instanceof HTMLTextAreaElement
+            ? HTMLTextAreaElement.prototype
+            : HTMLInputElement.prototype,
+          'value',
+        )?.set;
+        const newValue = (element as HTMLInputElement).value + char;
+        if (nativeInputValueSetter) {
+          nativeInputValueSetter.call(element, newValue);
+        } else {
+          (element as HTMLInputElement).value = newValue;
+        }
       } else {
         element.textContent = (element.textContent ?? '') + char;
       }
@@ -948,7 +1017,9 @@ const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown>
   scrollBy: (...args: unknown[]) =>
     window.scrollBy((args[0] as number) ?? 0, (args[1] as number) ?? 0),
   scrollIntoView: (...args: unknown[]) => {
-    const el = document.querySelector(args[0] as string);
+    const selector = String(args[0] ?? '');
+    if (!validators.isValidSelector(selector)) return false;
+    const el = document.querySelector(selector);
     el?.scrollIntoView(
       (args[1] as ScrollIntoViewOptions) ?? { behavior: 'smooth', block: 'center' },
     );
@@ -957,24 +1028,32 @@ const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown>
   getScrollPosition: () => ({ x: window.scrollX, y: window.scrollY }),
   getViewportSize: () => ({ width: window.innerWidth, height: window.innerHeight }),
   getComputedStyle: (...args: unknown[]) => {
-    const el = document.querySelector(args[0] as string);
+    const selector = String(args[0] ?? '');
+    if (!validators.isValidSelector(selector)) return null;
+    const el = document.querySelector(selector);
     if (!el) return null;
     const style = window.getComputedStyle(el);
     return args[1] ? style.getPropertyValue(args[1] as string) : null;
   },
   getBoundingRect: (...args: unknown[]) => {
-    const el = document.querySelector(args[0] as string);
+    const selector = String(args[0] ?? '');
+    if (!validators.isValidSelector(selector)) return null;
+    const el = document.querySelector(selector);
     if (!el) return null;
     const rect = el.getBoundingClientRect();
     return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
   },
   focusElement: (...args: unknown[]) => {
-    const el = document.querySelector(args[0] as string) as HTMLElement | null;
+    const selector = String(args[0] ?? '');
+    if (!validators.isValidSelector(selector)) return false;
+    const el = document.querySelector(selector) as HTMLElement | null;
     el?.focus();
     return !!el;
   },
   blurElement: (...args: unknown[]) => {
-    const el = document.querySelector(args[0] as string) as HTMLElement | null;
+    const selector = String(args[0] ?? '');
+    if (!validators.isValidSelector(selector)) return false;
+    const el = document.querySelector(selector) as HTMLElement | null;
     el?.blur();
     return !!el;
   },
@@ -1023,17 +1102,7 @@ function handleGetPageInfo(): GetPageInfoResponse {
     const selection = window.getSelection();
     const selectedText = selection ? selection.toString() : '';
 
-    // Use the timeout-bounded extraction shared with buildCurrentPageContext
-    let html = '';
-    try {
-      const extractStart = Date.now();
-      const rawHtml = document.documentElement.outerHTML;
-      if (Date.now() - extractStart < PAGE_EXTRACTION_TIMEOUT_MS) {
-        html = rawHtml.substring(0, MAX_CONTEXT_HTML_CHARS);
-      }
-    } catch {
-      // CSP or serialisation error — return empty HTML rather than failing the whole call
-    }
+    const html = extractPageHtmlSafely();
 
     return {
       success: true,
@@ -1113,9 +1182,19 @@ async function handleFillForm(message: FillFormMessage): Promise<ExtensionRespon
   }
 }
 
+/** Guard to prevent concurrent autofill requests from stomping on each other. */
+let _isAutofillingNow = false;
+
 async function handleAutoFillJobApplication(
   message: AutoFillJobApplicationMessage,
 ): Promise<ExtensionResponse> {
+  if (_isAutofillingNow) {
+    return {
+      success: false,
+      error: 'Autofill already in progress — please wait for it to finish',
+    } as ExtensionResponse;
+  }
+  _isAutofillingNow = true;
   const profile =
     typeof message.profile === 'object' && message.profile !== null ? message.profile : {};
   const options =
@@ -1129,6 +1208,8 @@ async function handleAutoFillJobApplication(
       success: false,
       error: error instanceof Error ? error.message : 'Autofill failed',
     } as ExtensionResponse;
+  } finally {
+    _isAutofillingNow = false;
   }
 }
 
@@ -1565,6 +1646,9 @@ function handleStartRecording(): ExtensionResponse {
 }
 
 function handleStopRecording(): ExtensionResponse {
+  if (!automationState.isRecording) {
+    return { success: true, recording: false } as ExtensionResponse;
+  }
   automationState.isRecording = false;
   detachRecordingListeners();
   hideRecordingIndicator();
@@ -1621,7 +1705,9 @@ function patchConsole(): void {
   ];
 
   for (const level of levels) {
+    // eslint-disable-next-line no-console
     const original = console[level];
+    // eslint-disable-next-line no-console
     console[level] = (...args: unknown[]) => {
       original.apply(console, args);
 
@@ -1695,8 +1781,8 @@ function addAutomationIndicator(): void {
 
   indicator.addEventListener('click', () => {
     const isConnected = automationState.connectionStatus === 'connected';
-    console.log(
-      `[AGI Workforce] Status: ${isConnected ? 'Connected' : 'Disconnected'} | URL: ${window.location.href}`,
+    logger.debug(
+      `Status: ${isConnected ? 'Connected' : 'Disconnected'} | URL: ${window.location.href}`,
     );
   });
 
@@ -1764,7 +1850,7 @@ function injectFloatingOverlay(): void {
   tooltip.textContent = 'Ask AGI Workforce';
 
   btn.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'open_side_panel' }).catch((err: unknown) => {
+    chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }).catch((err: unknown) => {
       logger.warn('Failed to open side panel', err);
     });
   });

@@ -29,16 +29,9 @@ export interface LlmChatMessage {
   content: string;
 }
 
-/**
- * @deprecated Renamed to `LlmChatMessage` to avoid confusion with the
- * canonical `ChatMessage` from `@agiworkforce/types`. Remove this alias
- * once all callers in the VS Code extension have been updated.
- */
-export type ChatMessage = LlmChatMessage;
-
 interface ChatCompletionRequest {
   model: string;
-  messages: ChatMessage[];
+  messages: LlmChatMessage[];
   stream?: boolean;
   temperature?: number;
   max_tokens?: number;
@@ -67,7 +60,7 @@ interface ChatCompletionResponse {
   model: string;
   choices: Array<{
     index: number;
-    message: ChatMessage;
+    message: LlmChatMessage;
     finish_reason: string;
   }>;
   usage?: {
@@ -146,18 +139,6 @@ function getCloudApiEndpoint(): string {
   return (config.get<string>('apiEndpoint') ?? DEFAULT_ENDPOINT).replace(/\/+$/, '');
 }
 
-/**
- * Returns the desktop bridge base URL for bridge-specific (non-AI) operations.
- * Returns undefined if the bridge is not enabled.
- */
-function _getBridgeEndpoint(): string | undefined {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  const enabled = config.get<boolean>('desktopBridge.enabled') ?? false;
-  if (!enabled) return undefined;
-  const port = config.get<number>('desktopBridge.port') ?? 8787;
-  return `http://127.0.0.1:${port}`;
-}
-
 function getModel(): string {
   const config = vscode.workspace.getConfiguration('agiWorkforce');
   return config.get<string>('model') ?? 'auto-balanced';
@@ -182,58 +163,6 @@ function getFeatureFlags(): {
 }
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
-
-/**
- * Low-level HTTPS/HTTP GET that returns the full response body as a string.
- */
-function httpsGet(
-  urlString: string,
-  headers: Record<string, string>,
-  token: vscode.CancellationToken,
-): Promise<{ statusCode: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(urlString);
-    const isHttps = parsed.protocol === 'https:';
-    const lib = isHttps ? https : http;
-
-    const options: https.RequestOptions = {
-      hostname: parsed.hostname,
-      port: parsed.port !== '' ? parseInt(parsed.port, 10) : isHttps ? 443 : 80,
-      path: parsed.pathname + parsed.search,
-      method: 'GET',
-      headers,
-    };
-
-    const req = lib.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => {
-        cancelListener.dispose();
-        resolve({
-          statusCode: res.statusCode ?? 0,
-          body: Buffer.concat(chunks).toString('utf8'),
-        });
-      });
-      res.on('error', (err) => {
-        cancelListener.dispose();
-        reject(err);
-      });
-    });
-
-    req.on('error', (err) => {
-      cancelListener.dispose();
-      reject(err);
-    });
-
-    const cancelListener = token.onCancellationRequested(() => {
-      cancelListener.dispose();
-      req.destroy(new Error('Request cancelled'));
-      reject(new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED'));
-    });
-
-    req.end();
-  });
-}
 
 /**
  * Low-level HTTPS POST that returns the full response body as a string.
@@ -343,9 +272,20 @@ function httpsPostStream(
       }
 
       let buffer = '';
+      const MAX_SSE_BUFFER = 1_000_000; // 1 MB guard against malformed streams
 
       res.on('data', (chunk: Buffer) => {
         buffer += chunk.toString('utf8');
+
+        if (buffer.length > MAX_SSE_BUFFER) {
+          cancelListener.dispose();
+          req.destroy();
+          reject(
+            new AgiWorkforceApiError('SSE buffer overflow (malformed stream)', 400, 'HTTP_ERROR'),
+          );
+          return;
+        }
+
         // SSE lines are separated by '\n\n' for event boundaries
         const lines = buffer.split('\n');
         // Keep the last incomplete line in the buffer
@@ -410,7 +350,7 @@ interface StreamCallbacks {
  */
 export async function streamChatCompletion(
   secrets: vscode.SecretStorage,
-  messages: ChatMessage[],
+  messages: LlmChatMessage[],
   callbacks: StreamCallbacks,
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
@@ -471,9 +411,12 @@ export async function streamChatCompletion(
         cancellationToken,
       ),
     );
-    callbacks.onDone();
-    getModelMetrics().recordRequest(model, Date.now() - requestStartTime);
-    getTokenCounter().addUsage(undefined, undefined, bodyStr.length, responseChars);
+    // Only fire onDone and record metrics if the request wasn't cancelled
+    if (!cancellationToken.isCancellationRequested) {
+      callbacks.onDone();
+      getModelMetrics().recordRequest(model, Date.now() - requestStartTime);
+      getTokenCounter().addUsage(undefined, undefined, bodyStr.length, responseChars);
+    }
   } else {
     // Non-streaming fallback
     const response = await httpsPost(
@@ -514,51 +457,36 @@ export async function streamChatCompletion(
  */
 export async function chatCompletion(
   secrets: vscode.SecretStorage,
-  messages: ChatMessage[],
+  messages: LlmChatMessage[],
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const safeResolve = (value: string): void => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
+    const safeReject = (err: unknown): void => {
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
+    };
+
     const tokens: string[] = [];
     streamChatCompletion(
       secrets,
       messages,
       {
         onToken: (t) => tokens.push(t),
-        onDone: () => resolve(tokens.join('')),
-        onError: reject,
+        onDone: () => safeResolve(tokens.join('')),
+        onError: safeReject,
       },
       cancellationToken,
       overrideModel,
-    ).catch(reject);
+    ).catch(safeReject);
   });
-}
-
-/**
- * Quick connectivity check — returns true if the API is reachable and the
- * API key is valid. Returns false on any error.
- * Always uses the cloud API endpoint (not the bridge) for the health check.
- */
-async function _pingApi(secrets: vscode.SecretStorage): Promise<boolean> {
-  try {
-    const apiKey = await getApiKey(secrets);
-    if (apiKey === undefined || apiKey === '') {
-      return false;
-    }
-    // Always ping the cloud API endpoint, not the bridge
-    const endpoint = getCloudApiEndpoint();
-    const cancelSource = new vscode.CancellationTokenSource();
-    const result = await httpsGet(
-      `${endpoint}/models`,
-      {
-        Authorization: `Bearer ${apiKey}`,
-        'User-Agent': 'agi-workforce-vscode/0.1.0',
-      },
-      cancelSource.token,
-    );
-    cancelSource.dispose();
-    return result.statusCode < 400;
-  } catch {
-    return false;
-  }
 }

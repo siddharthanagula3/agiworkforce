@@ -3,6 +3,7 @@ import { View, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Sparkles, Monitor, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
+import { ConversationStarters } from './ConversationStarters';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
@@ -125,6 +126,14 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
       {/* Subtitle */}
       <Animated.View entering={FadeIn.duration(500).delay(300)}>
         <Text className="text-white/40 text-base text-center">How can I help you?</Text>
+      </Animated.View>
+
+      {/* Conversation starters grid */}
+      <Animated.View
+        entering={FadeIn.duration(500).delay(450)}
+        style={{ marginTop: 32, width: '100%' }}
+      >
+        <ConversationStarters title="Start a conversation" />
       </Animated.View>
     </View>
   );

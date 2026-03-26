@@ -59,8 +59,9 @@ export async function batchGetTags(
 
 /** Get all conversation IDs that match a specific tag. */
 export async function getConversationsByTag(tag: ConversationTag): Promise<string[]> {
+  const params = new URLSearchParams({ tag });
   const result = await api.get<{ conversationIds: string[] }>(
-    `/api/autotag/conversations?tag=${tag}`,
+    `/api/autotag/conversations?${params.toString()}`,
   );
   return result.conversationIds;
 }

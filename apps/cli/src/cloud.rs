@@ -118,7 +118,8 @@ pub async fn cloud_exec(
             eligible.join(", ")
         );
     }
-    let cm = model_catalog::find(model_id).unwrap();
+    let cm = model_catalog::find(model_id)
+        .ok_or_else(|| anyhow::anyhow!("Model '{}' not found in catalog", model_id))?;
     if !config.byok.has_key(&cm.provider) {
         anyhow::bail!(
             "No API key for '{}'. Set the env var to use cloud BYOK.",

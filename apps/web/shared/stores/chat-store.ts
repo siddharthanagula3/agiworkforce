@@ -1093,6 +1093,10 @@ export const useChatStore = create<ChatStore>()(
                       : [],
                 };
             state.checkpointHistory.push(checkpointWithSnapshot);
+            // Cap checkpoint history to prevent unbounded growth
+            if (state.checkpointHistory.length > 10) {
+              state.checkpointHistory = state.checkpointHistory.slice(-10);
+            }
             state.currentCheckpoint = checkpoint.id;
           }),
 

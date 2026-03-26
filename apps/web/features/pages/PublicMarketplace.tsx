@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * AI Agent Marketplace - Modern GPT Store / VS Code Marketplace Design
  * Browse and add AI agents to your chat

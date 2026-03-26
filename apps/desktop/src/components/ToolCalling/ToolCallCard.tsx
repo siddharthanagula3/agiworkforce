@@ -5,7 +5,7 @@
  * Shows what tool is being called, with what parameters, and execution status.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -46,6 +46,13 @@ export function ToolCallCard({
   const [expanded, setExpanded] = useState(defaultExpanded || toolCall.expanded || false);
   const [copied, setCopied] = useState(false);
   const [isPending, setIsPending] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const handleCopy = async () => {
     const text = JSON.stringify(
@@ -60,7 +67,8 @@ export function ToolCallCard({
     );
     await navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   // Get status icon and color

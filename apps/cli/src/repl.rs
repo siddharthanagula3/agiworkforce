@@ -165,6 +165,96 @@ pub async fn run_repl(
                                 output::print_error(&format!("Voice mode error: {:#}", e));
                             }
                         }
+                        SlashResult::Ecosystem(subcmd) => {
+                            match subcmd.as_str() {
+                                "scan" => {
+                                    let detected = crate::ecosystem::scan();
+                                    eprintln!("{}", crate::ecosystem::format_table(&detected));
+                                }
+                                "import" => {
+                                    let detected = crate::ecosystem::scan();
+                                    let servers = crate::ecosystem::import_mcp_servers(&detected);
+                                    if servers.is_empty() {
+                                        eprintln!("No MCP server configs found to import.");
+                                    } else {
+                                        eprintln!("Imported {} MCP server config(s):", servers.len());
+                                        for s in &servers {
+                                            eprintln!("  {} ({})", s.name, s.source);
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    let detected = crate::ecosystem::scan();
+                                    eprintln!("{}", crate::ecosystem::format_table(&detected));
+                                }
+                            }
+                        }
+                        SlashResult::Marketplace(subcmd) => {
+                            let home = crate::config::CliConfig::config_dir();
+                            match (subcmd.as_str(), home) {
+                                (sub, Ok(_home)) if sub.starts_with("search ") => {
+                                    let query = sub.strip_prefix("search ").unwrap_or_default();
+                                    let mp = crate::marketplace::Marketplace::new();
+                                    match mp.search(query).await {
+                                        Ok(results) => {
+                                            eprintln!("{}", crate::marketplace::format_search_results(&results));
+                                        }
+                                        Err(e) => {
+                                            output::print_error(&format!("Marketplace search failed: {}", e));
+                                        }
+                                    }
+                                }
+                                ("list", Ok(home)) => {
+                                    let registry = crate::marketplace::Marketplace::list_installed(&home);
+                                    eprintln!("{}", crate::marketplace::format_installed(&registry));
+                                }
+                                (_, Err(e)) => {
+                                    output::print_error(&format!("Config dir error: {}", e));
+                                }
+                                _ => {
+                                    output::print_info("Usage: /marketplace search <query> | /marketplace list");
+                                }
+                            }
+                        }
+                        SlashResult::Sync(subcmd) => {
+                            match crate::config::CliConfig::config_dir() {
+                                Ok(home) => {
+                                    match subcmd.as_str() {
+                                        "status" => match crate::sync::ConfigSync::status(&home) {
+                                            Ok(changes) => {
+                                                if changes.is_empty() {
+                                                    eprintln!("No synced files found.");
+                                                } else {
+                                                    for (path, change) in &changes {
+                                                        eprintln!("  {:<35} {}", path, change);
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => output::print_error(&format!("Sync status failed: {}", e)),
+                                        },
+                                        "export" => match crate::sync::ConfigSync::export(&home) {
+                                            Ok(bundle) => {
+                                                if let Ok(json) = serde_json::to_string_pretty(&bundle) {
+                                                    println!("{}", json);
+                                                }
+                                            }
+                                            Err(e) => output::print_error(&format!("Sync export failed: {}", e)),
+                                        },
+                                        _ => {
+                                            output::print_info("Usage: /sync status | /sync export");
+                                        }
+                                    }
+                                }
+                                Err(e) => output::print_error(&format!("Config dir error: {}", e)),
+                            }
+                        }
+                        SlashResult::Onboarding => {
+                            match crate::onboarding::run_onboarding().await {
+                                Ok(true) => output::print_info("Onboarding complete. Restart to apply changes."),
+                                Ok(false) => output::print_info("Onboarding skipped."),
+                                Err(e) => output::print_error(&format!("Onboarding error: {}", e)),
+                            }
+                        }
                         SlashResult::Btw(question) => {
                             // Side query: send to LLM without affecting main history
                             let spinner = output::create_spinner("Side query...");
@@ -222,6 +312,15 @@ pub async fn run_repl(
                                     output::print_error(&format!("A2A error: {:#}", e));
                                 }
                             }
+                        }
+                        SlashResult::Batch(glob_pat, prompt) => {
+                            handle_batch_command(
+                                &glob_pat,
+                                &prompt,
+                                &mut session,
+                                config,
+                            )
+                            .await;
                         }
                         SlashResult::Handled => {}
                     }
@@ -347,6 +446,16 @@ enum SlashResult {
     Voice(String),
     /// A2A command — carries (subcommand, args) for async execution.
     A2a(String, String),
+    /// Batch operation — carries (glob_pattern, prompt) for parallel file processing.
+    Batch(String, String),
+    /// Run ecosystem scan.
+    Ecosystem(String),
+    /// Run marketplace search.
+    Marketplace(String),
+    /// Run sync operation.
+    Sync(String),
+    /// Re-run onboarding wizard.
+    Onboarding,
 }
 
 fn handle_slash_command(
@@ -508,6 +617,20 @@ fn handle_slash_command(
         "/diff" => {
             handle_diff();
         }
+        "/batch" => {
+            // Syntax: /batch <glob_pattern> <prompt>
+            // Split arg into first token (glob) and the rest (prompt)
+            let batch_parts: Vec<&str> = arg.splitn(2, ' ').collect();
+            let glob_pat = batch_parts.first().copied().unwrap_or_default();
+            let prompt = batch_parts.get(1).copied().unwrap_or_default();
+            if glob_pat.is_empty() || prompt.is_empty() {
+                output::print_warn(
+                    "Usage: /batch <glob_pattern> <prompt>\n  Example: /batch src/**/*.rs add error handling",
+                );
+            } else {
+                return SlashResult::Batch(glob_pat.to_string(), prompt.to_string());
+            }
+        }
         "/memory" | "/mem" => {
             handle_memory(arg);
         }
@@ -548,6 +671,47 @@ fn handle_slash_command(
                 return SlashResult::A2a(subcmd.to_string(), subarg.to_string());
             }
         }
+        "/ecosystem" | "/eco" => {
+            let subcmd = if arg.is_empty() { "scan" } else { arg };
+            return SlashResult::Ecosystem(subcmd.to_string());
+        }
+        "/marketplace" | "/market" => {
+            let subcmd = if arg.is_empty() { "list" } else { arg };
+            return SlashResult::Marketplace(subcmd.to_string());
+        }
+        "/sync" => {
+            let subcmd = if arg.is_empty() { "status" } else { arg };
+            return SlashResult::Sync(subcmd.to_string());
+        }
+        "/onboarding" => {
+            return SlashResult::Onboarding;
+        }
+        "/auth" => {
+            match crate::auth::auth_status() {
+                Ok(statuses) => {
+                    if statuses.is_empty() {
+                        eprintln!("No authentication configured. Use /login to authenticate.");
+                    } else {
+                        eprintln!("{}", "Auth Status:".cyan().bold());
+                        for s in &statuses {
+                            eprintln!(
+                                "  {:<18} {:<10} {}{}",
+                                s.provider,
+                                s.auth_type,
+                                s.status,
+                                s.expires_in
+                                    .as_ref()
+                                    .map(|e| format!(" (expires: {})", e))
+                                    .unwrap_or_default(),
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    output::print_error(&format!("Failed to read auth status: {}", e));
+                }
+            }
+        }
         "/help" | "/h" | "/?" => {
             print_help();
         }
@@ -560,6 +724,98 @@ fn handle_slash_command(
     }
 
     SlashResult::Handled
+}
+
+/// Execute `/batch <glob_pattern> <prompt>` — expand the glob, then send the
+/// prompt to the LLM for every matched file in parallel (up to 25 files).
+async fn handle_batch_command(
+    glob_pattern: &str,
+    prompt: &str,
+    session: &mut AgentSession,
+    config: &CliConfig,
+) {
+    // Expand glob
+    let entries: Vec<String> = match glob::glob(glob_pattern) {
+        Ok(paths) => paths
+            .filter_map(|e| e.ok())
+            .filter(|p| p.is_file())
+            .map(|p| p.display().to_string())
+            .collect(),
+        Err(e) => {
+            output::print_error(&format!("Invalid glob pattern: {}", e));
+            return;
+        }
+    };
+
+    if entries.is_empty() {
+        output::print_warn(&format!("No files matched: {}", glob_pattern));
+        return;
+    }
+
+    const MAX_BATCH_FILES: usize = 25;
+    if entries.len() > MAX_BATCH_FILES {
+        output::print_error(&format!(
+            "Too many files ({}). Batch limited to {} files. Use a narrower glob.",
+            entries.len(),
+            MAX_BATCH_FILES,
+        ));
+        return;
+    }
+
+    eprintln!(
+        "{}",
+        format!("Batch: {} files matched, processing...", entries.len())
+            .cyan()
+            .bold()
+    );
+    for f in &entries {
+        eprintln!("  {}", f);
+    }
+
+    // Build a combined prompt that includes all files with the user's instruction
+    let mut file_list = String::new();
+    for f in &entries {
+        file_list.push_str(&format!("- {}\n", f));
+    }
+
+    let batch_prompt = format!(
+        "Apply the following instruction to EACH of these files (process them all):\n\n\
+         Instruction: {}\n\n\
+         Files:\n{}",
+        prompt, file_list,
+    );
+
+    // Send through the normal agent loop so tools (edit_file, etc.) are available
+    let spinner = output::create_spinner("Batch processing...");
+    let md = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
+    let md_cb = std::sync::Arc::clone(&md);
+
+    let result = session
+        .send(
+            config,
+            &batch_prompt,
+            Box::new(move |chunk| {
+                if let Ok(mut renderer) = md_cb.lock() {
+                    output::print_assistant_chunk_formatted(&mut renderer, chunk);
+                }
+            }),
+        )
+        .await;
+
+    spinner.finish_and_clear();
+
+    if let Ok(mut renderer) = md.lock() {
+        output::flush_markdown(&mut renderer);
+    }
+
+    match result {
+        Ok(_) => {
+            output::print_assistant_end();
+        }
+        Err(e) => {
+            output::print_error(&format!("Batch failed: {:#}", e));
+        }
+    }
 }
 
 fn print_help() {
@@ -596,6 +852,10 @@ fn print_help() {
     eprintln!(
         "  {}             Show uncommitted git changes",
         "/diff".bold()
+    );
+    eprintln!(
+        "  {} Batch apply prompt to files",
+        "/batch <glob> <prompt>".bold()
     );
     eprintln!();
     eprintln!("{}", "Configuration:".cyan().bold());
@@ -670,6 +930,40 @@ fn print_help() {
     eprintln!("  {}             Show this help", "/help".bold());
     eprintln!("  {}             Exit", "/exit".bold());
     eprintln!();
+    eprintln!("{}", "Ecosystem & Sync:".cyan().bold());
+    eprintln!(
+        "  {}     Scan for AI tools (Claude, Codex, Cursor, etc.)",
+        "/ecosystem".bold()
+    );
+    eprintln!(
+        "  {}     Import MCP configs from detected tools",
+        "/eco import".bold()
+    );
+    eprintln!(
+        "  {}     Search/list marketplace plugins",
+        "/marketplace".bold()
+    );
+    eprintln!(
+        "  {}  Search marketplace",
+        "/market search <q>".bold()
+    );
+    eprintln!(
+        "  {}             Check sync status of dotfiles",
+        "/sync".bold()
+    );
+    eprintln!(
+        "  {}      Export synced settings as JSON",
+        "/sync export".bold()
+    );
+    eprintln!(
+        "  {}             Show auth status for all providers",
+        "/auth".bold()
+    );
+    eprintln!(
+        "  {}       Re-run first-run setup wizard",
+        "/onboarding".bold()
+    );
+    eprintln!();
     eprintln!("{}", "Agent-to-Agent (A2A):".cyan().bold());
     eprintln!("  {}     List known peer agents", "/a2a discover".bold());
     eprintln!("  {} Delegate task", "/a2a delegate <agent> <task>".bold());
@@ -702,7 +996,7 @@ fn print_help() {
 // Conversation commands
 // ---------------------------------------------------------------------------
 
-fn handle_save(session: &AgentSession) {
+pub fn handle_save(session: &AgentSession) {
     if session.turn_count == 0 {
         output::print_warn("Nothing to save — no messages in session yet.");
         return;
@@ -764,7 +1058,7 @@ fn handle_save(session: &AgentSession) {
     output::print_info(&format!("Session saved (SQLite): {}", json_id));
 }
 
-fn handle_load(arg: &str, session: &mut AgentSession) {
+pub fn handle_load(arg: &str, session: &mut AgentSession) {
     if arg.is_empty() {
         output::print_warn("Usage: /load <id>  (use /history to see IDs)");
         return;
@@ -786,7 +1080,7 @@ fn handle_load(arg: &str, session: &mut AgentSession) {
     }
 }
 
-fn handle_history() {
+pub fn handle_history() {
     // Show SQLite sessions first
     let has_sqlite = match sessions::open_db() {
         Ok(conn) => match sessions::list_sessions(&conn, 20) {
@@ -855,7 +1149,7 @@ fn handle_delete(arg: &str) {
     }
 }
 
-fn handle_export(arg: &str, session: &AgentSession) {
+pub fn handle_export(arg: &str, session: &AgentSession) {
     if session.turn_count == 0 {
         output::print_warn("Nothing to export — no messages in session yet.");
         return;
@@ -1006,7 +1300,7 @@ fn handle_setup(config: &mut CliConfig) {
 // Permissions commands
 // ---------------------------------------------------------------------------
 
-fn handle_permissions(arg: &str) {
+pub fn handle_permissions(arg: &str) {
     match arg {
         "reset" => match crate::permissions::PermissionStore::load() {
             Ok(mut store) => {
@@ -1102,7 +1396,7 @@ fn handle_sessions(arg: &str) {
     }
 }
 
-fn handle_rename(arg: &str) {
+pub fn handle_rename(arg: &str) {
     // Expected format: <id> <new title>
     let parts: Vec<&str> = arg.splitn(2, ' ').collect();
     if parts.len() < 2 || parts[0].is_empty() || parts[1].trim().is_empty() {
@@ -1161,7 +1455,7 @@ fn handle_migrate() {
 // New commands: compact, rewind, branch, diff, memory, init, config
 // ---------------------------------------------------------------------------
 
-fn handle_compact(arg: &str, session: &mut AgentSession) {
+pub fn handle_compact(arg: &str, session: &mut AgentSession) {
     let usage = crate::compaction::context_usage(&session.messages, &session.model);
     let before_tokens = usage.used_tokens;
 
@@ -1189,7 +1483,7 @@ fn handle_compact(arg: &str, session: &mut AgentSession) {
     ));
 }
 
-fn handle_rewind(arg: &str, session: &mut AgentSession) {
+pub fn handle_rewind(arg: &str, session: &mut AgentSession) {
     let count = if arg.is_empty() {
         1usize
     } else {
@@ -1218,7 +1512,7 @@ fn handle_rewind(arg: &str, session: &mut AgentSession) {
     }
 }
 
-fn handle_branch(arg: &str, session: &AgentSession) {
+pub fn handle_branch(arg: &str, session: &AgentSession) {
     // For now, branch saves current state to a new SQLite session
     if session.turn_count == 0 {
         output::print_warn("Nothing to branch — no messages yet.");
@@ -1318,7 +1612,7 @@ fn handle_diff() {
     }
 }
 
-fn handle_memory(arg: &str) {
+pub fn handle_memory(arg: &str) {
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let mgr = MemoryManager::new(&cwd);
 
@@ -1475,7 +1769,7 @@ fn parse_tier_and_text(input: &str) -> (MemoryTier, &str) {
     }
 }
 
-fn handle_init_project() {
+pub fn handle_init_project() {
     let claude_md = std::path::Path::new("CLAUDE.md");
     if claude_md.exists() {
         output::print_info("CLAUDE.md already exists in current directory.");

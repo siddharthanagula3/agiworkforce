@@ -2,25 +2,33 @@ use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
+use base64::{engine::general_purpose, Engine as _};
 use chrono::{DateTime, Duration, Utc};
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use super::secret_manager::SecretManager;
 
+type HmacSha256 = Hmac<Sha256>;
+
 /// Constant-time string comparison to prevent timing side-channels on token validation.
+/// Pads the shorter input to the longer length so that the comparison time does not
+/// leak the length of either operand.
 fn constant_time_eq(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.as_bytes()
-        .iter()
-        .zip(b.as_bytes())
-        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-        == 0
+    let max_len = std::cmp::max(a.len(), b.len());
+    let mut a_padded = a.as_bytes().to_vec();
+    let mut b_padded = b.as_bytes().to_vec();
+    a_padded.resize(max_len, 0);
+    b_padded.resize(max_len, 0);
+    // Constant-time compare including original length check
+    let len_eq = a.len() == b.len();
+    let content_eq: bool = a_padded.ct_eq(&b_padded).into();
+    len_eq && content_eq
 }
 
 const ACCESS_TOKEN_DURATION: i64 = 60;
@@ -31,7 +39,7 @@ const LOCKOUT_DURATION: i64 = 30;
 const INACTIVITY_TIMEOUT: i64 = 15;
 
 // SECSYS-003 fix: Rate limiting constants for token validation
-const TOKEN_VALIDATION_MAX_ATTEMPTS: u32 = 100; // Max attempts per minute
+const TOKEN_VALIDATION_MAX_ATTEMPTS: u32 = 20; // Max attempts per minute
 const TOKEN_VALIDATION_WINDOW_SECS: i64 = 60; // 1 minute window
 const VALIDATION_ATTEMPTS_MAX_ENTRIES: usize = 10_000; // Cap to prevent unbounded memory growth
 
@@ -76,6 +84,9 @@ pub struct User {
 
 impl User {
     pub fn new(email: String, password: &str, role: UserRole) -> Result<Self, String> {
+        if password.len() < 8 {
+            return Err("Password must be at least 8 characters".to_string());
+        }
         let password_hash = hash_password(password)?;
 
         Ok(Self {
@@ -232,11 +243,27 @@ impl AuthManager {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     fn get_jwt_secret(&self) -> Result<String, String> {
         self.secret_manager
             .get_or_create_jwt_secret()
             .map_err(|e| format!("Failed to retrieve JWT secret: {}", e))
+    }
+
+    /// Compute the HMAC-SHA256 signature for a JWT's `header.payload` using the
+    /// stored JWT secret and return the complete signed token (`header.payload.signature`).
+    pub fn sign_jwt(&self, header_b64: &str, payload_b64: &str) -> Result<String, String> {
+        let secret = self.get_jwt_secret()?;
+        sign_jwt_with_secret(header_b64, payload_b64, &secret)
+    }
+
+    /// Verify the HMAC-SHA256 signature of a JWT token using the stored JWT secret.
+    ///
+    /// Splits the token into `header.payload` and `signature`, recomputes the
+    /// HMAC, and performs a constant-time comparison via the `hmac` crate.
+    /// Returns `Ok(())` on success or an error string on failure.
+    pub fn verify_jwt_signature(&self, token: &str) -> Result<(), String> {
+        let secret = self.get_jwt_secret()?;
+        verify_jwt_signature_with_secret(token, &secret)
     }
 
     pub fn rotate_jwt_secret(&self) -> Result<(), String> {
@@ -251,14 +278,13 @@ impl AuthManager {
     }
 
     pub fn register(&self, email: String, password: &str, role: UserRole) -> Result<User, String> {
-        let users = self.users.read();
+        // FIX R-17: Use a single write lock for check-and-insert to prevent TOCTOU race.
+        // Previously: read lock -> check -> drop -> write lock -> insert (race window between locks).
+        let user = User::new(email.clone(), password, role)?;
+        let mut users = self.users.write();
         if users.values().any(|u| u.email == email) {
             return Err("Email already registered".to_string());
         }
-        drop(users);
-
-        let user = User::new(email, password, role)?;
-        let mut users = self.users.write();
         users.insert(user.id.clone(), user.clone());
 
         Ok(user)
@@ -278,6 +304,11 @@ impl AuthManager {
                     locked_until.format("%Y-%m-%d %H:%M:%S")
                 ));
             }
+            // FIX R-12: Lockout has expired — reset the failed attempt counter and lock
+            // so the user gets a fresh set of attempts rather than being re-locked on the
+            // very next failure.
+            user.failed_login_attempts = 0;
+            user.locked_until = None;
         }
 
         if !user.verify_password(password)? {
@@ -425,6 +456,10 @@ impl AuthManager {
             return Err("Invalid current password".to_string());
         }
 
+        if new_password.len() < 8 {
+            return Err("Password must be at least 8 characters".to_string());
+        }
+
         user.password_hash = hash_password(new_password)?;
         Ok(())
     }
@@ -440,6 +475,47 @@ impl AuthManager {
 
 fn validation_rate_key(access_token: &str) -> String {
     hex::encode(Sha256::digest(access_token.as_bytes()))
+}
+
+/// Sign a JWT (`header.payload`) with the given HMAC-SHA256 secret and return
+/// the full `header.payload.signature` token.
+pub fn sign_jwt_with_secret(
+    header_b64: &str,
+    payload_b64: &str,
+    secret: &str,
+) -> Result<String, String> {
+    let signing_input = format!("{}.{}", header_b64, payload_b64);
+
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|e| format!("HMAC key error: {}", e))?;
+    mac.update(signing_input.as_bytes());
+    let signature = mac.finalize().into_bytes();
+
+    let sig_b64 = general_purpose::URL_SAFE_NO_PAD.encode(signature);
+    Ok(format!("{}.{}", signing_input, sig_b64))
+}
+
+/// Verify the HMAC-SHA256 signature of a JWT using the provided secret.
+///
+/// The token must have the form `header.payload.signature`. The signature is
+/// recomputed over `header.payload` and compared in constant time.
+pub fn verify_jwt_signature_with_secret(token: &str, secret: &str) -> Result<(), String> {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return Err("Invalid JWT: expected 3 dot-separated parts".to_string());
+    }
+
+    let signing_input = format!("{}.{}", parts[0], parts[1]);
+    let provided_sig = general_purpose::URL_SAFE_NO_PAD
+        .decode(parts[2])
+        .map_err(|e| format!("Invalid JWT signature encoding: {}", e))?;
+
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|e| format!("HMAC key error: {}", e))?;
+    mac.update(signing_input.as_bytes());
+
+    mac.verify_slice(&provided_sig)
+        .map_err(|_| "Invalid JWT: signature verification failed".to_string())
 }
 
 fn hash_password(password: &str) -> Result<String, String> {

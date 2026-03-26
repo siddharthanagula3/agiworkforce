@@ -13,7 +13,7 @@
  */
 
 import * as vscode from 'vscode';
-import { streamChatCompletion, AgiWorkforceApiError, type ChatMessage } from '../utils/api';
+import { streamChatCompletion, AgiWorkforceApiError, type LlmChatMessage } from '../utils/api';
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
 import { getContextBuilder } from '../services/contextBuilder';
@@ -184,7 +184,7 @@ function isExecutionConfirmation(text: string): boolean {
  * when the AGI Workforce API is unavailable.
  */
 async function streamVscodeLmFallback(
-  messages: ChatMessage[],
+  messages: LlmChatMessage[],
   stream: vscode.ChatResponseStream,
   token: vscode.CancellationToken,
 ): Promise<void> {
@@ -270,8 +270,8 @@ function historyToMessages(
   history:
     | readonly vscode.ChatRequestTurn[]
     | readonly (vscode.ChatRequestTurn | vscode.ChatResponseTurn)[],
-): ChatMessage[] {
-  const messages: ChatMessage[] = [];
+): LlmChatMessage[] {
+  const messages: LlmChatMessage[] = [];
 
   for (const turn of history) {
     if (turn instanceof vscode.ChatRequestTurn) {
@@ -334,7 +334,7 @@ export function createChatHandler(
     const userMessage = buildUserMessage(request, editorCtx);
 
     // Build message array: system + history + current user turn
-    const messages: ChatMessage[] = [
+    const messages: LlmChatMessage[] = [
       { role: 'system', content: systemPrompt },
       ...historyToMessages(context.history),
       { role: 'user', content: userMessage },

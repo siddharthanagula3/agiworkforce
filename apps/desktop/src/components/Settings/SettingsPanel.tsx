@@ -1,5 +1,13 @@
-import { invoke, isTauri, isCloudWeb } from '@/lib/tauri-mock';
+import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
 import { analyticsDeleteAllData } from '@/api/analytics';
+import {
+  chat,
+  cache,
+  settings,
+  notifications,
+  onboarding,
+  models as modelsApi,
+} from '@agiworkforce/api';
 import { McpClient } from '@/api/mcp';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { toast } from 'sonner';
@@ -42,6 +50,7 @@ import { errorTracking } from '../../services/errorTracking';
 import type { NotificationSettings } from '../../hooks/useNotifications';
 import { ResourceMonitor } from '../ResourceMonitor';
 import { Button } from '../ui/Button';
+import { SectionErrorBoundary } from '../ui/SectionErrorBoundary';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
@@ -84,6 +93,7 @@ import { useSimpleModeStore } from '../../stores/ui';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { cn } from '@/lib/utils';
 import { useAppModeStore, selectMode, selectIsCloud } from '../../stores/appModeStore';
+import { useAuthStore } from '../../stores/auth';
 
 // ── Canonical tab IDs (10 tabs displayed in nav) ──────────────────────────────
 type CanonicalTab =
@@ -282,9 +292,9 @@ function DataPrivacySection() {
     let mounted = true;
     const loadPreference = async () => {
       try {
-        const result = await invoke<{ value: string } | null>('get_user_preference', {
-          key: 'crash_reporting_enabled',
-        });
+        const result = (await onboarding.getUserPreference('crash_reporting_enabled')) as {
+          value: string;
+        } | null;
         if (result && mounted) {
           const enabled = result.value === 'true';
           setCrashReportingEnabled(enabled);
@@ -314,9 +324,9 @@ function DataPrivacySection() {
 
     try {
       const results = await Promise.allSettled([
-        invoke('clear_local_database'),
-        invoke('cache_clear_all'),
-        invoke('settings_v2_clear_cache'),
+        chat.clearLocalDatabase(),
+        cache.cacheClearAll(),
+        settings.settingsV2ClearCache(),
         analyticsDeleteAllData(),
       ]);
 
@@ -341,13 +351,13 @@ function DataPrivacySection() {
   const handleToggleCrashReporting = useCallback(async (enabled: boolean) => {
     setSavingCrashReporting(true);
     try {
-      await invoke('set_user_preference', {
-        key: 'crash_reporting_enabled',
-        value: enabled.toString(),
-        category: 'privacy',
-        dataType: 'boolean',
-        description: 'Enable automatic crash reporting via Sentry',
-      });
+      await onboarding.setUserPreference(
+        'crash_reporting_enabled',
+        enabled.toString(),
+        'privacy',
+        'boolean',
+        'Enable automatic crash reporting via Sentry',
+      );
       errorTracking.updateConfig({ enabled });
       setCrashReportingEnabled(enabled);
     } catch (err) {
@@ -373,7 +383,7 @@ function DataPrivacySection() {
     setExportSuccess(false);
 
     try {
-      const exportData = await invoke<string>('export_user_data');
+      const exportData = (await onboarding.exportUserData()) as string;
 
       // Web fallback: use blob download
       if (!isTauri) {
@@ -383,7 +393,7 @@ function DataPrivacySection() {
         a.href = url;
         a.download = `agi-workforce-export-${new Date().toISOString().split('T')[0]}.json`;
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
         setExportSuccess(true);
         if (exportSuccessTimerRef.current) window.clearTimeout(exportSuccessTimerRef.current);
         exportSuccessTimerRef.current = window.setTimeout(() => setExportSuccess(false), 5000);
@@ -614,9 +624,11 @@ function AppModeSection() {
   const mode = useAppModeStore(selectMode);
   const isCloud = useAppModeStore(selectIsCloud);
 
-  // Detect whether the user is signed in (planTier > free implies cloud auth)
+  // Use real auth state instead of planTier heuristic — avoids showing
+  // "Sign in" when auth is still loading from Supabase.
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const sessionValidated = useAuthStore((state) => state.sessionValidated);
   const planTier = useAppModeStore((state) => state.planTier);
-  const isAuthenticated = planTier !== 'free';
 
   return (
     <div>
@@ -658,8 +670,14 @@ function AppModeSection() {
         </button>
       </div>
 
-      {/* Cloud-specific sub-panel */}
-      {isCloud && !isAuthenticated && (
+      {/* Cloud-specific sub-panel — only show "Sign in" after auth has finished loading */}
+      {isCloud && !sessionValidated && (
+        <div className="rounded-lg border border-zinc-500/20 bg-zinc-500/5 px-4 py-3 flex items-center gap-3">
+          <Loader2 className="h-4 w-4 text-zinc-400 shrink-0 animate-spin" />
+          <p className="text-sm text-zinc-400 flex-1">Checking authentication...</p>
+        </div>
+      )}
+      {isCloud && sessionValidated && !isAuthenticated && (
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
           <p className="text-sm text-blue-400 flex-1">
@@ -782,7 +800,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         a.href = url;
         a.download = `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`;
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
         return;
       }
 
@@ -827,7 +845,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     setNotificationLoading(true);
     setNotificationError(null);
     try {
-      const settings = await invoke<NotificationSettings>('notification_get_settings');
+      const settings =
+        (await notifications.notificationGetSettings()) as unknown as NotificationSettings;
       setNotificationSettings(settings);
       return settings;
     } catch (err) {
@@ -854,7 +873,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     try {
       await checkProviderStatus('ollama');
       const models =
-        (await invoke<string[]>('llm_get_ollama_models').catch(() => [] as string[])) || [];
+        ((await modelsApi.llmGetOllamaModels().catch(() => [] as string[])) as string[]) || [];
       setOllamaModels(models);
       setSelectedOllamaModel((currentModel) => {
         const persistedModel = useSettingsStore.getState().llmConfig.defaultModels?.ollama;
@@ -910,14 +929,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       hasInitializedOpenStateRef.current = false;
       baselineSnapshotRef.current = null;
     }
-  }, [
-    open,
-    buildCurrentSnapshot,
-    loadNotificationSettings,
-    loadSettings,
-    notificationSettings,
-    refreshOllamaState,
-  ]);
+  }, [open, buildCurrentSnapshot, loadNotificationSettings, loadSettings, refreshOllamaState]);
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<CanonicalTab>(() => {
@@ -1033,7 +1045,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     try {
       await saveSettings();
       if (notificationSettings) {
-        await invoke('notification_set_settings', { settings: notificationSettings });
+        await notifications.notificationSetSettings(
+          notificationSettings as unknown as Parameters<
+            typeof notifications.notificationSetSettings
+          >[0],
+        );
       }
       baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
       setHasUnsavedChanges(false);
@@ -1708,94 +1724,98 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="max-w-5xl w-full p-0 overflow-hidden bg-background">
-        <div className="flex h-[85vh]">
-          {/* Vertical sidebar navigation */}
-          <div className="w-52 border-r border-border bg-muted py-4 px-2 space-y-1 shrink-0 overflow-y-auto">
-            <DialogHeader className="px-3 pb-4">
-              <DialogTitle className="text-lg font-bold">Settings</DialogTitle>
-              <DialogDescription className="text-xs">Configure your preferences</DialogDescription>
-            </DialogHeader>
+    <SectionErrorBoundary sectionName="Settings Panel">
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+        <DialogContent className="max-w-5xl w-full p-0 overflow-hidden bg-background">
+          <div className="flex h-[85vh]">
+            {/* Vertical sidebar navigation */}
+            <div className="w-52 border-r border-border bg-muted py-4 px-2 space-y-1 shrink-0 overflow-y-auto">
+              <DialogHeader className="px-3 pb-4">
+                <DialogTitle className="text-lg font-bold">Settings</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Configure your preferences
+                </DialogDescription>
+              </DialogHeader>
 
-            {visibleNav.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setActiveTab(item.key)}
-                disabled={isBusy}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
-                  activeTab === item.key
-                    ? 'bg-background text-foreground font-medium'
-                    : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
-                } ${isBusy ? 'opacity-60 cursor-not-allowed' : ''}`}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                <span className="truncate flex-1 text-left">{item.label}</span>
-                {item.key === 'connectors' && connectedConnectorCount > 0 && (
-                  <span className="ml-auto shrink-0 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-500/15 px-1.5 text-[10px] font-semibold text-green-500">
-                    {connectedConnectorCount}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Content area */}
-          <div className="flex-1 flex flex-col min-w-0">
-            <div
-              className={`flex-1 overflow-y-auto px-6 py-6 ${
-                isBusy ? 'pointer-events-none opacity-80' : ''
-              }`}
-            >
-              {error && (
-                <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <div className="space-y-6">{renderTabContent()}</div>
-              )}
-            </div>
-
-            {/* Footer buttons */}
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border shrink-0">
-              {requiresDeferredSave ? (
-                <>
-                  {saveError && (
-                    <div className="mr-auto rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                      {saveError}
-                    </div>
+              {visibleNav.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setActiveTab(item.key)}
+                  disabled={isBusy}
+                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                    activeTab === item.key
+                      ? 'bg-background text-foreground font-medium'
+                      : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                  } ${isBusy ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate flex-1 text-left">{item.label}</span>
+                  {item.key === 'connectors' && connectedConnectorCount > 0 && (
+                    <span className="ml-auto shrink-0 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-500/15 px-1.5 text-[10px] font-semibold text-green-500">
+                      {connectedConnectorCount}
+                    </span>
                   )}
-                  <Button variant="outline" onClick={() => void handleCancel()} disabled={isBusy}>
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => void handleSaveSettings()}
-                    disabled={isBusy || !hasUnsavedChanges}
-                  >
-                    {loading || isSaving ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <p className="mr-auto text-xs text-muted-foreground">
-                    Changes in this section apply immediately.
-                  </p>
-                  <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
-                    Close
-                  </Button>
-                </>
-              )}
+                </button>
+              ))}
+            </div>
+
+            {/* Content area */}
+            <div className="flex-1 flex flex-col min-w-0">
+              <div
+                className={`flex-1 overflow-y-auto px-6 py-6 ${
+                  isBusy ? 'pointer-events-none opacity-80' : ''
+                }`}
+              >
+                {error && (
+                  <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="space-y-6">{renderTabContent()}</div>
+                )}
+              </div>
+
+              {/* Footer buttons */}
+              <div className="flex justify-end gap-3 px-6 py-4 border-t border-border shrink-0">
+                {requiresDeferredSave ? (
+                  <>
+                    {saveError && (
+                      <div className="mr-auto rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                        {saveError}
+                      </div>
+                    )}
+                    <Button variant="outline" onClick={() => void handleCancel()} disabled={isBusy}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => void handleSaveSettings()}
+                      disabled={isBusy || !hasUnsavedChanges}
+                    >
+                      {loading || isSaving ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="mr-auto text-xs text-muted-foreground">
+                      Changes in this section apply immediately.
+                    </p>
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
+                      Close
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </SectionErrorBoundary>
   );
 }

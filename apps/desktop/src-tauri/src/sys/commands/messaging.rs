@@ -84,6 +84,8 @@ pub async fn connect_slack(
     let connection_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp();
 
+    // TODO: SECURITY — Credentials should be encrypted via SecretManager before storage.
+    // Currently stored as plaintext JSON. See FIX-R10.
     let credentials_json = serde_json::json!({
         "bot_token": request.bot_token,
         "app_token": request.app_token,
@@ -135,6 +137,8 @@ pub async fn connect_whatsapp(
     let connection_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp();
 
+    // TODO: SECURITY — Credentials should be encrypted via SecretManager before storage.
+    // Currently stored as plaintext JSON. See FIX-R10.
     let credentials_json = serde_json::json!({
         "phone_number_id": request.phone_number_id,
         "access_token": request.access_token,
@@ -192,6 +196,8 @@ pub async fn connect_teams(
     let connection_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp();
 
+    // TODO: SECURITY — Credentials should be encrypted via SecretManager before storage.
+    // Currently stored as plaintext JSON. See FIX-R10.
     let credentials_json = serde_json::json!({
         "tenant_id": request.tenant_id,
         "client_id": request.client_id,
@@ -392,7 +398,7 @@ pub async fn get_messaging_history(
         .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
     let messages = stmt
-        .query_map(params![connection_id, channel_id, limit], |row| {
+        .query_map(params![connection_id, channel_id, limit as i64], |row| {
             let platform_str: String = row.get(8).unwrap_or_else(|_| String::from("slack"));
             let platform = match platform_str.to_lowercase().as_str() {
                 "discord" => crate::features::messaging::Platform::Discord,
@@ -540,6 +546,10 @@ pub async fn messaging_connect_signal(
     state: State<'_, MessagingState>,
     config: SignalConfig,
 ) -> Result<PlatformStatus, String> {
+    // Validate all user-supplied paths before constructing the client.
+    // This prevents command injection via signal_cli_path and path traversal via config_path.
+    config.validate().map_err(|e| format!("Invalid Signal config: {}", e))?;
+
     let mut client = SignalClient::new(config);
 
     match client.register().await {

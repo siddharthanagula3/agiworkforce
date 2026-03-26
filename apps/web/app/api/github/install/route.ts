@@ -10,12 +10,24 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const installationId = searchParams.get('installation_id');
   const accountLogin = searchParams.get('account_login') ?? '';
   const accountType = searchParams.get('account_type') ?? 'User';
+  const state = searchParams.get('state');
 
-  if (!installationId) {
+  if (!installationId || Number.isNaN(Number(installationId)) || Number(installationId) <= 0) {
     return NextResponse.redirect(new URL('/chat?error=github_install_failed', request.url));
   }
 
   const cookieStore = await cookies();
+
+  // Validate state parameter to prevent installation fixation attacks
+  const storedState = cookieStore.get('github_install_state')?.value;
+  if (!state || !storedState || state !== storedState) {
+    logger.warn(
+      { hasState: !!state, hasStoredState: !!storedState },
+      'GitHub install callback: state mismatch',
+    );
+    return NextResponse.redirect(new URL('/chat?error=github_install_invalid_state', request.url));
+  }
+
   const supabase = createServerClient(
     process.env['NEXT_PUBLIC_SUPABASE_URL'] ?? '',
     process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? '',
@@ -25,10 +37,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch {
+            /* Route Handler context */
+          }
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: '', ...options });
+          try {
+            cookieStore.set({ name, value: '', ...options });
+          } catch {
+            /* Route Handler context */
+          }
         },
       },
     },
@@ -61,6 +81,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       new URL('/chat/integrations/github?error=save_failed', request.url),
     );
   }
+
+  // Clear the state cookie after successful use
+  cookieStore.set({
+    name: 'github_install_state',
+    value: '',
+    maxAge: 0,
+    path: '/',
+  });
 
   return NextResponse.redirect(new URL('/chat/integrations/github?connected=true', request.url));
 }

@@ -23,7 +23,6 @@ async function handleSyncSubscription(request: NextRequest): Promise<Response> {
 
   try {
     const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-    const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
     let userId: string | null = null;
     let email: string | null = null;
@@ -32,9 +31,8 @@ async function handleSyncSubscription(request: NextRequest): Promise<Response> {
     const authHeader = request.headers.get('authorization');
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false, flowType: 'pkce' },
-      });
+      // Use service role key for server-side JWT verification
+      const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
       const { data, error } = await supabase.auth.getUser(token);
       if (error || !data.user) {

@@ -234,6 +234,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null);
   const [compactToolExpanded, setCompactToolExpanded] = useState(false);
   const [compactToolCopied, setCompactToolCopied] = useState(false);
+  const compactToolCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Store hooks
   const getSuggestedSidecarMode = useUnifiedChatStore((state) => state.getSuggestedSidecarMode);
@@ -398,6 +399,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const isResearchTask = message.metadata?.type === 'deep-research-task';
   const researchTask = researchTaskId ? researchTasks[researchTaskId as string] : null;
 
+  useEffect(() => {
+    return () => {
+      if (compactToolCopiedTimerRef.current) clearTimeout(compactToolCopiedTimerRef.current);
+    };
+  }, []);
+
   // Reset compact tool display state when message changes
   useEffect(() => {
     setCompactToolExpanded(false);
@@ -409,7 +416,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     try {
       await navigator.clipboard.writeText(text);
       setCompactToolCopied(true);
-      window.setTimeout(() => setCompactToolCopied(false), 1500);
+      if (compactToolCopiedTimerRef.current) clearTimeout(compactToolCopiedTimerRef.current);
+      compactToolCopiedTimerRef.current = setTimeout(() => setCompactToolCopied(false), 1500);
     } catch {
       setCompactToolCopied(false);
     }

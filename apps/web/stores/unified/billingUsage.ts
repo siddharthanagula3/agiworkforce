@@ -158,16 +158,20 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
   },
 
   _addAlert: (alert) => {
-    set((state) => ({
-      budgetAlerts: [
+    set((state) => {
+      const updated = [
         ...state.budgetAlerts,
         {
           ...alert,
           id: crypto.randomUUID(),
           timestamp: Date.now(),
         },
-      ],
-    }));
+      ];
+      // Cap budget alerts to prevent unbounded growth
+      return {
+        budgetAlerts: updated.length > 50 ? updated.slice(-50) : updated,
+      };
+    });
   },
 
   _clearAlerts: () => {

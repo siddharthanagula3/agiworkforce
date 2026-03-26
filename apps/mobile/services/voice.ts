@@ -104,6 +104,7 @@ export async function startRecording(onMetering?: MeteringCallback): Promise<voi
     await recording.startAsync();
   } catch (error) {
     // Clean up the recording object if prepare or start fails
+    clearMeteringInterval();
     try {
       await recording.stopAndUnloadAsync();
     } catch {
@@ -271,8 +272,7 @@ export async function transcribeWithDeepgram(uri: string, apiKey: string): Promi
     });
 
     if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Deepgram error ${response.status}: ${body}`);
+      throw new Error(`Deepgram transcription failed (HTTP ${response.status})`);
     }
 
     const data = (await response.json()) as {

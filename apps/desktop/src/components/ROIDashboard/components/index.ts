@@ -7,3 +7,7 @@ export { ComparisonSection } from './ComparisonSection';
 export { RecentActivityFeed } from './RecentActivityFeed';
 export { MilestoneToast } from './MilestoneToast';
 export { ExportReportModal } from './ExportReportModal';
+
+// Re-export Outcomes components for unified access
+export { OutcomesDashboard } from '../../Outcomes/OutcomesDashboard';
+export { GoalOutcomes } from '../../Outcomes/GoalOutcomes';

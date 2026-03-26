@@ -9,31 +9,7 @@
  */
 
 import * as vscode from 'vscode';
-
-// ─── Model context limits (tokens) ──────────────────────────────────────────
-
-const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  'claude-opus-4.6': 1_000_000,
-  'claude-sonnet-4.6': 200_000,
-  'claude-haiku-4.5': 200_000,
-  'gpt-5-pro': 256_000,
-  'gpt-5.4': 128_000,
-  'gpt-5.4-nano': 128_000,
-  'gemini-3-pro-preview': 2_000_000,
-  'gemini-3-flash-preview': 1_000_000,
-  'deepseek-r1': 128_000,
-  'deepseek-chat': 128_000,
-  'sonar-pro': 128_000,
-  'grok-4': 128_000,
-  'auto-balanced': 200_000,
-  'auto-economy': 128_000,
-  'auto-premium': 1_000_000,
-};
-
-const DEFAULT_CONTEXT_LIMIT = 128_000;
-
-/** Chars per token heuristic (same as tokenCounter.ts). */
-const CHARS_PER_TOKEN = 4;
+import { MODEL_CONTEXT_LIMITS, DEFAULT_CONTEXT_LIMIT, CHARS_PER_TOKEN } from './modelConstants';
 
 // ─── Budget modes ────────────────────────────────────────────────────────────
 

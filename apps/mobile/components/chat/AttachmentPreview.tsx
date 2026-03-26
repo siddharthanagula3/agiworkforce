@@ -53,7 +53,7 @@ function AttachmentThumbnail({
   onRemove,
 }: {
   attachment: Attachment;
-  onRemove: () => void;
+  onRemove: (id: string) => void;
 }) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
@@ -61,7 +61,7 @@ function AttachmentThumbnail({
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    onRemove();
+    onRemove(attachment.id);
   };
 
   const imageAttachment = isImage(attachment.mimeType);
@@ -146,11 +146,7 @@ export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewPr
           contentContainerStyle={{ paddingRight: 8 }}
         >
           {attachments.map((attachment) => (
-            <AttachmentThumbnail
-              key={attachment.id}
-              attachment={attachment}
-              onRemove={() => onRemove(attachment.id)}
-            />
+            <AttachmentThumbnail key={attachment.id} attachment={attachment} onRemove={onRemove} />
           ))}
         </ScrollView>
 

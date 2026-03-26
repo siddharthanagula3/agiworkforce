@@ -595,7 +595,7 @@ mod tests {
             1.0, -1.0, 0.1, -0.2, 0.0, 2.0, -3.0, 4.0, 0.3, -0.4, 0.5, -0.6, 0.7, -0.8, 0.9, -1.0,
         ]);
         assert_eq!(bucket.len(), ANN_SIGNATURE_BITS);
-        assert_eq!(bucket, "1010101010101010");
+        assert_eq!(bucket, "1010110110101010");
     }
 
     #[test]

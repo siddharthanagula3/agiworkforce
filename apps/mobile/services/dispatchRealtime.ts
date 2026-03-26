@@ -80,7 +80,13 @@ export async function subscribeToDispatch(): Promise<() => void> {
         useDispatchStore.getState().addMessage(msg);
       },
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.error('[DispatchRealtime] messages channel error — will auto-retry');
+      } else if (status === 'TIMED_OUT') {
+        console.error('[DispatchRealtime] messages channel subscription timed out');
+      }
+    });
 
   // -----------------------------------------------------------------------
   // 2. dispatch_agent_state UPDATE — live agent + approval state
@@ -110,7 +116,13 @@ export async function subscribeToDispatch(): Promise<() => void> {
         }
       },
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.error('[DispatchRealtime] agent-state channel error — will auto-retry');
+      } else if (status === 'TIMED_OUT') {
+        console.error('[DispatchRealtime] agent-state channel subscription timed out');
+      }
+    });
 
   // -----------------------------------------------------------------------
   // 3. surface_heartbeats UPDATE — desktop liveness
@@ -136,7 +148,13 @@ export async function subscribeToDispatch(): Promise<() => void> {
         }
       },
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.error('[DispatchRealtime] heartbeat channel error — will auto-retry');
+      } else if (status === 'TIMED_OUT') {
+        console.error('[DispatchRealtime] heartbeat channel subscription timed out');
+      }
+    });
 
   return () => {
     unsubscribeFromDispatch();

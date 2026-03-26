@@ -124,8 +124,8 @@ export const useSettingsStore = create<SettingsState>()(
       setFontPreference: (pref) => set({ fontPreference: pref }),
       setBiometricLockEnabled: (enabled) => set({ biometricLockEnabled: enabled }),
       setSelectedVoiceId: (voiceId) => set({ selectedVoiceId: voiceId }),
-      setSpeechRate: (rate) => set({ speechRate: rate }),
-      setSpeechPitch: (pitch) => set({ speechPitch: pitch }),
+      setSpeechRate: (rate) => set({ speechRate: Math.min(Math.max(rate, 0.5), 2.0) }),
+      setSpeechPitch: (pitch) => set({ speechPitch: Math.min(Math.max(pitch, 0.5), 2.0) }),
       setSelectedPresetId: (id) => set({ selectedPresetId: id }),
       setTtsProvider: (provider) => set({ ttsProvider: provider }),
       setAutoListenEnabled: (enabled) => set({ autoListenEnabled: enabled }),
@@ -137,6 +137,9 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: 'settings-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[settingsStore] Hydration failed:', error);
+      },
     },
   ),
 );

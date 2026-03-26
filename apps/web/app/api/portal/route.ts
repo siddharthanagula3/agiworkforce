@@ -9,6 +9,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 
 const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
 
@@ -20,7 +21,7 @@ if (!STRIPE_SECRET_KEY) {
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: '2026-02-25.clover' as Stripe.LatestApiVersion,
+      apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
     })
   : null;
 
@@ -156,6 +157,7 @@ async function handlePortal(request: NextRequest) {
         // All users should have stripe_customer_id stored in profiles table.
         // This is safer for portal access than payment processing, but still risky
         // because email addresses can be changed or associated with multiple accounts.
+        // TODO(2026-Q3): Remove email fallback entirely. Track via DEPRECATION_PORTAL_EMAIL_FALLBACK metric.
         if (!user.email) {
           throw createError.validation('User has no email address and no customer_id stored');
         }
@@ -211,6 +213,24 @@ async function handlePortal(request: NextRequest) {
           );
         } else {
           customerId = customers.data[0]?.id ?? null;
+        }
+
+        // Verify customer ownership via metadata if available
+        if (customerId) {
+          const matchedCustomer = customers.data.find((c) => c.id === customerId);
+          if (
+            matchedCustomer?.metadata?.['supabase_user_id'] &&
+            matchedCustomer.metadata['supabase_user_id'] !== user.id
+          ) {
+            logger.error(
+              { userId: user.id, customerId: matchedCustomer.id },
+              'Stripe customer belongs to different user — email fallback blocked',
+            );
+            return NextResponse.json(
+              { error: 'Customer account mismatch. Please contact support.' },
+              { status: 403 },
+            );
+          }
         }
 
         // CRITICAL: Store customer_id for future lookups

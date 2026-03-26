@@ -131,11 +131,11 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
             Event::End(TagEnd::Item) => {
                 flush_line(&mut lines, &mut current_spans);
             }
-            Event::Start(Tag::BlockQuote) => {
+            Event::Start(Tag::BlockQuote(_)) => {
                 flush_line(&mut lines, &mut current_spans);
                 in_blockquote = true;
             }
-            Event::End(TagEnd::BlockQuote) => {
+            Event::End(TagEnd::BlockQuote(_)) => {
                 in_blockquote = false;
             }
             Event::Start(Tag::Paragraph) => {

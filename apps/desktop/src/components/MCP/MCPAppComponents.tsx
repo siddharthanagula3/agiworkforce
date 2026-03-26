@@ -22,6 +22,8 @@ import type { McpAppDefinition } from './MCPAppRegistry';
 
 interface ChartConfig {
   chartType?: 'bar' | 'line' | 'pie';
+  width?: number;
+  height?: number;
   labels?: string[];
   datasets?: Array<{
     label: string;
@@ -113,7 +115,9 @@ function buildIframeScript(): string {
     '    var cfg = Object.assign({ chartType: "bar", labels: [], datasets: [] }, config);',
     '    var labels = (data && data.labels) ? data.labels : (cfg.labels || []);',
     '    var datasets = (data && data.datasets) ? data.datasets : (cfg.datasets || []);',
-    '    var W = 400, H = 200, padL = 30, padB = 24, padR = 10, padT = 16;',
+    '    var W = Number.isFinite(cfg.width) ? cfg.width : 400;',
+    '    var H = Number.isFinite(cfg.height) ? cfg.height : 200;',
+    '    var padL = 30, padB = 24, padR = 10, padT = 16;',
     '    var drawW = W - padL - padR;',
     '    var drawH = H - padT - padB;',
     '    var palette = ["#6366f1","#22c55e","#f59e0b","#ef4444","#14b8a6","#a855f7"];',
@@ -148,7 +152,7 @@ function buildIframeScript(): string {
     '    var lines = "";',
     '',
     '    datasets.forEach(function(ds,di){',
-    '      var col = ds.color || palette[di%palette.length];',
+    '      var col = esc(ds.color || palette[di%palette.length]);',
     '      var pts = [];',
     '      (ds.data||[]).forEach(function(v,i){',
     '        var x = padL + i*barW + barW/2;',

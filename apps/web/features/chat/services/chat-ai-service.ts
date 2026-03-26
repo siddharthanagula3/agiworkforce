@@ -95,35 +95,82 @@ async function getAuthToken(): Promise<string> {
 }
 
 /**
- * Parse an SSE line and extract content delta.
+ * Parsed result from a single SSE line.
+ * Besides plain text content, the API route may emit extended fields
+ * for server-managed tool execution (web search status, search results,
+ * citations) or thinking blocks.
+ */
+interface SSEExtractResult {
+  content: string | null;
+  /** Server-managed tool status (e.g., web_search "searching" indicator) */
+  toolStatus?: { type: string; name: string; status: string };
+  /** Web search result block from Anthropic web_search server tool */
+  searchResults?: unknown;
+  /** Stream finish reason (e.g., "stop", "tool_calls") */
+  finishReason?: string;
+}
+
+/**
+ * Parse an SSE line and extract content delta plus extended metadata.
  * Handles OpenAI-compatible format: data: {"choices":[{"delta":{"content":"..."}}]}
  */
-function extractContentFromSSE(line: string): string | null {
-  if (!line.startsWith('data: ')) return null;
+function extractContentFromSSE(line: string): SSEExtractResult {
+  const empty: SSEExtractResult = { content: null };
+  if (!line.startsWith('data: ')) return empty;
   const jsonStr = line.slice(6).trim();
-  if (jsonStr === '[DONE]') return null;
+  if (jsonStr === '[DONE]') return empty;
 
   try {
     const event = JSON.parse(jsonStr) as {
-      choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }>;
+      choices?: Array<{
+        delta?: {
+          content?: string;
+          x_tool_status?: { type: string; name: string; status: string };
+          x_search_results?: unknown;
+        };
+        message?: { content?: string };
+        finish_reason?: string;
+      }>;
       type?: string;
       delta?: { text?: string };
       content_block?: { text?: string };
     };
 
+    const result: SSEExtractResult = { content: null };
+
     // OpenAI-compatible format (used by the API route for streaming)
-    if (event.choices?.[0]?.delta?.content) {
-      return event.choices[0].delta.content;
+    const choice = event.choices?.[0];
+    if (choice) {
+      if (choice.delta?.content) {
+        result.content = choice.delta.content;
+      }
+
+      // Extended: server-managed tool status (web search "searching" indicator)
+      if (choice.delta?.x_tool_status) {
+        result.toolStatus = choice.delta.x_tool_status;
+      }
+
+      // Extended: web search result block
+      if (choice.delta?.x_search_results) {
+        result.searchResults = choice.delta.x_search_results;
+      }
+
+      // Finish reason
+      if (choice.finish_reason) {
+        result.finishReason = choice.finish_reason;
+      }
+
+      return result;
     }
 
-    // Anthropic streaming format
+    // Anthropic streaming format (direct, not via transform)
     if (event.type === 'content_block_delta' && event.delta && 'text' in event.delta) {
-      return event.delta.text ?? null;
+      result.content = event.delta.text ?? null;
     }
 
-    return null;
+    return result;
   } catch {
-    return null;
+    return empty;
   }
 }
 
@@ -138,8 +185,17 @@ export class ChatAIService {
     skillId?: string;
     conversationHistory: Array<{ role: string; content: string }>;
     onChunk?: (chunk: string) => void;
+    /** Called when server-managed web search starts/completes */
+    onSearchStatus?: (status: string) => void;
+    /** Called when web search results arrive from the server */
+    onSearchResults?: (results: unknown) => void;
+    /** Enable server-side web search (Anthropic/OpenAI/Google native tools) */
+    webSearch?: boolean;
+    /** Enable extended thinking */
+    thinkingMode?: boolean;
   }): Promise<string> {
-    const { content, skillId, conversationHistory, onChunk } = params;
+    const { content, skillId, conversationHistory, onChunk, onSearchStatus, onSearchResults } =
+      params;
 
     // Cancel any in-progress request before starting a new one
     if (activeAbortController) {
@@ -167,6 +223,10 @@ export class ChatAIService {
         stream: true,
         max_tokens: 4096,
         temperature: 0.7,
+        // Enable server-side web search when requested (Anthropic web_search, OpenAI web_search_preview, etc.)
+        ...(params.webSearch && { web_search: true }),
+        // Enable extended thinking when requested
+        ...(params.thinkingMode && { thinking_mode: true }),
       };
 
       // Always include model in metadata; also pass skillId when a specific skill was chosen
@@ -237,20 +297,37 @@ export class ChatAIService {
           const trimmed = line.trim();
           if (!trimmed) continue;
 
-          const content_piece = extractContentFromSSE(trimmed);
-          if (content_piece) {
-            fullResponse += content_piece;
-            if (onChunk) onChunk(content_piece);
+          const sseResult = extractContentFromSSE(trimmed);
+
+          if (sseResult.content) {
+            fullResponse += sseResult.content;
+            if (onChunk) onChunk(sseResult.content);
+          }
+
+          // Forward server-managed tool status (e.g., "Searching the web...")
+          if (sseResult.toolStatus && onSearchStatus) {
+            onSearchStatus(sseResult.toolStatus.status);
+          }
+
+          // Forward web search results
+          if (sseResult.searchResults && onSearchResults) {
+            onSearchResults(sseResult.searchResults);
           }
         }
       }
 
       // Process any remaining buffer
       if (buffer.trim()) {
-        const content_piece = extractContentFromSSE(buffer.trim());
-        if (content_piece) {
-          fullResponse += content_piece;
-          if (onChunk) onChunk(content_piece);
+        const sseResult = extractContentFromSSE(buffer.trim());
+        if (sseResult.content) {
+          fullResponse += sseResult.content;
+          if (onChunk) onChunk(sseResult.content);
+        }
+        if (sseResult.toolStatus && onSearchStatus) {
+          onSearchStatus(sseResult.toolStatus.status);
+        }
+        if (sseResult.searchResults && onSearchResults) {
+          onSearchResults(sseResult.searchResults);
         }
       }
 

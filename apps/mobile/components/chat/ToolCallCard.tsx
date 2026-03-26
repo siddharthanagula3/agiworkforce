@@ -87,8 +87,11 @@ function formatDuration(ms: number): string {
 export function ToolCallCard({ toolCall }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const borderColor = STATUS_BORDER_COLOR[toolCall.status];
-  const badgeConfig = STATUS_BADGE[toolCall.status];
+  const borderColor = STATUS_BORDER_COLOR[toolCall.status] ?? colors.textMuted;
+  const badgeConfig = STATUS_BADGE[toolCall.status] ?? {
+    label: toolCall.status,
+    color: 'blue' as const,
+  };
 
   const hasIO = Boolean(toolCall.input || toolCall.output);
 

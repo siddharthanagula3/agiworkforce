@@ -7,7 +7,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { History, RotateCcw, RefreshCw } from 'lucide-react';
-import { invoke, listen, type UnlistenFn } from '../../lib/tauri-mock';
+import { listen, type UnlistenFn } from '../../lib/tauri-mock';
+import { codeEditing } from '@agiworkforce/api';
 import { cn } from '../../lib/utils';
 
 interface CodingCheckpoint {
@@ -50,7 +51,7 @@ export default function RewindTimeline() {
     setLoading(true);
     setError(null);
     try {
-      const result = await invoke<CodingCheckpoint[]>('codingCheckpointList');
+      const result = (await codeEditing.codingCheckpointList()) as unknown as CodingCheckpoint[];
       setCheckpoints(Array.isArray(result) ? result : []);
     } catch (err) {
       console.error('[RewindTimeline] Failed to fetch checkpoints:', err);
@@ -98,7 +99,7 @@ export default function RewindTimeline() {
     setConfirmState(null);
     setRewinding(checkpointId);
     try {
-      await invoke('coding_checkpoint_rewind', { id: checkpointId });
+      await codeEditing.codingCheckpointRewind(checkpointId);
       await fetchCheckpoints();
     } catch (err) {
       console.error('[RewindTimeline] Rewind failed:', err);

@@ -57,7 +57,7 @@ mod tests {
             (temp - 0.7_f64).abs() < 1e-5,
             "temperature should be ~0.7, got {temp}"
         );
-        assert_eq!(adapted["max_tokens"], 100);
+        assert_eq!(adapted["max_output_tokens"], 100);
     }
 
     #[test]

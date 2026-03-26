@@ -10,6 +10,8 @@ import { logger, storageUtils } from './utils';
 const UI_FEEDBACK_DURATION_MS = 2000;
 const REFRESH_FEEDBACK_DURATION_MS = 1000;
 
+let sessionTimerInterval: ReturnType<typeof setInterval> | null = null;
+
 // State management
 const popupState: PopupState = {
   sessionStartTime: Date.now(),
@@ -44,7 +46,9 @@ function setupEventListeners(): void {
 
   if (sidePanelBtn) {
     sidePanelBtn.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'open_side_panel' });
+      chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }).catch(() => {
+        // Background may not be ready — silently ignore.
+      });
       window.close();
     });
   }
@@ -77,9 +81,22 @@ function setupEventListeners(): void {
 
   // Listen for connection status changes broadcast from background
   chrome.runtime.onMessage.addListener((message: unknown) => {
-    const msg = message as { type?: string; status?: ConnectionStatus; connected?: boolean };
-    if (msg?.type === 'CONNECTION_STATUS_CHANGED') {
-      applyConnectionStatus(msg.status ?? (msg.connected ? 'connected' : 'disconnected'));
+    if (
+      typeof message !== 'object' ||
+      message === null ||
+      !('type' in message) ||
+      (message as Record<string, unknown>)['type'] !== 'CONNECTION_STATUS_CHANGED'
+    ) {
+      return;
+    }
+    const msg = message as { type: string; status?: ConnectionStatus; connected?: boolean };
+    applyConnectionStatus(msg.status ?? (msg.connected ? 'connected' : 'disconnected'));
+  });
+
+  window.addEventListener('unload', () => {
+    if (sessionTimerInterval !== null) {
+      clearInterval(sessionTimerInterval);
+      sessionTimerInterval = null;
     }
   });
 
@@ -214,7 +231,9 @@ async function updateTabInfo(): Promise<void> {
       try {
         const url = new URL(tab.url);
         const displayUrl = `${url.hostname}${url.pathname}`;
-        const truncated = displayUrl.length > 25 ? displayUrl.substring(0, 25) + '...' : displayUrl;
+        // Use spread to iterate by code points — substring() can split multibyte characters.
+        const chars = [...displayUrl];
+        const truncated = chars.length > 25 ? chars.slice(0, 25).join('') + '...' : displayUrl;
 
         currentUrlEl.textContent = truncated;
         currentUrlEl.setAttribute('title', tab.url);
@@ -269,7 +288,7 @@ function startSessionTimer(): void {
   };
 
   updateSessionTime();
-  setInterval(updateSessionTime, 1000);
+  sessionTimerInterval = setInterval(updateSessionTime, 1000);
 }
 
 async function handleCapturePage(): Promise<void> {

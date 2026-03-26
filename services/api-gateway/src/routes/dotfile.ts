@@ -32,6 +32,7 @@ const DESKTOP_TIMEOUT_MS = 2000;
 // =============================================================================
 
 interface DotfileConfigResponse {
+  [key: string]: unknown;
   default: {
     model: string;
     provider: string;
@@ -42,16 +43,19 @@ interface DotfileConfigResponse {
 }
 
 interface DotfileMcpServersResponse {
+  [key: string]: unknown;
   servers: Record<string, unknown>;
   source: 'desktop' | 'default';
 }
 
 interface DotfileSkillsResponse {
+  [key: string]: unknown;
   skills: unknown[];
   source: 'desktop' | 'default';
 }
 
 interface DotfileEcosystemResponse {
+  [key: string]: unknown;
   tools: unknown[];
   source: 'desktop' | 'default';
 }
