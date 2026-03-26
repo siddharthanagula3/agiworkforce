@@ -174,9 +174,10 @@ function renderContent(content: string): React.ReactNode[] {
 
       lines.forEach((line, li) => {
         // Ordered list item: "1. text" or "1) text"
-        const orderedMatch = /^\s*\d+[.)]\s+(.*)$/.exec(line);
+        // Use {0,10} instead of * to prevent ReDoS on whitespace-heavy input
+        const orderedMatch = /^\s{0,10}\d+[.)]\s(.+)$/.exec(line);
         // Unordered list item: "- text" or "* text" (but not ** which is bold)
-        const unorderedMatch = /^\s*[-*]\s+(.*)$/.exec(line);
+        const unorderedMatch = /^\s{0,10}[-*]\s(.+)$/.exec(line);
         // Avoid matching "* text *" patterns as list items when they look like emphasis
         const isUnorderedList =
           unorderedMatch && !(line.trim().startsWith('*') && !line.trim().startsWith('* '));
@@ -208,7 +209,7 @@ function renderContent(content: string): React.ReactNode[] {
             nodes.push(<span key={`${i}-${li}-br`} className="block h-3" />);
           } else if (/^#{1,6}\s/.test(line)) {
             // Headers
-            const hashMatch = /^(#{1,6})\s+(.*)$/.exec(line);
+            const hashMatch = /^(#{1,6})\s(.+)$/.exec(line);
             if (hashMatch) {
               const level = hashMatch[1]!.length;
               const text = hashMatch[2] ?? '';
@@ -267,7 +268,8 @@ function renderContent(content: string): React.ReactNode[] {
 function renderInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
   // Handle [text](url), ~~strikethrough~~, **bold**, *italic*, `code`
-  const regex = /(\[([^\]]+)\]\(([^)]+)\)|~~.+?~~|\*\*.*?\*\*|\*.*?\*|`[^`]+`)/g;
+  // Use [^~], [^*], [^`] negated classes instead of .+?/.* to prevent ReDoS
+  const regex = /(\[([^\]]+)\]\(([^)]+)\)|~~[^~]+~~|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
