@@ -435,7 +435,11 @@ export async function applyPatchBatch(patches: PatchBlock[]): Promise<BatchResul
         await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content, 'utf-8'));
         await vscode.workspace.openTextDocument(fileUri);
         snapshots.set(filePath, '');
-        applied.push(...filePatches.map((p) => ({ ...p, confidence: 'high' as PatchConfidence })));
+        // New files are entirely LLM-generated — 'medium' confidence since there's
+        // no existing code to compare against (unlike exact-match edits → 'high').
+        applied.push(
+          ...filePatches.map((p) => ({ ...p, confidence: 'medium' as PatchConfidence })),
+        );
         logPatch(`  Created new file: ${filePath}`);
         continue;
       }
@@ -521,13 +525,22 @@ export async function applyPatchBatch(patches: PatchBlock[]): Promise<BatchResul
 
 // ─── Undo support ────────────────────────────────────────────────────────────
 
-/** Storage for batch snapshots, keyed by batchId. */
+/** Storage for batch snapshots, keyed by batchId. LRU-evicted at MAX_UNDO_BATCHES. */
 const batchSnapshotStore = new Map<string, BatchResult>();
+const MAX_UNDO_BATCHES = 50;
 
 /**
  * Store a batch result so it can be undone later.
+ * Evicts the oldest entry when the store exceeds MAX_UNDO_BATCHES.
  */
 export function storeBatchForUndo(result: BatchResult): void {
+  if (batchSnapshotStore.size >= MAX_UNDO_BATCHES) {
+    // Map iterates in insertion order — first key is the oldest
+    const oldestKey = batchSnapshotStore.keys().next().value;
+    if (oldestKey !== undefined) {
+      batchSnapshotStore.delete(oldestKey);
+    }
+  }
   batchSnapshotStore.set(result.batchId, result);
 }
 

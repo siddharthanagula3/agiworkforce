@@ -50,6 +50,7 @@ import { useCodeStore } from '../../stores/codeStore';
 import { sanitizeHtml } from '../../utils/security';
 import type { Artifact } from '../../types/chat';
 import { Badge } from '../ui/Badge';
+import { SectionErrorBoundary } from '../ui/SectionErrorBoundary';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { usePrompt } from '../ui/PromptDialog';
@@ -537,176 +538,178 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   })();
 
   return (
-    <>
-      <Card className={cn('overflow-hidden', className)} data-artifact-id={artifact.id}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 bg-muted/50">
-          <div className="flex items-center gap-2">
-            {icon}
-            <CardTitle className="text-sm font-semibold">
-              {artifact.title ||
-                `${artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1)} Artifact`}
-            </CardTitle>
-            {artifact.language && (
-              <Badge variant="outline" className="text-xs">
-                {artifact.language}
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            {artifact.type === 'code' && (
+    <SectionErrorBoundary sectionName="Artifact Renderer">
+      <>
+        <Card className={cn('overflow-hidden', className)} data-artifact-id={artifact.id}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 bg-muted/50">
+            <div className="flex items-center gap-2">
+              {icon}
+              <CardTitle className="text-sm font-semibold">
+                {artifact.title ||
+                  `${artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1)} Artifact`}
+              </CardTitle>
+              {artifact.language && (
+                <Badge variant="outline" className="text-xs">
+                  {artifact.language}
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {artifact.type === 'code' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={handleInsertIntoEditor}
+                      aria-label="Apply code to file"
+                    >
+                      <FileUp className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Apply to file...</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={handleInsertIntoEditor}
-                    aria-label="Apply code to file"
+                    onClick={handleCopy}
+                    aria-label="Copy to clipboard"
+                    disabled={awaitingOutput}
                   >
-                    <FileUp className="h-3.5 w-3.5" />
+                    {copied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-green-500" />
+                        <span className="sr-only">Copied!</span>
+                      </>
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Apply to file...</p>
+                  <p>
+                    {awaitingOutput
+                      ? 'Waiting for tool output'
+                      : copied
+                        ? 'Copied!'
+                        : 'Copy to clipboard'}
+                  </p>
                 </TooltipContent>
               </Tooltip>
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={handleCopy}
-                  aria-label="Copy to clipboard"
-                  disabled={awaitingOutput}
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-green-500" />
-                      <span className="sr-only">Copied!</span>
-                    </>
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>
-                  {awaitingOutput
-                    ? 'Waiting for tool output'
-                    : copied
-                      ? 'Copied!'
-                      : 'Copy to clipboard'}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label="Download or export artifact"
-                      disabled={awaitingOutput}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <ChevronDown className="h-2.5 w-2.5 ml-0.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{awaitingOutput ? 'Waiting for tool output' : 'Download / Export'}</p>
-                </TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={handleDownload}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Download as text
-                </DropdownMenuItem>
-                {(supportsDocumentExport || supportsExcelExport) && <DropdownMenuSeparator />}
-                {supportsDocumentExport && (
-                  <>
-                    <DropdownMenuItem onClick={handleExportPdf}>
-                      <FileText className="mr-2 h-4 w-4 text-red-500" />
-                      Export as PDF
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportWord}>
-                      <FileText className="mr-2 h-4 w-4 text-blue-500" />
-                      Export as Word
-                    </DropdownMenuItem>
-                  </>
-                )}
-                {supportsExcelExport && (
-                  <DropdownMenuItem onClick={handleExportExcel}>
-                    <FileSpreadsheet className="mr-2 h-4 w-4 text-green-500" />
-                    Export as Excel
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label="Download or export artifact"
+                        disabled={awaitingOutput}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <ChevronDown className="h-2.5 w-2.5 ml-0.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{awaitingOutput ? 'Waiting for tool output' : 'Download / Export'}</p>
+                  </TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={handleDownload}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download as text
                   </DropdownMenuItem>
-                )}
-                {supportsImageExport && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleExportSvg}>
-                      <ImageIcon className="mr-2 h-4 w-4 text-purple-500" />
-                      Export as SVG
+                  {(supportsDocumentExport || supportsExcelExport) && <DropdownMenuSeparator />}
+                  {supportsDocumentExport && (
+                    <>
+                      <DropdownMenuItem onClick={handleExportPdf}>
+                        <FileText className="mr-2 h-4 w-4 text-red-500" />
+                        Export as PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleExportWord}>
+                        <FileText className="mr-2 h-4 w-4 text-blue-500" />
+                        Export as Word
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {supportsExcelExport && (
+                    <DropdownMenuItem onClick={handleExportExcel}>
+                      <FileSpreadsheet className="mr-2 h-4 w-4 text-green-500" />
+                      Export as Excel
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportPng}>
-                      <ImageIcon className="mr-2 h-4 w-4 text-orange-500" />
-                      Export as PNG
-                    </DropdownMenuItem>
-                  </>
-                )}
-                {supportsMarkdownExport && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleCopyMarkdown}>
-                      <Table2 className="mr-2 h-4 w-4 text-cyan-500" />
-                      Copy as Markdown
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {awaitingOutput ? (
-            <div className="p-4 text-sm text-muted-foreground">Waiting for tool output...</div>
-          ) : artifact.type === 'code' && artifact.language === 'mermaid' ? (
-            <MermaidArtifact artifact={artifact} isDark={theme === 'dark'} />
-          ) : artifact.type === 'code' ? (
-            <CodeArtifact artifact={artifact} isDark={theme === 'dark'} />
-          ) : artifact.type === 'chart' ? (
-            <ChartArtifact artifact={artifact} />
-          ) : artifact.type === 'table' ? (
-            <TableArtifact artifact={artifact} />
-          ) : artifact.type === 'mermaid' ? (
-            <MermaidArtifact artifact={artifact} isDark={theme === 'dark'} />
-          ) : artifact.type === 'svg' ||
-            (typeof artifact.content === 'string' &&
-              artifact.content.trimStart().startsWith('<svg')) ? (
-            <SvgArtifact artifact={artifact} />
-          ) : artifact.type === 'markdown' ? (
-            <MarkdownArtifact artifact={artifact} isDark={theme === 'dark'} />
-          ) : artifact.type === 'react' || artifact.type === 'component' ? (
-            <ReactPreview code={artifact.content} />
-          ) : artifact.type === 'spreadsheet' ? (
-            <SpreadsheetArtifact artifact={artifact} />
-          ) : artifact.type === 'presentation' ? (
-            <PresentationArtifact artifact={artifact} />
-          ) : artifact.type === 'html' ? (
-            <HtmlArtifact artifact={artifact} />
-          ) : artifact.type === 'document' ? (
-            <MarkdownArtifact artifact={artifact} isDark={theme === 'dark'} />
-          ) : (
-            <div className="p-4 text-sm text-muted-foreground">Unsupported artifact type</div>
-          )}
-        </CardContent>
-      </Card>
-      {promptDialog}
-    </>
+                  )}
+                  {supportsImageExport && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleExportSvg}>
+                        <ImageIcon className="mr-2 h-4 w-4 text-purple-500" />
+                        Export as SVG
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleExportPng}>
+                        <ImageIcon className="mr-2 h-4 w-4 text-orange-500" />
+                        Export as PNG
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {supportsMarkdownExport && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleCopyMarkdown}>
+                        <Table2 className="mr-2 h-4 w-4 text-cyan-500" />
+                        Copy as Markdown
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {awaitingOutput ? (
+              <div className="p-4 text-sm text-muted-foreground">Waiting for tool output...</div>
+            ) : artifact.type === 'code' && artifact.language === 'mermaid' ? (
+              <MermaidArtifact artifact={artifact} isDark={theme === 'dark'} />
+            ) : artifact.type === 'code' ? (
+              <CodeArtifact artifact={artifact} isDark={theme === 'dark'} />
+            ) : artifact.type === 'chart' ? (
+              <ChartArtifact artifact={artifact} />
+            ) : artifact.type === 'table' ? (
+              <TableArtifact artifact={artifact} />
+            ) : artifact.type === 'mermaid' ? (
+              <MermaidArtifact artifact={artifact} isDark={theme === 'dark'} />
+            ) : artifact.type === 'svg' ||
+              (typeof artifact.content === 'string' &&
+                artifact.content.trimStart().startsWith('<svg')) ? (
+              <SvgArtifact artifact={artifact} />
+            ) : artifact.type === 'markdown' ? (
+              <MarkdownArtifact artifact={artifact} isDark={theme === 'dark'} />
+            ) : artifact.type === 'react' || artifact.type === 'component' ? (
+              <ReactPreview code={artifact.content} />
+            ) : artifact.type === 'spreadsheet' ? (
+              <SpreadsheetArtifact artifact={artifact} />
+            ) : artifact.type === 'presentation' ? (
+              <PresentationArtifact artifact={artifact} />
+            ) : artifact.type === 'html' ? (
+              <HtmlArtifact artifact={artifact} />
+            ) : artifact.type === 'document' ? (
+              <MarkdownArtifact artifact={artifact} isDark={theme === 'dark'} />
+            ) : (
+              <div className="p-4 text-sm text-muted-foreground">Unsupported artifact type</div>
+            )}
+          </CardContent>
+        </Card>
+        {promptDialog}
+      </>
+    </SectionErrorBoundary>
   );
 }
 
@@ -1656,7 +1659,6 @@ function SvgArtifact({ artifact }: { artifact: Artifact }) {
             'opacity',
             'class',
             'id',
-            'href',
             'preserveAspectRatio',
             'clip-path',
             'mask',
@@ -1678,7 +1680,15 @@ function SvgArtifact({ artifact }: { artifact: Artifact }) {
             'patternTransform',
           ],
           svg: ['viewBox', 'xmlns', 'width', 'height', 'preserveAspectRatio'],
+          // SECURITY: Only allow href on elements that need it (use, image, linearGradient)
+          // to prevent javascript: URI XSS via <use href="javascript:...">
+          use: ['href', 'x', 'y', 'width', 'height'],
+          image: ['href', 'x', 'y', 'width', 'height', 'preserveAspectRatio'],
+          linearGradient: ['href'],
+          radialGradient: ['href'],
         },
+        // javascript: URIs are blocked by DOMPurify's ALLOW_UNKNOWN_PROTOCOLS: false (default)
+        // href is only allowed on use, image, linearGradient, radialGradient (not global *)
       }),
     [artifact.content],
   );

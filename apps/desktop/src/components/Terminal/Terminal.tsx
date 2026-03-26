@@ -148,7 +148,8 @@ export function Terminal({ sessionId, className }: TerminalProps) {
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [sessionId, theme, sendInput, setupOutputListener, removeOutputListener]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- theme changes handled by the separate useEffect below; store actions are stable
+  }, [sessionId]);
 
   useEffect(() => {
     if (!xtermRef.current) return;

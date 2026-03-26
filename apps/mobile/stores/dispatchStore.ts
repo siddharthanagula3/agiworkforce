@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage } from '@/lib/mmkv';
@@ -104,12 +105,17 @@ export const useDispatchStore = create<DispatchState>()(
             // Queue for delivery when reconnected
             queueControl('dispatch_task', payload);
           }
-        } catch {
+        } catch (err) {
           set((state) => ({
             messages: state.messages.map((m) =>
               m.id === id ? { ...m, taskStatus: 'failed' as TaskStatus } : m,
             ),
           }));
+          Alert.alert(
+            'Dispatch Failed',
+            `Could not send task to desktop. ${err instanceof Error ? err.message : 'Check your connection.'}`,
+            [{ text: 'OK' }],
+          );
         }
       },
 
@@ -118,6 +124,9 @@ export const useDispatchStore = create<DispatchState>()(
     {
       name: 'dispatch-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[dispatchStore] Hydration failed:', error);
+      },
       partialize: (state) => ({
         messages: state.messages.slice(-500),
       }),

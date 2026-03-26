@@ -5,7 +5,7 @@
  * Supports sorting, filtering, pagination, and export to CSV.
  */
 
-import { useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Copy,
   Check,
@@ -41,6 +41,13 @@ export function TableViewer({
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = data.page_size ?? 20;
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   // Filter rows based on search term
   const filteredRows = useMemo(() => {
@@ -118,7 +125,8 @@ export function TableViewer({
 
     await navigator.clipboard.writeText(tsv);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const handleExportCSV = () => {

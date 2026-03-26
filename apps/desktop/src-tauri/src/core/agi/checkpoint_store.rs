@@ -211,7 +211,7 @@ impl CheckpointStore {
                     &checkpoint_clone.id,
                     &checkpoint_clone.task_id,
                     serde_json::to_string(&checkpoint_clone.goal)?,
-                    checkpoint_clone.current_step,
+                    checkpoint_clone.current_step as i64,
                     serde_json::to_string(&checkpoint_clone.completed_steps)?,
                     serde_json::to_string(&checkpoint_clone.current_state)?,
                     serde_json::to_string(&checkpoint_clone.tool_results)?,
@@ -219,12 +219,12 @@ impl CheckpointStore {
                     serde_json::to_string(&checkpoint_clone.available_resources)?,
                     checkpoint_clone.reason.to_string(),
                     checkpoint_clone.created_at_ms,
-                    checkpoint_clone.metadata.total_steps,
+                    checkpoint_clone.metadata.total_steps as i64,
                     checkpoint_clone.metadata.progress_percent,
-                    checkpoint_clone.metadata.elapsed_time_ms,
-                    checkpoint_clone.metadata.estimated_remaining_ms,
-                    checkpoint_clone.metadata.tool_calls_executed,
-                    checkpoint_clone.metadata.failure_count,
+                    checkpoint_clone.metadata.elapsed_time_ms as i64,
+                    checkpoint_clone.metadata.estimated_remaining_ms.map(|v| v as i64),
+                    checkpoint_clone.metadata.tool_calls_executed as i64,
+                    checkpoint_clone.metadata.failure_count as i64,
                     &checkpoint_clone.metadata.last_error,
                     1,
                     &checkpoint_clone.parent_checkpoint_id,
@@ -319,17 +319,17 @@ impl CheckpointStore {
             )?;
 
             let checkpoints = stmt
-                .query_map(params![task_id, limit as i32], |row| {
+                .query_map(params![task_id, limit as i64], |row| {
                     Ok(CheckpointSummary {
                         id: row.get(0)?,
                         task_id: row.get(1)?,
-                        current_step: row.get(2)?,
-                        total_steps: row.get(3)?,
+                        current_step: row.get::<_, i64>(2)? as usize,
+                        total_steps: row.get::<_, i64>(3)? as usize,
                         progress_percent: row.get(4)?,
                         created_at_ms: row.get(5)?,
                         reason: parse_checkpoint_reason(&row.get::<_, String>(6)?),
                         is_latest: row.get(7)?,
-                        estimated_remaining_ms: row.get(8)?,
+                        estimated_remaining_ms: row.get::<_, Option<i64>>(8)?.map(|v| v as u64),
                     })
                 })?
                 .collect::<Result<Vec<_>, _>>()?;

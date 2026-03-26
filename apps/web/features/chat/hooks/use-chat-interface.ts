@@ -496,9 +496,21 @@ export const useChat = (sessionId?: string) => {
             ),
           );
 
-          // Save only the final synthesized answer to database
+          // Save only the final synthesized answer to database (with metadata for reload)
           if (sessionId && result.response) {
-            await chatPersistenceService.saveMessage(sessionId, 'assistant', result.response);
+            await chatPersistenceService.saveMessage(sessionId, 'assistant', result.response, {
+              model: result.metadata.model,
+              employeeName: 'Supervisor',
+              employeeId: 'supervisor',
+              employeeAvatar: '#4f46e5',
+              selectionReason: result.selectionReason,
+              thinkingSteps: result.thinkingSteps,
+              tokensUsed: result.metadata.tokensUsed,
+              isMultiAgent: true,
+              employeesInvolved: result.metadata.employeesInvolved,
+              isSynthesis: true,
+              ...(searchResults && { searchResults }),
+            });
           }
         } else {
           // Single employee response - STREAM IT!
@@ -560,9 +572,20 @@ export const useChat = (sessionId?: string) => {
             ),
           );
 
-          // Save assistant response to database
+          // Save assistant response to database (with metadata for reload)
           if (sessionId && result.response) {
-            await chatPersistenceService.saveMessage(sessionId, 'assistant', result.response);
+            await chatPersistenceService.saveMessage(sessionId, 'assistant', result.response, {
+              model: result.metadata.model,
+              employeeName: result.selectedEmployee?.name,
+              employeeId: result.selectedEmployee?.name,
+              employeeAvatar: result.selectedEmployee
+                ? employeeChatService.getEmployeeAvatar(result.selectedEmployee.name)
+                : undefined,
+              selectionReason: result.selectionReason,
+              thinkingSteps: result.thinkingSteps,
+              tokensUsed: result.metadata.tokensUsed,
+              ...(searchResults && { searchResults }),
+            });
           }
         }
       } catch (error) {

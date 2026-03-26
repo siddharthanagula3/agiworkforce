@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Business and Legal Considerations Page
  * Prepare for growth and legal compliance

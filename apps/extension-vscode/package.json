@@ -10,7 +10,7 @@
     "url": "https://github.com/agiworkforce/agiworkforce"
   },
   "engines": {
-    "vscode": "^1.95.0"
+    "vscode": "^1.110.0"
   },
   "preview": true,
   "pricing": "Free",
@@ -121,6 +121,21 @@
         "command": "agi-workforce.triggerAgentAction",
         "title": "AGI Workforce: Trigger Agent Action on Desktop",
         "icon": "$(play)"
+      },
+      {
+        "command": "agi-workforce.createCheckpoint",
+        "title": "AGI Workforce: Create Checkpoint",
+        "icon": "$(bookmark)"
+      },
+      {
+        "command": "agi-workforce.restoreCheckpoint",
+        "title": "AGI Workforce: Restore Checkpoint",
+        "icon": "$(history)"
+      },
+      {
+        "command": "agi-workforce.listCheckpoints",
+        "title": "AGI Workforce: List Checkpoints",
+        "icon": "$(list-unordered)"
       },
       {
         "command": "agi.git.status",
@@ -681,7 +696,6 @@
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.4",
     "eslint": "^9.39.4",
-    "minimatch": "^3.1.5",
     "rimraf": "^6.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

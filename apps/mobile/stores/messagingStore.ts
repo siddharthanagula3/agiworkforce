@@ -165,6 +165,9 @@ export const useMessagingStore = create<MessagingState>()(
     {
       name: 'messaging-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[messagingStore] Hydration failed:', error);
+      },
       partialize: (state) => ({
         // Persist platform connection state for offline access
         // Do NOT persist loading or error state

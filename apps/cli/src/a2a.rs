@@ -454,6 +454,7 @@ pub async fn delegate_task(
 /// Hand off a conversation to another agent.
 ///
 /// Sends a POST to `target.endpoint/a2a/handoff` with the message history.
+#[allow(dead_code)]
 pub async fn handoff_conversation(
     target: &AgentCard,
     messages: Vec<Message>,

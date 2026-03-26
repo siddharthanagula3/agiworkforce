@@ -354,11 +354,15 @@ async function callUpstream(
     }
     case 'google': {
       const action = body.stream ? 'streamGenerateContent' : 'generateContent';
-      const url = `${GOOGLE_API_BASE}/${body.model}:${action}?key=${apiKey}`;
+      // SECURITY: Pass API key via header instead of URL query to prevent credential exposure in logs
+      const url = `${GOOGLE_API_BASE}/${body.model}:${action}`;
       const googleBody = toGoogleRequest(body);
       return fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
         body: JSON.stringify(googleBody),
       });
     }
@@ -669,13 +673,15 @@ router.post(
     if (!upstream.ok) {
       const errorBody = await upstream.text().catch(() => 'Unknown upstream error');
       logger.error(
-        { provider, model: body.model, status: upstream.status, errorBody },
+        {
+          provider,
+          model: body.model,
+          status: upstream.status,
+          errorBody: errorBody.slice(0, 500),
+        },
         'Upstream provider error',
       );
-      throw new AppError(
-        `Upstream ${provider} error (${upstream.status}): ${errorBody.slice(0, 500)}`,
-        502,
-      );
+      throw new AppError('Upstream provider error. Please try again.', 502);
     }
 
     // Streaming response

@@ -39,7 +39,10 @@ pub use audit_logger::{
     create_tool_execution_event, create_workflow_execution_event, AuditEvent, AuditEventType,
     AuditFilters, AuditIntegrityReport, AuditLogger, AuditStatus,
 };
-pub use auth::{AuthManager, AuthToken, Session, User, UserRole};
+pub use auth::{
+    sign_jwt_with_secret, verify_jwt_signature_with_secret, AuthManager, AuthToken, Session, User,
+    UserRole,
+};
 pub use auth_db::{AuthAuditLog, AuthDatabaseManager};
 pub use command_validator::{
     requires_confirmation, validate_command, validate_interactive_input, CommandValidationError,

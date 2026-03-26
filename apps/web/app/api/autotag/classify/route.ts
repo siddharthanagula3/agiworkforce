@@ -8,15 +8,14 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import type { User } from '@supabase/supabase-js';
+import { requireCsrfToken } from '@/lib/csrf';
+import { getAuthenticatedUser } from '@/lib/api-auth';
 
 type ConversationTag =
   | 'coding'
@@ -27,58 +26,6 @@ type ConversationTag =
   | 'debug'
   | 'creative'
   | 'general';
-
-async function getAuthenticatedUser(request: NextRequest): Promise<User> {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    // Use service role key for server-side JWT verification — anon key cannot verify
-    // tokens server-side since it lacks the JWT secret needed to validate signatures.
-    const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
-
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) {
-      throw createError.unauthorized('Invalid token');
-    }
-    return data.user;
-  }
-
-  const cookieStore = await cookies();
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    auth: { flowType: 'pkce' },
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
-      },
-      set(name: string, value: string, options: CookieOptions) {
-        try {
-          cookieStore.set({ name, value, ...options });
-        } catch {
-          // ignore
-        }
-      },
-      remove(name: string, options: CookieOptions) {
-        try {
-          cookieStore.set({ name, value: '', ...options });
-        } catch {
-          // ignore
-        }
-      },
-    },
-  });
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    throw createError.unauthorized();
-  }
-  return user;
-}
 
 // Keyword-based classifier (no LLM call — simple and fast)
 const KEYWORD_RULES: { tag: ConversationTag; patterns: RegExp[] }[] = [
@@ -233,6 +180,10 @@ function classifyText(text: string): ConversationTag {
 }
 
 async function handleClassify(request: NextRequest) {
+  // AUDIT-008-006: Enforce CSRF protection for DB-writing endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 

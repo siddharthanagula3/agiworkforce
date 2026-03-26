@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * API Reference Page - Comprehensive API Documentation
  * Details about API endpoints, authentication, and usage examples

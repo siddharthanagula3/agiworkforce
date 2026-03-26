@@ -191,7 +191,7 @@ describe('canAccessModel — unknown models', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('canAccessModel — case insensitivity', () => {
   it('handles uppercase model names correctly', () => {
-    expect(canAccessModel('GPT-5-NANO', 'hobby')).toBe(true);
+    expect(canAccessModel('GPT-5.4-NANO', 'hobby')).toBe(true);
     expect(canAccessModel('CLAUDE-SONNET-4.6', 'pro')).toBe(true);
   });
 

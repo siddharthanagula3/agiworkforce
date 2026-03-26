@@ -1089,6 +1089,11 @@ impl ToolExecutionGuard {
     /// MCP tools are assigned a default policy with Medium risk and rate-limited
     /// to 20 calls/min. File/URL/command parameters are still validated by
     /// `validate_mcp_tool_params` during `validate_tool_call`.
+    ///
+    /// FIX R-25: Dynamically registered MCP tools default to `requires_approval: true`.
+    /// MCP tools come from external servers whose behavior is not audited by us.
+    /// Requiring user approval by default ensures no MCP tool can perform side-effects
+    /// without explicit user consent, following the principle of least privilege.
     pub fn register_mcp_tool(&self, tool_name: &str) {
         if let Ok(mut guard) = self.allowed_tools.write() {
             if !guard.contains_key(tool_name) {
@@ -1097,7 +1102,7 @@ impl ToolExecutionGuard {
                     tool_name.to_string(),
                     ToolPolicy {
                         max_rate_per_minute: 20,
-                        requires_approval: false,
+                        requires_approval: true,
                         allowed_parameters: vec![], // MCP tools have dynamic params
                         risk_level: RiskLevel::Medium,
                     },
@@ -1267,7 +1272,8 @@ impl ToolExecutionGuard {
                     ));
                 }
             }
-            "browser_navigate" | "api_call" | "api_download" | "api_upload" | "git_clone" => {
+            "browser_navigate" | "api_call" | "api_download" | "api_upload" | "git_clone"
+            | "physical_scrape" => {
                 if let Some(url) = parameters.get("url").and_then(|u| u.as_str()) {
                     self.validate_url(url)?;
                 } else {
@@ -1365,7 +1371,19 @@ impl ToolExecutionGuard {
         };
 
         // SECSYS-004 fix: Check for path traversal patterns (including URL-encoded)
-        let normalized_path = expanded_path.replace("%2e%2e", "..").replace("%2f", "/");
+        // FIX R-24: Case-insensitive normalization with iterative decoding to handle
+        // double-encoding (e.g. %252e%252e -> %2e%2e -> ..)
+        let mut normalized_path = expanded_path.to_lowercase();
+        loop {
+            let decoded = normalized_path
+                .replace("%2e", ".")
+                .replace("%2f", "/")
+                .replace("%5c", "\\");
+            if decoded == normalized_path {
+                break;
+            }
+            normalized_path = decoded;
+        }
         if normalized_path.contains("..") {
             warn!("Path traversal detected: {}", expanded_path);
             return Err(SecurityError::PathTraversal(expanded_path.to_string()));
@@ -1563,6 +1581,59 @@ impl ToolExecutionGuard {
                     warn!("Failed to canonicalize path: {}", e);
                 }
             }
+        } else {
+            // FIX R-22: For non-existent paths (writes), validate the parent directory
+            // to prevent symlink attacks where an attacker creates a symlink after the
+            // existence check but before the actual write operation (TOCTOU).
+            if let Some(parent) = path_buf.parent() {
+                if parent.exists() {
+                    let canonical_parent = parent.canonicalize().map_err(|_| {
+                        SecurityError::PathTraversal(path.to_string())
+                    })?;
+                    let canonical_parent_str = canonical_parent.to_string_lossy();
+
+                    // Check canonical parent doesn't contain traversal
+                    if canonical_parent_str.contains("..") {
+                        warn!(
+                            "Symlink path traversal detected in parent: {}",
+                            expanded_path
+                        );
+                        return Err(SecurityError::PathTraversal(expanded_path.to_string()));
+                    }
+
+                    // Re-validate the canonical parent against blocked prefixes
+                    for prefix in &blocked_mount_prefixes {
+                        if canonical_parent_str.starts_with(prefix) {
+                            warn!(
+                                "Parent directory resolves to blocked mount point: {} -> {}",
+                                expanded_path, canonical_parent_str
+                            );
+                            return Err(SecurityError::PathTraversal(format!(
+                                "Path resolves to blocked location: {}",
+                                prefix
+                            )));
+                        }
+                    }
+
+                    // Re-validate the canonical parent against blocked system paths
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        if canonical_parent_str.starts_with("/dev/")
+                            || canonical_parent_str.starts_with("/proc/")
+                            || canonical_parent_str.starts_with("/sys/")
+                        {
+                            warn!(
+                                "Parent resolves to blocked system path: {} -> {}",
+                                expanded_path, canonical_parent_str
+                            );
+                            return Err(SecurityError::PathTraversal(format!(
+                                "Path resolves to blocked system location: {}",
+                                canonical_parent_str
+                            )));
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -1649,6 +1720,43 @@ impl ToolExecutionGuard {
                 warn!("Null-route IP address detected: {}", host);
                 return Err(SecurityError::BlockedDomain(host.to_string()));
             }
+
+            // FIX R-23: Block IPv6-mapped IPv4 addresses (e.g. ::ffff:127.0.0.1)
+            // These bypass naive string-based IPv4 checks while resolving to the same address.
+            if host.starts_with("::ffff:")
+                || host.starts_with("[::ffff:")
+                || host.contains("::ffff:")
+            {
+                warn!(
+                    "IPv6-mapped IPv4 address detected (potential SSRF bypass): {}",
+                    host
+                );
+                return Err(SecurityError::BlockedDomain(host.to_string()));
+            }
+
+            // FIX R-23: Block decimal IP notation (e.g. 2130706433 = 127.0.0.1)
+            // and octal/hex IP notation (e.g. 0x7f000001 = 127.0.0.1).
+            // Some URL parsers resolve these to the actual IP, bypassing string checks.
+            if host.chars().all(|c| c.is_ascii_digit()) && !host.is_empty() {
+                warn!(
+                    "Decimal IP notation detected (potential SSRF bypass): {}",
+                    host
+                );
+                return Err(SecurityError::BlockedDomain(host.to_string()));
+            }
+            if host.starts_with("0x") || host.starts_with("0X") {
+                warn!(
+                    "Hexadecimal IP notation detected (potential SSRF bypass): {}",
+                    host
+                );
+                return Err(SecurityError::BlockedDomain(host.to_string()));
+            }
+
+            // SECURITY NOTE: DNS rebinding attacks (where a domain resolves to a private IP
+            // after the initial check) cannot be fully prevented at the URL validation level.
+            // Mitigations include: pinning DNS results, validating the resolved IP at connect
+            // time, and using network-level controls (firewall rules blocking private ranges
+            // for outbound connections from the application).
         }
 
         Ok(())

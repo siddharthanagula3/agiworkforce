@@ -123,9 +123,12 @@ static DANGEROUS_PATTERNS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         "base64 -d |",
         "base64 -d|",
         "python -c",
+        "python2 -c",
         "python3 -c",
         "perl -e",
         "ruby -e",
+        "node -e",
+        "node --eval",
         // Pipe-to-network exfiltration (data piped to network tools)
         "| nc ",
         "| nc\t",
@@ -177,7 +180,10 @@ static DANGEROUS_PATTERNS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         // Windows reverse shell patterns
         "powershell -enc",
         "powershell -encodedcommand",
+        "powershell.exe -enc",
+        "powershell.exe -encodedcommand",
         "cmd /c powershell -",
+        "cmd.exe /c powershell",
         // Windows scheduled task abuse
         "schtasks /delete",
     ]
@@ -312,7 +318,12 @@ pub fn validate_command(command: &str, config: &ValidationConfig) -> ValidationR
         .join(" ")
         .to_lowercase();
 
-    // Check dangerous patterns (ALWAYS blocked, even in interactive mode)
+    // Check dangerous patterns (ALWAYS blocked, even in interactive mode).
+    // NOTE: This is a defense-in-depth blocklist layer. It can be bypassed via shell variable
+    // expansion ($'\x72\x6d'), aliases, or unicode homoglyphs. It is NOT the sole security
+    // boundary — the sandbox-policy crate (Seatbelt/Bubblewrap/Landlock) provides the
+    // authoritative OS-level enforcement. This validator reduces the attack surface but
+    // does not eliminate it.
     for pattern in DANGEROUS_PATTERNS.iter() {
         let lower_pattern = pattern.to_lowercase();
         if normalized.contains(lower_pattern.as_str()) {

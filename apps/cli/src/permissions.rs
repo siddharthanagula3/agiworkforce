@@ -40,7 +40,13 @@ impl PermissionStore {
         std::fs::create_dir_all(&dir)?;
         let path = Self::path()?;
         let contents = toml::to_string_pretty(self).context("Failed to serialize permissions")?;
-        std::fs::write(&path, contents).context("Failed to write permissions.toml")?;
+        std::fs::write(&path, &contents).context("Failed to write permissions.toml")?;
+        // Restrict file permissions to owner-only (contains allow/deny lists)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        }
         Ok(())
     }
 

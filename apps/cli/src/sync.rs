@@ -240,8 +240,25 @@ impl ConfigSync {
             conflicts: Vec::new(),
         };
 
+        // Canonicalize home once — on macOS /var is a symlink to /private/var,
+        // so we need a stable prefix for starts_with checks.
+        let canonical_home = home.canonicalize().unwrap_or_else(|_| home.to_path_buf());
+
         for (rel_path, synced) in &bundle.files {
-            let abs_path = home.join(rel_path);
+            // Validate that rel_path doesn't escape the home directory (path traversal).
+            // Build abs_path from the canonical home so both paths share the same
+            // symlink-resolved prefix — avoids false positives when the target file
+            // doesn't exist yet (canonicalize would fail on a non-existent path).
+            let abs_path = canonical_home.join(rel_path);
+            let canonical_abs = abs_path
+                .canonicalize()
+                .unwrap_or_else(|_| abs_path.clone());
+            if !canonical_abs.starts_with(&canonical_home) {
+                anyhow::bail!(
+                    "Sync bundle contains path traversal: '{}' resolves outside home directory",
+                    rel_path
+                );
+            }
 
             // Ensure parent directory exists
             if let Some(parent) = abs_path.parent() {

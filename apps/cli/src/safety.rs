@@ -135,9 +135,12 @@ const DANGEROUS_PREFIXES: &[&str] = &[
 ];
 
 /// Commands that, when piped to a shell, make the pipeline dangerous.
-const DANGEROUS_PIPE_SOURCES: &[&str] = &["curl", "wget"];
+const DANGEROUS_PIPE_SOURCES: &[&str] = &["curl", "wget", "nc", "ncat", "socat"];
 /// Shell commands that are dangerous when receiving piped input.
-const DANGEROUS_PIPE_SINKS: &[&str] = &["sh", "bash", "zsh", "dash"];
+const DANGEROUS_PIPE_SINKS: &[&str] = &[
+    "sh", "bash", "zsh", "dash", "fish", "csh", "tcsh", "ksh",
+    "python", "python3", "perl", "ruby", "node", "eval", "source",
+];
 
 // ---------------------------------------------------------------------------
 // Tool-specific dangerous options
@@ -196,6 +199,24 @@ const SYSTEM_PATHS: &[&str] = &[
 pub fn classify_command(command: &str) -> CommandSafety {
     let trimmed = command.trim();
 
+    // Before the subshell check, see if the top-level command itself is dangerous.
+    // `eval $(...)` or `exec \`...\`` are dangerous because the base command is
+    // dangerous — the subshell doesn't reduce the severity.
+    if trimmed.contains("$(") || trimmed.contains('`') {
+        let first_word = trimmed.split_whitespace().next().unwrap_or("");
+        let base_cmd = strip_path(first_word);
+        if DANGEROUS_COMMANDS.contains(&base_cmd) {
+            return CommandSafety::Dangerous;
+        }
+        // Otherwise, subshell/backtick can hide arbitrary commands inside
+        // otherwise-safe expressions. Mark as Unknown to force prompt.
+        return CommandSafety::Unknown;
+    }
+    if trimmed.contains("$((") {
+        // Arithmetic expansion is safe, but `$((...))` is hard to distinguish from
+        // `$(...` above, so the `$(` check already catches it. This is a no-op guard.
+    }
+
     // Split on pipe, semicolon, and && to get individual segments.
     let segments = split_segments(trimmed);
 
@@ -239,35 +260,69 @@ pub fn classify_command(command: &str) -> CommandSafety {
 // ---------------------------------------------------------------------------
 
 /// Split a command line on `|`, `;`, and `&&`, trimming each segment.
+/// Respects single and double quotes — operators inside quotes are literal.
 fn split_segments(command: &str) -> Vec<String> {
     let mut segments = Vec::new();
     let mut current = String::new();
     let mut chars = command.chars().peekable();
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut escaped = false;
 
     while let Some(ch) = chars.next() {
-        match ch {
-            '|' | ';' => {
-                let seg = current.trim().to_string();
-                if !seg.is_empty() {
-                    segments.push(seg);
-                }
-                current.clear();
-            }
-            '&' => {
-                if chars.peek() == Some(&'&') {
-                    chars.next(); // consume second '&'
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' && !in_single_quote {
+            current.push(ch);
+            escaped = true;
+            continue;
+        }
+
+        if ch == '\'' && !in_double_quote {
+            in_single_quote = !in_single_quote;
+            current.push(ch);
+            continue;
+        }
+
+        if ch == '"' && !in_single_quote {
+            in_double_quote = !in_double_quote;
+            current.push(ch);
+            continue;
+        }
+
+        // Only split on operators when outside quotes
+        if !in_single_quote && !in_double_quote {
+            match ch {
+                '|' | ';' => {
                     let seg = current.trim().to_string();
                     if !seg.is_empty() {
                         segments.push(seg);
                     }
                     current.clear();
-                } else {
-                    // Single '&' (background) — keep in current segment.
-                    current.push(ch);
+                    continue;
                 }
+                '&' => {
+                    if chars.peek() == Some(&'&') {
+                        chars.next(); // consume second '&'
+                        let seg = current.trim().to_string();
+                        if !seg.is_empty() {
+                            segments.push(seg);
+                        }
+                        current.clear();
+                    } else {
+                        current.push(ch);
+                    }
+                    continue;
+                }
+                _ => {}
             }
-            _ => current.push(ch),
         }
+
+        current.push(ch);
     }
 
     let seg = current.trim().to_string();
@@ -367,14 +422,16 @@ fn strip_path(word: &str) -> &str {
     word.rsplit('/').next().unwrap_or(word)
 }
 
-/// Classify `rm` — with `-f`/`-rf`/`--force` flags it is Dangerous, otherwise Unknown.
+/// Classify `rm` — force flags make it Dangerous, otherwise Unknown.
+/// `-r`/`-R`/`--recursive` alone is Unknown (prompts user), but combined with
+/// `-f` (e.g. `-rf`, `-fr`, `-rfv`) it becomes Dangerous.
 fn classify_rm(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     for arg in &args[1..] {
         if *arg == "-f" || *arg == "--force" || *arg == "-rf" || *arg == "-fr" {
             return CommandSafety::Dangerous;
         }
-        // Combined short flags like -rfv, -fv, etc.
+        // Combined short flags like -rfv, -fv — dangerous only if 'f' is present.
         if arg.starts_with('-') && !arg.starts_with("--") {
             let flag_chars = &arg[1..];
             if flag_chars.contains('f') {
@@ -382,7 +439,7 @@ fn classify_rm(command: &str) -> CommandSafety {
             }
         }
     }
-    // rm without force flags is Unknown — still prompts user but no danger warning.
+    // rm without force flags is Unknown — prompts user.
     CommandSafety::Unknown
 }
 
@@ -467,9 +524,13 @@ fn classify_git(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     let mut i = 1; // skip "git"
 
-    // Block `git -c` (config override injection).
+    // Block `git -c` (config override injection) — all forms.
     for arg in &args[1..] {
-        if *arg == "-c" {
+        if *arg == "-c" || arg.starts_with("-c=") || arg.starts_with("-c ") {
+            return CommandSafety::Dangerous;
+        }
+        // Also block --config and --config= (long form)
+        if *arg == "--config" || arg.starts_with("--config=") {
             return CommandSafety::Dangerous;
         }
     }

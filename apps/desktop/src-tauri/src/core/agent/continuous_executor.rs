@@ -312,7 +312,7 @@ impl DailyLimitTracker {
              FROM continuous_execution_daily_stats
              WHERE date = ?1",
             params![today],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get::<_, i64>(0)? as u64, row.get::<_, i64>(1)? as u64, row.get(2)?)),
         );
 
         if let Ok((tokens, requests, cost)) = result {
@@ -486,8 +486,8 @@ impl DailyLimitTracker {
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 stats.date,
-                stats.tokens_used,
-                stats.requests_made,
+                stats.tokens_used as i64,
+                stats.requests_made as i64,
                 stats.cost_incurred,
                 stats.last_updated.to_rfc3339(),
             ],
@@ -610,8 +610,8 @@ impl ExecutionStatePersistence {
                 task.finished_at.map(|dt| dt.to_rfc3339()),
                 task.current_step,
                 task.consecutive_failures,
-                task.tokens_used,
-                task.requests_made,
+                task.tokens_used as i64,
+                task.requests_made as i64,
                 task.total_cost,
                 task.last_error,
                 task.last_checkpoint_id,
@@ -666,8 +666,8 @@ impl ExecutionStatePersistence {
                     }),
                     current_step: row.get(8)?,
                     consecutive_failures: row.get(9)?,
-                    tokens_used: row.get(10)?,
-                    requests_made: row.get(11)?,
+                    tokens_used: row.get::<_, i64>(10)? as u64,
+                    requests_made: row.get::<_, i64>(11)? as u64,
                     total_cost: row.get(12)?,
                     last_error: row.get(13)?,
                     last_checkpoint_id: row.get(14)?,
@@ -742,8 +742,8 @@ impl ExecutionStatePersistence {
                     }),
                     current_step: row.get(8)?,
                     consecutive_failures: row.get(9)?,
-                    tokens_used: row.get(10)?,
-                    requests_made: row.get(11)?,
+                    tokens_used: row.get::<_, i64>(10)? as u64,
+                    requests_made: row.get::<_, i64>(11)? as u64,
                     total_cost: row.get(12)?,
                     last_error: row.get(13)?,
                     last_checkpoint_id: row.get(14)?,
@@ -850,7 +850,7 @@ impl ExecutionStatePersistence {
                 LIMIT ?2
             )
             "#,
-            params![task_id, keep_count],
+            params![task_id, keep_count as i64],
         )?;
 
         Ok(deleted)

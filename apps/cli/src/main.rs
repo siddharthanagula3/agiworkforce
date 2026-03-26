@@ -1,3 +1,4 @@
+// Active modules — core CLI functionality
 #[allow(dead_code)]
 mod a2a;
 mod agent;
@@ -25,8 +26,10 @@ mod subagent;
 mod teams;
 mod tools;
 mod tui;
+#[allow(dead_code)]
+mod tui_basic;
 mod voice;
-// --- Codex CLI parity modules ---
+// Codex CLI parity modules
 mod app_server;
 mod apply_patch;
 mod cloud;
@@ -36,6 +39,35 @@ mod plugins;
 mod review;
 mod sandbox;
 mod tool_search;
+#[allow(dead_code)]
+mod routing;
+#[allow(dead_code)]
+mod policy;
+// In-progress modules — compiled and partially wired. Public APIs available for future integration.
+#[allow(dead_code)]
+mod ecosystem;
+#[allow(dead_code)]
+mod history;
+#[allow(dead_code)]
+mod init;
+#[allow(dead_code)]
+mod marketplace;
+#[allow(dead_code)]
+mod memory_pipeline;
+#[allow(dead_code)]
+mod models_cache;
+#[allow(dead_code)]
+mod oauth;
+#[allow(dead_code)]
+mod onboarding;
+#[allow(dead_code)]
+mod project_registry;
+#[allow(dead_code)]
+mod shell_snapshot;
+#[allow(dead_code)]
+mod skill_learner;
+#[allow(dead_code)]
+mod sync;
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
@@ -312,6 +344,40 @@ enum Command {
     Features,
     /// Show execution policy rules.
     Execpolicy,
+    /// Scan for ecosystem tools (Claude, Codex, Cursor, Gemini) and import MCP configs.
+    Ecosystem {
+        #[command(subcommand)]
+        action: EcosystemSubcommand,
+    },
+    /// Browse session history.
+    History {
+        /// Maximum number of sessions to display.
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
+    /// Sync dotfiles and settings across devices.
+    Sync {
+        #[command(subcommand)]
+        action: SyncSubcommand,
+    },
+    /// Login to AGI Workforce cloud (or an LLM provider via OAuth).
+    Login {
+        /// Provider to login with (agiworkforce, anthropic, openai). Omit for interactive menu.
+        provider: Option<String>,
+    },
+    /// Logout from AGI Workforce cloud.
+    Logout,
+    /// Show authentication status for all configured providers.
+    AuthStatus,
+    /// Browse and install marketplace plugins.
+    Marketplace {
+        #[command(subcommand)]
+        action: MarketplaceSubcommand,
+    },
+    /// Initialize ~/.agiworkforce/ directory structure and project registration.
+    Init,
+    /// Run the first-run onboarding wizard again.
+    Onboarding,
 }
 
 #[derive(Subcommand, Debug)]
@@ -341,6 +407,55 @@ enum PluginSubcommand {
         #[arg(long)]
         name: Option<String>,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum EcosystemSubcommand {
+    /// Scan for installed AI tools and IDEs.
+    Scan,
+    /// Import MCP server configs from detected tools.
+    Import,
+    /// Show detected tools and available MCP servers in detail.
+    Show,
+}
+
+#[derive(Subcommand, Debug)]
+enum SyncSubcommand {
+    /// Show which synced files have changed since last sync.
+    Status,
+    /// Export synced files to a JSON bundle (prints to stdout).
+    Export,
+    /// Import a sync bundle from a JSON file.
+    Import {
+        /// Path to the sync bundle JSON file.
+        file: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum MarketplaceSubcommand {
+    /// Search the remote plugin marketplace.
+    Search {
+        /// Search query.
+        query: String,
+    },
+    /// Install a plugin from a local path or git URL.
+    Install {
+        /// Local path or git URL to install from.
+        source: String,
+        /// Installation scope (user, project, local).
+        #[arg(long, default_value = "user")]
+        scope: String,
+    },
+    /// Uninstall a plugin by name.
+    Uninstall {
+        /// Plugin name to uninstall.
+        name: String,
+    },
+    /// List all installed marketplace plugins.
+    List,
+    /// Update all git-installed plugins.
+    Update,
 }
 
 #[tokio::main]
@@ -373,6 +488,34 @@ async fn main() -> Result<()> {
             "Warning: config validation failed: {}. Continuing with defaults.",
             e
         );
+    }
+
+    // --- First-run: initialize home directory and run onboarding if needed ---
+    if let Ok(home) = config::CliConfig::config_dir() {
+        // Always ensure the directory structure exists (idempotent)
+        if let Err(e) = init::init_home_dir(&home) {
+            eprintln!("Warning: failed to initialize home directory: {}", e);
+        }
+
+        // First-run onboarding wizard (only if interactive terminal and no subcommand)
+        if cli.command.is_none()
+            && cli.prompt.is_none()
+            && io::stdin().is_terminal()
+            && !onboarding::is_setup_complete()
+        {
+            match onboarding::run_onboarding().await {
+                Ok(true) => {
+                    // Reload config after onboarding may have changed it
+                    app_config = config::CliConfig::load_merged()?;
+                }
+                Ok(false) => {
+                    // User skipped or interrupted — continue with defaults
+                }
+                Err(e) => {
+                    eprintln!("Warning: onboarding error: {}. Continuing.", e);
+                }
+            }
+        }
     }
 
     // --- Subcommand dispatch (Codex CLI parity) ---
@@ -625,6 +768,255 @@ async fn main() -> Result<()> {
                     println!("{} rule(s):", policy.rules.len());
                     for r in &policy.rules {
                         println!("  {:?} — {}", r.effect, r.source);
+                    }
+                }
+                Ok(())
+            }
+
+            // --- Ecosystem ---
+            Command::Ecosystem { action } => {
+                match action {
+                    EcosystemSubcommand::Scan => {
+                        let detected = ecosystem::scan();
+                        println!("{}", ecosystem::format_table(&detected));
+                        Ok(())
+                    }
+                    EcosystemSubcommand::Import => {
+                        let detected = ecosystem::scan();
+                        let servers = ecosystem::import_mcp_servers(&detected);
+                        if servers.is_empty() {
+                            println!("No MCP server configs found to import.");
+                        } else {
+                            println!("Imported {} MCP server config(s):", servers.len());
+                            for s in &servers {
+                                let transport = if s.url.is_some() { "HTTP/SSE" } else { "stdio" };
+                                println!("  {} ({}) [{}]", s.name, s.source, transport);
+                            }
+                        }
+                        let skills = ecosystem::discover_external_skills(&detected);
+                        if !skills.is_empty() {
+                            println!("\nDiscovered {} external skill file(s).", skills.len());
+                        }
+                        Ok(())
+                    }
+                    EcosystemSubcommand::Show => {
+                        let detected = ecosystem::scan();
+                        let ctx = ecosystem::build_context(&detected);
+                        println!("{}", ecosystem::format_table(&detected));
+                        if !ctx.available_instructions.is_empty() {
+                            println!("\nAvailable instruction files:");
+                            for i in &ctx.available_instructions {
+                                println!(
+                                    "  {} — {} ({} bytes)",
+                                    i.tool,
+                                    i.path.display(),
+                                    i.size_bytes
+                                );
+                            }
+                        }
+                        let servers = ecosystem::import_mcp_servers(&detected);
+                        if !servers.is_empty() {
+                            println!("\nImportable MCP servers:");
+                            for s in &servers {
+                                let cmd_display = s
+                                    .command
+                                    .as_deref()
+                                    .or(s.url.as_deref())
+                                    .unwrap_or("(unknown)");
+                                println!("  {} — {}", s.name, cmd_display);
+                            }
+                        }
+                        Ok(())
+                    }
+                }
+            }
+
+            // --- History ---
+            Command::History { limit } => {
+                let conn = sessions::open_db()?;
+                let list = sessions::list_sessions(&conn, *limit)?;
+                if list.is_empty() {
+                    println!("No sessions found.");
+                } else {
+                    println!("{}", sessions::format_session_list(&list));
+                }
+                Ok(())
+            }
+
+            // --- Sync ---
+            Command::Sync { action } => {
+                let home = config::CliConfig::config_dir()?;
+                match action {
+                    SyncSubcommand::Status => {
+                        let changes = sync::ConfigSync::status(&home)?;
+                        if changes.is_empty() {
+                            println!("No synced files found.");
+                        } else {
+                            println!("{:<35} {}", "File", "Status");
+                            println!("{}", "-".repeat(50));
+                            for (path, change) in &changes {
+                                println!("{:<35} {}", path, change);
+                            }
+                        }
+                        Ok(())
+                    }
+                    SyncSubcommand::Export => {
+                        let bundle = sync::ConfigSync::export(&home)?;
+                        let json = serde_json::to_string_pretty(&bundle)?;
+                        println!("{}", json);
+                        Ok(())
+                    }
+                    SyncSubcommand::Import { file } => {
+                        let contents = std::fs::read_to_string(file)
+                            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", file, e))?;
+                        let bundle: sync::SyncBundle = serde_json::from_str(&contents)
+                            .map_err(|e| anyhow::anyhow!("Failed to parse sync bundle: {}", e))?;
+                        let report = sync::ConfigSync::import(&home, &bundle)?;
+                        if !report.files_updated.is_empty() {
+                            println!("Updated:");
+                            for f in &report.files_updated {
+                                println!("  {}", f);
+                            }
+                        }
+                        if !report.files_skipped.is_empty() {
+                            println!("Skipped (unchanged):");
+                            for f in &report.files_skipped {
+                                println!("  {}", f);
+                            }
+                        }
+                        if !report.conflicts.is_empty() {
+                            println!("Conflicts (local kept):");
+                            for f in &report.conflicts {
+                                println!("  {}", f);
+                            }
+                        }
+                        Ok(())
+                    }
+                }
+            }
+
+            // --- Login ---
+            Command::Login { provider } => {
+                match provider.as_deref() {
+                    Some("agiworkforce") | Some("agi") => {
+                        let api_base = "https://api.agiworkforce.com";
+                        let entry = oauth::device_code_login(api_base).await?;
+                        let mut store = auth::AuthStore::load()?;
+                        store.entries.insert("agiworkforce".to_string(), entry);
+                        store.save()?;
+                        Ok(())
+                    }
+                    Some(pid) => {
+                        if let Some(provider_cfg) = oauth::get_provider(pid) {
+                            let entry = oauth::oauth_login(provider_cfg).await?;
+                            let mut store = auth::AuthStore::load()?;
+                            store.entries.insert(pid.to_string(), entry);
+                            store.save()?;
+                        } else {
+                            eprintln!("Unknown provider '{}'. Available: agiworkforce, anthropic, openai", pid);
+                        }
+                        Ok(())
+                    }
+                    None => {
+                        // Interactive menu via existing auth flow
+                        auth::interactive_login().await?;
+                        Ok(())
+                    }
+                }
+            }
+
+            // --- Logout ---
+            Command::Logout => {
+                let mut store = auth::AuthStore::load()?;
+                if store.entries.is_empty() {
+                    println!("No active sessions to logout from.");
+                } else {
+                    let count = store.entries.len();
+                    store.entries.clear();
+                    store.save()?;
+                    println!("Logged out from {} provider(s).", count);
+                }
+                Ok(())
+            }
+
+            // --- Auth Status ---
+            Command::AuthStatus => {
+                let statuses = auth::auth_status()?;
+                if statuses.is_empty() {
+                    println!("No authentication configured.");
+                    println!("Run `agiworkforce login` to authenticate.");
+                } else {
+                    println!("{:<18} {:<10} {:<12} {}", "Provider", "Type", "Status", "Expires");
+                    println!("{}", "-".repeat(60));
+                    for s in &statuses {
+                        println!(
+                            "{:<18} {:<10} {:<12} {}",
+                            s.provider,
+                            s.auth_type,
+                            s.status,
+                            s.expires_in.as_deref().unwrap_or("-"),
+                        );
+                    }
+                }
+                Ok(())
+            }
+
+            // --- Marketplace ---
+            Command::Marketplace { action } => {
+                let home = config::CliConfig::config_dir()?;
+                let mp = marketplace::Marketplace::new();
+                match action {
+                    MarketplaceSubcommand::Search { query } => {
+                        let results = mp.search(query).await?;
+                        println!("{}", marketplace::format_search_results(&results));
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Install { source, scope } => {
+                        mp.install(source, &home, scope).await?;
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Uninstall { name } => {
+                        mp.uninstall(name, &home)?;
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::List => {
+                        let registry = marketplace::Marketplace::list_installed(&home);
+                        println!("{}", marketplace::format_installed(&registry));
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Update => {
+                        mp.update_all(&home).await?;
+                        Ok(())
+                    }
+                }
+            }
+
+            // --- Init ---
+            Command::Init => {
+                let home = config::CliConfig::config_dir()?;
+                init::init_home_dir(&home)?;
+                println!("Initialized ~/.agiworkforce/ directory structure.");
+
+                // Register current directory as a project
+                let cwd = std::env::current_dir()?;
+                let mut registry = project_registry::ProjectRegistry::load(&home)?;
+                registry.register_project(&cwd, "trusted")?;
+                registry.save(&home)?;
+                println!("Registered project: {}", cwd.display());
+                Ok(())
+            }
+
+            // --- Onboarding ---
+            Command::Onboarding => {
+                match onboarding::run_onboarding().await {
+                    Ok(true) => {
+                        println!("Onboarding complete.");
+                    }
+                    Ok(false) => {
+                        println!("Onboarding skipped.");
+                    }
+                    Err(e) => {
+                        eprintln!("Onboarding error: {}", e);
                     }
                 }
                 Ok(())
@@ -1009,6 +1401,7 @@ async fn main() -> Result<()> {
             team_mode,
             cli.yes,
             cli.quiet,
+            cli.provider,
         )
         .await
     }

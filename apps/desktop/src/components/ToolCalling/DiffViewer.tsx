@@ -5,7 +5,7 @@
  * Shows additions, deletions, and context lines.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Copy, Check, FileCode, ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
@@ -25,9 +25,16 @@ export function DiffViewer({
   defaultExpanded = true,
 }: DiffViewerProps) {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandedHunks, setExpandedHunks] = useState<Set<number>>(
     new Set(defaultExpanded ? data.hunks.map((_, i) => i) : []),
   );
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const handleCopy = async () => {
     // Generate unified diff format
@@ -48,7 +55,8 @@ export function DiffViewer({
 
     await navigator.clipboard.writeText(lines.join('\n'));
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const toggleHunk = (index: number) => {

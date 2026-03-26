@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Individual Blog Post Page
  * Displays a single blog post with full content

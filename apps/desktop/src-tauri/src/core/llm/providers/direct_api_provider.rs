@@ -57,7 +57,7 @@ impl DirectApiProvider {
             proxy_url: config.proxy_url.clone(),
             ca_cert_path: config.ca_cert_path.clone(),
             connect_timeout_secs: config.connect_timeout_secs,
-            read_timeout_secs: None, // No timeout for streaming
+            read_timeout_secs: Some(120), // Per-read timeout to catch silent/hung providers (SSE idle timeout in llm_router handles normal gaps)
         };
         let streaming_client =
             create_http_client(&streaming_config).map_err(Box::<dyn Error + Send + Sync>::from)?;

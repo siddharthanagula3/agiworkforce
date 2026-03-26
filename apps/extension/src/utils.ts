@@ -5,6 +5,7 @@ export const logger = {
     console.debug(`[AGI Workforce] ${message}`, data);
   },
   info: (message: string, data?: unknown) => {
+    // eslint-disable-next-line no-console
     console.info(`[AGI Workforce] ${message}`, data);
   },
   warn: (message: string, data?: unknown) => {

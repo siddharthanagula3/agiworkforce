@@ -25,7 +25,23 @@ const nextConfig: NextConfig = {
   // Instrumentation is automatically enabled in Next.js 16+
   // See: apps/web/instrumentation.ts
   experimental: {
-    optimizePackageImports: ['@supabase/ssr'],
+    optimizePackageImports: [
+      '@supabase/ssr',
+      'lucide-react',
+      'date-fns',
+      'framer-motion',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-popover',
+      'sonner',
+      'react-markdown',
+      '@radix-ui/react-accordion',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-scroll-area',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tooltip',
+      'class-variance-authority',
+    ],
   },
   // Chat app is served as static files from public/chat/ (built from apps/desktop Vite app)
   // SPA fallback rewrite is in vercel.json: /chat/:path* → /chat/index.html

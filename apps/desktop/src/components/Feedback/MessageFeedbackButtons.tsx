@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ThumbsUp, ThumbsDown, MessageSquare, X, Send } from 'lucide-react';
-import { invoke } from '../../lib/tauri-mock';
+import { feedback } from '@agiworkforce/api';
 
 interface MessageFeedbackButtonsProps {
   messageId: string;
@@ -25,13 +25,13 @@ export function MessageFeedbackButtons({
     async (type: 'positive' | 'negative' | 'correction', correctionText?: string) => {
       setSubmitting(true);
       try {
-        await invoke('record_message_feedback', {
+        await feedback.recordMessageFeedback(
           messageId,
-          conversationId: conversationId ?? null,
-          feedbackType: type,
-          correction: correctionText ?? null,
-          category: null,
-        });
+          conversationId ?? null,
+          type,
+          correctionText ?? null,
+          null,
+        );
         setFeedbackState(type);
         if (type === 'correction') {
           setShowCorrection(false);

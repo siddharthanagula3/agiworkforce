@@ -1,9 +1,82 @@
 //! Signal messaging integration via signal-cli
 
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
 use crate::sys::error::{Error, Result};
+
+/// Allowlist of binary names permitted for signal-cli execution.
+const ALLOWED_CLI_BINARIES: &[&str] = &["signal-cli"];
+
+/// Validate that a CLI path is a simple binary name on the allowlist,
+/// then resolve it to a full path via PATH lookup.
+/// Rejects any path containing directory separators to prevent command injection.
+fn validate_cli_path(path: &str) -> Result<String> {
+    // Reject paths containing directory separators — only bare binary names allowed
+    if path.contains('/') || path.contains('\\') {
+        return Err(Error::PermissionError(format!(
+            "CLI path must be a simple binary name without path separators, got: {}",
+            path
+        )));
+    }
+
+    // Reject empty or whitespace-only input
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err(Error::Config(
+            "CLI path must not be empty".to_string(),
+        ));
+    }
+
+    // Validate against allowlist
+    if !ALLOWED_CLI_BINARIES.contains(&trimmed) {
+        return Err(Error::PermissionError(format!(
+            "Binary '{}' is not in the allowed list: {:?}",
+            trimmed, ALLOWED_CLI_BINARIES
+        )));
+    }
+
+    // Resolve the binary to its full path via PATH lookup
+    let resolved = which::which(trimmed).map_err(|e| {
+        Error::Config(format!(
+            "Could not find '{}' in PATH: {}",
+            trimmed, e
+        ))
+    })?;
+
+    Ok(resolved.to_string_lossy().into_owned())
+}
+
+/// Validate that a config path is safe — it must resolve to a location within
+/// the user's home directory to prevent path traversal attacks.
+fn validate_config_path(config_path: &str) -> Result<String> {
+    let path = Path::new(config_path);
+
+    // Canonicalize to resolve symlinks, .., and other traversal components
+    let canonical = path.canonicalize().map_err(|e| {
+        Error::InvalidPath(format!(
+            "Cannot resolve config path '{}': {}",
+            config_path, e
+        ))
+    })?;
+
+    // The config path must reside within the user's home directory
+    let home_dir = dirs::home_dir().ok_or_else(|| {
+        Error::Config("Unable to determine home directory for path validation".to_string())
+    })?;
+
+    if !canonical.starts_with(&home_dir) {
+        return Err(Error::PermissionError(format!(
+            "Config path '{}' resolves to '{}' which is outside the home directory",
+            config_path,
+            canonical.display()
+        )));
+    }
+
+    Ok(canonical.to_string_lossy().into_owned())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignalConfig {
@@ -19,6 +92,24 @@ impl Default for SignalConfig {
             signal_cli_path: Some("signal-cli".to_string()),
             config_path: None,
         }
+    }
+}
+
+impl SignalConfig {
+    /// Validate all user-supplied paths in this config.
+    /// Must be called before constructing a `SignalClient`.
+    pub fn validate(&self) -> Result<()> {
+        // Validate signal_cli_path if provided
+        if let Some(ref cli_path) = self.signal_cli_path {
+            validate_cli_path(cli_path)?;
+        }
+
+        // Validate config_path if provided
+        if let Some(ref config_path) = self.config_path {
+            validate_config_path(config_path)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -52,16 +143,29 @@ impl SignalClient {
         }
     }
 
-    fn get_cli_path(&self) -> &str {
-        self.config
+    /// Resolve and validate the CLI binary path.
+    /// Returns the full resolved path from PATH lookup, never a user-supplied raw path.
+    fn get_cli_path(&self) -> Result<String> {
+        let raw = self
+            .config
             .signal_cli_path
             .as_deref()
-            .unwrap_or("signal-cli")
+            .unwrap_or("signal-cli");
+        validate_cli_path(raw)
+    }
+
+    /// Validate and resolve the config path, if set.
+    fn get_config_path(&self) -> Result<Option<String>> {
+        match self.config.config_path.as_deref() {
+            Some(p) => validate_config_path(p).map(Some),
+            None => Ok(None),
+        }
     }
 
     /// Check if signal-cli is available
     pub async fn check_availability(&self) -> Result<bool> {
-        let output = Command::new(self.get_cli_path())
+        let cli_path = self.get_cli_path()?;
+        let output = Command::new(&cli_path)
             .arg("--version")
             .output()
             .await;
@@ -91,11 +195,14 @@ impl SignalClient {
             .as_ref()
             .ok_or_else(|| Error::Config("Phone number required".into()))?;
 
-        let mut cmd = Command::new(self.get_cli_path());
+        let cli_path = self.get_cli_path()?;
+        let config_path = self.get_config_path()?;
+
+        let mut cmd = Command::new(&cli_path);
         cmd.arg("-a").arg(phone);
 
-        if let Some(ref config_path) = self.config.config_path {
-            cmd.arg("--config").arg(config_path);
+        if let Some(ref validated_config_path) = config_path {
+            cmd.arg("--config").arg(validated_config_path);
         }
 
         cmd.arg("send").arg("-m").arg(content).arg(recipient);
@@ -121,11 +228,14 @@ impl SignalClient {
             .as_ref()
             .ok_or_else(|| Error::Config("Phone number required".into()))?;
 
-        let mut cmd = Command::new(self.get_cli_path());
+        let cli_path = self.get_cli_path()?;
+        let config_path = self.get_config_path()?;
+
+        let mut cmd = Command::new(&cli_path);
         cmd.arg("-a").arg(phone);
 
-        if let Some(ref config_path) = self.config.config_path {
-            cmd.arg("--config").arg(config_path);
+        if let Some(ref validated_config_path) = config_path {
+            cmd.arg("--config").arg(validated_config_path);
         }
 
         cmd.arg("send")
@@ -158,11 +268,14 @@ impl SignalClient {
             .as_ref()
             .ok_or_else(|| Error::Config("Phone number required".into()))?;
 
-        let mut cmd = Command::new(self.get_cli_path());
+        let cli_path = self.get_cli_path()?;
+        let config_path = self.get_config_path()?;
+
+        let mut cmd = Command::new(&cli_path);
         cmd.arg("-a").arg(phone);
 
-        if let Some(ref config_path) = self.config.config_path {
-            cmd.arg("--config").arg(config_path);
+        if let Some(ref validated_config_path) = config_path {
+            cmd.arg("--config").arg(validated_config_path);
         }
 
         cmd.arg("receive").arg("--json").arg("-t").arg("1"); // 1 second timeout
@@ -211,11 +324,14 @@ impl SignalClient {
             .as_ref()
             .ok_or_else(|| Error::Config("Phone number required".into()))?;
 
-        let mut cmd = Command::new(self.get_cli_path());
+        let cli_path = self.get_cli_path()?;
+        let config_path = self.get_config_path()?;
+
+        let mut cmd = Command::new(&cli_path);
         cmd.arg("-a").arg(phone);
 
-        if let Some(ref config_path) = self.config.config_path {
-            cmd.arg("--config").arg(config_path);
+        if let Some(ref validated_config_path) = config_path {
+            cmd.arg("--config").arg(validated_config_path);
         }
 
         cmd.arg("listContacts");

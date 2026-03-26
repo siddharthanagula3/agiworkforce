@@ -1,6 +1,7 @@
-import Link from 'next/link';
-import { Bot, Target, Zap, Shield, Users, ArrowRight } from 'lucide-react';
+import { Bot, Target, Zap, Shield, Users } from 'lucide-react';
 import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { CtaSection } from '../../components/marketing/CtaSection';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -119,7 +120,7 @@ export default function AboutPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="flex min-h-screen flex-col bg-black text-white">
+      <div className="flex min-h-screen flex-col bg-[#09090b] text-white">
         <Header />
 
         <main className="flex-1 pt-24">
@@ -228,7 +229,7 @@ export default function AboutPage() {
                 </div>
 
                 {/* Why we built this */}
-                <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8">
+                <div className="mt-8 rounded-2xl border border-zinc-800 border-l-[#c8892a] border-l-2 bg-zinc-900/50 p-8">
                   <h4 className="text-lg font-semibold mb-3 text-white">Why we built this</h4>
                   <p className="text-zinc-400 text-sm leading-relaxed">
                     Every powerful AI tool we tried was either locked to one model, cloud-only, or
@@ -247,14 +248,14 @@ export default function AboutPage() {
             <div className="container mx-auto px-4">
               <div className="grid md:grid-cols-4 gap-8 text-center">
                 <div className="p-8">
-                  <div className="text-4xl font-bold text-blue-500 mb-2">9+</div>
+                  <div className="text-4xl font-bold text-blue-500 mb-2">25+</div>
                   <div className="text-zinc-300 font-medium">AI Providers</div>
                   <div className="text-sm text-zinc-500 mt-1">OpenAI, Anthropic, Google & more</div>
                 </div>
                 <div className="p-8">
-                  <div className="text-4xl font-bold text-blue-500 mb-2">140+</div>
+                  <div className="text-4xl font-bold text-blue-500 mb-2">Dozens</div>
                   <div className="text-zinc-300 font-medium">AI Skills</div>
-                  <div className="text-sm text-zinc-500 mt-1">Across 9 industries</div>
+                  <div className="text-sm text-zinc-500 mt-1">Across multiple categories</div>
                 </div>
                 <div className="p-8">
                   <div className="text-4xl font-bold text-blue-500 mb-2">macOS</div>
@@ -271,36 +272,13 @@ export default function AboutPage() {
           </section>
 
           {/* CTA Section */}
-          <section className="py-24 relative overflow-hidden">
-            <div className="absolute inset-0 bg-blue-600/10" />
-            <div className="container relative mx-auto px-4 text-center">
-              <h2 className="text-4xl font-bold tracking-tight mb-6">Ready to Get Started?</h2>
-              <p className="text-xl text-zinc-400 mb-10 max-w-2xl mx-auto">
-                Just tell the AI what you want done. No setup, no configuration - everything is
-                reversible.
-              </p>
-              <Link
-                href="/download"
-                className="inline-flex h-14 items-center justify-center rounded-full bg-white px-8 text-lg font-bold text-black transition-transform hover:scale-105"
-              >
-                Download for Free
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </div>
-          </section>
+          <CtaSection
+            headline="Ready to Get Started?"
+            body="Just tell the AI what you want done. No setup, no configuration — everything is reversible."
+          />
         </main>
 
-        <footer className="border-t border-white/10 bg-black py-12">
-          <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2 font-bold">
-              <Bot className="h-5 w-5 text-zinc-500" />
-              <span className="text-zinc-500">AGI Workforce</span>
-            </div>
-            <div className="text-sm text-zinc-600">
-              &copy; {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
-            </div>
-          </div>
-        </footer>
+        <MarketingFooter />
       </div>
     </>
   );

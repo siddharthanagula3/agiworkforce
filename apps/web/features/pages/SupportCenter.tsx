@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Help & Support Page - Documentation, FAQs, and support resources
  */

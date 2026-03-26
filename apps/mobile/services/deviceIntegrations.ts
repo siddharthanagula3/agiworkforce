@@ -91,6 +91,16 @@ export async function requestContactsPermission(): Promise<boolean> {
   return status === 'granted';
 }
 
+/** Generate a deterministic fallback ID from contact fields (simple string hash). */
+function stableContactId(name: string, secondary: string): string {
+  const input = `${name}:${secondary}`;
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
 export async function searchContacts(query: string): Promise<ContactEntry[]> {
   const hasPermission = await requestContactsPermission();
   if (!hasPermission) return [];
@@ -112,7 +122,7 @@ export async function searchContacts(query: string): Promise<ContactEntry[]> {
       'Unknown';
 
     return {
-      id: contact.id ?? String(Math.random()),
+      id: contact.id ?? `contact_${stableContactId(name, phone ?? email ?? '')}`,
       name,
       phone,
       email,

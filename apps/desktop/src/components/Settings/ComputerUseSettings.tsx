@@ -178,18 +178,18 @@ export function ComputerUseSettings() {
               </div>
             )}
 
-            {allowedApps.length > 0 ? (
+            {(allowedApps as string[]).length > 0 ? (
               <ul className="space-y-1">
-                {allowedApps.map((app) => (
+                {(allowedApps as string[]).map((app: string) => (
                   <li
-                    key={app.appName}
+                    key={app}
                     className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm"
                   >
-                    <span>{app.appName}</span>
+                    <span>{app}</span>
                     <button
-                      onClick={() => removeAllowedApp(app.appName)}
+                      onClick={() => removeAllowedApp(app)}
                       className="text-muted-foreground hover:text-destructive transition-colors"
-                      aria-label={`Remove ${app.appName}`}
+                      aria-label={`Remove ${app}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -252,18 +252,18 @@ export function ComputerUseSettings() {
               </div>
             )}
 
-            {deniedApps.length > 0 ? (
+            {(deniedApps as string[]).length > 0 ? (
               <ul className="space-y-1">
-                {deniedApps.map((app) => (
+                {(deniedApps as string[]).map((app: string) => (
                   <li
-                    key={app.appName}
+                    key={app}
                     className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm"
                   >
-                    <span>{app.appName}</span>
+                    <span>{app}</span>
                     <button
-                      onClick={() => removeDeniedApp(app.appName)}
+                      onClick={() => removeDeniedApp(app)}
                       className="text-muted-foreground hover:text-destructive transition-colors"
-                      aria-label={`Remove ${app.appName}`}
+                      aria-label={`Remove ${app}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>

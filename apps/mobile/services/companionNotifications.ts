@@ -58,7 +58,10 @@ const ACTION_MAP: Record<string, NotificationSpec> = {
     title: (p) => 'Agent Failed',
     body: (p) => {
       const name = p.agentName ?? 'An agent';
-      const msg = p.errorMessage ? `: ${p.errorMessage}` : '';
+      // Sanitize: only show first line, max 100 chars — don't expose stack traces in notifications
+      const rawMsg =
+        typeof p.errorMessage === 'string' ? p.errorMessage.split('\n')[0]!.slice(0, 100) : '';
+      const msg = rawMsg ? `: ${rawMsg}` : '';
       return `${name} encountered an error and stopped${msg}.`;
     },
   },
@@ -88,7 +91,7 @@ const ACTION_MAP: Record<string, NotificationSpec> = {
     },
   },
   heartbeat_lost: {
-    type: 'agent_paused',
+    type: 'heartbeat_info',
     priority: 'high',
     title: () => 'Desktop Disconnected',
     body: () => 'Lost connection to your desktop. Agents may be paused.',

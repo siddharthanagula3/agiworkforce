@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
+import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 
@@ -46,6 +47,8 @@ export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    const rateLimitResponse = await withRateLimit(request, 'default');
+    if (rateLimitResponse) return rateLimitResponse;
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category') || undefined;
     const search = searchParams.get('search') || undefined;

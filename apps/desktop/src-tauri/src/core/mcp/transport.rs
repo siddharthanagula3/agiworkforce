@@ -429,12 +429,49 @@ impl StdioTransport {
             augmented_path
         };
 
+        // SECURITY: Blocklist approach for env vars passed to MCP child processes.
+        // We use a blocklist (not allowlist) because MCP servers legitimately need most of
+        // the parent environment (PATH, HOME, LANG, etc.) to function. An allowlist would
+        // break too many servers. Instead we deny specific variables that enable:
+        //   - Shared library injection (LD_PRELOAD, DYLD_INSERT_LIBRARIES, etc.)
+        //   - Runtime code injection via language-specific hooks (NODE_OPTIONS, PYTHONSTARTUP, etc.)
+        //   - Shell startup injection (BASH_ENV, ENV, ZDOTDIR)
+        //   - Information disclosure in debug builds (NODE_DEBUG, RUST_LOG)
+        //   - Electron/Node.js sandbox escapes (ELECTRON_RUN_AS_NODE)
+        const BLOCKED_ENV_VARS: &[&str] = &[
+            // Shared library injection (Linux / macOS)
+            "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT",
+            "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH",
+            // Node.js / Electron
+            "NODE_OPTIONS", "NODE_EXTRA_CA_CERTS",
+            "NODE_DEBUG",
+            "ELECTRON_RUN_AS_NODE",
+            // Python
+            "PYTHONSTARTUP", "PYTHONPATH",
+            // Ruby / Perl
+            "RUBYOPT", "PERL5OPT",
+            // JVM code injection
+            "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS",
+            // Shell startup injection
+            "BASH_ENV", "ENV", "ZDOTDIR",
+            // Info disclosure in debug builds
+            "RUST_LOG",
+        ];
+        let filtered_env: std::collections::HashMap<String, String> = env
+            .into_iter()
+            .filter(|(key, _)| {
+                let upper = key.to_uppercase();
+                !BLOCKED_ENV_VARS.iter().any(|blocked| upper == *blocked)
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
         let mut cmd = Command::new(&resolved);
         cmd.args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .envs(env)
+            .envs(filtered_env)
             .env("PATH", &final_path);
 
         let mut child = cmd
@@ -922,9 +959,84 @@ struct SseEvent {
     id: Option<String>,
 }
 
+/// Validate an MCP server URL to prevent SSRF attacks against private networks.
+///
+/// Blocks requests to private/link-local/loopback IP ranges and IPv6-mapped IPv4.
+/// Loopback addresses (127.0.0.0/8, ::1, localhost) are allowed because MCP
+/// servers commonly run locally.
+///
+/// This mirrors the logic in `direct_api_provider.rs::validate_provider_base_url()`
+/// but returns `McpError` and permits loopback (local MCP servers are expected).
+fn validate_mcp_server_url(url: &str) -> McpResult<()> {
+    let parsed = url::Url::parse(url).map_err(|e| {
+        McpError::InvalidConfig(format!("Invalid MCP server URL: {e}"))
+    })?;
+
+    // Determine if the host is a loopback address.
+    let is_loopback = match parsed.host() {
+        Some(url::Host::Domain(d)) => d == "localhost",
+        Some(url::Host::Ipv4(v4)) => v4.is_loopback(),
+        Some(url::Host::Ipv6(v6)) => v6.is_loopback(),
+        None => false,
+    };
+
+    // Loopback is allowed — MCP servers commonly run locally.
+    if is_loopback {
+        return Ok(());
+    }
+
+    // Block private/link-local IP ranges (SSRF prevention).
+    match parsed.host() {
+        Some(url::Host::Ipv4(v4)) => {
+            if v4.is_private() || v4.is_link_local() {
+                return Err(McpError::ConnectionError(format!(
+                    "SSRF protection: private/link-local IP address {} is not allowed for remote MCP servers",
+                    v4
+                )));
+            }
+            // Block 0.0.0.0
+            if v4.is_unspecified() {
+                return Err(McpError::ConnectionError(
+                    "SSRF protection: unspecified address 0.0.0.0 is not allowed".to_string(),
+                ));
+            }
+        }
+        Some(url::Host::Ipv6(v6)) => {
+            let segments = v6.segments();
+            // Block fe80::/10 (link-local)
+            let is_link_local = (segments[0] & 0xffc0) == 0xfe80;
+            // Block fc00::/7 (unique local)
+            let is_unique_local = (segments[0] & 0xfe00) == 0xfc00;
+            // Block IPv6-mapped IPv4 addresses (::ffff:x.x.x.x)
+            let is_ipv4_mapped = segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
+            if is_link_local || is_unique_local || is_ipv4_mapped {
+                return Err(McpError::ConnectionError(format!(
+                    "SSRF protection: private/link-local/mapped IPv6 address {} is not allowed for remote MCP servers",
+                    v6
+                )));
+            }
+        }
+        Some(url::Host::Domain(d)) => {
+            // Block numeric-only domains (decimal IP like 2130706433 = 127.0.0.1)
+            if d.chars().all(|c| c.is_ascii_digit()) && !d.is_empty() {
+                return Err(McpError::ConnectionError(format!(
+                    "SSRF protection: numeric hostname '{}' is not allowed (potential IP obfuscation)",
+                    d
+                )));
+            }
+        }
+        None => {}
+    }
+
+    Ok(())
+}
+
 impl HttpSseTransport {
     /// Create a new HTTP/SSE transport
     pub async fn new(server_name: String, config: HttpSseConfig) -> McpResult<Self> {
+        // FIX R-09: Validate the MCP server URL to prevent SSRF against private networks.
+        validate_mcp_server_url(&config.url)?;
+
         tracing::info!(
             "[MCP HTTP Transport] Connecting to server '{}' at {}",
             server_name,
@@ -1497,6 +1609,18 @@ impl HttpSseTransport {
                 "Response will be delivered via SSE".to_string(),
             ))
         } else {
+            // FIX R-10: Check Content-Length before reading the response body to prevent
+            // a malicious MCP server from exhausting memory with an oversized response.
+            const MAX_RESPONSE_BODY_BYTES: u64 = 50_000_000; // 50 MB
+            if let Some(len) = response.content_length() {
+                if len > MAX_RESPONSE_BODY_BYTES {
+                    return Err(McpError::ConnectionError(format!(
+                        "Response too large ({} bytes, max {} bytes)",
+                        len, MAX_RESPONSE_BODY_BYTES
+                    )));
+                }
+            }
+
             // Direct JSON response
             let response_text = response.text().await.map_err(|e| {
                 McpError::ConnectionError(format!("Failed to read response body: {}", e))

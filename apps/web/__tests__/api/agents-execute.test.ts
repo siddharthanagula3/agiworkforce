@@ -15,6 +15,18 @@ vi.mock('fs', () => ({
   readFileSync: vi.fn(() => 'You are a helpful AI assistant.'),
 }));
 
+// Mock fs/promises — the route uses access() and readFile() from fs/promises
+const mockFsAccess = vi.fn();
+const mockFsReadFile = vi.fn();
+vi.mock('fs/promises', () => ({
+  default: {
+    access: (...args: unknown[]) => mockFsAccess(...args),
+    readFile: (...args: unknown[]) => mockFsReadFile(...args),
+  },
+  access: (...args: unknown[]) => mockFsAccess(...args),
+  readFile: (...args: unknown[]) => mockFsReadFile(...args),
+}));
+
 // Mock rate limiting — pass through by default
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
@@ -138,9 +150,43 @@ vi.mock('@/lib/errors', () => {
   };
 });
 
-vi.mock('@/lib/error-handler', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/error-handler')>();
-  return actual;
+vi.mock('@/lib/error-handler', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { NextResponse } = require('next/server');
+  return {
+    handleError: (error: unknown) => {
+      if (error && typeof error === 'object' && 'statusCode' in error) {
+        const e = error as { code: string; message: string; statusCode: number };
+        return NextResponse.json(
+          { error: { code: e.code, message: e.message } },
+          { status: e.statusCode },
+        );
+      }
+      return NextResponse.json(
+        { error: { code: 'INTERNAL_ERROR', message: String(error) } },
+        { status: 500 },
+      );
+    },
+    withErrorHandler: (handler: (...args: unknown[]) => Promise<unknown>) => {
+      return async (...args: unknown[]) => {
+        try {
+          return await handler(...args);
+        } catch (error) {
+          if (error && typeof error === 'object' && 'statusCode' in error) {
+            const e = error as { code: string; message: string; statusCode: number };
+            return NextResponse.json(
+              { error: { code: e.code, message: e.message } },
+              { status: e.statusCode },
+            );
+          }
+          return NextResponse.json(
+            { error: { code: 'INTERNAL_ERROR', message: String(error) } },
+            { status: 500 },
+          );
+        }
+      };
+    },
+  };
 });
 
 // Build a minimal SSE readable stream for the LLM provider mock
@@ -172,6 +218,10 @@ const FAKE_BEARER = 'Bearer fake-token-value';
 describe('POST /api/agents/execute', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Default: fs/promises mocks for employee system prompt loading
+    mockFsAccess.mockResolvedValue(undefined);
+    mockFsReadFile.mockResolvedValue('You are a helpful AI assistant.');
 
     // Default: authenticated user
     mockGetUser.mockResolvedValue({

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 
@@ -68,7 +68,8 @@ fn write_default_config(home: &Path) -> Result<()> {
 "#;
 
     let contents = format!("{}{}", header, toml_body);
-    fs::write(&config_path, contents)?;
+    fs::write(&config_path, &contents)
+        .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
 
     Ok(())
 }

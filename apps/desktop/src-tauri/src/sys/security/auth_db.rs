@@ -576,7 +576,7 @@ impl AuthDatabaseManager {
         )?;
 
         let logs = stmt
-            .query_map(params![user_id, limit], |row| {
+            .query_map(params![user_id, limit as i64], |row| {
                 Ok(AuthAuditLog {
                     id: row.get(0)?,
                     user_id: row.get(1)?,

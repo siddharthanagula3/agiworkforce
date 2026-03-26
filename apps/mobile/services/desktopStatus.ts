@@ -10,6 +10,7 @@
  * and the latest heartbeat UPDATE was missed.
  */
 
+import { AppState } from 'react-native';
 import { supabase } from './supabase';
 import { useDesktopStatusStore } from '@/stores/desktopStatusStore';
 
@@ -63,11 +64,25 @@ async function checkDesktopHeartbeat(): Promise<void> {
 export function startDesktopStatusPolling(): () => void {
   void checkDesktopHeartbeat();
 
-  const intervalId = setInterval(() => {
+  let intervalId: ReturnType<typeof setInterval> | null = setInterval(() => {
     void checkDesktopHeartbeat();
   }, POLL_INTERVAL_MS);
 
+  // Pause polling when app is backgrounded to save battery
+  const appStateSubscription = AppState.addEventListener('change', (state) => {
+    if (state === 'background' && intervalId !== null) {
+      clearInterval(intervalId);
+      intervalId = null;
+    } else if (state === 'active' && intervalId === null) {
+      void checkDesktopHeartbeat();
+      intervalId = setInterval(() => {
+        void checkDesktopHeartbeat();
+      }, POLL_INTERVAL_MS);
+    }
+  });
+
   return () => {
-    clearInterval(intervalId);
+    if (intervalId !== null) clearInterval(intervalId);
+    appStateSubscription.remove();
   };
 }

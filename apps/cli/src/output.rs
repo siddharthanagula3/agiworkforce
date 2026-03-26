@@ -57,15 +57,20 @@ pub fn detect_color_level() -> ColorLevel {
 // Token & duration formatting
 // ---------------------------------------------------------------------------
 
+const MILLION: f64 = 1_000_000.0;
+const THOUSAND: f64 = 1_000.0;
+const MS_PER_SECOND: u64 = 1_000;
+const MS_PER_MINUTE: u64 = 60_000;
+
 /// Format a token count with human-readable K/M suffix.
 ///
 /// Examples: `842` → `"842"`, `12500` → `"12.5K"`, `2400000` → `"2.4M"`.
 #[allow(dead_code)]
 pub fn format_tokens(count: u32) -> String {
-    if count >= 1_000_000 {
-        format!("{:.1}M", count as f64 / 1_000_000.0)
-    } else if count >= 1_000 {
-        format!("{:.1}K", count as f64 / 1_000.0)
+    if count as f64 >= MILLION {
+        format!("{:.1}M", count as f64 / MILLION)
+    } else if count as f64 >= THOUSAND {
+        format!("{:.1}K", count as f64 / THOUSAND)
     } else {
         count.to_string()
     }
@@ -76,12 +81,12 @@ pub fn format_tokens(count: u32) -> String {
 /// Examples: `250` → `"250ms"`, `3400` → `"3.4s"`, `125000` → `"2m 5s"`.
 #[allow(dead_code)]
 pub fn format_duration_ms(ms: u64) -> String {
-    if ms < 1_000 {
+    if ms < MS_PER_SECOND {
         format!("{}ms", ms)
-    } else if ms < 60_000 {
-        format!("{:.1}s", ms as f64 / 1_000.0)
+    } else if ms < MS_PER_MINUTE {
+        format!("{:.1}s", ms as f64 / THOUSAND)
     } else {
-        format!("{}m {}s", ms / 60_000, (ms % 60_000) / 1_000)
+        format!("{}m {}s", ms / MS_PER_MINUTE, (ms % MS_PER_MINUTE) / MS_PER_SECOND)
     }
 }
 

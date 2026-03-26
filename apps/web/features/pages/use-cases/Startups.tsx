@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useRef } from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion, useInView } from 'framer-motion';
@@ -53,7 +55,7 @@ const StartupsPage: React.FC = () => {
       icon: Users,
       title: 'Compete with YC Companies from Your Bedroom',
       description:
-        'Get the same firepower as $10M funded startups for $190/month. Access 165+ specialized AI employees instantly. Tell them what you need in natural language—they execute.',
+        'Get the same firepower as $10M funded startups for $190/month. Access specialized AI employees instantly. Tell them what you need in natural language—they execute.',
       color: 'from-orange-500 to-red-500',
     },
   ];

@@ -11,7 +11,7 @@ use crate::context::SystemContext;
 use crate::errors::CliError;
 use crate::hooks;
 use crate::mcp;
-use crate::memory::MemoryManager;
+use crate::memory::{self, MemoryManager};
 use crate::models::{
     self, ContentBlock, Message, Provider, StreamCallback, ToolCallResponse, ToolDefinition,
 };
@@ -418,10 +418,43 @@ impl AgentSession {
             })
             .unwrap_or_default();
 
+        // Capture shell environment snapshot at session start (best-effort)
+        let session_id = uuid::Uuid::new_v4().to_string();
+        if let Ok(home) = crate::config::CliConfig::config_dir() {
+            crate::shell_snapshot::ShellSnapshot::capture(&home, &session_id);
+            crate::shell_snapshot::ShellSnapshot::cleanup_stale(&home);
+        }
+
+        // Load persistent memory from the memory pipeline
+        let persistent_memory = crate::config::CliConfig::config_dir()
+            .ok()
+            .map(|home| crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home))
+            .unwrap_or_default();
+
         // Discover and format skills for system prompt injection
         let discovered = skills::discover_skills();
         let skill_refs: Vec<&skills::Skill> = discovered.iter().collect();
         let skills_content = skills::format_skills_for_prompt(&skill_refs);
+
+        // Load glob-matched rules (.agiworkforce/rules/*.md)
+        let rules = std::env::current_dir()
+            .ok()
+            .map(|cwd| memory::load_rules(&cwd))
+            .unwrap_or_default();
+        let rules_context = if rules.is_empty() {
+            String::new()
+        } else {
+            // At session start, include rules with no globs (always-active).
+            // Glob-specific rules are injected later when files are known.
+            memory::rules_context_prompt(&rules, &[])
+        };
+
+        // Combine memory context with persistent memory from the pipeline
+        let combined_memory = if persistent_memory.is_empty() {
+            memory_context
+        } else {
+            format!("{}\n{}", memory_context, persistent_memory)
+        };
 
         let system_message = Message::text(
             "system",
@@ -430,7 +463,8 @@ impl AgentSession {
                 custom_system_prompt,
                 instructions.as_deref(),
                 &skills_content,
-                &memory_context,
+                &combined_memory,
+                &rules_context,
             ),
         );
 
@@ -543,6 +577,55 @@ impl AgentSession {
         self.loop_strike_count = 0;
     }
 
+    /// Normalize conversation history: ensure every tool_use call has a
+    /// matching tool_result. Orphaned calls (e.g., from interrupted turns)
+    /// get synthetic "aborted" results so the LLM API doesn't reject the
+    /// malformed history.
+    ///
+    /// Pattern from Codex CLI's `context_manager/normalize.rs`.
+    #[allow(dead_code)]
+    pub fn normalize_history(&mut self) {
+        use crate::models::ContentBlock;
+
+        let mut pending_call_ids: Vec<String> = Vec::new();
+        let mut result_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        // Pass 1: collect all tool_use IDs and tool_result IDs
+        for msg in &self.messages {
+            if let crate::models::MessageContent::Blocks(blocks) = &msg.content {
+                for block in blocks {
+                    match block {
+                        ContentBlock::ToolUse { id, .. } => {
+                            pending_call_ids.push(id.clone());
+                        }
+                        ContentBlock::ToolResult { tool_use_id, .. } => {
+                            result_ids.insert(tool_use_id.clone());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        // Pass 2: find orphaned calls (have tool_use but no matching tool_result)
+        let orphans: Vec<String> = pending_call_ids
+            .into_iter()
+            .filter(|id| !result_ids.contains(id))
+            .collect();
+
+        // Pass 3: inject synthetic "aborted" results for each orphan
+        for orphan_id in orphans {
+            self.messages.push(crate::models::Message::blocks(
+                "user",
+                vec![ContentBlock::ToolResult {
+                    tool_use_id: orphan_id,
+                    content: "[Tool call was aborted — no output produced]".to_string(),
+                    is_error: true,
+                }],
+            ));
+        }
+    }
+
     /// Attach an MCP server manager (for external tool discovery and execution).
     pub fn set_mcp_manager(&mut self, manager: mcp::McpManager) {
         self.mcp_manager = Some(manager);
@@ -551,6 +634,11 @@ impl AgentSession {
     /// Detach and return the MCP manager (for shutdown on session end).
     pub fn take_mcp_manager(&mut self) -> Option<mcp::McpManager> {
         self.mcp_manager.take()
+    }
+
+    /// Return MCP tool metadata (if any MCP servers are connected).
+    pub fn mcp_info(&self) -> Option<&[mcp::McpTool]> {
+        self.mcp_manager.as_ref().map(|m| m.tools()).filter(|t| !t.is_empty())
     }
 
     /// Get the hooks configuration (for firing hooks from the REPL).
@@ -1151,6 +1239,62 @@ Files modified:
         self.total_output_tokens += total_output;
         self.turn_count += 1;
 
+        // --- Post-turn: memory extraction + skill learning (best-effort, non-blocking) ---
+        if let Ok(home) = crate::config::CliConfig::config_dir() {
+            // Skill learner: collect tool names from messages to analyze patterns
+            let tool_counts: Vec<(String, u32)> = {
+                let mut counts: std::collections::HashMap<String, u32> =
+                    std::collections::HashMap::new();
+                for msg in &self.messages {
+                    if let crate::models::MessageContent::Blocks(blocks) = &msg.content {
+                        for block in blocks {
+                            if let ContentBlock::ToolUse { name, .. } = block {
+                                *counts.entry(name.clone()).or_insert(0) += 1;
+                            }
+                        }
+                    }
+                }
+                counts.into_iter().collect()
+            };
+            if !tool_counts.is_empty() {
+                let session_id = self
+                    .session_name
+                    .as_deref()
+                    .unwrap_or("anonymous");
+                if let Some(skill) = crate::skill_learner::SkillLearner::analyze_session(
+                    &home,
+                    session_id,
+                    &tool_counts,
+                    true, // completed turns are successful
+                ) {
+                    if let Err(e) = crate::skill_learner::SkillLearner::save_skill(&home, &skill) {
+                        eprintln!("[skill_learner] failed to save learned skill: {}", e);
+                    } else if !self.quiet {
+                        eprintln!(
+                            "  {} Learned skill: {} (confidence: {:.0}%)",
+                            "auto".dimmed(),
+                            skill.name,
+                            skill.confidence * 100.0,
+                        );
+                    }
+                }
+            }
+
+            // Memory pipeline: trigger consolidation check (max once per hour)
+            if crate::memory_pipeline::MemoryPipeline::needs_consolidation(&home) {
+                let home_clone = home.clone();
+                let config_clone = config.clone();
+                // Spawn consolidation as a non-blocking background task
+                tokio::spawn(async move {
+                    if let Err(e) =
+                        crate::memory_pipeline::MemoryPipeline::consolidate(&home_clone, &config_clone).await
+                    {
+                        eprintln!("[memory_pipeline] consolidation error: {}", e);
+                    }
+                });
+            }
+        }
+
         Ok(TurnResult {
             response: final_response,
             input_tokens: total_input,
@@ -1368,6 +1512,7 @@ fn build_system_prompt(
     instructions: Option<&str>,
     skills_content: &str,
     memory_context: &str,
+    rules_context: &str,
 ) -> String {
     let base = custom_system_prompt.unwrap_or(
         "You are AGI Workforce CLI, a powerful AI assistant running in the user's terminal.\n\
@@ -1403,6 +1548,14 @@ Important guidelines:
         prompt.push_str("\n<project-instructions>\n");
         prompt.push_str(instr);
         prompt.push_str("\n</project-instructions>\n");
+    }
+
+    // Glob-matched rules (.agiworkforce/rules/*.md) — injected after
+    // instructions so rules have highest specificity.
+    if !rules_context.is_empty() {
+        prompt.push('\n');
+        prompt.push_str(rules_context);
+        prompt.push('\n');
     }
 
     if !skills_content.is_empty() {

@@ -15,6 +15,24 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { EyeOff, Loader2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
+// Static risk detection patterns — compiled once at module scope instead of per-call
+const DANGEROUS_COMMAND_PATTERNS = [
+  /\b(rm|del|erase|format|diskpart|fdisk|wipe)\b/i,
+  /\b(shutdown|poweroff|reboot|halt)\b/i,
+  /(disable|disallow|stop|kill)\s+(antivirus|firewall|defender|av)/i,
+  /\b(registry\s+delete|regedit|reg\s+delete)\b/i,
+  /taskkill\s+\/f/i,
+  /\b(dd|shred)\b.*if=/i,
+];
+const DANGEROUS_OPERATOR_PATTERNS = [/[;&|`$(){}[\]\\]/];
+const PROMPT_INJECTION_PATTERNS = [
+  /ignore\s+(previous\s+)?instructions/i,
+  /override\s+(system\s+)?prompt/i,
+  /system\s+prompt|system\s+message/i,
+  /forget\s+(everything|previous)/i,
+  /roleplay\s+as\s+(?!the assistant)/i,
+];
+
 import { cn } from '../../lib/utils';
 import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
@@ -746,33 +764,13 @@ export const UnifiedAgenticChat: React.FC<{
     // Risk detection runs in ALL modes - dangerous patterns should always be flagged
     // The undo-based safety philosophy handles reversibility AFTER actions, but we still
     // need upfront detection to warn users about potentially dangerous requests.
-    const dangerousCommandPatterns = [
-      /\b(rm|del|erase|format|diskpart|fdisk|wipe)\b/i,
-      /\b(shutdown|poweroff|reboot|halt)\b/i,
-      /(disable|disallow|stop|kill)\s+(antivirus|firewall|defender|av)/i,
-      /\b(registry\s+delete|regedit|reg\s+delete)\b/i,
-      /taskkill\s+\/f/i,
-      /\b(dd|shred)\b.*if=/i,
-    ];
-
-    // Shell operators and redirection that could be dangerous with command injection
-    const dangerousOperatorPatterns = [/[;&|`$(){}[\]\\]/];
-
-    // Prompt injection patterns
-    const promptInjectionPatterns = [
-      /ignore\s+(previous\s+)?instructions/i,
-      /override\s+(system\s+)?prompt/i,
-      /system\s+prompt|system\s+message/i,
-      /forget\s+(everything|previous)/i,
-      /roleplay\s+as\s+(?!the assistant)/i,
-    ];
 
     const lower = content.toLowerCase();
     let riskLevel: 'low' | 'medium' | 'high' = 'low';
     let matchedRisk: string | null = null;
 
     // Check for dangerous commands (high risk)
-    for (const pattern of dangerousCommandPatterns) {
+    for (const pattern of DANGEROUS_COMMAND_PATTERNS) {
       if (pattern.test(lower)) {
         riskLevel = 'high';
         matchedRisk = pattern.source;
@@ -782,7 +780,7 @@ export const UnifiedAgenticChat: React.FC<{
 
     // Check for prompt injection (medium risk)
     if (riskLevel === 'low') {
-      for (const pattern of promptInjectionPatterns) {
+      for (const pattern of PROMPT_INJECTION_PATTERNS) {
         if (pattern.test(lower)) {
           riskLevel = 'medium';
           matchedRisk = pattern.source;
@@ -792,7 +790,7 @@ export const UnifiedAgenticChat: React.FC<{
     }
 
     // Check for shell operators combined with commands (medium risk)
-    if (riskLevel === 'low' && dangerousOperatorPatterns[0]!.test(content)) {
+    if (riskLevel === 'low' && DANGEROUS_OPERATOR_PATTERNS[0]!.test(content)) {
       if (/\b(execute|run|system|shell|cmd|command|bash|sh|powershell)\b/i.test(lower)) {
         riskLevel = 'medium';
         matchedRisk = 'Shell operators with execution keywords';

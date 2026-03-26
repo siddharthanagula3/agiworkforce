@@ -8,8 +8,7 @@ import { CreditService } from './credit-service';
 import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
 // AUDIT-P3: Use shared Stripe type helpers for safer period access
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
-
-const STRIPE_API_VERSION = '2026-01-28.clover' as Stripe.LatestApiVersion;
+import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 
 function getSupabaseClient() {
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
@@ -264,7 +263,7 @@ export class SubscriptionService {
     }
 
     const stripe = new Stripe(stripeKey, {
-      apiVersion: STRIPE_API_VERSION,
+      apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
     });
 
     try {
@@ -294,7 +293,28 @@ export class SubscriptionService {
           return null;
         }
 
-        customerId = customers.data[0]!.id;
+        const customer = customers.data[0]!;
+
+        // SECURITY: Verify the Stripe customer actually belongs to this user.
+        // Email matched but the customer may have been created for a different
+        // Supabase user — reject to prevent IDOR via email-based fallback.
+        if (
+          customer.metadata?.['supabase_user_id'] &&
+          customer.metadata['supabase_user_id'] !== userId
+        ) {
+          logger.warn(
+            {
+              email,
+              customerId: customer.id,
+              expectedUserId: userId,
+              actualUserId: customer.metadata['supabase_user_id'],
+            },
+            'IDOR blocked: Stripe customer email matched but belongs to a different user',
+          );
+          return null;
+        }
+
+        customerId = customer.id;
 
         // Store customer_id for future lookups
         await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);

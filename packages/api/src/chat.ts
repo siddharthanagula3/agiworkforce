@@ -433,3 +433,54 @@ export async function chatRecallMemory(
 export async function chatSearchMemories(query: string, limit?: number): Promise<unknown[]> {
   return command<unknown[]>('chat_search_memories', { query, limit });
 }
+
+// ---- Conversation Checkpoints ----
+
+export interface CheckpointData {
+  id: string;
+  conversationId: number;
+  checkpointName: string;
+  description: string | null;
+  messageCount: number;
+  messagesSnapshot: string;
+  contextSnapshot: string | null;
+  metadata: string | null;
+  parentCheckpointId: string | null;
+  branchName: string | null;
+  createdAt: number;
+}
+
+export interface CreateCheckpointRequest {
+  conversationId: number;
+  checkpointName: string;
+  description?: string | null;
+  parentCheckpointId?: string | null;
+  branchName?: string | null;
+}
+
+export interface RestoreCheckpointRequest {
+  checkpointId: string;
+  conversationId: number;
+}
+
+export async function checkpointCreate(request: CreateCheckpointRequest): Promise<CheckpointData> {
+  return command<CheckpointData>('checkpoint_create', { ...request });
+}
+
+export async function checkpointRestore(request: RestoreCheckpointRequest): Promise<void> {
+  return command<void>('checkpoint_restore', { ...request });
+}
+
+export async function checkpointDelete(checkpointId: string): Promise<void> {
+  return command<void>('checkpoint_delete', { checkpointId });
+}
+
+export async function checkpointList(conversationId: number): Promise<CheckpointData[]> {
+  return command<CheckpointData[]>('checkpoint_list', { conversationId });
+}
+
+// ---- Database Maintenance ----
+
+export async function clearLocalDatabase(): Promise<void> {
+  return command<void>('clear_local_database');
+}

@@ -417,11 +417,8 @@ async function handleListModels(request: NextRequest) {
 
   // Verify user with Supabase
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, flowType: 'pkce' },
-  });
+  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
   const {
     data: { user },
@@ -470,4 +467,6 @@ async function handleListModels(request: NextRequest) {
 }
 
 export const GET = withErrorHandler(handleListModels);
-export const OPTIONS = handleListModels;
+export function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, { status: 204, headers: getCorsHeaders(request) });
+}

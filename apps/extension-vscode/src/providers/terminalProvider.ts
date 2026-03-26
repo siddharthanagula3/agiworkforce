@@ -11,7 +11,7 @@
  */
 
 import * as vscode from 'vscode';
-import { chatCompletion, type ChatMessage } from '../utils/api';
+import { chatCompletion, type LlmChatMessage } from '../utils/api';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -114,7 +114,7 @@ export class TerminalProvider implements vscode.Disposable {
       return '';
     }
 
-    const messages: ChatMessage[] = [
+    const messages: LlmChatMessage[] = [
       {
         role: 'system',
         content:
@@ -151,7 +151,7 @@ export class TerminalProvider implements vscode.Disposable {
     const platform =
       process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
 
-    const messages: ChatMessage[] = [
+    const messages: LlmChatMessage[] = [
       {
         role: 'system',
         content:
@@ -214,7 +214,12 @@ export class TerminalProvider implements vscode.Disposable {
    */
   private async _captureOutput(terminal: vscode.Terminal): Promise<string | undefined> {
     // Strategy 1: Shell Integration API (VS Code >= 1.93)
-    const shellIntegration = (terminal as unknown as TerminalWithShellIntegration).shellIntegration;
+    // VS Code Shell Integration API may not be in @types/vscode yet — use
+    // runtime property check instead of `as unknown as` double-cast.
+    const shellIntegration =
+      'shellIntegration' in terminal
+        ? (terminal.shellIntegration as TerminalShellIntegration | undefined)
+        : undefined;
 
     if (shellIntegration !== undefined) {
       try {
@@ -319,10 +324,6 @@ interface TerminalShellExecution {
 interface TerminalShellIntegration {
   readonly executions: readonly TerminalShellExecution[];
   executeCommand?(command: string): TerminalShellExecution;
-}
-
-interface TerminalWithShellIntegration {
-  readonly shellIntegration?: TerminalShellIntegration;
 }
 
 // ─── Activation ──────────────────────────────────────────────────────────────

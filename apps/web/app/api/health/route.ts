@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
+import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 
 interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
 
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, {
-        apiVersion: '2026-02-25.clover' as Stripe.LatestApiVersion,
+        apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
       });
 
       // Simple API call to check connectivity

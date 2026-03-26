@@ -83,12 +83,12 @@ describe('Dark mode color tokens', () => {
   });
 
   describe('Chat surface tokens', () => {
-    it('--chat-bg is set to #0f0f13 in dark mode', () => {
+    it('--chat-bg is set to #0a0a0a in dark mode', () => {
       const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
       expect(darkBlockMatch).not.toBeNull();
 
       const darkBlock = darkBlockMatch![1];
-      expect(darkBlock).toContain('--chat-bg: #0f0f13');
+      expect(darkBlock).toContain('--chat-bg: #0a0a0a');
     });
 
     it('--chat-sidebar-bg is set to #0b0c14 in dark mode', () => {
@@ -104,8 +104,8 @@ describe('Dark mode color tokens', () => {
       expect(darkBlockMatch).not.toBeNull();
 
       const darkBlock = darkBlockMatch![1];
-      // Must define a subtle border hex color
-      expect(darkBlock).toMatch(/--chat-border-subtle:\s*#[0-9a-f]{6}/);
+      // Border-subtle may use hex (#xxxxxx) or rgba(...) notation
+      expect(darkBlock).toMatch(/--chat-border-subtle:\s*(?:#[0-9a-f]{6}|rgba\()/);
     });
 
     it('--chat-text-primary defines a readable text color in dark mode', () => {

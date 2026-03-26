@@ -1,5 +1,5 @@
 import { Check, Copy, Link, Linkedin, Mail, MessageSquare, Newspaper, Twitter } from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Button } from '../../../components/ui/Button';
 import {
@@ -30,6 +30,15 @@ export function ShareModal() {
   const [embedCode, setEmbedCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const embedCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if (embedCopiedTimerRef.current) clearTimeout(embedCopiedTimerRef.current);
+    };
+  }, []);
 
   const loadShareData = useCallback(async () => {
     if (!selectedWorkflow) return;
@@ -55,7 +64,8 @@ export function ShareModal() {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error('Failed to copy URL:', error);
     }
@@ -65,7 +75,8 @@ export function ShareModal() {
     try {
       await navigator.clipboard.writeText(embedCode);
       setEmbedCopied(true);
-      setTimeout(() => setEmbedCopied(false), 2000);
+      if (embedCopiedTimerRef.current) clearTimeout(embedCopiedTimerRef.current);
+      embedCopiedTimerRef.current = setTimeout(() => setEmbedCopied(false), 2000);
     } catch (error) {
       console.error('Failed to copy embed code:', error);
     }

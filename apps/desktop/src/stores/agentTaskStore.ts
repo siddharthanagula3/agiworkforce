@@ -146,56 +146,63 @@ export const useAgentTaskStore = create<AgentTaskState>()(
         loading: false,
 
         submitGoal: async (goal, options = {}) => {
-          if (options.parallel) {
-            const result = await invoke<{ bestResult: { score: number } }>(
-              'agi_submit_goal_parallel',
-              {
-                request: {
-                  description: goal,
-                  priority: 'medium',
-                  numAgents: options.maxIterations ?? 4,
+          try {
+            if (options.parallel) {
+              const result = await invoke<{ bestResult: { score: number } }>(
+                'agi_submit_goal_parallel',
+                {
+                  request: {
+                    description: goal,
+                    priority: 'medium',
+                    numAgents: options.maxIterations ?? 4,
+                  },
                 },
+              );
+              const taskId = `parallel_${Date.now()}`;
+              set((state) => ({
+                tasks: [
+                  ...state.tasks,
+                  {
+                    id: taskId,
+                    goal,
+                    status: 'completed' as const,
+                    createdAt: new Date().toISOString(),
+                    completedAt: new Date().toISOString(),
+                    result: `Parallel execution complete. Best score: ${result.bestResult.score}`,
+                  },
+                ],
+              }));
+              return taskId;
+            }
+
+            const result = await invoke<SubmitGoalResponse>('agi_submit_goal', {
+              request: {
+                description: goal,
+                priority: 'medium',
               },
-            );
-            const taskId = `parallel_${Date.now()}`;
+            });
+
+            const taskId = result.goalId;
+
             set((state) => ({
               tasks: [
                 ...state.tasks,
                 {
                   id: taskId,
                   goal,
-                  status: 'completed' as const,
+                  status: 'pending' as const,
                   createdAt: new Date().toISOString(),
-                  completedAt: new Date().toISOString(),
-                  result: `Parallel execution complete. Best score: ${result.bestResult.score}`,
                 },
               ],
             }));
+
             return taskId;
+          } catch (error) {
+            toast.error(
+              `Failed to submit goal: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+            throw error;
           }
-
-          const result = await invoke<SubmitGoalResponse>('agi_submit_goal', {
-            request: {
-              description: goal,
-              priority: 'medium',
-            },
-          });
-
-          const taskId = result.goalId;
-
-          set((state) => ({
-            tasks: [
-              ...state.tasks,
-              {
-                id: taskId,
-                goal,
-                status: 'pending' as const,
-                createdAt: new Date().toISOString(),
-              },
-            ],
-          }));
-
-          return taskId;
         },
 
         submitGoalSwarm: async (goal, options = {}) => {

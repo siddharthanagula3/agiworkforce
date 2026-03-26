@@ -10,7 +10,7 @@
  */
 
 import type { Request, Response, NextFunction } from 'express';
-import { timingSafeEqual } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { logger } from '../logger.js';
 
 // =============================================================================
@@ -70,20 +70,17 @@ function getClientIp(req: Request): string {
 }
 
 /**
- * Constant-time string comparison to prevent timing attacks
+ * Constant-time string comparison to prevent timing attacks.
+ * Uses HMAC to normalize input lengths — both digests are always 32 bytes,
+ * so timingSafeEqual never short-circuits and no length information leaks.
  */
-function secureCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    // Still do a comparison to maintain constant time
-    const bufA = Buffer.from(a);
-    const bufB = Buffer.from(a); // Compare a to itself
-    timingSafeEqual(bufA, bufB);
-    return false;
-  }
+const COMPARE_KEY = randomBytes(32);
 
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  return timingSafeEqual(bufA, bufB);
+function secureCompare(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const ha = createHmac('sha256', COMPARE_KEY).update(a).digest();
+  const hb = createHmac('sha256', COMPARE_KEY).update(b).digest();
+  return timingSafeEqual(ha, hb);
 }
 
 /**
@@ -261,6 +258,17 @@ export function cleanupAuthFailures(): void {
       if (!entry.lockedUntil || entry.lockedUntil <= now) {
         authFailures.delete(ip);
       }
+    }
+  }
+
+  // Size cap: evict oldest entries when map gets too large
+  if (authFailures.size > 10_000) {
+    const entries = [...authFailures.entries()].sort(
+      (a, b) => a[1].firstFailure - b[1].firstFailure,
+    );
+    const excess = entries.slice(0, authFailures.size - 5_000);
+    for (const [ip] of excess) {
+      authFailures.delete(ip);
     }
   }
 }
