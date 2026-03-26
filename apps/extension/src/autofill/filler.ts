@@ -45,8 +45,14 @@ function sanitizeProfileValue(value: string): string {
   // Strip control chars except \n (\u000A) and \t (\u0009) which are useful in textareas.
   // eslint-disable-next-line no-control-regex
   let sanitized = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
-  // Strip any HTML tags — profile values should be plain text
-  sanitized = sanitized.replace(/<[^>]*>/g, '');
+  // Strip any HTML tags — profile values should be plain text.
+  // Loop to handle nested/recursive patterns like "<<script>alert(1)</script>"
+  // where a single pass leaves residual tags.
+  let previous: string;
+  do {
+    previous = sanitized;
+    sanitized = sanitized.replace(/<[^>]*>/g, '');
+  } while (sanitized !== previous);
   // Trim and enforce length limit
   return sanitized.trim().substring(0, MAX_PROFILE_FIELD_LENGTH);
 }
