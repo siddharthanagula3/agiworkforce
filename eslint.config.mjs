@@ -56,6 +56,9 @@ export default [
       // Build artifacts (Vite SPA output served as static files)
       '**/public/chat/**',
       '**/dist-web/**',
+      // Rust crate vendored JS files (not app source)
+      'crates/**',
+      '**/crates/**',
     ],
   },
 
