@@ -329,11 +329,11 @@ export class ChatRealtimeSubscriptionManager {
       })
       .on('presence', { event: 'join' }, ({ newPresences }) => {
         // Handle new presence
-        console.log('New presence:', newPresences);
+        console.debug('New presence:', newPresences);
       })
       .on('presence', { event: 'leave' }, ({ leftPresences }) => {
         // Handle left presence
-        console.log('Left presence:', leftPresences);
+        console.debug('Left presence:', leftPresences);
       });
 
     // Track this participant's presence
@@ -462,7 +462,7 @@ export class ChatRealtimeSubscriptionManager {
 
       setTimeout(
         () => {
-          console.log(
+          console.debug(
             `Reconnecting channel ${channelName} (attempt ${attempts + 1}/${this.maxReconnectAttempts})`,
           );
           reconnectFn();

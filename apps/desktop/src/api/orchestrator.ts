@@ -106,7 +106,7 @@ async function ensureInit() {
  */
 export async function orchestratorInit(maxAgents: number, config?: AGIConfig): Promise<void> {
   if (!isTauri) {
-    console.info('[orchestrator] orchestratorInit (mock)', { maxAgents, config });
+    console.debug('[orchestrator] orchestratorInit (mock)', { maxAgents, config });
     orchestratorInitialized = true;
     return;
   }
@@ -124,7 +124,7 @@ export async function spawnAgent(payload: SpawnAgentPayload): Promise<string> {
   await ensureInit();
 
   if (!isTauri) {
-    console.info('[orchestrator] spawnAgent (mock)', payload);
+    console.debug('[orchestrator] spawnAgent (mock)', payload);
     return `mock-agent-${Math.random().toString(36).slice(2, 8)}`;
   }
 
@@ -149,7 +149,7 @@ export async function spawnParallelAgents(goals: SpawnAgentPayload[]): Promise<s
   await ensureInit();
 
   if (!isTauri) {
-    console.info('[orchestrator] spawnParallelAgents (mock)', goals);
+    console.debug('[orchestrator] spawnParallelAgents (mock)', goals);
     return goals.map(() => `mock-agent-${Math.random().toString(36).slice(2, 8)}`);
   }
 
@@ -173,7 +173,7 @@ export async function spawnParallelAgents(goals: SpawnAgentPayload[]): Promise<s
  */
 export async function getAgentStatus(agentId: string): Promise<OrchestratorAgentStatus | null> {
   if (!isTauri) {
-    console.info('[orchestrator] getAgentStatus (mock)', agentId);
+    console.debug('[orchestrator] getAgentStatus (mock)', agentId);
     return null;
   }
 
@@ -182,7 +182,7 @@ export async function getAgentStatus(agentId: string): Promise<OrchestratorAgent
 
 export async function cancelAgent(agentId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[orchestrator] cancelAgent (mock)', agentId);
+    console.debug('[orchestrator] cancelAgent (mock)', agentId);
     return;
   }
 
@@ -194,7 +194,7 @@ export async function cancelAgent(agentId: string): Promise<void> {
  */
 export async function cancelAllAgents(): Promise<void> {
   if (!isTauri) {
-    console.info('[orchestrator] cancelAllAgents (mock)');
+    console.debug('[orchestrator] cancelAllAgents (mock)');
     return;
   }
 
@@ -207,7 +207,7 @@ export async function cancelAllAgents(): Promise<void> {
  */
 export async function waitForAllAgents(): Promise<AgentResult[]> {
   if (!isTauri) {
-    console.info('[orchestrator] waitForAllAgents (mock)');
+    console.debug('[orchestrator] waitForAllAgents (mock)');
     return [];
   }
 
@@ -220,7 +220,7 @@ export async function waitForAllAgents(): Promise<AgentResult[]> {
  */
 export async function cleanupAgents(): Promise<number> {
   if (!isTauri) {
-    console.info('[orchestrator] cleanupAgents (mock)');
+    console.debug('[orchestrator] cleanupAgents (mock)');
     return 0;
   }
 
@@ -240,7 +240,7 @@ export async function listAgents(): Promise<OrchestratorAgentStatus[]> {
  */
 export async function pauseAgent(agentId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[orchestrator] pauseAgent (mock)', agentId);
+    console.debug('[orchestrator] pauseAgent (mock)', agentId);
     return;
   }
 
@@ -252,7 +252,7 @@ export async function pauseAgent(agentId: string): Promise<void> {
  */
 export async function resumeAgent(agentId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[orchestrator] resumeAgent (mock)', agentId);
+    console.debug('[orchestrator] resumeAgent (mock)', agentId);
     return;
   }
 

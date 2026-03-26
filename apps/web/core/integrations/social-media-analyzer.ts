@@ -135,7 +135,7 @@ export class SocialMediaAnalyzer {
    * Analyze social media for a given topic
    */
   async analyze(query: SocialMediaQuery, userId?: string): Promise<SocialMediaAnalysisResult> {
-    console.log('[SocialMediaAnalyzer] Starting analysis:', query);
+    console.debug('[SocialMediaAnalyzer] Starting analysis:', query);
 
     try {
       // Build comprehensive analysis prompt
@@ -161,7 +161,7 @@ export class SocialMediaAnalyzer {
         await this.storeAnalysis(userId, query, analysis);
       }
 
-      console.log('[SocialMediaAnalyzer] Analysis complete');
+      console.debug('[SocialMediaAnalyzer] Analysis complete');
       return analysis;
     } catch (error) {
       console.error('[SocialMediaAnalyzer] Analysis failed:', error);

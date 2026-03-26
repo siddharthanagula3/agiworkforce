@@ -83,7 +83,7 @@ export async function spawnAgent(payload: SpawnAgentPayload): Promise<string> {
 }
 
 export async function cancelAgent(agentId: string): Promise<void> {
-  console.info('[orchestrator] cancelAgent (web no-op):', agentId);
+  console.debug('[orchestrator] cancelAgent (web no-op):', agentId);
 }
 
 export async function listAgents(): Promise<unknown[]> {
