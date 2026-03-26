@@ -41,7 +41,7 @@ export const DiffViewer = (_props?: any) => null;
 export const handleSlashCommand = () => {};
 // ... will add more if tsc complains
 
-export const sanitizeMarkdownHtml = (html: string): string => html;
+export { sanitizeHTML as sanitizeMarkdownHtml } from '@/shared/utils/html-sanitizer';
 
 // Missing named exports from security stub
-export const sanitizeHtml = (html: string, _opts?: any): string => html;
+export { sanitizeHTML as sanitizeHtml, sanitizeSVG } from '@/shared/utils/html-sanitizer';

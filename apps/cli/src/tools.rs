@@ -5,10 +5,17 @@ use std::time::Duration;
 use anyhow::Result;
 use colored::Colorize;
 use dialoguer::Confirm;
+use once_cell::sync::Lazy;
 use tokio::process::Command;
 
 use crate::agent::ToolCall;
 use crate::safety::{classify_command, CommandSafety, DANGEROUS_COMMANDS};
+
+// Pre-compiled regexes for HTML stripping (compiled once, reused across calls)
+static SCRIPT_RE: Lazy<regex::Regex> =
+    Lazy::new(|| regex::Regex::new(r"(?is)<script[^>]*>.*?</script>").expect("valid regex"));
+static STYLE_RE: Lazy<regex::Regex> =
+    Lazy::new(|| regex::Regex::new(r"(?is)<style[^>]*>.*?</style>").expect("valid regex"));
 
 // ---------------------------------------------------------------------------
 // Path safety
@@ -163,7 +170,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "edit_file" => execute_edit_file(&call.args, require_confirm).await,
         "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
-        // --- Codex CLI parity tools ---
+        // --- Extended tools ---
         "apply_patch" => execute_apply_patch(&call.args, require_confirm).await,
         "grep_files" => execute_grep_files(&call.args, opts.quiet).await,
         "tool_search" => execute_tool_search(&call.args).await,
@@ -1122,10 +1129,8 @@ async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<ToolResult>
 /// and decodes common HTML entities. Not a full parser but handles real-world pages.
 fn strip_html_tags(input: &str) -> String {
     // 1. Remove <script>...</script> and <style>...</style> blocks (case-insensitive)
-    let script_re = regex::Regex::new(r"(?is)<script[^>]*>.*?</script>").unwrap();
-    let style_re = regex::Regex::new(r"(?is)<style[^>]*>.*?</style>").unwrap();
-    let no_script = script_re.replace_all(input, " ");
-    let no_style = style_re.replace_all(&no_script, " ");
+    let no_script = SCRIPT_RE.replace_all(input, " ");
+    let no_style = STYLE_RE.replace_all(&no_script, " ");
 
     // 2. Strip remaining HTML tags
     let mut result = String::with_capacity(no_style.len());
@@ -1879,7 +1884,7 @@ mod tests {
 }
 
 // ---------------------------------------------------------------------------
-// Codex CLI parity tool handlers
+// Extended tool handlers
 // ---------------------------------------------------------------------------
 
 async fn execute_apply_patch(
@@ -2426,7 +2431,7 @@ async fn execute_plan_mode(args: &HashMap<String, String>) -> Result<ToolResult>
                 ),
             })
         }
-        "status" | _ => Ok(ToolResult {
+        _ => Ok(ToolResult {
             tool_name: "plan_mode".into(),
             success: true,
             output: if state.active {

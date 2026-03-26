@@ -43,7 +43,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useCodeStore } from '@/stores/unified/codeStore';
-import { sanitizeHtml } from '@/utils/security';
+import { sanitizeSVG } from '@/utils/security';
 import type { Artifact } from '@/types/chat';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -771,45 +771,7 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
     );
   }
 
-  const sanitizedSvg = svg
-    ? sanitizeHtml(svg, {
-        allowedTags: [
-          'svg',
-          'path',
-          'circle',
-          'rect',
-          'line',
-          'polyline',
-          'polygon',
-          'g',
-          'text',
-          'tspan',
-          'defs',
-          'clipPath',
-          'use',
-          'image',
-        ],
-        allowedAttributes: {
-          '*': [
-            'fill',
-            'stroke',
-            'stroke-width',
-            'd',
-            'x',
-            'y',
-            'width',
-            'height',
-            'viewBox',
-            'xmlns',
-            'transform',
-            'opacity',
-            'class',
-            'id',
-          ],
-          svg: ['viewBox', 'xmlns', 'width', 'height', 'preserveAspectRatio'],
-        },
-      })
-    : null;
+  const sanitizedSvg = svg ? sanitizeSVG(svg) : null;
 
   return (
     <div className="p-4 bg-white/5 rounded-lg overflow-x-auto flex justify-center min-h-[200px] items-center">

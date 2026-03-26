@@ -1,6 +1,6 @@
 //! Context compaction — token estimation, usage tracking, and message pruning.
 //!
-//! Implements a multi-phase compaction strategy adapted from OpenCode + Gemini CLI + Codex:
+//! Implements a multi-phase compaction strategy:
 //! 1. Reverse token budget: Walk tool outputs backward, truncating older ones first
 //! 2. History split: Keep last 30% of messages untouched, compress only older 70%
 //! 3. Prune: Replace large tool outputs with a short summary
@@ -16,7 +16,7 @@ use crate::models::{ContentBlock, Message, MessageContent};
 // Constants
 // ---------------------------------------------------------------------------
 
-/// Rough token estimate: 4 UTF-8 bytes ≈ 1 token (Codex heuristic).
+/// Rough token estimate: 4 UTF-8 bytes ≈ 1 token.
 pub const BYTES_PER_TOKEN: usize = 4;
 
 /// Warn user when context exceeds this fraction of the model's limit.

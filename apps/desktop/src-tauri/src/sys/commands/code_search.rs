@@ -1,6 +1,6 @@
 //! Code Search & Formatter Module
 //!
-//! Provides OpenCode-parity tools for the agent:
+//! Provides code search tools for the agent:
 //! - `grep_search`  — regex content search across files (ripgrep-style, .gitignore-aware)
 //! - `glob_search`  — find files matching a glob pattern (.gitignore-aware)
 //! - `format_file`  — run language-specific formatter on a file after editing
@@ -164,7 +164,7 @@ fn is_likely_binary(path: &Path) -> bool {
 
 /// Search file contents using a regular expression.
 ///
-/// Mirrors OpenCode's `Grep` tool:
+/// Behaviour:
 /// - Skips excluded dirs, binary files, and files > 10 MB.
 /// - Respects an optional `include_pattern` glob (e.g. `"*.ts"`) to restrict
 ///   which file extensions are searched.
@@ -398,7 +398,7 @@ fn grep_blocking(
 
 /// Find files matching a glob pattern.
 ///
-/// Mirrors OpenCode's `Glob` tool:
+/// Behaviour:
 /// - Pattern examples: `"**/*.ts"`, `"src/**/*.rs"`, `"*.json"`
 /// - Skips excluded dirs automatically.
 /// - Results are sorted by modification time (most-recently-modified first).

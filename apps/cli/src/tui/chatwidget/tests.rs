@@ -1970,7 +1970,7 @@ async fn make_chatwidget_manual(
         frame_requester: FrameRequester::test_dummy(),
         has_input_focus: true,
         enhanced_keys_supported: false,
-        placeholder_text: "Ask Codex to do anything".to_string(),
+        placeholder_text: "Ask AGI Workforce anything".to_string(),
         disable_paste_burst: false,
         animations_enabled: cfg.animations,
         skills: None,
@@ -5807,7 +5807,7 @@ async fn slash_init_skips_when_project_doc_exists() {
 
     match op_rx.try_recv() {
         Err(TryRecvError::Empty) => {}
-        other => panic!("expected no Codex op to be sent, got {other:?}"),
+        other => panic!("expected no agent op to be sent, got {other:?}"),
     }
 
     let cells = drain_insert_history(&mut rx);
@@ -6314,7 +6314,7 @@ async fn slash_copy_reports_when_no_copyable_output_exists() {
     assert_snapshot!("slash_copy_no_output_info_message", rendered);
     assert!(
         rendered.contains(
-            "`/copy` is unavailable before the first Codex output or right after a rollback."
+            "`/copy` is unavailable before the first output or right after a rollback."
         ),
         "expected no-output message, got {rendered:?}"
     );
@@ -6387,7 +6387,7 @@ async fn slash_copy_is_unavailable_when_legacy_agent_message_is_not_repeated_on_
     let rendered = lines_to_single_string(&cells[0]);
     assert!(
         rendered.contains(
-            "`/copy` is unavailable before the first Codex output or right after a rollback."
+            "`/copy` is unavailable before the first output or right after a rollback."
         ),
         "expected unavailable message, got {rendered:?}"
     );
@@ -6416,7 +6416,7 @@ async fn slash_copy_is_unavailable_when_legacy_agent_message_item_is_not_repeate
     let rendered = lines_to_single_string(&cells[0]);
     assert!(
         rendered.contains(
-            "`/copy` is unavailable before the first Codex output or right after a rollback."
+            "`/copy` is unavailable before the first output or right after a rollback."
         ),
         "expected unavailable message, got {rendered:?}"
     );
@@ -6448,7 +6448,7 @@ async fn slash_copy_does_not_return_stale_output_after_thread_rollback() {
     let rendered = lines_to_single_string(&cells[0]);
     assert!(
         rendered.contains(
-            "`/copy` is unavailable before the first Codex output or right after a rollback."
+            "`/copy` is unavailable before the first output or right after a rollback."
         ),
         "expected rollback-cleared copy state message, got {rendered:?}"
     );
@@ -9940,7 +9940,7 @@ async fn permissions_full_access_history_cell_emitted_only_after_confirmation() 
 //
 // Snapshot test: command approval modal
 //
-// Synthesizes a Codex ExecApprovalRequest event to trigger the approval modal
+// Synthesizes an ExecApprovalRequest event to trigger the approval modal
 // and snapshots the visual output using the ratatui TestBackend.
 #[tokio::test]
 async fn approval_modal_exec_snapshot() -> anyhow::Result<()> {

@@ -8,7 +8,7 @@
  * - If query is empty or no project folder set: lists the project root directory.
  * - If query contains a `/` or `\`: drills into that directory path.
  * - Otherwise: uses `glob_search` to find files matching `**‌/<query>*` across
- *   the whole project (same as OpenCode's `@` file mention).
+ *   the whole project.
  *
  * Selected files are injected into the chat as `@path/to/file.ts` tokens, which
  * the context builder reads and includes as file content in the system prompt.

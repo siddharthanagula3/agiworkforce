@@ -45,7 +45,7 @@ pub struct Skill {
     pub category: Option<String>,
     /// Required environment variables (parsed from `env_vars:` in frontmatter).
     /// Skill should only be activated when all listed env vars are set.
-    /// Pattern from Codex CLI's `skills/env_var_dependencies.rs`.
+    /// Skill is only activated when all listed env vars are set.
     pub required_env_vars: Vec<String>,
 }
 

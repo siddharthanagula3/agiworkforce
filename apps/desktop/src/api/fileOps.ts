@@ -90,7 +90,7 @@ export async function fileReadBinary(filePath: string): Promise<string> {
 }
 
 /**
- * Read a file with line-number offset and limit (OpenCode parity).
+ * Read a file with line-number offset and limit.
  * Rust: file_read_range(path, offset?, limit?)
  */
 export async function fileReadRange(
