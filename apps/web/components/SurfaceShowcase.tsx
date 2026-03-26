@@ -1,6 +1,3 @@
-'use client';
-
-import { useState } from 'react';
 import { MARKETING } from '@/lib/marketing-constants';
 
 interface Surface {
@@ -24,7 +21,7 @@ const surfaces: Surface[] = [
       'Runs Ollama, LM Studio, and local models offline',
     ],
     mockup: (
-      <div className="relative mx-auto w-full max-w-md">
+      <div className="relative mx-auto w-full max-w-lg">
         <div className="rounded-xl border border-white/10 bg-[#0e0e0e] p-1 shadow-2xl">
           <div className="flex items-center gap-2 rounded-t-lg bg-[#1a1a1a] px-3 py-2">
             <div className="flex gap-1.5">
@@ -34,7 +31,7 @@ const surfaces: Surface[] = [
             </div>
             <span className="ml-2 text-[10px] text-zinc-500">AGI Workforce</span>
           </div>
-          <div className="flex h-48 rounded-b-lg bg-[#111]">
+          <div className="flex h-64 rounded-b-lg bg-[#111]">
             <div className="w-12 border-r border-white/5 bg-[#0e0e0e] py-3">
               {['💬', '🔧', '📁', '🌐', '⚙️'].map((e) => (
                 <div key={e} className="mb-2 flex justify-center text-xs opacity-60">
@@ -66,7 +63,7 @@ const surfaces: Surface[] = [
       'No install needed, share links to conversations',
     ],
     mockup: (
-      <div className="relative mx-auto w-full max-w-md">
+      <div className="relative mx-auto w-full max-w-lg">
         <div className="rounded-xl border border-white/10 bg-[#0e0e0e] shadow-2xl overflow-hidden">
           <div className="flex items-center gap-2 bg-[#1a1a1a] px-3 py-2">
             <div className="flex gap-1.5">
@@ -78,7 +75,7 @@ const surfaces: Surface[] = [
               <span className="text-[10px] text-zinc-500">app.agiworkforce.com</span>
             </div>
           </div>
-          <div className="h-48 bg-[#111] p-4">
+          <div className="h-64 bg-[#111] p-4">
             <div className="mb-3 h-3 w-40 rounded bg-cyan-500/20" />
             <div className="grid grid-cols-2 gap-2">
               {[1, 2, 3, 4].map((i) => (
@@ -104,7 +101,7 @@ const surfaces: Surface[] = [
       'CI/CD ready — run in GitHub Actions, Docker, headless',
     ],
     mockup: (
-      <div className="relative mx-auto w-full max-w-md">
+      <div className="relative mx-auto w-full max-w-lg">
         <div className="rounded-xl border border-white/10 bg-[#0e0e0e] p-4 font-mono text-xs shadow-2xl">
           <div className="mb-1 text-zinc-600">$ agiworkforce chat</div>
           <div className="mb-1 text-emerald-400/80">▶ Connected to Claude Opus 4.6</div>
@@ -131,12 +128,12 @@ const surfaces: Surface[] = [
       'MCP integrated — same tools as the desktop app',
     ],
     mockup: (
-      <div className="relative mx-auto w-full max-w-md">
+      <div className="relative mx-auto w-full max-w-lg">
         <div className="rounded-xl border border-white/10 bg-[#1e1e1e] shadow-2xl overflow-hidden">
           <div className="flex items-center bg-[#2d2d2d] px-3 py-1.5">
             <span className="text-[10px] text-zinc-500">main.tsx — AGI Workforce</span>
           </div>
-          <div className="flex h-48">
+          <div className="flex h-64">
             <div className="flex-1 p-3 font-mono text-[10px] leading-relaxed">
               <div>
                 <span className="text-blue-400">const</span>{' '}
@@ -181,7 +178,7 @@ const surfaces: Surface[] = [
       'Quick actions — explain, translate, rewrite, code review',
     ],
     mockup: (
-      <div className="relative mx-auto w-full max-w-md">
+      <div className="relative mx-auto w-full max-w-lg">
         <div className="rounded-xl border border-white/10 bg-[#0e0e0e] shadow-2xl overflow-hidden">
           <div className="flex items-center gap-2 bg-[#1a1a1a] px-3 py-2">
             <div className="flex gap-1.5">
@@ -196,7 +193,7 @@ const surfaces: Surface[] = [
               AGI
             </div>
           </div>
-          <div className="relative h-48 bg-[#111]">
+          <div className="relative h-64 bg-[#111]">
             <div className="p-4 opacity-40">
               <div className="mb-2 h-3 w-48 rounded bg-white/10" />
               <div className="mb-1 h-2 w-full rounded bg-white/5" />
@@ -229,7 +226,7 @@ const surfaces: Surface[] = [
       'Quick prompts and conversation history on the go',
     ],
     mockup: (
-      <div className="relative mx-auto w-40">
+      <div className="relative mx-auto w-52">
         <div className="rounded-[24px] border-2 border-white/10 bg-[#0e0e0e] p-1.5 shadow-2xl">
           <div className="mx-auto mb-1 h-4 w-16 rounded-b-xl bg-[#0e0e0e]" />
           <div className="rounded-[18px] bg-[#111] p-3">
@@ -253,72 +250,32 @@ const surfaces: Surface[] = [
 ];
 
 export function SurfaceShowcase() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const active = surfaces[activeIndex] as Surface;
-
   return (
-    <div className="mt-20 mx-auto max-w-5xl px-4">
-      <div
-        className="rounded-2xl border bg-[#131313]/80 p-8 backdrop-blur-2xl transition-all duration-500 md:p-12"
-        style={{ borderColor: `${active.color}20` }}
-      >
-        <div className="grid items-center gap-8 md:grid-cols-2">
-          {/* Left — Text */}
-          <div>
-            <div
-              className="mb-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"
-              style={{
-                borderColor: `${active.color}30`,
-                backgroundColor: `${active.color}10`,
-                color: active.color,
-              }}
-            >
-              <span className="text-sm">{active.icon}</span>
-              {active.label}
+    <div className="mt-20 space-y-px bg-[#1a1917]">
+      {surfaces.map((s) => (
+        <div key={s.label} className="bg-[#09090b]">
+          <div className="mx-auto grid max-w-6xl items-center gap-6 px-4 py-10 md:grid-cols-[1fr_2fr] md:py-14">
+            {/* Left — compact text */}
+            <div>
+              <p className="mb-1 font-mono text-xs text-[#555150]">{s.tech}</p>
+              <h3 className="mb-3 text-xl font-bold text-[#edebe8]">{s.label}</h3>
+              <ul className="space-y-2">
+                {s.features.map((f) => (
+                  <li
+                    key={f}
+                    className="flex items-start gap-2 text-xs leading-relaxed text-[#888480]"
+                  >
+                    <span className="mt-0.5 text-[#c8892a]">&#8226;</span>
+                    <span dangerouslySetInnerHTML={{ __html: f }} />
+                  </li>
+                ))}
+              </ul>
             </div>
-            <h3 className="mb-1 text-2xl font-bold text-[#e5e2e1] md:text-3xl">{active.label}</h3>
-            <p className="mb-6 text-sm text-zinc-500">{active.tech}</p>
-            <ul className="space-y-3">
-              {active.features.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm text-zinc-400">
-                  <span className="mt-0.5 text-emerald-500">✓</span>
-                  <span dangerouslySetInnerHTML={{ __html: f }} />
-                </li>
-              ))}
-            </ul>
+            {/* Right — large mockup */}
+            <div className="flex items-center justify-center">{s.mockup}</div>
           </div>
-
-          {/* Right — Mockup */}
-          <div>{active.mockup}</div>
         </div>
-
-        {/* Surface tabs — clickable */}
-        <div className="mt-8 flex items-center justify-center gap-1.5">
-          {surfaces.map((s, i) => (
-            <button
-              key={s.label}
-              onClick={() => setActiveIndex(i)}
-              className="flex h-11 items-center gap-2 rounded-lg px-3 transition-colors"
-              style={
-                i === activeIndex
-                  ? { backgroundColor: `${active.color}15`, color: active.color }
-                  : undefined
-              }
-              aria-label={`Show ${s.label}`}
-              aria-current={i === activeIndex ? 'true' : undefined}
-            >
-              <span className="text-sm">{s.icon}</span>
-              <span
-                className={`hidden text-xs font-medium sm:inline ${
-                  i === activeIndex ? '' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {s.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
