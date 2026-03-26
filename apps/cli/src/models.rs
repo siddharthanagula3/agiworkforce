@@ -269,7 +269,9 @@ async fn try_subscription_auth(
             let url = base_url_override.unwrap_or_else(|| default_subscription_url(sub_name));
             // Subscription auth tokens must only be sent over HTTPS
             if !url.starts_with("https://") {
-                eprintln!("[auth] Rejecting non-HTTPS subscription URL for {}: {}", sub_name, url);
+                // Redact URL to avoid leaking embedded credentials in logs
+                let scheme = url.split("://").next().unwrap_or("unknown");
+                eprintln!("[auth] Rejecting non-HTTPS subscription URL for {} (scheme: {})", sub_name, scheme);
                 continue;
             }
             let account_id = auth_store.entries.get(sub_name).and_then(|e| match e {

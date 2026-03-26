@@ -2,17 +2,17 @@ import type { RateLimitState } from './types';
 
 export const logger = {
   debug: (message: string, data?: unknown) => {
-    console.debug(`[AGI Workforce] ${message}`, data);
+    console.debug('[AGI Workforce] %s', message, data);
   },
   info: (message: string, data?: unknown) => {
     // eslint-disable-next-line no-console
-    console.info(`[AGI Workforce] ${message}`, data);
+    console.info('[AGI Workforce] %s', message, data);
   },
   warn: (message: string, data?: unknown) => {
-    console.warn(`[AGI Workforce] ${message}`, data);
+    console.warn('[AGI Workforce] %s', message, data);
   },
   error: (message: string, error?: unknown) => {
-    console.error(`[AGI Workforce] ${message}`, error);
+    console.error('[AGI Workforce] %s', message, error);
   },
 };
 

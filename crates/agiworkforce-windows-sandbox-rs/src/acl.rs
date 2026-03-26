@@ -193,6 +193,10 @@ pub unsafe fn dacl_has_write_allow_for_sid(p_dacl: *mut ACL, psid: *mut c_void) 
         if GetAce(p_dacl as *const ACL, i as u32, &mut p_ace) == 0 {
             continue;
         }
+        // Validate pointer before dereference
+        if p_ace.is_null() {
+            continue;
+        }
         let hdr = &*(p_ace as *const ACE_HEADER);
         if hdr.AceType != 0 {
             continue; // ACCESS_ALLOWED_ACE_TYPE
@@ -204,8 +208,12 @@ pub unsafe fn dacl_has_write_allow_for_sid(p_dacl: *mut ACL, psid: *mut c_void) 
         let ace = &*(p_ace as *const ACCESS_ALLOWED_ACE);
         let mask = ace.Mask;
         let base = p_ace as usize;
-        let sid_ptr =
-            (base + std::mem::size_of::<ACE_HEADER>() + std::mem::size_of::<u32>()) as *mut c_void;
+        let sid_offset = std::mem::size_of::<ACE_HEADER>() + std::mem::size_of::<u32>();
+        // Bounds check: ensure the SID offset doesn't exceed the ACE size
+        if sid_offset > hdr.AceSize as usize {
+            continue;
+        }
+        let sid_ptr = (base + sid_offset) as *mut c_void;
         let eq = EqualSid(sid_ptr, psid);
         if eq != 0 && (mask & FILE_GENERIC_WRITE) != 0 {
             return true;
@@ -241,6 +249,11 @@ pub unsafe fn dacl_has_write_deny_for_sid(p_dacl: *mut ACL, psid: *mut c_void) -
         if GetAce(p_dacl as *const ACL, i, &mut p_ace) == 0 {
             continue;
         }
+        // Validate pointer before dereference — GetAce should guarantee non-null
+        // on success, but defend against invalid pointers.
+        if p_ace.is_null() {
+            continue;
+        }
         let hdr = &*(p_ace as *const ACE_HEADER);
         if hdr.AceType != 1 {
             continue; // ACCESS_DENIED_ACE_TYPE
@@ -250,8 +263,12 @@ pub unsafe fn dacl_has_write_deny_for_sid(p_dacl: *mut ACL, psid: *mut c_void) -
         }
         let ace = &*(p_ace as *const ACCESS_ALLOWED_ACE);
         let base = p_ace as usize;
-        let sid_ptr =
-            (base + std::mem::size_of::<ACE_HEADER>() + std::mem::size_of::<u32>()) as *mut c_void;
+        let sid_offset = std::mem::size_of::<ACE_HEADER>() + std::mem::size_of::<u32>();
+        // Bounds check: ensure the SID offset doesn't exceed the ACE size
+        if sid_offset > hdr.AceSize as usize {
+            continue;
+        }
+        let sid_ptr = (base + sid_offset) as *mut c_void;
         if EqualSid(sid_ptr, psid) != 0 && (ace.Mask & deny_write_mask) != 0 {
             return true;
         }
