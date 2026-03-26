@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, Bot, Check, Clock, Eye, Smartphone, Terminal, Wrench, X } from 'lucide-react';
+import { ArrowRight, Bot, Check, Clock, Eye, Smartphone, Terminal, Wrench } from 'lucide-react';
 import { Header } from '../../../components/layout/Header';
 import { CtaSection } from '../../../components/marketing/CtaSection';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
@@ -72,81 +72,6 @@ const jsonLd = {
     ],
   },
 };
-
-interface ComparisonRow {
-  feature: string;
-  agiWorkforce: boolean;
-  claudeDesktop: boolean;
-  chatGpt: boolean;
-  cursor: boolean;
-}
-
-const comparisonData: ComparisonRow[] = [
-  {
-    feature: 'Parallel sub-agents',
-    agiWorkforce: true,
-    claudeDesktop: false,
-    chatGpt: false,
-    cursor: false,
-  },
-  {
-    feature: 'Background agents',
-    agiWorkforce: true,
-    claudeDesktop: false,
-    chatGpt: false,
-    cursor: false,
-  },
-  {
-    feature: 'Autonomous mode',
-    agiWorkforce: true,
-    claudeDesktop: true,
-    chatGpt: false,
-    cursor: false,
-  },
-  {
-    feature: 'Mobile agent oversight',
-    agiWorkforce: true,
-    claudeDesktop: false,
-    chatGpt: false,
-    cursor: false,
-  },
-  {
-    feature: 'Multi-model support',
-    agiWorkforce: true,
-    claudeDesktop: false,
-    chatGpt: false,
-    cursor: true,
-  },
-  {
-    feature: 'Desktop automation',
-    agiWorkforce: true,
-    claudeDesktop: true,
-    chatGpt: false,
-    cursor: false,
-  },
-  {
-    feature: '1,459+ IPC tools',
-    agiWorkforce: true,
-    claudeDesktop: false,
-    chatGpt: false,
-    cursor: false,
-  },
-  {
-    feature: 'Non-coding AI skills',
-    agiWorkforce: true,
-    claudeDesktop: false,
-    chatGpt: false,
-    cursor: false,
-  },
-];
-
-function ComparisonCell({ supported }: { supported: boolean }) {
-  return supported ? (
-    <Check className="mx-auto h-5 w-5 text-emerald-500" />
-  ) : (
-    <X className="mx-auto h-5 w-5 text-[#555150]" />
-  );
-}
 
 const webPageJsonLd = {
   '@context': 'https://schema.org',
@@ -460,60 +385,6 @@ export default function AgentsPage() {
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Comparison Table */}
-          <section className="border-t border-zinc-800/60 py-24">
-            <div className="container mx-auto px-4">
-              <div className="mx-auto max-w-4xl">
-                <h2 className="mb-4 text-2xl font-bold tracking-tight text-[#edebe8] md:text-3xl">
-                  Beyond single-agent AI
-                </h2>
-                <p className="mb-12 max-w-xl text-[#888480]">
-                  Most AI tools run one agent at a time. AGI Workforce is the only platform with
-                  parallel sub-agent orchestration and mobile oversight.
-                </p>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-zinc-800">
-                        <th className="px-4 py-4 text-left font-medium text-[#888480]">Feature</th>
-                        <th className="px-4 py-4 text-center font-semibold text-[#c8892a]">
-                          AGI Workforce
-                        </th>
-                        <th className="px-4 py-4 text-center font-medium text-[#888480]">
-                          Claude Desktop
-                        </th>
-                        <th className="px-4 py-4 text-center font-medium text-[#888480]">
-                          ChatGPT
-                        </th>
-                        <th className="px-4 py-4 text-center font-medium text-[#888480]">Cursor</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {comparisonData.map((row) => (
-                        <tr key={row.feature} className="border-b border-zinc-800/50">
-                          <td className="px-4 py-4 text-[#edebe8]">{row.feature}</td>
-                          <td className="px-4 py-4">
-                            <ComparisonCell supported={row.agiWorkforce} />
-                          </td>
-                          <td className="px-4 py-4">
-                            <ComparisonCell supported={row.claudeDesktop} />
-                          </td>
-                          <td className="px-4 py-4">
-                            <ComparisonCell supported={row.chatGpt} />
-                          </td>
-                          <td className="px-4 py-4">
-                            <ComparisonCell supported={row.cursor} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
               </div>
             </div>
