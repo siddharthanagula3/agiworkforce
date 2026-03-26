@@ -372,8 +372,7 @@ mod tests {
         // This test validates that goals can be structured for parallel execution.
         // In production, this would use a real AgentOrchestrator instance.
 
-        let goals = vec![
-            Goal {
+        let goals = [Goal {
                 id: "test_goal_1".to_string(),
                 description: "Test goal 1".to_string(),
                 priority: Priority::High,
@@ -388,8 +387,7 @@ mod tests {
                 deadline: None,
                 constraints: vec![],
                 success_criteria: vec!["Complete successfully".to_string()],
-            },
-        ];
+            }];
 
         // Verify goal structure is valid
         assert_eq!(goals.len(), 2);

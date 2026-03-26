@@ -2073,20 +2073,23 @@ mod tests {
 
     #[test]
     fn test_timeout_constants_are_reasonable() {
+        let connect = SSE_CONNECT_TIMEOUT_SECS;
+        let request = HTTP_REQUEST_TIMEOUT_SECS;
+        let idle = SSE_STREAM_IDLE_TIMEOUT_SECS;
+
         // Connection timeout should be shorter than request timeout
         assert!(
-            SSE_CONNECT_TIMEOUT_SECS < HTTP_REQUEST_TIMEOUT_SECS
-                || SSE_CONNECT_TIMEOUT_SECS == HTTP_REQUEST_TIMEOUT_SECS,
+            connect <= request,
             "Connect timeout ({}) should not exceed request timeout ({})",
-            SSE_CONNECT_TIMEOUT_SECS,
-            HTTP_REQUEST_TIMEOUT_SECS,
+            connect,
+            request,
         );
         // SSE idle timeout should be generous since SSE streams may have long pauses
         assert!(
-            SSE_STREAM_IDLE_TIMEOUT_SECS >= HTTP_REQUEST_TIMEOUT_SECS,
+            idle >= request,
             "SSE idle timeout ({}) should be at least as long as request timeout ({})",
-            SSE_STREAM_IDLE_TIMEOUT_SECS,
-            HTTP_REQUEST_TIMEOUT_SECS,
+            idle,
+            request,
         );
     }
 
