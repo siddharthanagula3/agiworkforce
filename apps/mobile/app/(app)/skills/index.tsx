@@ -1,6 +1,8 @@
-import { View } from 'react-native';
+import { useCallback } from 'react';
+import { View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Zap } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { ArrowLeft, Zap } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
 
@@ -9,10 +11,25 @@ import { colors } from '@/lib/theme';
  * Will display 150+ AI skills organized by category in Phase C.
  */
 export default function SkillsScreen() {
+  const router = useRouter();
+
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+  }, [router]);
+
   return (
     <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
       <View className="flex-row items-center px-4 h-12">
-        <Text variant="subheading" className="text-white">
+        <Pressable
+          onPress={handleBack}
+          className="p-2 -ml-2 rounded-lg active:bg-white/5"
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
+          <ArrowLeft size={20} color={colors.textSecondary} />
+        </Pressable>
+        <Text variant="subheading" className="text-white ml-2">
           Skills
         </Text>
       </View>

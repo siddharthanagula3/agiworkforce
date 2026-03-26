@@ -75,7 +75,7 @@ export async function respondToolConfirmation(
     throw new Error('[toolConfirmation] requestId is required');
   }
   if (!isTauri) {
-    console.info('[toolConfirmation] respondToolConfirmation (mock)', {
+    console.debug('[toolConfirmation] respondToolConfirmation (mock)', {
       requestId,
       approved,
       rememberChoice,
@@ -107,7 +107,7 @@ export async function respondToolConfirmation(
  */
 export async function getToolSafetyTier(toolName: string): Promise<ToolSafetyTierInfo | null> {
   if (!isTauri) {
-    console.info('[toolConfirmation] getToolSafetyTier (mock)', toolName);
+    console.debug('[toolConfirmation] getToolSafetyTier (mock)', toolName);
     return {
       tool_name: toolName,
       safety_tier: 'Safe',
@@ -135,7 +135,7 @@ export async function getToolSafetyTier(toolName: string): Promise<ToolSafetyTie
  */
 export async function getRememberedToolChoices(): Promise<Record<string, boolean>> {
   if (!isTauri) {
-    console.info('[toolConfirmation] getRememberedToolChoices (mock)');
+    console.debug('[toolConfirmation] getRememberedToolChoices (mock)');
     return {};
   }
 
@@ -153,7 +153,7 @@ export async function getRememberedToolChoices(): Promise<Record<string, boolean
  */
 export async function clearRememberedToolChoices(): Promise<void> {
   if (!isTauri) {
-    console.info('[toolConfirmation] clearRememberedToolChoices (mock)');
+    console.debug('[toolConfirmation] clearRememberedToolChoices (mock)');
     return;
   }
 
@@ -172,7 +172,7 @@ export async function clearRememberedToolChoices(): Promise<void> {
  */
 export async function clearRememberedToolChoice(toolName: string): Promise<void> {
   if (!isTauri) {
-    console.info('[toolConfirmation] clearRememberedToolChoice (mock)', toolName);
+    console.debug('[toolConfirmation] clearRememberedToolChoice (mock)', toolName);
     return;
   }
 
@@ -191,7 +191,7 @@ export async function clearRememberedToolChoice(toolName: string): Promise<void>
  */
 export async function getPendingConfirmationCount(): Promise<number> {
   if (!isTauri) {
-    console.info('[toolConfirmation] getPendingConfirmationCount (mock)');
+    console.debug('[toolConfirmation] getPendingConfirmationCount (mock)');
     return 0;
   }
 
@@ -215,7 +215,7 @@ export async function cancelToolConfirmation(requestId: string): Promise<void> {
     throw new Error('[toolConfirmation] requestId is required');
   }
   if (!isTauri) {
-    console.info('[toolConfirmation] cancelToolConfirmation (mock)', requestId);
+    console.debug('[toolConfirmation] cancelToolConfirmation (mock)', requestId);
     return;
   }
 
