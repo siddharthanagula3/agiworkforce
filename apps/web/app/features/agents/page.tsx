@@ -1,22 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import {
-  ArrowRight,
-  Bot,
-  BookOpen,
-  Brain,
-  Check,
-  ChevronRight,
-  Clock,
-  Eye,
-  GitMerge,
-  Layers,
-  Smartphone,
-  Users,
-  Wrench,
-  X,
-  Zap,
-} from 'lucide-react';
+import { ArrowRight, Bot, Check, Clock, Eye, Smartphone, Terminal, Wrench, X } from 'lucide-react';
 import { Header } from '../../../components/layout/Header';
 import { CtaSection } from '../../../components/marketing/CtaSection';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
@@ -24,7 +8,7 @@ import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'AI Agents & Parallel Orchestration | AGI Workforce',
   description:
-    'Deploy autonomous AI agents that decompose complex tasks, work simultaneously in parallel, and aggregate results. Powered by a proprietary swarm orchestration engine with mobile oversight.',
+    'Deploy autonomous AI agents that decompose complex tasks, work simultaneously in parallel, and aggregate results. Powered by an orchestration engine with mobile oversight.',
   keywords: [
     'AI agents',
     'parallel orchestration',
@@ -69,7 +53,7 @@ const jsonLd = {
   '@type': 'WebPage',
   name: 'AI Agents & Parallel Orchestration',
   description:
-    'Deploy autonomous AI agents that decompose complex tasks, work simultaneously in parallel, and aggregate results — powered by a proprietary swarm orchestration engine.',
+    'Deploy autonomous AI agents that decompose complex tasks, work simultaneously in parallel, and aggregate results — powered by an orchestration engine.',
   url: 'https://agiworkforce.com/features/agents',
   mainEntity: {
     '@type': 'SoftwareApplication',
@@ -89,74 +73,6 @@ const jsonLd = {
   },
 };
 
-const orchestrationSteps = [
-  {
-    icon: Layers,
-    title: 'Task Decomposition',
-    description: 'Complex tasks are broken into independent sub-tasks',
-    detail: 'The orchestrator analyzes your request and identifies parallelizable work units.',
-  },
-  {
-    icon: Users,
-    title: 'Agent Spawning',
-    description: 'Specialized agents are assigned to each sub-task',
-    detail: 'Each agent is configured with the right tools, context, and model for its job.',
-  },
-  {
-    icon: Zap,
-    title: 'Parallel Execution',
-    description: 'Agents work simultaneously, not sequentially',
-    detail: 'All sub-agents execute concurrently, reducing total completion time dramatically.',
-  },
-  {
-    icon: GitMerge,
-    title: 'Result Aggregation',
-    description: 'Results are combined into a unified deliverable',
-    detail: 'Outputs from all agents are merged, deduplicated, and presented as one result.',
-  },
-];
-
-const capabilities = [
-  {
-    icon: Bot,
-    title: 'Autonomous Mode',
-    description:
-      'Agents plan, execute, and iterate without human intervention. Set goals and let them work.',
-    highlight: 'Set a goal, walk away',
-  },
-  {
-    icon: Clock,
-    title: 'Background Agents',
-    description: 'Long-running agents that work in the background while you focus on other things.',
-    highlight: 'Always working for you',
-  },
-  {
-    icon: Eye,
-    title: 'Vision & Screen Understanding',
-    description: 'Agents that can see your screen, read text, and interact with visual elements.',
-    highlight: 'See what you see',
-  },
-  {
-    icon: BookOpen,
-    title: 'RAG & Knowledge',
-    description:
-      'Agents with retrieval-augmented generation for accessing project context and documents.',
-    highlight: 'Context-aware intelligence',
-  },
-  {
-    icon: Brain,
-    title: 'Planning & Reasoning',
-    description: 'Multi-step planning with reflection and self-correction capabilities.',
-    highlight: 'Think before acting',
-  },
-  {
-    icon: Wrench,
-    title: 'Tool Execution',
-    description: 'Agents use any MCP tool: browser, terminal, files, databases, APIs.',
-    highlight: 'Unlimited MCP tools',
-  },
-];
-
 interface ComparisonRow {
   feature: string;
   agiWorkforce: boolean;
@@ -174,7 +90,7 @@ const comparisonData: ComparisonRow[] = [
     cursor: false,
   },
   {
-    feature: 'Swarm orchestration',
+    feature: 'Background agents',
     agiWorkforce: true,
     claudeDesktop: false,
     chatGpt: false,
@@ -209,6 +125,13 @@ const comparisonData: ComparisonRow[] = [
     cursor: false,
   },
   {
+    feature: '1,459+ IPC tools',
+    agiWorkforce: true,
+    claudeDesktop: false,
+    chatGpt: false,
+    cursor: false,
+  },
+  {
     feature: 'Non-coding AI skills',
     agiWorkforce: true,
     claudeDesktop: false,
@@ -221,7 +144,7 @@ function ComparisonCell({ supported }: { supported: boolean }) {
   return supported ? (
     <Check className="mx-auto h-5 w-5 text-emerald-500" />
   ) : (
-    <X className="mx-auto h-5 w-5 text-zinc-600" />
+    <X className="mx-auto h-5 w-5 text-[#555150]" />
   );
 }
 
@@ -245,204 +168,282 @@ export default function AgentsPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
       />
-      <div className="flex min-h-screen flex-col bg-black text-white">
+      <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8]">
         <Header />
 
         <main className="flex-1 pt-24">
-          {/* Hero Section */}
-          <section className="relative overflow-hidden py-20 md:py-32 lg:py-40">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black" />
-            <div className="container relative mx-auto px-4 text-center">
-              <div className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 backdrop-blur-xs">
-                <span className="mr-2 flex h-2 w-2 animate-pulse rounded-full bg-blue-500" />
-                Swarm Orchestration Engine
-              </div>
-              <h1 className="mx-auto max-w-5xl bg-gradient-to-b from-white to-white/50 bg-clip-text text-5xl font-bold tracking-tight text-transparent md:text-7xl lg:text-8xl">
-                AI Agents That Work in Parallel
-              </h1>
-              <p className="mx-auto mt-6 max-w-3xl text-lg text-zinc-400 md:text-xl">
-                Deploy autonomous agents that decompose complex tasks, work simultaneously, and
-                aggregate results — powered by a proprietary swarm orchestration engine.
-              </p>
-              <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <Link
-                  href="/download"
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-black"
-                >
-                  Download Desktop App
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-                <Link
-                  href="#how-it-works"
-                  className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-800 bg-black px-8 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white"
-                >
-                  How It Works
-                </Link>
-              </div>
-
-              <div className="mt-12 flex flex-col items-center gap-4 md:flex-row md:justify-center">
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Zap className="h-4 w-4 text-blue-500" />
-                  <span>Parallel Execution</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Bot className="h-4 w-4 text-blue-500" />
-                  <span>Autonomous Mode</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Eye className="h-4 w-4 text-blue-500" />
-                  <span>Vision + RAG</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* How Swarm Orchestration Works */}
-          <section id="how-it-works" className="bg-zinc-950 py-24">
-            <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <div className="mb-4 inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-blue-400">
-                  <Layers className="mr-2 h-4 w-4" />
-                  Orchestration Pipeline
-                </div>
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  How Swarm Orchestration Works
-                </h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  A four-stage pipeline that transforms complex requests into parallel agent
-                  workflows, completing work in a fraction of the time.
+          {/* Hero */}
+          <section className="relative py-20 md:py-32 lg:py-40">
+            <div className="container relative mx-auto px-4">
+              <div className="mx-auto max-w-3xl">
+                <p className="mb-6 text-sm font-medium tracking-widest uppercase text-[#c8892a]">
+                  Parallel Agent Orchestration
                 </p>
-              </div>
-
-              <div className="relative grid gap-6 md:grid-cols-4">
-                {orchestrationSteps.map((step, index) => (
-                  <div key={step.title} className="relative flex flex-col items-center text-center">
-                    {/* Connector arrow (hidden on mobile, shown between steps on desktop) */}
-                    {index < orchestrationSteps.length - 1 && (
-                      <div className="absolute right-0 top-12 z-10 hidden translate-x-1/2 md:block">
-                        <ChevronRight className="h-6 w-6 text-blue-500/50" />
-                      </div>
-                    )}
-
-                    {/* Step number */}
-                    <div className="mb-4 flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/20 text-sm font-bold text-blue-400">
-                      {index + 1}
-                    </div>
-
-                    {/* Icon */}
-                    <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-800 bg-black">
-                      <step.icon className="h-8 w-8 text-blue-500" />
-                    </div>
-
-                    {/* Content */}
-                    <h3 className="mb-2 text-lg font-semibold">{step.title}</h3>
-                    <p className="mb-2 text-sm text-zinc-400">{step.description}</p>
-                    <p className="text-xs text-zinc-600">{step.detail}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* Agent Capabilities */}
-          <section className="bg-black py-24">
-            <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  Agent Capabilities
-                </h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  Every agent in your workforce comes equipped with powerful capabilities that go
-                  far beyond simple chat.
+                <h1 className="text-4xl font-bold tracking-tight text-[#edebe8] md:text-6xl lg:text-7xl">
+                  12 agents. 3 minutes.
+                  <br />
+                  <span className="text-[#888480]">Work that used to take hours.</span>
+                </h1>
+                <p className="mt-6 max-w-2xl text-lg text-[#888480]">
+                  Decompose a task, spawn specialized agents in parallel, and merge the results.
+                  Each agent gets its own tools, model, and context window. You get one unified
+                  deliverable.
                 </p>
-              </div>
-
-              <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-                {capabilities.map((capability) => (
-                  <div
-                    key={capability.title}
-                    className="group rounded-2xl border border-zinc-800 bg-black/50 p-8 transition-all hover:scale-105 hover:border-blue-500/50"
+                <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+                  <Link
+                    href="/download"
+                    className="inline-flex h-12 items-center justify-center rounded-lg bg-[#c8892a] px-8 text-sm font-medium text-[#09090b] transition-colors hover:bg-[#d9a04a]"
                   >
-                    <capability.icon className="mb-4 h-10 w-10 text-blue-500" />
-                    <div className="mb-2 inline-block rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-400">
-                      {capability.highlight}
-                    </div>
-                    <h3 className="mb-2 text-xl font-semibold">{capability.title}</h3>
-                    <p className="leading-relaxed text-zinc-400">{capability.description}</p>
-                  </div>
-                ))}
+                    Download Desktop App
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                  <Link
+                    href="#trace"
+                    className="inline-flex h-12 items-center justify-center rounded-lg border border-zinc-800 px-8 text-sm font-medium text-[#888480] transition-colors hover:border-zinc-700 hover:text-[#edebe8]"
+                  >
+                    See it run
+                  </Link>
+                </div>
               </div>
             </div>
           </section>
 
-          {/* Mobile Companion */}
-          <section className="bg-zinc-950 py-24">
+          {/* Agent Execution Trace */}
+          <section id="trace" className="border-t border-zinc-800/60 py-24">
             <div className="container mx-auto px-4">
-              <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-blue-900/20 via-black to-black p-8 md:p-16">
-                <div className="absolute inset-0 -z-10 bg-blue-500/5 blur-3xl" />
+              <div className="mx-auto max-w-3xl">
+                <div className="mb-8 flex items-center gap-3">
+                  <Terminal className="h-5 w-5 text-[#c8892a]" />
+                  <h2 className="text-sm font-medium tracking-widest uppercase text-[#888480]">
+                    Execution Trace
+                  </h2>
+                </div>
 
+                <div className="overflow-hidden rounded-lg border border-zinc-800 bg-black">
+                  {/* Terminal chrome */}
+                  <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
+                    <div className="h-3 w-3 rounded-full bg-zinc-700" />
+                    <div className="h-3 w-3 rounded-full bg-zinc-700" />
+                    <div className="h-3 w-3 rounded-full bg-zinc-700" />
+                    <span className="ml-3 text-xs text-[#555150]">agiworkforce --- agents</span>
+                  </div>
+
+                  <pre className="overflow-x-auto p-6 text-[13px] leading-relaxed">
+                    <code>
+                      <span className="text-[#555150]">$</span>{' '}
+                      <span className="text-[#edebe8]">
+                        &quot;Refactor the auth module, add tests, update the docs&quot;
+                      </span>
+                      {'\n\n'}
+                      <span className="text-[#c8892a]">orchestrator</span>
+                      <span className="text-[#555150]"> ── </span>
+                      <span className="text-[#888480]">decomposed into 3 parallel tasks</span>
+                      {'\n\n'}
+                      <span className="text-[#555150]">
+                        {'  '}agent/refactor{'  '}
+                      </span>
+                      <span className="text-emerald-500">spawned</span>
+                      <span className="text-[#555150]"> ── </span>
+                      <span className="text-[#888480]">
+                        claude-4.6-opus{'  '}| tools: fs, terminal, git
+                      </span>
+                      {'\n'}
+                      <span className="text-[#555150]">
+                        {'  '}agent/tests{'     '}
+                      </span>
+                      <span className="text-emerald-500">spawned</span>
+                      <span className="text-[#555150]"> ── </span>
+                      <span className="text-[#888480]">
+                        claude-4.6-sonnet | tools: fs, terminal, vitest
+                      </span>
+                      {'\n'}
+                      <span className="text-[#555150]">
+                        {'  '}agent/docs{'      '}
+                      </span>
+                      <span className="text-emerald-500">spawned</span>
+                      <span className="text-[#555150]"> ── </span>
+                      <span className="text-[#888480]">
+                        gpt-5.4-mini{'     '}| tools: fs, markdown
+                      </span>
+                      {'\n\n'}
+                      <span className="text-[#555150]">
+                        {'  '}agent/refactor{'  '}
+                      </span>
+                      <span className="text-[#c8892a]">running</span>
+                      <span className="text-[#555150]"> ── </span>
+                      <span className="text-[#888480]">
+                        extracted 4 services from monolith auth.ts
+                      </span>
+                      {'\n'}
+                      <span className="text-[#555150]">
+                        {'  '}agent/tests{'     '}
+                      </span>
+                      <span className="text-[#c8892a]">running</span>
+                      <span className="text-[#555150]"> ── </span>
+                      <span className="text-[#888480]">generated 47 test cases across 4 files</span>
+                      {'\n'}
+                      <span className="text-[#555150]">
+                        {'  '}agent/docs{'      '}
+                      </span>
+                      <span className="text-[#c8892a]">running</span>
+                      <span className="text-[#555150]"> ── </span>
+                      <span className="text-[#888480]">
+                        updated API reference + migration guide
+                      </span>
+                      {'\n\n'}
+                      <span className="text-[#555150]">
+                        {'  '}agent/refactor{'  '}
+                      </span>
+                      <span className="text-emerald-500">done</span>
+                      <span className="text-[#555150]">
+                        {'  '}2m 14s{'  '}12 files changed
+                      </span>
+                      {'\n'}
+                      <span className="text-[#555150]">
+                        {'  '}agent/tests{'     '}
+                      </span>
+                      <span className="text-emerald-500">done</span>
+                      <span className="text-[#555150]">
+                        {'  '}1m 48s{'  '}47/47 passing
+                      </span>
+                      {'\n'}
+                      <span className="text-[#555150]">
+                        {'  '}agent/docs{'      '}
+                      </span>
+                      <span className="text-emerald-500">done</span>
+                      <span className="text-[#555150]">
+                        {'  '}0m 52s{'  '}3 files updated
+                      </span>
+                      {'\n\n'}
+                      <span className="text-[#c8892a]">orchestrator</span>
+                      <span className="text-[#555150]"> ── </span>
+                      <span className="text-[#888480]">merged results{'  '}</span>
+                      <span className="text-emerald-500">complete</span>
+                      <span className="text-[#555150]">
+                        {'  '}3m 01s total (sequential est. 11m)
+                      </span>
+                    </code>
+                  </pre>
+                </div>
+
+                <p className="mt-4 text-sm text-[#555150]">
+                  Each agent picks its own model, tools, and execution strategy. The orchestrator
+                  handles decomposition, dependency ordering, and result merging.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Capabilities --- asymmetric layout */}
+          <section className="border-t border-zinc-800/60 py-24">
+            <div className="container mx-auto px-4">
+              <div className="mx-auto max-w-5xl">
+                <h2 className="mb-4 text-2xl font-bold tracking-tight text-[#edebe8] md:text-3xl">
+                  What agents can do
+                </h2>
+                <p className="mb-12 max-w-xl text-[#888480]">
+                  Every agent in a parallel run has access to the full tool surface. These are not
+                  chat wrappers.
+                </p>
+
+                <div className="grid gap-px overflow-hidden rounded-lg border border-zinc-800 bg-zinc-800 md:grid-cols-2">
+                  {[
+                    {
+                      icon: Bot,
+                      name: 'Autonomous mode',
+                      detail:
+                        'Set a goal and walk away. Agents plan, execute, and self-correct without intervention.',
+                    },
+                    {
+                      icon: Clock,
+                      name: 'Background agents',
+                      detail:
+                        'Long-running tasks continue in the background. Desktop notifications on completion.',
+                    },
+                    {
+                      icon: Eye,
+                      name: 'Vision + screen understanding',
+                      detail:
+                        'Agents see your screen, read rendered UI, and interact with visual elements.',
+                    },
+                    {
+                      icon: Wrench,
+                      name: '1,459+ IPC tools',
+                      detail:
+                        'File system, terminal, git, browser, databases, MCP servers, and every Tauri command.',
+                    },
+                  ].map((cap) => (
+                    <div key={cap.name} className="bg-[#09090b] p-8">
+                      <cap.icon className="mb-4 h-5 w-5 text-[#c8892a]" />
+                      <h3 className="mb-2 text-base font-semibold text-[#edebe8]">{cap.name}</h3>
+                      <p className="text-sm leading-relaxed text-[#888480]">{cap.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Mobile Companion --- asymmetric two-column */}
+          <section className="border-t border-zinc-800/60 py-24">
+            <div className="container mx-auto px-4">
+              <div className="relative mx-auto max-w-5xl overflow-hidden rounded-xl border border-zinc-800 bg-black p-8 md:p-16">
                 <div className="flex flex-col items-center gap-12 md:flex-row">
                   <div className="flex-1 space-y-6">
-                    <div className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-blue-400">
-                      <Smartphone className="mr-2 h-4 w-4" />
-                      Mobile Companion App
+                    <div className="inline-flex items-center gap-2 text-sm font-medium text-[#c8892a]">
+                      <Smartphone className="h-4 w-4" />
+                      Mobile Companion
                     </div>
-                    <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-                      Monitor and Control Agents from Your Phone
+                    <h2 className="text-3xl font-bold tracking-tight text-[#edebe8] md:text-4xl">
+                      Monitor and control agents from your phone
                     </h2>
-                    <p className="text-lg text-zinc-400">
+                    <p className="text-lg text-[#888480]">
                       QR-pair with your desktop, view a real-time agent dashboard, and approve or
                       deny every tool call — all from your phone.
                     </p>
-                    <p className="text-sm font-medium text-blue-400">
-                      The only AI platform with a dedicated mobile companion app for agent
-                      oversight.
+                    <p className="text-sm text-[#c8892a]">
+                      The only AI platform with a dedicated mobile companion for agent oversight.
                     </p>
 
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3 text-sm text-zinc-300">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500" />
-                        <span>QR code pairing with desktop in seconds</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-sm text-zinc-300">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500" />
-                        <span>Real-time agent status and progress tracking</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-sm text-zinc-300">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500" />
-                        <span>Per-tool-call approve/deny controls</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-sm text-zinc-300">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500" />
-                        <span>Push notifications for agent milestones</span>
-                      </div>
+                    <div className="space-y-3 pt-2">
+                      {[
+                        'QR code pairing with desktop in seconds',
+                        'Real-time agent status and progress tracking',
+                        'Per-tool-call approve/deny controls',
+                        'Push notifications for agent milestones',
+                      ].map((item) => (
+                        <div key={item} className="flex items-center gap-3 text-sm text-[#edebe8]">
+                          <Check className="h-4 w-4 shrink-0 text-emerald-500" />
+                          <span>{item}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Phone mockup placeholder */}
+                  {/* Phone mockup */}
                   <div className="shrink-0" aria-hidden="true">
-                    <div className="relative h-[480px] w-[240px] rounded-[2.5rem] border-2 border-zinc-700 bg-zinc-900/80 p-3 shadow-2xl backdrop-blur-sm">
+                    <div className="relative h-[480px] w-[240px] rounded-[2.5rem] border-2 border-zinc-700 bg-zinc-900/80 p-3 shadow-2xl">
                       <div className="absolute left-1/2 top-4 h-6 w-20 -translate-x-1/2 rounded-full bg-black" />
                       <div className="flex h-full flex-col items-center justify-center rounded-[2rem] border border-zinc-800 bg-black/60 p-4">
-                        <Bot className="mb-4 h-12 w-12 text-blue-500" />
-                        <div className="mb-2 text-center text-sm font-semibold">
+                        <Bot className="mb-4 h-12 w-12 text-[#c8892a]" />
+                        <div className="mb-2 text-center text-sm font-semibold text-[#edebe8]">
                           Agent Dashboard
                         </div>
                         <div className="w-full space-y-2">
                           <div className="flex items-center justify-between rounded-lg bg-zinc-800/50 px-3 py-2 text-xs">
-                            <span className="text-zinc-400">Research Agent</span>
+                            <span className="text-[#888480]">Research Agent</span>
                             <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-emerald-400">
                               Running
                             </span>
                           </div>
                           <div className="flex items-center justify-between rounded-lg bg-zinc-800/50 px-3 py-2 text-xs">
-                            <span className="text-zinc-400">Code Agent</span>
-                            <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-blue-400">
+                            <span className="text-[#888480]">Code Agent</span>
+                            <span className="rounded-full bg-[#c8892a]/20 px-2 py-0.5 text-[#c8892a]">
                               Waiting
                             </span>
                           </div>
                           <div className="flex items-center justify-between rounded-lg bg-zinc-800/50 px-3 py-2 text-xs">
-                            <span className="text-zinc-400">Writer Agent</span>
+                            <span className="text-[#888480]">Writer Agent</span>
                             <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-emerald-400">
                               Running
                             </span>
@@ -464,54 +465,56 @@ export default function AgentsPage() {
             </div>
           </section>
 
-          {/* Comparison Section */}
-          <section className="bg-black py-24">
+          {/* Comparison Table */}
+          <section className="border-t border-zinc-800/60 py-24">
             <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  Beyond Single-Agent AI
+              <div className="mx-auto max-w-4xl">
+                <h2 className="mb-4 text-2xl font-bold tracking-tight text-[#edebe8] md:text-3xl">
+                  Beyond single-agent AI
                 </h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
+                <p className="mb-12 max-w-xl text-[#888480]">
                   Most AI tools run one agent at a time. AGI Workforce is the only platform with
                   parallel sub-agent orchestration and mobile oversight.
                 </p>
-              </div>
 
-              <div className="mx-auto max-w-4xl overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-800">
-                      <th className="px-4 py-4 text-left font-medium text-zinc-400">Feature</th>
-                      <th className="px-4 py-4 text-center font-semibold text-blue-400">
-                        AGI Workforce
-                      </th>
-                      <th className="px-4 py-4 text-center font-medium text-zinc-400">
-                        Claude Desktop
-                      </th>
-                      <th className="px-4 py-4 text-center font-medium text-zinc-400">ChatGPT</th>
-                      <th className="px-4 py-4 text-center font-medium text-zinc-400">Cursor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {comparisonData.map((row) => (
-                      <tr key={row.feature} className="border-b border-zinc-800/50">
-                        <td className="px-4 py-4 text-zinc-300">{row.feature}</td>
-                        <td className="px-4 py-4">
-                          <ComparisonCell supported={row.agiWorkforce} />
-                        </td>
-                        <td className="px-4 py-4">
-                          <ComparisonCell supported={row.claudeDesktop} />
-                        </td>
-                        <td className="px-4 py-4">
-                          <ComparisonCell supported={row.chatGpt} />
-                        </td>
-                        <td className="px-4 py-4">
-                          <ComparisonCell supported={row.cursor} />
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-800">
+                        <th className="px-4 py-4 text-left font-medium text-[#888480]">Feature</th>
+                        <th className="px-4 py-4 text-center font-semibold text-[#c8892a]">
+                          AGI Workforce
+                        </th>
+                        <th className="px-4 py-4 text-center font-medium text-[#888480]">
+                          Claude Desktop
+                        </th>
+                        <th className="px-4 py-4 text-center font-medium text-[#888480]">
+                          ChatGPT
+                        </th>
+                        <th className="px-4 py-4 text-center font-medium text-[#888480]">Cursor</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {comparisonData.map((row) => (
+                        <tr key={row.feature} className="border-b border-zinc-800/50">
+                          <td className="px-4 py-4 text-[#edebe8]">{row.feature}</td>
+                          <td className="px-4 py-4">
+                            <ComparisonCell supported={row.agiWorkforce} />
+                          </td>
+                          <td className="px-4 py-4">
+                            <ComparisonCell supported={row.claudeDesktop} />
+                          </td>
+                          <td className="px-4 py-4">
+                            <ComparisonCell supported={row.chatGpt} />
+                          </td>
+                          <td className="px-4 py-4">
+                            <ComparisonCell supported={row.cursor} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </section>
