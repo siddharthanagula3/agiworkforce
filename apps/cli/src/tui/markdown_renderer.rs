@@ -202,7 +202,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
 
 fn flush_line(lines: &mut Vec<Line<'static>>, spans: &mut Vec<Span<'static>>) {
     if !spans.is_empty() {
-        lines.push(Line::from(spans.drain(..).collect::<Vec<_>>()));
+        lines.push(Line::from(std::mem::take(spans)));
     }
 }
 
