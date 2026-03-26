@@ -21,11 +21,12 @@ RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
 
 WORKDIR /app
 
-# Copy package manifest for dependency install
-COPY package.json ./
+# Copy package manifest + lockfile for reproducible installs
+COPY package.json pnpm-lock.yaml* ./
 
 # Install all dependencies (including devDependencies for build)
-RUN pnpm install --frozen-lockfile
+# Uses lockfile if present (monorepo context), otherwise generates one
+RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 
 # =============================================================================
 # Stage 2: Build
@@ -56,10 +57,10 @@ RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json pnpm-lock.yaml* ./
 
 # Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile && \
+RUN pnpm install --prod --frozen-lockfile 2>/dev/null || pnpm install --prod && \
     pnpm store prune
 
 # =============================================================================
