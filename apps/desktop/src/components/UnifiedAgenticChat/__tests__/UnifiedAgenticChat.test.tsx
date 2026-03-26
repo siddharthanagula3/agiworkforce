@@ -102,6 +102,11 @@ vi.mock('../ChatInputArea', () => ({
   },
 }));
 
+vi.mock('../TokenCounter', () => ({
+  TokenCounter: () => <div data-testid="token-counter" />,
+  default: () => <div data-testid="token-counter" />,
+}));
+
 vi.mock('../BudgetAlertsPanel', () => ({
   BudgetAlertsPanel: () => null,
 }));
@@ -462,15 +467,25 @@ vi.mock('../../../stores/simpleModeStore', () => ({
 }));
 
 // Mock executionStore
-vi.mock('../../../stores/executionStore', () => ({
-  useExecutionStore: {
-    getState: vi.fn(() => ({
-      researchTasks: {},
-      addResearchTask: vi.fn(),
-      updateResearchTask: vi.fn(),
-    })),
-  },
-}));
+vi.mock('../../../stores/executionStore', () => {
+  const state = {
+    researchTasks: {},
+    activeGoal: null,
+    addResearchTask: vi.fn(),
+    updateResearchTask: vi.fn(),
+  };
+
+  const useExecutionStore = vi.fn((selector?: (s: typeof state) => unknown) => {
+    if (typeof selector === 'function') {
+      return selector(state);
+    }
+    return state;
+  });
+
+  (useExecutionStore as unknown as { getState: () => typeof state }).getState = () => state;
+
+  return { useExecutionStore };
+});
 
 // Mock customInstructionsStore
 vi.mock('../../../stores/customInstructionsStore', () => {

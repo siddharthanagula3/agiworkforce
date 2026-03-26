@@ -7,6 +7,16 @@ import type {
   McpToolExecutionStats,
 } from '../../types/mcp';
 
+// Mock isTauri to true so store methods don't bail out
+vi.mock('../../lib/tauri-mock', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../lib/tauri-mock')>('../../lib/tauri-mock');
+  return {
+    ...actual,
+    isTauri: true,
+  };
+});
+
 // AUDIT-P3-TEST-TYPE: Properly typed mock functions for MCP API
 vi.mock('../../api/mcp', () => ({
   McpClient: {

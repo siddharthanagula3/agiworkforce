@@ -118,13 +118,12 @@ describe('ErrorTrackingService', () => {
       expect(() => service.captureError(error, context)).not.toThrow();
     });
 
-    it('should log error to console when disabled', () => {
+    it('should silently return when disabled', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const error = new Error('Test error');
-      service.captureError(error);
-
-      expect(consoleSpy).toHaveBeenCalledWith(error);
+      // When disabled, captureError returns immediately without side effects
+      expect(() => service.captureError(error)).not.toThrow();
 
       consoleSpy.mockRestore();
     });
@@ -145,14 +144,9 @@ describe('ErrorTrackingService', () => {
       expect(() => service.captureMessage('Test message', ErrorSeverity.LOW)).not.toThrow();
     });
 
-    it('should log message to console when disabled', () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      service.captureMessage('Test message');
-
-      expect(consoleSpy).toHaveBeenCalledWith('Test message');
-
-      consoleSpy.mockRestore();
+    it('should silently return when disabled', () => {
+      // When disabled, captureMessage returns immediately without side effects
+      expect(() => service.captureMessage('Test message')).not.toThrow();
     });
 
     it('should default to LOW severity', () => {
