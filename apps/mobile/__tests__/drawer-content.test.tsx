@@ -54,9 +54,14 @@ jest.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AfterFirstUnlockThisDeviceOnly',
 }));
 
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: jest.fn().mockImplementation(({ children }) => children),
-}));
+jest.mock('react-native-safe-area-context', () => {
+  const MockSafeAreaView = jest.fn().mockImplementation(({ children }) => children);
+  MockSafeAreaView.displayName = 'SafeAreaView';
+  return {
+    SafeAreaView: MockSafeAreaView,
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+  };
+});
 
 jest.mock('lucide-react-native', () => ({
   MessageSquare: jest.fn().mockReturnValue(null),
@@ -69,6 +74,10 @@ jest.mock('lucide-react-native', () => ({
 }));
 
 jest.mock('@react-navigation/drawer', () => ({}));
+
+jest.mock('../components/shared/DesktopCompanionWidget', () => ({
+  DesktopCompanionWidget: jest.fn().mockReturnValue(null),
+}));
 
 // ---------------------------------------------------------------------------
 // Import modules under test AFTER mocks
