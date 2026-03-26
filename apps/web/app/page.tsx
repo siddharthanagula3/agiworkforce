@@ -88,37 +88,43 @@ const features = [
   {
     icon: Users,
     title: 'AI Skills',
-    desc: `Pre-built AI specialists across ${MARKETING.categories.display} categories — engineering, marketing, finance, legal, creative, and more. Start working in seconds.`,
+    stat: `${MARKETING.categories.display} categories`,
+    desc: 'Pre-built specialists across engineering, marketing, finance, legal, creative, and more.',
     href: '/features/ai-skills',
   },
   {
     icon: Plug,
-    title: 'Unlimited MCP Plugins',
-    desc: 'Connect any MCP tool — file systems, databases, APIs, browsers, and cloud services. No artificial tool limits, ever.',
+    title: 'Unlimited MCP',
+    stat: '3 transports',
+    desc: 'Connect any MCP server — stdio, SSE, or HTTP. File systems, databases, APIs, browsers. No tool caps.',
     href: '/features/plugins',
   },
   {
     icon: Wrench,
-    title: 'Computer Use & Full Terminal',
-    desc: 'Control your browser, run any terminal command, read and write files, and capture your screen — with configurable autonomy.',
+    title: 'Computer Use',
+    stat: `${MARKETING.tools.display} IPC tools`,
+    desc: 'Browser automation, terminal, file I/O, screen capture, keyboard — all through ToolGuard safety tiers.',
     href: '/features/tools',
   },
   {
     icon: Bot,
-    title: 'Parallel AI Agents',
-    desc: 'Break big tasks into parallel workstreams. Multiple agents work simultaneously and combine results — faster than any single AI conversation.',
+    title: 'Parallel Agents',
+    stat: 'Up to 100 concurrent',
+    desc: 'Decompose complex tasks into parallel workstreams. Multiple agents execute simultaneously.',
     href: '/features/agents',
   },
   {
     icon: MessageSquare,
     title: 'Agentic Chat',
-    desc: 'A chat interface that shows exactly what AI is doing: tool calls, file edits, web searches, and code execution — all visible in real time.',
+    stat: `${MARKETING.models.display} models`,
+    desc: 'Inline tool execution with Claude Code-style status labels. Switch models mid-conversation.',
     href: '/features/ai-chat',
   },
   {
     icon: Lock,
-    title: 'Transparency at Every Step',
-    desc: 'Every action is visible before it runs. Configurable autonomy from full approval to auto-pilot. Your files and API keys never leave your machine.',
+    title: 'Local-First Privacy',
+    stat: 'Zero data brokering',
+    desc: 'API keys encrypted with Argon2id + AES-GCM. All processing on your machine. Run fully offline.',
     href: '/security',
   },
 ];
@@ -364,37 +370,27 @@ export default function Home() {
                 long-running automations.
               </p>
 
-              <div className="mt-14 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {features.map((feature, i) => {
-                  const isWide = i === 0;
-                  const card = (
-                    <div className="group relative flex h-full flex-col rounded-2xl border border-white/[0.06] bg-[#0f0f11] p-8 transition-all duration-300 hover:border-[#c8892a]/20 hover:bg-[#111114] hover:shadow-[0_0_50px_rgba(200,137,42,0.06)]">
-                      <feature.icon className="mb-5 h-9 w-9 text-[#c8892a] transition-all duration-300 group-hover:drop-shadow-[0_0_10px_rgba(200,137,42,0.5)]" />
-                      <h3 className="mb-2.5 text-xl font-semibold text-[#edebe8]">
-                        {feature.title}
-                      </h3>
-                      <p className="font-body flex-1 leading-relaxed text-[#888480]">
+              <div className="mt-14 grid gap-px bg-[#1a1917] md:grid-cols-2 lg:grid-cols-3">
+                {features.map((feature) => {
+                  const inner = (
+                    <div className="group relative flex h-full flex-col bg-[#09090b] p-8 transition-colors hover:bg-[#0f0e0c]">
+                      <div className="mb-6 flex items-center justify-between">
+                        <feature.icon className="h-6 w-6 text-[#c8892a]" />
+                        <span className="font-mono text-xs text-[#555150]">{feature.stat}</span>
+                      </div>
+                      <h3 className="mb-2 text-lg font-semibold text-[#edebe8]">{feature.title}</h3>
+                      <p className="font-body flex-1 text-sm leading-relaxed text-[#888480]">
                         {feature.desc}
                       </p>
-                      {feature.href && (
-                        <div className="mt-5 flex translate-x-0 items-center gap-1.5 text-sm font-medium text-[#c8892a] opacity-0 transition-all duration-200 group-hover:opacity-100">
-                          Learn more <ArrowRight className="h-3.5 w-3.5" />
-                        </div>
-                      )}
+                      <div className="mt-5 flex items-center gap-1.5 text-xs font-medium text-[#555150] transition-colors group-hover:text-[#c8892a]">
+                        Learn more <ArrowRight className="h-3 w-3" />
+                      </div>
                     </div>
                   );
-                  return feature.href ? (
-                    <Link
-                      key={feature.title}
-                      href={feature.href}
-                      className={`block ${isWide ? 'lg:col-span-2' : ''}`}
-                    >
-                      {card}
+                  return (
+                    <Link key={feature.title} href={feature.href}>
+                      {inner}
                     </Link>
-                  ) : (
-                    <div key={feature.title} className={isWide ? 'lg:col-span-2' : ''}>
-                      {card}
-                    </div>
                   );
                 })}
               </div>
