@@ -1164,9 +1164,10 @@ async fn execute_background_agent(
                         a.fail(format!("Failed to initialize agent: {e}"));
                         let db = db_conn.clone();
                         let agent_snapshot = a.clone();
-                        let _ = tokio::task::spawn_blocking(move || {
+                        // Fire-and-forget: task runs on blocking pool regardless of handle.
+                        drop(tokio::task::spawn_blocking(move || {
                             persist_agent_to_db(&db, &agent_snapshot)
-                        });
+                        }));
                     }
                     return;
                 }
@@ -1183,9 +1184,10 @@ async fn execute_background_agent(
                 a.fail("No LLM router or automation service available".to_string());
                 let db = db_conn.clone();
                 let agent_snapshot = a.clone();
-                let _ = tokio::task::spawn_blocking(move || {
+                // Fire-and-forget: task runs on blocking pool regardless of handle.
+                drop(tokio::task::spawn_blocking(move || {
                     persist_agent_to_db(&db, &agent_snapshot)
-                });
+                }));
             }
             return;
         }
@@ -1295,9 +1297,10 @@ async fn execute_background_agent(
             }
             let db = db_conn.clone();
             let agent_snapshot = a.clone();
-            let _ = tokio::task::spawn_blocking(move || {
+            // Fire-and-forget: task runs on blocking pool regardless of handle.
+            drop(tokio::task::spawn_blocking(move || {
                 persist_agent_to_db(&db, &agent_snapshot)
-            });
+            }));
         }
     }
 

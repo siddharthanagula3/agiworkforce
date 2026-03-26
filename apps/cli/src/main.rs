@@ -29,7 +29,7 @@ mod tui;
 #[allow(dead_code)]
 mod tui_basic;
 mod voice;
-// Codex CLI parity modules
+// Extended CLI modules
 mod app_server;
 mod apply_patch;
 mod cloud;
@@ -280,7 +280,7 @@ enum ShellType {
 }
 
 // ---------------------------------------------------------------------------
-// Subcommands — Codex CLI parity
+// Subcommands
 // ---------------------------------------------------------------------------
 
 #[derive(Subcommand, Debug)]
@@ -518,7 +518,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    // --- Subcommand dispatch (Codex CLI parity) ---
+    // --- Subcommand dispatch ---
     if let Some(ref command) = cli.command {
         let sys_ctx = context::gather_system_context();
         return match command {
@@ -684,7 +684,8 @@ async fn main() -> Result<()> {
                             addr: listen
                                 .trim_start_matches("ws://")
                                 .parse()
-                                .unwrap_or_else(|_| DEFAULT_APP_SERVER_ADDR.parse().unwrap()),
+                                // SAFETY: DEFAULT_APP_SERVER_ADDR is a valid const SocketAddr
+                                .unwrap_or_else(|_| DEFAULT_APP_SERVER_ADDR.parse().expect("const DEFAULT_APP_SERVER_ADDR must be a valid SocketAddr")),
                         },
                         ..Default::default()
                     }
@@ -852,7 +853,7 @@ async fn main() -> Result<()> {
                         if changes.is_empty() {
                             println!("No synced files found.");
                         } else {
-                            println!("{:<35} {}", "File", "Status");
+                            println!("{:<35} Status", "File");
                             println!("{}", "-".repeat(50));
                             for (path, change) in &changes {
                                 println!("{:<35} {}", path, change);
@@ -946,7 +947,7 @@ async fn main() -> Result<()> {
                     println!("No authentication configured.");
                     println!("Run `agiworkforce login` to authenticate.");
                 } else {
-                    println!("{:<18} {:<10} {:<12} {}", "Provider", "Type", "Status", "Expires");
+                    println!("{:<18} {:<10} {:<12} Expires", "Provider", "Type", "Status");
                     println!("{}", "-".repeat(60));
                     for s in &statuses {
                         println!(

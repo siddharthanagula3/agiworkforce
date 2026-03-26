@@ -97,7 +97,7 @@ pub mod terminal;
 pub mod thinking;
 pub mod triggers;
 
-pub mod code_search; // Grep + Glob + Formatter pipeline (OpenCode parity)
+pub mod code_search; // Grep + Glob + Formatter pipeline
 pub mod swarm; // Added in Phase 26
 pub mod system_permissions;
 pub mod test_runner; // Test runner integration (cargo / pytest / jest / etc.)

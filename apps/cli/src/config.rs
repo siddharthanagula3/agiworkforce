@@ -51,7 +51,7 @@ pub struct DefaultConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fast_model: Option<String>,
 
-    /// Approval mode: suggest (default), auto-edit, full-auto. (Codex CLI parity)
+    /// Approval mode: suggest (default), auto-edit, full-auto.
     #[serde(default = "default_approval_mode")]
     pub approval_mode: String,
 

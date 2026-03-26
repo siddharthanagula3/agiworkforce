@@ -1,5 +1,5 @@
 // Markdown → ratatui rendering with syntax highlighting
-// Inspired by Codex CLI's markdown_render.rs
+// Markdown rendering with syntax highlighting
 
 use pulldown_cmark::{Event, Parser, Tag, TagEnd, CodeBlockKind};
 use ratatui::style::{Color, Modifier, Style};

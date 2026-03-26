@@ -276,8 +276,9 @@ function connectToNativeHost(): void {
           for (const msg of queued) {
             try {
               await handleMessage(msg, {} as chrome.runtime.MessageSender, () => {});
-            } catch {
+            } catch (err) {
               // Best-effort drain — don't block reconnection
+              logger.debug('Failed to drain queued message during reconnect', err);
             }
           }
           state.isProcessingQueue = false;
@@ -453,8 +454,9 @@ async function ensureTabGroup(tabId: number): Promise<void> {
       const groupId = await chrome.tabs.group({ tabIds: [tabId] });
       await chrome.tabGroups.update(groupId, { title: TAB_GROUP_NAME, color: 'blue' });
     }
-  } catch {
+  } catch (err) {
     // tabGroups API may not be available in all contexts
+    logger.debug('Tab group operation failed (non-fatal)', err);
   }
 }
 
@@ -981,8 +983,9 @@ async function handleMessageAsync(
               tools: toolsMsg.tools,
               url: toolsMsg.url,
             });
-          } catch {
+          } catch (err) {
             // Native port may be disconnected
+            logger.debug('WebMCP native port message failed', err);
           }
         }
       }
@@ -1716,7 +1719,9 @@ function setupContextMenu(): void {
             timestamp: Date.now(),
           },
         })
-        .catch(() => {});
+        .catch((err) => {
+          logger.warn('Failed to store pending chat (ask)', err);
+        });
       void sendNativeMessage({
         type: 'selected_text_query',
         tabId: tab.id,
@@ -1737,7 +1742,9 @@ function setupContextMenu(): void {
             timestamp: Date.now(),
           },
         })
-        .catch(() => {});
+        .catch((err) => {
+          logger.warn('Failed to store pending chat (explain)', err);
+        });
       if (chrome.sidePanel) {
         chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
       }
@@ -1751,7 +1758,9 @@ function setupContextMenu(): void {
             timestamp: Date.now(),
           },
         })
-        .catch(() => {});
+        .catch((err) => {
+          logger.warn('Failed to store pending chat (translate)', err);
+        });
       if (chrome.sidePanel) {
         chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
       }
@@ -1765,7 +1774,9 @@ function setupContextMenu(): void {
             timestamp: Date.now(),
           },
         })
-        .catch(() => {});
+        .catch((err) => {
+          logger.warn('Failed to store pending chat (summarize)', err);
+        });
       if (chrome.sidePanel) {
         chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
       }
@@ -2194,12 +2205,16 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   // Handle scheduled task alarms (Gap 6)
   if (alarm.name.startsWith(TASK_ALARM_PREFIX)) {
     const taskId = alarm.name.slice(TASK_ALARM_PREFIX.length);
-    void loadScheduledTasks().then((tasks) => {
-      const task = tasks.find((t) => t.id === taskId);
-      if (task?.enabled) {
-        void executeScheduledTask(task);
-      }
-    });
+    void loadScheduledTasks()
+      .then((tasks) => {
+        const task = tasks.find((t) => t.id === taskId);
+        if (task?.enabled) {
+          void executeScheduledTask(task);
+        }
+      })
+      .catch((err) => {
+        logger.warn(`Failed to load/execute scheduled task ${taskId}`, err);
+      });
   }
 });
 

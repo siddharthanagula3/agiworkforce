@@ -63,11 +63,15 @@ export function useNetworkStatus(): NetworkStatus {
 
   useEffect(() => {
     // Fetch initial state so the badge renders correctly on mount
-    NetInfo.fetch().then((state) => {
-      const online = state.isConnected ?? true;
-      setIsOnline(online);
-      wasOnlineRef.current = online;
-    });
+    NetInfo.fetch()
+      .then((state) => {
+        const online = state.isConnected ?? true;
+        setIsOnline(online);
+        wasOnlineRef.current = online;
+      })
+      .catch((err) => {
+        console.warn('[useNetworkStatus] Initial network fetch failed:', err);
+      });
 
     const unsubscribe = NetInfo.addEventListener((state) => {
       const online = state.isConnected ?? true;

@@ -12,18 +12,20 @@ pub(super) fn clear_local_database_inner(db: &AppDatabase) -> Result<(), String>
         .unchecked_transaction()
         .map_err(|e| format!("Failed to start database reset transaction: {e}"))?;
 
-    for table in [
-        "messages",
-        "conversations",
-        "automation_history",
-        "command_history",
-        "clipboard_history",
-        "overlay_events",
-        "settings",
-        "settings_v2",
+    // Each DELETE statement is a static string literal to prevent any possibility
+    // of SQL injection. Never use format!() to build SQL, even with hardcoded names.
+    for (table_name, sql) in [
+        ("messages", "DELETE FROM messages"),
+        ("conversations", "DELETE FROM conversations"),
+        ("automation_history", "DELETE FROM automation_history"),
+        ("command_history", "DELETE FROM command_history"),
+        ("clipboard_history", "DELETE FROM clipboard_history"),
+        ("overlay_events", "DELETE FROM overlay_events"),
+        ("settings", "DELETE FROM settings"),
+        ("settings_v2", "DELETE FROM settings_v2"),
     ] {
-        tx.execute(&format!("DELETE FROM {table}"), [])
-            .map_err(|e| format!("Failed to clear {table}: {e}"))?;
+        tx.execute(sql, [])
+            .map_err(|e| format!("Failed to clear {table_name}: {e}"))?;
     }
 
     tx.commit()

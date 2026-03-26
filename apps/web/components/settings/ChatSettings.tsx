@@ -37,7 +37,9 @@ export function ChatSettings() {
     })
       .then((r) => r.json())
       .then((data) => setModels(data.data || []))
-      .catch(() => {})
+      .catch((e: unknown) => {
+        console.error('[ChatSettings] Failed to load models:', e);
+      })
       .finally(() => setLoadingModels(false));
   }, []);
 

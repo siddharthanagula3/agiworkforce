@@ -6,9 +6,9 @@
 //! - Iterate on fixes until tests pass
 //! - Present a clear pass/fail summary to the user
 //!
-//! Mirrors the "run build → collect errors → auto-repair" loop described in
-//! OpenCode's architecture. The agent calls `test_run`, receives structured
-//! failures, fixes them, then calls `test_run` again.
+//! Implements the "run build -> collect errors -> auto-repair" loop.
+//! The agent calls `test_run`, receives structured failures, fixes them,
+//! then calls `test_run` again.
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

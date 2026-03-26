@@ -458,7 +458,7 @@ impl StdioTransport {
             "RUST_LOG",
         ];
         let filtered_env: std::collections::HashMap<String, String> = env
-            .into_iter()
+            .iter()
             .filter(|(key, _)| {
                 let upper = key.to_uppercase();
                 !BLOCKED_ENV_VARS.iter().any(|blocked| upper == *blocked)

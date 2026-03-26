@@ -1,5 +1,5 @@
 // AGI Workforce TUI — ratatui-based full-screen terminal UI
-// Built on rendering modules from Codex CLI (rebranded) + our AgentSession
+// Built on ratatui rendering modules + AgentSession
 
 #[allow(dead_code, unused_imports)]
 mod color;
