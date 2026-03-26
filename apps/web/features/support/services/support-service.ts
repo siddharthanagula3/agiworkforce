@@ -379,7 +379,7 @@ class SupportService {
 
       const result = await response.json();
       if (process.env.NODE_ENV === 'development') {
-        console.log('[Support Service] Email notification sent:', result.messageId);
+        console.debug('[Support Service] Email notification sent:', result.messageId);
       }
 
       return {

@@ -14,7 +14,7 @@ import type {
  */
 export async function createWorkflow(definition: WorkflowDefinition): Promise<string> {
   if (!isTauri) {
-    console.info('[workflow] createWorkflow (mock)', definition.name);
+    console.debug('[workflow] createWorkflow (mock)', definition.name);
     return `mock-workflow-${Date.now()}`;
   }
 
@@ -31,7 +31,7 @@ export async function createWorkflow(definition: WorkflowDefinition): Promise<st
  */
 export async function updateWorkflow(id: string, definition: WorkflowDefinition): Promise<void> {
   if (!isTauri) {
-    console.info('[workflow] updateWorkflow (mock)', id);
+    console.debug('[workflow] updateWorkflow (mock)', id);
     return;
   }
 
@@ -48,7 +48,7 @@ export async function updateWorkflow(id: string, definition: WorkflowDefinition)
  */
 export async function deleteWorkflow(id: string): Promise<void> {
   if (!isTauri) {
-    console.info('[workflow] deleteWorkflow (mock)', id);
+    console.debug('[workflow] deleteWorkflow (mock)', id);
     return;
   }
 
@@ -65,7 +65,7 @@ export async function deleteWorkflow(id: string): Promise<void> {
  */
 export async function getWorkflow(id: string): Promise<WorkflowDefinition> {
   if (!isTauri) {
-    console.info('[workflow] getWorkflow (mock)', id);
+    console.debug('[workflow] getWorkflow (mock)', id);
     return {
       id,
       user_id: 'mock-user',
@@ -93,7 +93,7 @@ export async function getWorkflow(id: string): Promise<WorkflowDefinition> {
  */
 export async function getUserWorkflows(userId: string): Promise<WorkflowDefinition[]> {
   if (!isTauri) {
-    console.info('[workflow] getUserWorkflows (mock)', userId);
+    console.debug('[workflow] getUserWorkflows (mock)', userId);
     return [];
   }
 
@@ -113,7 +113,7 @@ export async function executeWorkflow(
   inputs: Record<string, unknown> = {},
 ): Promise<string> {
   if (!isTauri) {
-    console.info('[workflow] executeWorkflow (mock)', workflowId);
+    console.debug('[workflow] executeWorkflow (mock)', workflowId);
     return `mock-execution-${Date.now()}`;
   }
 
@@ -130,7 +130,7 @@ export async function executeWorkflow(
  */
 export async function pauseWorkflow(executionId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[workflow] pauseWorkflow (mock)', executionId);
+    console.debug('[workflow] pauseWorkflow (mock)', executionId);
     return;
   }
 
@@ -147,7 +147,7 @@ export async function pauseWorkflow(executionId: string): Promise<void> {
  */
 export async function resumeWorkflow(executionId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[workflow] resumeWorkflow (mock)', executionId);
+    console.debug('[workflow] resumeWorkflow (mock)', executionId);
     return;
   }
 
@@ -164,7 +164,7 @@ export async function resumeWorkflow(executionId: string): Promise<void> {
  */
 export async function cancelWorkflow(executionId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[workflow] cancelWorkflow (mock)', executionId);
+    console.debug('[workflow] cancelWorkflow (mock)', executionId);
     return;
   }
 
@@ -181,7 +181,7 @@ export async function cancelWorkflow(executionId: string): Promise<void> {
  */
 export async function getWorkflowStatus(executionId: string): Promise<WorkflowExecution> {
   if (!isTauri) {
-    console.info('[workflow] getWorkflowStatus (mock)', executionId);
+    console.debug('[workflow] getWorkflowStatus (mock)', executionId);
     return {
       id: executionId,
       workflow_id: 'mock-workflow',
@@ -206,7 +206,7 @@ export async function getWorkflowStatus(executionId: string): Promise<WorkflowEx
  */
 export async function getExecutionLogs(executionId: string): Promise<WorkflowExecutionLog[]> {
   if (!isTauri) {
-    console.info('[workflow] getExecutionLogs (mock)', executionId);
+    console.debug('[workflow] getExecutionLogs (mock)', executionId);
     return [];
   }
 
@@ -227,7 +227,7 @@ export async function scheduleWorkflow(
   timezone?: string,
 ): Promise<void> {
   if (!isTauri) {
-    console.info('[workflow] scheduleWorkflow (mock)', workflowId, cronExpr);
+    console.debug('[workflow] scheduleWorkflow (mock)', workflowId, cronExpr);
     return;
   }
 
@@ -244,7 +244,7 @@ export async function scheduleWorkflow(
  */
 export async function getNextExecutionTime(cronExpr: string): Promise<number> {
   if (!isTauri) {
-    console.info('[workflow] getNextExecutionTime (mock)', cronExpr);
+    console.debug('[workflow] getNextExecutionTime (mock)', cronExpr);
     return Date.now() + 3600000; // 1 hour from now
   }
 
@@ -265,7 +265,7 @@ export async function triggerWorkflowOnEvent(
   eventData: Record<string, unknown> = {},
 ): Promise<string> {
   if (!isTauri) {
-    console.info('[workflow] triggerWorkflowOnEvent (mock)', workflowId, eventType);
+    console.debug('[workflow] triggerWorkflowOnEvent (mock)', workflowId, eventType);
     return `mock-execution-${Date.now()}`;
   }
 

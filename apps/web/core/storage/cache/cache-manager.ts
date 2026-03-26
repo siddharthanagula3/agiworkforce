@@ -379,7 +379,7 @@ class CacheService {
     keysToDelete.forEach((key) => this.memoryCache.delete(key));
 
     if (keysToDelete.length > 0) {
-      console.log(`[Cache] Cleaned up ${keysToDelete.length} expired entries`);
+      console.debug(`[Cache] Cleaned up ${keysToDelete.length} expired entries`);
     }
   }
 

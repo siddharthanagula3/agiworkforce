@@ -129,6 +129,7 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
     savedTranslateX.value = 0;
     savedTranslateY.value = 0;
     onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose]); // Shared values are stable refs — omit from deps
 
   if (!imageUrl) return null;

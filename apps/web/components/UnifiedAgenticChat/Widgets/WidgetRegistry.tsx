@@ -167,7 +167,7 @@ class WidgetRegistryImpl {
     this.notifyListeners();
 
     if (process.env['DEV']) {
-      console.log(`[WidgetRegistry] Registered widget: ${definition.type}`);
+      console.debug(`[WidgetRegistry] Registered widget: ${definition.type}`);
     }
   }
 
