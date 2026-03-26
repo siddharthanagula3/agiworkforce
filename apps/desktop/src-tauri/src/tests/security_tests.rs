@@ -10,7 +10,7 @@
 /// - ToolSafetyTier and RiskLevel enums
 /// - ToolExecutionGuard policy checks
 #[cfg(test)]
-mod security_tests {
+mod security_test_cases {
     use crate::sys::security::command_validator::{
         requires_confirmation, validate_command, validate_interactive_input,
         CommandValidationError, ValidationConfig,
@@ -130,11 +130,8 @@ mod security_tests {
         let cfg = ValidationConfig::oneshot();
         let cmd = "a".repeat(65536);
         // Likely passes length check; may fail for other reasons but not length
-        match validate_command(&cmd, &cfg) {
-            Err(CommandValidationError::CommandTooLong { .. }) => {
-                panic!("Should not reject a command at exactly the max length")
-            }
-            _ => {} // any other result (ok or different error) is fine
+        if let Err(CommandValidationError::CommandTooLong { .. }) = validate_command(&cmd, &cfg) {
+            panic!("Should not reject a command at exactly the max length")
         }
     }
 
