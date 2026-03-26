@@ -452,11 +452,9 @@ export default function AISkillsPage() {
               {/* Stats */}
               <div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-3">
                 <div className="p-6">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">23</div>
-                  <div className="text-lg text-zinc-400">Skill Categories</div>
-                  <p className="mt-2 text-sm text-zinc-600">
-                    Pre-built specialists ready to deploy
-                  </p>
+                  <div className="mb-2 text-5xl font-bold text-blue-500">150+</div>
+                  <div className="text-lg text-zinc-400">Pre-Built Skills</div>
+                  <p className="mt-2 text-sm text-zinc-600">Domain specialists ready to deploy</p>
                 </div>
                 <div className="p-6">
                   <div className="mb-2 text-5xl font-bold text-blue-500">23</div>
@@ -466,9 +464,11 @@ export default function AISkillsPage() {
                   </p>
                 </div>
                 <div className="p-6">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">Every</div>
-                  <div className="text-lg text-zinc-400">Industry</div>
-                  <p className="mt-2 text-sm text-zinc-600">Built for real work, not just code</p>
+                  <div className="mb-2 text-5xl font-bold text-blue-500">6</div>
+                  <div className="text-lg text-zinc-400">Surfaces</div>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Desktop, web, CLI, VS Code, browser, mobile
+                  </p>
                 </div>
               </div>
             </div>
