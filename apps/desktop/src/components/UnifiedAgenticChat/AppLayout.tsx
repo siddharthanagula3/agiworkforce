@@ -364,7 +364,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {sidecarOpen && (
         <div
           className={cn(
-            'bg-white dark:bg-[#0b0c14] border-l border-gray-200 dark:border-white/10 shadow-2xl z-20 flex flex-col ease-in-out',
+            'bg-card border-l border-border shadow-2xl z-20 flex flex-col ease-in-out',
             !isResizing && 'transition-[width] duration-300',
           )}
           style={{ width: sidecarWidth, position: 'absolute', top: 0, right: 0, bottom: 0 }}
@@ -415,7 +415,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {isArtifactPanelOpen && (
         <div
           className={cn(
-            'bg-white dark:bg-[#0b0c14] border-l border-gray-200 dark:border-white/10 shadow-2xl z-30 flex flex-col ease-in-out',
+            'bg-card border-l border-border shadow-2xl z-30 flex flex-col ease-in-out',
             !isResizing && 'transition-[width] duration-300',
           )}
           style={{
@@ -453,7 +453,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {activeRightPanel && (
         <div
           className={cn(
-            'bg-white dark:bg-[#0b0c14] border-l border-gray-200 dark:border-white/10 shadow-2xl z-20 flex flex-col ease-in-out',
+            'bg-card border-l border-border shadow-2xl z-20 flex flex-col ease-in-out',
             !isResizing && 'transition-[width] duration-300',
           )}
           style={{

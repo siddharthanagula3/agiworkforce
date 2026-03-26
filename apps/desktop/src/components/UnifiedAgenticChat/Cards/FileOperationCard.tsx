@@ -75,10 +75,8 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
   return (
     <div
       className={`file-operation-card rounded-lg border ${
-        operation.success
-          ? 'border-gray-200 dark:border-gray-700'
-          : 'border-red-200 dark:border-red-900'
-      } bg-white dark:bg-gray-800 overflow-hidden ${className}`}
+        operation.success ? 'border-border' : 'border-red-200 dark:border-red-900'
+      } bg-card overflow-hidden ${className}`}
     >
       {}
       <div className="flex items-start justify-between p-4">
@@ -91,7 +89,7 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
           {}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-medium uppercase text-gray-600 dark:text-gray-400">
+              <span className="text-xs font-medium uppercase text-muted-foreground">
                 {operation.type}
               </span>
               {operation.success ? (
@@ -102,15 +100,12 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
             </div>
 
             {}
-            <div
-              className="font-mono text-sm text-gray-900 dark:text-gray-100 truncate"
-              title={operation.filePath}
-            >
+            <div className="font-mono text-sm text-foreground truncate" title={operation.filePath}>
               {operation.filePath}
             </div>
 
             {}
-            <div className="flex items-center gap-3 mt-2 text-xs text-gray-600 dark:text-gray-400">
+            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Clock size={12} />
                 {formattedTime}
@@ -136,10 +131,10 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
             <button
               type="button"
               onClick={onViewFile}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-accent rounded transition-colors"
               title="View file"
             >
-              <Eye size={14} className="text-gray-600 dark:text-gray-400" />
+              <Eye size={14} className="text-muted-foreground" />
             </button>
           )}
         </div>
@@ -150,7 +145,7 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
         <div className="px-4 pb-4">
           {!showFullDiff ? (
             <div className="space-y-2">
-              <div className="text-xs text-gray-600 dark:text-gray-400">
+              <div className="text-xs text-muted-foreground">
                 Content modified ({operation.oldContent?.split('\n').length || 0} →{' '}
                 {operation.newContent?.split('\n').length || 0} lines)
               </div>
@@ -174,7 +169,7 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowFullDiff(false)}
-                className="text-sm text-gray-600 dark:text-gray-400 hover:underline"
+                className="text-sm text-muted-foreground hover:underline"
               >
                 Hide diff
               </button>
@@ -185,7 +180,7 @@ export const FileOperationCard: React.FC<FileOperationCardProps> = ({
 
       {}
       {enableApproval && (
-        <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2 px-4 py-3 bg-muted border-t border-border">
           <button
             type="button"
             onClick={onApprove}

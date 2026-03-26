@@ -12,20 +12,22 @@ export function TerminalView({ contextId, className }: TerminalViewProps) {
   const [isFullHeight, setIsFullHeight] = React.useState(false);
 
   return (
-    <div className={cn('flex h-full flex-col bg-zinc-950', className)}>
+    <div className={cn('flex h-full flex-col bg-background', className)}>
       {}
-      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50 px-4 py-2">
+      <div className="flex items-center justify-between border-b border-border bg-card/50 px-4 py-2">
         <div className="flex items-center gap-2">
           <TerminalIcon className="h-4 w-4 text-emerald-500" />
-          <span className="text-sm font-semibold text-zinc-200">Terminal Output</span>
+          <span className="text-sm font-semibold text-foreground">Terminal Output</span>
           {contextId && (
-            <span className="text-xs text-zinc-500">• Session: {contextId.slice(0, 8)}</span>
+            <span className="text-xs text-muted-foreground">
+              • Session: {contextId.slice(0, 8)}
+            </span>
           )}
         </div>
         <button
           type="button"
           onClick={() => setIsFullHeight(!isFullHeight)}
-          className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           title={isFullHeight ? 'Restore height' : 'Maximize height'}
         >
           {isFullHeight ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -38,21 +40,23 @@ export function TerminalView({ contextId, className }: TerminalViewProps) {
       </div>
 
       {}
-      <div className="border-t border-zinc-800 bg-zinc-900/30 px-4 py-2">
-        <div className="flex items-center gap-4 text-xs text-zinc-500">
+      <div className="border-t border-border bg-card/30 px-4 py-2">
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
-            <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">Ctrl</kbd>
+            <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">Ctrl</kbd>
             <span>+</span>
-            <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">F</kbd>
+            <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">F</kbd>
             <span className="ml-1">Search</span>
           </div>
           <div className="flex items-center gap-1">
-            <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">Ctrl</kbd>
+            <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">Ctrl</kbd>
             <span>+</span>
-            <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">C</kbd>
+            <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">C</kbd>
             <span className="ml-1">Copy</span>
           </div>
-          <div className="ml-auto text-zinc-600">Read-only terminal • Live command output</div>
+          <div className="ml-auto text-muted-foreground">
+            Read-only terminal • Live command output
+          </div>
         </div>
       </div>
     </div>

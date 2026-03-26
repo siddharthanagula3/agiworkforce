@@ -500,7 +500,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   // Render research task
   if (isResearchTask && researchTask) {
     return (
-      <div className="group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors">
+      <div className="group flex gap-3 px-4 py-3 hover:bg-accent/50 transition-colors">
         {showAvatar && (
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white text-sm font-medium">
             AI
@@ -649,7 +649,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 <button
                   type="button"
                   onClick={() => void handleCompactToolCopy(copyText)}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/70 transition-colors"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
                   title="Copy full output"
                   aria-label="Copy full output"
                 >
@@ -662,7 +662,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 <button
                   type="button"
                   onClick={() => setCompactToolExpanded((open) => !open)}
-                  className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/70 transition-colors"
+                  className="inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors"
                   title={compactToolExpanded ? 'Collapse output' : 'Expand output'}
                 >
                   {compactToolExpanded ? (
@@ -676,14 +676,14 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             </div>
 
             {(isCompleted || isFailed) && !toolHasRichRenderer && (
-              <div className="px-3 py-2 bg-black/50 font-mono text-xs text-zinc-200">
+              <div className="px-3 py-2 bg-black/50 font-mono text-xs text-foreground">
                 {!compactToolExpanded ? (
                   <>
                     <pre className="whitespace-pre-wrap break-words">
                       {collapsedBodyPreview || 'No output'}
                     </pre>
                     {hiddenLineCount > 0 ? (
-                      <p className="mt-1 text-[11px] text-zinc-400">
+                      <p className="mt-1 text-[11px] text-muted-foreground">
                         +{hiddenLineCount} more lines
                       </p>
                     ) : null}
@@ -692,10 +692,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                   <div className="space-y-2">
                     {compactOutput.stdout ? (
                       <div>
-                        <p className="mb-1 text-[11px] uppercase tracking-wide text-zinc-400">
+                        <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                           stdout
                         </p>
-                        <pre className="whitespace-pre-wrap break-words text-zinc-200">
+                        <pre className="whitespace-pre-wrap break-words text-foreground">
                           {compactOutput.stdout}
                         </pre>
                       </div>
@@ -721,7 +721,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                       </div>
                     ) : null}
                     {!compactOutput.stdout && !compactOutput.stderr && !compactOutput.error ? (
-                      <pre className="whitespace-pre-wrap break-words text-zinc-200">
+                      <pre className="whitespace-pre-wrap break-words text-foreground">
                         {compactOutput.raw || 'No output'}
                       </pre>
                     ) : null}
@@ -736,7 +736,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
     return (
       <div
-        className="group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors"
+        className="group flex gap-3 px-4 py-3 hover:bg-accent/50 transition-colors"
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
@@ -949,7 +949,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       />
 
       <div
-        className={`message-bubble group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors ${
+        className={`message-bubble group flex gap-3 px-4 py-3 hover:bg-accent/50 transition-colors ${
           isUser ? 'flex-row-reverse' : ''
         }`}
         onMouseEnter={() => setShowActions(true)}

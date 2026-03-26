@@ -172,7 +172,7 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status })
           </Badge>
           <span className="text-xs text-muted-foreground truncate" title={url}>
             {hostname}
-            <span className="text-zinc-500">{displayUrl}</span>
+            <span className="text-muted-foreground">{displayUrl}</span>
           </span>
         </div>
 

@@ -40,12 +40,6 @@ export const publicRoutes: SitemapEntry[] = [
 
   // Features
   { path: '/features/ai-chat', priority: 0.7, changefreq: 'monthly' },
-  { path: '/features/ai-dashboards', priority: 0.7, changefreq: 'monthly' },
-  {
-    path: '/features/ai-project-manager',
-    priority: 0.7,
-    changefreq: 'monthly',
-  },
 
   // Legal
   { path: '/privacy-policy', priority: 0.4, changefreq: 'yearly' },

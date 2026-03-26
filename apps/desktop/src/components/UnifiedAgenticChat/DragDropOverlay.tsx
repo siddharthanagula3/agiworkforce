@@ -121,12 +121,14 @@ export function DragDropOverlay({
 
             <div className="text-center px-8">
               <h3 className="text-2xl font-semibold text-white mb-2">Drop to Add Context</h3>
-              <p className="text-lg text-zinc-400 mb-4">Release to attach files to your message</p>
+              <p className="text-lg text-muted-foreground mb-4">
+                Release to attach files to your message
+              </p>
               {accept && accept.length > 0 && (
-                <p className="text-sm text-zinc-500">Accepted: {accept.join(', ')}</p>
+                <p className="text-sm text-muted-foreground">Accepted: {accept.join(', ')}</p>
               )}
               {maxFiles > 0 && (
-                <p className="text-sm text-zinc-500 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   Maximum {maxFiles} {maxFiles === 1 ? 'file' : 'files'}
                 </p>
               )}

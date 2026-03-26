@@ -24,8 +24,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/features/tools', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/features/plugins', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/features/ai-chat', priority: 0.8, changeFrequency: 'weekly' },
-    { path: '/features/ai-dashboards', priority: 0.7, changeFrequency: 'weekly' },
-    { path: '/features/ai-project-manager', priority: 0.7, changeFrequency: 'weekly' },
 
     // Use case pages
     { path: '/use-cases', priority: 0.8, changeFrequency: 'monthly' },

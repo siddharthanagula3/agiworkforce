@@ -148,30 +148,30 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
 
   if (isLoading) {
     return (
-      <div className={cn('flex h-full items-center justify-center bg-zinc-950', className)}>
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+      <div className={cn('flex h-full items-center justify-center bg-background', className)}>
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error || !diffData) {
     return (
-      <div className={cn('flex h-full items-center justify-center bg-zinc-950', className)}>
+      <div className={cn('flex h-full items-center justify-center bg-background', className)}>
         <div className="text-center">
           <AlertCircle className="mx-auto h-12 w-12 text-rose-500" />
-          <p className="mt-4 text-sm text-zinc-400">{error || 'No diff data available'}</p>
+          <p className="mt-4 text-sm text-muted-foreground">{error || 'No diff data available'}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={cn('flex h-full flex-col bg-zinc-950', className)}>
+    <div className={cn('flex h-full flex-col bg-background', className)}>
       {}
-      <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50 px-4 py-2">
+      <div className="flex items-center justify-between border-b border-border bg-card/50 px-4 py-2">
         <div className="flex items-center gap-2">
           <FileCode className="h-4 w-4 text-blue-500" />
-          <span className="text-sm font-semibold text-zinc-200">
+          <span className="text-sm font-semibold text-foreground">
             {diffData.originalPath.split(/[/\\]/).pop()}
           </span>
           {stats && (
@@ -186,7 +186,9 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-wide text-zinc-500">{diffData.language}</span>
+          <span className="text-xs uppercase tracking-wide text-muted-foreground">
+            {diffData.language}
+          </span>
         </div>
       </div>
 
@@ -208,14 +210,14 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
       </div>
 
       {}
-      <div className="flex items-center justify-between border-t border-zinc-800 bg-zinc-900/50 px-4 py-3">
+      <div className="flex items-center justify-between border-t border-border bg-card/50 px-4 py-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleCopy}
             className={cn(
               'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium',
-              'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100',
+              'bg-muted text-foreground hover:bg-accent hover:text-foreground',
               'transition-colors',
             )}
           >

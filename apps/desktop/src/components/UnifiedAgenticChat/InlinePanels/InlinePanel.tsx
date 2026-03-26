@@ -74,22 +74,20 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
         transition={{ duration: 0.15 }}
-        className="my-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-charcoal-800 overflow-hidden"
+        className="my-2 rounded-lg border border-border bg-card overflow-hidden"
       >
         {/* Header */}
         <div
           onClick={onToggleCollapse}
-          className="flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-charcoal-700 hover:bg-gray-150 dark:hover:bg-charcoal-650 cursor-pointer transition-colors border-b border-gray-200 dark:border-gray-700"
+          className="flex items-center justify-between px-4 py-2 bg-muted hover:bg-accent cursor-pointer transition-colors border-b border-border"
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <span className="text-lg shrink-0">{getIcon(panel.type)}</span>
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              {getTitle(panel.type)}
-            </span>
+            <span className="text-sm font-semibold text-foreground">{getTitle(panel.type)}</span>
             {panel.metadata &&
               'duration' in panel.metadata &&
               panel.metadata['duration'] != null && (
-                <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto shrink-0">
+                <span className="text-xs text-muted-foreground ml-auto shrink-0">
                   {String(panel.metadata['duration'])}ms
                 </span>
               )}
@@ -116,14 +114,14 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
                 e.stopPropagation();
                 onToggleCollapse();
               }}
-              className="p-1 hover:bg-gray-200 dark:hover:bg-charcoal-600 rounded transition-colors"
+              className="p-1 hover:bg-accent rounded transition-colors"
               title={panel.isCollapsed ? 'Expand' : 'Collapse'}
               aria-label={panel.isCollapsed ? 'Expand panel' : 'Collapse panel'}
             >
               <ChevronDown
                 size={16}
                 className={cn(
-                  'text-gray-600 dark:text-gray-400 transition-transform',
+                  'text-muted-foreground transition-transform',
                   panel.isCollapsed && '-rotate-90',
                 )}
               />
@@ -135,7 +133,7 @@ const InlinePanelComponent: React.FC<InlinePanelProps> = memo(
                   e.stopPropagation();
                   onClose();
                 }}
-                className="p-1 hover:bg-gray-200 dark:hover:bg-charcoal-600 rounded transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                className="p-1 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
                 title="Close panel"
                 aria-label="Close panel"
               >

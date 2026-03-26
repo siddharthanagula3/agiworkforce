@@ -61,13 +61,13 @@ const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
           {/* Command */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Command
               </span>
               <button
                 type="button"
                 onClick={handleCopyCommand}
-                className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400"
+                className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent transition-colors text-muted-foreground"
                 title="Copy command"
               >
                 {copied ? (
@@ -83,13 +83,12 @@ const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
                 )}
               </button>
             </div>
-            <div className="bg-gray-900 dark:bg-black rounded p-3 font-mono text-sm text-gray-100 overflow-x-auto border border-gray-700 dark:border-gray-800">
+            <div className="bg-card rounded p-3 font-mono text-sm text-foreground overflow-x-auto border border-border">
               <code>$ {terminalContent.command}</code>
             </div>
             {terminalContent.cwd && (
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Working directory:{' '}
-                <code className="text-gray-600 dark:text-gray-300">{terminalContent.cwd}</code>
+              <div className="text-xs text-muted-foreground mt-1">
+                Working directory: <code className="text-foreground">{terminalContent.cwd}</code>
               </div>
             )}
           </div>
@@ -100,19 +99,19 @@ const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
             {terminalContent.stdout && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Output
                   </span>
                   <button
                     type="button"
                     onClick={() => handleCopyOutput(terminalContent.stdout!)}
-                    className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400"
+                    className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent transition-colors text-muted-foreground"
                     title="Copy output"
                   >
                     <Copy size={12} />
                   </button>
                 </div>
-                <div className="bg-gray-900 dark:bg-black rounded p-3 font-mono text-sm text-gray-100 overflow-x-auto border border-gray-700 dark:border-gray-800 max-h-64 overflow-y-auto">
+                <div className="bg-card rounded p-3 font-mono text-sm text-foreground overflow-x-auto border border-border max-h-64 overflow-y-auto">
                   <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed">
                     {terminalContent.stdout}
                   </pre>
@@ -147,7 +146,7 @@ const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
             {/* Exit Code */}
             {terminalContent.exitCode !== undefined && (
               <div className="flex items-center gap-3 pt-2">
-                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Exit Code:
                 </span>
                 <span

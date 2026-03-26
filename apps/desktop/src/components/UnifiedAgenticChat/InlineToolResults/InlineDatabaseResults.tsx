@@ -215,7 +215,7 @@ export const InlineDatabaseResults: React.FC<ToolResultProps> = ({ result, statu
                       className="px-2 py-1.5 text-muted-foreground truncate max-w-[150px]"
                     >
                       {cell === null ? (
-                        <span className="text-zinc-500 italic">NULL</span>
+                        <span className="text-muted-foreground italic">NULL</span>
                       ) : (
                         String(cell)
                       )}
@@ -279,7 +279,7 @@ export const InlineDatabaseResults: React.FC<ToolResultProps> = ({ result, statu
                             className="px-2 py-1.5 text-muted-foreground whitespace-nowrap"
                           >
                             {cell === null ? (
-                              <span className="text-zinc-500 italic">NULL</span>
+                              <span className="text-muted-foreground italic">NULL</span>
                             ) : typeof cell === 'boolean' ? (
                               <span className={cell ? 'text-emerald-400' : 'text-red-400'}>
                                 {String(cell)}

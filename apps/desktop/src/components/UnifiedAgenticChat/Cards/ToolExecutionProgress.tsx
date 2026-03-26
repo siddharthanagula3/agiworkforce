@@ -143,7 +143,7 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
       case 'cancelled':
         return 'text-yellow-400';
       default:
-        return 'text-gray-400';
+        return 'text-muted-foreground';
     }
   };
 
@@ -170,22 +170,22 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
 
   return (
     <div
-      className={`tool-execution-progress rounded-lg border border-gray-700 bg-gray-800/50 overflow-hidden ${className}`}
+      className={`tool-execution-progress rounded-lg border border-border bg-muted/50 overflow-hidden ${className}`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-3 bg-gray-800/80">
+      <div className="flex items-center justify-between p-3 bg-muted/80">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {/* Expand/Collapse Button */}
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
-            className="p-1 hover:bg-gray-700 rounded transition-colors shrink-0"
+            className="p-1 hover:bg-accent rounded transition-colors shrink-0"
             title={expanded ? 'Collapse' : 'Expand'}
           >
             {expanded ? (
-              <ChevronDown size={14} className="text-gray-400" />
+              <ChevronDown size={14} className="text-muted-foreground" />
             ) : (
-              <ChevronRight size={14} className="text-gray-400" />
+              <ChevronRight size={14} className="text-muted-foreground" />
             )}
           </button>
 
@@ -193,14 +193,14 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
           <div className={`shrink-0 ${getStatusColor()}`}>{getToolIcon(stream.tool_name)}</div>
 
           {/* Tool Name */}
-          <span className="font-medium text-gray-200 truncate">{stream.tool_name}</span>
+          <span className="font-medium text-foreground truncate">{stream.tool_name}</span>
 
           {/* Status Icon */}
           <div className={`shrink-0 ${getStatusColor()}`}>{getStatusIcon()}</div>
 
           {/* Progress Message */}
           {stream.progressMessage && stream.status === 'running' && (
-            <span className="text-xs text-gray-400 truncate">{stream.progressMessage}</span>
+            <span className="text-xs text-muted-foreground truncate">{stream.progressMessage}</span>
           )}
         </div>
 
@@ -208,7 +208,9 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
         <div className="flex items-center gap-1 shrink-0">
           {/* Duration */}
           {stream.duration_ms !== undefined && (
-            <span className="text-xs text-gray-500 mr-2">{formatDuration(stream.duration_ms)}</span>
+            <span className="text-xs text-muted-foreground mr-2">
+              {formatDuration(stream.duration_ms)}
+            </span>
           )}
 
           {/* Cancel button for running tools */}
@@ -228,7 +230,7 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
             <button
               type="button"
               onClick={onRetry}
-              className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-gray-300"
+              className="p-1.5 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
               title="Retry execution"
             >
               <RotateCw size={14} />
@@ -240,7 +242,7 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
             <button
               type="button"
               onClick={handleCopy}
-              className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-gray-300"
+              className="p-1.5 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
               title={copied ? 'Copied!' : 'Copy output'}
             >
               <Copy size={14} className={copied ? 'text-green-400' : ''} />
@@ -252,7 +254,7 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
       {/* Progress Bar */}
       {stream.status === 'running' && (
         <div className="px-3 pb-2">
-          <div className="relative h-1.5 bg-gray-700 rounded-full overflow-hidden">
+          <div className="relative h-1.5 bg-border rounded-full overflow-hidden">
             <div
               className="absolute inset-y-0 left-0 bg-blue-500 transition-all duration-300 ease-out rounded-full"
               style={{ width: `${progressPercent}%` }}
@@ -264,7 +266,7 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
           </div>
 
           {/* Progress details */}
-          <div className="flex items-center justify-between mt-1 text-xs text-gray-500">
+          <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
             <span>{progressPercent}%</span>
             {hasByteProgress && (
               <span>
@@ -277,17 +279,17 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
 
       {/* Expanded Content */}
       {expanded && (
-        <div className="border-t border-gray-700">
+        <div className="border-t border-border">
           {/* Output Area */}
           {stream.outputBuffer.length > 0 && (
             <pre
               ref={outputRef}
-              className="p-3 text-xs font-mono text-gray-300 overflow-auto bg-gray-900/50"
+              className="p-3 text-xs font-mono text-foreground overflow-auto bg-card/50"
               style={{ maxHeight: maxOutputHeight }}
             >
               {stream.outputBuffer}
               {stream.status === 'running' && (
-                <span className="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-0.5" />
+                <span className="inline-block w-2 h-4 bg-muted-foreground animate-pulse ml-0.5" />
               )}
             </pre>
           )}

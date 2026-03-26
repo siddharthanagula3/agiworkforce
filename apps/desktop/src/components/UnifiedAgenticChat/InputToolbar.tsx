@@ -78,10 +78,10 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
           disabled={disabled}
           className={cn(
             'p-2 rounded-lg transition-colors',
-            'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
-            'hover:bg-gray-100 dark:hover:bg-charcoal-700',
+            'text-muted-foreground hover:text-foreground',
+            'hover:bg-accent',
             'disabled:opacity-50 disabled:cursor-not-allowed',
-            visionUnsupported && 'opacity-50 cursor-not-allowed text-gray-300 dark:text-gray-600',
+            visionUnsupported && 'opacity-50 cursor-not-allowed text-muted-foreground',
           )}
           title={visionUnsupported ? 'Current model does not support attachments' : 'Attach files'}
           aria-label={
@@ -118,7 +118,7 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
             'p-2 rounded-lg transition-colors',
             researchOpen
               ? 'text-teal-500 bg-teal-500/10 dark:text-teal-400 dark:bg-teal-400/10'
-              : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent',
             'disabled:opacity-50 disabled:cursor-not-allowed',
           )}
           title="Deep Research"
@@ -138,7 +138,7 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
             'p-2 rounded-lg transition-colors',
             agentModeEnabled
               ? 'text-amber-500 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-400/10'
-              : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent',
             'disabled:opacity-50 disabled:cursor-not-allowed',
           )}
           title={
