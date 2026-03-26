@@ -9,14 +9,11 @@ import {
   FolderOpen,
   Globe,
   Image,
-  Infinity as InfinityIcon,
-  MonitorSmartphone,
   Plug,
   Search,
   Server,
   Terminal,
   Wifi,
-  Zap,
 } from 'lucide-react';
 import { Header } from '../../../components/layout/Header';
 import { CtaSection } from '../../../components/marketing/CtaSection';
@@ -91,82 +88,48 @@ const jsonLd = {
   },
 };
 
+const webPageJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'AI Plugins - AGI Workforce',
+  description: 'Extend AGI Workforce with plugins for any workflow or integration.',
+  url: 'https://agiworkforce.com/features/plugins',
+  isPartOf: { '@type': 'WebSite', name: 'AGI Workforce', url: 'https://agiworkforce.com' },
+};
+
 const transports = [
   {
-    icon: MonitorSmartphone,
+    icon: Terminal,
     name: 'stdio',
     label: 'Local Processes',
-    description:
-      'Run MCP servers as local child processes. Ideal for file system tools, code analysis, and local databases that need direct system access.',
+    desc: 'Child processes with direct system access. File tools, code analysis, local databases.',
     example: 'npx @modelcontextprotocol/server-filesystem',
   },
   {
     icon: Wifi,
     name: 'SSE',
     label: 'Server-Sent Events',
-    description:
-      'Connect to remote MCP servers via streaming SSE. Perfect for long-running tools, real-time data feeds, and cloud-hosted services.',
+    desc: 'Streaming connections to remote servers. Real-time data, long-running tasks, cloud services.',
     example: 'https://mcp.example.com/sse',
   },
   {
     icon: Globe,
     name: 'HTTP',
     label: 'Streamable HTTP',
-    description:
-      'Standard REST-based MCP connections for stateless tool calls. Works with any HTTP-compatible server, proxy, or API gateway.',
+    desc: 'Stateless REST-based calls. Any HTTP-compatible server, proxy, or API gateway.',
     example: 'https://api.example.com/mcp',
   },
 ];
 
 const toolCategories = [
-  {
-    icon: FolderOpen,
-    name: 'File System',
-    description: 'Read, write, search, and manage files across your system',
-    tools: ['file-read', 'file-write', 'file-search'],
-  },
-  {
-    icon: Globe,
-    name: 'Browser Automation',
-    description: 'Navigate, click, fill forms, extract data from any website',
-    tools: ['puppeteer', 'playwright', 'web-scraper'],
-  },
-  {
-    icon: Database,
-    name: 'Database',
-    description: 'Query SQLite, PostgreSQL, MySQL databases directly',
-    tools: ['sqlite', 'postgres', 'mysql'],
-  },
-  {
-    icon: Terminal,
-    name: 'Terminal & Shell',
-    description: 'Execute commands, manage processes, automate workflows',
-    tools: ['bash', 'powershell', 'ssh'],
-  },
-  {
-    icon: Cloud,
-    name: 'Cloud APIs',
-    description: 'Connect to GitHub, Slack, Notion, Google Drive, and more',
-    tools: ['github', 'slack', 'google-drive'],
-  },
-  {
-    icon: Code,
-    name: 'Code Analysis',
-    description: 'AST parsing, linting, refactoring, and code generation',
-    tools: ['tree-sitter', 'eslint', 'prettier'],
-  },
-  {
-    icon: Image,
-    name: 'Image & Media',
-    description: 'Generate, edit, and analyze images and media files',
-    tools: ['sharp', 'ffmpeg', 'vision-api'],
-  },
-  {
-    icon: Search,
-    name: 'Search & Research',
-    description: 'Web search, documentation lookup, knowledge retrieval',
-    tools: ['brave-search', 'rag', 'context7'],
-  },
+  { icon: FolderOpen, name: 'File System', tools: ['file-read', 'file-write', 'file-search'] },
+  { icon: Globe, name: 'Browser', tools: ['puppeteer', 'playwright', 'web-scraper'] },
+  { icon: Database, name: 'Database', tools: ['sqlite', 'postgres', 'mysql'] },
+  { icon: Terminal, name: 'Terminal', tools: ['bash', 'powershell', 'ssh'] },
+  { icon: Cloud, name: 'Cloud APIs', tools: ['github', 'slack', 'google-drive'] },
+  { icon: Code, name: 'Code Analysis', tools: ['tree-sitter', 'eslint', 'prettier'] },
+  { icon: Image, name: 'Image & Media', tools: ['sharp', 'ffmpeg', 'vision-api'] },
+  { icon: Search, name: 'Search', tools: ['brave-search', 'rag', 'context7'] },
 ];
 
 const comparisonFeatures = [
@@ -202,27 +165,6 @@ const comparisonFeatures = [
   },
 ];
 
-const steps = [
-  {
-    number: '01',
-    title: 'Add MCP servers to .mcp.json',
-    description:
-      'Define your MCP servers in a simple JSON config file. Specify the transport type, command or URL, and any arguments.',
-  },
-  {
-    number: '02',
-    title: 'Auto-discover available tools',
-    description:
-      'AGI Workforce connects to each server and discovers all available tools automatically. No manual registration needed.',
-  },
-  {
-    number: '03',
-    title: 'Use tools naturally in conversation',
-    description:
-      'Simply ask your AI agent to perform tasks. It selects and invokes the right MCP tools behind the scenes.',
-  },
-];
-
 const mcpConfigExample = `{
   "mcpServers": {
     "filesystem": {
@@ -251,15 +193,6 @@ const mcpConfigExample = `{
   }
 }`;
 
-const webPageJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'WebPage',
-  name: 'AI Plugins - AGI Workforce',
-  description: 'Extend AGI Workforce with plugins for any workflow or integration.',
-  url: 'https://agiworkforce.com/features/plugins',
-  isPartOf: { '@type': 'WebSite', name: 'AGI Workforce', url: 'https://agiworkforce.com' },
-};
-
 export default function PluginsPage() {
   return (
     <>
@@ -271,120 +204,107 @@ export default function PluginsPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
       />
-      <div className="flex min-h-screen flex-col bg-black text-white">
+      <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8]">
         <Header />
 
         <main className="flex-1 pt-24">
-          {/* Hero Section */}
-          <section className="relative overflow-hidden py-20 md:py-32 lg:py-40">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black" />
-            <div className="container relative mx-auto px-4 text-center">
-              <div className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 backdrop-blur-xs">
-                <Plug className="mr-2 h-4 w-4" />
-                MCP Tool Ecosystem
+          {/* Hero */}
+          <section className="py-20 md:py-28">
+            <div className="mx-auto max-w-3xl px-6 text-center">
+              <div className="mb-6 inline-flex items-center gap-2 border border-zinc-800 px-3 py-1 text-sm text-[#888480]">
+                <Plug className="h-3.5 w-3.5 text-[#c8892a]" />
+                Model Context Protocol
               </div>
-              <h1 className="mx-auto max-w-4xl bg-gradient-to-b from-white to-white/50 bg-clip-text text-5xl font-bold tracking-tight text-transparent md:text-7xl lg:text-8xl">
-                Unlimited Tools via Model Context Protocol
+              <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">
+                Connect Any Tool via MCP
               </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400 md:text-xl">
-                Connect any MCP server — file systems, databases, APIs, browsers, and more. No
-                artificial limits, no tool caps.
+              <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-[#888480]">
+                stdio, SSE, and HTTP transports. No tool caps, no curated lists. Point at an MCP
+                server and every tool is available immediately.
               </p>
-              <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <div className="mt-8 flex items-center justify-center gap-4">
                 <Link
                   href="/download"
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-black"
+                  className="inline-flex h-10 items-center gap-2 bg-[#c8892a] px-6 text-sm font-medium text-[#09090b] transition-colors hover:bg-[#d49a3a]"
                 >
-                  Download Desktop App
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  Download
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
                 <Link
-                  href="#tools"
-                  className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-800 bg-black px-8 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white"
+                  href="#config"
+                  className="inline-flex h-10 items-center border border-zinc-800 px-6 text-sm text-[#888480] transition-colors hover:border-zinc-700 hover:text-[#edebe8]"
                 >
-                  Explore Tools
+                  See Config
                 </Link>
-              </div>
-
-              <div className="mt-12 flex flex-col items-center gap-4 md:flex-row md:justify-center">
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <InfinityIcon className="h-4 w-4 text-blue-500" />
-                  <span>Unlimited Tools</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Server className="h-4 w-4 text-blue-500" />
-                  <span>3 Transport Types</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Zap className="h-4 w-4 text-blue-500" />
-                  <span>Zero Caps</span>
-                </div>
               </div>
             </div>
           </section>
 
-          {/* How MCP Works */}
-          <section className="bg-zinc-950 py-24">
-            <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  How MCP Works
-                </h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  Think of MCP like USB-C for AI — one standard protocol to connect any tool. AGI
-                  Workforce speaks all three MCP transport types natively.
-                </p>
+          {/* Config Block */}
+          <section id="config" className="pb-20 md:pb-28">
+            <div className="mx-auto max-w-3xl px-6">
+              <div className="border border-zinc-800 bg-black">
+                <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
+                  <span className="font-mono text-xs text-[#888480]">.mcp.json</span>
+                  <span className="text-[10px] uppercase tracking-wider text-[#555150]">
+                    Drop this in your project root
+                  </span>
+                </div>
+                <pre className="overflow-x-auto p-5 text-[13px] leading-relaxed">
+                  <code className="text-[#888480]">{mcpConfigExample}</code>
+                </pre>
               </div>
-              <div className="grid gap-8 md:grid-cols-3">
-                {transports.map((transport) => (
-                  <div
-                    key={transport.name}
-                    className="group rounded-2xl border border-zinc-800 bg-black/50 p-8 transition-all hover:border-blue-500/50"
-                  >
-                    <transport.icon className="mb-4 h-10 w-10 text-blue-500" />
-                    <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-blue-400">
-                      {transport.name}
+              <p className="mt-4 text-sm text-[#555150]">
+                Every tool on every server is discovered automatically. Add a server, restart, done.
+              </p>
+            </div>
+          </section>
+
+          {/* Transports — horizontal row */}
+          <section className="border-y border-zinc-800/50 py-20 md:py-24">
+            <div className="mx-auto max-w-5xl px-6">
+              <h2 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">
+                Three Transports
+              </h2>
+              <p className="mb-12 text-[#555150]">
+                Local processes, streaming connections, and stateless HTTP. All native.
+              </p>
+              <div className="grid gap-px border border-zinc-800 bg-zinc-800 md:grid-cols-3">
+                {transports.map((t) => (
+                  <div key={t.name} className="bg-[#09090b] p-6">
+                    <div className="mb-3 flex items-center gap-3">
+                      <t.icon className="h-4 w-4 text-[#c8892a]" />
+                      <span className="font-mono text-sm font-medium">{t.name}</span>
+                      <span className="text-xs text-[#555150]">{t.label}</span>
                     </div>
-                    <h3 className="mb-3 text-xl font-semibold">{transport.label}</h3>
-                    <p className="mb-4 leading-relaxed text-zinc-400">{transport.description}</p>
-                    <code className="block rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-500">
-                      {transport.example}
-                    </code>
+                    <p className="mb-4 text-sm leading-relaxed text-[#888480]">{t.desc}</p>
+                    <code className="block font-mono text-xs text-[#555150]">{t.example}</code>
                   </div>
                 ))}
               </div>
             </div>
           </section>
 
-          {/* Tool Categories Grid */}
-          <section id="tools" className="bg-black py-24">
-            <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  Tool Categories
-                </h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  From file management to web search, MCP tools cover every capability your AI agent
-                  needs. Install community servers or build your own.
-                </p>
-              </div>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {toolCategories.map((category) => (
-                  <div
-                    key={category.name}
-                    className="group rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xs transition-all hover:border-blue-500/50 hover:bg-white/[0.08]"
-                  >
-                    <category.icon className="mb-4 h-8 w-8 text-blue-500" />
-                    <h3 className="mb-2 text-lg font-semibold">{category.name}</h3>
-                    <p className="mb-4 text-sm leading-relaxed text-zinc-400">
-                      {category.description}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {category.tools.map((tool) => (
-                        <span
-                          key={tool}
-                          className="rounded-full border border-zinc-700 bg-zinc-800/50 px-2.5 py-0.5 text-xs text-zinc-400"
-                        >
+          {/* Tool Categories — compact grid */}
+          <section id="tools" className="py-20 md:py-24">
+            <div className="mx-auto max-w-5xl px-6">
+              <h2 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">
+                Tool Categories
+              </h2>
+              <p className="mb-12 text-[#555150]">
+                Community servers or your own. Every category below has open-source MCP servers
+                ready to install.
+              </p>
+              <div className="grid gap-px border border-zinc-800 bg-zinc-800 sm:grid-cols-2 lg:grid-cols-4">
+                {toolCategories.map((cat) => (
+                  <div key={cat.name} className="bg-[#09090b] p-5">
+                    <div className="mb-3 flex items-center gap-2.5">
+                      <cat.icon className="h-4 w-4 text-[#c8892a]" />
+                      <span className="text-sm font-medium">{cat.name}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {cat.tools.map((tool) => (
+                        <span key={tool} className="font-mono text-xs text-[#555150]">
                           {tool}
                         </span>
                       ))}
@@ -395,44 +315,43 @@ export default function PluginsPage() {
             </div>
           </section>
 
-          {/* Comparison Section */}
-          <section className="bg-zinc-950 py-24">
-            <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  No Artificial Limits
-                </h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  Other tools cap your MCP connections or restrict transport types. AGI Workforce
-                  gives you the full protocol — unlimited.
-                </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] border-collapse">
+          {/* Comparison Table */}
+          <section className="border-t border-zinc-800/50 py-20 md:py-24">
+            <div className="mx-auto max-w-4xl px-6">
+              <h2 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">
+                MCP Support Comparison
+              </h2>
+              <p className="mb-12 text-[#555150]">
+                Other tools cap connections or restrict transports. AGI Workforce implements the
+                full protocol.
+              </p>
+              <div className="overflow-x-auto border border-zinc-800">
+                <table className="w-full min-w-[560px]">
                   <thead>
-                    <tr className="border-b border-zinc-800">
-                      <th className="p-4 text-left text-sm font-medium text-zinc-500">Feature</th>
-                      <th className="p-4 text-left text-sm font-semibold text-blue-400">
-                        AGI Workforce
-                      </th>
-                      <th className="p-4 text-left text-sm font-medium text-zinc-500">Cursor</th>
-                      <th className="p-4 text-left text-sm font-medium text-zinc-500">
-                        Claude Desktop
-                      </th>
+                    <tr className="border-b border-zinc-800 text-left text-xs uppercase tracking-wider">
+                      <th className="px-4 py-3 font-medium text-[#555150]">Feature</th>
+                      <th className="px-4 py-3 font-medium text-[#c8892a]">AGI Workforce</th>
+                      <th className="px-4 py-3 font-medium text-[#555150]">Cursor</th>
+                      <th className="px-4 py-3 font-medium text-[#555150]">Claude Desktop</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {comparisonFeatures.map((row) => (
-                      <tr key={row.feature} className="border-b border-zinc-800/50">
-                        <td className="p-4 text-sm text-zinc-400">{row.feature}</td>
-                        <td className="p-4 text-sm font-medium text-white">
+                    {comparisonFeatures.map((row, i) => (
+                      <tr
+                        key={row.feature}
+                        className={
+                          i < comparisonFeatures.length - 1 ? 'border-b border-zinc-800/50' : ''
+                        }
+                      >
+                        <td className="px-4 py-3 text-sm text-[#888480]">{row.feature}</td>
+                        <td className="px-4 py-3 text-sm text-[#edebe8]">
                           <span className="flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            <CheckCircle2 className="h-3.5 w-3.5 text-[#c8892a]" />
                             {row.agi}
                           </span>
                         </td>
-                        <td className="p-4 text-sm text-zinc-500">{row.cursor}</td>
-                        <td className="p-4 text-sm text-zinc-500">{row.claude}</td>
+                        <td className="px-4 py-3 text-sm text-[#555150]">{row.cursor}</td>
+                        <td className="px-4 py-3 text-sm text-[#555150]">{row.claude}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -441,47 +360,46 @@ export default function PluginsPage() {
             </div>
           </section>
 
-          {/* Getting Started */}
-          <section className="bg-black py-24">
-            <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  Get Started in 3 Steps
-                </h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  Set up MCP tools in minutes. No complex infrastructure, no server management —
-                  just a JSON config file.
-                </p>
-              </div>
-              <div className="grid gap-12 lg:grid-cols-2">
-                <div className="space-y-8">
-                  {steps.map((step) => (
-                    <div key={step.number} className="flex gap-4">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold">
-                        {step.number}
-                      </div>
-                      <div>
-                        <h3 className="mb-2 text-xl font-semibold">{step.title}</h3>
-                        <p className="leading-relaxed text-zinc-400">{step.description}</p>
-                      </div>
-                    </div>
-                  ))}
+          {/* Adding a server — concrete example */}
+          <section className="border-t border-zinc-800/50 py-20 md:py-24">
+            <div className="mx-auto max-w-3xl px-6">
+              <h2 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">
+                Example: Add a GitHub Server
+              </h2>
+              <p className="mb-8 text-[#555150]">
+                One entry in your config. The agent discovers every tool the server exposes.
+              </p>
+              <div className="border border-zinc-800 bg-black">
+                <div className="border-b border-zinc-800 px-4 py-2.5">
+                  <span className="font-mono text-xs text-[#888480]">.mcp.json</span>
                 </div>
-                <div className="relative">
-                  <div className="absolute -inset-1 rounded-2xl bg-blue-500/10 blur-xl" />
-                  <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
-                    <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
-                      <div className="flex gap-1.5">
-                        <div className="h-3 w-3 rounded-full bg-zinc-700" />
-                        <div className="h-3 w-3 rounded-full bg-zinc-700" />
-                        <div className="h-3 w-3 rounded-full bg-zinc-700" />
-                      </div>
-                      <span className="text-xs text-zinc-500">.mcp.json</span>
-                    </div>
-                    <pre className="overflow-x-auto p-4 text-sm leading-relaxed">
-                      <code className="text-zinc-300">{mcpConfigExample}</code>
-                    </pre>
-                  </div>
+                <pre className="overflow-x-auto p-5 text-[13px] leading-relaxed">
+                  <code className="text-[#888480]">{`{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_TOKEN": "$GITHUB_TOKEN" }
+    }
+  }
+}`}</code>
+                </pre>
+              </div>
+              <div className="mt-6 space-y-3 text-sm text-[#888480]">
+                <div className="flex items-start gap-3">
+                  <Server className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#c8892a]" />
+                  <span>
+                    AGI Workforce spawns the process, calls{' '}
+                    <code className="font-mono text-[#555150]">tools/list</code>, and registers
+                    every tool — create issues, manage PRs, search repos, read files.
+                  </span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Plug className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#c8892a]" />
+                  <span>
+                    ToolGuard assigns permission tiers automatically. Read operations run freely;
+                    writes require confirmation.
+                  </span>
                 </div>
               </div>
             </div>
@@ -489,9 +407,9 @@ export default function PluginsPage() {
 
           <CtaSection
             icon="Plug"
-            headline="Extend Your AI with Any Tool"
-            body="Connect unlimited MCP servers. Use community tools or build your own. No caps, no restrictions — just the full power of the Model Context Protocol."
-            secondaryLabel="Read Documentation"
+            headline="Connect Your First MCP Server"
+            body="Drop a .mcp.json in your project root. Every tool on every server, discovered automatically. No caps, no restrictions."
+            secondaryLabel="Read Docs"
             secondaryHref="/docs"
           />
         </main>
