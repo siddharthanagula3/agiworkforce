@@ -166,9 +166,9 @@ export function validatePriceIdConsistency(): ValidationResult {
 
     // Log the mappings for debugging
     if (process.env.NODE_ENV !== 'production') {
-      console.log('[validate-env] Price ID mappings:');
+      console.debug('[validate-env] Price ID mappings:');
       for (const [key, value] of Object.entries(expectedMappings)) {
-        console.log(`  ${key}: ${value}`);
+        console.debug(`  ${key}: ${value}`);
       }
     }
   } catch (error) {
@@ -280,7 +280,7 @@ export function validateEnvironment(): ValidationResult {
  */
 export function logValidationResults(result: ValidationResult): void {
   if (result.valid) {
-    console.log('✅ Environment validation passed');
+    console.debug('✅ Environment validation passed');
   } else {
     console.error('❌ Environment validation failed');
   }
@@ -295,7 +295,7 @@ export function logValidationResults(result: ValidationResult): void {
     result.warnings.forEach((warning) => console.warn(`  - ${warning}`));
   }
 
-  console.log(''); // Empty line for spacing
+  console.debug(''); // Empty line for spacing
 }
 
 /**

@@ -135,6 +135,8 @@ export function MessageList({
       keyExtractor={keyExtractor}
       contentContainerStyle={{ paddingVertical: 8 }}
       showsVerticalScrollIndicator={false}
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
       onScroll={(event) => {
         const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
         const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;

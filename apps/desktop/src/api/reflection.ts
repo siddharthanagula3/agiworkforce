@@ -199,7 +199,7 @@ export function getCorrectionTypeIcon(type: CorrectionType): string {
  */
 export async function getReflectionInsights(goalId: string): Promise<ReflectionInsight | null> {
   if (!isTauri) {
-    console.info('[reflection] getReflectionInsights (mock)', goalId);
+    console.debug('[reflection] getReflectionInsights (mock)', goalId);
     return null;
   }
 
@@ -220,7 +220,7 @@ export async function getReflectionInsights(goalId: string): Promise<ReflectionI
  */
 export async function getFailurePatterns(goalId: string): Promise<FailurePattern[]> {
   if (!isTauri) {
-    console.info('[reflection] getFailurePatterns (mock)', goalId);
+    console.debug('[reflection] getFailurePatterns (mock)', goalId);
     return [];
   }
 
@@ -239,7 +239,7 @@ export async function getFailurePatterns(goalId: string): Promise<FailurePattern
  */
 export async function getSuggestedCorrections(goalId: string): Promise<Correction[]> {
   if (!isTauri) {
-    console.info('[reflection] getSuggestedCorrections (mock)', goalId);
+    console.debug('[reflection] getSuggestedCorrections (mock)', goalId);
     return [];
   }
 
@@ -258,7 +258,7 @@ export async function getSuggestedCorrections(goalId: string): Promise<Correctio
  */
 export async function getSubGoals(goalId: string): Promise<SubGoal[]> {
   if (!isTauri) {
-    console.info('[reflection] getSubGoals (mock)', goalId);
+    console.debug('[reflection] getSubGoals (mock)', goalId);
     return [];
   }
 
@@ -277,7 +277,7 @@ export async function getSubGoals(goalId: string): Promise<SubGoal[]> {
  */
 export async function getRecommendations(goalId: string): Promise<string[]> {
   if (!isTauri) {
-    console.info('[reflection] getRecommendations (mock)', goalId);
+    console.debug('[reflection] getRecommendations (mock)', goalId);
     return [];
   }
 

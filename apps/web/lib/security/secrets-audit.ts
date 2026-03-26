@@ -202,12 +202,15 @@ export function safeLog(message: string, data?: unknown): void {
   if (process.env.NODE_ENV === 'production') {
     // In production, only log if no secrets were detected
     if (!containsSecrets(message) && (!data || !containsSecrets(JSON.stringify(data)))) {
+      // eslint-disable-next-line no-console
       console.log(safeMessage, safeData);
     } else {
+      // eslint-disable-next-line no-console
       console.log('[LOG REDACTED - contained sensitive data]');
     }
   } else {
     // In development, log with redaction
+    // eslint-disable-next-line no-console
     console.log(safeMessage, safeData);
   }
 }

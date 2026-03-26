@@ -128,7 +128,7 @@ export function useSessionPersistence(
   const log = useCallback(
     (message: string, data?: unknown) => {
       if (debug) {
-        console.log(`[useSessionPersistence] ${message}`, data);
+        console.debug(`[useSessionPersistence] ${message}`, data);
       }
     },
     [debug],
