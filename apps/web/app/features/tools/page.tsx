@@ -9,17 +9,12 @@ import {
   Monitor,
   Keyboard,
   Shield,
-  CheckCircle2,
-  Zap,
-  RotateCcw,
-  DollarSign,
-  MessageSquare,
-  Play,
-  Search,
+  ChevronRight,
 } from 'lucide-react';
 import { Header } from '../../../components/layout/Header';
 import { CtaSection } from '../../../components/marketing/CtaSection';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { MARKETING } from '../../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'Desktop Tools & Computer Use | AGI Workforce',
@@ -97,135 +92,6 @@ const jsonLd = {
   },
 };
 
-const capabilities = [
-  {
-    icon: Globe,
-    title: 'Browser Automation',
-    gradient: 'from-blue-500 to-blue-600',
-    borderHover: 'hover:border-blue-500/50',
-    iconColor: 'text-blue-400',
-    bgGlow: 'bg-blue-500/10',
-    features: [
-      'Navigate websites, click elements, fill forms, extract data',
-      'Playwright-powered DOM operations',
-    ],
-    tagline: 'Works with any website — no API needed',
-  },
-  {
-    icon: Terminal,
-    title: 'Terminal & Shell',
-    gradient: 'from-emerald-500 to-green-600',
-    borderHover: 'hover:border-emerald-500/50',
-    iconColor: 'text-emerald-400',
-    bgGlow: 'bg-emerald-500/10',
-    features: [
-      'Execute commands, manage processes, install packages',
-      'Full shell access with safety sandboxing',
-    ],
-    tagline: 'Run any command your terminal can',
-  },
-  {
-    icon: FolderOpen,
-    title: 'File Management',
-    gradient: 'from-purple-500 to-violet-600',
-    borderHover: 'hover:border-purple-500/50',
-    iconColor: 'text-purple-400',
-    bgGlow: 'bg-purple-500/10',
-    features: [
-      'Read, write, search, organize files and directories',
-      'Bulk operations with undo support',
-    ],
-    tagline: 'Manage your entire file system naturally',
-  },
-  {
-    icon: Eye,
-    title: 'Screen Capture & Vision',
-    gradient: 'from-orange-500 to-amber-600',
-    borderHover: 'hover:border-orange-500/50',
-    iconColor: 'text-orange-400',
-    bgGlow: 'bg-orange-500/10',
-    features: [
-      'OCR text extraction, screenshot analysis',
-      'Visual element detection and interaction',
-    ],
-    tagline: 'AI that can see and understand your screen',
-  },
-  {
-    icon: Monitor,
-    title: 'Computer Use',
-    gradient: 'from-cyan-500 to-teal-600',
-    borderHover: 'hover:border-cyan-500/50',
-    iconColor: 'text-cyan-400',
-    bgGlow: 'bg-cyan-500/10',
-    features: [
-      'Observe-Plan-Act loop for autonomous desktop control',
-      'Mouse and keyboard simulation',
-    ],
-    tagline: 'Full computer use — like having a second pair of hands',
-  },
-  {
-    icon: Keyboard,
-    title: 'Keyboard & Input',
-    gradient: 'from-pink-500 to-rose-600',
-    borderHover: 'hover:border-pink-500/50',
-    iconColor: 'text-pink-400',
-    bgGlow: 'bg-pink-500/10',
-    features: ['Type text, execute hotkeys, simulate input', 'Clipboard management'],
-    tagline: 'Automate any repetitive input task',
-  },
-];
-
-const safetyFeatures = [
-  {
-    icon: Shield,
-    title: 'ToolGuard Validation',
-    description:
-      'Every tool execution is validated through ToolGuard before running — ensuring no unauthorized actions reach your system.',
-  },
-  {
-    icon: CheckCircle2,
-    title: 'Approval Flows',
-    description:
-      'Sensitive operations require explicit approval. Review what the AI wants to do before it acts.',
-  },
-  {
-    icon: RotateCcw,
-    title: 'Undo Support',
-    description:
-      'Reversible actions come with full undo support. Experiment freely knowing you can always roll back.',
-  },
-  {
-    icon: DollarSign,
-    title: 'Budget Controls',
-    description:
-      'Set token and iteration budgets for autonomous loops. The AI stops when limits are reached.',
-  },
-];
-
-const steps = [
-  {
-    number: '01',
-    icon: MessageSquare,
-    title: 'Describe Your Task',
-    description:
-      'Tell the AI what you want done in plain language. No scripting, no configuration files, no technical knowledge required.',
-  },
-  {
-    number: '02',
-    icon: Play,
-    title: 'AI Plans & Executes',
-    description:
-      'The AI breaks your task into steps, selects the right desktop tools, and executes each action with real-time progress updates.',
-  },
-  {
-    number: '03',
-    icon: Search,
-    title: 'Review & Approve',
-    description:
-      'See exactly what was done, review results, approve or undo any action. You stay in control at every step.',
-  },
-];
-
 const webPageJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebPage',
@@ -234,6 +100,127 @@ const webPageJsonLd = {
   url: 'https://agiworkforce.com/features/tools',
   isPartOf: { '@type': 'WebSite', name: 'AGI Workforce', url: 'https://agiworkforce.com' },
 };
+
+const domains = [
+  { icon: Globe, label: 'Browser', tools: 'navigate, click, extract, type, screenshot' },
+  { icon: Terminal, label: 'Terminal', tools: 'execute, pipe, kill, read output' },
+  { icon: FolderOpen, label: 'Files', tools: 'read, write, delete, list, search' },
+  { icon: Eye, label: 'Vision', tools: 'screenshot, OCR, element detection' },
+  { icon: Monitor, label: 'Computer Use', tools: 'observe-plan-act loop, mouse, keyboard' },
+  { icon: Keyboard, label: 'Input', tools: 'type text, hotkeys, clipboard' },
+];
+
+const terminalLines = [
+  { prompt: true, text: 'agent task "Find flights under $400 to Tokyo for March"' },
+  { prompt: false, text: '' },
+  { prompt: false, text: 'ToolGuard  tier=Confirmation  tool=browser_navigate' },
+  { prompt: false, text: '           url=https://google.com/travel/flights' },
+  { prompt: false, text: '           rate=20/min  risk=High  approved=true', accent: true },
+  { prompt: false, text: '' },
+  {
+    prompt: false,
+    text: 'invoke     browser_navigate  { url: "https://google.com/travel/flights" }',
+  },
+  { prompt: false, text: '           status=ok  latency=340ms' },
+  {
+    prompt: false,
+    text: 'invoke     browser_type      { selector: "[aria-label=\\"Where to?\\"]", text: "Tokyo" }',
+  },
+  { prompt: false, text: 'invoke     browser_click     { selector: "[data-result=\\"NRT\\"]" }' },
+  {
+    prompt: false,
+    text: 'invoke     browser_extract   { selector: ".result-price", extract_type: "text" }',
+  },
+  { prompt: false, text: '           results=14  filtered=3 under $400' },
+  { prompt: false, text: '' },
+  { prompt: false, text: 'ToolGuard  tier=Safe          tool=file_write' },
+  { prompt: false, text: 'invoke     file_write        { path: "~/Desktop/tokyo-flights.csv" }' },
+  { prompt: false, text: '           wrote 3 rows, 847 bytes', accent: true },
+];
+
+const safetyTiers = [
+  {
+    name: 'Safe',
+    rate: '30/min',
+    description: 'Runs automatically. Read-only operations with no side effects.',
+    examples: 'file_read, file_list, browser_get_text, ui_screenshot',
+    risk: 'Low',
+  },
+  {
+    name: 'Notification',
+    rate: '30/min',
+    description: 'Executes and notifies you. Medium-risk reads that access external data.',
+    examples: 'browser_extract, search_web, browser_screenshot',
+    risk: 'Medium',
+  },
+  {
+    name: 'Confirmation',
+    rate: '5-20/min',
+    description:
+      'Pauses for your approval. Operations that modify state or access sensitive resources.',
+    examples: 'file_write, file_delete, browser_navigate, terminal_execute',
+    risk: 'High',
+  },
+  {
+    name: 'Explicit Approval',
+    rate: '5/min',
+    description:
+      'Requires detailed review. Arbitrary code execution and irreversible system changes.',
+    examples: 'code_execute',
+    risk: 'Critical',
+  },
+];
+
+const capabilities = [
+  {
+    icon: Globe,
+    title: 'Browser Automation',
+    description:
+      'Playwright-powered DOM operations. Navigate, click, type, extract, screenshot any website without an API.',
+    tools: [
+      'browser_navigate',
+      'browser_click',
+      'browser_type',
+      'browser_extract',
+      'browser_screenshot',
+    ],
+  },
+  {
+    icon: Terminal,
+    title: 'Terminal & Shell',
+    description:
+      'Full shell access with command injection detection and sandboxing. Execute, pipe, manage processes.',
+    tools: ['terminal_execute', 'terminal_pipe', 'terminal_kill'],
+  },
+  {
+    icon: FolderOpen,
+    title: 'File Management',
+    description:
+      'Read, write, search, delete with path traversal protection. Bulk operations with undo support via ToolGuard.',
+    tools: ['file_read', 'file_write', 'file_delete', 'file_list', 'file_search'],
+  },
+  {
+    icon: Eye,
+    title: 'Screen Capture & Vision',
+    description:
+      'Screenshot any region, OCR text extraction, visual element detection. The AI sees what you see.',
+    tools: ['ui_screenshot', 'screen_ocr', 'element_detect'],
+  },
+  {
+    icon: Monitor,
+    title: 'Computer Use',
+    description:
+      'Observe-Plan-Act loop for autonomous desktop control. Mouse positioning, clicking, dragging across applications.',
+    tools: ['ui_click', 'ui_type', 'mouse_move', 'mouse_drag'],
+  },
+  {
+    icon: Keyboard,
+    title: 'Keyboard & Input',
+    description:
+      'Type text, execute hotkeys, manage clipboard. Automate any repetitive input across any application.',
+    tools: ['keyboard_type', 'keyboard_hotkey', 'clipboard_read', 'clipboard_write'],
+  },
+];
 
 export default function ToolsFeaturePage() {
   return (
@@ -246,214 +233,214 @@ export default function ToolsFeaturePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
       />
-      <div className="flex min-h-screen flex-col bg-black text-white">
+      <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8]">
         <Header />
 
         <main className="flex-1 pt-24">
-          {/* Hero Section */}
-          <section className="relative overflow-hidden py-20 md:py-32 lg:py-40">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black" />
-            <div className="container relative mx-auto px-4 text-center">
-              <div className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 backdrop-blur-xs">
-                <Monitor className="mr-2 h-4 w-4" />
-                Desktop Automation
-              </div>
-              <h1 className="mx-auto max-w-4xl bg-gradient-to-b from-white to-white/50 bg-clip-text text-5xl font-bold tracking-tight text-transparent md:text-7xl lg:text-8xl">
-                Your Desktop, Fully Autonomous
-              </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400 md:text-xl">
-                Native desktop automation that sees your screen, controls your keyboard, manages
-                your files, and runs terminal commands — all with safety controls.
-              </p>
-              <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <Link
-                  href="/download"
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-black"
-                >
-                  Download Desktop App
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-                <Link
-                  href="#capabilities"
-                  className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-800 bg-black px-8 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white"
-                >
-                  See Capabilities
-                </Link>
-              </div>
-
-              <div className="mt-12 flex flex-col items-center gap-4 md:flex-row md:justify-center">
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Zap className="h-4 w-4 text-blue-500" />
-                  <span>6 Automation Domains</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Native Performance</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Shield className="h-4 w-4 text-emerald-500" />
-                  <span>Full Safety Controls</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Capabilities Grid */}
-          <section id="capabilities" className="bg-zinc-950 py-24">
+          {/* Hero */}
+          <section className="relative py-20 md:py-28 lg:py-36">
             <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <div className="mb-4 inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-blue-400">
-                  <Zap className="mr-2 h-4 w-4" />
-                  Capabilities
-                </div>
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  Everything Your Desktop Can Do, Automated
-                </h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  Six powerful automation domains that give your AI agent full control over your
-                  desktop environment — with safety at every step.
+              <div className="mx-auto max-w-3xl">
+                <p className="mb-6 font-mono text-sm tracking-wider text-[#c8892a]">
+                  {MARKETING.tools.display} native IPC tools
                 </p>
-              </div>
-              <div className="grid gap-8 md:grid-cols-2">
-                {capabilities.map((capability) => (
-                  <div
-                    key={capability.title}
-                    className={`group relative rounded-2xl border border-zinc-800 bg-black/50 p-8 transition-all hover:scale-[1.02] ${capability.borderHover}`}
-                  >
+                <h1 className="text-4xl font-bold tracking-tight md:text-6xl lg:text-7xl">
+                  Your desktop,
+                  <br />
+                  fully autonomous
+                </h1>
+                <p className="mt-6 max-w-xl text-lg text-[#888480]">
+                  Sees your screen, controls your keyboard, manages your files, and runs terminal
+                  commands — all validated through a 4-tier safety model before execution.
+                </p>
+
+                {/* 6 domain pills */}
+                <div className="mt-10 flex flex-wrap gap-3">
+                  {domains.map((d) => (
                     <div
-                      className={`absolute inset-0 rounded-2xl ${capability.bgGlow} opacity-0 transition-opacity group-hover:opacity-100 blur-xl pointer-events-none`}
-                    />
-                    <div className="flex items-start gap-5">
-                      <div
-                        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${capability.gradient} shadow-lg`}
-                      >
-                        <capability.icon className="h-7 w-7 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="mb-3 text-xl font-semibold">{capability.title}</h3>
-                        <ul className="mb-4 space-y-2">
-                          {capability.features.map((feature) => (
-                            <li key={feature} className="flex items-start gap-2 text-zinc-400">
-                              <CheckCircle2
-                                className={`mt-0.5 h-4 w-4 shrink-0 ${capability.iconColor}`}
-                              />
-                              <span>{feature}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        <p className={`text-sm font-medium ${capability.iconColor}`}>
-                          {capability.tagline}
-                        </p>
+                      key={d.label}
+                      className="flex items-center gap-2.5 rounded-full border border-[#222220] bg-[#111110] px-4 py-2"
+                    >
+                      <d.icon className="h-4 w-4 text-[#c8892a]" />
+                      <div>
+                        <span className="text-sm font-medium text-[#edebe8]">{d.label}</span>
+                        <span className="ml-2 text-sm text-[#555150]">{d.tools}</span>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+
+                <div className="mt-10 flex gap-4">
+                  <Link
+                    href="/download"
+                    className="inline-flex h-11 items-center rounded-lg bg-[#c8892a] px-6 text-sm font-medium text-[#09090b] transition-colors hover:bg-[#d49a3a]"
+                  >
+                    Download
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                  <Link
+                    href="#safety"
+                    className="inline-flex h-11 items-center rounded-lg border border-[#222220] px-6 text-sm font-medium text-[#888480] transition-colors hover:border-[#333330] hover:text-[#edebe8]"
+                  >
+                    Safety model
+                  </Link>
+                </div>
               </div>
             </div>
           </section>
 
-          {/* Safety Section */}
-          <section className="bg-black py-24">
+          {/* Terminal mockup */}
+          <section className="border-y border-[#1a1a18] bg-black py-20 md:py-28">
             <div className="container mx-auto px-4">
-              <div className="flex flex-col items-center gap-16 lg:flex-row">
-                <div className="flex-1 space-y-8">
-                  <div className="mb-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-400">
-                    <Shield className="mr-2 h-4 w-4" />
-                    Safety First
+              <div className="mx-auto max-w-3xl">
+                <h2 className="mb-2 text-2xl font-bold tracking-tight md:text-3xl">
+                  What a tool execution looks like
+                </h2>
+                <p className="mb-10 text-[#888480]">
+                  Every IPC call is logged, rate-limited, and validated by ToolGuard before it
+                  reaches your system.
+                </p>
+
+                <div className="overflow-hidden rounded-lg border border-[#222220]">
+                  {/* Title bar */}
+                  <div className="flex items-center gap-2 border-b border-[#222220] bg-[#111110] px-4 py-2.5">
+                    <div className="h-3 w-3 rounded-full bg-[#333330]" />
+                    <div className="h-3 w-3 rounded-full bg-[#333330]" />
+                    <div className="h-3 w-3 rounded-full bg-[#333330]" />
+                    <span className="ml-3 font-mono text-xs text-[#555150]">
+                      agiworkforce — tool execution log
+                    </span>
                   </div>
-                  <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-                    Autonomous, but Safe
-                  </h2>
-                  <p className="text-lg text-zinc-400">
-                    Every tool action passes through multiple safety layers before execution. You
-                    stay in control even when the AI works autonomously.
-                  </p>
-                  <div className="space-y-6">
-                    {safetyFeatures.map((feature) => (
-                      <div key={feature.title} className="flex gap-4">
-                        <feature.icon className="h-6 w-6 shrink-0 text-emerald-500" />
-                        <div>
-                          <h3 className="mb-1 text-lg font-semibold">{feature.title}</h3>
-                          <p className="text-zinc-400">{feature.description}</p>
-                        </div>
+
+                  {/* Terminal body */}
+                  <div className="overflow-x-auto bg-[#0a0a09] p-5 font-mono text-[13px] leading-6">
+                    {terminalLines.map((line, i) => (
+                      <div key={i} className="whitespace-pre">
+                        {line.prompt ? (
+                          <span>
+                            <span className="text-[#c8892a]">$ </span>
+                            <span className="text-[#edebe8]">{line.text}</span>
+                          </span>
+                        ) : line.text === '' ? (
+                          '\u00A0'
+                        ) : (
+                          <span className={line.accent ? 'text-[#c8892a]' : 'text-[#666660]'}>
+                            {line.text}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="flex-1">
-                  <div className="relative rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-xs">
-                    <div className="absolute inset-0 -z-10 bg-emerald-500/10 blur-3xl rounded-2xl" />
-                    <div className="space-y-4 font-mono text-sm text-zinc-400">
-                      <div className="flex items-center gap-2 text-emerald-400">
-                        <Shield className="h-4 w-4" />
-                        <span>ToolGuard Safety Pipeline</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Safety tiers */}
+          <section id="safety" className="bg-[#09090b] py-20 md:py-28">
+            <div className="container mx-auto px-4">
+              <div className="mx-auto max-w-4xl">
+                <div className="mb-4 flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-[#c8892a]" />
+                  <span className="font-mono text-sm text-[#c8892a]">ToolGuard</span>
+                </div>
+                <h2 className="mb-3 text-2xl font-bold tracking-tight md:text-3xl">
+                  4-tier safety model
+                </h2>
+                <p className="mb-12 max-w-xl text-[#888480]">
+                  Every tool call is classified by risk level and routed through the appropriate
+                  approval tier. Low-risk reads execute instantly. Destructive operations wait for
+                  you.
+                </p>
+
+                {/* Horizontal tier progression */}
+                <div className="grid gap-px overflow-hidden rounded-lg border border-[#222220] bg-[#222220] md:grid-cols-4">
+                  {safetyTiers.map((tier, i) => (
+                    <div key={tier.name} className="relative bg-[#0e0e0c] p-5">
+                      {/* Tier number */}
+                      <div className="mb-4 flex items-center gap-3">
+                        <span className="font-mono text-xs text-[#555150]">
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <span className="text-sm font-semibold text-[#edebe8]">{tier.name}</span>
                       </div>
-                      <div className="h-px bg-white/10" />
-                      <div className="flex justify-between">
-                        <span>Tool Validation</span>
-                        <span className="text-emerald-400">Passed</span>
+
+                      {/* Rate */}
+                      <div className="mb-3 font-mono text-xs text-[#c8892a]">{tier.rate}</div>
+
+                      {/* Description */}
+                      <p className="mb-4 text-sm leading-relaxed text-[#888480]">
+                        {tier.description}
+                      </p>
+
+                      {/* Example tools */}
+                      <div className="font-mono text-xs leading-5 text-[#555150]">
+                        {tier.examples.split(', ').map((tool) => (
+                          <div key={tool}>{tool}</div>
+                        ))}
                       </div>
-                      <div className="flex justify-between">
-                        <span>Permission Check</span>
-                        <span className="text-emerald-400">Authorized</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Sandbox Isolation</span>
-                        <span className="text-emerald-400">Active</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Budget Remaining</span>
-                        <span className="text-white">47 / 50 iterations</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Undo Stack</span>
-                        <span className="text-white">3 reversible actions</span>
-                      </div>
-                      <div className="h-px bg-white/10" />
-                      <div className="flex justify-between">
-                        <span>Status</span>
-                        <span className="text-emerald-400 font-semibold">Safe to Execute</span>
-                      </div>
+
+                      {/* Arrow connector (hidden on last) */}
+                      {i < safetyTiers.length - 1 && (
+                        <ChevronRight className="absolute right-0 top-1/2 z-10 hidden h-4 w-4 -translate-y-1/2 translate-x-1/2 text-[#555150] md:block" />
+                      )}
                     </div>
-                  </div>
+                  ))}
+                </div>
+
+                {/* Mapping legend */}
+                <div className="mt-8 flex flex-wrap gap-x-8 gap-y-2 font-mono text-xs text-[#555150]">
+                  <span>Low risk = Safe</span>
+                  <span>Medium risk (no approval) = Notification</span>
+                  <span>Medium/High risk = Confirmation</span>
+                  <span>Critical risk = Explicit Approval</span>
                 </div>
               </div>
             </div>
           </section>
 
-          {/* How It Works */}
-          <section className="bg-zinc-950 py-24">
+          {/* Capabilities */}
+          <section className="border-t border-[#1a1a18] bg-black py-20 md:py-28">
             <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">How It Works</h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  From natural language to executed automation in three simple steps.
+              <div className="mx-auto max-w-4xl">
+                <h2 className="mb-3 text-2xl font-bold tracking-tight md:text-3xl">
+                  6 automation domains
+                </h2>
+                <p className="mb-12 text-[#888480]">
+                  Each domain exposes IPC tools the AI agent can call. All validated by ToolGuard.
                 </p>
-              </div>
-              <div className="grid gap-8 md:grid-cols-3">
-                {steps.map((step, index) => (
-                  <div key={step.number} className="relative">
-                    {index < steps.length - 1 && (
-                      <div className="absolute right-0 top-12 hidden h-px w-full translate-x-1/2 bg-gradient-to-r from-blue-500/50 to-transparent md:block" />
-                    )}
-                    <div className="relative rounded-2xl border border-zinc-800 bg-black/50 p-8 text-center">
-                      <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700">
-                        <step.icon className="h-7 w-7 text-white" />
+
+                <div className="grid gap-px overflow-hidden rounded-lg border border-[#222220] bg-[#222220] md:grid-cols-2">
+                  {capabilities.map((cap) => (
+                    <div key={cap.title} className="bg-[#0e0e0c] p-6">
+                      <div className="mb-3 flex items-center gap-3">
+                        <cap.icon className="h-5 w-5 text-[#888480]" />
+                        <h3 className="text-base font-semibold">{cap.title}</h3>
                       </div>
-                      <div className="mb-2 text-sm font-bold text-blue-400">Step {step.number}</div>
-                      <h3 className="mb-3 text-xl font-semibold">{step.title}</h3>
-                      <p className="text-zinc-400 leading-relaxed">{step.description}</p>
+                      <p className="mb-4 text-sm leading-relaxed text-[#888480]">
+                        {cap.description}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {cap.tools.map((tool) => (
+                          <span
+                            key={tool}
+                            className="rounded border border-[#222220] bg-[#111110] px-2 py-0.5 font-mono text-xs text-[#555150]"
+                          >
+                            {tool}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </section>
 
           <CtaSection
             icon="Monitor"
-            headline="Automate Your Desktop Today"
-            body="Download the desktop app and let AI handle your repetitive tasks. Browser automation, file management, terminal commands — all from natural language."
+            headline="Download the desktop app"
+            body="Browser automation, file management, terminal commands, screen capture, computer use — 1,459+ IPC tools validated through ToolGuard."
           />
         </main>
 
