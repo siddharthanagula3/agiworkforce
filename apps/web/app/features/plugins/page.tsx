@@ -2,7 +2,6 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import {
   ArrowRight,
-  CheckCircle2,
   Cloud,
   Code,
   Database,
@@ -130,39 +129,6 @@ const toolCategories = [
   { icon: Code, name: 'Code Analysis', tools: ['tree-sitter', 'eslint', 'prettier'] },
   { icon: Image, name: 'Image & Media', tools: ['sharp', 'ffmpeg', 'vision-api'] },
   { icon: Search, name: 'Search', tools: ['brave-search', 'rag', 'context7'] },
-];
-
-const comparisonFeatures = [
-  {
-    feature: 'MCP Tool Count',
-    agi: 'Unlimited',
-    cursor: '40-tool cap',
-    claude: 'Limited',
-  },
-  {
-    feature: 'Transport Types',
-    agi: 'stdio + SSE + HTTP',
-    cursor: 'stdio only',
-    claude: 'stdio + SSE',
-  },
-  {
-    feature: 'Custom Servers',
-    agi: 'Any MCP server',
-    cursor: 'Curated list',
-    claude: 'Manual config',
-  },
-  {
-    feature: 'Auto-Discovery',
-    agi: 'Full auto-discovery',
-    cursor: 'Partial',
-    claude: 'None',
-  },
-  {
-    feature: 'Tool Sandboxing',
-    agi: 'ToolGuard + per-tool permissions',
-    cursor: 'Basic',
-    claude: 'Basic',
-  },
 ];
 
 const mcpConfigExample = `{
@@ -311,51 +277,6 @@ export default function PluginsPage() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          </section>
-
-          {/* Comparison Table */}
-          <section className="border-t border-zinc-800/50 py-20 md:py-24">
-            <div className="mx-auto max-w-4xl px-6">
-              <h2 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">
-                MCP Support Comparison
-              </h2>
-              <p className="mb-12 text-[#555150]">
-                Other tools cap connections or restrict transports. AGI Workforce implements the
-                full protocol.
-              </p>
-              <div className="overflow-x-auto border border-zinc-800">
-                <table className="w-full min-w-[560px]">
-                  <thead>
-                    <tr className="border-b border-zinc-800 text-left text-xs uppercase tracking-wider">
-                      <th className="px-4 py-3 font-medium text-[#555150]">Feature</th>
-                      <th className="px-4 py-3 font-medium text-[#c8892a]">AGI Workforce</th>
-                      <th className="px-4 py-3 font-medium text-[#555150]">Cursor</th>
-                      <th className="px-4 py-3 font-medium text-[#555150]">Claude Desktop</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {comparisonFeatures.map((row, i) => (
-                      <tr
-                        key={row.feature}
-                        className={
-                          i < comparisonFeatures.length - 1 ? 'border-b border-zinc-800/50' : ''
-                        }
-                      >
-                        <td className="px-4 py-3 text-sm text-[#888480]">{row.feature}</td>
-                        <td className="px-4 py-3 text-sm text-[#edebe8]">
-                          <span className="flex items-center gap-2">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-[#c8892a]" />
-                            {row.agi}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-[#555150]">{row.cursor}</td>
-                        <td className="px-4 py-3 text-sm text-[#555150]">{row.claude}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </div>
           </section>

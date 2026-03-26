@@ -180,10 +180,10 @@ export default function DocsPage() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="group rounded-xl border border-zinc-800 bg-black/50 p-6 hover:border-blue-500/50 transition-all hover:transform hover:scale-105"
+                  className="group rounded-xl border border-zinc-800 bg-black/50 p-6 hover:border-[#c8892a]/50 transition-all hover:transform hover:scale-105"
                 >
-                  <link.icon className="h-8 w-8 text-blue-500 mb-3" />
-                  <h3 className="text-xl font-semibold mb-2 group-hover:text-blue-400 transition-colors">
+                  <link.icon className="h-8 w-8 text-[#c8892a] mb-3" />
+                  <h3 className="text-xl font-semibold mb-2 group-hover:text-[#c8892a] transition-colors">
                     {link.title}
                   </h3>
                   <p className="text-zinc-400 text-sm">{link.description}</p>
@@ -194,20 +194,20 @@ export default function DocsPage() {
             {/* Feature Documentation */}
             <section className="mb-16">
               <div className="flex items-center gap-3 mb-8">
-                <Book className="h-6 w-6 text-blue-500" />
+                <Book className="h-6 w-6 text-[#c8892a]" />
                 <h2 className="text-3xl font-semibold">Feature Documentation</h2>
               </div>
               <div className="grid md:grid-cols-2 gap-6">
                 {featureDocs.map((section, i) => (
                   <div key={i} className="rounded-xl border border-zinc-800 bg-black/50 p-6">
                     <div className="flex items-center gap-3 mb-4">
-                      <section.icon className="h-6 w-6 text-blue-500" />
+                      <section.icon className="h-6 w-6 text-[#c8892a]" />
                       <h3 className="text-xl font-semibold">{section.title}</h3>
                     </div>
                     <ul className="space-y-2">
                       {section.items.map((item, j) => (
                         <li key={j} className="text-zinc-300 flex items-start gap-2">
-                          <span className="text-blue-500 mt-1">•</span>
+                          <span className="text-[#c8892a] mt-1">•</span>
                           <span>{item}</span>
                         </li>
                       ))}
@@ -221,7 +221,7 @@ export default function DocsPage() {
             <section className="mb-16">
               <div className="rounded-xl border border-zinc-800 bg-black/50 p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <Shield className="h-6 w-6 text-blue-500" />
+                  <Shield className="h-6 w-6 text-[#c8892a]" />
                   <h2 className="text-2xl font-semibold">Security & Privacy</h2>
                 </div>
                 <p className="text-zinc-400 mb-4">
@@ -229,21 +229,21 @@ export default function DocsPage() {
                 </p>
                 <ul className="space-y-3 text-zinc-300">
                   <li className="flex items-start gap-3">
-                    <Shield className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                    <Shield className="h-5 w-5 text-[#c8892a] shrink-0 mt-0.5" />
                     <div>
                       <strong className="text-white">Local-first execution</strong> - Your data
                       stays on your device unless you explicitly allow cloud connections
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
-                    <Shield className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                    <Shield className="h-5 w-5 text-[#c8892a] shrink-0 mt-0.5" />
                     <div>
                       <strong className="text-white">Encrypted credential storage</strong> - API
                       keys and sensitive data stored using OS keyring with AES-256-GCM encryption
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
-                    <Shield className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                    <Shield className="h-5 w-5 text-[#c8892a] shrink-0 mt-0.5" />
                     <div>
                       <strong className="text-white">Undo-based safety model</strong> - Every action
                       is reversible. Made a mistake? Just say &quot;undo&quot; and the AI reverts
@@ -251,14 +251,14 @@ export default function DocsPage() {
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
-                    <Shield className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                    <Shield className="h-5 w-5 text-[#c8892a] shrink-0 mt-0.5" />
                     <div>
                       <strong className="text-white">No data sent to AGI Workforce servers</strong>{' '}
                       - We don&apos;t collect or store your automation data or credentials
                     </div>
                   </li>
                   <li className="flex items-start gap-3">
-                    <Shield className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                    <Shield className="h-5 w-5 text-[#c8892a] shrink-0 mt-0.5" />
                     <div>
                       <strong className="text-white">TLS 1.3 for all network connections</strong> -
                       End-to-end encryption for all API communications
@@ -272,7 +272,7 @@ export default function DocsPage() {
             <section className="mb-16">
               <div className="rounded-xl border border-zinc-800 bg-black/50 p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <FileText className="h-6 w-6 text-blue-500" />
+                  <FileText className="h-6 w-6 text-[#c8892a]" />
                   <h2 className="text-2xl font-semibold">API Reference</h2>
                 </div>
                 <p className="text-zinc-400 mb-6">
@@ -287,26 +287,26 @@ export default function DocsPage() {
                       <span
                         className={`inline-flex items-center justify-center px-3 py-1 rounded-md text-xs font-bold uppercase ${
                           endpoint.method === 'GET'
-                            ? 'bg-blue-500/20 text-blue-400'
+                            ? 'bg-[#c8892a]/20 text-[#c8892a]'
                             : 'bg-emerald-500/20 text-emerald-400'
                         }`}
                       >
                         {endpoint.method}
                       </span>
-                      <code className="font-mono text-sm text-blue-300 flex-1">
+                      <code className="font-mono text-sm text-[#c8892a] flex-1">
                         {endpoint.path}
                       </code>
                       <span className="text-zinc-400 text-sm">{endpoint.description}</span>
                     </div>
                   ))}
                 </div>
-                <div className="mt-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <div className="mt-6 p-4 rounded-lg bg-[#c8892a]/10 border border-[#c8892a]/20">
                   <div className="flex items-start gap-3">
-                    <Terminal className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+                    <Terminal className="h-5 w-5 text-[#c8892a] shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="font-semibold text-blue-400 mb-2">OpenAI-Compatible API</h4>
+                      <h4 className="font-semibold text-[#c8892a] mb-2">OpenAI-Compatible API</h4>
                       <p className="text-zinc-300 text-sm">
-                        The <code className="text-blue-300">/api/llm/v1/chat/completions</code>{' '}
+                        The <code className="text-[#c8892a]">/api/llm/v1/chat/completions</code>{' '}
                         endpoint is fully compatible with OpenAI&apos;s API format, making it easy
                         to integrate with existing tools and libraries.
                       </p>
@@ -320,7 +320,7 @@ export default function DocsPage() {
             <section className="mb-16">
               <div className="rounded-xl border border-zinc-800 bg-black/50 p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <Cloud className="h-6 w-6 text-blue-500" />
+                  <Cloud className="h-6 w-6 text-[#c8892a]" />
                   <h2 className="text-2xl font-semibold">Integration & Development</h2>
                 </div>
                 <div className="grid md:grid-cols-2 gap-6">
@@ -328,19 +328,19 @@ export default function DocsPage() {
                     <h3 className="font-semibold text-white mb-3">External Service Integration</h3>
                     <ul className="space-y-2 text-zinc-300">
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
+                        <span className="text-[#c8892a] mt-1">•</span>
                         <span>REST API calls with authentication</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
+                        <span className="text-[#c8892a] mt-1">•</span>
                         <span>Webhook support for event notifications</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
+                        <span className="text-[#c8892a] mt-1">•</span>
                         <span>OAuth 2.0 integration</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
+                        <span className="text-[#c8892a] mt-1">•</span>
                         <span>Custom tool development</span>
                       </li>
                     </ul>
@@ -349,19 +349,19 @@ export default function DocsPage() {
                     <h3 className="font-semibold text-white mb-3">Development Tools</h3>
                     <ul className="space-y-2 text-zinc-300">
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
+                        <span className="text-[#c8892a] mt-1">•</span>
                         <span>TypeScript SDK for custom integrations</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
+                        <span className="text-[#c8892a] mt-1">•</span>
                         <span>Rust backend for native extensions</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
+                        <span className="text-[#c8892a] mt-1">•</span>
                         <span>Chat-first interface - no configuration needed</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
+                        <span className="text-[#c8892a] mt-1">•</span>
                         <span>Built-in debugging tools</span>
                       </li>
                     </ul>
@@ -371,7 +371,7 @@ export default function DocsPage() {
             </section>
 
             {/* Support Section */}
-            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-6">
+            <div className="rounded-xl border border-[#c8892a]/20 bg-[#c8892a]/5 p-6">
               <h3 className="text-xl font-semibold mb-2">Need Help?</h3>
               <p className="text-zinc-400 mb-4">
                 Can&apos;t find what you&apos;re looking for? We&apos;re here to help you get
@@ -380,7 +380,7 @@ export default function DocsPage() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link
                   href="/diagnose"
-                  className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                  className="inline-flex items-center justify-center rounded-md bg-[#c8892a] px-6 py-3 text-sm font-medium text-[#09090b] hover:bg-[#d4993a] transition-colors"
                 >
                   <Terminal className="h-4 w-4 mr-2" />
                   Diagnostic Tool
