@@ -4,15 +4,11 @@ import {
   ArrowRight,
   Bot,
   CheckCircle2,
-  Code2,
-  Globe,
   Lock,
   MessageSquare,
   Monitor,
   Plug,
   Shield,
-  Smartphone,
-  Terminal,
   Users,
   Wrench,
   Zap,
@@ -23,7 +19,6 @@ import { SurfaceShowcase } from '../components/SurfaceShowcase';
 import { CtaSection } from '../components/marketing/CtaSection';
 import { MarketingFooter } from '../components/marketing/MarketingFooter';
 import { ScrollRevealInit } from '../components/marketing/ScrollRevealInit';
-import { AnimatedStats } from '../components/marketing/AnimatedStats';
 import { MARKETING } from '../lib/marketing-constants';
 
 export const metadata: Metadata = {
@@ -127,36 +122,6 @@ const features = [
     desc: 'API keys encrypted with Argon2id + AES-GCM. All processing on your machine. Run fully offline.',
     href: '/security',
   },
-];
-
-const stats = [
-  {
-    value: MARKETING.models.count,
-    suffix: '+',
-    label: MARKETING.models.label,
-    description: `across ${MARKETING.providers.display} providers`,
-  },
-  {
-    value: MARKETING.appSize.value,
-    suffix: 'MB',
-    label: 'App size',
-    description: 'native Rust binary',
-  },
-  {
-    value: MARKETING.tools.count,
-    suffix: '+',
-    label: MARKETING.tools.label,
-    description: 'IPC-registered',
-  },
-];
-
-const surfaces = [
-  { Icon: Monitor, label: 'Desktop', sub: 'Tauri v2 · macOS · Windows · Linux' },
-  { Icon: Globe, label: 'Web', sub: 'Next.js SPA' },
-  { Icon: Terminal, label: 'CLI', sub: 'Rust binary · agiworkforce' },
-  { Icon: Code2, label: 'VS Code', sub: '@agi chat participant' },
-  { Icon: Plug, label: 'Browser', sub: 'Chrome MV3 extension' },
-  { Icon: Smartphone, label: 'Mobile', sub: 'Expo · iOS + Android' },
 ];
 
 export default function Home() {
@@ -393,34 +358,6 @@ export default function Home() {
                     </Link>
                   );
                 })}
-              </div>
-            </div>
-          </section>
-
-          {/* ── STATS ── */}
-          <section className="border-y border-white/[0.05] bg-[#0c0c0e] py-20 md:py-28">
-            <AnimatedStats stats={stats} />
-          </section>
-
-          {/* ── SURFACE STRIP ── */}
-          <section className="scroll-reveal opacity-0 translate-y-8 transition-all duration-1000 ease-out py-16 md:py-20">
-            <div className="container mx-auto px-4 text-center">
-              <p className="mb-8 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#555150]">
-                Available on every surface
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                {surfaces.map(({ Icon, label, sub }) => (
-                  <div
-                    key={label}
-                    className="group flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-[#0f0f11] px-5 py-3.5 transition-all duration-200 hover:border-white/[0.1] hover:bg-[#111114]"
-                  >
-                    <Icon className="h-5 w-5 shrink-0 text-[#c8892a]" />
-                    <div className="text-left">
-                      <div className="text-sm font-semibold text-[#edebe8]">{label}</div>
-                      <div className="text-xs text-[#555150]">{sub}</div>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </section>
