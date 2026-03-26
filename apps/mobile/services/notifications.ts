@@ -284,11 +284,20 @@ export function setNavigatorReady(ready: boolean): void {
  * error is caught and logged rather than crashing the app.
  */
 function safeNavigate(route: Parameters<typeof router.push>[0]): void {
+  let attempts = 0;
+  const maxAttempts = 4;
+
   const attemptPush = () => {
+    attempts++;
     try {
       router.push(route);
     } catch (err) {
-      console.warn('[notifications] Navigation failed:', err);
+      if (attempts < maxAttempts && !_navigatorReady) {
+        // Exponential backoff: 100ms, 200ms, 400ms
+        setTimeout(attemptPush, 100 * Math.pow(2, attempts - 1));
+      } else {
+        console.warn('[notifications] Navigation failed after retries:', err);
+      }
     }
   };
 
@@ -296,7 +305,7 @@ function safeNavigate(route: Parameters<typeof router.push>[0]): void {
     attemptPush();
   } else {
     // Defer until after the current JS turn so the navigator can finish mounting
-    setTimeout(attemptPush, 100);
+    setTimeout(attemptPush, 50);
   }
 }
 
@@ -505,6 +514,18 @@ let tokenSubscription: Notifications.Subscription | null = null;
  * Returns a cleanup function to remove all listeners.
  */
 export function setupNotificationListeners(): () => void {
+  // Guard: if listeners already exist, return existing cleanup to prevent duplicates.
+  if (foregroundSubscription || responseSubscription || tokenSubscription) {
+    return () => {
+      foregroundSubscription?.remove();
+      responseSubscription?.remove();
+      tokenSubscription?.remove();
+      foregroundSubscription = null;
+      responseSubscription = null;
+      tokenSubscription = null;
+    };
+  }
+
   // Foreground notification received (for in-app handling like badge updates)
   foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
     const data = notification.request.content.data as NotificationData | undefined;

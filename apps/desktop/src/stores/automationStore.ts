@@ -416,6 +416,7 @@ export const useAutomationStore = create<AutomationState>()(
                 state.isRecording = false;
                 state.currentRecording = null;
                 state.recordings.unshift(recording);
+                if (state.recordings.length > 100) state.recordings.pop();
               },
               undefined,
               'automation/stopRecording',
@@ -566,6 +567,7 @@ export const useAutomationStore = create<AutomationState>()(
                 state.executionProgress = 100;
                 state.currentExecution = result;
                 state.executionHistory.unshift(historyEntry);
+                if (state.executionHistory.length > 100) state.executionHistory.pop();
               },
               undefined,
               'automation/executeScript/success',
@@ -666,6 +668,7 @@ export const useAutomationStore = create<AutomationState>()(
               state.isRecording = false;
               state.currentRecording = null;
               state.recordings.unshift(recording);
+              if (state.recordings.length > 100) state.recordings.pop();
             },
             undefined,
             'automation/handleRecordingStopped',
@@ -681,6 +684,7 @@ export const useAutomationStore = create<AutomationState>()(
               }
 
               state.pendingActions.push(action);
+              if (state.pendingActions.length > 1000) state.pendingActions.shift();
             },
             undefined,
             'automation/handleActionRecorded',

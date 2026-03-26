@@ -1,7 +1,8 @@
 /**
  * SupportPage Component Tests
  *
- * Tests for the dashboard support page with FAQ section and contact form.
+ * Tests for the dashboard support page with tabbed layout: FAQs, Documentation, Contact.
+ * The component loads FAQs dynamically from Supabase via supportService.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -15,6 +16,9 @@ vi.mock('@shared/ui/card', () => ({
   ),
   CardContent: ({ children, ...props }: Record<string, unknown>) => (
     <div {...props}>{children as React.ReactNode}</div>
+  ),
+  CardDescription: ({ children, ...props }: Record<string, unknown>) => (
+    <p {...props}>{children as React.ReactNode}</p>
   ),
   CardHeader: ({ children, ...props }: Record<string, unknown>) => (
     <div {...props}>{children as React.ReactNode}</div>
@@ -40,18 +44,6 @@ vi.mock('@shared/ui/textarea', () => ({
   Textarea: (props: Record<string, unknown>) => <textarea {...props} />,
 }));
 
-vi.mock('@shared/ui/badge', () => ({
-  Badge: ({ children, ...props }: Record<string, unknown>) => (
-    <span {...props}>{children as React.ReactNode}</span>
-  ),
-}));
-
-vi.mock('@shared/ui/label', () => ({
-  Label: ({ children, ...props }: Record<string, unknown>) => (
-    <label {...props}>{children as React.ReactNode}</label>
-  ),
-}));
-
 vi.mock('@shared/ui/accordion', () => ({
   Accordion: ({ children, ...props }: Record<string, unknown>) => (
     <div data-testid="accordion" {...props}>
@@ -75,20 +67,26 @@ vi.mock('@shared/ui/accordion', () => ({
   ),
 }));
 
-vi.mock('@shared/ui/select', () => ({
-  Select: ({ children, ...props }: Record<string, unknown>) => (
+// Mock Tabs — render all TabsContent so tests can query content in all tabs
+vi.mock('@shared/ui/tabs', () => ({
+  Tabs: ({ children, ...props }: Record<string, unknown>) => (
+    <div data-testid="tabs" {...props}>
+      {children as React.ReactNode}
+    </div>
+  ),
+  TabsList: ({ children, ...props }: Record<string, unknown>) => (
+    <div data-testid="tabs-list" {...props}>
+      {children as React.ReactNode}
+    </div>
+  ),
+  TabsTrigger: ({ children, ...props }: Record<string, unknown>) => (
+    <button type="button" {...props}>
+      {children as React.ReactNode}
+    </button>
+  ),
+  TabsContent: ({ children, ...props }: Record<string, unknown>) => (
     <div {...props}>{children as React.ReactNode}</div>
   ),
-  SelectContent: ({ children, ...props }: Record<string, unknown>) => (
-    <div {...props}>{children as React.ReactNode}</div>
-  ),
-  SelectItem: ({ children, ...props }: Record<string, unknown>) => (
-    <div {...props}>{children as React.ReactNode}</div>
-  ),
-  SelectTrigger: ({ children, ...props }: Record<string, unknown>) => (
-    <div {...props}>{children as React.ReactNode}</div>
-  ),
-  SelectValue: (props: Record<string, unknown>) => <span {...props} />,
 }));
 
 vi.mock('@shared/lib/utils', () => ({
@@ -104,29 +102,60 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Mock lucide-react icons
-vi.mock('lucide-react', () => {
-  const Icon = ({ className }: { className?: string }) => <span className={className} />;
-  return {
-    HelpCircle: Icon,
-    Mail: Icon,
-    ExternalLink: Icon,
-    BookOpen: Icon,
-    Github: Icon,
-    CheckCircle: Icon,
-    MessageSquare: Icon,
-    Book: Icon,
-    Users: Icon,
-    Globe: Icon,
-  };
+// Mock lucide-react icons — use importOriginal to include all icons
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
+  return { ...actual };
 });
+
+// Mock support service
+const mockGetFAQs = vi.fn();
+const mockSubmitTicket = vi.fn();
+vi.mock('@features/support/services/support-service', () => ({
+  supportService: {
+    getFAQs: (...args: unknown[]) => mockGetFAQs(...args),
+    submitTicket: (...args: unknown[]) => mockSubmitTicket(...args),
+  },
+}));
+
+// Mock auth store
+vi.mock('@shared/stores/authentication-store', () => ({
+  useAuthStore: () => ({
+    user: { id: 'user-1', email: 'test@example.com' },
+  }),
+}));
 
 // Import the component from the support page
 import SupportPage from '../../../app/support/page';
 
+const MOCK_FAQS = [
+  {
+    id: '1',
+    category: 'Getting Started',
+    question: 'How do I get started?',
+    answer: 'Sign up and start chatting.',
+    is_published: true,
+    sort_order: 1,
+    created_at: '2026-01-01',
+    updated_at: '2026-01-01',
+  },
+  {
+    id: '2',
+    category: 'Billing',
+    question: 'How does billing work?',
+    answer: 'We use Stripe for billing.',
+    is_published: true,
+    sort_order: 2,
+    created_at: '2026-01-01',
+    updated_at: '2026-01-01',
+  },
+];
+
 describe('SupportPage (Dashboard)', () => {
   beforeEach(() => {
-    vi.stubGlobal('open', vi.fn());
+    vi.clearAllMocks();
+    mockGetFAQs.mockResolvedValue({ data: MOCK_FAQS, error: null });
+    mockSubmitTicket.mockResolvedValue({ data: { id: 'ticket-1' }, error: null });
   });
 
   it('renders without crashing', () => {
@@ -134,108 +163,75 @@ describe('SupportPage (Dashboard)', () => {
     expect(screen.getByText('Help & Support')).toBeDefined();
   });
 
-  it('shows the support center badge', () => {
+  it('shows the page subtitle', () => {
     render(<SupportPage />);
-    expect(screen.getByText('Support Center')).toBeDefined();
+    expect(screen.getByText('Find answers and get the help you need')).toBeDefined();
   });
 
-  it('shows the FAQ section', () => {
+  it('shows the FAQ tab', () => {
     render(<SupportPage />);
-    expect(screen.getByText('Frequently Asked Questions')).toBeDefined();
+    expect(screen.getByText('FAQs')).toBeDefined();
   });
 
-  it('renders all FAQ items', () => {
+  it('renders FAQ items after loading', async () => {
     render(<SupportPage />);
 
-    expect(screen.getByText('How do I get started?')).toBeDefined();
-    expect(screen.getByText('What AI models are available?')).toBeDefined();
-    expect(screen.getByText('How does billing work?')).toBeDefined();
-    expect(screen.getByText('Can I use my own API keys?')).toBeDefined();
-    expect(screen.getByText('How do @mentions work in chat?')).toBeDefined();
-    expect(screen.getByText('What is VIBE workspace?')).toBeDefined();
-    expect(screen.getByText('How do I generate images and videos?')).toBeDefined();
-    expect(screen.getByText('Is my data secure?')).toBeDefined();
-    expect(screen.getByText('How do I contact support?')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('How do I get started?')).toBeDefined();
+      expect(screen.getByText('How does billing work?')).toBeDefined();
+    });
   });
 
-  it('shows the contact form', () => {
+  it('shows the contact form tab content', () => {
     render(<SupportPage />);
-
-    expect(screen.getByText('Contact Support')).toBeDefined();
-    expect(screen.getByLabelText('Name')).toBeDefined();
-    expect(screen.getByLabelText('Email')).toBeDefined();
-    expect(screen.getByLabelText('Subject')).toBeDefined();
-    expect(screen.getByLabelText('Message')).toBeDefined();
+    expect(screen.getByText('Send us a message')).toBeDefined();
   });
 
-  it('contact form has required fields', () => {
+  it('contact form has name, email, subject, and message fields', () => {
     render(<SupportPage />);
 
-    const nameInput = screen.getByLabelText('Name') as HTMLInputElement;
-    const emailInput = screen.getByLabelText('Email') as HTMLInputElement;
-    const subjectInput = screen.getByLabelText('Subject') as HTMLInputElement;
-    const messageInput = screen.getByLabelText('Message') as HTMLTextAreaElement;
-
-    expect(nameInput.required).toBe(true);
-    expect(emailInput.required).toBe(true);
-    expect(subjectInput.required).toBe(true);
-    expect(messageInput.required).toBe(true);
+    expect(screen.getByPlaceholderText('Your name')).toBeDefined();
+    expect(screen.getByPlaceholderText('your.email@example.com')).toBeDefined();
+    expect(screen.getByPlaceholderText('How can we help?')).toBeDefined();
+    expect(screen.getByPlaceholderText('Please describe your issue...')).toBeDefined();
   });
 
-  it('shows success message after form submission', async () => {
+  it('submits the contact form successfully', async () => {
     render(<SupportPage />);
 
-    // Fill required fields
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Test User' } });
-    fireEvent.change(screen.getByLabelText('Email'), {
+    fireEvent.change(screen.getByPlaceholderText('Your name'), {
+      target: { value: 'Test User' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('your.email@example.com'), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.change(screen.getByLabelText('Subject'), {
+    fireEvent.change(screen.getByPlaceholderText('How can we help?'), {
       target: { value: 'Test Subject' },
     });
-    fireEvent.change(screen.getByLabelText('Message'), {
+    fireEvent.change(screen.getByPlaceholderText('Please describe your issue...'), {
       target: { value: 'Test message content' },
     });
 
-    // Submit the form
-    const submitButton = screen.getByRole('button', { name: /submit/i });
+    const submitButton = screen.getByRole('button', { name: /send message/i });
     fireEvent.click(submitButton);
 
-    // Should show success message (async because handleSubmit is async)
     await waitFor(() => {
-      expect(screen.getByText('Message Sent!')).toBeDefined();
+      expect(mockSubmitTicket).toHaveBeenCalled();
     });
   });
 
-  it('shows quick links section', () => {
+  it('shows documentation section', () => {
     render(<SupportPage />);
 
-    expect(screen.getByText('Quick Links')).toBeDefined();
-    expect(screen.getByText('Documentation')).toBeDefined();
-    expect(screen.getByText('API Reference')).toBeDefined();
-    expect(screen.getByText('Status Page')).toBeDefined();
-    expect(screen.getByText('Community')).toBeDefined();
+    expect(screen.getByText('Quick Start Guide')).toBeDefined();
+    expect(screen.getByText('API Documentation')).toBeDefined();
   });
 
-  it('allows sending another message after submission', async () => {
+  it('shows contact channel options', () => {
     render(<SupportPage />);
 
-    // Fill and submit
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Test' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } });
-    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Sub' } });
-    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'Msg' } });
-    fireEvent.click(screen.getByRole('button', { name: /submit/i }));
-
-    // Wait for the success state
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /send another/i })).toBeDefined();
-    });
-
-    // Click "Send Another Message"
-    fireEvent.click(screen.getByRole('button', { name: /send another/i }));
-
-    // Form should be visible again
-    expect(screen.getByLabelText('Name')).toBeDefined();
+    expect(screen.getByText('Email Support')).toBeDefined();
+    expect(screen.getByText('Live Chat')).toBeDefined();
+    expect(screen.getByText('Community Forum')).toBeDefined();
   });
 });

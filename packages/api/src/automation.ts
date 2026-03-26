@@ -536,3 +536,19 @@ export async function captureScreenWindow(
 export async function captureFromClipboard(conversationId?: number): Promise<CaptureResult> {
   return command<CaptureResult>('capture_from_clipboard', { conversationId });
 }
+
+// ---- System Permissions ----
+
+export interface AutomationPermissions {
+  accessibility: boolean;
+  screenRecording: boolean;
+  inputMonitoring: boolean;
+}
+
+export async function checkAutomationPermissions(): Promise<AutomationPermissions> {
+  return command<AutomationPermissions>('check_automation_permissions');
+}
+
+export async function requestAutomationPermission(kind: string): Promise<void> {
+  return command<void>('request_automation_permission', { kind });
+}

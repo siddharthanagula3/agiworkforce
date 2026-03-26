@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { listen } from '@/lib/tauri-mock';
-import { invoke } from '@/lib/tauri-mock';
+import { agent } from '@agiworkforce/api';
 import { HelpCircle, Check } from 'lucide-react';
 import type { ToolResultProps } from './index';
 
@@ -69,7 +69,7 @@ export function QuestionPrompt({ result }: ToolResultProps) {
     setSubmitted(true);
     setSubmittedAnswer(answerValue);
     try {
-      await invoke('question_answer', { id: pending.id, answer: answerValue });
+      await agent.questionAnswer(pending.id, answerValue);
     } catch (err) {
       // Best-effort: the tool executor will timeout if the answer doesn't arrive
       console.error('Failed to submit question answer:', err);

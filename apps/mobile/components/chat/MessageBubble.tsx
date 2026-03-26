@@ -5,11 +5,8 @@ import {
   Alert,
   ActionSheetIOS,
   Platform,
-  Modal,
-  TextInput,
-  StyleSheet,
 } from 'react-native';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
@@ -27,9 +24,11 @@ import { StatusStep as StatusStepComponent } from './StatusStep';
 import { GeneratedImage } from './GeneratedImage';
 import { ImageGenProgress } from './ImageGenProgress';
 import { ImageFullScreen } from './ImageFullScreen';
-import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { FileExportButton } from './FileExportButton';
 import { CitationChip } from './CitationChip';
+import { CollapsibleSources } from './CollapsibleSources';
+import { MessageEditModal } from './MessageEditModal';
+import { renderMarkdownContent } from './MessageContentRenderer';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/lib/theme';
@@ -48,227 +47,6 @@ interface MessageBubbleProps {
   onReaction?: (messageId: string, reaction: ReactionType) => void;
   /** Called to open the shared thinking bottom sheet with this message's reasoning */
   onOpenThinking?: (content: string, duration?: number) => void;
-}
-
-/**
- * Render inline math: $...$ (not $$)
- * Returns an array of React Native Text/View nodes.
- */
-function renderInlineMath(text: string, keyBase: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  // Match $...$ but not $$
-  const mathRegex = /(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)/g;
-  let lastIdx = 0;
-  let keyCounter = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = mathRegex.exec(text)) !== null) {
-    if (match.index > lastIdx) {
-      parts.push(text.slice(lastIdx, match.index));
-    }
-    parts.push(
-      <Text
-        key={`${keyBase}-imath-${keyCounter++}`}
-        style={{
-          fontFamily: 'Menlo',
-          fontStyle: 'italic',
-          fontSize: 13,
-          backgroundColor: 'rgba(33, 128, 141, 0.08)',
-          color: colors.textPrimary,
-        }}
-      >
-        {` ${match[1].trim()} `}
-      </Text>,
-    );
-    lastIdx = match.index + match[0].length;
-  }
-
-  if (lastIdx < text.length) {
-    parts.push(text.slice(lastIdx));
-  }
-  return parts;
-}
-
-/**
- * Handles inline formatting: **bold**, `code`, and $inline math$.
- */
-function renderInlineMarkdown(text: string, keyBase = 'inline'): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  // Match bold and inline code
-  const inlineRegex = /(\*\*(.+?)\*\*|`([^`]+)`)/g;
-  let lastIdx = 0;
-  let inlineMatch: RegExpExecArray | null;
-  let inlineKey = 0;
-
-  while ((inlineMatch = inlineRegex.exec(text)) !== null) {
-    // Plain text before — pass through inline math renderer
-    if (inlineMatch.index > lastIdx) {
-      const plain = text.slice(lastIdx, inlineMatch.index);
-      parts.push(...renderInlineMath(plain, `${keyBase}-pre-${inlineKey}`));
-    }
-
-    if (inlineMatch[2]) {
-      // Bold text
-      parts.push(
-        <Text key={`bold-${inlineKey++}`} style={{ fontWeight: '700' }}>
-          {inlineMatch[2]}
-        </Text>,
-      );
-    } else if (inlineMatch[3]) {
-      // Inline code
-      parts.push(
-        <Text
-          key={`code-${inlineKey++}`}
-          style={{
-            fontFamily: 'Menlo',
-            fontSize: 13,
-            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-            color: colors.textPrimary,
-          }}
-        >
-          {` ${inlineMatch[3]} `}
-        </Text>,
-      );
-    }
-
-    lastIdx = inlineMatch.index + inlineMatch[0].length;
-  }
-
-  // Remaining plain text — pass through inline math renderer
-  if (lastIdx < text.length) {
-    parts.push(...renderInlineMath(text.slice(lastIdx), `${keyBase}-post`));
-  }
-
-  return parts;
-}
-
-/**
- * Renders basic inline markdown:
- * - **bold** text
- * - `inline code`
- * - ```code blocks```
- * - $$...$$ block math
- * - $...$ inline math
- *
- * Returns an array of React Native Text/View elements.
- */
-function renderMarkdownContent(content: string): React.ReactNode[] {
-  if (!content) return [];
-
-  const elements: React.ReactNode[] = [];
-  let remaining = content;
-  let keyCounter = 0;
-
-  // First pass: extract block math $$...$$ and code blocks ```...```
-  // Process them together in document order.
-  const blockRegex = /(\$\$([\s\S]*?)\$\$|```(?:\w+)?\n?([\s\S]*?)```)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = blockRegex.exec(content)) !== null) {
-    // Text before this block
-    if (match.index > lastIndex) {
-      const textBefore = content.slice(lastIndex, match.index);
-      elements.push(
-        <Text
-          key={`text-${keyCounter++}`}
-          className="text-[15px] leading-relaxed text-white/90"
-          selectable
-        >
-          {renderInlineMarkdown(textBefore, `il-${keyCounter}`)}
-        </Text>,
-      );
-    }
-
-    if (match[2] !== undefined) {
-      // Block math $$...$$
-      const mathContent = match[2].trim();
-      elements.push(
-        <View
-          key={`bmath-${keyCounter++}`}
-          style={{
-            backgroundColor: 'rgba(33, 128, 141, 0.08)',
-            borderRadius: 6,
-            padding: 8,
-            marginVertical: 6,
-            borderLeftWidth: 2,
-            borderLeftColor: colors.teal,
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: 'Menlo',
-              fontStyle: 'italic',
-              fontSize: 14,
-              color: colors.textPrimary,
-              textAlign: 'center',
-              lineHeight: 22,
-            }}
-            selectable
-          >
-            {mathContent}
-          </Text>
-        </View>,
-      );
-    } else if (match[3] !== undefined) {
-      // Code block
-      const codeContent = match[3].trim();
-      elements.push(
-        <View
-          key={`code-${keyCounter++}`}
-          style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.3)',
-            borderRadius: 8,
-            padding: 10,
-            paddingTop: 28,
-            marginVertical: 6,
-            borderWidth: 1,
-            borderColor: 'rgba(255, 255, 255, 0.06)',
-          }}
-        >
-          <CodeBlockCopyButton code={codeContent} />
-          <Text
-            style={{
-              fontSize: 13,
-              lineHeight: 19,
-              fontFamily: 'Menlo',
-              color: 'rgba(245, 247, 251, 0.85)',
-            }}
-            selectable
-          >
-            {codeContent}
-          </Text>
-        </View>,
-      );
-    }
-
-    lastIndex = match.index + match[0].length;
-  }
-
-  // Remaining text after last block
-  if (lastIndex < content.length) {
-    remaining = content.slice(lastIndex);
-    elements.push(
-      <Text
-        key={`text-${keyCounter++}`}
-        className="text-[15px] leading-relaxed text-white/90"
-        selectable
-      >
-        {renderInlineMarkdown(remaining, `il-tail-${keyCounter}`)}
-      </Text>,
-    );
-  }
-
-  // If nothing matched, render the entire content as inline text
-  if (elements.length === 0 && content.length > 0) {
-    elements.push(
-      <Text key="text-0" className="text-[15px] leading-relaxed text-white/90" selectable>
-        {renderInlineMarkdown(content, 'il-0')}
-      </Text>,
-    );
-  }
-
-  return elements;
 }
 
 /**
@@ -456,7 +234,7 @@ export const MessageBubble = memo(function MessageBubble({
     handleOpenEditModal,
   ]);
 
-  const contentElements = renderMarkdownContent(message.content);
+  const contentElements = useMemo(() => renderMarkdownContent(message.content), [message.content]);
 
   // Compute image display width: full bubble width minus avatar + gap + padding
   const imageWidth = Math.min(width - 80, 320);
@@ -589,18 +367,22 @@ export const MessageBubble = memo(function MessageBubble({
               />
             )}
 
-            {/* Citations */}
+            {/* Citations: chips for 1-3, collapsible card for 4+ */}
             {isAssistant && message.citations && message.citations.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                {message.citations.map((cit, i) => (
-                  <CitationChip
-                    key={`cit-${i}`}
-                    index={i + 1}
-                    title={cit.title ?? cit.url}
-                    url={cit.url}
-                  />
-                ))}
-              </View>
+              message.citations.length <= 3 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {message.citations.map((cit, i) => (
+                    <CitationChip
+                      key={`cit-${i}`}
+                      index={i + 1}
+                      title={cit.title ?? cit.url}
+                      url={cit.url}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <CollapsibleSources sources={message.citations} />
+              )
             ) : null}
 
             {/* Inline artifacts */}
@@ -667,46 +449,14 @@ export const MessageBubble = memo(function MessageBubble({
         />
       )}
 
-      {/* Edit message modal (Android + fallback for iOS when Alert.prompt unavailable) */}
-      <Modal
+      {/* Edit message modal */}
+      <MessageEditModal
         visible={editModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <Pressable style={editStyles.backdrop} onPress={() => setEditModalVisible(false)}>
-          <Pressable style={editStyles.dialog} onPress={() => undefined}>
-            <Text style={editStyles.dialogTitle}>Edit Message</Text>
-            <TextInput
-              style={editStyles.input}
-              value={editText}
-              onChangeText={setEditText}
-              multiline
-              autoFocus
-              placeholderTextColor="rgba(255,255,255,0.3)"
-              placeholder="Edit your message…"
-            />
-            <View style={editStyles.buttonRow}>
-              <Pressable
-                style={editStyles.cancelBtn}
-                onPress={() => setEditModalVisible(false)}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel edit"
-              >
-                <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={editStyles.submitBtn}
-                onPress={handleSubmitEdit}
-                accessibilityRole="button"
-                accessibilityLabel="Submit edit"
-              >
-                <Text style={{ color: colors.teal, fontSize: 15, fontWeight: '600' }}>Send</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        text={editText}
+        onChangeText={setEditText}
+        onClose={() => setEditModalVisible(false)}
+        onSubmit={handleSubmitEdit}
+      />
     </Animated.View>
   );
 
@@ -720,52 +470,4 @@ export const MessageBubble = memo(function MessageBubble({
   }
 
   return messageContent;
-});
-
-const editStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  dialog: {
-    width: '100%',
-    backgroundColor: '#1e2025',
-    borderRadius: 14,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  dialogTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 12,
-  },
-  input: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 15,
-    color: '#fff',
-    minHeight: 80,
-    maxHeight: 200,
-    textAlignVertical: 'top',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    marginBottom: 16,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 16,
-  },
-  cancelBtn: {
-    padding: 8,
-  },
-  submitBtn: {
-    padding: 8,
-  },
 });

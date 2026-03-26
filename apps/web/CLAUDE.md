@@ -23,6 +23,7 @@ pnpm test:e2e:ui            # Playwright interactive UI
 ### Build Pipeline
 
 The `pnpm build` command is a hybrid:
+
 1. Builds the desktop Vite SPA with `VITE_BUILD_TARGET=web` and `--base /chat/`
 2. Copies desktop `dist-web/` to `apps/web/public/chat/`
 3. Runs `next build`
@@ -34,6 +35,7 @@ Use `pnpm build:next-only` when you only changed web-specific files (not desktop
 ### Dual-App Structure
 
 The web surface serves two distinct apps:
+
 - **Next.js SSR site** — marketing pages, auth, billing, API routes, SEO
 - **Desktop chat SPA** — Vite-built React app served statically at `/chat/` via Vercel rewrite (`/chat/:path*` → `/chat/index.html`)
 
@@ -50,10 +52,11 @@ stores/        # Web-specific Zustand stores
 lib/           # Utilities (llm-providers, csrf, rate-limit, security, validation)
 hooks/         # Web-specific React hooks
 services/      # Service layer (Supabase clients, error handling, state recovery)
-api/           # API integration layer
+api/           # API integration layer (6 files)
+handlers/      # Slash command handlers
+data/          # Marketplace/employees data
 types/         # Web-specific TypeScript types
 test/          # Vitest setup, mocks
-e2e/           # Playwright specs
 ```
 
 ### Import Aliases
@@ -68,6 +71,7 @@ e2e/           # Playwright specs
 ### Shared Monorepo Packages
 
 The web app consumes these workspace packages:
+
 - `@agiworkforce/api` — typed API wrappers
 - `@agiworkforce/chat` — shared chat components (ChatInput, ChatInterface, MessageBubble, MessageList)
 - `@agiworkforce/runtime` — runtime detection + capability-aware command routing
@@ -100,7 +104,8 @@ Supabase SSR with cookie-based sessions. The middleware in `proxy.ts` handles se
 
 ### API Routes
 
-47 API route handlers in `app/api/`. Key groups:
+86 API route handlers across 44 directories in `app/api/`. Key groups:
+
 - `/api/llm/v1/chat/completions` — OpenAI-compatible endpoint (also exposed at `api.agiworkforce.com/v1/chat/completions` via Vercel rewrite)
 - `/api/auth/*` — login, signup, callback, device auth
 - `/api/stripe-webhook`, `/api/checkout`, `/api/credit-topup` — billing
@@ -141,7 +146,7 @@ Validated at startup by `instrumentation.ts` → `lib/validate-env.ts` (logs war
 - **Middleware is `proxy.ts`**, not the standard `middleware.ts` — it exports a `proxy()` function handling Supabase session + CSP nonce injection.
 - **ESLint is relaxed** for `components/`, `hooks/`, `lib/`, `stores/` (allows `any`, unused vars) because many files are ported from the desktop app.
 - **React Compiler rules are disabled** in ESLint for desktop compatibility.
-- **`shared/lib/api.ts`** is ~26K lines — the centralized API client with token management, retry logic, CSRF handling, and error mapping. Read specific sections, not the whole file.
+- **`shared/lib/api.ts`** is ~900 lines — the centralized API client with token management, retry logic, CSRF handling, and error mapping.
 - **Framer Motion in tests**: always mocked. If adding a component test with animations, the mock in `test/setup.ts` already handles it — don't add your own.
 - **The `/chat/` route is NOT a Next.js page** — it's a static SPA from the desktop Vite build. Changes to chat UI require rebuilding the desktop app, not editing `app/chat/`.
 - **Vercel deployment**: `vercel.json` uses a custom build script (`scripts/build-with-chat.sh`) that differs from `pnpm build`. Check both if build breaks.

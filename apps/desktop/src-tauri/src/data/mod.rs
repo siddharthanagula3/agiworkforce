@@ -1,4 +1,5 @@
 pub mod analytics;
+pub mod async_sqlite;
 pub mod cache;
 pub mod config_hierarchy;
 pub mod database;

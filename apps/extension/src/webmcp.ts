@@ -1,5 +1,10 @@
 import { logger } from './utils';
 
+/** Escape a string for use inside a CSS attribute selector value (double-quoted). */
+function escapeAttrValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 export interface WebMCPToolInfo {
   name: string;
   description: string;
@@ -239,13 +244,13 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
 
   // Fallback: try declarative form submission
   const form = document.querySelector(
-    `form[tool-name="${CSS.escape(name)}"]`,
+    `form[tool-name="${escapeAttrValue(name)}"]`,
   ) as HTMLFormElement | null;
   if (form) {
     try {
       // Fill form fields from args
       for (const [key, value] of Object.entries(args)) {
-        const field = form.querySelector(`[name="${CSS.escape(key)}"]`) as
+        const field = form.querySelector(`[name="${escapeAttrValue(key)}"]`) as
           | HTMLInputElement
           | HTMLSelectElement
           | HTMLTextAreaElement
@@ -277,16 +282,23 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
 
 let toolChangeCallback: ((tools: WebMCPToolInfo[]) => void) | null = null;
 let mutationObserver: MutationObserver | null = null;
+let mutationDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function watchForToolChanges(callback: (tools: WebMCPToolInfo[]) => void): void {
   toolChangeCallback = callback;
 
-  // Watch for DOM changes (new declarative forms)
+  // Watch for DOM changes (new declarative forms).
+  // Debounce to avoid expensive discoverAllTools() on rapid SPA mutations.
   mutationObserver = new MutationObserver(() => {
-    if (toolChangeCallback) {
-      const { tools } = discoverAllTools();
-      toolChangeCallback(tools);
-    }
+    if (!toolChangeCallback) return;
+    if (mutationDebounceTimer !== null) clearTimeout(mutationDebounceTimer);
+    mutationDebounceTimer = setTimeout(() => {
+      mutationDebounceTimer = null;
+      if (toolChangeCallback) {
+        const { tools } = discoverAllTools();
+        toolChangeCallback(tools);
+      }
+    }, 300);
   });
 
   mutationObserver.observe(document.body, {
@@ -334,9 +346,19 @@ export function watchForToolChanges(callback: (tools: WebMCPToolInfo[]) => void)
 }
 
 export function stopWatchingToolChanges(): void {
+  if (mutationDebounceTimer !== null) {
+    clearTimeout(mutationDebounceTimer);
+    mutationDebounceTimer = null;
+  }
   if (mutationObserver) {
     mutationObserver.disconnect();
     mutationObserver = null;
   }
   toolChangeCallback = null;
+}
+
+// Ensure the MutationObserver is disconnected when the page unloads to prevent
+// stale observers from accumulating on SPA navigations or tab closures.
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', stopWatchingToolChanges);
 }

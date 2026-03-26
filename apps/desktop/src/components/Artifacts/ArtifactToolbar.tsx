@@ -5,7 +5,7 @@
  */
 
 import { Check, Copy, Download, ExternalLink, Share2 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ArtifactTypeIcon, getArtifactFileExtension } from '@/lib/artifactUtils';
@@ -35,12 +35,20 @@ export function ArtifactToolbar({
   );
   const [copied, setCopied] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(content);
     setCopied(true);
     toast.success('Copied to clipboard');
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   }, [content]);
 
   const handleDownload = useCallback(() => {

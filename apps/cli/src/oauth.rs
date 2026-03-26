@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 // OAuth provider authentication for AGI Workforce CLI
 // Supports: Anthropic (Claude Max), OpenAI (ChatGPT Plus/Pro), GitHub Copilot
 
@@ -74,23 +73,52 @@ pub fn generate_pkce() -> PkceCodes {
 
 fn generate_random_string(len: usize) -> String {
     let chars = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-    
-    (0..len)
-        .map(|_| { let idx = (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos() as usize) % chars.len(); chars[idx] as char })
-        .collect()
+    let mut result = String::with_capacity(len);
+    let mut remaining = len;
+
+    // Use UUID v4 as a CSPRNG source (backed by OS randomness via getrandom).
+    // Each UUID yields 16 random bytes; loop until we have enough.
+    while remaining > 0 {
+        let bytes = uuid::Uuid::new_v4().into_bytes();
+        for &byte in bytes.iter() {
+            if remaining == 0 {
+                break;
+            }
+            result.push(chars[(byte as usize) % chars.len()] as char);
+            remaining -= 1;
+        }
+    }
+
+    result
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OAuth Authorization URL Builder
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Percent-encode a string for use in URL query parameters.
+fn percent_encode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len() * 2);
+    for b in input.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => {
+                out.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+    out
+}
+
 pub fn build_authorize_url(provider: &OAuthProvider, pkce: &PkceCodes) -> String {
     let mut url = format!(
         "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&code_challenge={}&code_challenge_method=S256&state={}&code=true",
         provider.authorize_url,
         provider.client_id,
-        urlencoding::encode(provider.redirect_uri),
-        urlencoding::encode(provider.scopes),
+        percent_encode(provider.redirect_uri),
+        percent_encode(provider.scopes),
         pkce.challenge,
         pkce.verifier,
     );
@@ -165,6 +193,7 @@ pub async fn exchange_code(
 }
 
 /// Refresh an expired access token.
+#[allow(dead_code)]
 pub async fn refresh_token(
     provider: &OAuthProvider,
     refresh_token: &str,
@@ -274,6 +303,7 @@ fn default_interval() -> u64 { 5 }
 fn default_expires() -> u64 { 900 }
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code)]
 struct DeviceTokenResponse {
     access_token: String,
     token_type: Option<String>,

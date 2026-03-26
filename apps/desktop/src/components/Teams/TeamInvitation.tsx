@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTeamStore } from '../../stores/teamStore';
 import { useAuthStore } from '../../stores/auth';
 import type { TeamInvitation as TeamInvitationType, Team } from '../../types/teams';
@@ -22,6 +22,13 @@ export const TeamInvitation: React.FC<TeamInvitationProps> = ({
   const [role, setRole] = useState<string>('editor');
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const currentUserId = useAuthStore((state) => state.getCurrentUserId());
 
@@ -51,7 +58,8 @@ export const TeamInvitation: React.FC<TeamInvitationProps> = ({
 
     await navigator.clipboard.writeText(validation.sanitized || inviteUrl);
     setCopiedToken(token);
-    setTimeout(() => setCopiedToken(null), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopiedToken(null), 2000);
   };
 
   const getRoleBadgeColor = (role: string) => {

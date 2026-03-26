@@ -95,7 +95,24 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
     throw new AppError('user_id mismatch', 403);
   }
 
-  const deviceId = req.headers['x-device-id'] as string | undefined;
+  // SECURITY (H11): Validate device_id ownership — prevent cross-user device contamination
+  const rawDeviceId = (req.headers['x-device-id'] as string | undefined) ?? batch.device_id;
+  let deviceId: string | undefined;
+  if (rawDeviceId) {
+    const { data: pairing } = await supabase
+      .from('device_pairings')
+      .select('id')
+      .eq('user_id', user.userId)
+      .eq('device_id', rawDeviceId)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle();
+    if (pairing) {
+      deviceId = rawDeviceId;
+    } else {
+      throw new AppError('device_id does not belong to authenticated user', 403);
+    }
+  }
 
   const syncedIds: string[] = [];
   const failedIds: string[] = [];

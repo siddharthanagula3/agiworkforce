@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
-import { invoke } from '../../lib/tauri-mock';
+import { auth } from '@agiworkforce/api';
 import { Button } from '../ui/Button';
 import { useTeamStore } from '../../stores/teamStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -198,7 +198,7 @@ function DeviceManagement() {
   const loadDevices = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await invoke<ConnectedDevice[]>('account_list_devices').catch(() => {
+      const result = await auth.accountListDevices().catch(() => {
         // Fallback: show current device only
         const current: ConnectedDevice = {
           id: 'current',
@@ -223,7 +223,7 @@ function DeviceManagement() {
   const handleDisconnect = useCallback(async (deviceId: string) => {
     setDisconnecting(deviceId);
     try {
-      await invoke('account_disconnect_device', { deviceId });
+      await auth.accountDisconnectDevice(deviceId);
       setDevices((prev) => prev.filter((d) => d.id !== deviceId));
       toast.success('Device disconnected');
     } catch (err) {

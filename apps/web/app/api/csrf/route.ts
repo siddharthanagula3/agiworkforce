@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/services/supabase-server';
+
 import { generateCsrfToken, getOrCreateAnonSession } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
@@ -17,10 +17,9 @@ async function handleGetCsrfToken(request: NextRequest): Promise<NextResponse> {
   try {
     const rateLimitResponse = await withRateLimit(request, 'default');
     if (rateLimitResponse) return rateLimitResponse;
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    // Note: We intentionally skip getSession()/getUser() here — the CSRF token is bound to
+    // the anonymous session from getOrCreateAnonSession(), not the Supabase auth session.
+    // This avoids an unnecessary round-trip for anonymous visitors requesting CSRF tokens.
 
     // Use cookie-derived session binding so all endpoints that call requireCsrfToken(request)
     // validate against the same session identifier.
@@ -33,7 +32,7 @@ async function handleGetCsrfToken(request: NextRequest): Promise<NextResponse> {
 
     logger.info(
       {
-        sessionId: session?.user?.id ? 'authenticated' : 'anonymous',
+        sessionType: sessionId ? 'bound' : 'anonymous',
         timestamp: new Date().toISOString(),
       },
       'CSRF token generated',

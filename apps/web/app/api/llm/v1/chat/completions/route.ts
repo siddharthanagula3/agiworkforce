@@ -248,13 +248,11 @@ async function handleChatCompletions(request: NextRequest) {
 
   const token = authHeader.substring(7);
 
-  // Verify user with Supabase
+  // Verify user with Supabase — use service role key for server-side JWT verification
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, flowType: 'pkce' },
-  });
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const {
     data: { user },

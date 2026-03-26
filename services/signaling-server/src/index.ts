@@ -149,12 +149,13 @@ const SIGNALING_SECRET = process.env['SIGNALING_INTERNAL_SECRET'];
  * Constant-time string comparison to prevent timing attacks on secret validation.
  * Returns false if either input is empty/undefined.
  */
+const COMPARE_KEY = randomBytes(32);
+
 function constantTimeCompare(a: string, b: string): boolean {
   if (!a || !b) return false;
   // HMAC normalizes lengths — both digests are always 32 bytes
-  const key = Buffer.alloc(32);
-  const ha = createHmac('sha256', key).update(a).digest();
-  const hb = createHmac('sha256', key).update(b).digest();
+  const ha = createHmac('sha256', COMPARE_KEY).update(a).digest();
+  const hb = createHmac('sha256', COMPARE_KEY).update(b).digest();
   return timingSafeEqual(ha, hb);
 }
 
@@ -288,32 +289,6 @@ const adminLimiter = rateLimit({
     message: `Too many admin requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
     retryAfter: RATE_LIMIT_RETRY_AFTER_SECONDS,
   },
-});
-
-// =============================================================================
-// 404 and Error Handlers
-// =============================================================================
-
-// 404 handler for undefined routes
-app.use((_req: Request, res: Response) => {
-  res.status(404).json({ error: 'NOT_FOUND', message: 'Route not found' });
-});
-
-// Global error handler (must be last middleware)
-app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
-  // Handle Zod validation errors
-  if (err instanceof z.ZodError) {
-    logger.warn({ path: req.path, method: req.method }, 'Request validation failed');
-    res.status(400).json({
-      error: 'VALIDATION_ERROR',
-      message: 'Request validation failed',
-      details: z.treeifyError(err),
-    });
-    return;
-  }
-
-  logger.error({ error: err.message, path: req.path, method: req.method }, 'Unhandled error');
-  res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Internal server error' });
 });
 
 // =============================================================================
@@ -666,7 +641,16 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
 });
 
 // SECURITY: Rate limited to 10/min - destructive operation
+// SECURITY: Requires Bearer token matching SIGNALING_INTERNAL_SECRET
 app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
+  // SECURITY: Authenticate pairing deletion with internal secret
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace('Bearer ', '');
+
+  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   const rawCode = req.params['code'];
   if (!rawCode) {
     return res.status(400).json({ error: 'missing_code' });
@@ -699,10 +683,45 @@ app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
 });
 
 // =============================================================================
+// 404 and Error Handlers (MUST be after all route handlers)
+// =============================================================================
+
+// 404 handler for undefined routes
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ error: 'NOT_FOUND', message: 'Route not found' });
+});
+
+// Global error handler (must be last middleware)
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  // Handle Zod validation errors
+  if (err instanceof z.ZodError) {
+    logger.warn({ path: req.path, method: req.method }, 'Request validation failed');
+    res.status(400).json({
+      error: 'VALIDATION_ERROR',
+      message: 'Request validation failed',
+      details: z.treeifyError(err),
+    });
+    return;
+  }
+
+  logger.error({ error: err.message, path: req.path, method: req.method }, 'Unhandled error');
+  res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Internal server error' });
+});
+
+// =============================================================================
 // WebSocket Connection Handling
 // =============================================================================
 
 wss.on('connection', (socket, request) => {
+  // SECURITY: Validate WebSocket Origin header to prevent cross-site WebSocket hijacking
+  const origin = request.headers['origin'];
+  // Allow connections with no origin (non-browser clients like desktop app)
+  if (origin && allowedOrigins.length > 0 && !allowedOrigins.includes(origin)) {
+    socket.close(1008, 'forbidden_origin');
+    logger.warn({ origin }, 'WebSocket connection rejected: forbidden origin');
+    return;
+  }
+
   // Reject connections during shutdown
   if (isShuttingDown) {
     socket.send(JSON.stringify({ type: 'error', error: 'server_shutting_down' }));

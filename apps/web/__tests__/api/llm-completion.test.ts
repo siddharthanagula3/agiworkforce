@@ -343,11 +343,11 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should detect Google provider from gemini model', async () => {
-      // gemini-3-flash-preview is in ECONOMY_MODELS
+      // gemini-3.1-flash-lite is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('google');
       mockSendRequest.mockResolvedValue({
         content: 'Response from Gemini',
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.1-flash-lite',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -360,26 +360,26 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'gemini-3-flash-preview',
+          model: 'gemini-3.1-flash-lite',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gemini-3-flash-preview');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gemini-3.1-flash-lite');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'google',
-        expect.objectContaining({ model: 'gemini-3-flash-preview' }),
+        expect.objectContaining({ model: 'gemini-3.1-flash-lite' }),
       );
     });
 
     it('should detect xAI provider from grok model', async () => {
-      // grok-4-mini is in ECONOMY_MODELS
+      // grok-4.1-fast-non-reasoning is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('xai');
       mockSendRequest.mockResolvedValue({
         content: 'Response from Grok',
-        model: 'grok-4-mini',
+        model: 'grok-4.1-fast-non-reasoning',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -392,17 +392,17 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'grok-4-mini',
+          model: 'grok-4.1-fast-non-reasoning',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4-mini');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4.1-fast-non-reasoning');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'xai',
-        expect.objectContaining({ model: 'grok-4-mini' }),
+        expect.objectContaining({ model: 'grok-4.1-fast-non-reasoning' }),
       );
     });
 
@@ -444,7 +444,7 @@ describe('POST /api/llm/completion', () => {
   // =========================================================================
   describe('Fallback Model Selection', () => {
     it('should return 402 when credits are insufficient and no fallback available', async () => {
-      // Use max tier since claude-opus-4.5 requires max or enterprise tier
+      // Use max tier since claude-opus-4.6 requires max or enterprise tier
       mockGetSubscription.mockResolvedValue({
         id: 'sub_123',
         status: 'active',
@@ -470,7 +470,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-opus-4.5',
+          model: 'claude-opus-4.6',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });

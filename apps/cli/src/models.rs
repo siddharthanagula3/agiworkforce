@@ -267,6 +267,11 @@ async fn try_subscription_auth(
             crate::auth::resolve_auth(&mut auth_store, sub_name).await
         {
             let url = base_url_override.unwrap_or_else(|| default_subscription_url(sub_name));
+            // Subscription auth tokens must only be sent over HTTPS
+            if !url.starts_with("https://") {
+                eprintln!("[auth] Rejecting non-HTTPS subscription URL for {}: {}", sub_name, url);
+                continue;
+            }
             let account_id = auth_store.entries.get(sub_name).and_then(|e| match e {
                 crate::auth::AuthEntry::OAuth { account_id, .. } => account_id.clone(),
                 _ => None,

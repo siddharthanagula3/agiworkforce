@@ -5,7 +5,7 @@
  * Supports zoom, download, and OCR text extraction display.
  */
 
-import { useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Download, ZoomIn, ZoomOut, Maximize2, X, Copy, Check } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
@@ -31,6 +31,13 @@ export function ImagePreview({
   const [zoom, setZoom] = useState(100);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   // Get image source (either data URL or regular URL)
   const imageSrc = useMemo(
@@ -60,7 +67,8 @@ export function ImagePreview({
     if (!ocrText) return;
     await navigator.clipboard.writeText(ocrText);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const handleZoomIn = () => {

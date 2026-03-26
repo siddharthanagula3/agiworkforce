@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { requireEnv, getOptionalEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { withErrorHandler } from '@/lib/error-handler';
 
 /**
  * Debug endpoint to check LLM provider configuration
@@ -12,7 +13,7 @@ import { withRateLimit } from '@/lib/rate-limit';
  *
  * GET /api/debug/llm-status
  */
-export async function GET(request: NextRequest) {
+async function handleGetLlmStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
   // Only allow in development or with admin auth
@@ -88,3 +89,5 @@ export async function GET(request: NextRequest) {
     },
   });
 }
+
+export const GET = withErrorHandler(handleGetLlmStatus);

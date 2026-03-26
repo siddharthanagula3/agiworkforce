@@ -308,10 +308,34 @@ impl AutonomousAgent {
 
         let timeout = std::time::Duration::from_secs(86400); // 24h max
         let start = std::time::Instant::now();
+        let mut iteration: usize = 0;
+        let max_iterations = if self.config.max_loop_iterations > 0 {
+            self.config.max_loop_iterations
+        } else {
+            MAX_LOOP_ITERATIONS
+        };
 
         loop {
             if start.elapsed() > timeout {
                 return Err(anyhow!("run_goal timed out after 24 hours"));
+            }
+
+            // Enforce iteration limit (same as run_autonomous_loop)
+            iteration += 1;
+            if iteration > max_iterations {
+                return Err(anyhow!("run_goal exceeded max iterations ({})", max_iterations));
+            }
+
+            // Enforce cumulative cost cap (same as run_autonomous_loop)
+            if let Ok(router) = self.router.try_read() {
+                let cost = router.get_cumulative_cost();
+                if cost > self.config.max_session_cost as f64 {
+                    return Err(anyhow!(
+                        "run_goal exceeded session cost cap (${:.2} > ${:.2})",
+                        cost,
+                        self.config.max_session_cost
+                    ));
+                }
             }
 
             // Process one cycle of the task queue

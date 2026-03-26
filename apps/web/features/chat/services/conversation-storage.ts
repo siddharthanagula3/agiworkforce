@@ -282,15 +282,20 @@ export class ChatPersistenceService {
     sessionId: string,
     role: 'user' | 'assistant' | 'system',
     content: string,
+    metadata?: Record<string, unknown>,
   ): Promise<ChatMessage> {
+    const insertData: Record<string, unknown> = {
+      conversation_id: sessionId,
+      role,
+      content,
+    };
+    if (metadata && Object.keys(metadata).length > 0) {
+      insertData['metadata'] = metadata;
+    }
     const { data, error } = await (
       supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>
     )
-      .insert({
-        conversation_id: sessionId,
-        role,
-        content,
-      })
+      .insert(insertData)
       .select()
       .maybeSingle();
 
@@ -779,6 +784,13 @@ export class ChatPersistenceService {
       logger.warn('Invalid updatedAt for message:', dbMessage.id);
     }
 
+    // Restore metadata from the JSONB column (if present)
+    const rawMetadata = dbMessage['metadata'] as Record<string, unknown> | null | undefined;
+    const metadata =
+      rawMetadata && typeof rawMetadata === 'object' && Object.keys(rawMetadata).length > 0
+        ? rawMetadata
+        : undefined;
+
     return {
       id: dbMessage.id,
       sessionId: dbMessage.conversation_id,
@@ -788,6 +800,7 @@ export class ChatPersistenceService {
       updatedAt: isNaN(updatedAt.getTime()) ? createdAt : updatedAt,
       edited: dbMessage.edited ?? false,
       editCount: dbMessage.edit_count ?? 0,
+      ...(metadata && { metadata }),
     };
   }
 }

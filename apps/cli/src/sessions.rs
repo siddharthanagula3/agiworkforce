@@ -300,8 +300,23 @@ pub fn search_session_messages(
             let text_lower = text.to_lowercase();
             if text_lower.contains(&query_lower) {
                 if let Some(pos) = text_lower.find(&query_lower) {
-                    let start = pos.saturating_sub(60);
-                    let end = (pos + query.len() + 60).min(text.len());
+                    // Use char-safe boundaries to avoid panics on multi-byte UTF-8
+                    let indices_up_to_pos: Vec<usize> = text.char_indices()
+                        .map(|(i, _)| i)
+                        .take_while(|&i| i <= pos)
+                        .collect();
+                    let start = if indices_up_to_pos.len() > 60 {
+                        indices_up_to_pos[indices_up_to_pos.len() - 61]
+                    } else {
+                        0
+                    };
+                    let end = text.char_indices()
+                        .map(|(i, _)| i)
+                        .find(|&i| i >= pos + query.len())
+                        .and_then(|i| text.char_indices().map(|(j, _)| j).find(|&j| j >= i).and_then(|base| {
+                            text[base..].char_indices().nth(60).map(|(off, _)| base + off).or(Some(text.len()))
+                        }))
+                        .unwrap_or(text.len());
                     let snippet = text[start..end].replace('\n', " ");
                     let prefix = if start > 0 { "..." } else { "" };
                     let suffix = if end < text.len() { "..." } else { "" };
@@ -511,13 +526,17 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &std::path::Path)
         };
 
         // Skip already-imported sessions.
-        let exists: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sessions WHERE id = ?1",
-                params![session_id],
-                |r| r.get(0),
-            )
-            .unwrap_or(0);
+        let exists: i64 = match conn.query_row(
+            "SELECT COUNT(*) FROM sessions WHERE id = ?1",
+            params![session_id],
+            |r| r.get(0),
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("[sessions] skipping session {} due to query error: {}", session_id, e);
+                continue;
+            }
+        };
         if exists > 0 {
             continue;
         }

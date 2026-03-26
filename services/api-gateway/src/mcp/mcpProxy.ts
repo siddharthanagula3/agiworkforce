@@ -274,10 +274,32 @@ export class McpProxy {
       'Connecting to stdio MCP server',
     );
 
-    const env: NodeJS.ProcessEnv = { ...process.env };
+    // SECURITY: Build a sanitized env — strip sensitive vars from parent process
+    const SENSITIVE_ENV_KEYS = new Set([
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'SUPABASE_ANON_KEY',
+      'JWT_SECRET',
+      'STRIPE_SECRET_KEY',
+      'STRIPE_WEBHOOK_SECRET',
+      'SIGNALING_INTERNAL_SECRET',
+      'DATABASE_URL',
+      'REDIS_URL',
+      'UPSTASH_REDIS_REST_TOKEN',
+      'LD_PRELOAD',
+      'LD_LIBRARY_PATH',
+      'DYLD_INSERT_LIBRARIES',
+    ]);
+    const env: NodeJS.ProcessEnv = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (!SENSITIVE_ENV_KEYS.has(k)) {
+        env[k] = v;
+      }
+    }
     if (transport.env) {
       for (const [k, v] of Object.entries(transport.env)) {
-        env[k] = v;
+        if (!SENSITIVE_ENV_KEYS.has(k)) {
+          env[k] = v;
+        }
       }
     }
 
@@ -294,9 +316,20 @@ export class McpProxy {
       initialized: false,
     };
 
+    const MAX_BUFFER_SIZE = 1_048_576; // 1MB cap to prevent OOM from misbehaving MCP servers
+
     // Handle stdout data (JSON-RPC responses)
     child.stdout.on('data', (data: Buffer) => {
       conn.buffer += data.toString();
+      if (conn.buffer.length > MAX_BUFFER_SIZE) {
+        logger.error(
+          { serverId },
+          'MCP server buffer overflow (>1MB without newline), killing process',
+        );
+        child.kill('SIGTERM');
+        conn.buffer = '';
+        return;
+      }
       this.processStdioBuffer(serverId, conn);
     });
 

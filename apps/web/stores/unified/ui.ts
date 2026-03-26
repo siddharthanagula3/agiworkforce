@@ -373,7 +373,7 @@ export const useUIStore = create<UIState>()(
                   ? console.error
                   : errorData.severity === 'warning'
                     ? console.warn
-                    : console.info;
+                    : console.debug;
 
               consoleMethod(`[${errorData.severity.toUpperCase()}] ${errorData.message}`, {
                 type: errorData.type,
@@ -871,10 +871,9 @@ export const useUIStore = create<UIState>()(
               // Dynamically import to avoid circular dependency
               Promise.all([import('./modelStore'), import('./accountStore')]).then(
                 ([{ useModelStore: _useModelStore }, { useAccountStore: _useAccountStore }]) => {
-                  const modelStore = {} as any;
-
-                  const accountStore = {} as any;
-                  const tier = accountStore.account.plan ?? 'hobby';
+                  const modelStore = _useModelStore.getState();
+                  const accountStore = _useAccountStore.getState();
+                  const tier = accountStore.account?.plan ?? 'hobby';
 
                   // Map tier to the best available auto mode
                   // Max/Enterprise → Premium, Pro → Balanced, Hobby/Free → Economy
@@ -1012,8 +1011,14 @@ export const useUIStore = create<UIState>()(
             showModeSwitcherHint: boolean;
           }>;
 
-          const drafts = new Map<number | null, DraftMessage>(persisted?.drafts || []);
-          const cleanedDrafts = cleanOldDrafts(drafts);
+          // Reconstruct Date objects that were serialized to strings by JSON.stringify
+          const rawDrafts = new Map<number | null, DraftMessage>(persisted?.drafts || []);
+          for (const [key, draft] of rawDrafts) {
+            if (draft.timestamp && typeof draft.timestamp === 'string') {
+              rawDrafts.set(key, { ...draft, timestamp: new Date(draft.timestamp) });
+            }
+          }
+          const cleanedDrafts = cleanOldDrafts(rawDrafts);
 
           return {
             ...currentState,

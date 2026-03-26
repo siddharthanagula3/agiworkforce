@@ -117,58 +117,66 @@ const INITIAL_STATE: Omit<
 // Store
 // ---------------------------------------------------------------------------
 
+let refreshInFlight = false;
+
 export const useBillingStore = create<AuthState>()((set, get) => ({
   ...INITIAL_STATE,
 
   refreshUser: async () => {
-    set({ isLoading: true, error: null });
+    if (refreshInFlight) return;
+    refreshInFlight = true;
     try {
-      const response = await fetch('/api/me', {
-        credentials: 'include',
-      });
+      set({ isLoading: true, error: null });
+      try {
+        const response = await fetch('/api/me', {
+          credentials: 'include',
+        });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Not authenticated — clear gracefully
-          set({
-            user: null,
-            subscription: null,
-            creditBalance_cents: null,
-            dailyUsage_cents: 0,
-            dailyLimit_cents: null,
-            featureFlags: null,
-            isLoading: false,
-            initialized: true,
-          });
-          return;
+        if (!response.ok) {
+          if (response.status === 401) {
+            // Not authenticated — clear gracefully
+            set({
+              user: null,
+              subscription: null,
+              creditBalance_cents: null,
+              dailyUsage_cents: 0,
+              dailyLimit_cents: null,
+              featureFlags: null,
+              isLoading: false,
+              initialized: true,
+            });
+            return;
+          }
+          throw new Error(`/api/me returned ${response.status}`);
         }
-        throw new Error(`/api/me returned ${response.status}`);
+
+        const data: MeResponse = await response.json();
+
+        const tier = (data.plan.tier || 'free') as SubscriptionPlan['tier'];
+        const plan: SubscriptionPlan = {
+          tier,
+          display_name: data.plan.display_name,
+          status: data.plan.status,
+          current_period_end: data.plan.current_period_end,
+          plan_name: data.plan.display_name,
+        };
+
+        set({
+          subscription: plan,
+          creditBalance_cents: data.credits?.balance_cents ?? null,
+          dailyUsage_cents: data.credits?.daily_usage_cents ?? 0,
+          dailyLimit_cents: data.credits?.daily_limit_cents ?? null,
+          featureFlags: data.feature_flags,
+          isLoading: false,
+          error: null,
+          initialized: true,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ isLoading: false, error: message, initialized: true });
       }
-
-      const data: MeResponse = await response.json();
-
-      const tier = (data.plan.tier || 'free') as SubscriptionPlan['tier'];
-      const plan: SubscriptionPlan = {
-        tier,
-        display_name: data.plan.display_name,
-        status: data.plan.status,
-        current_period_end: data.plan.current_period_end,
-        plan_name: data.plan.display_name,
-      };
-
-      set({
-        subscription: plan,
-        creditBalance_cents: data.credits?.balance_cents ?? null,
-        dailyUsage_cents: data.credits?.daily_usage_cents ?? 0,
-        dailyLimit_cents: data.credits?.daily_limit_cents ?? null,
-        featureFlags: data.feature_flags,
-        isLoading: false,
-        error: null,
-        initialized: true,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ isLoading: false, error: message, initialized: true });
+    } finally {
+      refreshInFlight = false;
     }
   },
 

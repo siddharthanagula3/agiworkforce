@@ -31,46 +31,59 @@
  */
 
 // ---------------------------------------------------------------------------
-// Shared mock references — must be declared before jest.mock() factory so
-// they are accessible inside closures after Jest hoisting.
+// Shared mock references — created inside the jest.mock factory to avoid TDZ
+// issues caused by Jest hoisting the factory above const declarations.
+// The mock functions are retrieved after import via require().
 // ---------------------------------------------------------------------------
 
-const mockSetItemAsync = jest.fn<Promise<void>, [string, string, object?]>();
-const mockGetItemAsync = jest.fn<Promise<string | null>, [string]>();
-const mockDeleteItemAsync = jest.fn<Promise<void>, [string]>();
-
-// Expose the access-control constant used by secureStorage.setItem
 const WHEN_UNLOCKED_THIS_DEVICE_ONLY = 'AfterFirstUnlockThisDeviceOnly';
 
 jest.mock('expo-secure-store', () => ({
-  setItemAsync: mockSetItemAsync,
-  getItemAsync: mockGetItemAsync,
-  deleteItemAsync: mockDeleteItemAsync,
-  WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+  __esModule: true,
+  setItemAsync: jest.fn<Promise<void>, [string, string, object?]>(),
+  getItemAsync: jest.fn<Promise<string | null>, [string]>(),
+  deleteItemAsync: jest.fn<Promise<void>, [string]>(),
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AfterFirstUnlockThisDeviceOnly',
 }));
 
-// Supabase must be mocked before authStore is imported.
-const mockGetSession = jest.fn();
-const mockSignOut = jest.fn();
-const mockOnAuthStateChange = jest.fn();
-const mockRefreshSession = jest.fn();
-const mockSignInWithPassword = jest.fn();
-const mockSignUp = jest.fn();
-const mockSignInWithIdToken = jest.fn();
+// Retrieve references to the mock functions created inside the factory.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _SecureStoreMock = require('expo-secure-store') as {
+  setItemAsync: jest.Mock;
+  getItemAsync: jest.Mock;
+  deleteItemAsync: jest.Mock;
+};
+const mockSetItemAsync = _SecureStoreMock.setItemAsync;
+const mockGetItemAsync = _SecureStoreMock.getItemAsync;
+const mockDeleteItemAsync = _SecureStoreMock.deleteItemAsync;
 
+// Supabase must be mocked before authStore is imported.
+// Create mock fns inside the factory to avoid TDZ issues from Jest hoisting.
 jest.mock('../services/supabase', () => ({
   supabase: {
     auth: {
-      getSession: mockGetSession,
-      signOut: mockSignOut,
-      onAuthStateChange: mockOnAuthStateChange,
-      refreshSession: mockRefreshSession,
-      signInWithPassword: mockSignInWithPassword,
-      signUp: mockSignUp,
-      signInWithIdToken: mockSignInWithIdToken,
+      getSession: jest.fn(),
+      signOut: jest.fn(),
+      onAuthStateChange: jest.fn(),
+      refreshSession: jest.fn(),
+      signInWithPassword: jest.fn(),
+      signUp: jest.fn(),
+      signInWithIdToken: jest.fn(),
     },
   },
 }));
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _SupabaseMock = require('../services/supabase') as {
+  supabase: { auth: Record<string, jest.Mock> };
+};
+const mockGetSession = _SupabaseMock.supabase.auth.getSession;
+const mockSignOut = _SupabaseMock.supabase.auth.signOut;
+const mockOnAuthStateChange = _SupabaseMock.supabase.auth.onAuthStateChange;
+const mockRefreshSession = _SupabaseMock.supabase.auth.refreshSession;
+const mockSignInWithPassword = _SupabaseMock.supabase.auth.signInWithPassword;
+const mockSignUp = _SupabaseMock.supabase.auth.signUp;
+const mockSignInWithIdToken = _SupabaseMock.supabase.auth.signInWithIdToken;
 
 // mmkv is not used by authStore but may be imported transitively.
 jest.mock('../lib/mmkv', () => ({

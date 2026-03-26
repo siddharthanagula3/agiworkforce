@@ -131,3 +131,21 @@ export async function formatFile(path: string, projectRoot?: string): Promise<Fo
 export async function formatDetect(path: string, projectRoot?: string): Promise<FormatterInfo> {
   return command<FormatterInfo>('format_detect', { path, projectRoot });
 }
+
+// ---- Coding Checkpoints (Undo/Rewind) ----
+
+export interface CodingCheckpoint {
+  id: string;
+  toolName: string;
+  filePath?: string;
+  createdAtMs: number;
+  description?: string;
+}
+
+export async function codingCheckpointList(): Promise<CodingCheckpoint[]> {
+  return command<CodingCheckpoint[]>('coding_checkpoint_list');
+}
+
+export async function codingCheckpointRewind(id: string): Promise<string[]> {
+  return command<string[]>('coding_checkpoint_rewind', { id });
+}

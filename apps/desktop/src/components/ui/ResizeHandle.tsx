@@ -23,11 +23,24 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const handlersRef = useRef<{ move?: (e: MouseEvent) => void; up?: () => void }>({});
 
+  // Store latest callback refs to prevent stale closures during active drag
+  const onResizeRef = useRef(onResize);
+  const minWidthRef = useRef(minWidth);
+  const maxWidthRef = useRef(maxWidth);
+  const isResizingRef = useRef(isResizing);
+
+  useEffect(() => {
+    onResizeRef.current = onResize;
+    minWidthRef.current = minWidth;
+    maxWidthRef.current = maxWidth;
+    isResizingRef.current = isResizing;
+  });
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       setIsDragging(true);
-      isResizing?.(true);
+      isResizingRef.current?.(true);
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
 
@@ -36,7 +49,7 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
 
       const handleMouseUp = () => {
         setIsDragging(false);
-        isResizing?.(false);
+        isResizingRef.current?.(false);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         if (handlersRef.current.move)
@@ -47,11 +60,12 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         const deltaX = moveEvent.clientX - startX;
-
         const change = direction === 'right' ? deltaX : -deltaX;
-
-        const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + change));
-        onResize(newWidth);
+        const newWidth = Math.max(
+          minWidthRef.current,
+          Math.min(maxWidthRef.current, startWidth + change),
+        );
+        onResizeRef.current(newWidth);
       };
 
       handlersRef.current = { move: handleMouseMove, up: handleMouseUp };
@@ -59,7 +73,7 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     },
-    [width, minWidth, maxWidth, direction, onResize, isResizing],
+    [width, direction],
   );
 
   // Cleanup effect to ensure event listeners are removed on unmount

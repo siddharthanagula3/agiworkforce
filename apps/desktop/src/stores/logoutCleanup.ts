@@ -12,10 +12,10 @@
  * complete cleanup across all stores.
  */
 
-import { useUnifiedAuthStore, cleanupUnifiedAuthStore } from './auth';
 import { useBillingUsageStore, stopMetricsAutoRefresh } from './billingUsage';
 import { useBrowserStore } from './browserStore';
 import { useCodeStore } from './codeStore';
+import { useConnectorsStore } from './connectorsStore';
 import { useDatabaseStore } from './databaseStore';
 import { useExecutionStore, cleanupExecutionListeners } from './executionStore';
 import { useMcpStore } from './mcpStore';
@@ -29,6 +29,17 @@ import { useUnifiedChatStore } from './unifiedChatStore';
 import { useAutomationStore } from './automationStore';
 import { useOnboardingStore } from './onboardingStore';
 import { useSettingsV2Store } from './settingsV2Store';
+import { useChatMemoryStore } from './chatMemoryStore';
+import { useCheckpointStore } from './checkpointStore';
+import { useCodingCheckpointStore } from './codingCheckpointStore';
+import { useGitStore } from './gitStore';
+import { useHooksStore } from './hooksStore';
+import { useIntentStore } from './intentStore';
+import { useKnowledgeStore } from './knowledgeStore';
+import { useLLMConfigStore } from './llmConfigStore';
+import { useProjectMemoryStore } from './projectMemoryStore';
+import { useSecurityStore } from './securityStore';
+import { useVisionStore } from './visionStore';
 
 /**
  * Clears all store state on logout.
@@ -52,6 +63,10 @@ export function cleanupAllStoresOnLogout(): void {
     // Automation store has state that should be reset
     const automationStore = useAutomationStore.getState();
     automationStore.reset();
+
+    // HIGH-001/HIGH-002: Connectors store — clear OAuth timers and state
+    const connectorsStore = useConnectorsStore.getState();
+    connectorsStore.resetOnLogout();
 
     // AUDIT-006-011: Productivity store cleanup
     const productivityStore = useProductivityStore.getState();
@@ -113,10 +128,8 @@ export function cleanupAllStoresOnLogout(): void {
       isLoadingROI: false,
     });
 
-    // Unified Auth store - clear account, billing, and auth data
-    // (Consolidated from authStore, accountStore, and billingStore)
-    cleanupUnifiedAuthStore();
-    useUnifiedAuthStore.getState().reset();
+    // Unified Auth store cleanup is handled by the caller (auth.ts signOut)
+    // to avoid a circular dependency (auth -> logoutCleanup -> auth).
 
     // 3. Clean up stores that should preserve some state (preferences)
 
@@ -155,6 +168,29 @@ export function cleanupAllStoresOnLogout(): void {
       appSettings: null,
       error: null,
     });
+
+    // 4. Clean up feature stores — use safe setState to initial values.
+    // These stores may not expose a reset() method, so we set state directly.
+    const featureStores = [
+      useChatMemoryStore,
+      useCheckpointStore,
+      useCodingCheckpointStore,
+      useGitStore,
+      useHooksStore,
+      useIntentStore,
+      useKnowledgeStore,
+      useLLMConfigStore,
+      useProjectMemoryStore,
+      useSecurityStore,
+      useVisionStore,
+    ] as const;
+
+    for (const store of featureStores) {
+      const state = store.getState() as unknown as Record<string, unknown>;
+      if (typeof state['reset'] === 'function') {
+        (state as unknown as { reset: () => void }).reset();
+      }
+    }
   } catch (error) {
     console.error('[LogoutCleanup] Error during store cleanup:', error);
     // Don't throw - logout should complete even if cleanup has issues
@@ -172,6 +208,7 @@ export function clearPersistedUserData(): void {
     'unified-chat-storage',
     'unified-auth-storage',
     'billing-usage-store',
+    'connectors-store',
     'id-mappings',
     // Legacy store keys (now consolidated)
     'billing-storage', // Legacy - now in unified-auth-storage

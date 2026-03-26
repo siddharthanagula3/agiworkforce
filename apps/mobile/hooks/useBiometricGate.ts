@@ -34,7 +34,9 @@ export function useBiometricGate(): BiometricGateResult {
         return true;
       }
       return false;
-    } catch {
+    } catch (err) {
+      // Unlock on error to prevent app lockout, but log for debugging
+      console.warn('[biometric] Authentication error, unlocking by default:', err);
       setIsUnlocked(true);
       return true;
     }

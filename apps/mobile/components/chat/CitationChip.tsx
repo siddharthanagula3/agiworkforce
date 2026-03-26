@@ -12,7 +12,9 @@ interface CitationChipProps {
 export function CitationChip({ index, title, url }: CitationChipProps) {
   const handlePress = () => {
     if (url) {
-      Linking.openURL(url);
+      Linking.openURL(url).catch(() => {
+        // Failed to open URL — malformed or no handler installed
+      });
     }
   };
 

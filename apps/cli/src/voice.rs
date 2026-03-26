@@ -430,17 +430,24 @@ fn record_audio() -> Result<Option<AudioRecording>> {
         }
     }
 
-    let stream_config = best_config.unwrap_or_else(|| {
-        // Fallback: use whatever the device provides, we will resample later
-        let default_cfg = device
-            .default_input_config()
-            .expect("device should have a default input config");
-        cpal::StreamConfig {
-            channels: default_cfg.channels(),
-            sample_rate: default_cfg.sample_rate(),
-            buffer_size: cpal::BufferSize::Default,
+    let stream_config = match best_config {
+        Some(cfg) => cfg,
+        None => {
+            // Fallback: use whatever the device provides, we will resample later
+            let default_cfg = device.default_input_config().map_err(|e| {
+                anyhow::anyhow!(
+                    "Audio device has no default input config ({}). \
+                     Try specifying an input device explicitly.",
+                    e
+                )
+            })?;
+            cpal::StreamConfig {
+                channels: default_cfg.channels(),
+                sample_rate: default_cfg.sample_rate(),
+                buffer_size: cpal::BufferSize::Default,
+            }
         }
-    });
+    };
 
     let actual_sample_rate = stream_config.sample_rate.0;
     let actual_channels = stream_config.channels;
@@ -631,10 +638,7 @@ fn encode_wav(recording: &AudioRecording) -> Result<PathBuf> {
     let tmp_dir = std::env::temp_dir();
     let wav_path = tmp_dir.join(format!(
         "agiworkforce_voice_{}.wav",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis())
-            .unwrap_or(0)
+        uuid::Uuid::new_v4()
     ));
 
     let spec = hound::WavSpec {
@@ -682,7 +686,9 @@ async fn transcribe(
     };
 
     // Clean up temp WAV file
-    let _ = std::fs::remove_file(&wav_path);
+    if let Err(e) = std::fs::remove_file(&wav_path) {
+        eprintln!("[voice] Failed to clean up temp file {}: {}", wav_path.display(), e);
+    }
 
     result
 }
@@ -774,7 +780,9 @@ async fn transcribe_local(
     if txt_path.exists() {
         let text =
             std::fs::read_to_string(&txt_path).context("Failed to read whisper output file")?;
-        let _ = std::fs::remove_file(&txt_path);
+        if let Err(e) = std::fs::remove_file(&txt_path) {
+            eprintln!("[voice] Failed to clean up temp file {}: {}", txt_path.display(), e);
+        }
         Ok(text.trim().to_string())
     } else {
         // Some versions write to stdout instead

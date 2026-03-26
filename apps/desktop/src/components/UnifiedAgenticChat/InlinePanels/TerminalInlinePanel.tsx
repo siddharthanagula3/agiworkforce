@@ -5,7 +5,7 @@
  * exit code, and other metadata.
  */
 
-import React, { memo } from 'react';
+import React, { memo, useEffect, useRef } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -23,8 +23,15 @@ export interface TerminalInlinePanelProps {
 const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
   ({ panel, onToggleCollapse }) => {
     const [copied, setCopied] = useState(false);
+    const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
     const terminalContent = panel.content.terminal;
+
+    useEffect(() => {
+      return () => {
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      };
+    }, []);
 
     if (!terminalContent) {
       return null;
@@ -39,7 +46,8 @@ const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
       navigator.clipboard.writeText(terminalContent.command);
       setCopied(true);
       toast.success('Command copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     };
 
     const handleCopyOutput = (text: string) => {

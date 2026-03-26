@@ -1308,7 +1308,7 @@ mod tests {
             Some(Duration::from_secs(300)),
         );
 
-        let call_log = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let call_log = Arc::new(tokio::sync::Mutex::new(Vec::new()));
 
         let candidates = vec![
             ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
@@ -1320,7 +1320,7 @@ mod tests {
             .run_with_fallback(&candidates, move |candidate| {
                 let log = log_clone.clone();
                 async move {
-                    log.lock().unwrap().push(candidate.provider);
+                    log.lock().await.push(candidate.provider);
                     Ok::<_, Box<dyn std::error::Error + Send + Sync>>("ok".to_string())
                 }
             })
@@ -1328,7 +1328,7 @@ mod tests {
             .unwrap();
 
         // The rate-limited provider must NOT appear in the call log
-        let calls = call_log.lock().unwrap();
+        let calls = call_log.lock().await;
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0], Provider::OpenAI);
 

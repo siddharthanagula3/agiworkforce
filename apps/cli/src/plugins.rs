@@ -100,7 +100,21 @@ impl PluginsManager {
                     if mp.exists() {
                         std::fs::read_to_string(&mp)
                             .ok()
-                            .and_then(|c| serde_json::from_str(&c).ok())
+                            .and_then(|c| serde_json::from_str::<PluginManifest>(&c).ok())
+                            .map(|mut m| {
+                                // Validate MCP server commands — reject shell metacharacters
+                                m.mcp_servers.retain(|sname, cfg| {
+                                    let has_metachar = cfg.command.contains(&['|', ';', '&', '$', '`', '\0'][..]);
+                                    if has_metachar {
+                                        eprintln!(
+                                            "[plugins] Rejected MCP server '{}' in plugin '{}': command contains shell metacharacters",
+                                            sname, name
+                                        );
+                                    }
+                                    !has_metachar
+                                });
+                                m
+                            })
                     } else {
                         None
                     }
@@ -126,6 +140,22 @@ impl PluginsManager {
     }
     pub fn plugins(&self) -> &[LoadedPlugin] {
         &self.plugins
+    }
+
+    /// Collect MCP server configs from all loaded plugins, converted to
+    /// `crate::mcp::McpServerConfig` so callers can pass them to `McpManager`.
+    pub fn mcp_configs(&self) -> HashMap<String, crate::mcp::McpServerConfig> {
+        let mut out = HashMap::new();
+        for p in &self.plugins {
+            for (name, cfg) in &p.mcp_servers {
+                out.insert(name.clone(), crate::mcp::McpServerConfig {
+                    command: cfg.command.clone(),
+                    args: cfg.args.clone(),
+                    env: cfg.env.clone(),
+                });
+            }
+        }
+        out
     }
     pub fn install(&self, req: PluginInstallRequest) -> PluginInstallOutcome {
         let target = self.global_dir.join(&req.name);

@@ -1,9 +1,10 @@
-import { invoke, listen, UnlistenFn } from '../lib/tauri-mock';
+import { listen, UnlistenFn } from '../lib/tauri-mock';
 import { EVENTS } from '../constants/event-names';
 import { toast } from 'sonner';
 import { useEffect, useRef } from 'react';
 import { sha256 } from '../lib/hash';
 import { isTauri } from '../lib/tauri-mock';
+import { agent, automation, browserExtension } from '@agiworkforce/api';
 import type {
   ActionLogEntry,
   ActionLogEntryType,
@@ -452,7 +453,8 @@ export function useAgenticEvents() {
 
     void (async () => {
       try {
-        const response = (await invoke('extension_status')) as ExtensionStatusDiagnosticsPayload;
+        const response =
+          (await browserExtension.extensionStatus()) as ExtensionStatusDiagnosticsPayload;
         const status = String(response?.status ?? 'unknown');
         const diagnostics = response?.diagnostics;
         const recommendations = diagnostics?.recommendations ?? [];
@@ -998,7 +1000,7 @@ export function useAgenticEvents() {
                 try {
                   const INVOKE_TIMEOUT_MS = 10000;
                   await Promise.race([
-                    invoke('agent_set_workflow_hash', { workflowHash }),
+                    agent.agentSetWorkflowHash(workflowHash),
                     new Promise<never>((_, reject) => {
                       timeoutId = setTimeout(
                         () =>
@@ -1340,11 +1342,9 @@ export function useAgenticEvents() {
         if (!isMountedRef.current) return;
         const { message, reason, graceful } = event.payload;
         const openSettings = () => {
-          void invoke('request_automation_permission', { kind: reason ?? 'accessibility' }).catch(
-            (err) => {
-              console.error('Failed to request automation permission:', err);
-            },
-          );
+          void automation.requestAutomationPermission(reason ?? 'accessibility').catch((err) => {
+            console.error('Failed to request automation permission:', err);
+          });
         };
         if (graceful) {
           // Soft toast — agent fell back to normal LLM, user can enable if they want

@@ -41,6 +41,12 @@ async function secureSet(key: string, value: string): Promise<void> {
       // Clean up any stale chunked data from a previous larger write.
       await secureRemoveChunks(key);
     } else {
+      // Read old chunk count BEFORE writing, so we can clean up orphans after.
+      const oldCountStr = await SecureStore.getItemAsync(key + CHUNK_COUNT_SUFFIX).catch(
+        () => null,
+      );
+      const oldCount = oldCountStr ? parseInt(oldCountStr, 10) : 0;
+
       // Write new chunks FIRST, then clean up old data.
       // This prevents data loss if the write fails mid-way.
       const count = Math.ceil(value.length / CHUNK_SIZE);
@@ -51,13 +57,9 @@ async function secureSet(key: string, value: string): Promise<void> {
         );
       }
       await SecureStore.setItemAsync(key + CHUNK_COUNT_SUFFIX, String(count));
-      // Now clean up: remove direct-key value and any excess old chunks.
+      // Remove direct-key value from a previous single-chunk write.
       await SecureStore.deleteItemAsync(key).catch(() => {});
       // Remove orphan chunks from a previous write that had more chunks.
-      const oldCountStr = await SecureStore.getItemAsync(key + CHUNK_COUNT_SUFFIX).catch(
-        () => null,
-      );
-      const oldCount = oldCountStr ? parseInt(oldCountStr, 10) : 0;
       for (let i = count; i < oldCount; i++) {
         await SecureStore.deleteItemAsync(`${key}__chunk_${i}`).catch(() => {});
       }

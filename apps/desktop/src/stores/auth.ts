@@ -904,6 +904,12 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 return;
               }
 
+              // Guard: if user signed out while refresh was in-flight, bail
+              if (!get().isAuthenticated) {
+                console.warn('[UnifiedAuth] User signed out during sync - aborting');
+                return;
+              }
+
               // Determine plan tier with cache fallback
               let planTier: PlanTier | null;
               let fetchStatus: SubscriptionFetchStatus;
@@ -974,6 +980,11 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 } catch {
                   // Continue without credits
                 }
+              }
+
+              // Guard: re-check auth after async credit fetch (user may have signed out)
+              if (!get().isAuthenticated) {
+                return;
               }
 
               set(
@@ -1212,6 +1223,12 @@ export function initializeUnifiedAuthStore(): () => void {
     const store = useUnifiedAuthStore.getState();
 
     if (authState.user) {
+      // Reset subscription retry counter when a new user signs in
+      const previousUserId = store.user?.id;
+      if (previousUserId !== authState.user.id) {
+        resetRetryCount();
+      }
+
       store.setUser({
         id: authState.user.id,
         email: authState.user.email || '',
