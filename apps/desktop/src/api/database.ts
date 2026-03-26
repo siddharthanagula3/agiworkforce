@@ -145,7 +145,7 @@ export async function dbCreatePool(
   poolConfig: PoolConfig,
 ): Promise<void> {
   if (!isTauri) {
-    console.info('[database] dbCreatePool (mock)', connectionId);
+    console.debug('[database] dbCreatePool (mock)', connectionId);
     return;
   }
 
@@ -166,7 +166,7 @@ export async function dbCreatePool(
  */
 export async function dbExecuteQuery(connectionId: string, sql: string): Promise<QueryResult> {
   if (!isTauri) {
-    console.info('[database] dbExecuteQuery (mock)', connectionId, sql);
+    console.debug('[database] dbExecuteQuery (mock)', connectionId, sql);
     return { columns: [], rows: [] };
   }
 
@@ -191,7 +191,7 @@ export async function dbExecutePrepared(
   params: SqlRowValue[],
 ): Promise<QueryResult> {
   if (!isTauri) {
-    console.info('[database] dbExecutePrepared (mock)', connectionId, sql);
+    console.debug('[database] dbExecutePrepared (mock)', connectionId, sql);
     return { columns: [], rows: [] };
   }
 
@@ -216,7 +216,7 @@ export async function dbExecuteBatch(
   queries: string[],
 ): Promise<QueryResult[]> {
   if (!isTauri) {
-    console.info('[database] dbExecuteBatch (mock)', connectionId, queries.length);
+    console.debug('[database] dbExecuteBatch (mock)', connectionId, queries.length);
     return [];
   }
 
@@ -235,7 +235,7 @@ export async function dbExecuteBatch(
  */
 export async function dbClosePool(connectionId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[database] dbClosePool (mock)', connectionId);
+    console.debug('[database] dbClosePool (mock)', connectionId);
     return;
   }
 
@@ -251,7 +251,7 @@ export async function dbClosePool(connectionId: string): Promise<void> {
  */
 export async function dbListPools(): Promise<string[]> {
   if (!isTauri) {
-    console.info('[database] dbListPools (mock)');
+    console.debug('[database] dbListPools (mock)');
     return [];
   }
 
@@ -267,7 +267,7 @@ export async function dbListPools(): Promise<string[]> {
  */
 export async function dbGetPoolStats(connectionId: string): Promise<PoolStats> {
   if (!isTauri) {
-    console.info('[database] dbGetPoolStats (mock)', connectionId);
+    console.debug('[database] dbGetPoolStats (mock)', connectionId);
     return { active_connections: 0, idle_connections: 0, max_connections: 0, total_queries: 0 };
   }
 
@@ -288,7 +288,7 @@ export async function dbGetPoolStats(connectionId: string): Promise<PoolStats> {
  */
 export async function dbValidateQuery(sql: string): Promise<QueryValidation> {
   if (!isTauri) {
-    console.info('[database] dbValidateQuery (mock)', sql);
+    console.debug('[database] dbValidateQuery (mock)', sql);
     return { is_valid: true, query_type: 'SELECT', tables: [], risk_level: 'low', warnings: [] };
   }
 
@@ -304,7 +304,7 @@ export async function dbValidateQuery(sql: string): Promise<QueryValidation> {
  */
 export async function dbBuildSelect(query: SelectQuery): Promise<string> {
   if (!isTauri) {
-    console.info('[database] dbBuildSelect (mock)', query.table);
+    console.debug('[database] dbBuildSelect (mock)', query.table);
     return `SELECT ${query.columns.join(', ')} FROM ${query.table}`;
   }
 
@@ -321,7 +321,7 @@ export async function dbBuildSelect(query: SelectQuery): Promise<string> {
  */
 export async function dbBuildInsert(query: InsertQuery): Promise<string> {
   if (!isTauri) {
-    console.info('[database] dbBuildInsert (mock)', query.table);
+    console.debug('[database] dbBuildInsert (mock)', query.table);
     return `INSERT INTO ${query.table} (${query.columns.join(', ')}) VALUES (...)`;
   }
 
@@ -338,7 +338,7 @@ export async function dbBuildInsert(query: InsertQuery): Promise<string> {
  */
 export async function dbBuildUpdate(query: UpdateQuery): Promise<string> {
   if (!isTauri) {
-    console.info('[database] dbBuildUpdate (mock)', query.table);
+    console.debug('[database] dbBuildUpdate (mock)', query.table);
     return `UPDATE ${query.table} SET ...`;
   }
 
@@ -354,7 +354,7 @@ export async function dbBuildUpdate(query: UpdateQuery): Promise<string> {
  */
 export async function dbBuildDelete(query: DeleteQuery): Promise<string> {
   if (!isTauri) {
-    console.info('[database] dbBuildDelete (mock)', query.table);
+    console.debug('[database] dbBuildDelete (mock)', query.table);
     return `DELETE FROM ${query.table}`;
   }
 
@@ -374,7 +374,7 @@ export async function dbBuildDelete(query: DeleteQuery): Promise<string> {
  */
 export async function dbMysqlTestConnection(connectionId: string): Promise<boolean> {
   if (!isTauri) {
-    console.info('[database] dbMysqlTestConnection (mock)', connectionId);
+    console.debug('[database] dbMysqlTestConnection (mock)', connectionId);
     return true;
   }
 
@@ -390,7 +390,7 @@ export async function dbMysqlTestConnection(connectionId: string): Promise<boole
  */
 export async function dbMysqlListTables(connectionId: string): Promise<string[]> {
   if (!isTauri) {
-    console.info('[database] dbMysqlListTables (mock)', connectionId);
+    console.debug('[database] dbMysqlListTables (mock)', connectionId);
     return [];
   }
 
@@ -409,7 +409,7 @@ export async function dbMysqlDescribeTable(
   tableName: string,
 ): Promise<MySqlColumnInfo[]> {
   if (!isTauri) {
-    console.info('[database] dbMysqlDescribeTable (mock)', connectionId, tableName);
+    console.debug('[database] dbMysqlDescribeTable (mock)', connectionId, tableName);
     return [];
   }
 
@@ -431,7 +431,7 @@ export async function dbMysqlListIndexes(
   tableName: string,
 ): Promise<MySqlIndexInfo[]> {
   if (!isTauri) {
-    console.info('[database] dbMysqlListIndexes (mock)', connectionId, tableName);
+    console.debug('[database] dbMysqlListIndexes (mock)', connectionId, tableName);
     return [];
   }
 
@@ -455,7 +455,7 @@ export async function dbMysqlCallProcedure(
   params: unknown[],
 ): Promise<unknown[]> {
   if (!isTauri) {
-    console.info('[database] dbMysqlCallProcedure (mock)', connectionId, procedureName);
+    console.debug('[database] dbMysqlCallProcedure (mock)', connectionId, procedureName);
     return [];
   }
 
@@ -481,7 +481,7 @@ export async function dbMysqlBulkInsert(
   rows: unknown[][],
 ): Promise<number> {
   if (!isTauri) {
-    console.info('[database] dbMysqlBulkInsert (mock)', connectionId, tableName, rows.length);
+    console.debug('[database] dbMysqlBulkInsert (mock)', connectionId, tableName, rows.length);
     return 0;
   }
 
@@ -509,7 +509,7 @@ export async function dbMongoConnect(
   config: ConnectionConfig,
 ): Promise<void> {
   if (!isTauri) {
-    console.info('[database] dbMongoConnect (mock)', connectionId);
+    console.debug('[database] dbMongoConnect (mock)', connectionId);
     return;
   }
 
@@ -533,7 +533,7 @@ export async function dbMongoFind(
   limit?: number,
 ): Promise<MongoDocument[]> {
   if (!isTauri) {
-    console.info('[database] dbMongoFind (mock)', connectionId, collection);
+    console.debug('[database] dbMongoFind (mock)', connectionId, collection);
     return [];
   }
 
@@ -559,7 +559,7 @@ export async function dbMongoFindOne(
   filter: MongoFilter,
 ): Promise<MongoDocument | null> {
   if (!isTauri) {
-    console.info('[database] dbMongoFindOne (mock)', connectionId, collection);
+    console.debug('[database] dbMongoFindOne (mock)', connectionId, collection);
     return null;
   }
 
@@ -584,7 +584,7 @@ export async function dbMongoInsertOne(
   document: MongoDocument,
 ): Promise<string> {
   if (!isTauri) {
-    console.info('[database] dbMongoInsertOne (mock)', connectionId, collection);
+    console.debug('[database] dbMongoInsertOne (mock)', connectionId, collection);
     return `mock_id_${Date.now()}`;
   }
 
@@ -609,7 +609,12 @@ export async function dbMongoInsertMany(
   documents: MongoDocument[],
 ): Promise<string[]> {
   if (!isTauri) {
-    console.info('[database] dbMongoInsertMany (mock)', connectionId, collection, documents.length);
+    console.debug(
+      '[database] dbMongoInsertMany (mock)',
+      connectionId,
+      collection,
+      documents.length,
+    );
     return [];
   }
 
@@ -634,7 +639,7 @@ export async function dbMongoUpdateMany(
   update: MongoUpdate,
 ): Promise<MongoResult> {
   if (!isTauri) {
-    console.info('[database] dbMongoUpdateMany (mock)', connectionId, collection);
+    console.debug('[database] dbMongoUpdateMany (mock)', connectionId, collection);
     return { matched_count: 0, modified_count: 0 };
   }
 
@@ -660,7 +665,7 @@ export async function dbMongoDeleteMany(
   filter: MongoFilter,
 ): Promise<number> {
   if (!isTauri) {
-    console.info('[database] dbMongoDeleteMany (mock)', connectionId, collection);
+    console.debug('[database] dbMongoDeleteMany (mock)', connectionId, collection);
     return 0;
   }
 
@@ -680,7 +685,7 @@ export async function dbMongoDeleteMany(
  */
 export async function dbMongoDisconnect(connectionId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[database] dbMongoDisconnect (mock)', connectionId);
+    console.debug('[database] dbMongoDisconnect (mock)', connectionId);
     return;
   }
 
@@ -703,7 +708,7 @@ export async function dbRedisConnect(
   config: ConnectionConfig,
 ): Promise<void> {
   if (!isTauri) {
-    console.info('[database] dbRedisConnect (mock)', connectionId);
+    console.debug('[database] dbRedisConnect (mock)', connectionId);
     return;
   }
 
@@ -722,7 +727,7 @@ export async function dbRedisConnect(
  */
 export async function dbRedisGet(connectionId: string, key: string): Promise<string | null> {
   if (!isTauri) {
-    console.info('[database] dbRedisGet (mock)', connectionId, key);
+    console.debug('[database] dbRedisGet (mock)', connectionId, key);
     return null;
   }
 
@@ -747,7 +752,7 @@ export async function dbRedisSet(
   expirationSeconds?: number,
 ): Promise<void> {
   if (!isTauri) {
-    console.info('[database] dbRedisSet (mock)', connectionId, key);
+    console.debug('[database] dbRedisSet (mock)', connectionId, key);
     return;
   }
 
@@ -769,7 +774,7 @@ export async function dbRedisSet(
  */
 export async function dbRedisDel(connectionId: string, keys: string[]): Promise<number> {
   if (!isTauri) {
-    console.info('[database] dbRedisDel (mock)', connectionId, keys.length);
+    console.debug('[database] dbRedisDel (mock)', connectionId, keys.length);
     return 0;
   }
 
@@ -788,7 +793,7 @@ export async function dbRedisDel(connectionId: string, keys: string[]): Promise<
  */
 export async function dbRedisExists(connectionId: string, key: string): Promise<boolean> {
   if (!isTauri) {
-    console.info('[database] dbRedisExists (mock)', connectionId, key);
+    console.debug('[database] dbRedisExists (mock)', connectionId, key);
     return false;
   }
 
@@ -812,7 +817,7 @@ export async function dbRedisExpire(
   seconds: number,
 ): Promise<boolean> {
   if (!isTauri) {
-    console.info('[database] dbRedisExpire (mock)', connectionId, key, seconds);
+    console.debug('[database] dbRedisExpire (mock)', connectionId, key, seconds);
     return true;
   }
 
@@ -836,7 +841,7 @@ export async function dbRedisHGet(
   field: string,
 ): Promise<string | null> {
   if (!isTauri) {
-    console.info('[database] dbRedisHGet (mock)', connectionId, key, field);
+    console.debug('[database] dbRedisHGet (mock)', connectionId, key, field);
     return null;
   }
 
@@ -862,7 +867,7 @@ export async function dbRedisHSet(
   value: string,
 ): Promise<boolean> {
   if (!isTauri) {
-    console.info('[database] dbRedisHSet (mock)', connectionId, key, field);
+    console.debug('[database] dbRedisHSet (mock)', connectionId, key, field);
     return true;
   }
 
@@ -886,7 +891,7 @@ export async function dbRedisHGetAll(
   key: string,
 ): Promise<Record<string, string>> {
   if (!isTauri) {
-    console.info('[database] dbRedisHGetAll (mock)', connectionId, key);
+    console.debug('[database] dbRedisHGetAll (mock)', connectionId, key);
     return {};
   }
 
@@ -905,7 +910,7 @@ export async function dbRedisHGetAll(
  */
 export async function dbRedisDisconnect(connectionId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[database] dbRedisDisconnect (mock)', connectionId);
+    console.debug('[database] dbRedisDisconnect (mock)', connectionId);
     return;
   }
 
@@ -926,7 +931,7 @@ export async function dbRedisDisconnect(connectionId: string): Promise<void> {
  */
 export async function dbStorePassword(connectionId: string, password: string): Promise<void> {
   if (!isTauri) {
-    console.info('[database] dbStorePassword (mock)', connectionId);
+    console.debug('[database] dbStorePassword (mock)', connectionId);
     return;
   }
 
@@ -946,7 +951,7 @@ export async function dbStorePassword(connectionId: string, password: string): P
  */
 export async function dbHasStoredPassword(connectionId: string): Promise<boolean> {
   if (!isTauri) {
-    console.info('[database] dbHasStoredPassword (mock)', connectionId);
+    console.debug('[database] dbHasStoredPassword (mock)', connectionId);
     return false;
   }
 
@@ -964,7 +969,7 @@ export async function dbHasStoredPassword(connectionId: string): Promise<boolean
  */
 export async function dbGetStoredPassword(connectionId: string): Promise<string | null> {
   if (!isTauri) {
-    console.info('[database] dbGetStoredPassword (mock)', connectionId);
+    console.debug('[database] dbGetStoredPassword (mock)', connectionId);
     return null;
   }
 
@@ -980,7 +985,7 @@ export async function dbGetStoredPassword(connectionId: string): Promise<string 
  */
 export async function dbDeleteStoredPassword(connectionId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[database] dbDeleteStoredPassword (mock)', connectionId);
+    console.debug('[database] dbDeleteStoredPassword (mock)', connectionId);
     return;
   }
 

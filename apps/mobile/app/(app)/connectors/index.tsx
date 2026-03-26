@@ -8,9 +8,10 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import { View, SectionList, Alert } from 'react-native';
+import { View, SectionList, Alert, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link2 } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { ArrowLeft, Link2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/lib/theme';
 import { useIntegrationStore } from '@/stores/integrationStore';
@@ -37,6 +38,7 @@ interface ConnectorSection {
 // ---------------------------------------------------------------------------
 
 export default function ConnectorsScreen() {
+  const router = useRouter();
   const connectedConnectors = useIntegrationStore((s) => s.connectedConnectors);
   const enabledConnectors = useIntegrationStore((s) => s.enabledConnectors);
   const connectConnector = useIntegrationStore((s) => s.connectConnector);
@@ -109,6 +111,17 @@ export default function ConnectorsScreen() {
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 h-12">
         <View className="flex-row items-center gap-2">
+          <Pressable
+            onPress={() => {
+              if (router.canGoBack()) router.back();
+              else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+            }}
+            className="p-2 -ml-2 rounded-lg active:bg-white/5"
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
+            <ArrowLeft size={20} color={colors.textSecondary} />
+          </Pressable>
           <Link2 size={20} color={colors.teal} />
           <Text variant="subheading" className="text-white">
             Connectors

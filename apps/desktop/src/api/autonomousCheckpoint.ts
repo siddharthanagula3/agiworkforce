@@ -41,7 +41,7 @@ export interface AutonomousTaskCheckpoint {
  */
 export async function listAutonomousCheckpoints(): Promise<AutonomousTaskCheckpoint[]> {
   if (!isTauri) {
-    console.info('[autonomousCheckpoint] listAutonomousCheckpoints (mock)');
+    console.debug('[autonomousCheckpoint] listAutonomousCheckpoints (mock)');
     return [];
   }
 
@@ -55,7 +55,7 @@ export async function listAutonomousCheckpointsByTask(
   taskId: string,
 ): Promise<AutonomousTaskCheckpoint[]> {
   if (!isTauri) {
-    console.info('[autonomousCheckpoint] listAutonomousCheckpointsByTask (mock)', taskId);
+    console.debug('[autonomousCheckpoint] listAutonomousCheckpointsByTask (mock)', taskId);
     return [];
   }
 
@@ -69,7 +69,7 @@ export async function listAutonomousCheckpointsByTask(
  */
 export async function resumeAutonomousTask(taskId: string): Promise<string> {
   if (!isTauri) {
-    console.info('[autonomousCheckpoint] resumeAutonomousTask (mock)', taskId);
+    console.debug('[autonomousCheckpoint] resumeAutonomousTask (mock)', taskId);
     return '{}';
   }
 
@@ -81,7 +81,7 @@ export async function resumeAutonomousTask(taskId: string): Promise<string> {
  */
 export async function deleteAutonomousCheckpoint(checkpointId: string): Promise<void> {
   if (!isTauri) {
-    console.info('[autonomousCheckpoint] deleteAutonomousCheckpoint (mock)', checkpointId);
+    console.debug('[autonomousCheckpoint] deleteAutonomousCheckpoint (mock)', checkpointId);
     return;
   }
 
@@ -94,7 +94,7 @@ export async function deleteAutonomousCheckpoint(checkpointId: string): Promise<
  */
 export async function deleteAutonomousCheckpointsForTask(taskId: string): Promise<number> {
   if (!isTauri) {
-    console.info('[autonomousCheckpoint] deleteAutonomousCheckpointsForTask (mock)', taskId);
+    console.debug('[autonomousCheckpoint] deleteAutonomousCheckpointsForTask (mock)', taskId);
     return 0;
   }
 

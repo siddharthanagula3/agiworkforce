@@ -88,7 +88,7 @@ export interface SystemResources {
  */
 export async function agiInit(config?: AGICoreConfig): Promise<void> {
   if (!isTauri) {
-    console.info('[agi] agiInit (mock)', config);
+    console.debug('[agi] agiInit (mock)', config);
     return;
   }
 
@@ -103,7 +103,7 @@ export async function agiInit(config?: AGICoreConfig): Promise<void> {
  */
 export async function agiStop(): Promise<void> {
   if (!isTauri) {
-    console.info('[agi] agiStop (mock)');
+    console.debug('[agi] agiStop (mock)');
     return;
   }
 
@@ -128,7 +128,7 @@ export async function submitGoalSwarm(
   }
 
   if (!isTauri) {
-    console.info('[agi] submitGoalSwarm (mock)', request);
+    console.debug('[agi] submitGoalSwarm (mock)', request);
     return {
       success: true,
       goalId: `mock_swarm_${Date.now()}`,
@@ -172,7 +172,7 @@ export async function submitGoalAuto(
   }
 
   if (!isTauri) {
-    console.info('[agi] submitGoalAuto (mock)', request);
+    console.debug('[agi] submitGoalAuto (mock)', request);
     return { goalId: `mock_auto_${Date.now()}` };
   }
 
@@ -199,7 +199,7 @@ export async function submitGoalAuto(
  */
 export async function shouldUseSwarm(description: string): Promise<boolean> {
   if (!isTauri) {
-    console.info('[agi] shouldUseSwarm (mock)', description);
+    console.debug('[agi] shouldUseSwarm (mock)', description);
     return false;
   }
 
@@ -216,7 +216,7 @@ export async function shouldUseSwarm(description: string): Promise<boolean> {
  */
 export async function queryKnowledge(query: string, limit: number = 10): Promise<KnowledgeEntry[]> {
   if (!isTauri) {
-    console.info('[agi] queryKnowledge (mock)', { query, limit });
+    console.debug('[agi] queryKnowledge (mock)', { query, limit });
     return [];
   }
 
@@ -228,7 +228,7 @@ export async function queryKnowledge(query: string, limit: number = 10): Promise
  */
 export async function getRecentKnowledge(limit: number = 10): Promise<KnowledgeEntry[]> {
   if (!isTauri) {
-    console.info('[agi] getRecentKnowledge (mock)', limit);
+    console.debug('[agi] getRecentKnowledge (mock)', limit);
     return [];
   }
 
@@ -243,7 +243,7 @@ export async function getKnowledgeByCategory(
   limit: number = 10,
 ): Promise<KnowledgeEntry[]> {
   if (!isTauri) {
-    console.info('[agi] getKnowledgeByCategory (mock)', { category, limit });
+    console.debug('[agi] getKnowledgeByCategory (mock)', { category, limit });
     return [];
   }
 
@@ -260,7 +260,7 @@ export async function getKnowledgeByCategory(
  */
 export async function getSystemResources(): Promise<SystemResources> {
   if (!isTauri) {
-    console.info('[agi] getSystemResources (mock)');
+    console.debug('[agi] getSystemResources (mock)');
     return {
       cpuUsagePercent: 0,
       memoryUsageMb: 0,

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* eslint-env node */
+/* global process */
 /* eslint-disable no-undef */
 /**
  * AGI Workforce CLI — npm wrapper

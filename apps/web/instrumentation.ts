@@ -17,7 +17,7 @@ export async function register() {
       logValidationResults(result);
 
       if (result.valid) {
-        console.log('✅ Server initialization complete - environment validated');
+        console.debug('✅ Server initialization complete - environment validated');
       } else {
         // Log errors but do NOT throw — let the site render.
         // Features that need missing vars will fail gracefully at call time.
