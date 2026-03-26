@@ -33,6 +33,11 @@ function LoginForm() {
   const [ssoMode, setSsoMode] = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
 
+  // Show branded splash during any auth transition: session check on arrival,
+  // post-login redirect, or SSO handoff. Covers Supabase response latency.
+  const hasRedirect = searchParams.get('redirectTo') !== null;
+  const [showSplash, setShowSplash] = useState(hasRedirect);
+
   // Check for account suspension errors passed from middleware
   const initialMessage = useMemo(() => {
     const error = searchParams.get('error');
@@ -61,6 +66,9 @@ function LoginForm() {
         window.location.href = `${redirectTo}#${hashParams.toString()}`;
       } else if (session?.access_token) {
         window.location.href = redirectTo;
+      } else {
+        // No valid session — show the login form
+        setShowSplash(false);
       }
     });
   }, [redirectTo]);
@@ -167,6 +175,8 @@ function LoginForm() {
         setMessage({ type: 'error', text: error.message });
       }
     } else {
+      // Login succeeded — show splash while redirect happens
+      setShowSplash(true);
       // If redirecting to /chat (Vite SPA), pass session tokens via hash
       // so the SPA can pick them up (it can't read Next.js SSR cookies)
       if (redirectTo.includes('/chat')) {
@@ -225,6 +235,21 @@ function LoginForm() {
       },
     });
   };
+
+  // Branded splash during any auth transition (session check, post-login, SSO)
+  if (showSplash) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-black text-white">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <Bot className="h-12 w-12 text-blue-500" />
+          <span className="text-2xl font-bold tracking-tighter">AGI Workforce</span>
+          <span className="text-sm text-zinc-500">
+            {loading ? 'Signing you in...' : 'Loading your workspace...'}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-black px-4 py-12 text-white">
