@@ -35,11 +35,11 @@ function StarRating({ rating }: { rating: number }) {
               ? 'text-amber-400 fill-amber-400'
               : i === full && half
                 ? 'text-amber-400 fill-amber-400/50'
-                : 'text-zinc-600',
+                : 'text-muted-foreground',
           )}
         />
       ))}
-      <span className="ml-1 text-xs text-zinc-400">{clamped.toFixed(1)}</span>
+      <span className="ml-1 text-xs text-muted-foreground">{clamped.toFixed(1)}</span>
     </div>
   );
 }
@@ -49,20 +49,20 @@ export function InlineMarketplaceCard({ result, status, onExpand }: ToolResultPr
 
   if (status === 'running') {
     return (
-      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-zinc-900/80 border border-white/10">
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-card/80 border border-white/10">
         <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-        <span className="text-sm text-zinc-400">Loading marketplace item...</span>
+        <span className="text-sm text-muted-foreground">Loading marketplace item...</span>
       </div>
     );
   }
 
   if (status === 'failed' || status === 'error') {
     return (
-      <div className="mt-3 p-3 rounded-lg bg-zinc-900/80 border border-red-500/30">
+      <div className="mt-3 p-3 rounded-lg bg-card/80 border border-red-500/30">
         <div className="flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <p className="text-sm text-red-300 font-medium">Marketplace fetch failed</p>
-          {result?.error && <p className="text-xs text-zinc-500 mt-1">{result.error}</p>}
+          {result?.error && <p className="text-xs text-muted-foreground mt-1">{result.error}</p>}
         </div>
       </div>
     );
@@ -74,7 +74,7 @@ export function InlineMarketplaceCard({ result, status, onExpand }: ToolResultPr
   const catClass =
     category && CATEGORY_COLORS[category.toLowerCase()]
       ? CATEGORY_COLORS[category.toLowerCase()]
-      : 'bg-zinc-500/20 text-zinc-300';
+      : 'bg-muted-foreground/20 text-foreground';
 
   const formattedCount =
     installCount !== undefined
@@ -84,10 +84,10 @@ export function InlineMarketplaceCard({ result, status, onExpand }: ToolResultPr
       : undefined;
 
   return (
-    <div className="mt-3 rounded-lg bg-zinc-900/80 border border-white/10 overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2.5 bg-zinc-800/60 border-b border-white/10">
+    <div className="mt-3 rounded-lg bg-card/80 border border-white/10 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/60 border-b border-white/10">
         <Store className="h-4 w-4 text-indigo-400 shrink-0" />
-        <span className="text-sm font-medium text-zinc-200 flex-1 truncate">{name}</span>
+        <span className="text-sm font-medium text-foreground flex-1 truncate">{name}</span>
         {category && (
           <span
             className={cn(
@@ -102,12 +102,12 @@ export function InlineMarketplaceCard({ result, status, onExpand }: ToolResultPr
       </div>
 
       <div className="p-3 space-y-2">
-        {author && <p className="text-xs text-zinc-500">by {author}</p>}
+        {author && <p className="text-xs text-muted-foreground">by {author}</p>}
 
         <div className="flex items-center justify-between">
           <StarRating rating={rating} />
           {formattedCount && (
-            <span className="flex items-center gap-1 text-xs text-zinc-500">
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Download className="h-3 w-3" />
               {formattedCount} installs
             </span>
@@ -128,7 +128,7 @@ export function InlineMarketplaceCard({ result, status, onExpand }: ToolResultPr
             size="xs"
             variant="ghost"
             onClick={() => onExpand?.('clone-template')}
-            className="h-7 flex-1 gap-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+            className="h-7 flex-1 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             Clone
           </Button>

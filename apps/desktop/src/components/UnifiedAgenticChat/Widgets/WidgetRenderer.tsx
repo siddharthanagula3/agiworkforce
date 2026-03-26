@@ -46,9 +46,9 @@ export interface WidgetRendererComponentProps {
 
 function WidgetLoadingFallback() {
   return (
-    <div className="flex items-center justify-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
-      <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-      <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">Loading widget...</span>
+    <div className="flex items-center justify-center p-6 bg-muted rounded-lg">
+      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      <span className="ml-2 text-sm text-muted-foreground">Loading widget...</span>
     </div>
   );
 }

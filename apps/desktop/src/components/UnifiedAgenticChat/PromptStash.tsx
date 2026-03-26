@@ -177,7 +177,7 @@ export function PromptStash({ currentText, onLoad, disabled = false }: PromptSta
           'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
           isOpen
             ? 'text-blue-400 bg-blue-500/10'
-            : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent',
           disabled && 'pointer-events-none opacity-40',
         )}
       >

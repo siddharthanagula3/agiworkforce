@@ -124,9 +124,9 @@ export const EditableMessage: React.FC<EditableMessageProps> = ({
           onKeyDown={handleKeyDown}
           placeholder="Edit your message..."
           className={cn(
-            'w-full resize-none rounded-lg border bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100',
-            'placeholder:text-zinc-500 focus:outline-hidden focus:ring-2 focus:ring-primary/50',
-            'border-zinc-700 focus:border-primary/50',
+            'w-full resize-none rounded-lg border bg-muted/50 px-3 py-2 text-sm text-foreground',
+            'placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary/50',
+            'border-border focus:border-primary/50',
             'transition-all duration-200',
           )}
           style={{ minHeight: '60px', maxHeight: '400px' }}
@@ -137,18 +137,18 @@ export const EditableMessage: React.FC<EditableMessageProps> = ({
       {/* Footer with character count and actions */}
       <div className="flex items-center justify-between gap-2">
         {/* Character count */}
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span
             className={cn(
               'tabular-nums transition-colors',
-              isNearLimit ? 'text-amber-400' : 'text-zinc-500',
+              isNearLimit ? 'text-amber-400' : 'text-muted-foreground',
             )}
           >
             {characterCount.toLocaleString()} / {maxLength.toLocaleString()}
           </span>
-          <span className="text-zinc-600">|</span>
-          <span className="text-zinc-600">
-            <kbd className="px-1 py-0.5 bg-zinc-700/50 rounded text-[10px] font-mono">
+          <span className="text-muted-foreground">|</span>
+          <span className="text-muted-foreground">
+            <kbd className="px-1 py-0.5 bg-accent/50 rounded text-[10px] font-mono">
               {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter
             </kbd>{' '}
             to save
@@ -163,7 +163,7 @@ export const EditableMessage: React.FC<EditableMessageProps> = ({
             disabled={isSaving}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium',
-              'bg-zinc-700/50 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100',
+              'bg-accent/50 text-foreground hover:bg-accent hover:text-foreground',
               'transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           >

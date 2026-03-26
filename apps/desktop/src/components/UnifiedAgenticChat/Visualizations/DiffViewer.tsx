@@ -114,17 +114,11 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   return (
     <>
       {confirmDialog}
-      <div
-        className={`diff-viewer rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 ${className}`}
-      >
+      <div className={`diff-viewer rounded-lg overflow-hidden border border-border ${className}`}>
         {}
-        <div className="flex items-center justify-between bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between bg-muted px-4 py-2 border-b border-border">
           <div className="flex items-center gap-3">
-            {fileName && (
-              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {fileName}
-              </span>
-            )}
+            {fileName && <span className="text-sm font-medium text-foreground">{fileName}</span>}
             <div className="flex items-center gap-2 text-xs">
               {linesAdded > 0 && (
                 <span className="text-green-600 dark:text-green-400">+{linesAdded}</span>
@@ -133,7 +127,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
                 <span className="text-red-600 dark:text-red-400">-{linesRemoved}</span>
               )}
               {linesAdded === 0 && linesRemoved === 0 && (
-                <span className="text-gray-500">No changes</span>
+                <span className="text-muted-foreground">No changes</span>
               )}
             </div>
           </div>
@@ -154,14 +148,14 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             )}
 
             {}
-            <div className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded p-1">
+            <div className="flex items-center gap-1 bg-accent rounded p-1">
               <button
                 type="button"
                 onClick={() => setCurrentViewMode('split')}
                 className={`px-2 py-1 text-xs rounded transition-colors ${
                   currentViewMode === 'split'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    ? 'bg-card text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Split
@@ -171,8 +165,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
                 onClick={() => setCurrentViewMode('unified')}
                 className={`px-2 py-1 text-xs rounded transition-colors ${
                   currentViewMode === 'unified'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    ? 'bg-card text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Unified
@@ -183,23 +177,23 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             <button
               type="button"
               onClick={() => handleCopy(oldContent, 'old')}
-              className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-accent rounded transition-colors"
               title="Copy old content"
             >
               <Copy
                 size={14}
-                className={copied === 'old' ? 'text-green-500' : 'text-gray-600 dark:text-gray-400'}
+                className={copied === 'old' ? 'text-green-500' : 'text-muted-foreground'}
               />
             </button>
             <button
               type="button"
               onClick={() => handleCopy(newContent, 'new')}
-              className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-accent rounded transition-colors"
               title="Copy new content"
             >
               <Copy
                 size={14}
-                className={copied === 'new' ? 'text-green-500' : 'text-gray-600 dark:text-gray-400'}
+                className={copied === 'new' ? 'text-green-500' : 'text-muted-foreground'}
               />
             </button>
 
@@ -207,13 +201,13 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             <button
               type="button"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-accent rounded transition-colors"
               title={isExpanded ? 'Collapse' : 'Expand'}
             >
               {isExpanded ? (
-                <Minimize2 size={14} className="text-gray-600 dark:text-gray-400" />
+                <Minimize2 size={14} className="text-muted-foreground" />
               ) : (
-                <Maximize2 size={14} className="text-gray-600 dark:text-gray-400" />
+                <Maximize2 size={14} className="text-muted-foreground" />
               )}
             </button>
           </div>

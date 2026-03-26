@@ -29,7 +29,7 @@ const STATUS_CONFIG_MAP: Partial<Record<string, ScheduleStatusConfig>> = {
   },
   completed: {
     label: 'Completed',
-    color: 'text-zinc-400',
+    color: 'text-muted-foreground',
     icon: <CheckCircle2 className="h-3 w-3" />,
   },
 };
@@ -57,20 +57,20 @@ export function InlineScheduleCard({ result, status }: ToolResultProps) {
 
   if (status === 'running') {
     return (
-      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-zinc-900/80 border border-white/10">
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-card/80 border border-white/10">
         <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-        <span className="text-sm text-zinc-400">Loading schedule...</span>
+        <span className="text-sm text-muted-foreground">Loading schedule...</span>
       </div>
     );
   }
 
   if (status === 'failed' || status === 'error') {
     return (
-      <div className="mt-3 p-3 rounded-lg bg-zinc-900/80 border border-red-500/30">
+      <div className="mt-3 p-3 rounded-lg bg-card/80 border border-red-500/30">
         <div className="flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <p className="text-sm text-red-300 font-medium">Schedule operation failed</p>
-          {result?.error && <p className="text-xs text-zinc-500 mt-1">{result.error}</p>}
+          {result?.error && <p className="text-xs text-muted-foreground mt-1">{result.error}</p>}
         </div>
       </div>
     );
@@ -98,10 +98,10 @@ export function InlineScheduleCard({ result, status }: ToolResultProps) {
     : undefined;
 
   return (
-    <div className="mt-3 rounded-lg bg-zinc-900/80 border border-white/10 overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2.5 bg-zinc-800/60 border-b border-white/10">
+    <div className="mt-3 rounded-lg bg-card/80 border border-white/10 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/60 border-b border-white/10">
         <Calendar className="h-4 w-4 text-sky-400 shrink-0" />
-        <span className="text-sm font-medium text-zinc-200 flex-1 truncate">{name}</span>
+        <span className="text-sm font-medium text-foreground flex-1 truncate">{name}</span>
         <span className={cn('flex items-center gap-1 text-xs font-medium', statusCfg.color)}>
           {statusCfg.icon}
           {statusCfg.label}
@@ -111,25 +111,25 @@ export function InlineScheduleCard({ result, status }: ToolResultProps) {
       <div className="p-3 space-y-2">
         {schedule && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-zinc-500">Schedule:</span>
-            <code className="text-zinc-300 bg-zinc-800/60 px-1.5 py-0.5 rounded font-mono text-xs">
+            <span className="text-muted-foreground">Schedule:</span>
+            <code className="text-foreground bg-muted/60 px-1.5 py-0.5 rounded font-mono text-xs">
               {schedule}
             </code>
-            <span className="text-zinc-500">&mdash; {parseCron(schedule)}</span>
+            <span className="text-muted-foreground">&mdash; {parseCron(schedule)}</span>
           </div>
         )}
 
         {formattedNextRun && (
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <Clock className="h-3 w-3 text-zinc-500" />
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3 text-muted-foreground" />
             <span>Next run: {formattedNextRun}</span>
           </div>
         )}
 
         {lastResult && (
-          <div className="p-2 rounded bg-zinc-800/40 border border-white/5">
-            <p className="text-xs text-zinc-500 font-medium mb-0.5">Last Result</p>
-            <p className="text-xs text-zinc-400 line-clamp-2">{lastResult}</p>
+          <div className="p-2 rounded bg-muted/40 border border-white/5">
+            <p className="text-xs text-muted-foreground font-medium mb-0.5">Last Result</p>
+            <p className="text-xs text-muted-foreground line-clamp-2">{lastResult}</p>
           </div>
         )}
       </div>

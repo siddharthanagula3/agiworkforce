@@ -321,7 +321,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   return (
     <div
       className={cn(
-        'w-72 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] p-3 text-left shadow-2xl backdrop-blur-xl',
+        'w-72 rounded-xl border border-[hsl(var(--border))] bg-popover p-3 text-left shadow-2xl',
         '',
         className,
       )}
@@ -337,10 +337,10 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       )}
 
       <div className="flex items-center justify-between pb-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           Models
         </p>
-        <span className="text-[10px] text-gray-400 dark:text-gray-500">Choose a provider</span>
+        <span className="text-[10px] text-muted-foreground">Choose a provider</span>
       </div>
 
       {/* Quick tier picker — Instant / Latest / Thinking */}
@@ -354,7 +354,10 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
 
       {/* Search Input */}
       <div className="relative mb-2">
-        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <Search
+          size={12}
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+        />
         <input
           ref={searchInputRef}
           type="text"
@@ -364,7 +367,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
           className={cn(
             'w-full pl-7 pr-7 py-1.5 text-xs rounded-lg border transition-colors',
             'bg-[hsl(var(--muted))] border-[hsl(var(--border))]',
-            'placeholder:text-gray-400 dark:placeholder:text-gray-500',
+            'placeholder:text-muted-foreground',
             'focus:outline-hidden focus:ring-1 focus:ring-primary/50 focus:border-primary/50',
           )}
         />
@@ -375,7 +378,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               setSearchQuery('');
               searchInputRef.current?.focus();
             }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             <X size={12} />
           </button>
@@ -384,7 +387,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
 
       {/* Auto Selection Section */}
       <div className="mb-2 space-y-1">
-        <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           Auto Selection
         </div>
         {availableAutoModes.map((modeId) => {
@@ -406,13 +409,11 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               <div className="flex items-center gap-2">
                 <IconComponent
                   size={14}
-                  className={isSelected ? 'text-amber-500' : 'text-gray-500'}
+                  className={isSelected ? 'text-amber-500' : 'text-muted-foreground'}
                 />
                 <div className="text-left">
                   <div className="font-medium">{config?.name ?? modeId}</div>
-                  <div className="text-[9px] text-gray-500 dark:text-gray-400">
-                    {config?.description}
-                  </div>
+                  <div className="text-[9px] text-muted-foreground">{config?.description}</div>
                 </div>
               </div>
               {isSelected && <Check size={14} className="text-amber-500" />}
@@ -423,15 +424,15 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         {/* Show last routing decision if in auto mode */}
         {isAutoMode && lastRoutingDecision?.wasRouted && (
           <div className="ml-6 mt-1 rounded-md bg-[hsl(var(--muted))] px-3 py-1.5 text-[10px]">
-            <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
               <Sparkles size={10} className="text-amber-500" />
               <span>
                 Last used:{' '}
-                <span className="font-medium text-gray-900 dark:text-gray-100">
+                <span className="font-medium text-foreground">
                   {getModelMetadata(lastRoutingDecision.routedModelId)?.name ??
                     lastRoutingDecision.routedModelId}
                 </span>
-                <span className="ml-1 text-gray-400">({lastRoutingDecision.taskType})</span>
+                <span className="ml-1 text-muted-foreground">({lastRoutingDecision.taskType})</span>
               </span>
             </div>
           </div>
@@ -460,10 +461,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               Use
             </Button>
           </div>
-          <p className="mt-1.5 font-semibold text-gray-900 dark:text-gray-100">
-            {suggestedMetadata.name}
-          </p>
-          <p className="mt-0.5 text-[10px] leading-snug text-gray-600 dark:text-gray-400">
+          <p className="mt-1.5 font-semibold text-foreground">{suggestedMetadata.name}</p>
+          <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
             {suggestion.reason}
           </p>
         </div>
@@ -473,10 +472,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         {/* No results message */}
         {searchQuery && Object.values(modelGroups).every((models) => models.length === 0) && (
           <div className="py-6 text-center">
-            <Search size={24} className="mx-auto mb-2 text-gray-400" />
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              No models found for "{searchQuery}"
-            </p>
+            <Search size={24} className="mx-auto mb-2 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">No models found for "{searchQuery}"</p>
             <button
               type="button"
               onClick={() => setSearchQuery('')}
@@ -492,7 +489,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
           if (models.length === 0) return null;
           return (
             <div key={provider} className="space-y-1">
-              <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {PROVIDER_LABELS[provider as Provider]}
               </div>
               <div className="flex flex-col gap-1">
@@ -614,16 +611,14 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               <div className="flex items-center gap-2 mb-1.5">
                 <Brain
                   size={12}
-                  className={
-                    thinkingModeEnabled ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500'
-                  }
+                  className={thinkingModeEnabled ? 'text-amber-500' : 'text-muted-foreground'}
                 />
                 <span
                   className={cn(
                     'text-[10px] font-medium',
                     thinkingModeEnabled
                       ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-gray-500 dark:text-gray-400',
+                      : 'text-muted-foreground',
                   )}
                 >
                   Think

@@ -145,12 +145,14 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
   }, [hasUnsavedChanges, handleSave]);
 
   return (
-    <div className={cn('relative h-full w-full bg-zinc-950', className)}>
+    <div className={cn('relative h-full w-full bg-background', className)}>
       {}
       {filePath && (
-        <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50 px-4 py-2">
+        <div className="flex items-center justify-between border-b border-border bg-card/50 px-4 py-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-zinc-400">{filePath.split(/[/\\]/).pop()}</span>
+            <span className="text-xs font-mono text-muted-foreground">
+              {filePath.split(/[/\\]/).pop()}
+            </span>
             {hasUnsavedChanges && (
               <span
                 className="h-2 w-2 rounded-full bg-terra-cotta animate-pulse"
@@ -159,7 +161,9 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs uppercase tracking-wide text-zinc-500">{language}</span>
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">
+              {language}
+            </span>
           </div>
         </div>
       )}
@@ -167,7 +171,7 @@ export function CodeCanvas({ contextId, className }: CodeCanvasProps) {
       {}
       {isLoading ? (
         <div className="flex h-full items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <div className="h-full">

@@ -411,31 +411,33 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
         <div className="flex flex-1 items-center justify-between min-w-0">
           <div className="flex flex-col min-w-0">
             <span
-              className={cn('text-sm font-medium text-zinc-100', cmd.active && 'text-teal-300')}
+              className={cn('text-sm font-medium text-foreground', cmd.active && 'text-teal-300')}
             >
               {q ? highlightSearchTerm(cmd.title, q) : cmd.title}
             </span>
             {cmd.subtitle && (
-              <span className="text-xs text-zinc-500 truncate">
+              <span className="text-xs text-muted-foreground truncate">
                 {q ? highlightSearchTerm(cmd.subtitle, q) : cmd.subtitle}
               </span>
             )}
             {!cmd.subtitle && cmd.group && (
-              <span className="text-xs text-zinc-600 truncate">{cmd.group}</span>
+              <span className="text-xs text-muted-foreground truncate">{cmd.group}</span>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0 ml-2">
             {stats.lastUsed && (
-              <span className="text-[10px] text-zinc-500">{formatLastUsed(stats.lastUsed)}</span>
+              <span className="text-[10px] text-muted-foreground">
+                {formatLastUsed(stats.lastUsed)}
+              </span>
             )}
             {stats.executionCount > 1 && (
-              <span className="flex items-center gap-1 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+              <span className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 <TrendingUp className="h-2.5 w-2.5" />
                 {stats.executionCount}
               </span>
             )}
             {cmd.shortcut && (
-              <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+              <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 {cmd.shortcut}
               </kbd>
             )}
@@ -449,7 +451,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
       return (
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold text-zinc-100">
+            <span className="truncate text-sm font-semibold text-foreground">
               {q
                 ? highlightSearchTerm(r.conversation_title || 'Untitled conversation', q)
                 : r.conversation_title || 'Untitled conversation'}
@@ -458,7 +460,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
               {r.role}
             </span>
           </div>
-          <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
+          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
             {q ? highlightSearchTerm(r.content_snippet, q) : r.content_snippet}
           </p>
         </div>
@@ -470,17 +472,17 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
     return (
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-semibold text-zinc-100">
+          <span className="truncate text-sm font-semibold text-foreground">
             {q ? highlightSearchTerm(conv.title || 'Untitled', q) : conv.title || 'Untitled'}
           </span>
           {conv.updatedAt && (
-            <span className="flex items-center gap-1 text-xs text-zinc-500 shrink-0">
+            <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
               <Clock className="h-3 w-3" />
               {formatRelativeTime(conv.updatedAt)}
             </span>
           )}
         </div>
-        <p className="mt-1 truncate text-xs text-zinc-500">
+        <p className="mt-1 truncate text-xs text-muted-foreground">
           {q && conv.lastMessage
             ? highlightSearchTerm(conv.lastMessage, q)
             : conv.lastMessage || 'No activity'}
@@ -546,7 +548,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
           'flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors',
           isSelected
             ? 'bg-teal-500/15 border-l-2 border-teal-500'
-            : 'hover:bg-zinc-900/50 border-l-2 border-transparent',
+            : 'hover:bg-accent border-l-2 border-transparent',
         )}
         role="option"
         aria-selected={isSelected}
@@ -554,14 +556,14 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
         <div
           className={cn(
             'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
-            isSelected ? 'bg-teal-500/20 text-teal-400' : 'bg-zinc-900 text-zinc-500',
+            isSelected ? 'bg-teal-500/20 text-teal-400' : 'bg-card text-muted-foreground',
           )}
         >
           {getResultIcon(result)}
         </div>
         {renderResultContent(result)}
         {isSelected && (
-          <kbd className="mt-1 rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-mono text-zinc-400 shrink-0">
+          <kbd className="mt-1 rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-muted-foreground shrink-0">
             ↵
           </kbd>
         )}
@@ -601,19 +603,19 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
           onClick={(e) => e.stopPropagation()}
           className={cn(
             'relative w-full max-w-2xl',
-            'rounded-2xl border border-zinc-800',
-            'bg-zinc-950/95 backdrop-blur-xl',
+            'rounded-2xl border border-border',
+            'bg-background/95 backdrop-blur-xl',
             'shadow-2xl shadow-black/50',
             'overflow-hidden',
           )}
           style={{ willChange: prefersReducedMotion ? 'auto' : 'opacity, transform' }}
         >
           {/* Search header */}
-          <div className="flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
+          <div className="flex items-center gap-3 border-b border-border px-4 py-3">
             {ftsLoading ? (
               <Loader2 className="h-5 w-5 shrink-0 animate-spin text-teal-400" aria-hidden="true" />
             ) : (
-              <Search className="h-5 w-5 shrink-0 text-zinc-500" aria-hidden="true" />
+              <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             )}
             <input
               type="text"
@@ -621,8 +623,8 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search conversations, messages, or commands..."
               className={cn(
-                'flex-1 bg-transparent text-sm text-zinc-100 outline-hidden',
-                'placeholder:text-zinc-500',
+                'flex-1 bg-transparent text-sm text-foreground outline-hidden',
+                'placeholder:text-muted-foreground',
               )}
               autoFocus
               role="searchbox"
@@ -636,7 +638,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               aria-label="Close command palette"
             >
               <X className="h-4 w-4" aria-hidden="true" />
@@ -651,7 +653,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                 {recentSearchEntries.length > 0 && (
                   <div>
                     <div className="flex items-center justify-between px-4 py-1.5">
-                      <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                      <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         <History className="h-3 w-3" />
                         Recent Searches
                       </span>
@@ -661,7 +663,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                           clearRecentSearches();
                           setRecentSearchEntries([]);
                         }}
-                        className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+                        className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
                       >
                         Clear
                       </button>
@@ -671,13 +673,13 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                         type="button"
                         key={`rsearch-${entry.timestamp}`}
                         onClick={() => setQuery(entry.query)}
-                        className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-zinc-900/50 transition-colors border-l-2 border-transparent"
+                        className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-accent transition-colors border-l-2 border-transparent"
                       >
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-zinc-500">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-card text-muted-foreground">
                           <Clock className="h-3.5 w-3.5" />
                         </div>
-                        <span className="text-sm text-zinc-300 truncate">{entry.query}</span>
-                        <span className="ml-auto text-[10px] text-zinc-600 shrink-0">
+                        <span className="text-sm text-foreground truncate">{entry.query}</span>
+                        <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
                           {formatRelativeTime(new Date(entry.timestamp).toISOString())}
                         </span>
                       </button>
@@ -686,9 +688,12 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                 )}
                 {recentSearchEntries.length === 0 && (
                   <div className="px-4 py-10 text-center" role="status">
-                    <Search className="mx-auto h-10 w-10 text-zinc-700" aria-hidden="true" />
-                    <p className="mt-3 text-sm text-zinc-500">No recent activity</p>
-                    <p className="mt-1 text-xs text-zinc-600">
+                    <Search
+                      className="mx-auto h-10 w-10 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <p className="mt-3 text-sm text-muted-foreground">No recent activity</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Search conversations, messages, and commands
                     </p>
                   </div>
@@ -696,16 +701,16 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
               </div>
             ) : flatResults.length === 0 && query.trim() ? (
               <div className="px-4 py-10 text-center" role="status">
-                <Search className="mx-auto h-10 w-10 text-zinc-700" aria-hidden="true" />
-                <p className="mt-3 text-sm text-zinc-500">No results found</p>
-                <p className="mt-1 text-xs text-zinc-600">Try different keywords</p>
+                <Search className="mx-auto h-10 w-10 text-muted-foreground" aria-hidden="true" />
+                <p className="mt-3 text-sm text-muted-foreground">No results found</p>
+                <p className="mt-1 text-xs text-muted-foreground">Try different keywords</p>
               </div>
             ) : sections ? (
               // Grouped view (default, no query)
               <div className="py-2">
                 {sections.map((section) => (
                   <div key={section.heading}>
-                    <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                    <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {section.heading}
                     </div>
                     {section.items.map((result) => renderItem(result, flatResults.indexOf(result)))}
@@ -723,7 +728,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                     <>
                       {cmdResults.length > 0 && (
                         <div>
-                          <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                          <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                             Commands
                           </div>
                           {cmdResults.map((result) =>
@@ -733,7 +738,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                       )}
                       {convResults.length > 0 && (
                         <div>
-                          <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                          <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                             Conversations
                           </div>
                           {convResults.map((result) =>
@@ -743,7 +748,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                       )}
                       {msgResults.length > 0 && (
                         <div>
-                          <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                          <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                             Messages
                           </div>
                           {msgResults.map((result) =>
@@ -759,19 +764,19 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-zinc-800 bg-zinc-900/50 px-4 py-2 text-xs text-zinc-500">
+          <div className="flex items-center justify-between border-t border-border bg-card/50 px-4 py-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1">
-                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">↑</kbd>
-                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">↓</kbd>
+                <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">↑</kbd>
+                <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">↓</kbd>
                 <span className="ml-1">Navigate</span>
               </div>
               <div className="flex items-center gap-1">
-                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">↵</kbd>
+                <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">↵</kbd>
                 <span className="ml-1">Select</span>
               </div>
               <div className="flex items-center gap-1">
-                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">Esc</kbd>
+                <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">Esc</kbd>
                 <span className="ml-1">Close</span>
               </div>
             </div>

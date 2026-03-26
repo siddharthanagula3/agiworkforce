@@ -23,20 +23,20 @@ export function InlineAgentCard({ result, status, onExpand }: ToolResultProps) {
 
   if (status === 'running' && !data) {
     return (
-      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-zinc-900/80 border border-white/10">
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-card/80 border border-white/10">
         <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-        <span className="text-sm text-zinc-400">Starting agent...</span>
+        <span className="text-sm text-muted-foreground">Starting agent...</span>
       </div>
     );
   }
 
   if (status === 'failed' || status === 'error') {
     return (
-      <div className="mt-3 p-3 rounded-lg bg-zinc-900/80 border border-red-500/30">
+      <div className="mt-3 p-3 rounded-lg bg-card/80 border border-red-500/30">
         <div className="flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <p className="text-sm text-red-300 font-medium">Agent failed to start</p>
-          {result?.error && <p className="text-xs text-zinc-500 mt-1">{result.error}</p>}
+          {result?.error && <p className="text-xs text-muted-foreground mt-1">{result.error}</p>}
         </div>
       </div>
     );
@@ -50,14 +50,14 @@ export function InlineAgentCard({ result, status, onExpand }: ToolResultProps) {
   const isPaused = agentStatus === 'paused';
 
   return (
-    <div className="mt-3 rounded-lg bg-zinc-900/80 border border-white/10 overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2.5 bg-zinc-800/60 border-b border-white/10">
+    <div className="mt-3 rounded-lg bg-card/80 border border-white/10 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/60 border-b border-white/10">
         {agentStatus === 'completed' ? (
           <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
         ) : (
           <Bot className="h-4 w-4 text-blue-400 shrink-0" />
         )}
-        <span className="text-sm font-medium text-zinc-200 flex-1 truncate">{name}</span>
+        <span className="text-sm font-medium text-foreground flex-1 truncate">{name}</span>
         <div className="flex items-center gap-1.5">
           <span className={cn('h-1.5 w-1.5 rounded-full', statusCfg.dot)} />
           <span className={cn('text-xs font-medium', statusCfg.color)}>{statusCfg.label}</span>
@@ -65,14 +65,14 @@ export function InlineAgentCard({ result, status, onExpand }: ToolResultProps) {
       </div>
 
       <div className="p-3 space-y-3">
-        {goal && <p className="text-xs text-zinc-400 line-clamp-2">{goal}</p>}
+        {goal && <p className="text-xs text-muted-foreground line-clamp-2">{goal}</p>}
 
         <div className="space-y-1">
-          <div className="flex items-center justify-between text-xs text-zinc-500">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Progress</span>
             <span>{progress}%</span>
           </div>
-          <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
             <div
               className={cn(
                 'h-full rounded-full transition-all duration-500',
@@ -89,7 +89,7 @@ export function InlineAgentCard({ result, status, onExpand }: ToolResultProps) {
               size="xs"
               variant="ghost"
               onClick={() => onExpand?.(isRunning ? 'pause-agent' : 'resume-agent')}
-              className="h-7 gap-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+              className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
               {isRunning ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
               {isRunning ? 'Pause' : 'Resume'}
@@ -98,7 +98,7 @@ export function InlineAgentCard({ result, status, onExpand }: ToolResultProps) {
               size="xs"
               variant="ghost"
               onClick={() => onExpand?.('cancel-agent')}
-              className="h-7 gap-1.5 text-xs text-zinc-400 hover:text-red-400"
+              className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-red-400"
             >
               <X className="h-3 w-3" />
               Cancel

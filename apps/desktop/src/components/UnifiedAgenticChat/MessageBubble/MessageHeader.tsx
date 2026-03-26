@@ -71,13 +71,13 @@ const MessageHeaderComponent: React.FC<MessageHeaderProps> = ({
 
   return (
     <div className="flex items-center gap-2 mb-1 flex-wrap">
-      <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{roleName}</span>
+      <span className="text-sm font-medium text-foreground">{roleName}</span>
 
-      {showTimestamp && <span className="message-meta text-zinc-500">{formattedTime}</span>}
+      {showTimestamp && <span className="message-meta text-muted-foreground">{formattedTime}</span>}
 
       {/* Edited indicator */}
       {message.metadata?.edited && (
-        <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400 italic">
+        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground italic">
           <Pencil size={10} />
           edited
         </span>
@@ -85,7 +85,7 @@ const MessageHeaderComponent: React.FC<MessageHeaderProps> = ({
 
       {/* Model badge for assistant messages */}
       {isAssistant && message.metadata?.model && (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-[10px] font-medium text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted text-[10px] font-medium text-muted-foreground border border-border">
           {message.metadata.model
             .split('/')
             .pop()
@@ -97,7 +97,7 @@ const MessageHeaderComponent: React.FC<MessageHeaderProps> = ({
 
       {/* Pending indicator */}
       {message.pending && (
-        <span className="inline-flex items-center gap-1 message-meta text-zinc-500">
+        <span className="inline-flex items-center gap-1 message-meta text-muted-foreground">
           <Loader2 size={12} className="animate-spin" />
           Sending...
         </span>

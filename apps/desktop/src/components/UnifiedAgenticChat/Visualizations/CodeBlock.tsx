@@ -119,10 +119,10 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
 
   return (
     <div
-      className={`code-block relative rounded-lg overflow-hidden border border-gray-700 ${className}`}
+      className={`code-block relative rounded-lg overflow-hidden border border-border ${className}`}
     >
       {}
-      <div className="flex items-center justify-between bg-gray-800/80 backdrop-blur-xs px-3 py-2 text-sm border-b border-gray-700">
+      <div className="flex items-center justify-between bg-muted/80 backdrop-blur-xs px-3 py-2 text-sm border-b border-border">
         <div className="flex items-center gap-2">
           {/* Language badge with color indicator */}
           <div
@@ -134,14 +134,14 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           </div>
           {fileName && (
             <span
-              className="text-gray-400 font-mono text-xs truncate max-w-[150px]"
+              className="text-muted-foreground font-mono text-xs truncate max-w-[150px]"
               title={fileName}
             >
               {fileName}
             </span>
           )}
           {/* Line count */}
-          <span className="text-gray-500 text-[10px]">
+          <span className="text-muted-foreground text-[10px]">
             {lineCount} {lineCount === 1 ? 'line' : 'lines'}
           </span>
         </div>
@@ -150,7 +150,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           <button
             type="button"
             onClick={() => setWordWrap(!wordWrap)}
-            className={`p-1.5 rounded transition-colors ${wordWrap ? 'bg-gray-600 text-white' : 'hover:bg-gray-700 text-gray-400'}`}
+            className={`p-1.5 rounded transition-colors ${wordWrap ? 'bg-accent text-white' : 'hover:bg-accent text-muted-foreground'}`}
             title={wordWrap ? 'Disable word wrap' : 'Enable word wrap'}
           >
             <WrapText size={14} />
@@ -169,7 +169,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
             <button
               type="button"
               onClick={handleDownload}
-              className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-gray-200"
+              className="p-1.5 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
               title="Download"
             >
               <Download size={14} />
@@ -178,7 +178,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
-            className={`p-1.5 rounded transition-colors ${isExpanded ? 'bg-gray-600 text-white' : 'hover:bg-gray-700 text-gray-400 hover:text-gray-200'}`}
+            className={`p-1.5 rounded transition-colors ${isExpanded ? 'bg-accent text-white' : 'hover:bg-accent text-muted-foreground hover:text-foreground'}`}
             title={isExpanded ? 'Collapse' : 'Expand'}
           >
             <Maximize2 size={14} />
@@ -187,13 +187,13 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
             <button
               type="button"
               onClick={handleCopy}
-              className="p-1.5 hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-accent rounded transition-colors"
               title="Copy code"
             >
               {copied ? (
                 <Check size={14} className="text-green-400" />
               ) : (
-                <Copy size={14} className="text-gray-400 hover:text-gray-200" />
+                <Copy size={14} className="text-muted-foreground hover:text-foreground" />
               )}
             </button>
           )}

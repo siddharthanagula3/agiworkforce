@@ -27,7 +27,7 @@ export const InlineSuggestion: React.FC<InlineSuggestionProps> = ({
 
   return (
     <div
-      className="absolute top-2 left-2 text-[15px] leading-6 text-gray-400 dark:text-gray-600 pointer-events-none"
+      className="absolute top-2 left-2 text-[15px] leading-6 text-muted-foreground pointer-events-none"
       style={{
         paddingLeft: '8px',
         paddingRight: '8px',
@@ -36,7 +36,7 @@ export const InlineSuggestion: React.FC<InlineSuggestionProps> = ({
     >
       <span className="invisible">{content}</span>
       {isLoading ? (
-        <span className="text-gray-300 dark:text-gray-700 animate-pulse">...</span>
+        <span className="text-muted-foreground animate-pulse">...</span>
       ) : (
         <span className="italic">{suggestion}</span>
       )}
