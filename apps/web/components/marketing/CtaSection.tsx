@@ -59,40 +59,41 @@ export function CtaSection({
   }
 
   return (
-    <section className="relative overflow-hidden py-24">
-      <div className="absolute inset-0 bg-blue-600/10" />
-      <div className="container relative mx-auto px-4 text-center">
-        {Icon && <Icon className="mx-auto mb-6 h-12 w-12 text-blue-500" />}
-        <h2 className="mb-6 text-4xl font-bold tracking-tight md:text-5xl">{headline}</h2>
-        <p className="mx-auto mb-10 max-w-2xl text-xl text-zinc-400">{body}</p>
-        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+    <section className="border-t border-[#1a1917] py-24">
+      <div className="container mx-auto max-w-3xl px-4 text-center">
+        {Icon && <Icon className="mx-auto mb-6 h-10 w-10 text-[#c8892a]" />}
+        <h2 className="mb-4 text-3xl font-bold tracking-tight text-[#edebe8] md:text-4xl">
+          {headline}
+        </h2>
+        <p className="mx-auto mb-10 max-w-xl text-lg text-[#888480]">{body}</p>
+        <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
             href="/download"
-            className="inline-flex h-14 items-center justify-center rounded-full bg-white px-8 text-lg font-bold text-black transition-transform hover:scale-105"
+            className="inline-flex h-11 items-center justify-center rounded-md bg-[#c8892a] px-6 text-sm font-medium text-[#09090b] transition-colors hover:bg-[#d4993a]"
           >
             Download Desktop App
-            <ArrowRight className="ml-2 h-5 w-5" />
+            <ArrowRight className="ml-2 h-4 w-4" />
           </Link>
           <Link
             href={secondaryHref}
-            className="inline-flex h-14 items-center justify-center rounded-full border border-zinc-700 bg-black px-8 text-lg font-medium text-white transition-colors hover:bg-zinc-900"
+            className="inline-flex h-11 items-center justify-center rounded-md border border-[#555150] px-6 text-sm font-medium text-[#edebe8] transition-colors hover:border-[#888480]"
           >
             {secondaryLabel}
           </Link>
         </div>
-        <form onSubmit={handleSubscribe} className="mx-auto mt-8 flex max-w-md gap-2">
+        <form onSubmit={handleSubscribe} className="mx-auto mt-8 flex max-w-sm gap-2">
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Enter your email for updates"
             disabled={submitted}
-            className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="flex-1 rounded-md border border-[#555150]/40 bg-[#131313] px-4 py-2 text-sm text-[#edebe8] placeholder:text-[#555150] focus:outline-none focus:ring-1 focus:ring-[#c8892a]/50 disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={submitted}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+            className="rounded-md border border-[#c8892a]/30 bg-[#c8892a]/10 px-4 py-2 text-sm font-medium text-[#c8892a] transition-colors hover:bg-[#c8892a]/20 disabled:opacity-50 whitespace-nowrap"
           >
             {submitted ? 'Subscribed' : 'Stay Updated'}
           </button>
