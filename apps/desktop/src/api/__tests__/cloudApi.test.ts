@@ -111,9 +111,19 @@ describe('cloudApi', () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encoder.encode('data: {"conversation_id":"conv_1"}\n\n'));
-        controller.enqueue(encoder.encode('data: {"text":"Hello"}\n\n'));
-        controller.enqueue(encoder.encode('data: {"text":" world"}\n\n'));
+        controller.enqueue(
+          encoder.encode(
+            'data: {"id":"chatcmpl-1","choices":[{"delta":{"role":"assistant"}}]}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode('data: {"id":"chatcmpl-1","choices":[{"delta":{"content":"Hello"}}]}\n\n'),
+        );
+        controller.enqueue(
+          encoder.encode(
+            'data: {"id":"chatcmpl-1","choices":[{"delta":{"content":" world"}}]}\n\n',
+          ),
+        );
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
       },
@@ -146,17 +156,17 @@ describe('cloudApi', () => {
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/cloud-chat/send'),
+      expect.stringContaining('/api/llm/v1/chat/completions'),
       expect.objectContaining({
         body: JSON.stringify({
-          conversation_id: 'conv_1',
-          message: 'Ping',
           model: 'claude-haiku-4-5-20251001',
+          messages: [{ role: 'user', content: 'Ping' }],
+          stream: true,
         }),
       }),
     );
     expect(chunks.join('')).toBe('Hello world');
-    expect(onEvent).toHaveBeenCalledWith({ conversation_id: 'conv_1' });
+    expect(onEvent).toHaveBeenCalled();
     expect(onDone).toHaveBeenCalledOnce();
     expect(onError).not.toHaveBeenCalled();
   });
