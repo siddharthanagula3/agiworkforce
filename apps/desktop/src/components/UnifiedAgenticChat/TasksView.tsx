@@ -279,7 +279,7 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
             )}
           </div>
 
-          <p className="mt-1.5 line-clamp-2 text-sm font-medium text-zinc-200" title={task.goal}>
+          <p className="mt-1.5 line-clamp-2 text-sm font-medium text-foreground" title={task.goal}>
             {task.goal}
           </p>
 
@@ -407,7 +407,7 @@ function EmptyState({ tab, onNew }: EmptyStateProps) {
   const { icon: Icon, text } = messages[tab];
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-      <Icon className="h-10 w-10 text-zinc-700" />
+      <Icon className="h-10 w-10 text-muted-foreground" />
       <p className="text-sm text-muted-foreground">{text}</p>
       {tab === 'active' && (
         <button
@@ -617,7 +617,7 @@ export function TasksView() {
       <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
         <div className="flex items-center gap-3">
           <ListTodo className="h-5 w-5 text-teal-400" />
-          <h1 className="text-lg font-semibold text-zinc-100">Tasks</h1>
+          <h1 className="text-lg font-semibold text-foreground">Tasks</h1>
           {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
         </div>
         <button
@@ -639,7 +639,7 @@ export function TasksView() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search tasks..."
-            className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-zinc-200 placeholder-zinc-600 outline-none transition focus:border-teal-500/40 focus:ring-1 focus:ring-teal-500/20"
+            className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-3 text-sm text-foreground placeholder-muted-foreground outline-none transition focus:border-teal-500/40 focus:ring-1 focus:ring-teal-500/20"
           />
         </div>
       </div>

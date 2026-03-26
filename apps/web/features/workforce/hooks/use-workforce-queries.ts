@@ -371,7 +371,7 @@ export function useWorkforceStats(
           .eq('user_id', userId)
           .maybeSingle();
 
-        totalTokensUsed = tokenData ? 1000000 - (tokenData.current_balance || 0) : 0;
+        totalTokensUsed = tokenData ? Math.max(0, -(tokenData.current_balance || 0)) : 0;
       } catch {
         // Table may not exist yet
       }

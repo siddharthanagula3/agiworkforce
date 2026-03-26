@@ -1724,9 +1724,9 @@ function MarkdownArtifact({ artifact, isDark }: { artifact: Artifact; isDark: bo
         '[&_table]:w-full [&_table]:text-sm',
         '[&_th]:text-left [&_th]:font-semibold [&_th]:border-b [&_th]:px-3 [&_th]:py-2',
         '[&_td]:px-3 [&_td]:py-2 [&_td]:border-b',
-        '[&_blockquote]:border-l-4 [&_blockquote]:border-zinc-500 [&_blockquote]:pl-4 [&_blockquote]:italic',
+        '[&_blockquote]:border-l-4 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:italic',
         '[&_a]:text-blue-400 [&_a]:underline',
-        '[&_hr]:border-zinc-600',
+        '[&_hr]:border-border',
       )}
     >
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{artifact.content}</ReactMarkdown>
