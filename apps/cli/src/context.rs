@@ -824,7 +824,7 @@ mod tests {
     #[test]
     fn test_detect_pm_bun() {
         let (_d, path) = tmp_project_dir();
-        fs::write(Path::new(&path).join("bun.lockb"), &[0u8; 4]).unwrap();
+        fs::write(Path::new(&path).join("bun.lockb"), [0u8; 4]).unwrap();
         assert_eq!(detect_package_manager(&path).as_deref(), Some("bun"));
     }
 
