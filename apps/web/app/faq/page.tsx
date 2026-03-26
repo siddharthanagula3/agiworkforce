@@ -140,7 +140,7 @@ export default function FAQPage() {
       <main className="flex-1 pt-24">
         {/* Hero Section */}
         <section className="relative overflow-hidden py-16 md:py-24">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black" />
+          <div className="absolute inset-0 bg-black" />
           <div className="container relative mx-auto px-4 text-center">
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
               Frequently Asked Questions
@@ -164,7 +164,7 @@ export default function FAQPage() {
                     onClick={() => setActiveCategory(category)}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                       activeCategory === category
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-[#c8892a] text-[#09090b]'
                         : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
                     }`}
                   >
@@ -217,7 +217,7 @@ export default function FAQPage() {
             </p>
             <Link
               href="/contact"
-              className="inline-flex h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-sm font-medium hover:bg-blue-700 transition-colors"
+              className="inline-flex h-12 items-center justify-center rounded-md bg-[#c8892a] px-8 text-sm font-medium text-[#09090b] hover:bg-[#d4993a] transition-colors"
             >
               Contact Support
             </Link>
