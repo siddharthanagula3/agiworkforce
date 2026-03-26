@@ -662,6 +662,8 @@ function SurfaceShowcaseStatic() {
 }
 
 /* ─── Main Component ──────────────────────────────────────────────── */
+const VH_PER_SURFACE = 60;
+
 export function SurfaceShowcase() {
   const sectionRef = useRef<HTMLElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -670,11 +672,13 @@ export function SurfaceShowcase() {
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
-    offset: ['start start', 'end end'],
+    offset: ['start 0.3', 'end end'],
   });
 
   useMotionValueEvent(scrollYProgress, 'change', (v) => {
-    const idx = Math.min(Math.floor(v * surfaces.length), surfaces.length - 1);
+    // Clamp to valid range — progress can be slightly negative before section fully enters
+    const clamped = Math.max(0, Math.min(1, v));
+    const idx = Math.min(Math.floor(clamped * surfaces.length), surfaces.length - 1);
     if (idx >= 0 && idx !== activeIndex) {
       setActiveIndex(idx);
     }
@@ -692,10 +696,10 @@ export function SurfaceShowcase() {
     <section
       ref={sectionRef}
       className="relative bg-[#09090b]"
-      style={{ height: `${surfaces.length * 100}vh` }}
+      style={{ height: `${surfaces.length * VH_PER_SURFACE}vh` }}
     >
-      {/* Sticky viewport */}
-      <div className="sticky top-0 flex h-screen items-center overflow-hidden">
+      {/* Sticky viewport — offset for fixed header (h-16 = 4rem) */}
+      <div className="sticky top-16 flex h-[calc(100vh-4rem)] items-center overflow-hidden">
         <div className="mx-auto w-full max-w-6xl px-4">
           {/* Section header */}
           <div className="mb-8">
