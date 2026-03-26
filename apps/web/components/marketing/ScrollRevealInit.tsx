@@ -8,18 +8,30 @@ import { useEffect } from 'react';
  */
 export function ScrollRevealInit() {
   useEffect(() => {
+    const reveal = (el: Element) => {
+      el.classList.add('opacity-100', 'translate-y-0');
+      el.classList.remove('opacity-0', 'translate-y-8');
+    };
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('opacity-100', 'translate-y-0');
-            entry.target.classList.remove('opacity-0', 'translate-y-8');
-          }
+          if (entry.isIntersecting) reveal(entry.target);
         });
       },
-      { threshold: 0.12 },
+      { threshold: 0.05 },
     );
-    document.querySelectorAll('.scroll-reveal').forEach((el) => observer.observe(el));
+
+    document.querySelectorAll('.scroll-reveal').forEach((el) => {
+      // Reveal elements already in viewport on mount
+      const rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {
+        reveal(el);
+      } else {
+        observer.observe(el);
+      }
+    });
+
     return () => observer.disconnect();
   }, []);
 

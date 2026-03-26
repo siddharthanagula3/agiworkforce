@@ -412,7 +412,7 @@ export default function AIChatFeaturePage() {
           </section>
 
           <CtaSection
-            icon={MessageSquare}
+            icon="MessageSquare"
             headline="Start Chatting With Any AI Model"
             body="Download the desktop app and connect your preferred AI provider in minutes. Real-time streaming, tool execution, and reasoning traces included."
           />

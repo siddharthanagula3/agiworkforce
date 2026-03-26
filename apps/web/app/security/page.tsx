@@ -462,7 +462,7 @@ export default function SecurityPage() {
           </section>
 
           <CtaSection
-            icon={Shield}
+            icon="Shield"
             headline="Secure AI, From Day One"
             body="Download the desktop app and run AI with full local encryption, sandboxed tool execution, and zero data brokering — your keys, your data, your control."
           />

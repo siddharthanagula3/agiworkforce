@@ -60,7 +60,7 @@ const surfaces: Surface[] = [
   {
     icon: '🌐',
     label: 'Web',
-    tech: 'Next.js 16 SPA',
+    tech: 'Next.js SPA',
     color: '#06b6d4',
     features: [
       'Access from any browser — Chrome, Safari, Firefox, Edge',
@@ -329,17 +329,22 @@ export function SurfaceShowcase() {
             <div className="transition-all duration-500">{active.mockup}</div>
           </div>
 
-          {/* Surface dots */}
-          <div className="mt-8 flex items-center justify-center gap-2">
+          {/* Surface nav */}
+          <div className="mt-8 flex items-center justify-center gap-1">
             {surfaces.map((s, i) => (
               <button
                 key={s.label}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  i === activeIndex ? 'w-8' : 'w-2 bg-zinc-700 hover:bg-zinc-500'
-                }`}
-                style={i === activeIndex ? { backgroundColor: active.color } : undefined}
+                className="flex h-11 items-center justify-center px-3"
                 aria-label={`Show ${s.label}`}
-              />
+                aria-current={i === activeIndex ? 'true' : undefined}
+              >
+                <span
+                  className={`block h-2 rounded-full transition-all duration-300 ${
+                    i === activeIndex ? 'w-8' : 'w-2 bg-zinc-700 hover:bg-zinc-500'
+                  }`}
+                  style={i === activeIndex ? { backgroundColor: active.color } : undefined}
+                />
+              </button>
             ))}
           </div>
         </div>
@@ -351,7 +356,7 @@ export function SurfaceShowcase() {
           <div
             key={s.label}
             data-surface-panel={i}
-            className="flex h-[70vh] items-center justify-center"
+            className="flex h-[50vh] items-center justify-center"
           >
             {/* Invisible scroll trigger — the sticky card above shows the content */}
             <span className="sr-only">{s.label}</span>
