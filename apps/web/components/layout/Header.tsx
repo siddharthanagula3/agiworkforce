@@ -3,13 +3,13 @@
 import {
   Bot,
   ChevronDown,
-  KanbanSquare,
+  FolderKanban,
   LayoutDashboard,
   Menu,
   MessageSquare,
+  MonitorSmartphone,
   Plug,
   Users,
-  Wrench,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -19,46 +19,46 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 const featureItems = [
   {
-    name: 'AI Chat',
+    name: 'Multi-Model Chat',
     href: '/features/ai-chat',
     icon: MessageSquare,
-    description: 'Multi-model conversations with streaming',
+    description: '25+ providers, switch models mid-conversation',
   },
   {
     name: 'AI Skills',
     href: '/features/ai-skills',
     icon: Users,
-    description: 'Specialized AI employees across multiple categories',
+    description: '150+ specialists across 23 categories',
   },
   {
-    name: 'Plugins & MCP',
+    name: 'MCP Plugins',
     href: '/features/plugins',
     icon: Plug,
-    description: 'Unlimited tool integrations',
+    description: 'Unlimited MCP servers — stdio, SSE, HTTP',
   },
   {
-    name: 'Desktop Tools',
+    name: 'Computer Use',
     href: '/features/tools',
-    icon: Wrench,
-    description: 'Screen, keyboard & app automation',
+    icon: MonitorSmartphone,
+    description: 'Browser, keyboard, screen, files, terminal automation',
   },
   {
-    name: 'AI Agents',
+    name: 'Agents',
     href: '/features/agents',
     icon: Bot,
-    description: 'Autonomous task execution',
+    description: 'Parallel autonomous execution with mobile oversight',
   },
   {
     name: 'Dashboards',
     href: '/features/ai-dashboards',
     icon: LayoutDashboard,
-    description: 'Real-time analytics & insights',
+    description: 'Real-time agent monitoring & analytics',
   },
   {
-    name: 'Project Manager',
+    name: 'Projects',
     href: '/features/ai-project-manager',
-    icon: KanbanSquare,
-    description: 'AI-powered project workflows',
+    icon: FolderKanban,
+    description: 'AI task decomposition & workflow orchestration',
   },
 ];
 
