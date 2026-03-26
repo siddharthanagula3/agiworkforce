@@ -178,8 +178,8 @@ export default function Home() {
             />
             {/* Warm amber glow */}
             <div className="pointer-events-none absolute left-1/2 top-[38%] h-[500px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c8892a]/[0.07] blur-[140px]" />
-            {/* Blue accent glow */}
-            <div className="pointer-events-none absolute right-[12%] bottom-[15%] h-[280px] w-[400px] rounded-full bg-blue-700/[0.05] blur-[100px]" />
+            {/* Secondary accent glow */}
+            <div className="pointer-events-none absolute right-[12%] bottom-[15%] h-[280px] w-[400px] rounded-full bg-[#c8892a]/[0.04] blur-[100px]" />
 
             <div className="container relative mx-auto px-4 text-center">
               {/* Badge */}
@@ -211,7 +211,7 @@ export default function Home() {
               <div className="animate-hero-5 mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
                 <Link
                   href="/download"
-                  className="group inline-flex h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-8 text-sm font-semibold text-white transition-all hover:bg-blue-500 hover:shadow-[0_0_30px_rgba(37,99,235,0.35)] focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-[#09090b]"
+                  className="group inline-flex h-12 items-center justify-center gap-2 rounded-md bg-[#c8892a] px-8 text-sm font-semibold text-[#09090b] transition-all hover:bg-[#d4993a] focus:outline-none focus:ring-2 focus:ring-[#c8892a]/50 focus:ring-offset-2 focus:ring-offset-[#09090b]"
                 >
                   Download Free
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />

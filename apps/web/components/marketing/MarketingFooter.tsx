@@ -31,7 +31,7 @@ export function MarketingFooter() {
           {/* Brand column */}
           <div className="md:col-span-1">
             <div className="flex items-center gap-2 font-bold mb-4">
-              <Bot className="h-5 w-5 text-blue-500" />
+              <Bot className="h-5 w-5 text-[#c8892a]" />
               <span className="text-white">AGI Workforce</span>
             </div>
             <p className="text-sm text-zinc-500 leading-relaxed">

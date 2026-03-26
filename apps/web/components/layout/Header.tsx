@@ -189,7 +189,7 @@ export function Header() {
     <header className="fixed top-0 w-full border-b border-white/10 bg-black/50 backdrop-blur-xl z-50">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tighter">
-          <Bot className="h-6 w-6 text-blue-500" />
+          <Bot className="h-6 w-6 text-[#c8892a]" />
           <span>AGI Workforce</span>
         </Link>
 
@@ -242,8 +242,8 @@ export function Header() {
                       }}
                       onKeyDown={(e) => handleMenuItemKeyDown(e, index)}
                     >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
-                        <item.icon className="h-4 w-4 text-blue-400" />
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#c8892a]/10">
+                        <item.icon className="h-4 w-4 text-[#c8892a]" />
                       </div>
                       <div>
                         <div className="text-sm font-medium text-white">{item.name}</div>
@@ -280,7 +280,7 @@ export function Header() {
               </button>
               <Link
                 href="/chat"
-                className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+                className="rounded-md bg-[#c8892a] px-4 py-2 text-sm font-semibold text-[#09090b] hover:bg-[#d4993a] transition-colors"
               >
                 Chat
               </Link>
