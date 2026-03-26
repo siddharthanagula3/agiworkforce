@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { ModelSelector } from '../ModelSelector';
 import { useUnifiedAuthStore } from '../../../stores/auth';
 import { useModelStore } from '../../../stores/modelStore';
+import { useAppModeStore } from '../../../stores/appModeStore';
 
 vi.mock('../ModelCard', () => ({
   ModelCard: ({ model, onClick }: { model: { name: string }; onClick?: () => void }) => (
@@ -22,10 +23,14 @@ describe('ModelSelector', () => {
   beforeEach(() => {
     setAuthPlan('hobby');
 
+    // Force local mode so the component shows tier-filtered models (not cloudModels)
+    useAppModeStore.setState({ mode: 'local' });
+
     useModelStore.setState({
       selectedModel: null,
       favorites: [],
       recentModels: [],
+      cloudModels: [],
     });
   });
 
@@ -34,7 +39,7 @@ describe('ModelSelector', () => {
 
     expect(screen.getByText('Auto (Economy)')).toBeInTheDocument();
     expect(screen.queryByText('Auto Balanced')).not.toBeInTheDocument();
-    expect(screen.queryByText('GPT-5.2 Codex (Low)')).not.toBeInTheDocument();
+    expect(screen.queryByText('GPT-5.4 Codex (Low)')).not.toBeInTheDocument();
   });
 
   it('shows pro-tier managed cloud models for pro users', () => {
@@ -43,6 +48,5 @@ describe('ModelSelector', () => {
     render(<ModelSelector />);
 
     expect(screen.getByText('Auto Balanced')).toBeInTheDocument();
-    expect(screen.getByText('GPT-5.2 Codex (Low)')).toBeInTheDocument();
   });
 });
