@@ -154,68 +154,60 @@ interface UserPlanData {
   stripeSubscriptionId: string | null;
 }
 
-// Per-tier configuration for token limits, pricing, and display
+// Per-tier configuration — credits are in CENTS (e.g., 350 = $3.50/mo)
+// Source of truth: desktop pricing.ts tokenCredits + subscription-service.ts PLAN_CREDITS
 const TIER_CONFIG: Record<
   BillingPlan,
-  { totalLimit: number; providerLimit: number; price: number; name: string; features: string[] }
+  { creditLimitCents: number; price: number; name: string; features: string[] }
 > = {
   free: {
-    totalLimit: 1_000_000,
-    providerLimit: 250_000,
+    creditLimitCents: 0,
     price: 0,
     name: 'Free',
-    features: [
-      '1M tokens/month (250k per LLM)',
-      'All 4 AI providers included',
-      'Basic analytics',
-      'Community support',
-    ],
+    features: ['Local LLMs only (Ollama, LM Studio)', 'Basic automations', 'Community support'],
   },
   hobby: {
-    totalLimit: 2_500_000,
-    providerLimit: 625_000,
+    creditLimitCents: 350, // $3.50/mo
     price: 10,
     name: 'Hobby',
     features: [
-      '2.5M tokens/month (625k per LLM)',
-      'All 4 AI providers included',
-      'Basic analytics',
-      'Email support',
+      '$3.50/mo in AI credits',
+      'Speed-optimized AI models',
+      'Vision & image analysis',
+      'Basic computer use',
+      'Community support',
     ],
   },
   pro: {
-    totalLimit: 10_000_000,
-    providerLimit: 2_500_000,
+    creditLimitCents: 1200, // $12/mo
     price: 29.99,
     name: 'Pro',
     features: [
-      '10M tokens/month (2.5M per LLM)',
-      'All 4 AI providers included',
-      'Advanced analytics',
-      'Priority support',
-      'API access',
+      '$12/mo in AI credits',
+      'Balanced AI models (chat, tool use, vision)',
+      'Full computer use & browser automation',
+      'Image generation & analysis',
+      'Email support',
     ],
   },
   max: {
-    totalLimit: 50_000_000,
-    providerLimit: 12_500_000,
+    creditLimitCents: 15000, // $150/mo
     price: 299.99,
     name: 'Max',
     features: [
-      '50M tokens/month (12.5M per LLM)',
-      'All 4 AI providers included',
-      'Advanced analytics',
+      '$150/mo in AI credits',
+      'Deep reasoning & thinking models',
+      'Advanced agentic coding models',
+      'Video generation & analysis',
       'Priority support',
-      'Custom integrations',
     ],
   },
   enterprise: {
-    totalLimit: 100_000_000,
-    providerLimit: 25_000_000,
+    creditLimitCents: 100000, // $1000/mo default, overridden per-contract
     price: 0,
     name: 'Enterprise',
     features: [
-      'Unlimited tokens',
+      'Custom credit allocation',
       'All AI providers',
       'Custom analytics',
       'Dedicated support',
@@ -287,10 +279,10 @@ async function fetchTokenUsage(userId: string): Promise<LLMUsage[]> {
     .eq('user_id', userId);
 
   const defaultUsage: LLMUsage[] = [
-    { provider: 'OpenAI', tokens: 0, cost: 0, limit: TIER_CONFIG.free.providerLimit },
-    { provider: 'Anthropic', tokens: 0, cost: 0, limit: TIER_CONFIG.free.providerLimit },
-    { provider: 'Google', tokens: 0, cost: 0, limit: TIER_CONFIG.free.providerLimit },
-    { provider: 'Perplexity', tokens: 0, cost: 0, limit: TIER_CONFIG.free.providerLimit },
+    { provider: 'OpenAI', tokens: 0, cost: 0, limit: 0 },
+    { provider: 'Anthropic', tokens: 0, cost: 0, limit: 0 },
+    { provider: 'Google', tokens: 0, cost: 0, limit: 0 },
+    { provider: 'Perplexity', tokens: 0, cost: 0, limit: 0 },
   ];
 
   if (error || !data || (data as unknown[]).length === 0) {
@@ -385,20 +377,14 @@ export function useBillingData(): UseQueryResult<BillingInfo | null, Error> {
       ]);
 
       const tierConfig = TIER_CONFIG[userPlan.plan] ?? TIER_CONFIG.free;
-      const totalLimit = tierConfig.totalLimit;
-      const providerLimit = tierConfig.providerLimit;
+      const creditLimitCents = tierConfig.creditLimitCents;
 
-      // Update limits based on plan
-      const updatedLlmUsage = llmUsage.map((llm) => ({
-        ...llm,
-        limit: providerLimit,
-      }));
-
-      const totalCost = updatedLlmUsage.reduce((sum, llm) => sum + llm.cost, 0);
+      const totalCost = llmUsage.reduce((sum, llm) => sum + llm.cost, 0);
       const balance = Number.isFinite(tokenBalance.currentBalance)
         ? tokenBalance.currentBalance
         : 0;
-      const totalUsed = totalLimit - balance;
+      // Both creditLimitCents and balance are in cents — units match
+      const totalUsed = Math.max(creditLimitCents - balance, 0);
 
       // Calculate billing period dates
       const now = new Date();
@@ -420,11 +406,11 @@ export function useBillingData(): UseQueryResult<BillingInfo | null, Error> {
         stripeCustomerId: userPlan.stripeCustomerId,
         stripeSubscriptionId: userPlan.stripeSubscriptionId,
         usage: {
-          totalTokens: Math.max(totalUsed, 0),
-          totalLimit,
+          totalTokens: totalUsed,
+          totalLimit: creditLimitCents,
           totalCost,
           currentBalance: tokenBalance.currentBalance,
-          llmUsage: updatedLlmUsage,
+          llmUsage,
         },
       };
     },
