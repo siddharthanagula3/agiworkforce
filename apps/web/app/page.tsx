@@ -27,9 +27,9 @@ import { AnimatedStats } from '../components/marketing/AnimatedStats';
 import { MARKETING } from '../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI Workforce | AI Desktop Assistant',
+  title: 'AGI Workforce | AI Agent Automation Platform',
   description:
-    'AGI Workforce is a privacy-first native desktop AI assistant. Chat with AI, automate your browser, manage files, and run code — all locally. Multi-provider LLM support with BYOK and full offline mode via Ollama.',
+    'AGI Workforce is a privacy-first AI agent platform. Chat with AI, automate your browser, terminal, files, and code — across desktop, web, CLI, VS Code, and browser extension. Multi-provider LLM support with BYOK and full offline mode via Ollama.',
   keywords: [
     'AI agent',
     'AI automation',
@@ -48,18 +48,18 @@ export const metadata: Metadata = {
     'data privacy',
   ],
   openGraph: {
-    title: 'AGI Workforce | AI Desktop Assistant',
+    title: 'AGI Workforce | AI Agent Automation Platform',
     description:
-      'Chat with AI, automate your browser, manage files, and run code — all from one native desktop app. Free to try.',
+      'A team of AI agents that automates your browser, terminal, files, and code — across desktop, web, CLI, VS Code, and browser extension. Free to try.',
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [{ url: '/app-preview.png', width: 1200, height: 630, alt: 'AGI Workforce' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Workforce | AI Desktop Assistant',
+    title: 'AGI Workforce | AI Agent Automation Platform',
     description:
-      'Chat with AI, automate your browser, manage files, and run code — all from one native desktop app.',
+      'A team of AI agents that automates your browser, terminal, files, and code — across desktop, web, CLI, VS Code, and browser extension.',
     images: ['/app-preview.png'],
   },
 };
@@ -146,7 +146,7 @@ const stats = [
 
 const surfaces = [
   { Icon: Monitor, label: 'Desktop', sub: 'Tauri v2 · macOS · Windows · Linux' },
-  { Icon: Globe, label: 'Web', sub: 'Next.js 16 SPA' },
+  { Icon: Globe, label: 'Web', sub: 'Next.js SPA' },
   { Icon: Terminal, label: 'CLI', sub: 'Rust binary · agiworkforce' },
   { Icon: Code2, label: 'VS Code', sub: '@agi chat participant' },
   { Icon: Plug, label: 'Browser', sub: 'Chrome MV3 extension' },
@@ -204,8 +204,7 @@ export default function Home() {
               {/* Subtitle */}
               <p className="animate-hero-4 font-body mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-[#888480] md:text-xl">
                 A team of AI agents that automates your browser, terminal, files, and code — across
-                desktop, web, CLI, VS Code, and browser.{' '}
-                <span className="text-[#aaa8a4]">Your data never leaves your machine.</span>
+                desktop, web, CLI, VS Code, and browser extension.
               </p>
 
               {/* CTAs */}
@@ -257,21 +256,21 @@ export default function Home() {
                   <div key={i} className="flex shrink-0 items-center gap-20 md:gap-28">
                     <svg
                       viewBox="0 0 24 24"
-                      className="h-7 w-7 shrink-0 fill-[#555150] transition-colors hover:fill-[#888480]"
+                      className="h-7 w-7 shrink-0 fill-[#888480] transition-colors hover:fill-[#aaa8a4]"
                       aria-label="OpenAI"
                     >
                       <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.998 5.998 0 0 0-3.998 2.9 6.042 6.042 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.602 1.5v3.003l-2.602 1.5-2.602-1.5z" />
                     </svg>
                     <svg
                       viewBox="0 0 24 24"
-                      className="h-7 w-7 shrink-0 fill-[#555150] transition-colors hover:fill-[#888480]"
+                      className="h-7 w-7 shrink-0 fill-[#888480] transition-colors hover:fill-[#aaa8a4]"
                       aria-label="Anthropic"
                     >
                       <path d="M17.304 3.541l-5.17 14.27h3.164l5.17-14.27h-3.164zM6.696 3.541l5.17 14.27H8.702L3.532 3.541h3.164z" />
                     </svg>
                     <svg
                       viewBox="0 0 24 24"
-                      className="h-7 w-7 shrink-0 opacity-50 transition-opacity hover:opacity-80"
+                      className="h-7 w-7 shrink-0 opacity-70 transition-opacity hover:opacity-100"
                       aria-label="Google"
                     >
                       <path
@@ -293,14 +292,14 @@ export default function Home() {
                     </svg>
                     <svg
                       viewBox="0 0 24 24"
-                      className="h-7 w-7 shrink-0 fill-[#555150] transition-colors hover:fill-[#888480]"
+                      className="h-7 w-7 shrink-0 fill-[#888480] transition-colors hover:fill-[#aaa8a4]"
                       aria-label="xAI"
                     >
                       <path d="M3.005 6.3h3.2l5.59 8.24L6.36 22H3.005l5.735-7.735L3.005 6.3zm8.25 0h3.2L22 22h-3.2L11.255 6.3zm5.545 0H20l-3.5 4.7-1.6-2.35L16.8 6.3z" />
                     </svg>
                     <svg
                       viewBox="0 0 24 24"
-                      className="h-7 w-7 shrink-0 opacity-50 transition-opacity hover:opacity-80"
+                      className="h-7 w-7 shrink-0 opacity-70 transition-opacity hover:opacity-100"
                       aria-label="Mistral"
                     >
                       <rect x="1" y="3" width="5" height="5" fill="#F7D046" />
@@ -315,7 +314,7 @@ export default function Home() {
                     </svg>
                     <svg
                       viewBox="0 0 24 24"
-                      className="h-7 w-7 shrink-0 fill-[#555150] transition-colors hover:fill-[#888480]"
+                      className="h-7 w-7 shrink-0 fill-[#888480] transition-colors hover:fill-[#aaa8a4]"
                       aria-label="Ollama"
                     >
                       <circle cx="12" cy="8" r="4" />
@@ -325,21 +324,21 @@ export default function Home() {
                     </svg>
                     <svg
                       viewBox="0 0 24 24"
-                      className="h-7 w-7 shrink-0 fill-[#555150] transition-colors hover:fill-[#888480]"
+                      className="h-7 w-7 shrink-0 fill-[#888480] transition-colors hover:fill-[#aaa8a4]"
                       aria-label="Groq"
                     >
                       <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z" />
                     </svg>
                     <svg
                       viewBox="0 0 24 24"
-                      className="h-7 w-7 shrink-0 fill-[#555150] transition-colors hover:fill-[#888480]"
+                      className="h-7 w-7 shrink-0 fill-[#888480] transition-colors hover:fill-[#aaa8a4]"
                       aria-label="DeepSeek"
                     >
                       <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.5 14.5L12 14l-3.5 2.5 1-4L6 10l4.1-.35L12 6l1.9 3.65L18 10l-3.5 2.5 1 4z" />
                     </svg>
                     <svg
                       viewBox="0 0 24 24"
-                      className="h-7 w-7 shrink-0 fill-[#555150] transition-colors hover:fill-[#888480]"
+                      className="h-7 w-7 shrink-0 fill-[#888480] transition-colors hover:fill-[#aaa8a4]"
                       aria-label="Perplexity"
                     >
                       <path d="M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.18l7 3.89v7.86l-7 3.89-7-3.89V8.07l7-3.89z" />

@@ -1,12 +1,34 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRight, type LucideIcon } from 'lucide-react';
+import {
+  ArrowRight,
+  Bot,
+  KanbanSquare,
+  Layers,
+  LayoutDashboard,
+  MessageSquare,
+  Monitor,
+  Plug,
+  Shield,
+  type LucideIcon,
+} from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
+const iconMap: Record<string, LucideIcon> = {
+  Bot,
+  KanbanSquare,
+  Layers,
+  LayoutDashboard,
+  MessageSquare,
+  Monitor,
+  Plug,
+  Shield,
+};
+
 interface CtaSectionProps {
-  icon?: LucideIcon;
+  icon?: string;
   headline: string;
   body: string;
   secondaryLabel?: string;
@@ -14,12 +36,13 @@ interface CtaSectionProps {
 }
 
 export function CtaSection({
-  icon: Icon,
+  icon,
   headline,
   body,
   secondaryLabel = 'View Pricing',
   secondaryHref = '/pricing',
 }: CtaSectionProps) {
+  const Icon = icon ? iconMap[icon] : undefined;
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
