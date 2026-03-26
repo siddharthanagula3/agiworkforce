@@ -542,8 +542,7 @@ mod tests {
 
     #[test]
     fn test_total_execution_time_calculation() {
-        let results = vec![
-            ToolExecutionResult {
+        let results = [ToolExecutionResult {
                 tool_id: "tool_1".to_string(),
                 step_id: "step_1".to_string(),
                 success: true,
@@ -581,8 +580,7 @@ mod tests {
                     memory_mb: 30,
                     network_mb: 0.0,
                 },
-            },
-        ];
+            }];
 
         let total_time_ms: u64 = results.iter().map(|r| r.execution_time_ms).sum();
         assert_eq!(total_time_ms, 600);
