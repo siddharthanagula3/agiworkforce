@@ -1015,7 +1015,7 @@ pub async fn dir_traverse(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// file_read_range — Read with line-number offset + limit (OpenCode parity)
+// file_read_range — Read with line-number offset + limit
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Response for a ranged file read.
@@ -1037,8 +1037,8 @@ pub struct FileReadRangeResult {
 /// Read a file with a line-number offset and limit.
 ///
 /// Each returned line is prefixed with its 1-based line number: `"42: <content>"`.
-/// This matches the OpenCode `Read(path, offset, limit)` tool signature and lets
-/// the agent navigate large files without loading them entirely into context.
+/// This lets the agent navigate large files without loading them entirely
+/// into context.
 ///
 /// # Arguments
 /// * `path`   — Absolute or relative path to the file.

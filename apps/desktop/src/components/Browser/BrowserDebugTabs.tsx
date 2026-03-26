@@ -9,7 +9,7 @@
  *
  * Also adds an Error Analysis card for failed actions.
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -26,6 +26,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { sanitizeHtml } from '../../utils/security';
 import {
   useBrowserStore,
   selectBrowserActions,
@@ -266,6 +267,18 @@ function ErrorAnalysis({ failedActions }: ErrorAnalysisProps) {
 // DOM Snapshot tab
 // =============================================================================
 
+/** Renders HTML from DOM snapshots through DOMPurify instead of regex stripping. */
+function SanitizedDomPreview({ html }: { html: string }) {
+  const sanitized = useMemo(() => sanitizeHtml(html), [html]);
+  return (
+    <div
+      className="text-[11px] text-muted-foreground leading-relaxed"
+      dangerouslySetInnerHTML={{ __html: sanitized }}
+    />
+  );
+}
+SanitizedDomPreview.displayName = 'SanitizedDomPreview';
+
 interface DOMSnapshotTabProps {
   failedActions: BrowserAction[];
 }
@@ -354,22 +367,7 @@ function DOMSnapshotTab({ failedActions }: DOMSnapshotTabProps) {
             {snapshot.html}
           </pre>
         ) : (
-          <div
-            className="text-[11px] text-muted-foreground leading-relaxed"
-            // Safe: the HTML comes from the browser automation backend, not user input
-            // We render it in a sandboxed preview context
-            dangerouslySetInnerHTML={{
-              __html: snapshot.html
-                .replace(
-                  /<script[\s\S]*?<\/script>/gi,
-                  '<em class="text-amber-400/60">[script removed]</em>',
-                )
-                .replace(
-                  /<iframe[\s\S]*?<\/iframe>/gi,
-                  '<em class="text-amber-400/60">[iframe removed]</em>',
-                ),
-            }}
-          />
+          <SanitizedDomPreview html={snapshot.html} />
         )}
       </div>
     </div>

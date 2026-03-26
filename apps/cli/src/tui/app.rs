@@ -3559,7 +3559,7 @@ impl App {
                                     Line::from(vec!["• ".dim(), "Sandbox ready".into()]),
                                     Line::from(vec![
                                         "  ".into(),
-                                        "Codex can now safely edit files and execute commands in your computer"
+                                        "AGI Workforce can now safely edit files and execute commands in your computer"
                                             .dark_gray(),
                                     ]),
                                 ]);
@@ -4504,7 +4504,7 @@ impl App {
             Err(external_editor::EditorError::MissingEditor) => {
                 self.chat_widget
                     .add_to_history(history_cell::new_error_event(
-                    "Cannot open external editor: set $VISUAL or $EDITOR before starting Codex."
+                    "Cannot open external editor: set $VISUAL or $EDITOR before starting AGI Workforce."
                         .to_string(),
                 ));
                 self.reset_external_editor_state(tui);
@@ -7394,7 +7394,7 @@ guardian_approval = true
 
     #[tokio::test]
     async fn model_migration_prompt_shows_for_hidden_model() {
-        let agiworkforce_home = tempdir().expect("temp codex home");
+        let agiworkforce_home = tempdir().expect("temp agiworkforce home");
         let config = ConfigBuilder::default()
             .agiworkforce_home(agiworkforce_home.path().to_path_buf())
             .build()

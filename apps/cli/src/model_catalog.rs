@@ -1,6 +1,6 @@
 //! 3-tier model catalog: bundled defaults → disk cache → remote fetch.
 //!
-//! Architecture (inspired by Codex CLI + Aider + models.dev):
+//! Architecture (inspired by Aider + models.dev):
 //!
 //! Tier 1 — BUNDLED:  Compiled into binary. Always available offline.
 //! Tier 2 — CACHE:    ~/.agiworkforce/cache/models.json (5-min TTL, version-aware)

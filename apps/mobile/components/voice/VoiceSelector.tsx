@@ -37,7 +37,10 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
         setVoices(v);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        console.warn('[VoiceSelector] Failed to fetch voices:', err);
+        setLoading(false);
+      });
   }, []);
 
   const handleSelectPreset = useCallback(
@@ -60,7 +63,9 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
         voice: matchedVoiceId ?? undefined,
         rate: preset.rate,
         pitch: preset.pitch,
-      }).catch(() => undefined);
+      }).catch((err) => {
+        console.warn('[VoiceSelector] TTS sample playback failed:', err);
+      });
     },
     [voices, setSelectedPresetId, setSpeechRate, setSpeechPitch, setSelectedVoiceId],
   );

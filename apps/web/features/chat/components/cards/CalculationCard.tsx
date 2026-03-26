@@ -17,6 +17,7 @@ import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@shared/ui/collapsible';
 import { cn } from '@shared/lib/utils';
+import DOMPurify from 'dompurify';
 import { toast } from 'sonner';
 
 interface ParsedCalculation {
@@ -159,7 +160,9 @@ function FormulaDisplay({ expression, isLatex }: { expression: string; isLatex: 
     return (
       <div
         className="formula-katex overflow-x-auto py-2 text-center"
-        dangerouslySetInnerHTML={{ __html: rendered }}
+        dangerouslySetInnerHTML={{
+          __html: DOMPurify.sanitize(rendered, { USE_PROFILES: { html: true } }),
+        }}
         role="math"
         aria-label={expression}
       />

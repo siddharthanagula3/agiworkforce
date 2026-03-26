@@ -916,7 +916,9 @@ export const UnifiedAgenticChat: React.FC<{
               });
             }
             if (isTauri) {
-              void ipcInvoke('chat_stop_generation').catch(() => {});
+              void ipcInvoke('chat_stop_generation').catch((e: unknown) => {
+                console.error('[Chat] Failed to stop generation:', e);
+              });
             }
           } else {
             upsertToolArtifact(
@@ -2167,7 +2169,11 @@ export const UnifiedAgenticChat: React.FC<{
       entryPoint,
     });
     if (isTauri) {
-      void ipcInvoke('agent_set_workflow_hash', { workflow_hash: workflowHash }).catch(() => {});
+      void ipcInvoke('agent_set_workflow_hash', { workflow_hash: workflowHash }).catch(
+        (e: unknown) => {
+          console.error('[Chat] Failed to set workflow hash:', e);
+        },
+      );
     }
 
     const taskMetadata = deriveTaskMetadata(entryPoint, enrichedOptions.attachments);
@@ -2468,7 +2474,11 @@ export const UnifiedAgenticChat: React.FC<{
     const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
 
     if (isTauri) {
-      await ipcInvoke('chat_stop_generation', { conversationId: conversationDbId }).catch(() => {});
+      await ipcInvoke('chat_stop_generation', { conversationId: conversationDbId }).catch(
+        (e: unknown) => {
+          console.error('[Chat] Failed to stop generation:', e);
+        },
+      );
     }
 
     const currentStreamingId = useUnifiedChatStore.getState().currentStreamingMessageId;
@@ -2507,7 +2517,9 @@ export const UnifiedAgenticChat: React.FC<{
       toolExecutionTimeoutsRef.current.clear();
 
       if (isTauri) {
-        void ipcInvoke('chat_stop_generation').catch(() => {});
+        void ipcInvoke('chat_stop_generation').catch((e: unknown) => {
+          console.error('[Chat] Failed to stop generation on new conversation:', e);
+        });
       }
 
       const state = useUnifiedChatStore.getState();

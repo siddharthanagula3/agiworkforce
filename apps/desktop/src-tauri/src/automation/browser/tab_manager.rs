@@ -306,7 +306,8 @@ impl TabManager {
                 });
                 socket
                     .send(tungstenite::Message::Text(
-                        serde_json::to_string(&get_history).unwrap(),
+                        serde_json::to_string(&get_history)
+                            .map_err(|e| format!("JSON serialize failed: {}", e))?,
                     ))
                     .map_err(|e| format!("WS send failed: {}", e))?;
 
@@ -358,7 +359,8 @@ impl TabManager {
                 });
                 socket
                     .send(tungstenite::Message::Text(
-                        serde_json::to_string(&navigate_cmd).unwrap(),
+                        serde_json::to_string(&navigate_cmd)
+                            .map_err(|e| format!("JSON serialize failed: {}", e))?,
                     ))
                     .map_err(|e| format!("WS send failed: {}", e))?;
 
