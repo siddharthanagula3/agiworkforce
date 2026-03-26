@@ -61,9 +61,9 @@ import {
 } from './hooks';
 
 const PLAN_CREDIT_LIMITS = {
-  hobby: { monthly: 1.0, daily: 0.3 },
-  pro: { monthly: 20.0, daily: 6.0 },
-  max: { monthly: 250.0, daily: 75.0 },
+  hobby: { monthly: 3.5, daily: 1.0 },
+  pro: { monthly: 12.0, daily: 4.0 },
+  max: { monthly: 150.0, daily: 50.0 },
 };
 
 export interface SendOptions {
