@@ -21,11 +21,18 @@ export const runtime = 'nodejs';
 // Singleton service-role client — stateless, safe to reuse across requests
 // ---------------------------------------------------------------------------
 
-const _supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-const _supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-const _serviceClient = createClient(_supabaseUrl, _supabaseServiceKey, {
-  auth: { persistSession: false },
-});
+let _serviceClient: ReturnType<typeof createClient> | null = null;
+
+function getServiceClient() {
+  if (!_serviceClient) {
+    const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+    const key = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+    _serviceClient = createClient(url, key, {
+      auth: { persistSession: false },
+    });
+  }
+  return _serviceClient;
+}
 
 type SurfaceId = 'desktop' | 'mobile' | 'extension' | 'cli';
 type SurfaceStatus = 'online' | 'offline' | 'unknown';
@@ -90,13 +97,13 @@ async function authenticateRequest(request: NextRequest): Promise<string | null>
     const {
       data: { user },
       error,
-    } = await _serviceClient.auth.getUser(token);
+    } = await getServiceClient().auth.getUser(token);
     if (error || !user) return null;
     return user.id;
   }
 
   // Cookie-based auth for browser requests
-  const supabaseUrl = _supabaseUrl;
+  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const { createServerClient } = await import('@supabase/ssr');
   const ssrClient = createServerClient(supabaseUrl, requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'), {
     cookies: {
@@ -125,7 +132,8 @@ export async function GET(request: NextRequest) {
   }
 
   // Reuse the module-level singleton service client
-  const untypedClient = _serviceClient as unknown as import('@supabase/supabase-js').SupabaseClient;
+  const untypedClient =
+    getServiceClient() as unknown as import('@supabase/supabase-js').SupabaseClient;
 
   // ---------------------------------------------------------------------------
   // 1. Surface heartbeats
