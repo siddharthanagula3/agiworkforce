@@ -101,9 +101,9 @@ function getRecommendation(totalPoints: number): PlanRecommendation {
       plan: 'pro',
       label: 'Pro',
       price: '$29.99/mo',
-      color: 'blue',
-      ringColor: 'ring-blue-500',
-      badgeColor: 'bg-blue-600 text-white',
+      color: 'amber',
+      ringColor: 'ring-[#c8892a]',
+      badgeColor: 'bg-[#c8892a] text-white',
       description: 'Ideal for daily use with advanced models and browser automation.',
     };
   }
@@ -228,12 +228,12 @@ function PlanCalculator({
         className="max-w-2xl mx-auto mb-12 rounded-2xl p-px"
         style={{
           ...transitionStyle,
-          background: 'linear-gradient(135deg, #10b981 0%, #3b82f6 50%, #a855f7 100%)',
+          background: 'linear-gradient(135deg, #10b981 0%, #c8892a 50%, #a855f7 100%)',
         }}
       >
         <div className="rounded-2xl bg-zinc-950 p-8 text-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-4 py-1.5 text-xs font-medium text-zinc-300 mb-4">
-            <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+            <Sparkles className="h-3.5 w-3.5 text-[#c8892a]" />
             Plan Finder — 4 quick questions
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Find your perfect plan</h2>
@@ -242,7 +242,7 @@ function PlanCalculator({
           </p>
           <Button
             onClick={() => transitionStep(0, 'forward')}
-            className="bg-gradient-to-r from-emerald-600 via-blue-600 to-purple-600 hover:from-emerald-500 hover:via-blue-500 hover:to-purple-500 text-white font-semibold px-8 border-0"
+            className="bg-gradient-to-r from-emerald-600 via-[#c8892a] to-purple-600 hover:from-emerald-500 hover:via-[#d4993a] hover:to-purple-500 text-white font-semibold px-8 border-0"
           >
             Get my recommendation
             <ChevronRight className="h-4 w-4" />
@@ -256,17 +256,17 @@ function PlanCalculator({
   if (assessmentStep === totalQuestions && recommendation) {
     const colorMap: Record<string, string> = {
       emerald: 'text-emerald-400',
-      blue: 'text-blue-400',
+      amber: 'text-[#c8892a]',
       purple: 'text-purple-400',
     };
     const borderMap: Record<string, string> = {
       emerald: 'border-emerald-500/60',
-      blue: 'border-blue-500/60',
+      amber: 'border-[#c8892a]/60',
       purple: 'border-purple-500/60',
     };
     const glowMap: Record<string, string> = {
       emerald: 'shadow-[0_0_40px_-8px_rgba(16,185,129,0.4)]',
-      blue: 'shadow-[0_0_40px_-8px_rgba(59,130,246,0.4)]',
+      amber: 'shadow-[0_0_40px_-8px_rgba(200,137,42,0.4)]',
       purple: 'shadow-[0_0_40px_-8px_rgba(168,85,247,0.4)]',
     };
 
@@ -285,16 +285,16 @@ function PlanCalculator({
               background:
                 recommendation.color === 'emerald'
                   ? 'radial-gradient(ellipse at center, #10b981 0%, transparent 70%)'
-                  : recommendation.color === 'blue'
-                    ? 'radial-gradient(ellipse at center, #3b82f6 0%, transparent 70%)'
+                  : recommendation.color === 'amber'
+                    ? 'radial-gradient(ellipse at center, #c8892a 0%, transparent 70%)'
                     : 'radial-gradient(ellipse at center, #a855f7 0%, transparent 70%)',
             }}
           />
 
           <style>{`
             @keyframes subtlePulse {
-              0%, 100% { box-shadow: 0 0 40px -8px ${recommendation.color === 'emerald' ? 'rgba(16,185,129,0.4)' : recommendation.color === 'blue' ? 'rgba(59,130,246,0.4)' : 'rgba(168,85,247,0.4)'}; }
-              50% { box-shadow: 0 0 60px -4px ${recommendation.color === 'emerald' ? 'rgba(16,185,129,0.6)' : recommendation.color === 'blue' ? 'rgba(59,130,246,0.6)' : 'rgba(168,85,247,0.6)'}; }
+              0%, 100% { box-shadow: 0 0 40px -8px ${recommendation.color === 'emerald' ? 'rgba(16,185,129,0.4)' : recommendation.color === 'amber' ? 'rgba(200,137,42,0.4)' : 'rgba(168,85,247,0.4)'}; }
+              50% { box-shadow: 0 0 60px -4px ${recommendation.color === 'emerald' ? 'rgba(16,185,129,0.6)' : recommendation.color === 'amber' ? 'rgba(200,137,42,0.6)' : 'rgba(168,85,247,0.6)'}; }
             }
           `}</style>
 
@@ -319,8 +319,8 @@ function PlanCalculator({
                 className={`font-semibold px-6 border-0 ${
                   recommendation.color === 'emerald'
                     ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                    : recommendation.color === 'blue'
-                      ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                    : recommendation.color === 'amber'
+                      ? 'bg-[#c8892a] hover:bg-[#d4993a] text-white'
                       : 'bg-purple-600 hover:bg-purple-500 text-white'
                 }`}
               >
@@ -351,7 +351,7 @@ function PlanCalculator({
       <div
         className="rounded-2xl bg-zinc-950 p-px"
         style={{
-          background: 'linear-gradient(135deg, #10b981 0%, #3b82f6 50%, #a855f7 100%)',
+          background: 'linear-gradient(135deg, #10b981 0%, #c8892a 50%, #a855f7 100%)',
         }}
       >
         <div className="rounded-2xl bg-zinc-950 p-7">
@@ -371,7 +371,7 @@ function PlanCalculator({
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
                 width: `${progressPercent}%`,
-                background: 'linear-gradient(90deg, #10b981, #3b82f6, #a855f7)',
+                background: 'linear-gradient(90deg, #10b981, #c8892a, #a855f7)',
               }}
             />
           </div>
@@ -389,7 +389,7 @@ function PlanCalculator({
                   onClick={() => handleOptionSelect(currentQuestion.id, option.points)}
                   className={`w-full text-left rounded-xl border px-4 py-3.5 text-sm font-medium transition-all duration-150 ${
                     isSelected
-                      ? 'border-blue-500 bg-blue-500/10 text-white ring-1 ring-blue-500/50'
+                      ? 'border-[#c8892a] bg-[#c8892a]/10 text-white ring-1 ring-[#c8892a]/50'
                       : 'border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900 hover:text-white'
                   }`}
                 >
@@ -397,7 +397,7 @@ function PlanCalculator({
                     {/* Radio indicator */}
                     <span
                       className={`flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
-                        isSelected ? 'border-blue-500 bg-blue-500' : 'border-zinc-600'
+                        isSelected ? 'border-[#c8892a] bg-[#c8892a]' : 'border-zinc-600'
                       }`}
                     >
                       {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
@@ -426,8 +426,8 @@ function PlanCalculator({
                 currentAnswer === undefined
                   ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
                   : isLastStep
-                    ? 'bg-gradient-to-r from-emerald-600 via-blue-600 to-purple-600 hover:from-emerald-500 hover:via-blue-500 hover:to-purple-500 text-white'
-                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                    ? 'bg-gradient-to-r from-emerald-600 via-[#c8892a] to-purple-600 hover:from-emerald-500 hover:via-[#d4993a] hover:to-purple-500 text-white'
+                    : 'bg-[#c8892a] hover:bg-[#d4993a] text-white'
               }`}
             >
               {isLastStep ? 'See Recommendation' : 'Next'}
@@ -773,7 +773,7 @@ function PricingContent() {
                   onClick={() =>
                     setBillingInterval((prev) => (prev === 'monthly' ? 'annual' : 'monthly'))
                   }
-                  className="relative inline-flex h-6 w-11 items-center rounded-full bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-zinc-900"
+                  className="relative inline-flex h-6 w-11 items-center rounded-full bg-[#c8892a] transition-colors focus:outline-none focus:ring-2 focus:ring-[#c8892a]/50 focus:ring-offset-2 focus:ring-offset-zinc-900"
                   aria-label="Toggle billing interval"
                 >
                   <span
@@ -900,11 +900,11 @@ function PricingContent() {
               {/* Pro Plan */}
               <div
                 ref={proRef}
-                className="rounded-2xl border border-blue-500 bg-blue-950/10 p-6 flex flex-col relative overflow-hidden transition-shadow duration-500 data-[highlighted=true]:shadow-[0_0_60px_-4px_rgba(59,130,246,0.7)]"
+                className="rounded-2xl border border-[#c8892a] bg-[#c8892a]/5 p-6 flex flex-col relative overflow-hidden transition-shadow duration-500 data-[highlighted=true]:shadow-[0_0_60px_-4px_rgba(200,137,42,0.7)]"
               >
-                <div className="absolute inset-0 bg-blue-600/3 pointer-events-none" />
+                <div className="absolute inset-0 bg-[#c8892a]/5 pointer-events-none" />
                 <div className="relative">
-                  <div className="inline-flex items-center rounded-full bg-blue-600/20 px-3 py-1 text-xs font-medium text-blue-200 mb-3">
+                  <div className="inline-flex items-center rounded-full bg-[#c8892a]/20 px-3 py-1 text-xs font-medium text-amber-200 mb-3">
                     <Zap className="h-3 w-3 mr-2" />
                     Recommended
                   </div>
@@ -925,37 +925,37 @@ function PricingContent() {
                 </div>
                 <ul className="space-y-3 text-sm text-zinc-100 flex-1 relative">
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <Check className="h-4 w-4 text-[#c8892a] flex-shrink-0 mt-0.5" />
                     <span>
                       <strong>Pro Models:</strong> Anthropic, OpenAI, Google
                     </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <Check className="h-4 w-4 text-[#c8892a] flex-shrink-0 mt-0.5" />
                     <span>
                       <strong>Web Search:</strong> Perplexity with citations
                     </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <Check className="h-4 w-4 text-[#c8892a] flex-shrink-0 mt-0.5" />
                     <span>
                       <strong>Browser Agent:</strong> Autonomous web automation
                     </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <Check className="h-4 w-4 text-[#c8892a] flex-shrink-0 mt-0.5" />
                     <span>
                       <strong>Media Generation:</strong> Images & videos (Runway)
                     </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <Check className="h-4 w-4 text-[#c8892a] flex-shrink-0 mt-0.5" />
                     <span>
                       <strong>Code Execution:</strong> Run code in terminal
                     </span>
                   </li>
                   <li className="flex gap-2">
-                    <Check className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <Check className="h-4 w-4 text-[#c8892a] flex-shrink-0 mt-0.5" />
                     <span>
                       <strong>Unlimited Workspaces:</strong> RAG & knowledge base
                     </span>
@@ -965,7 +965,7 @@ function PricingContent() {
                 <Button
                   className={`mt-6 w-full inline-flex items-center justify-center gap-2 ${
                     joinedWaitlistPlans.pro
-                      ? 'bg-blue-600/20 border border-blue-400 text-blue-200 hover:bg-blue-600/20'
+                      ? 'bg-[#c8892a]/20 border border-[#c8892a] text-amber-200 hover:bg-[#c8892a]/20'
                       : ''
                   }`}
                   onClick={() => handleButtonClick('pro')}
@@ -1069,7 +1069,7 @@ function PricingContent() {
                     <tr className="border-b border-zinc-800">
                       <th className="text-left py-4 px-4 text-zinc-400 font-medium">Feature</th>
                       <th className="text-center py-4 px-4 text-emerald-400 font-medium">Hobby</th>
-                      <th className="text-center py-4 px-4 text-blue-400 font-medium">Pro</th>
+                      <th className="text-center py-4 px-4 text-[#c8892a] font-medium">Pro</th>
                       <th className="text-center py-4 px-4 text-purple-400 font-medium">Max</th>
                     </tr>
                   </thead>
@@ -1185,7 +1185,7 @@ function PricingContent() {
                         <td className="text-center py-4 px-4">
                           {typeof row.pro === 'boolean' ? (
                             row.pro ? (
-                              <Check className="h-5 w-5 text-blue-400 mx-auto" />
+                              <Check className="h-5 w-5 text-[#c8892a] mx-auto" />
                             ) : (
                               <span className="text-zinc-600">—</span>
                             )
