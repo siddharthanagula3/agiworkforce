@@ -416,7 +416,7 @@ export default function AIProjectManagerFeaturePage() {
           </section>
 
           <CtaSection
-            icon={KanbanSquare}
+            icon="KanbanSquare"
             headline="Manage Projects With AI Agents"
             body="Download the desktop app and let AI decompose, delegate, and deliver your next project. Parallel agents, smart scheduling, and full oversight included."
           />

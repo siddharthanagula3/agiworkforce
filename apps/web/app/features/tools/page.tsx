@@ -451,7 +451,7 @@ export default function ToolsFeaturePage() {
           </section>
 
           <CtaSection
-            icon={Monitor}
+            icon="Monitor"
             headline="Automate Your Desktop Today"
             body="Download the desktop app and let AI handle your repetitive tasks. Browser automation, file management, terminal commands — all from natural language."
           />

@@ -517,7 +517,7 @@ export default function AgentsPage() {
           </section>
 
           <CtaSection
-            icon={Bot}
+            icon="Bot"
             headline="Deploy Your AI Workforce"
             body="Stop running one agent at a time. Launch a parallel workforce that decomposes, executes, and delivers — all from your desktop."
           />
