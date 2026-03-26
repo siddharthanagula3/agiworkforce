@@ -637,7 +637,6 @@ pub struct ProjectInstructionFile {
 /// 3. `~/.claude/` (Claude Code compatibility)
 /// 4. `~/.codex/` (Codex compatibility)
 ///
-/// This mirrors OpenCode's behaviour of injecting `AGENTS.md` as agent context.
 /// The caller (LLM router / context builder) should prepend these contents to
 /// the system prompt so the agent understands the project's conventions.
 #[tauri::command]

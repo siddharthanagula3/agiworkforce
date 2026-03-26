@@ -205,7 +205,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
         if (userId) {
           get()
             .saveSessionToDb(session, userId)
-            .catch(() => {});
+            .catch((e: unknown) => {
+              console.error('[ChatStore] Failed to save session to DB:', e);
+            });
         }
         return id;
       },

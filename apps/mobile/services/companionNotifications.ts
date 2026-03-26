@@ -161,8 +161,9 @@ export function notifyCompanionMessage(payload: ControlPayload): void {
  */
 export function setupCompanionNotifications(): () => void {
   return addCompanionMessageListener((payload) => {
-    dispatchCompanionNotification(payload).catch(() => {
+    dispatchCompanionNotification(payload).catch((err) => {
       // Notification dispatch failure is non-critical — don't crash
+      console.warn('[CompanionNotifications] Dispatch failed:', err);
     });
   });
 }

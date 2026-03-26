@@ -284,7 +284,9 @@ async function handleGetLatestRelease(
   }
 
   // Record download analytics (non-blocking)
-  recordDownload(release.id, request).catch(() => {});
+  recordDownload(release.id, request).catch((e: unknown) => {
+    console.error('[Releases] Failed to record download:', e);
+  });
 
   // Build Tauri-compatible update manifest
   const manifest: TauriUpdateManifest = {

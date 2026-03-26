@@ -15,9 +15,13 @@ export function NetworkBadge() {
 
   useEffect(() => {
     // Initial fetch of network state
-    NetInfo.fetch().then((state) => {
-      setIsOnline(state.isConnected ?? true);
-    });
+    NetInfo.fetch()
+      .then((state) => {
+        setIsOnline(state.isConnected ?? true);
+      })
+      .catch((err) => {
+        console.warn('[NetworkBadge] Initial network state fetch failed:', err);
+      });
 
     // Subscribe to network state changes
     const unsubscribe = NetInfo.addEventListener((state) => {
