@@ -532,8 +532,9 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &std::path::Path)
             |r| r.get(0),
         ) {
             Ok(v) => v,
-            Err(e) => {
-                eprintln!("[sessions] skipping session {} due to query error: {}", session_id, e);
+            Err(_err) => {
+                let redacted_id = if session_id.len() > 8 { &session_id[..8] } else { session_id };
+                eprintln!("[sessions] skipping session {}... due to query error", redacted_id);
                 continue;
             }
         };

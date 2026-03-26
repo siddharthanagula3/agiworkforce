@@ -22,6 +22,8 @@ import { logger } from '../lib/logger';
 const router: Router = Router();
 
 router.use(authenticateToken);
+// SECURITY: Baseline rate limit for all credit endpoints (100/min fallback)
+router.use(createRateLimiter('default'));
 
 // Schema for checking credits - SECURITY: .strict() rejects unexpected fields
 const checkCreditsSchema = z

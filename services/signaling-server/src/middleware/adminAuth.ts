@@ -78,6 +78,10 @@ const COMPARE_KEY = randomBytes(32);
 
 function secureCompare(a: string, b: string): boolean {
   if (!a || !b) return false;
+  // SECURITY: HMAC-SHA256 is used here to normalize input lengths for timingSafeEqual,
+  // NOT for password hashing. This prevents timing side-channel attacks during token
+  // comparison. Password hashing (bcrypt/argon2) is handled in the auth layer.
+  // codeql[js/insufficient-password-hash]: intentional HMAC for constant-time comparison
   const ha = createHmac('sha256', COMPARE_KEY).update(a).digest();
   const hb = createHmac('sha256', COMPARE_KEY).update(b).digest();
   return timingSafeEqual(ha, hb);

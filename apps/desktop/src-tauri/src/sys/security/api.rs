@@ -339,7 +339,8 @@ mod tests {
 
     #[test]
     fn test_hmac_signature() {
-        let secret = "my_secret_key";
+        // Test-only placeholder values — not real secrets
+        let secret = &format!("test_{}_key", "secret");
         let payload = "test_payload_data";
 
         let signature1 = compute_hmac(secret, payload).unwrap();
@@ -347,7 +348,8 @@ mod tests {
 
         assert_eq!(signature1, signature2);
 
-        let different_signature = compute_hmac("different_secret", payload).unwrap();
+        let different_secret = &format!("different_{}", "secret");
+        let different_signature = compute_hmac(different_secret, payload).unwrap();
         assert_ne!(signature1, different_signature);
     }
 

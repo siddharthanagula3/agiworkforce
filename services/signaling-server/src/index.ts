@@ -1355,10 +1355,19 @@ function isSessionExpired(session: Session): boolean {
 
 function generateCode(): string {
   const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const bytes = randomBytes(PAIRING_CODE_LENGTH);
+  const len = charset.length; // 36
+  // Rejection sampling: discard byte values that cause modulo bias.
+  // The largest multiple of 36 that fits in a byte is 252 (36*7).
+  const limit = 256 - (256 % len); // 252
   let code = '';
-  for (let i = 0; i < PAIRING_CODE_LENGTH; i++) {
-    code += charset[bytes.readUInt8(i) % charset.length];
+  while (code.length < PAIRING_CODE_LENGTH) {
+    const bytes = randomBytes(PAIRING_CODE_LENGTH - code.length + 4);
+    for (let i = 0; i < bytes.length && code.length < PAIRING_CODE_LENGTH; i++) {
+      const byte = bytes.readUInt8(i);
+      if (byte < limit) {
+        code += charset[byte % len];
+      }
+    }
   }
   return code;
 }

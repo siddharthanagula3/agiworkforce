@@ -31,10 +31,18 @@ const tokenPollSchema = z.object({
  */
 function generateUserCode(): string {
   const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  const bytes = crypto.randomBytes(8);
+  const len = alphabet.length; // 31
+  // Rejection sampling: discard byte values that cause modulo bias.
+  // The largest multiple of 31 that fits in a byte is 248 (31*8).
+  const limit = 256 - (256 % len); // 248
   let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += alphabet[bytes[i] % alphabet.length];
+  while (code.length < 8) {
+    const bytes = crypto.randomBytes(8 - code.length + 4); // over-provision to reduce loops
+    for (let i = 0; i < bytes.length && code.length < 8; i++) {
+      if (bytes[i]! < limit) {
+        code += alphabet[bytes[i]! % len];
+      }
+    }
   }
   return `${code.slice(0, 4)}-${code.slice(4, 8)}`;
 }
