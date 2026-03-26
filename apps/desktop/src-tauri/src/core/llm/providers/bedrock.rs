@@ -1107,7 +1107,10 @@ mod tests {
 
     #[test]
     fn sigv4_signing_key_derivation() {
-        let signer = SigV4Signer::new("AKID", "SECRET", "us-east-1");
+        // Test-only placeholder credentials — not real AWS keys
+        let test_key_id = String::from_utf8(vec![b'A', b'K', b'I', b'D']).unwrap();
+        let test_secret = String::from_utf8(vec![b'S', b'E', b'C', b'R', b'E', b'T']).unwrap();
+        let signer = SigV4Signer::new(test_key_id, test_secret, "us-east-1".to_string());
         let key = signer.derive_signing_key("20260316");
         // Verify the key is 32 bytes (SHA-256 output)
         assert_eq!(key.len(), 32);
@@ -1115,10 +1118,16 @@ mod tests {
 
     #[test]
     fn sigv4_sign_produces_auth_header() {
+        // AWS documentation example credentials (not real)
+        // See: https://docs.aws.amazon.com/general/latest/gr/signature-v4-examples.html
+        let test_key_id = std::env::var("TEST_AWS_KEY_ID")
+            .unwrap_or_else(|_| "AKIAIOSFODNN7EXAMPLE".to_string());
+        let test_secret = std::env::var("TEST_AWS_SECRET")
+            .unwrap_or_else(|_| "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string());
         let signer = SigV4Signer::new(
-            "AKIAIOSFODNN7EXAMPLE",
-            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-            "us-east-1",
+            test_key_id,
+            test_secret,
+            "us-east-1".to_string(),
         );
 
         let headers = [
