@@ -27,6 +27,8 @@ import {
 import { getMobileSyncService } from '@/services/conversationSync';
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
 import { subscribeToRealtime, unsubscribeFromRealtime } from '@/services/realtime';
+import { subscribeToDispatch, unsubscribeFromDispatch } from '@/services/dispatchRealtime';
+import { startDesktopStatusPolling } from '@/services/desktopStatus';
 import { useChatStore } from '@/stores/chatStore';
 import '../global.css';
 
@@ -95,6 +97,32 @@ export default function RootLayout() {
       unsubscribe?.();
       unsubscribeFromRealtime();
     };
+  }, [session]);
+
+  // Dispatch Realtime — desktop→mobile task updates
+  useEffect(() => {
+    if (!session) return;
+
+    let unsubscribe: (() => void) | undefined;
+    subscribeToDispatch()
+      .then((unsub) => {
+        unsubscribe = unsub;
+      })
+      .catch((err) => {
+        console.warn('[RootLayout] Dispatch subscription failed:', err);
+      });
+
+    return () => {
+      unsubscribe?.();
+      unsubscribeFromDispatch();
+    };
+  }, [session]);
+
+  // Desktop liveness polling — catch missed Realtime heartbeat updates
+  useEffect(() => {
+    if (!session) return;
+    const cleanup = startDesktopStatusPolling();
+    return cleanup;
   }, [session]);
 
   // 3-device conversation sync — sync on app resume

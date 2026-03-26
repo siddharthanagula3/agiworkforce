@@ -11,6 +11,7 @@
 //! - `{"continue": false}` → signals the caller to stop
 
 use anyhow::{Context, Result};
+use colored::Colorize;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -341,11 +342,30 @@ pub fn aggregate_results(results: &[HookResult]) -> HookAggregateOutcome {
 // ---------------------------------------------------------------------------
 
 /// Load hooks configuration from ~/.agiworkforce/hooks.json.
+/// Verifies file permissions on Unix (rejects group/other-readable files).
 pub fn load_hooks() -> Result<HooksConfig> {
     let path = crate::config::CliConfig::config_dir()?.join("hooks.json");
 
     if !path.exists() {
         return Ok(HooksConfig::default());
+    }
+
+    // Security: verify hooks.json is not group/other-writable (prevents tampering)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(&path) {
+            let mode = meta.permissions().mode();
+            if mode & 0o022 != 0 {
+                eprintln!(
+                    "{} hooks.json is group/other-writable (mode {:o}). \
+                     Fix with: chmod 600 {}",
+                    "security warning:".red().bold(),
+                    mode & 0o777,
+                    path.display()
+                );
+            }
+        }
     }
 
     let contents = std::fs::read_to_string(&path).context("Failed to read hooks.json")?;

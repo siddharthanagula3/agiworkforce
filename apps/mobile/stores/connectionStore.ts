@@ -102,8 +102,9 @@ interface ConnectionState {
 /** Signaling client instance — kept outside state to avoid serialization */
 let signalingClient: SignalingClient | null = null;
 
-/** Queue of control messages to flush once reconnected */
+/** Queue of control messages to flush once reconnected. Capped to prevent unbounded growth. */
 const pendingControlQueue: Array<{ action: string; payload: unknown }> = [];
+const MAX_PENDING_QUEUE = 200;
 
 /** Drain and send all queued control messages */
 function flushPendingControlQueue(): void {
@@ -145,41 +146,67 @@ function parsePairingCode(raw: string): string {
   return trimmed.toUpperCase();
 }
 
+// ---------------------------------------------------------------------------
+// Runtime type guards for incoming control messages (no Zod dependency)
+// ---------------------------------------------------------------------------
+
+function isString(v: unknown): v is string {
+  return typeof v === 'string';
+}
+
+function isNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+const VALID_TASK_STATUSES = new Set(['pending', 'working', 'completed', 'failed']);
+
+function isTaskStatus(v: unknown): v is TaskStatus {
+  return isString(v) && VALID_TASK_STATUSES.has(v);
+}
+
 /**
  * Handle incoming control messages from the desktop via signaling or data channel.
+ * All fields are validated at runtime before use — no unsafe `as` casts.
  */
 function handleControlMessage(payload: unknown): void {
-  if (typeof payload !== 'object' || payload === null) return;
-  const msg = payload as Record<string, unknown>;
-  const action = msg['action'] as string | undefined;
+  if (!isObject(payload)) return;
+  const action = isString(payload['action']) ? payload['action'] : undefined;
+  if (!action) return;
 
   switch (action) {
     case 'agents_update': {
-      const agents = msg['agents'];
+      const agents = payload['agents'];
       if (Array.isArray(agents)) {
-        useAgentStore.getState().setAgents(agents as Agent[]);
+        // Filter to objects only — drop malformed entries
+        const valid = agents.filter(isObject) as unknown as Agent[];
+        useAgentStore.getState().setAgents(valid);
       }
       break;
     }
     case 'agent_update': {
-      const agentId = msg['agentId'] as string | undefined;
-      const patch = msg['patch'] as Partial<Omit<Agent, 'id'>> | undefined;
+      const agentId = isString(payload['agentId']) ? payload['agentId'] : undefined;
+      const patch = isObject(payload['patch']) ? payload['patch'] : undefined;
       if (agentId && patch) {
-        useAgentStore.getState().updateAgent(agentId, patch);
+        useAgentStore.getState().updateAgent(agentId, patch as Partial<Omit<Agent, 'id'>>);
       }
       break;
     }
     case 'agent_removed': {
-      const agentId = msg['agentId'] as string | undefined;
+      const agentId = isString(payload['agentId']) ? payload['agentId'] : undefined;
       if (agentId) {
         useAgentStore.getState().removeAgent(agentId);
       }
       break;
     }
     case 'pong': {
-      // Heartbeat pong received from desktop — record it with round-trip latency
-      const pingTimestamp = msg['timestamp'] as number | undefined;
-      const latencyMs = pingTimestamp != null ? Date.now() - pingTimestamp : undefined;
+      const pingTimestamp = isNumber(payload['timestamp']) ? payload['timestamp'] : undefined;
+      const now = Date.now();
+      const latencyMs =
+        pingTimestamp != null && pingTimestamp <= now ? now - pingTimestamp : undefined;
       useConnectionStore.getState().recordHeartbeat(latencyMs);
       break;
     }
@@ -189,17 +216,19 @@ function handleControlMessage(payload: unknown): void {
     case 'task_completed':
     case 'agent_paused':
     case 'heartbeat_lost': {
-      // Notify the companion notification bridge — fires local push notification
-      notifyCompanionMessage(msg as { action: string; [key: string]: unknown });
+      notifyCompanionMessage({ action, ...payload });
       break;
     }
-    // --- Dispatch thread messages from desktop ---
     case 'dispatch_response': {
-      const messageId = (msg['messageId'] as string) || `desktop-${Date.now()}`;
-      const text = (msg['text'] as string) ?? '';
-      const taskStatus = (msg['taskStatus'] as TaskStatus) ?? undefined;
-      const statusDetail = (msg['statusDetail'] as string) ?? undefined;
-      const taskResult = (msg['taskResult'] as TaskResult) ?? undefined;
+      const messageId = isString(payload['messageId'])
+        ? payload['messageId']
+        : `desktop-${Date.now()}`;
+      const text = isString(payload['text']) ? payload['text'] : '';
+      const taskStatus = isTaskStatus(payload['taskStatus']) ? payload['taskStatus'] : undefined;
+      const statusDetail = isString(payload['statusDetail']) ? payload['statusDetail'] : undefined;
+      const taskResult = isObject(payload['taskResult'])
+        ? (payload['taskResult'] as TaskResult)
+        : undefined;
       const dispatchMsg: DispatchMessage = {
         id: messageId,
         role: 'desktop',
@@ -213,19 +242,18 @@ function handleControlMessage(payload: unknown): void {
       break;
     }
     case 'dispatch_status_update': {
-      const messageId = msg['messageId'] as string | undefined;
+      const messageId = isString(payload['messageId']) ? payload['messageId'] : undefined;
       if (messageId) {
         const patch: Partial<Omit<DispatchMessage, 'id'>> = {};
-        if (msg['taskStatus'] != null) patch.taskStatus = msg['taskStatus'] as TaskStatus;
-        if (msg['statusDetail'] != null) patch.statusDetail = msg['statusDetail'] as string;
-        if (msg['text'] != null) patch.text = msg['text'] as string;
-        if (msg['taskResult'] != null) patch.taskResult = msg['taskResult'] as TaskResult;
+        if (isTaskStatus(payload['taskStatus'])) patch.taskStatus = payload['taskStatus'];
+        if (isString(payload['statusDetail'])) patch.statusDetail = payload['statusDetail'];
+        if (isString(payload['text'])) patch.text = payload['text'];
+        if (isObject(payload['taskResult'])) patch.taskResult = payload['taskResult'] as TaskResult;
         useDispatchStore.getState().updateMessage(messageId, patch);
       }
       break;
     }
     default:
-      // Unknown control action — ignore
       break;
   }
 }
@@ -582,6 +610,9 @@ export const useConnectionStore = create<ConnectionState>()(
       },
 
       queueControl: (action: string, payload?: unknown) => {
+        if (pendingControlQueue.length >= MAX_PENDING_QUEUE) {
+          pendingControlQueue.shift(); // Drop oldest to stay under cap
+        }
         pendingControlQueue.push({ action, payload: payload ?? {} });
       },
 
@@ -649,7 +680,14 @@ export const useConnectionStore = create<ConnectionState>()(
 
         // If disconnecting or reconnecting, queue for later delivery instead of dropping
         if (status === 'reconnecting' || status === 'stale') {
-          pendingControlQueue.push({ action, payload: payload ?? {} });
+          if (pendingControlQueue.length < MAX_PENDING_QUEUE) {
+            pendingControlQueue.push({ action, payload: payload ?? {} });
+          }
+          return;
+        }
+
+        // Cannot send when fully disconnected or session expired — silently no-op
+        if (status === 'disconnected' || status === 'error' || status === 'session_expired') {
           return;
         }
 
@@ -679,6 +717,9 @@ export const useConnectionStore = create<ConnectionState>()(
     {
       name: 'connection-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[connectionStore] Hydration failed:', error);
+      },
       partialize: (state) => ({
         // Do NOT persist pairingCode — it's ephemeral and sensitive
         // Do NOT persist connection status or metadata

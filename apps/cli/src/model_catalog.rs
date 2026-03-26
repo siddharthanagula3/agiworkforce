@@ -33,6 +33,11 @@ const CACHE_FILE: &str = "cache/models.json";
 pub const DEFAULT_MODEL: &str = "claude-opus-4-6";
 pub const DEFAULT_PROVIDER: &str = "anthropic";
 
+/// Fallback defaults for model metadata when upstream data is missing.
+const DEFAULT_CONTEXT_WINDOW: usize = 128_000;
+const DEFAULT_MAX_OUTPUT: usize = 4_096;
+const DEFAULT_PRICE: f64 = 0.0;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Model type — shared by all tiers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -532,10 +537,10 @@ async fn fetch_remote() -> Option<Vec<Model>> {
 
         for (model_id, model_val) in models_obj {
             if let Ok(md) = serde_json::from_value::<ModelsDevModel>(model_val.clone()) {
-                let ctx = md.limit.as_ref().and_then(|l| l.context).unwrap_or(128_000);
-                let out = md.limit.as_ref().and_then(|l| l.output).unwrap_or(4_096);
-                let price_in = md.cost.as_ref().and_then(|c| c.input).unwrap_or(0.0);
-                let price_out = md.cost.as_ref().and_then(|c| c.output).unwrap_or(0.0);
+                let ctx = md.limit.as_ref().and_then(|l| l.context).unwrap_or(DEFAULT_CONTEXT_WINDOW);
+                let out = md.limit.as_ref().and_then(|l| l.output).unwrap_or(DEFAULT_MAX_OUTPUT);
+                let price_in = md.cost.as_ref().and_then(|c| c.input).unwrap_or(DEFAULT_PRICE);
+                let price_out = md.cost.as_ref().and_then(|c| c.output).unwrap_or(DEFAULT_PRICE);
 
                 models.push(Model {
                     id: model_id.clone(),
@@ -599,10 +604,10 @@ impl UserModelOverride {
             id: self.id.clone(),
             provider: self.provider.clone(),
             display_name: self.display_name.clone().unwrap_or_else(|| self.id.clone()),
-            context_window: self.context_window.unwrap_or(128_000),
-            max_output_tokens: self.max_output_tokens.unwrap_or(4_096),
-            input_price_per_1m: self.input_price_per_1m.unwrap_or(0.0),
-            output_price_per_1m: self.output_price_per_1m.unwrap_or(0.0),
+            context_window: self.context_window.unwrap_or(DEFAULT_CONTEXT_WINDOW),
+            max_output_tokens: self.max_output_tokens.unwrap_or(DEFAULT_MAX_OUTPUT),
+            input_price_per_1m: self.input_price_per_1m.unwrap_or(DEFAULT_PRICE),
+            output_price_per_1m: self.output_price_per_1m.unwrap_or(DEFAULT_PRICE),
             supports_tools: self.supports_tools.unwrap_or(true),
             supports_vision: self.supports_vision.unwrap_or(false),
             supports_reasoning: self.supports_reasoning.unwrap_or(false),
@@ -651,21 +656,42 @@ impl Catalog {
 
     /// Load + background refresh from models.dev (non-blocking).
     /// Returns the catalog immediately; spawns a task to fetch + update cache.
+    ///
+    /// Also checks `models_cache` (1h TTL) as an additional cache tier before
+    /// fetching from the network.
     pub fn load_with_refresh() -> Self {
         let catalog = Self::load();
 
         // Spawn non-blocking background refresh
         tokio::spawn(async {
+            // Check models_cache (separate from the model_catalog cache) — if
+            // it has recent data, skip the network fetch entirely.
+            let home = crate::config::CliConfig::config_dir().ok();
+            if let Some(ref h) = home {
+                if crate::models_cache::ModelsCache::load(h).is_some() {
+                    // models_cache is fresh (within its own TTL) — skip remote fetch
+                    return;
+                }
+            }
+
             if let Some(remote_models) = fetch_remote().await {
                 // Merge: bundled models take priority, remote fills gaps
                 let mut merged = bundled_models();
                 let bundled_ids: Vec<String> = merged.iter().map(|m| m.id.clone()).collect();
-                for rm in remote_models {
+                for rm in &remote_models {
                     if !bundled_ids.contains(&rm.id) {
-                        merged.push(rm);
+                        merged.push(rm.clone());
                     }
                 }
                 write_cache(&merged);
+
+                // Also update models_cache with the raw JSON for cross-module use
+                if let Some(ref h) = home {
+                    let json_val = serde_json::to_value(&remote_models).unwrap_or_default();
+                    if let Err(e) = crate::models_cache::ModelsCache::save(h, &json_val) {
+                        eprintln!("[model_catalog] failed to update models_cache: {}", e);
+                    }
+                }
             }
         });
 

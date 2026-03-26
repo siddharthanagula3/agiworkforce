@@ -186,7 +186,11 @@ export async function subscribeToRealtime(): Promise<() => void> {
     )
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        // Subscribed to conversations — no-op
+        // Subscribed to conversations
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('[Realtime] conversations channel error — will auto-retry');
+      } else if (status === 'TIMED_OUT') {
+        console.error('[Realtime] conversations channel subscription timed out');
       }
     });
 
@@ -205,7 +209,11 @@ export async function subscribeToRealtime(): Promise<() => void> {
     )
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        // Subscribed to messages — no-op
+        // Subscribed to messages
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('[Realtime] messages channel error — will auto-retry');
+      } else if (status === 'TIMED_OUT') {
+        console.error('[Realtime] messages channel subscription timed out');
       }
     });
 

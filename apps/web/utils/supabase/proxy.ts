@@ -47,7 +47,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes that require authentication
+  // Protected routes that require authentication (defense-in-depth: routes also have inline auth)
   const protectedPaths = [
     '/chat',
     '/device-auth',
@@ -57,6 +57,23 @@ export async function updateSession(request: NextRequest) {
     '/api/checkout',
     '/api/portal',
     '/api/agents',
+    '/api/memory',
+    '/api/chat',
+    '/api/projects',
+    '/api/schedules',
+    '/api/teams',
+    '/api/user',
+    '/api/media',
+    '/api/messaging',
+    '/api/workforce',
+    '/api/sync-subscription',
+    '/api/autotag',
+    '/api/github',
+    '/api/admin',
+    '/api/settings',
+    '/api/control-plane',
+    '/api/voice',
+    '/api/completion',
   ];
   const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path));
 
@@ -157,9 +174,10 @@ export async function updateSession(request: NextRequest) {
           return redirectResponse;
         }
       }
-    } catch {
+    } catch (e) {
       // If account status check fails, allow through rather than blocking
       // all authenticated users. Individual API routes have their own auth.
+      console.warn('[proxy] Account status check failed, allowing through:', e);
     }
   }
 

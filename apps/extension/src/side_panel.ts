@@ -69,8 +69,9 @@ async function loadMessages(): Promise<void> {
         resolve();
         return;
       }
-      const stored = result[STORAGE_KEY] as ChatMessage[] | undefined;
-      if (Array.isArray(stored) && stored.length > 0) {
+      const raw = result[STORAGE_KEY];
+      const stored = Array.isArray(raw) ? (raw as ChatMessage[]) : undefined;
+      if (stored && stored.length > 0) {
         messages.push(...stored.slice(-MAX_STORED_MESSAGES));
         lastRenderedCount = 0;
       }
@@ -86,10 +87,10 @@ function clearStoredMessages(): void {
 }
 
 function saveApiKey(key: string): void {
-  chrome.storage.session.set({ [API_KEY_STORAGE_KEY]: key }).catch((err: unknown) => {
+  chrome.storage.session.set({ [API_KEY_STORAGE_KEY]: key }).catch((_err: unknown) => {
     // CRIT-004: Do NOT fall back to chrome.storage.local for credentials.
     // Credentials must not persist across browser sessions in plaintext storage.
-    console.error('[AGI] Session storage unavailable; API key not saved:', err);
+    console.error('[AGI] Session storage unavailable; API key not saved');
   });
 }
 
@@ -98,7 +99,20 @@ function saveApiKey(key: string): void {
  * Migrates from chrome.storage.local if a legacy key is found there.
  * Returns null if not set.
  */
+// Guard to prevent concurrent API key migrations from racing.
+let _apiKeyMigrationPromise: Promise<string | null> | null = null;
+
 async function loadApiKey(): Promise<string | null> {
+  if (_apiKeyMigrationPromise) return _apiKeyMigrationPromise;
+  _apiKeyMigrationPromise = loadApiKeyInternal();
+  try {
+    return await _apiKeyMigrationPromise;
+  } finally {
+    _apiKeyMigrationPromise = null;
+  }
+}
+
+function loadApiKeyInternal(): Promise<string | null> {
   return new Promise((resolve) => {
     chrome.storage.session.get(API_KEY_STORAGE_KEY, (result) => {
       if (chrome.runtime.lastError) {
@@ -936,6 +950,7 @@ function sanitizeHtml(dirty: string): string {
       'id',
     ],
     ALLOW_DATA_ATTR: false,
+    ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
   });
 }
 

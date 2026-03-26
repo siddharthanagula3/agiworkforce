@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 
 const SIGNATURE_HEADER: &str = "X-Signature";
 const TIMESTAMP_HEADER: &str = "X-Timestamp";
@@ -197,16 +198,19 @@ pub fn compute_hmac(secret: &str, payload: &str) -> Result<String, String> {
     Ok(hex::encode(code_bytes))
 }
 
+/// Constant-time string comparison to prevent timing side-channels on signature validation.
+/// Pads the shorter input to the longer length so that the comparison time does not
+/// leak the length of either operand.
 fn constant_time_compare(a: &str, b: &str) -> bool {
-    // Use XOR of lengths to avoid early return that leaks length info via timing.
-    // The iteration still runs over the shorter string, but the length
-    // mismatch is folded into the result without a branch.
-    let len_diff = a.len() ^ b.len();
-    let mut result = len_diff as u8;
-    for (byte_a, byte_b) in a.bytes().zip(b.bytes()) {
-        result |= byte_a ^ byte_b;
-    }
-    result == 0
+    let max_len = std::cmp::max(a.len(), b.len());
+    let mut a_padded = a.as_bytes().to_vec();
+    let mut b_padded = b.as_bytes().to_vec();
+    a_padded.resize(max_len, 0);
+    b_padded.resize(max_len, 0);
+    // Constant-time compare including original length check
+    let len_eq = a.len() == b.len();
+    let content_eq: bool = a_padded.ct_eq(&b_padded).into();
+    len_eq && content_eq
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

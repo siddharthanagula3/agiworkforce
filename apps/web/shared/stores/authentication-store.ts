@@ -296,8 +296,12 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         set({ isLoading: true });
 
-        // Logout from auth service first — if this throws, stores stay intact
-        await authService.logout();
+        try {
+          // Logout from auth service — proceed with cleanup even if this fails
+          await authService.logout();
+        } catch (err) {
+          console.warn('[Auth] authService.logout() failed, proceeding with cleanup:', err);
+        }
 
         // Clean up all stores to prevent data leaks between sessions
         await cleanupAllStores();

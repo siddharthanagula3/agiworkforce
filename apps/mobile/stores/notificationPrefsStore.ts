@@ -75,9 +75,11 @@ export function getCategoryForType(type: NotificationEventType): NotificationCat
  * Parse "HH:MM" into total minutes since midnight.
  */
 function timeToMinutes(time: string): number {
+  if (!/^\d{2}:\d{2}$/.test(time)) return 0;
   const [hStr, mStr] = time.split(':');
   const h = parseInt(hStr ?? '0', 10);
   const m = parseInt(mStr ?? '0', 10);
+  if (h < 0 || h > 23 || m < 0 || m > 59) return 0;
   return h * 60 + m;
 }
 
@@ -168,6 +170,9 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
     {
       name: 'notification-prefs-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[notificationPrefsStore] Hydration failed:', error);
+      },
     },
   ),
 );

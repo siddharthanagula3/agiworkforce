@@ -6,7 +6,7 @@
  * Calls `shareArtifact` from the artifact-sharing service (Agent C).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Copy, Link2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,13 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
   const [expiryMode, setExpiryMode] = useState<ExpiryMode>('seven-days');
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   // Generate share URL when dialog opens or expiry mode changes
   useEffect(() => {
@@ -75,7 +82,8 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
       await navigator.clipboard.writeText(shareResult.url);
       setCopied(true);
       toast.success('Link copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Failed to copy link');
     }

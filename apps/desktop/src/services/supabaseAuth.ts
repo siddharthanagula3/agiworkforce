@@ -21,7 +21,7 @@ import { API_BASE_URL, WEB_APP_URL } from '../api/config';
 import { isTauri } from '../lib/tauri-mock';
 
 // ============================================================================
-// LocalStorage Cache for Resilience Against Cold Starts
+// In-Memory Cache for Resilience Against Cold Starts
 // ============================================================================
 const AUTH_CACHE_PREFIX = 'agiworkforce_auth_cache_';
 const AUTH_CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes - limits exposure window after token revocation
@@ -32,17 +32,16 @@ interface CachedAuthData<T> {
   cachedAt: number;
 }
 
+const authCacheMap = new Map<string, CachedAuthData<unknown>>();
+
 function getCachedData<T>(key: string, userId: string): T | null {
   try {
-    const raw = localStorage.getItem(`${AUTH_CACHE_PREFIX}${key}`);
-    if (!raw) return null;
-    const cached: CachedAuthData<T> = JSON.parse(raw);
-    // Validate cache: must be for same user and not expired
+    const cached = authCacheMap.get(`${AUTH_CACHE_PREFIX}${key}`) as CachedAuthData<T> | undefined;
+    if (!cached) return null;
     if (cached.userId !== userId) return null;
     if (Date.now() - cached.cachedAt > AUTH_CACHE_MAX_AGE_MS) return null;
     return cached.data;
   } catch {
-    // AUDIT-P3-ERROR: Cache read failure - graceful degradation to null
     return null;
   }
 }
@@ -50,20 +49,14 @@ function getCachedData<T>(key: string, userId: string): T | null {
 function setCachedData<T>(key: string, userId: string, data: T): void {
   try {
     const cached: CachedAuthData<T> = { data, userId, cachedAt: Date.now() };
-    localStorage.setItem(`${AUTH_CACHE_PREFIX}${key}`, JSON.stringify(cached));
+    authCacheMap.set(`${AUTH_CACHE_PREFIX}${key}`, cached as CachedAuthData<unknown>);
   } catch {
-    // AUDIT-P3-ERROR: Cache write failure - non-critical, app continues without caching
+    // non-critical
   }
 }
 
 function clearAuthCache(): void {
-  try {
-    Object.keys(localStorage)
-      .filter((k) => k.startsWith(AUTH_CACHE_PREFIX))
-      .forEach((k) => localStorage.removeItem(k));
-  } catch {
-    // AUDIT-P3-ERROR: Cache clear failure - non-critical during logout
-  }
+  authCacheMap.clear();
 }
 
 // ============================================================================

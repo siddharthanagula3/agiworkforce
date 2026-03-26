@@ -147,10 +147,13 @@ pub fn migrate_to_encrypted(db_path: &str, key: &[u8]) -> Result<(), String> {
 
         // Step 4: Use ATTACH with KEY to create an encrypted copy via sqlcipher_export
         let hex_key = hex::encode(key);
+        // Sanitize path for SQL: escape single quotes to prevent injection.
+        // SQLite ATTACH doesn't support parameterized binding.
+        let safe_path = temp_encrypted_path.replace('\'', "''");
         source
             .execute_batch(&format!(
                 "ATTACH DATABASE '{}' AS encrypted KEY \"x'{}'\";",
-                temp_encrypted_path, hex_key
+                safe_path, hex_key
             ))
             .map_err(|e| format!("Failed to attach encrypted DB: {}", e))?;
 

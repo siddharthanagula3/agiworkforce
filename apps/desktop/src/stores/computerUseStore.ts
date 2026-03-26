@@ -81,6 +81,13 @@ interface ComputerUseState {
   isExecutingOpa: boolean;
   lastOpaResult: OpaTaskResult | null;
 
+  // Settings
+  computerUseEnabled: boolean;
+  consentAccepted: boolean;
+  allowedApps: string[];
+  deniedApps: string[];
+  hideAppsOnTask: boolean;
+
   // Existing actions
   startSession: () => Promise<void>;
   stopSession: () => Promise<void>;
@@ -88,6 +95,15 @@ interface ComputerUseState {
   logAction: (action: ComputerAction) => void;
   clearLog: () => void;
   reset: () => void;
+
+  // Settings actions
+  setComputerUseEnabled: (enabled: boolean) => void;
+  setConsentAccepted: (accepted: boolean) => void;
+  addAllowedApp: (app: string) => void;
+  removeAllowedApp: (app: string) => void;
+  addDeniedApp: (app: string) => void;
+  removeDeniedApp: (app: string) => void;
+  setHideAppsOnTask: (hide: boolean) => void;
 
   // Newly wired actions
   click: (x: number, y: number) => Promise<void>;
@@ -128,6 +144,34 @@ export const useComputerUseStore = create<ComputerUseState>()(
       error: null,
       isExecutingOpa: false,
       lastOpaResult: null,
+
+      // Settings defaults
+      computerUseEnabled: false,
+      consentAccepted: false,
+      allowedApps: [],
+      deniedApps: [],
+      hideAppsOnTask: true,
+
+      // Settings actions
+      setComputerUseEnabled: (enabled: boolean) => set({ computerUseEnabled: enabled }),
+      setConsentAccepted: (accepted: boolean) => set({ consentAccepted: accepted }),
+      addAllowedApp: (app: string) =>
+        set((state) => {
+          state.allowedApps.push(app);
+        }),
+      removeAllowedApp: (app: string) =>
+        set((state) => {
+          state.allowedApps = state.allowedApps.filter((a) => a !== app);
+        }),
+      addDeniedApp: (app: string) =>
+        set((state) => {
+          state.deniedApps.push(app);
+        }),
+      removeDeniedApp: (app: string) =>
+        set((state) => {
+          state.deniedApps = state.deniedApps.filter((a) => a !== app);
+        }),
+      setHideAppsOnTask: (hide: boolean) => set({ hideAppsOnTask: hide }),
 
       startSession: async () => {
         try {
@@ -563,3 +607,10 @@ export const selectLastClickPosition = (state: ComputerUseState) => {
   }
   return null;
 };
+
+// Settings selectors
+export const selectComputerUseEnabled = (state: ComputerUseState) => state.computerUseEnabled;
+export const selectConsentAccepted = (state: ComputerUseState) => state.consentAccepted;
+export const selectAllowedApps = (state: ComputerUseState) => state.allowedApps;
+export const selectDeniedApps = (state: ComputerUseState) => state.deniedApps;
+export const selectHideAppsOnTask = (state: ComputerUseState) => state.hideAppsOnTask;

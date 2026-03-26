@@ -383,13 +383,13 @@ impl CodebaseCache {
             .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
         let total_entries: usize =
-            db.query_row("SELECT COUNT(*) FROM codebase_cache", [], |row| row.get(0))?;
+            db.query_row("SELECT COUNT(*) FROM codebase_cache", [], |row| row.get::<_, i64>(0).map(|v| v as usize))?;
 
         let mut entries_by_type = HashMap::new();
         let mut stmt =
             db.prepare("SELECT cache_type, COUNT(*) FROM codebase_cache GROUP BY cache_type")?;
         let rows = stmt.query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, usize>(1)?))
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
         })?;
 
         for row in rows {
@@ -400,20 +400,22 @@ impl CodebaseCache {
         let total_size_bytes: u64 = db.query_row(
             "SELECT COALESCE(SUM(LENGTH(data)), 0) FROM codebase_cache",
             [],
-            |row| row.get(0),
+            |row| row.get::<_, i64>(0).map(|v| v as u64),
         )?;
 
         let oldest_entry: Option<u64> = db
             .query_row("SELECT MIN(created_at) FROM codebase_cache", [], |row| {
-                row.get(0)
+                row.get::<_, Option<i64>>(0).map(|v| v.map(|n| n as u64))
             })
-            .optional()?;
+            .optional()?
+            .flatten();
 
         let newest_entry: Option<u64> = db
             .query_row("SELECT MAX(created_at) FROM codebase_cache", [], |row| {
-                row.get(0)
+                row.get::<_, Option<i64>>(0).map(|v| v.map(|n| n as u64))
             })
-            .optional()?;
+            .optional()?
+            .flatten();
 
         let hits = *self
             .hit_count

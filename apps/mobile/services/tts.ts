@@ -42,6 +42,7 @@ export async function speak(text: string, options?: TTSOptions): Promise<void> {
   await Speech.stop();
 
   return new Promise<void>((resolve, reject) => {
+    let settled = false;
     Speech.speak(text, {
       voice: options?.voice,
       rate: options?.rate ?? 1.0,
@@ -51,14 +52,20 @@ export async function speak(text: string, options?: TTSOptions): Promise<void> {
         options?.onStart?.();
       },
       onDone: () => {
+        if (settled) return;
+        settled = true;
         options?.onDone?.();
         resolve();
       },
       onStopped: () => {
+        if (settled) return;
+        settled = true;
         options?.onStopped?.();
         resolve();
       },
       onError: (error) => {
+        if (settled) return;
+        settled = true;
         const err = error instanceof Error ? error : new Error(String(error));
         options?.onError?.(err);
         reject(err);

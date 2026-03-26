@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Device Authorization Page
  * Handles OAuth device flow for AGI Workforce Desktop app.

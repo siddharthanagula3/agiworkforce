@@ -329,7 +329,7 @@ ${state.result.report}
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }, [state.result]);
 
   const handleReset = useCallback(() => {

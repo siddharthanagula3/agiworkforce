@@ -222,7 +222,7 @@ impl TemplateManager {
                     }),
                     default_prompts: serde_json::from_str(&prompts_json).unwrap_or_default(),
                     success_criteria: serde_json::from_str(&criteria_json).unwrap_or_default(),
-                    estimated_duration_ms: row.get(9)?,
+                    estimated_duration_ms: row.get::<_, i64>(9)? as u64,
                     difficulty_level: DifficultyLevel::from_str(&difficulty_str)
                         .unwrap_or(DifficultyLevel::Medium),
                     install_count: row.get(11)?,
@@ -270,7 +270,7 @@ impl TemplateManager {
                 }),
                 default_prompts: serde_json::from_str(&prompts_json).unwrap_or_default(),
                 success_criteria: serde_json::from_str(&criteria_json).unwrap_or_default(),
-                estimated_duration_ms: row.get(9)?,
+                estimated_duration_ms: row.get::<_, i64>(9)? as u64,
                 difficulty_level: DifficultyLevel::from_str(&difficulty_str)
                     .unwrap_or(DifficultyLevel::Medium),
                 install_count: row.get(11)?,
@@ -331,7 +331,7 @@ impl TemplateManager {
                     }),
                     default_prompts: serde_json::from_str(&prompts_json).unwrap_or_default(),
                     success_criteria: serde_json::from_str(&criteria_json).unwrap_or_default(),
-                    estimated_duration_ms: row.get(9)?,
+                    estimated_duration_ms: row.get::<_, i64>(9)? as u64,
                     difficulty_level: DifficultyLevel::from_str(&difficulty_str)
                         .unwrap_or(DifficultyLevel::Medium),
                     install_count: row.get(11)?,
@@ -401,7 +401,7 @@ impl TemplateManager {
                     }),
                     default_prompts: serde_json::from_str(&prompts_json).unwrap_or_default(),
                     success_criteria: serde_json::from_str(&criteria_json).unwrap_or_default(),
-                    estimated_duration_ms: row.get(9)?,
+                    estimated_duration_ms: row.get::<_, i64>(9)? as u64,
                     difficulty_level: DifficultyLevel::from_str(&difficulty_str)
                         .unwrap_or(DifficultyLevel::Medium),
                     install_count: row.get(11)?,
@@ -451,7 +451,7 @@ impl TemplateManager {
                     }),
                     default_prompts: serde_json::from_str(&prompts_json).unwrap_or_default(),
                     success_criteria: serde_json::from_str(&criteria_json).unwrap_or_default(),
-                    estimated_duration_ms: row.get(9)?,
+                    estimated_duration_ms: row.get::<_, i64>(9)? as u64,
                     difficulty_level: DifficultyLevel::from_str(&difficulty_str)
                         .unwrap_or(DifficultyLevel::Medium),
                     install_count: row.get(11)?,

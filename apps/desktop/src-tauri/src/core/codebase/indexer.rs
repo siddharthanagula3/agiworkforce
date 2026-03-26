@@ -2,7 +2,7 @@ use rusqlite::{params, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use tokio_rusqlite::Connection;
+use crate::data::async_sqlite::AsyncConnection as Connection;
 use tracing::debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,7 +157,7 @@ impl CodebaseIndexer {
                             symbol.column,
                             symbol.signature,
                             symbol.documentation,
-                            now
+                            now as i64
                         ],
                     )?;
                 }
@@ -165,7 +165,7 @@ impl CodebaseIndexer {
                 let _ = conn.execute(
                     "INSERT OR REPLACE INTO files (path, last_indexed, content_hash)
                      VALUES (?1, ?2, ?3)",
-                    params![file_path_for_insert, now, content_hash],
+                    params![file_path_for_insert, now as i64, content_hash],
                 )?;
 
                 Ok(())
@@ -191,7 +191,7 @@ impl CodebaseIndexer {
                 )?;
 
                 let symbols = stmt
-                    .query_map(params![query_pattern, limit], |row| {
+                    .query_map(params![query_pattern, limit as i64], |row| {
                         Ok(Symbol {
                             name: row.get(0)?,
                             kind: parse_symbol_kind(&row.get::<_, String>(1)?),

@@ -229,7 +229,14 @@ export function VoiceConversationScreen({
       setTranscriptPreview(text.trim());
 
       // Send to AI and get response
-      const aiResponse = await onSendMessage(text.trim());
+      let aiResponse: string;
+      try {
+        aiResponse = await onSendMessage(text.trim());
+      } catch (sendErr) {
+        console.warn('[VoiceConversation] Send failed:', sendErr);
+        if (activeRef.current) setPhase('idle');
+        return;
+      }
 
       if (!activeRef.current) return;
 

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AgiWorkforceApiError, chatCompletion, type ChatMessage } from '../utils/api';
+import { AgiWorkforceApiError, chatCompletion, type LlmChatMessage } from '../utils/api';
 
 const MIN_PREFIX_CHARS = 3;
 const MAX_CONTEXT_LINES = 80;
@@ -106,21 +106,26 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
       this.pendingResolve = undefined;
     }
 
-    // Wait for debounce period before sending the request
+    // Wait for debounce period before sending the request.
+    // The cancellation listener must be disposed to prevent accumulation
+    // across rapid keystrokes (each call registers a new listener).
+    let cancelListener: vscode.Disposable | undefined;
     const shouldProceed = await new Promise<boolean>((resolve) => {
       this.pendingResolve = () => resolve(false);
       this.debounceTimer = setTimeout(() => {
         this.debounceTimer = undefined;
         this.pendingResolve = undefined;
+        cancelListener?.dispose();
         resolve(true);
       }, debounceMs);
 
-      token.onCancellationRequested(() => {
+      cancelListener = token.onCancellationRequested(() => {
         if (this.debounceTimer !== undefined) {
           clearTimeout(this.debounceTimer);
           this.debounceTimer = undefined;
         }
         this.pendingResolve = undefined;
+        cancelListener?.dispose();
         resolve(false);
       });
     });
@@ -136,7 +141,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
         ? `\n\nCode after cursor:\n\`\`\`${language}\n${suffixSnippet.slice(0, 500)}\n\`\`\``
         : '';
 
-    const messages: ChatMessage[] = [
+    const messages: LlmChatMessage[] = [
       {
         role: 'system',
         content:

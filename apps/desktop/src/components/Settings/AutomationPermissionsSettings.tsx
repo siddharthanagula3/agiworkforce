@@ -1,4 +1,4 @@
-import { invoke } from '@/lib/tauri-mock';
+import { automation } from '@agiworkforce/api';
 import { Check, ExternalLink, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -82,7 +82,8 @@ export function AutomationPermissionsSettings() {
 
   const refresh = useCallback(async () => {
     try {
-      const result = await invoke<AutomationPermissions>('check_automation_permissions');
+      const result =
+        (await automation.checkAutomationPermissions()) as unknown as AutomationPermissions;
       setPermissions(result);
     } catch (err) {
       console.error('Failed to check automation permissions:', err);
@@ -99,7 +100,7 @@ export function AutomationPermissionsSettings() {
     async (kind: string) => {
       setRequesting(kind);
       try {
-        await invoke('request_automation_permission', { kind });
+        await automation.requestAutomationPermission(kind);
         // Re-check after a short delay to give the user time to toggle in Settings
         refreshTimerRef.current = setTimeout(() => void refresh(), 2000);
       } catch (err) {

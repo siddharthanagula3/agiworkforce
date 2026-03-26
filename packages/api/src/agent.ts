@@ -3,11 +3,31 @@
  */
 
 import { command } from '@agiworkforce/runtime';
+import type { AgentConfig } from '@agiworkforce/types';
 
 // ---- Types ----
 
+export type { AgentConfig };
+
 export interface AGIConfig {
-  [key: string]: unknown;
+  /** Agent name for identification. */
+  name?: string;
+  /** LLM model identifier. */
+  model?: string;
+  /** LLM provider identifier. */
+  provider?: string;
+  /** System prompt for the agent. */
+  systemPrompt?: string;
+  /** Maximum agentic loop iterations. */
+  maxIterations?: number;
+  /** Tool names the agent is allowed to use. */
+  tools?: string[];
+  /** Whether tool calls are auto-approved. */
+  autoApprove?: boolean;
+  /** Sampling temperature. */
+  temperature?: number;
+  /** Arbitrary metadata. */
+  metadata?: Record<string, unknown>;
 }
 export interface SubmitGoalRequest {
   goal: string;
@@ -40,7 +60,14 @@ export interface Goal {
   createdAt: string;
 }
 export interface OrchestratorInitRequest {
-  [key: string]: unknown;
+  /** LLM model identifier for the orchestrator. */
+  model?: string;
+  /** LLM provider identifier. */
+  provider?: string;
+  /** Maximum concurrent agents. */
+  maxConcurrentAgents?: number;
+  /** Arbitrary metadata. */
+  metadata?: Record<string, unknown>;
 }
 export interface SpawnAgentRequest {
   goal: string;
@@ -80,9 +107,6 @@ export interface KnowledgeEntryResponse {
   content: string;
   source: string;
   score: number;
-}
-export interface AgentConfig {
-  [key: string]: unknown;
 }
 export interface AgentSubmitTaskRequest {
   task: string;
@@ -152,7 +176,14 @@ export interface BackgroundAgentStats {
   failed: number;
 }
 export interface BgSubmitTaskRequest {
-  [key: string]: unknown;
+  /** Task description or goal. */
+  task: string;
+  /** LLM model identifier. */
+  model?: string;
+  /** Tool names the task is allowed to use. */
+  tools?: string[];
+  /** Arbitrary metadata. */
+  metadata?: Record<string, unknown>;
 }
 export interface ListBackgroundTasksRequest {
   status?: string;
@@ -201,7 +232,14 @@ export interface WorkflowExecutionLog {
   level: string;
 }
 export interface SwarmInitRequest {
-  [key: string]: unknown;
+  /** LLM model identifier for swarm agents. */
+  model?: string;
+  /** LLM provider identifier. */
+  provider?: string;
+  /** Maximum number of concurrent swarm agents. */
+  maxAgents?: number;
+  /** Arbitrary metadata. */
+  metadata?: Record<string, unknown>;
 }
 export interface SwarmGoalRequest {
   goal: string;
@@ -337,6 +375,9 @@ export async function agentSetWorkflowHash(workflowHash?: string): Promise<void>
 }
 export async function agentListTrustedWorkflows(): Promise<Record<string, string[]>> {
   return command<Record<string, string[]>>('agent_list_trusted_workflows');
+}
+export async function questionAnswer(id: string, answer: unknown): Promise<void> {
+  return command<void>('question_answer', { id, answer });
 }
 
 // ---- Checkpoints ----

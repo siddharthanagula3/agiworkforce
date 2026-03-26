@@ -54,6 +54,9 @@ export const useDesktopStatusStore = create<DesktopStatusState>()(
     {
       name: 'desktop-status-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[desktopStatusStore] Hydration failed:', error);
+      },
       partialize: (state) => ({
         // Only persist identity — liveness is recomputed from heartbeats
         desktopName: state.desktopName,

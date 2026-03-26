@@ -104,6 +104,13 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copied, setCopied] = useState(false);
   const outputRef = useRef<HTMLPreElement>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   // Auto-scroll output when new content arrives
   useEffect(() => {
@@ -117,7 +124,8 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
     try {
       await navigator.clipboard.writeText(stream.outputBuffer);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy output:', err);
     }

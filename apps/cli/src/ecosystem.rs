@@ -469,7 +469,17 @@ fn json_server_entry(
     let command = config
         .get("command")
         .and_then(|v| v.as_str())
-        .map(String::from);
+        .and_then(|c| {
+            // Reject commands containing shell metacharacters to prevent injection
+            if c.contains(&['|', ';', '&', '$', '`', '\0'][..]) {
+                eprintln!(
+                    "[ecosystem] Skipping imported MCP server '{}:{}': command contains shell metacharacters",
+                    source, name
+                );
+                return None;
+            }
+            Some(String::from(c))
+        });
 
     let args: Vec<String> = config
         .get("args")
@@ -685,6 +695,7 @@ pub fn build_context(detected: &[DetectedTool]) -> EcosystemContext {
 }
 
 /// Format ecosystem context as a system prompt section.
+#[allow(dead_code)]
 pub fn format_ecosystem_prompt(ctx: &EcosystemContext) -> String {
     if ctx.detected_tools.is_empty() {
         return String::new();

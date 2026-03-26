@@ -455,8 +455,8 @@ describe('watchForToolChanges — MutationObserver', () => {
     // Inject a form with tool-name — should trigger the MutationObserver
     addDeclarativeForm({ toolName: 'dynamic-tool', toolDescription: 'Added later' });
 
-    // Wait for MutationObserver microtask to fire
-    await new Promise((r) => setTimeout(r, 10));
+    // Wait for MutationObserver microtask + 300ms debounce to fire
+    await new Promise((r) => setTimeout(r, 400));
 
     expect(callback).toHaveBeenCalled();
     const tools = callback.mock.calls[callback.mock.calls.length - 1][0] as Array<{
@@ -472,7 +472,8 @@ describe('watchForToolChanges — MutationObserver', () => {
 
     form.setAttribute('tool-name', 'new-name');
 
-    await new Promise((r) => setTimeout(r, 10));
+    // Wait for MutationObserver microtask + 300ms debounce
+    await new Promise((r) => setTimeout(r, 400));
 
     expect(callback).toHaveBeenCalled();
   });
@@ -484,7 +485,8 @@ describe('watchForToolChanges — MutationObserver', () => {
 
     addDeclarativeForm({ toolName: 'late-tool' });
 
-    await new Promise((r) => setTimeout(r, 20));
+    // Wait longer than debounce to confirm no callback fires
+    await new Promise((r) => setTimeout(r, 500));
 
     expect(callback).not.toHaveBeenCalled();
   });
@@ -494,10 +496,12 @@ describe('watchForToolChanges — MutationObserver', () => {
     watchForToolChanges(callback);
 
     addDeclarativeForm({ toolName: 'tool-1' });
-    await new Promise((r) => setTimeout(r, 10));
+    // Wait for first debounce to complete
+    await new Promise((r) => setTimeout(r, 400));
 
     addDeclarativeForm({ toolName: 'tool-2' });
-    await new Promise((r) => setTimeout(r, 10));
+    // Wait for second debounce to complete
+    await new Promise((r) => setTimeout(r, 400));
 
     expect(callback.mock.calls.length).toBeGreaterThanOrEqual(2);
   });

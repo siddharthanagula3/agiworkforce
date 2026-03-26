@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -9,6 +9,70 @@ use tokio::process::Command;
 
 use crate::agent::ToolCall;
 use crate::safety::{classify_command, CommandSafety, DANGEROUS_COMMANDS};
+
+// ---------------------------------------------------------------------------
+// Path safety
+// ---------------------------------------------------------------------------
+
+/// Validate that a file path is within the working directory or project root.
+/// Prevents LLM-directed writes to arbitrary filesystem locations.
+fn validate_file_path(path_str: &str) -> std::result::Result<PathBuf, String> {
+    let path = Path::new(path_str);
+
+    // Reject paths with null bytes
+    if path_str.contains('\0') {
+        return Err("Path contains null bytes".to_string());
+    }
+
+    // Resolve to absolute path relative to cwd
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
+    };
+
+    // Canonicalize cwd as the safe root
+    let cwd = std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."));
+    let cwd_canonical = cwd.canonicalize().unwrap_or(cwd);
+
+    // For existing paths, canonicalize and check
+    if absolute.exists() {
+        let canonical = absolute.canonicalize().map_err(|e| format!("Cannot resolve path: {}", e))?;
+        if !canonical.starts_with(&cwd_canonical) {
+            return Err(format!(
+                "Path escapes project directory: {} (resolved to {})",
+                path_str,
+                canonical.display()
+            ));
+        }
+        return Ok(canonical);
+    }
+
+    // For new paths, check that no component is ".." that would escape cwd
+    let mut check = cwd_canonical.clone();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                check.pop();
+                if !check.starts_with(&cwd_canonical) {
+                    return Err(format!(
+                        "Path traversal detected: {} escapes project root",
+                        path_str
+                    ));
+                }
+            }
+            std::path::Component::Normal(c) => {
+                check.push(c);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(absolute)
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,6 +110,7 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 // ---------------------------------------------------------------------------
 
 /// Options controlling tool execution behavior.
+#[derive(Clone, Copy)]
 pub struct ToolExecOptions {
     /// Whether to prompt the user before executing destructive tools.
     pub require_confirmation: bool,
@@ -85,6 +150,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     let is_safe_tool = matches!(
         call.name.as_str(),
         "read_file" | "search_files" | "list_directory" | "web_search" | "web_fetch"
+        | "glob" | "todo_read" | "ask_user" | "tool_search" | "grep_files"
     );
     let require_confirm = opts.require_confirmation && !(opts.auto_approve_safe && is_safe_tool);
 
@@ -101,6 +167,15 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "apply_patch" => execute_apply_patch(&call.args, require_confirm).await,
         "grep_files" => execute_grep_files(&call.args, opts.quiet).await,
         "tool_search" => execute_tool_search(&call.args).await,
+        // --- Competitive parity tools (OpenCode/Gemini) ---
+        "glob" => execute_glob(&call.args).await,
+        "batch" => Box::pin(execute_batch(call, opts)).await,
+        "multiedit" => execute_multiedit(&call.args, require_confirm).await,
+        "todo_read" => execute_todo_read().await,
+        "todo_write" => execute_todo_write(&call.args).await,
+        "ask_user" => execute_ask_user(&call.args).await,
+        "plan_mode" => execute_plan_mode(&call.args).await,
+        "read_many_files" => execute_read_many_files(&call.args).await,
         _ => Ok(ToolResult {
             tool_name: call.name.clone(),
             success: false,
@@ -284,6 +359,15 @@ async fn execute_write_file(
             });
         }
     };
+
+    // Validate path doesn't escape project directory
+    if let Err(reason) = validate_file_path(path) {
+        return Ok(ToolResult {
+            tool_name: "write_file".to_string(),
+            success: false,
+            output: format!("Path rejected: {}", reason),
+        });
+    }
 
     print_tool_status("write_file", &format!("Write({})", path));
 
@@ -739,6 +823,15 @@ async fn execute_edit_file(
         }
     };
 
+    // Validate path doesn't escape project directory
+    if let Err(reason) = validate_file_path(path) {
+        return Ok(ToolResult {
+            tool_name: "edit_file".to_string(),
+            success: false,
+            output: format!("Path rejected: {}", reason),
+        });
+    }
+
     print_tool_status("edit_file", &format!("Edit({})", path));
 
     let file_path = Path::new(path);
@@ -858,13 +951,25 @@ async fn execute_web_search(args: &HashMap<String, String>) -> Result<ToolResult
         });
     }
 
-    // Use a generic search API endpoint (placeholder — real integration would
-    // point to Brave Search, SerpAPI, etc.).
+    // Brave Search API (https://api.search.brave.com/app/keys for free tier).
+    // Also supports SERPAPI_API_KEY with SerpAPI, or TAVILY_API_KEY with Tavily.
+    let (url, header_name, header_value) =
+        if !std::env::var("BRAVE_SEARCH_API_KEY").unwrap_or_default().is_empty() {
+            let key = std::env::var("BRAVE_SEARCH_API_KEY").unwrap_or_default();
+            ("https://api.search.brave.com/res/v1/web/search".to_string(), "X-Subscription-Token".to_string(), key)
+        } else if !std::env::var("TAVILY_API_KEY").unwrap_or_default().is_empty() {
+            let key = std::env::var("TAVILY_API_KEY").unwrap_or_default();
+            ("https://api.tavily.com/search".to_string(), "Authorization".to_string(), format!("Bearer {}", key))
+        } else {
+            // Fallback: use SEARCH_API_KEY with Brave Search as default
+            ("https://api.search.brave.com/res/v1/web/search".to_string(), "X-Subscription-Token".to_string(), api_key)
+        };
+
     let client = reqwest::Client::new();
     let resp = client
-        .get("https://api.search.example/search")
-        .header("Authorization", format!("Bearer {}", api_key))
-        .query(&[("q", query.as_str()), ("limit", &_max_results.to_string())])
+        .get(&url)
+        .header(&header_name, &header_value)
+        .query(&[("q", query.as_str()), ("count", &_max_results.to_string())])
         .timeout(Duration::from_secs(15))
         .send()
         .await;
@@ -923,7 +1028,7 @@ fn validate_fetch_url(url: &str) -> Result<(), String> {
         return Err(format!("Blocked loopback address: {}", host));
     }
 
-    // Block private IP ranges (10.x, 172.16-31.x, 192.168.x, 169.254.x)
+    // Block private IPv4 ranges (10.x, 172.16-31.x, 192.168.x, 169.254.x)
     if let Ok(ip) = host.parse::<std::net::Ipv4Addr>() {
         if ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified() {
             return Err(format!("Blocked private/internal IP: {}", ip));
@@ -931,6 +1036,33 @@ fn validate_fetch_url(url: &str) -> Result<(), String> {
         // Block 169.254.x.x (link-local / metadata)
         if ip.octets()[0] == 169 && ip.octets()[1] == 254 {
             return Err(format!("Blocked link-local IP: {}", ip));
+        }
+    }
+
+    // Block private IPv6 ranges (loopback, link-local, ULA)
+    if let Ok(ip) = host.parse::<std::net::Ipv6Addr>() {
+        let segments = ip.segments();
+        let is_loopback_v6 = ip == std::net::Ipv6Addr::LOCALHOST;
+        let is_unspecified_v6 = ip == std::net::Ipv6Addr::UNSPECIFIED;
+        let is_link_local_v6 = segments[0] & 0xffc0 == 0xfe80; // fe80::/10
+        let is_ula_v6 = segments[0] & 0xfe00 == 0xfc00; // fc00::/7 (unique local)
+        let is_v4_mapped = segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
+
+        if is_loopback_v6 || is_unspecified_v6 || is_link_local_v6 || is_ula_v6 {
+            return Err(format!("Blocked private/internal IPv6: {}", ip));
+        }
+
+        // Check IPv4-mapped IPv6 addresses (::ffff:10.0.0.1)
+        if is_v4_mapped {
+            let mapped = std::net::Ipv4Addr::new(
+                (segments[6] >> 8) as u8,
+                segments[6] as u8,
+                (segments[7] >> 8) as u8,
+                segments[7] as u8,
+            );
+            if mapped.is_loopback() || mapped.is_private() || mapped.is_link_local() {
+                return Err(format!("Blocked private IPv4-mapped IPv6: {}", ip));
+            }
         }
     }
 
@@ -986,25 +1118,41 @@ async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<ToolResult>
     }
 }
 
-/// Strip HTML tags by removing everything between < and >.
-/// This is a simple approach; not a full HTML parser.
+/// Strip HTML to plain text. Removes script/style blocks entirely, strips tags,
+/// and decodes common HTML entities. Not a full parser but handles real-world pages.
 fn strip_html_tags(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    let mut inside_tag = false;
+    // 1. Remove <script>...</script> and <style>...</style> blocks (case-insensitive)
+    let script_re = regex::Regex::new(r"(?is)<script[^>]*>.*?</script>").unwrap();
+    let style_re = regex::Regex::new(r"(?is)<style[^>]*>.*?</style>").unwrap();
+    let no_script = script_re.replace_all(input, " ");
+    let no_style = style_re.replace_all(&no_script, " ");
 
-    for ch in input.chars() {
+    // 2. Strip remaining HTML tags
+    let mut result = String::with_capacity(no_style.len());
+    let mut inside_tag = false;
+    for ch in no_style.chars() {
         match ch {
             '<' => inside_tag = true,
-            '>' => inside_tag = false,
+            '>' => {
+                inside_tag = false;
+                result.push(' '); // tags become space separators
+            }
             _ if !inside_tag => result.push(ch),
             _ => {}
         }
     }
 
-    // Collapse runs of whitespace into a single space, then trim.
-    let collapsed: String = result.split_whitespace().collect::<Vec<&str>>().join(" ");
+    // 3. Decode common HTML entities
+    let decoded = result
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ");
 
-    collapsed
+    // 4. Collapse whitespace
+    decoded.split_whitespace().collect::<Vec<&str>>().join(" ")
 }
 
 // ---------------------------------------------------------------------------
@@ -1888,6 +2036,14 @@ async fn execute_tool_search(args: &HashMap<String, String>) -> Result<ToolResul
         "apply_patch",
         "grep_files",
         "task",
+        "glob",
+        "batch",
+        "multiedit",
+        "todo_read",
+        "todo_write",
+        "ask_user",
+        "plan_mode",
+        "read_many_files",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -1898,5 +2054,463 @@ async fn execute_tool_search(args: &HashMap<String, String>) -> Result<ToolResul
         tool_name: "tool_search".into(),
         success: true,
         output: crate::tool_search::format_search_results(&results),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Tool: glob (GAP-005 — OpenCode/Gemini parity)
+// ---------------------------------------------------------------------------
+
+async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let pattern = match args.get("pattern") {
+        Some(p) => p,
+        None => {
+            return Ok(ToolResult {
+                tool_name: "glob".into(),
+                success: false,
+                output: "Missing required argument: pattern".into(),
+            })
+        }
+    };
+    let path = args.get("path").map(|s| s.as_str()).unwrap_or(".");
+
+    print_tool_status("glob", &format!("Glob({}, {})", pattern, path));
+
+    let full_pattern = if pattern.contains('/') || pattern.starts_with('.') {
+        pattern.clone()
+    } else {
+        format!("{}/{}", path, pattern)
+    };
+
+    let mut matches: Vec<String> = Vec::new();
+    for entry in glob::glob(&full_pattern).map_err(|e| anyhow::anyhow!("Invalid glob: {}", e))? {
+        match entry {
+            Ok(p) => matches.push(p.display().to_string()),
+            Err(e) => eprintln!("[glob] error: {}", e),
+        }
+    }
+
+    matches.sort();
+    let count = matches.len();
+    let output = if matches.is_empty() {
+        format!("No files matched pattern: {}", full_pattern)
+    } else {
+        let listing = matches.join("\n");
+        format!("{} files matched:\n{}", count, listing)
+    };
+
+    Ok(ToolResult {
+        tool_name: "glob".into(),
+        success: true,
+        output: truncate_output_with_save("glob", output),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Tool: batch (GAP-002 — OpenCode parity: parallel tool calls)
+// ---------------------------------------------------------------------------
+
+async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
+    let calls_json = match call.args.get("tool_calls") {
+        Some(j) => j,
+        None => {
+            return Ok(ToolResult {
+                tool_name: "batch".into(),
+                success: false,
+                output: "Missing required argument: tool_calls (JSON array)".into(),
+            })
+        }
+    };
+
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(calls_json).map_err(|e| {
+        anyhow::anyhow!("Invalid tool_calls JSON: {}", e)
+    })?;
+
+    const MAX_BATCH: usize = 25;
+    if parsed.len() > MAX_BATCH {
+        return Ok(ToolResult {
+            tool_name: "batch".into(),
+            success: false,
+            output: format!("Batch limited to {} tool calls, got {}", MAX_BATCH, parsed.len()),
+        });
+    }
+
+    print_tool_status("batch", &format!("Batch({} tools)", parsed.len()));
+
+    // Execute sub-tools sequentially to avoid Send/lifetime issues with tokio::spawn.
+    let mut results: Vec<Result<ToolResult>> = Vec::new();
+    for item in &parsed {
+        let name = item
+            .get("tool")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let args: HashMap<String, String> = item
+            .get("args")
+            .and_then(|v| v.as_object())
+            .map(|obj| {
+                obj.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let tool_call = ToolCall {
+            name,
+            args,
+        };
+        results.push(execute_tool_with_opts(&tool_call, opts).await);
+    }
+
+    let mut output_parts = Vec::new();
+    let mut success_count = 0usize;
+    let total = results.len();
+
+    for (i, result) in results.into_iter().enumerate() {
+        match result {
+            Ok(tr) => {
+                if tr.success {
+                    success_count += 1;
+                }
+                output_parts.push(format!(
+                    "[{}/{}] {} — {}: {}",
+                    i + 1,
+                    total,
+                    if tr.success { "OK" } else { "FAIL" },
+                    tr.tool_name,
+                    tr.output.lines().next().unwrap_or("(empty)")
+                ));
+            }
+            Err(e) => {
+                output_parts.push(format!("[{}/{}] ERROR: {}", i + 1, total, e));
+            }
+        }
+    }
+
+    Ok(ToolResult {
+        tool_name: "batch".into(),
+        success: success_count == total,
+        output: format!(
+            "Batch complete: {}/{} succeeded\n{}",
+            success_count,
+            total,
+            output_parts.join("\n")
+        ),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Tool: multiedit (GAP-006 — OpenCode parity: sequential edits on one file)
+// ---------------------------------------------------------------------------
+
+async fn execute_multiedit(
+    args: &HashMap<String, String>,
+    require_confirm: bool,
+) -> Result<ToolResult> {
+    let path = match args.get("path") {
+        Some(p) => p.clone(),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "multiedit".into(),
+                success: false,
+                output: "Missing required argument: path".into(),
+            })
+        }
+    };
+    let edits_json = match args.get("edits") {
+        Some(e) => e,
+        None => {
+            return Ok(ToolResult {
+                tool_name: "multiedit".into(),
+                success: false,
+                output: "Missing required argument: edits (JSON array of {old_string, new_string})".into(),
+            })
+        }
+    };
+
+    let edits: Vec<serde_json::Value> = serde_json::from_str(edits_json)
+        .map_err(|e| anyhow::anyhow!("Invalid edits JSON: {}", e))?;
+
+    print_tool_status("multiedit", &format!("MultiEdit({}, {} edits)", path, edits.len()));
+
+    let mut applied = 0usize;
+    let mut errors = Vec::new();
+
+    for (i, edit) in edits.iter().enumerate() {
+        let old_s = edit.get("old_string").and_then(|v| v.as_str()).unwrap_or("");
+        let new_s = edit.get("new_string").and_then(|v| v.as_str()).unwrap_or("");
+        let replace_all = edit.get("replace_all").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        let mut edit_args = HashMap::new();
+        edit_args.insert("path".to_string(), path.clone());
+        edit_args.insert("old_string".to_string(), old_s.to_string());
+        edit_args.insert("new_string".to_string(), new_s.to_string());
+        if replace_all {
+            edit_args.insert("replace_all".to_string(), "true".to_string());
+        }
+
+        match execute_edit_file(&edit_args, require_confirm).await {
+            Ok(r) if r.success => applied += 1,
+            Ok(r) => errors.push(format!("Edit {}: {}", i + 1, r.output)),
+            Err(e) => errors.push(format!("Edit {}: {}", i + 1, e)),
+        }
+    }
+
+    let output = if errors.is_empty() {
+        format!("All {} edits applied to {}", applied, path)
+    } else {
+        format!(
+            "{}/{} edits applied to {}. Errors:\n{}",
+            applied,
+            edits.len(),
+            path,
+            errors.join("\n")
+        )
+    };
+
+    Ok(ToolResult {
+        tool_name: "multiedit".into(),
+        success: errors.is_empty(),
+        output,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Tool: todo_read / todo_write (GAP-004 — OpenCode/Gemini parity)
+// ---------------------------------------------------------------------------
+
+/// In-memory todo store — persists for the session lifetime.
+static TODO_STORE: std::sync::LazyLock<tokio::sync::Mutex<Vec<TodoItem>>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(Vec::new()));
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct TodoItem {
+    content: String,
+    status: String,  // pending, in_progress, completed
+    priority: String, // high, medium, low
+}
+
+async fn execute_todo_read() -> Result<ToolResult> {
+    let todos = TODO_STORE.lock().await;
+    if todos.is_empty() {
+        return Ok(ToolResult {
+            tool_name: "todo_read".into(),
+            success: true,
+            output: "No todos. Use todo_write to create a task list.".into(),
+        });
+    }
+    let mut lines = Vec::new();
+    for (i, todo) in todos.iter().enumerate() {
+        let marker = match todo.status.as_str() {
+            "completed" => "[x]",
+            "in_progress" => "[~]",
+            _ => "[ ]",
+        };
+        lines.push(format!(
+            "{} {}. [{}] {}",
+            marker,
+            i + 1,
+            todo.priority,
+            todo.content
+        ));
+    }
+    Ok(ToolResult {
+        tool_name: "todo_read".into(),
+        success: true,
+        output: lines.join("\n"),
+    })
+}
+
+async fn execute_todo_write(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let todos_json = match args.get("todos") {
+        Some(j) => j,
+        None => {
+            return Ok(ToolResult {
+                tool_name: "todo_write".into(),
+                success: false,
+                output: "Missing: todos (JSON array of {content, status, priority})".into(),
+            })
+        }
+    };
+    let new_todos: Vec<TodoItem> = serde_json::from_str(todos_json)
+        .map_err(|e| anyhow::anyhow!("Invalid todos JSON: {}", e))?;
+    let count = new_todos.len();
+    let mut store = TODO_STORE.lock().await;
+    *store = new_todos;
+    Ok(ToolResult {
+        tool_name: "todo_write".into(),
+        success: true,
+        output: format!("Updated todo list ({} items)", count),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Tool: ask_user (GAP-007 — Gemini parity: prompt user mid-loop)
+// ---------------------------------------------------------------------------
+
+async fn execute_ask_user(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let question = match args.get("question") {
+        Some(q) => q,
+        None => {
+            return Ok(ToolResult {
+                tool_name: "ask_user".into(),
+                success: false,
+                output: "Missing required argument: question".into(),
+            })
+        }
+    };
+
+    eprintln!("\n{} {}", "Agent asks:".cyan().bold(), question);
+
+    let answer = dialoguer::Input::<String>::new()
+        .with_prompt("Your answer")
+        .interact_text()
+        .unwrap_or_else(|_| "(no answer)".to_string());
+
+    Ok(ToolResult {
+        tool_name: "ask_user".into(),
+        success: true,
+        output: format!("User responded: {}", answer),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Tool: plan_mode (GAP-003 — OpenCode/Gemini parity)
+// ---------------------------------------------------------------------------
+
+/// Session-global plan mode state.
+static PLAN_MODE: std::sync::LazyLock<tokio::sync::Mutex<PlanState>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(PlanState::default()));
+
+#[derive(Default)]
+struct PlanState {
+    active: bool,
+    plan_file: Option<String>,
+}
+
+async fn execute_plan_mode(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let action = args.get("action").map(|s| s.as_str()).unwrap_or("status");
+    let mut state = PLAN_MODE.lock().await;
+
+    match action {
+        "enter" => {
+            state.active = true;
+            state.plan_file = args.get("file").cloned();
+            let file_msg = state
+                .plan_file
+                .as_deref()
+                .map(|f| format!(" Plan file: {}", f))
+                .unwrap_or_default();
+            Ok(ToolResult {
+                tool_name: "plan_mode".into(),
+                success: true,
+                output: format!(
+                    "Entered PLAN mode. You should now create a detailed plan before making changes.{}",
+                    file_msg
+                ),
+            })
+        }
+        "exit" => {
+            state.active = false;
+            let plan_ref = state
+                .plan_file
+                .take()
+                .map(|f| format!(" Plan was at: {}", f))
+                .unwrap_or_default();
+            Ok(ToolResult {
+                tool_name: "plan_mode".into(),
+                success: true,
+                output: format!(
+                    "Exited PLAN mode. You may now edit files to implement the plan.{}",
+                    plan_ref
+                ),
+            })
+        }
+        "status" | _ => Ok(ToolResult {
+            tool_name: "plan_mode".into(),
+            success: true,
+            output: if state.active {
+                format!(
+                    "PLAN mode is ACTIVE. Create your plan before editing files.{}",
+                    state
+                        .plan_file
+                        .as_deref()
+                        .map(|f| format!(" Plan file: {}", f))
+                        .unwrap_or_default()
+                )
+            } else {
+                "PLAN mode is OFF. You may edit files freely.".into()
+            },
+        }),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tool: read_many_files (GAP — Gemini parity: read multiple files at once)
+// ---------------------------------------------------------------------------
+
+async fn execute_read_many_files(args: &HashMap<String, String>) -> Result<ToolResult> {
+    let paths_json = match args.get("paths") {
+        Some(p) => p,
+        None => {
+            return Ok(ToolResult {
+                tool_name: "read_many_files".into(),
+                success: false,
+                output: "Missing required argument: paths (JSON array of file paths)".into(),
+            })
+        }
+    };
+
+    let paths: Vec<String> = serde_json::from_str(paths_json)
+        .map_err(|e| anyhow::anyhow!("Invalid paths JSON: {}", e))?;
+
+    if paths.len() > 50 {
+        return Ok(ToolResult {
+            tool_name: "read_many_files".into(),
+            success: false,
+            output: format!("Too many files ({}). Maximum is 50.", paths.len()),
+        });
+    }
+
+    print_tool_status("read_many_files", &format!("Read({} files)", paths.len()));
+
+    let mut output_parts = Vec::new();
+    let mut success_count = 0usize;
+
+    for path_str in &paths {
+        let file_path = Path::new(path_str);
+        if !file_path.exists() {
+            output_parts.push(format!("--- {} ---\n[File not found]", path_str));
+            continue;
+        }
+        match tokio::fs::read_to_string(file_path).await {
+            Ok(content) => {
+                let lines: Vec<&str> = content.lines().take(MAX_FILE_LINES).collect();
+                let truncated = if content.lines().count() > MAX_FILE_LINES {
+                    format!("\n[... truncated at {} lines]", MAX_FILE_LINES)
+                } else {
+                    String::new()
+                };
+                output_parts.push(format!(
+                    "--- {} ---\n{}{}",
+                    path_str,
+                    lines.join("\n"),
+                    truncated
+                ));
+                success_count += 1;
+            }
+            Err(e) => {
+                output_parts.push(format!("--- {} ---\n[Error: {}]", path_str, e));
+            }
+        }
+    }
+
+    Ok(ToolResult {
+        tool_name: "read_many_files".into(),
+        success: success_count > 0,
+        output: truncate_output_with_save(
+            "read_many_files",
+            format!("Read {}/{} files:\n\n{}", success_count, paths.len(), output_parts.join("\n\n")),
+        ),
     })
 }

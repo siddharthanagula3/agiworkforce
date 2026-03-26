@@ -77,6 +77,9 @@ export const useProjectStore = create<ProjectState>()(
     {
       name: 'project-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[projectStore] Hydration failed:', error);
+      },
     },
   ),
 );

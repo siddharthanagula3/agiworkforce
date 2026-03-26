@@ -36,6 +36,7 @@ import {
   uuidToDbId,
 } from '../../stores/unifiedChatStore';
 import { SubscriptionGateResult, type SubscriptionStatus } from '../../utils/subscriptionGate';
+import { SectionErrorBoundary } from '../ui/SectionErrorBoundary';
 import { SubscriptionLockDialog } from '../Subscription';
 import { useBillingUsageStore } from '../../stores/billingUsage';
 import { useBillingStore } from '../../stores/auth';
@@ -991,7 +992,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       if (attachmentRevisionRef.current <= preSendAttachmentRevision + 1) {
         setAttachments(messageAttachments);
       } else {
-        console.info('[ChatInputArea] Skipping attachment restore due to newer edits');
+        console.debug('[ChatInputArea] Skipping attachment restore due to newer edits');
       }
     };
 
@@ -1227,276 +1228,278 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   );
 
   return (
-    <>
-      {/* Drag overlay */}
-      <DragOverlay isVisible={isDragging} visionSupported={visionSupported} />
+    <SectionErrorBoundary sectionName="Chat Input">
+      <>
+        {/* Drag overlay */}
+        <DragOverlay isVisible={isDragging} visionSupported={visionSupported} />
 
-      {/* Hidden file input - accepts images, audio, documents, and code files */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept="image/*,audio/*,text/*,application/pdf,application/json,.md,.txt,.js,.jsx,.ts,.tsx,.py,.rs,.go,.java,.c,.cpp,.h,.html,.css,.xml,.yaml,.yml,.toml,.csv,.sql,.sh,.ps1"
-        className="hidden"
-        onChange={handleFileSelect}
-      />
+        {/* Hidden file input - accepts images, audio, documents, and code files */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,audio/*,text/*,application/pdf,application/json,.md,.txt,.js,.jsx,.ts,.tsx,.py,.rs,.go,.java,.c,.cpp,.h,.html,.css,.xml,.yaml,.yml,.toml,.csv,.sql,.sh,.ps1"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
 
-      {/* Main input container */}
-      <motion.div
-        ref={composerRef}
-        className={cn(
-          'fixed z-40 w-full px-4',
-          isEmptyState ? 'max-w-2xl' : 'max-w-5xl',
-          className,
-        )}
-        initial={false}
-        animate={{
-          bottom: isEmptyState ? '50%' : '24px',
-          left: `calc(${sidebarOffset}px + (100% - ${sidebarOffset}px - var(--agi-right-panel-offset, 0px)) / 2)`,
-          x: '-50%',
-          y: isEmptyState ? '50%' : '0%',
-          maxWidth: isEmptyState ? '42rem' : '64rem',
-        }}
-        transition={
-          prefersReducedMotion
-            ? { duration: 0.15 }
-            : { type: 'spring', stiffness: 350, damping: 30 }
-        }
-        style={{
-          willChange: 'transform',
-          width: `max(320px, calc(100% - ${sidebarOffset}px - var(--agi-right-panel-offset, 0px)))`,
-        }}
-      >
-        {/* Focus modes - hidden in simple mode */}
-        {showFocusModeButtons && (
-          <FocusModeButtons
-            focusMode={focusMode}
-            onFocusModeChange={setFocusMode}
-            prefersReducedMotion={prefersReducedMotion}
-          />
-        )}
-
-        <div
+        {/* Main input container */}
+        <motion.div
+          ref={composerRef}
           className={cn(
-            'relative overflow-visible rounded-2xl',
-            'bg-[hsl(var(--card))] backdrop-blur-xl',
-            'border border-[hsl(var(--border))]',
-            'shadow-xl shadow-gray-200/50 dark:shadow-black/30',
-            'transition-all duration-200 ease-out',
-            'focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10',
-            isEmptyState && 'shadow-2xl',
+            'fixed z-40 w-full px-4',
+            isEmptyState ? 'max-w-2xl' : 'max-w-5xl',
+            className,
           )}
+          initial={false}
+          animate={{
+            bottom: isEmptyState ? '50%' : '24px',
+            left: `calc(${sidebarOffset}px + (100% - ${sidebarOffset}px - var(--agi-right-panel-offset, 0px)) / 2)`,
+            x: '-50%',
+            y: isEmptyState ? '50%' : '0%',
+            maxWidth: isEmptyState ? '42rem' : '64rem',
+          }}
+          transition={
+            prefersReducedMotion
+              ? { duration: 0.15 }
+              : { type: 'spring', stiffness: 350, damping: 30 }
+          }
+          style={{
+            willChange: 'transform',
+            width: `max(320px, calc(100% - ${sidebarOffset}px - var(--agi-right-panel-offset, 0px)))`,
+          }}
         >
-          {/* Editing indicator */}
-          {editingMessageId && (
-            <div className="flex items-center justify-between gap-2 border-b border-amber-200/60 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-900/20 dark:text-amber-100">
-              <span>Editing previous message</span>
-              <button
-                type="button"
-                className="text-xs font-semibold underline decoration-amber-500"
-                onClick={cancelEditing}
-              >
-                Cancel
-              </button>
-            </div>
+          {/* Focus modes - hidden in simple mode */}
+          {showFocusModeButtons && (
+            <FocusModeButtons
+              focusMode={focusMode}
+              onFocusModeChange={setFocusMode}
+              prefersReducedMotion={prefersReducedMotion}
+            />
           )}
 
-          {/* Context display */}
-          <ContextDisplay items={activeContext} onRemove={removeContextItem} />
-
-          {/* Attachment processing indicator */}
-          {isProcessingAttachments && (
-            <div
-              className="border-b border-[hsl(var(--border))] px-4 py-3"
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
-                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                <span>{isSimpleMode ? 'Adding your files...' : 'Processing attachments...'}</span>
+          <div
+            className={cn(
+              'relative overflow-visible rounded-2xl',
+              'bg-[hsl(var(--card))] backdrop-blur-xl',
+              'border border-[hsl(var(--border))]',
+              'shadow-xl shadow-gray-200/50 dark:shadow-black/30',
+              'transition-all duration-200 ease-out',
+              'focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10',
+              isEmptyState && 'shadow-2xl',
+            )}
+          >
+            {/* Editing indicator */}
+            {editingMessageId && (
+              <div className="flex items-center justify-between gap-2 border-b border-amber-200/60 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-900/20 dark:text-amber-100">
+                <span>Editing previous message</span>
+                <button
+                  type="button"
+                  className="text-xs font-semibold underline decoration-amber-500"
+                  onClick={cancelEditing}
+                >
+                  Cancel
+                </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Attachments preview */}
-          <AttachmentPreview
-            attachments={attachments}
-            onRemove={handleAttachmentRemove}
-            visionSupported={visionSupported}
-            disableRemove={isSending}
-          />
+            {/* Context display */}
+            <ContextDisplay items={activeContext} onRemove={removeContextItem} />
 
-          {/* Error display */}
-          {submitError && (
-            <div
-              className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700 dark:border-rose-600/60 dark:bg-rose-900/20 dark:text-rose-100"
-              role="alert"
-              aria-live="assertive"
-            >
-              {submitError}
-            </div>
-          )}
+            {/* Attachment processing indicator */}
+            {isProcessingAttachments && (
+              <div
+                className="border-b border-[hsl(var(--border))] px-4 py-3"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  <span>{isSimpleMode ? 'Adding your files...' : 'Processing attachments...'}</span>
+                </div>
+              </div>
+            )}
 
-          {/* Textarea area - full width at top */}
-          <div className="relative px-3 pt-3">
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              aria-label="Message"
-              placeholder={
-                isQueueMode
-                  ? isSimpleMode
-                    ? "I'm working on your request. Type here and I'll respond when ready..."
-                    : 'Type to queue a message while AI is working...'
-                  : placeholder
-              }
-              disabled={isInputDisabled}
-              rows={1}
-              className={cn(
-                'w-full resize-none bg-transparent py-2 px-1',
-                'text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))]',
-                'focus:outline-hidden',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-                'text-[15px] leading-6',
+            {/* Attachments preview */}
+            <AttachmentPreview
+              attachments={attachments}
+              onRemove={handleAttachmentRemove}
+              visionSupported={visionSupported}
+              disableRemove={isSending}
+            />
+
+            {/* Error display */}
+            {submitError && (
+              <div
+                className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-700 dark:border-rose-600/60 dark:bg-rose-900/20 dark:text-rose-100"
+                role="alert"
+                aria-live="assertive"
+              >
+                {submitError}
+              </div>
+            )}
+
+            {/* Textarea area - full width at top */}
+            <div className="relative px-3 pt-3">
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                aria-label="Message"
+                placeholder={
+                  isQueueMode
+                    ? isSimpleMode
+                      ? "I'm working on your request. Type here and I'll respond when ready..."
+                      : 'Type to queue a message while AI is working...'
+                    : placeholder
+                }
+                disabled={isInputDisabled}
+                rows={1}
+                className={cn(
+                  'w-full resize-none bg-transparent py-2 px-1',
+                  'text-[hsl(var(--foreground))] placeholder-[hsl(var(--muted-foreground))]',
+                  'focus:outline-hidden',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'text-[15px] leading-6',
+                )}
+                style={{ maxHeight: `${24 * MAX_ROWS}px` }}
+              />
+
+              {/* Slash command menu */}
+              <SlashCommandMenu
+                show={showSlashAutocomplete}
+                suggestions={autocompleteResult.suggestions}
+                selectedIndex={slashAutocompleteIndex}
+                onSelect={handleSlashCommandSelect}
+                onHover={setSlashAutocompleteIndex}
+              />
+
+              {/* @mention skill picker */}
+              {mentionQuery !== null && fileMentionQuery === null && !showSlashAutocomplete && (
+                <SkillMentionPicker
+                  query={mentionQuery}
+                  onSelect={handleSkillMentionSelect}
+                  onClose={() => setMentionQuery(null)}
+                />
               )}
-              style={{ maxHeight: `${24 * MAX_ROWS}px` }}
-            />
 
-            {/* Slash command menu */}
-            <SlashCommandMenu
-              show={showSlashAutocomplete}
-              suggestions={autocompleteResult.suggestions}
-              selectedIndex={slashAutocompleteIndex}
-              onSelect={handleSlashCommandSelect}
-              onHover={setSlashAutocompleteIndex}
-            />
+              {/* @file: mention picker */}
+              {fileMentionQuery !== null && !showSlashAutocomplete && (
+                <FileMentionPicker
+                  query={fileMentionQuery}
+                  onSelect={handleFileMentionSelect}
+                  onClose={() => setFileMentionQuery(null)}
+                />
+              )}
 
-            {/* @mention skill picker */}
-            {mentionQuery !== null && fileMentionQuery === null && !showSlashAutocomplete && (
-              <SkillMentionPicker
-                query={mentionQuery}
-                onSelect={handleSkillMentionSelect}
-                onClose={() => setMentionQuery(null)}
-              />
-            )}
+              {/* Inline suggestion */}
+              {!showSlashAutocomplete && (
+                <InlineSuggestion
+                  content={content}
+                  suggestion={inlineSuggestion}
+                  isLoading={promptCompletion.isLoading}
+                />
+              )}
+            </div>
 
-            {/* @file: mention picker */}
-            {fileMentionQuery !== null && !showSlashAutocomplete && (
-              <FileMentionPicker
-                query={fileMentionQuery}
-                onSelect={handleFileMentionSelect}
-                onClose={() => setFileMentionQuery(null)}
-              />
-            )}
-
-            {/* Inline suggestion */}
-            {!showSlashAutocomplete && (
-              <InlineSuggestion
-                content={content}
-                suggestion={inlineSuggestion}
-                isLoading={promptCompletion.isLoading}
-              />
-            )}
-          </div>
-
-          {/* Auto-detected intent tags (shown above toolbar for auto-detected only) */}
-          {combinedTags.filter((t) => t.autoDetected).length > 0 && (
-            <ActiveModeTags
-              tags={combinedTags.filter((t) => t.autoDetected)}
-              onDismiss={(key) => {
-                setAutoIntentTags((prev) => prev.filter((t) => t.key !== key));
-                setUserDismissedIntents((prev) => new Set(prev).add(key));
-              }}
-            />
-          )}
-
-          {/* Toolbar row: [+Menu] [Model] [Mic] [Send] */}
-          <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-1 overflow-hidden">
-            <div className="flex items-center gap-1 shrink-0">
-              <PlusMenu
-                disabled={isAttachmentInteractionDisabled}
-                onAttachClick={() => fileInputRef.current?.click()}
-                onScreenCapture={handleScreenCapture}
-                conversationId={activeConversationDbId ?? undefined}
-                webSearchEnabled={webSearchEnabled}
-                onToggleWebSearch={() => setWebSearchEnabled((v) => !v)}
-                visionSupported={visionSupported}
-                promptStashText={content}
-                onPromptStashLoad={(text) => {
-                  setContent(text);
-                  setDraftContent(text);
+            {/* Auto-detected intent tags (shown above toolbar for auto-detected only) */}
+            {combinedTags.filter((t) => t.autoDetected).length > 0 && (
+              <ActiveModeTags
+                tags={combinedTags.filter((t) => t.autoDetected)}
+                onDismiss={(key) => {
+                  setAutoIntentTags((prev) => prev.filter((t) => t.key !== key));
+                  setUserDismissedIntents((prev) => new Set(prev).add(key));
                 }}
               />
+            )}
+
+            {/* Toolbar row: [+Menu] [Model] [Mic] [Send] */}
+            <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-1 overflow-hidden">
+              <div className="flex items-center gap-1 shrink-0">
+                <PlusMenu
+                  disabled={isAttachmentInteractionDisabled}
+                  onAttachClick={() => fileInputRef.current?.click()}
+                  onScreenCapture={handleScreenCapture}
+                  conversationId={activeConversationDbId ?? undefined}
+                  webSearchEnabled={webSearchEnabled}
+                  onToggleWebSearch={() => setWebSearchEnabled((v) => !v)}
+                  visionSupported={visionSupported}
+                  promptStashText={content}
+                  onPromptStashLoad={(text) => {
+                    setContent(text);
+                    setDraftContent(text);
+                  }}
+                />
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {content.length > maxLength * 0.8 && (
+                  <span className="text-xs text-muted-foreground">
+                    {maxLength - content.length} chars left
+                  </span>
+                )}
+                <ModelSelectorButton
+                  modelDisplayName={modelDisplayName}
+                  thinkingModeEnabled={thinkingModeEnabled}
+                  isOpen={showModelSelector}
+                  onOpenChange={setShowModelSelector}
+                  isSimpleMode={isSimpleMode}
+                  containerRef={modelSelectorRef}
+                  capabilities={capabilities}
+                  isToolFallback={isToolFallback}
+                />
+                <VoiceInputButton
+                  disabled={disabled}
+                  isSupported={isVoiceSupported}
+                  isRecording={isListening}
+                  isTranscribing={isTranscribing}
+                  onToggleRecording={toggleListening}
+                />
+                <SendButton
+                  showStopButton={!!showStopButton}
+                  isSending={isSending}
+                  isQueueMode={isQueueMode}
+                  disabled={isSendDisabled}
+                  hasContent={!!content.trim()}
+                  isSimpleMode={isSimpleMode}
+                  onSend={() => handleSubmit()}
+                  onStop={onStopGeneration}
+                />
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {content.length > maxLength * 0.8 && (
-                <span className="text-xs text-muted-foreground">
-                  {maxLength - content.length} chars left
-                </span>
-              )}
-              <ModelSelectorButton
-                modelDisplayName={modelDisplayName}
-                thinkingModeEnabled={thinkingModeEnabled}
-                isOpen={showModelSelector}
-                onOpenChange={setShowModelSelector}
-                isSimpleMode={isSimpleMode}
-                containerRef={modelSelectorRef}
-                capabilities={capabilities}
-                isToolFallback={isToolFallback}
-              />
-              <VoiceInputButton
-                disabled={disabled}
-                isSupported={isVoiceSupported}
-                isRecording={isListening}
-                isTranscribing={isTranscribing}
-                onToggleRecording={toggleListening}
-              />
-              <SendButton
-                showStopButton={!!showStopButton}
-                isSending={isSending}
-                isQueueMode={isQueueMode}
-                disabled={isSendDisabled}
-                hasContent={!!content.trim()}
-                isSimpleMode={isSimpleMode}
-                onSend={() => handleSubmit()}
-                onStop={onStopGeneration}
-              />
-            </div>
+
+            {/* Voice recording status */}
+            <VoiceRecordingStatus
+              isRecording={isListening}
+              isTranscribing={isTranscribing}
+              interimTranscript={interimTranscript}
+              preferWhisperCloud={preferWhisperCloud}
+              voiceError={voiceError}
+            />
+
+            {/* Footer */}
+            <InputFooter
+              isSimpleMode={isSimpleMode}
+              hasInlineSuggestion={!!inlineSuggestion}
+              showCreditUsage={showCreditUsage}
+              creditPercentage={creditPercentage}
+              isLowBalance={isLowBalance}
+              tokenCurrent={tokenUsage?.current}
+              tokenMax={tokenUsage?.max}
+            />
           </div>
+        </motion.div>
 
-          {/* Voice recording status */}
-          <VoiceRecordingStatus
-            isRecording={isListening}
-            isTranscribing={isTranscribing}
-            interimTranscript={interimTranscript}
-            preferWhisperCloud={preferWhisperCloud}
-            voiceError={voiceError}
-          />
-
-          {/* Footer */}
-          <InputFooter
-            isSimpleMode={isSimpleMode}
-            hasInlineSuggestion={!!inlineSuggestion}
-            showCreditUsage={showCreditUsage}
-            creditPercentage={creditPercentage}
-            isLowBalance={isLowBalance}
-            tokenCurrent={tokenUsage?.current}
-            tokenMax={tokenUsage?.max}
-          />
-        </div>
-      </motion.div>
-
-      {/* Subscription lock dialog */}
-      <SubscriptionLockDialog
-        open={showLockDialog}
-        onOpenChange={setShowLockDialog}
-        gateResult={lockGateResult}
-      />
-    </>
+        {/* Subscription lock dialog */}
+        <SubscriptionLockDialog
+          open={showLockDialog}
+          onOpenChange={setShowLockDialog}
+          gateResult={lockGateResult}
+        />
+      </>
+    </SectionErrorBoundary>
   );
 };
 

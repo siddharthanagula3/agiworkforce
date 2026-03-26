@@ -106,6 +106,10 @@ export const rateLimitConfigs = {
   health: { windowMs: 60_000, max: 100 },
   // SECURITY: Status checks (database connectivity) are read-only, allow 100/min
   status: { windowMs: 60_000, max: 100 },
+  // Dotfile config endpoints: read-only, allow 60/min
+  // SECURITY: Dotfile reads are unauthenticated config lookups, moderate limit
+  'dotfile-read': { windowMs: 60_000, max: 60 },
+
   // SECURITY: Default fallback for unlisted endpoints
   default: { windowMs: 60_000, max: 100 },
 } as const;

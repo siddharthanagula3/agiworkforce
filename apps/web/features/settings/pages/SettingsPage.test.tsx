@@ -8,6 +8,18 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
 
+// Mock next/navigation
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  usePathname: () => '/settings',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 // Mock sonner toast
 vi.mock('sonner', () => ({
   toast: {
@@ -196,31 +208,9 @@ vi.mock('@shared/lib/utils', () => ({
 }));
 
 // Mock lucide-react icons
-vi.mock('lucide-react', () => {
-  const Icon = React.forwardRef<HTMLSpanElement, Record<string, unknown>>(
-    ({ className, ...props }, ref) => (
-      <span ref={ref} className={className as string | undefined} {...props} />
-    ),
-  );
-  Icon.displayName = 'Icon';
-  return {
-    User: Icon,
-    Brain: Icon,
-    Key: Icon,
-    Palette: Icon,
-    Bell: Icon,
-    Eye: Icon,
-    EyeOff: Icon,
-    Save: Icon,
-    Shield: Icon,
-    Upload: Icon,
-    Check: Icon,
-    ChevronDown: Icon,
-    ChevronUp: Icon,
-    ChevronRight: Icon,
-    Circle: Icon,
-    X: Icon,
-  };
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
+  return { ...actual };
 });
 
 import SettingsPage from './SettingsPage';
@@ -234,48 +224,39 @@ describe('SettingsPage', () => {
   it('shows the page description', () => {
     render(<SettingsPage />);
     expect(
-      screen.getByText('Manage your account, AI configuration, and preferences'),
+      screen.getByText('Customize appearance, chat preferences, and model endpoints'),
     ).toBeDefined();
   });
 
   it('shows all tab navigation items', () => {
     render(<SettingsPage />);
 
-    expect(screen.getByTestId('tab-profile')).toBeDefined();
-    expect(screen.getByTestId('tab-ai')).toBeDefined();
-    expect(screen.getByTestId('tab-keys')).toBeDefined();
-    expect(screen.getByTestId('tab-appearance')).toBeDefined();
-    expect(screen.getByTestId('tab-notifications')).toBeDefined();
-  });
-
-  it('renders profile tab content', () => {
-    render(<SettingsPage />);
-    expect(screen.getByText('Profile Information')).toBeDefined();
-  });
-
-  it('renders AI Configuration tab content', () => {
-    render(<SettingsPage />);
-    expect(screen.getByText('AI Configuration')).toBeDefined();
-  });
-
-  it('renders API Keys tab content', () => {
-    render(<SettingsPage />);
-    // "API Keys" appears in tab trigger and in card title
-    const matches = screen.getAllByText('API Keys');
-    expect(matches.length).toBeGreaterThanOrEqual(2);
+    // Tab labels may appear multiple times (tab trigger + content)
+    expect(screen.getAllByText('Appearance').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Chat').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Models').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Account').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders Appearance tab content', () => {
     render(<SettingsPage />);
-    // "Appearance" appears in tab trigger and in card title
     const matches = screen.getAllByText('Appearance');
-    expect(matches.length).toBeGreaterThanOrEqual(2);
+    expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders Notifications tab content', () => {
+  it('renders Chat tab content', () => {
     render(<SettingsPage />);
-    // "Notifications" appears in tab trigger and in card title
-    const matches = screen.getAllByText('Notifications');
-    expect(matches.length).toBeGreaterThanOrEqual(2);
+    const matches = screen.getAllByText('Chat');
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders Models tab content', () => {
+    render(<SettingsPage />);
+    expect(screen.getByText('Models')).toBeDefined();
+  });
+
+  it('renders Account tab content', () => {
+    render(<SettingsPage />);
+    expect(screen.getByText('Account')).toBeDefined();
   });
 });

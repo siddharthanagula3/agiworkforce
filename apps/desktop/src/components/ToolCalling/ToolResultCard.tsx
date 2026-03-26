@@ -5,7 +5,7 @@
  * Supports JSON, tables, images, diffs, code, and more.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   XCircle,
@@ -31,6 +31,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { SyntaxHighlighterProps } from 'react-syntax-highlighter';
 import type { ToolResultUI, TableData, DiffData } from '../../types/toolCalling';
 import { sanitizeMarkdownHtml } from '../../utils/security';
+import { FileDownloadButton, type DownloadableFile } from '../FileUpload/FileDownloadButton';
 
 interface ToolResultCardProps {
   result: ToolResultUI;
@@ -41,6 +42,13 @@ interface ToolResultCardProps {
 export function ToolResultCard({ result, className, defaultExpanded = true }: ToolResultCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded || result.expanded || false);
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const handleCopy = async () => {
     let text = '';
@@ -51,7 +59,8 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
     }
     await navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   // Determine icon based on output type
@@ -259,20 +268,35 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
                 Artifacts ({result.artifacts.length})
               </div>
               <div className="space-y-1 text-xs">
-                {result.artifacts.map((artifact) => (
-                  <div
-                    key={artifact.id}
-                    className="flex items-center gap-2 p-2 bg-muted/30 rounded"
-                  >
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="font-mono flex-1">{artifact.name}</span>
-                    {artifact.size && (
-                      <span className="text-muted-foreground">
-                        {(artifact.size / 1024).toFixed(1)} KB
-                      </span>
-                    )}
-                  </div>
-                ))}
+                {result.artifacts.map((artifact) => {
+                  const isFile = artifact.type === 'file' && (artifact.path || artifact.data);
+                  const downloadable: DownloadableFile | null = isFile
+                    ? {
+                        id: artifact.id,
+                        name: artifact.name,
+                        size: artifact.size ?? 0,
+                        type: artifact.mime_type ?? 'application/octet-stream',
+                        path: artifact.path,
+                        content: artifact.data,
+                      }
+                    : null;
+
+                  return (
+                    <div
+                      key={artifact.id}
+                      className="flex items-center gap-2 p-2 bg-muted/30 rounded"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="font-mono flex-1">{artifact.name}</span>
+                      {artifact.size && (
+                        <span className="text-muted-foreground">
+                          {(artifact.size / 1024).toFixed(1)} KB
+                        </span>
+                      )}
+                      {downloadable && <FileDownloadButton file={downloadable} variant="inline" />}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

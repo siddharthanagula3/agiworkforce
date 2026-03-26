@@ -29,6 +29,10 @@ interface ConnectorsState {
   isLoading: (id: string) => boolean;
   getError: (id: string) => string | null;
   clearError: (id: string) => void;
+  /** Clears all pending OAuth timeout timers to prevent leaks */
+  clearAllTimers: () => void;
+  /** Full reset for logout — clears timers, state, and persisted data */
+  resetOnLogout: () => void;
 }
 
 export const useConnectorsStore = create<ConnectorsState>()(
@@ -206,6 +210,30 @@ export const useConnectorsStore = create<ConnectorsState>()(
           set((state) => ({
             error: { ...state.error, [id]: null },
           }));
+        },
+
+        clearAllTimers: () => {
+          const timers = get()._oauthTimers;
+          for (const timerId of Object.values(timers)) {
+            if (timerId !== undefined) {
+              clearTimeout(timerId);
+            }
+          }
+          set({ _oauthTimers: {} });
+        },
+
+        resetOnLogout: () => {
+          // Clear all pending OAuth timers first to prevent leaks
+          get().clearAllTimers();
+          // Reset all state to defaults
+          set({
+            connectedIds: [],
+            loading: {},
+            error: {},
+            pendingOAuth: {},
+            oauthStartedAt: {},
+            _oauthTimers: {},
+          });
         },
       }),
       {

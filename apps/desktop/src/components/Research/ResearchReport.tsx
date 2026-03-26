@@ -9,7 +9,7 @@
  * - "Start New Research" button
  */
 import type { ReactNode } from 'react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Copy,
@@ -48,6 +48,13 @@ export const ResearchReport = memo(function ResearchReport({
   className,
 }: ResearchReportProps) {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const handleCopy = useCallback(async () => {
     const text = buildPlainText(result);
@@ -55,7 +62,8 @@ export const ResearchReport = memo(function ResearchReport({
       await navigator.clipboard.writeText(text);
       setCopied(true);
       toast.success('Report copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Failed to copy report');
     }

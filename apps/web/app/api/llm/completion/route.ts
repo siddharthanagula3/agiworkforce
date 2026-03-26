@@ -173,16 +173,10 @@ async function handleLLMCompletion(request: NextRequest) {
 
   const token = authHeader.substring(7);
 
-  // Verify user with Supabase - create client with anon key to verify JWT
+  // Verify user with Supabase using service role key for reliable JWT verification
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      flowType: 'pkce', // Use PKCE flow for enhanced security
-    },
-  });
+  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
   // Verify the JWT token by calling getUser with the token
   const {

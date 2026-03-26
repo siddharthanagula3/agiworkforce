@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { MARKETING } from '@/lib/marketing-constants';
 import {
   ArrowRight,
   MessageSquare,
@@ -82,7 +83,7 @@ const capabilities = [
       'Switch between OpenAI, Anthropic, Google, xAI, DeepSeek, Ollama, and more',
       'Bring your own API keys — no middleman, no markup',
     ],
-    tagline: '9+ providers, one unified interface',
+    tagline: `${MARKETING.providers.display} providers, one unified interface`,
   },
   {
     icon: Zap,
@@ -182,8 +183,7 @@ const steps = [
     number: '01',
     icon: Layers,
     title: 'Pick Your Model',
-    description:
-      'Choose from 9+ AI providers or use a local Ollama model. Switch mid-conversation without losing context.',
+    description: `Choose from ${MARKETING.providers.display} AI providers or use a local Ollama model. Switch mid-conversation without losing context.`,
   },
   {
     number: '02',
@@ -245,7 +245,7 @@ export default function AIChatFeaturePage() {
               <div className="mt-12 flex flex-col items-center gap-4 md:flex-row md:justify-center">
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <Zap className="h-4 w-4 text-blue-500" />
-                  <span>9+ AI Providers</span>
+                  <span>{MARKETING.providers.display} AI Providers</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />

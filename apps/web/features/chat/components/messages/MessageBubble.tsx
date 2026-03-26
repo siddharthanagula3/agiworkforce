@@ -59,6 +59,7 @@ import type { MediaGenerationResult } from '@core/integrations/media-generation-
 import type { GeneratedDocument } from '../../services/document-generation-service';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { ArtifactBlock } from '../ArtifactBlock';
+import { CitationFooter } from './InlineCitation';
 
 /**
  * Framer-motion variants for message bubble entrance animations.
@@ -156,6 +157,13 @@ interface Message {
       employeeAvatar: string;
       content: string;
       messageType?: string;
+    }>;
+    /** Web search citations from server-managed tools (e.g., Anthropic web_search) */
+    citations?: Array<{
+      type?: string;
+      cited_text?: string;
+      title?: string;
+      url?: string;
     }>;
   };
 }
@@ -508,6 +516,23 @@ const MessageBubbleComponent = function MessageBubble({
             <div className="mt-4">
               <SearchResults searchResponse={message.metadata.searchResults} showAnswer />
             </div>
+          )}
+
+          {/* Citations (from server-managed web search tools) */}
+          {!isUser && message.metadata?.citations && message.metadata.citations.length > 0 && (
+            <CitationFooter
+              citations={message.metadata.citations
+                .filter(
+                  (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
+                    !!(c.url && c.title),
+                )
+                .map((c, i) => ({
+                  index: i + 1,
+                  url: c.url,
+                  title: c.title,
+                  snippet: c.cited_text,
+                }))}
+            />
           )}
 
           {/* Thinking Steps (Collapsible) */}

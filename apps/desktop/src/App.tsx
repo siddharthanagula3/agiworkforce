@@ -53,6 +53,7 @@ import { useAuthStore, useAccountStore } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import useErrorStore, { useSimpleModeStore, selectOnboardingCompleted } from './stores/ui';
 import { useAppModeStore } from './stores/appModeStore';
+import { ModeSelectionDialog } from './components/ModeSelectionDialog';
 import { useSettingsDialogStore } from './stores/settingsDialogStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { OnboardingWelcome } from './components/Onboarding';
@@ -142,6 +143,10 @@ const DesktopShell = () => {
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isAuthLoading = useAuthStore((state) => state.isLoading);
+  const sessionValidated = useAuthStore((state) => state.sessionValidated);
+
+  // Mode selection dialog — show on first launch before mode has been chosen
+  const hasSelectedMode = useAppModeStore((state) => state.hasSelectedMode);
 
   const subscriptionFetchStatus = useAccountStore((state) => state.subscriptionFetchStatus);
 
@@ -1040,10 +1045,10 @@ const DesktopShell = () => {
     ];
   }, [actions, openSettings, startNewChat, state.maximized, theme, toggleTheme, isMac]);
 
-  if (isAuthLoading) {
+  if (isAuthLoading || !sessionValidated) {
     return (
       <div className="flex h-screen items-center justify-center bg-zinc-950">
-        {/* Skeleton layout — avoids raw spinner, matches the app's shell shape */}
+        {/* Skeleton layout — shown while Supabase session is being validated */}
         <div className="flex w-full max-w-sm flex-col items-center gap-4 px-6">
           <div className="h-10 w-10 animate-pulse rounded-xl bg-zinc-800" />
           <div className="h-4 w-32 animate-pulse rounded bg-zinc-800" />
@@ -1092,6 +1097,7 @@ const DesktopShell = () => {
         {isTauri && showOnboarding && !onboardingCompleted && (
           <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
         )}
+        {isTauri && !hasSelectedMode && <ModeSelectionDialog open={!hasSelectedMode} />}
         <div className="flex flex-col gap-1">
           <StatusBanner />
           <OfflineIndicator position="top" />

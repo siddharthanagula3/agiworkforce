@@ -43,6 +43,28 @@ pub struct Skill {
     /// Optional category for grouping in display.
     /// Parsed from `category:` in frontmatter.
     pub category: Option<String>,
+    /// Required environment variables (parsed from `env_vars:` in frontmatter).
+    /// Skill should only be activated when all listed env vars are set.
+    /// Pattern from Codex CLI's `skills/env_var_dependencies.rs`.
+    pub required_env_vars: Vec<String>,
+}
+
+impl Skill {
+    /// Check if all required environment variables are set.
+    /// Returns `Ok(())` if satisfied, or `Err` listing the missing vars.
+    pub fn check_env_deps(&self) -> std::result::Result<(), Vec<String>> {
+        let missing: Vec<String> = self
+            .required_env_vars
+            .iter()
+            .filter(|var| std::env::var(var).is_err())
+            .cloned()
+            .collect();
+        if missing.is_empty() {
+            Ok(())
+        } else {
+            Err(missing)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +126,7 @@ fn load_skill(path: &Path) -> Result<Skill> {
         path: path.to_path_buf(),
         allow_implicit: fm.allow_implicit,
         category: fm.category,
+        required_env_vars: fm.env_vars,
     })
 }
 
@@ -118,6 +141,7 @@ struct Frontmatter {
     body: String,
     allow_implicit: bool,
     category: Option<String>,
+    env_vars: Vec<String>,
 }
 
 /// Parse YAML frontmatter from a markdown file.
@@ -133,6 +157,7 @@ fn parse_frontmatter(content: &str) -> Result<Frontmatter> {
             body: content.to_string(),
             allow_implicit: true,
             category: None,
+            env_vars: Vec::new(),
         });
     }
 
@@ -147,6 +172,7 @@ fn parse_frontmatter(content: &str) -> Result<Frontmatter> {
         let mut description = String::new();
         let mut allow_implicit = true;
         let mut category: Option<String> = None;
+        let mut env_vars: Vec<String> = Vec::new();
 
         for line in frontmatter_str.lines() {
             let line = line.trim();
@@ -162,6 +188,20 @@ fn parse_frontmatter(content: &str) -> Result<Frontmatter> {
                 if !v.is_empty() {
                     category = Some(v);
                 }
+            } else if let Some(val) = line.strip_prefix("env_vars:") {
+                // Parse comma-separated or YAML list: env_vars: VAR1, VAR2
+                let v = strip_yaml_quotes(val);
+                env_vars = v
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+            } else if line.starts_with("- ") && !env_vars.is_empty() {
+                // Support YAML list continuation under env_vars:
+                let v = strip_yaml_quotes(&line[2..]);
+                if !v.is_empty() {
+                    env_vars.push(v);
+                }
             }
         }
 
@@ -175,6 +215,7 @@ fn parse_frontmatter(content: &str) -> Result<Frontmatter> {
             body: body.to_string(),
             allow_implicit,
             category,
+            env_vars,
         })
     } else {
         // Malformed frontmatter
@@ -184,6 +225,7 @@ fn parse_frontmatter(content: &str) -> Result<Frontmatter> {
             body: content.to_string(),
             allow_implicit: true,
             category: None,
+            env_vars: Vec::new(),
         })
     }
 }
@@ -452,6 +494,7 @@ mod tests {
             path: PathBuf::from(format!("/tmp/{name}.md")),
             allow_implicit: true,
             category: None,
+            required_env_vars: Vec::new(),
         }
     }
 
@@ -464,6 +507,7 @@ mod tests {
             path: PathBuf::from(format!("/home/user/.agiworkforce/skills/{name}.md")),
             allow_implicit: implicit,
             category: cat.map(String::from),
+            required_env_vars: Vec::new(),
         }
     }
 

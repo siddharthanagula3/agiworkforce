@@ -20,7 +20,13 @@ export interface APIConfig {
 }
 
 const DEFAULT_CONFIG: APIConfig = {
-  baseURL: process.env['NEXT_PUBLIC_API_URL'] || 'http://localhost:3001/api',
+  baseURL:
+    process.env.NODE_ENV === 'development'
+      ? process.env['NEXT_PUBLIC_API_URL'] || 'http://localhost:3001/api'
+      : (process.env['NEXT_PUBLIC_API_URL'] ??
+        (() => {
+          throw new Error('NEXT_PUBLIC_API_URL not configured');
+        })()),
   timeout: 30000, // 30 seconds
   retries: 3,
   retryDelay: 1000, // 1 second

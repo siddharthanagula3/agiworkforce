@@ -29,6 +29,28 @@ export interface AutofillResult {
   errors: string[];
 }
 
+// ─── Profile value sanitization ──────────────────────────────────────────────
+
+/** Maximum length for any single profile field value. */
+const MAX_PROFILE_FIELD_LENGTH = 2000;
+
+/**
+ * Sanitize a profile field value before filling it into a form.
+ * - Strips control characters (except newline/tab for textareas)
+ * - Rejects HTML tags (prevents XSS if ATS renders submitted data unsafely)
+ * - Enforces a length limit
+ * - Trims whitespace
+ */
+function sanitizeProfileValue(value: string): string {
+  // Strip control chars except \n (\u000A) and \t (\u0009) which are useful in textareas.
+  // eslint-disable-next-line no-control-regex
+  let sanitized = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  // Strip any HTML tags — profile values should be plain text
+  sanitized = sanitized.replace(/<[^>]*>/g, '');
+  // Trim and enforce length limit
+  return sanitized.trim().substring(0, MAX_PROFILE_FIELD_LENGTH);
+}
+
 // ─── Native input value setter (React/Vue compatible) ────────────────────────
 
 /**
@@ -62,6 +84,8 @@ function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: strin
  */
 function dispatchFillEvents(el: HTMLElement): void {
   el.dispatchEvent(new FocusEvent('focus', { bubbles: true }));
+  // beforeinput is required by React 19+ and Vue 3.4+ for input validation hooks.
+  el.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true }));
   el.dispatchEvent(new Event('input', { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
   el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
@@ -227,7 +251,7 @@ export async function fillFields(
       continue;
     }
 
-    const stringValue = String(profileValue);
+    const stringValue = sanitizeProfileValue(String(profileValue));
     const el = document.querySelector(field.selector);
 
     if (!el) {
@@ -237,6 +261,27 @@ export async function fillFields(
         success: false,
         skipped: false,
         reason: 'Element not found in DOM',
+      });
+      continue;
+    }
+
+    // Skip readonly or disabled fields — filling them has no effect and can
+    // confuse form validation logic.
+    const isReadonly =
+      (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && el.readOnly;
+    const isDisabled =
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLTextAreaElement ||
+      el instanceof HTMLSelectElement
+        ? el.disabled
+        : false;
+    if (isReadonly || isDisabled) {
+      results.push({
+        key: field.key,
+        selector: field.selector,
+        success: false,
+        skipped: true,
+        reason: isReadonly ? 'Field is readonly' : 'Field is disabled',
       });
       continue;
     }

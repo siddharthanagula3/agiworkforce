@@ -162,6 +162,10 @@ async function triggerManualReconnect(): Promise<ExtensionResponse> {
 }
 
 function scheduleNativeReconnect(trigger: string): void {
+  // Debounce: if a reconnect timer is already pending, skip this call.
+  // The attempt counter only increments when a new timer is actually scheduled,
+  // which is the correct behavior — duplicate disconnect events should not
+  // accelerate the backoff.
   if (nativeReconnectTimer) {
     return;
   }
@@ -554,9 +558,14 @@ function getAlarmPeriod(task: ScheduledTask): number {
     case 'weekly':
       return 60 * 24 * 7;
     case 'monthly':
-      return 60 * 24 * 30;
-    default:
+      return 60 * 24 * 30; // Approximate — real months vary 28-31 days
+    default: {
+      // Exhaustive guard: if a new scheduleType is added to the ScheduledTask
+      // type, TypeScript will flag this assignment as unreachable.
+      const _exhaustive: never = task.scheduleType;
+      logger.warn('Unknown schedule type, defaulting to daily', { scheduleType: _exhaustive });
       return 60 * 24;
+    }
   }
 }
 
@@ -755,20 +764,20 @@ async function handleMessageAsync(
       return syncTabContextWithDesktop(resolvedTabId, 'content_sync', messageContext);
     }
 
-    case 'queue_message': {
+    case 'QUEUE_MESSAGE': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         resolvedTabId = activeTab?.id;
       }
       if (!resolvedTabId) {
-        logger.warn('queue_message: no active tab');
+        logger.warn('QUEUE_MESSAGE: no active tab');
         return { success: false, error: 'No active tab' } as ExtensionResponse;
       }
       const msgEntry = message as import('./types').QueueMessageMessage;
       try {
         await sendNativeRequest({
-          type: 'queue_message',
+          type: 'QUEUE_MESSAGE',
           id: msgEntry.id,
           text: msgEntry.text,
           tabId: resolvedTabId,
@@ -776,7 +785,7 @@ async function handleMessageAsync(
         });
         return { success: true } as ExtensionResponse;
       } catch (err: unknown) {
-        logger.warn('queue_message native send failed', err);
+        logger.warn('QUEUE_MESSAGE native send failed', err);
         return { success: false, error: 'Native send failed' } as ExtensionResponse;
       }
     }
@@ -787,7 +796,7 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
-    case 'open_side_panel': {
+    case 'OPEN_SIDE_PANEL': {
       let resolvedTabId = tabId;
       if (chrome.sidePanel && !resolvedTabId) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -796,7 +805,7 @@ async function handleMessageAsync(
       if (chrome.sidePanel && resolvedTabId) {
         chrome.sidePanel.open({ tabId: resolvedTabId }).catch(() => {});
       } else if (!resolvedTabId) {
-        logger.warn('open_side_panel: no active tab');
+        logger.warn('OPEN_SIDE_PANEL: no active tab');
       }
       return { success: true } as ExtensionResponse;
     }
@@ -1081,34 +1090,41 @@ async function handleMessageAsync(
       if (!probeUrl || typeof probeUrl !== 'string') {
         return { success: false, error: 'Missing probeUrl' } as ExtensionResponse;
       }
-      try {
+      if (!isAllowedProbeUrl(probeUrl)) {
+        return { success: false, error: 'Probe URL not allowed' } as ExtensionResponse;
+      }
+      {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const resp = await fetch(probeUrl, {
-          method,
-          signal: controller.signal,
-          credentials: 'omit',
-          cache: 'no-store',
-        });
-        clearTimeout(timeoutId);
-        const headers: Record<string, string> = {};
-        resp.headers.forEach((value, key) => {
-          headers[key.toLowerCase()] = value;
-        });
-        let body: string | undefined;
-        if (method === 'GET' && resp.ok) {
-          try {
-            body = await resp.text();
-          } catch {
-            /* non-fatal */
+        try {
+          const resp = await fetch(probeUrl, {
+            method,
+            signal: controller.signal,
+            credentials: 'omit',
+            cache: 'no-store',
+          });
+          const headers: Record<string, string> = {};
+          resp.headers.forEach((value, key) => {
+            headers[key.toLowerCase()] = value;
+          });
+          let body: string | undefined;
+          if (method === 'GET' && resp.ok) {
+            try {
+              const raw = await resp.text();
+              body = raw.substring(0, MAX_PROBE_RESPONSE_BYTES);
+            } catch {
+              /* non-fatal */
+            }
           }
+          return { success: true, status: resp.status, headers, body } as ExtensionResponse;
+        } catch (e) {
+          return {
+            success: false,
+            error: e instanceof Error ? e.message : 'Probe fetch failed',
+          } as ExtensionResponse;
+        } finally {
+          clearTimeout(timeoutId);
         }
-        return { success: true, status: resp.status, headers, body } as ExtensionResponse;
-      } catch (e) {
-        return {
-          success: false,
-          error: e instanceof Error ? e.message : 'Probe fetch failed',
-        } as ExtensionResponse;
       }
     }
 
@@ -1146,18 +1162,52 @@ async function handleMessageAsync(
   }
 }
 
-/** Domains where cookie operations are blocked (sensitive sites). */
+/**
+ * Domains where cookie operations are blocked to prevent exfiltration of
+ * sensitive session tokens. Errs on the side of caution — default-deny for
+ * known sensitive categories.
+ */
 const BLOCKED_COOKIE_DOMAINS: RegExp[] = [
+  // Financial
   /bank/i,
   /paypal/i,
   /venmo/i,
   /chase/i,
   /wellsfargo/i,
   /citibank/i,
+  /fidelity/i,
+  /schwab/i,
+  /stripe\.com$/i,
+  /plaid\.com$/i,
+  /coinbase/i,
+  /binance/i,
+  /kraken/i,
+  // Government & healthcare
   /\.gov$/i,
+  /\.mil$/i,
   /healthcare/i,
   /medical/i,
   /health\.com/i,
+  // Cloud infrastructure & developer tools
+  /aws\.amazon\.com/i,
+  /console\.cloud\.google/i,
+  /portal\.azure/i,
+  /github\.com$/i,
+  /gitlab\.com$/i,
+  /bitbucket\.org$/i,
+  // Auth & identity providers
+  /accounts\.google/i,
+  /login\.microsoftonline/i,
+  /auth0\.com$/i,
+  /okta\.com$/i,
+  // Email & communication
+  /mail\.google/i,
+  /outlook\.(live|office)/i,
+  // Social media (auth tokens)
+  /facebook\.com$/i,
+  /twitter\.com$/i,
+  /x\.com$/i,
+  /instagram\.com$/i,
 ];
 
 function isCookieDomainAllowed(urlOrDomain: string): boolean {
@@ -1257,12 +1307,14 @@ async function handleClearCookies(
       } as ExtensionResponse;
     }
     const cookies = await chrome.cookies.getAll({ url });
-    for (const cookie of cookies) {
-      await chrome.cookies.remove({
-        url: `${cookie.secure ? 'https' : 'http'}://${cookie.domain}${cookie.path}`,
-        name: cookie.name,
-      });
-    }
+    await Promise.all(
+      cookies.map((cookie) =>
+        chrome.cookies.remove({
+          url: `${cookie.secure ? 'https' : 'http'}://${cookie.domain}${cookie.path}`,
+          name: cookie.name,
+        }),
+      ),
+    );
     return { success: true, cleared: cookies.length } as ExtensionResponse;
   } catch (error) {
     logger.error('Failed to clear cookies', error);
@@ -1553,7 +1605,8 @@ async function checkDesktopConnection(): Promise<void> {
 
 async function notifyConnectionStatusChange(): Promise<void> {
   try {
-    const tabs = await chrome.tabs.query({});
+    // Skip discarded tabs — they have no active content script to receive messages.
+    const tabs = await chrome.tabs.query({ discarded: false });
 
     for (const tab of tabs) {
       if (tab.id) {
@@ -1565,9 +1618,9 @@ async function notifyConnectionStatusChange(): Promise<void> {
             status: state.connectionStatus,
           },
           () => {
-            // Ignore errors - tab might not have content script
-            const _lastError = chrome.runtime.lastError;
-            void _lastError;
+            // Reading chrome.runtime.lastError clears the error state (Chrome API
+            // quirk). Without this, Chrome logs "Unchecked runtime.lastError".
+            void chrome.runtime.lastError;
           },
         );
       }
@@ -1737,7 +1790,8 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   state.rateLimiter.reset(tabId);
   lastPageContextSyncByTab.delete(tabId);
   webmcpToolsByTab.delete(tabId);
-  logger.debug('Cleaned up rate limit for tab', { tabId });
+  nlwebByTab.delete(tabId);
+  logger.debug('Cleaned up rate limit, webmcp tools, and nlweb for tab', { tabId });
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -1803,6 +1857,53 @@ const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8765';
 
 /** Allowed bridge URL hostnames — only local connections to the desktop app are permitted. */
 const ALLOWED_BRIDGE_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
+
+/** Maximum response body size for NLWEB probe requests (256 KB). */
+const MAX_PROBE_RESPONSE_BYTES = 262_144;
+
+/**
+ * Private/reserved IPv4 and IPv6 ranges that MUST NOT be probed.
+ * Prevents SSRF reconnaissance of internal networks via the NLWEB_PROBE handler.
+ */
+function isPrivateOrReservedHost(hostname: string): boolean {
+  // Strip IPv6 brackets
+  const h = hostname.replace(/^\[|\]$/g, '');
+
+  // IPv6 loopback and link-local
+  if (h === '::1' || h.startsWith('fe80:') || h.startsWith('fd')) return true;
+
+  // Named loopback
+  if (h === 'localhost' || h === '0.0.0.0') return true;
+
+  // IPv4 private/reserved ranges
+  const ipv4Match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (ipv4Match) {
+    const [, a, b] = ipv4Match.map(Number);
+    if (a === 10) return true; // 10.0.0.0/8
+    if (a === 172 && b !== undefined && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16
+    if (a === 169 && b === 254) return true; // 169.254.0.0/16 (link-local)
+    if (a === 127) return true; // 127.0.0.0/8
+    if (a === 0) return true; // 0.0.0.0/8
+  }
+
+  return false;
+}
+
+/**
+ * Validate that a probe URL is safe to fetch.
+ * Blocks private/reserved IPs, non-http(s) schemes, and localhost.
+ */
+function isAllowedProbeUrl(raw: string): boolean {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    if (isPrivateOrReservedHost(parsed.hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Validate that a bridge URL points to a local address.
@@ -1960,13 +2061,19 @@ async function handleChatMessage(
         streamed = true;
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
+        // Buffer incomplete lines across reader.read() calls so a JSON
+        // payload split across two TCP segments is not silently dropped.
+        let sseBuffer = '';
 
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
-          const raw = decoder.decode(value, { stream: true });
-          // Handle SSE format: lines starting with "data: "
-          for (const line of raw.split('\n')) {
+          sseBuffer += decoder.decode(value, { stream: true });
+          // Split on newlines — the last element may be an incomplete line,
+          // so we keep it in the buffer for the next iteration.
+          const lines = sseBuffer.split('\n');
+          sseBuffer = lines.pop() ?? '';
+          for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed || trimmed === 'data: [DONE]') continue;
             const dataStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed;
@@ -1989,15 +2096,35 @@ async function handleChatMessage(
             }
           }
         }
+        // Flush any remaining buffered content after the stream ends.
+        const remaining = sseBuffer.trim();
+        if (remaining && remaining !== 'data: [DONE]') {
+          const dataStr = remaining.startsWith('data: ') ? remaining.slice(6) : remaining;
+          try {
+            const parsed = JSON.parse(dataStr) as {
+              choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>;
+              content?: string;
+              done?: boolean;
+            };
+            const delta = parsed.choices?.[0]?.delta?.content ?? parsed.content ?? '';
+            if (delta) {
+              broadcastChunk(delta, false);
+            }
+          } catch {
+            // Final fragment is not valid JSON — discard
+          }
+        }
         broadcastChunk('', true);
         return;
       }
-    } catch {
-      // Network error or local API unavailable — fall through
+    } catch (fetchErr) {
+      // Network error or local API unavailable — fall through to native.
+      // Log for diagnostics but don't surface to user.
+      logger.debug('Chat SSE fetch failed, falling back to native', fetchErr);
     }
 
     if (!streamed) {
-      // Fall back: forward to native desktop app via existing queue_message path
+      // Fall back: forward to native desktop app via existing QUEUE_MESSAGE path
       if (state.isNativeConnected && state.nativePort) {
         try {
           const nativeResp = (await withTimeout(

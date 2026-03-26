@@ -62,6 +62,8 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
   );
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onApproveRef = useRef(onApprove);
+  onApproveRef.current = onApprove;
   const countdownProgress = useSharedValue(countdown != null ? 1 : 0);
 
   const isPending = approval.status === 'pending';
@@ -95,7 +97,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
             intervalRef.current = null;
           }
           // Auto-approve on timeout
-          onApprove(approval.id);
+          onApproveRef.current(approval.id);
           return 0;
         }
         return prev - 1;
@@ -108,7 +110,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
         intervalRef.current = null;
       }
     };
-  }, [isPending, approval.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPending, approval.id, countdown, countdownProgress]);
 
   const countdownBarStyle = useAnimatedStyle(() => ({
     width: `${countdownProgress.value * 100}%`,
@@ -123,11 +125,15 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
 
   const handleRejectPress = useCallback(() => {
     if (showRejectInput) {
-      // Second tap: confirm rejection
+      // Second tap: confirm rejection — stop countdown to prevent auto-approve after reject
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
       if (hapticsEnabled) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       }
-      onReject(approval.id, rejectReason || undefined);
+      onReject(approval.id, rejectReason.trim() || undefined);
       setShowRejectInput(false);
       setRejectReason('');
     } else {

@@ -6,11 +6,9 @@
  * processQueue() drains the queue in FIFO order, retrying each entry through
  * the provided sendFn callback.
  *
- * The queue is intentionally kept in memory only — messages that are queued
- * already appear in the chat store UI with a "queued" status indicator, so
- * they survive app-level state. If the process is killed, unprocessed queued
- * messages are lost; this is acceptable because the user sees the failed
- * messages in the chat and can retry manually.
+ * **Persistence:** The queue is backed by MMKV storage so it survives app
+ * kills. On cold start, `restoreFromStorage()` rehydrates persisted entries
+ * (without callbacks — those must be re-wired by the caller if needed).
  *
  * Retry behaviour:
  *  - Exponential backoff between retries: 1s, 2s, 4s (capped at MAX_BACKOFF_MS)
@@ -18,6 +16,8 @@
  *    the attempt resolves, regardless of whether processQueue() is awaited.
  *  - Entries exceeding MAX_RETRY_COUNT are dropped and onFailure is called.
  */
+
+import { storage } from '@/lib/mmkv';
 
 export interface QueuedMessage {
   /** Unique queue entry ID (distinct from the chat message ID) */
@@ -50,6 +50,19 @@ const BASE_BACKOFF_MS = 1_000;
 /** Maximum backoff delay cap (ms) */
 const MAX_BACKOFF_MS = 8_000;
 
+/** MMKV key for persisted queue data */
+const QUEUE_STORAGE_KEY = 'offline_queue_v1';
+
+/** Serializable subset of QueuedMessage (excludes function callbacks). */
+interface PersistedQueueEntry {
+  id: string;
+  conversationId: string;
+  content: string;
+  model: string;
+  queuedAt: string;
+  retryCount: number;
+}
+
 /** Compute backoff delay for a given retry count (0-based). */
 function backoffDelay(retryCount: number): number {
   return Math.min(BASE_BACKOFF_MS * Math.pow(2, retryCount), MAX_BACKOFF_MS);
@@ -62,6 +75,47 @@ function sleep(ms: number): Promise<void> {
 class OfflineMessageQueue {
   private queue: QueuedMessage[] = [];
   private _isProcessing: boolean = false;
+
+  /** Persist the current queue to MMKV (message data only, no callbacks). */
+  private persistToStorage(): void {
+    try {
+      const entries: PersistedQueueEntry[] = this.queue.map(
+        ({ id, conversationId, content, model, queuedAt, retryCount }) => ({
+          id,
+          conversationId,
+          content,
+          model,
+          queuedAt,
+          retryCount,
+        }),
+      );
+      storage.set(QUEUE_STORAGE_KEY, JSON.stringify(entries));
+    } catch {
+      // Non-fatal — queue will be in-memory only
+    }
+  }
+
+  /**
+   * Restore queued messages from MMKV after app restart.
+   * Callbacks are NOT restored (they are ephemeral function refs).
+   */
+  restoreFromStorage(): void {
+    try {
+      const raw = storage.getString(QUEUE_STORAGE_KEY);
+      if (!raw) return;
+      const entries = JSON.parse(raw) as PersistedQueueEntry[];
+      if (!Array.isArray(entries)) return;
+      // Only restore entries that aren't already in the queue (idempotent)
+      for (const entry of entries) {
+        if (!this.queue.some((q) => q.id === entry.id)) {
+          this.queue.push(entry);
+        }
+      }
+    } catch {
+      // Corrupted data — start fresh
+      storage.delete(QUEUE_STORAGE_KEY);
+    }
+  }
 
   /**
    * Add a message to the end of the queue.
@@ -103,6 +157,7 @@ class OfflineMessageQueue {
     };
 
     this.queue.push(entry);
+    this.persistToStorage();
     return entry;
   }
 
@@ -144,33 +199,34 @@ class OfflineMessageQueue {
 
     this._isProcessing = true;
 
-    // Snapshot the queue to avoid mutating while iterating
-    const entries = [...this.queue];
-
-    for (const entry of entries) {
-      // If the entry was already removed by a concurrent clear(), skip it
-      if (!this.queue.includes(entry)) continue;
+    // Process from front of live queue — new enqueue() calls during drain are
+    // picked up immediately (no stale snapshot).
+    while (this.queue.length > 0) {
+      const entry = this.queue[0]!;
+      if (!entry) break;
 
       try {
         await sendFn(entry);
-        // Success — remove from queue and fire success callback
+        // Success — remove from queue, persist, and fire success callback
         this.queue = this.queue.filter((q) => q.id !== entry.id);
+        this.persistToStorage();
         try {
           entry.onSuccess?.();
-        } catch {
-          // Callback errors must not abort queue processing
+        } catch (cbErr) {
+          console.warn('[OfflineQueue] onSuccess callback error:', cbErr);
         }
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
         entry.retryCount += 1;
 
         if (entry.retryCount >= MAX_RETRY_COUNT) {
-          // Drop after max retries — call failure callback
+          // Drop after max retries — persist removal, then call failure callback
           this.queue = this.queue.filter((q) => q.id !== entry.id);
+          this.persistToStorage();
           try {
             entry.onFailure?.(error);
-          } catch {
-            // Callback errors must not abort queue processing
+          } catch (cbErr) {
+            console.warn('[OfflineQueue] onFailure callback error:', cbErr);
           }
           // Continue to next entry — this one is permanently gone
           continue;
@@ -198,7 +254,10 @@ class OfflineMessageQueue {
     }
     this.queue = [];
     this._isProcessing = false;
+    this.persistToStorage();
   }
 }
 
 export const offlineQueue = new OfflineMessageQueue();
+// Restore any persisted queue entries from the previous session
+offlineQueue.restoreFromStorage();

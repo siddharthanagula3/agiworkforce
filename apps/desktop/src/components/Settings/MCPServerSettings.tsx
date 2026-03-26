@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Copy, Check, Share2 } from 'lucide-react';
 import { useMcpServerStore } from '@/stores/mcpServerStore';
 
@@ -9,6 +9,13 @@ export function MCPServerSettings() {
     useMcpServerStore();
   const [copied, setCopied] = useState(false);
   const [tokenVisible, setTokenVisible] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
   const [portValue, setPortValue] = useState('9090');
   const [portError, setPortError] = useState<string | null>(null);
 
@@ -35,7 +42,8 @@ export function MCPServerSettings() {
     );
     await navigator.clipboard.writeText(snippet);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const toggleTool = async (tool: string) => {
