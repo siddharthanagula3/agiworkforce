@@ -13,7 +13,6 @@ import {
   MessageSquare,
   CheckCircle2,
   Users,
-  Layers,
   Zap,
   Code,
   Brain,
@@ -597,7 +596,7 @@ export default function AISkillsPage() {
           </section>
 
           <CtaSection
-            icon={Layers}
+            icon="Layers"
             headline="Start With Any Skill Today"
             body="Download AGI Workforce and put AI employees to work — engineering, marketing, finance, creative, and beyond."
           />
