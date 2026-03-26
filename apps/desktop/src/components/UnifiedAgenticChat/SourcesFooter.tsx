@@ -132,7 +132,7 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
                   <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-zinc-200 truncate group-hover:text-teal transition-colors">
+                  <p className="text-xs font-medium text-foreground truncate group-hover:text-teal transition-colors">
                     {citation.title || new URL(citation.url).hostname}
                   </p>
                   <p className="text-[10px] text-muted-foreground truncate">

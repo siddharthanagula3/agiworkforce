@@ -590,14 +590,14 @@
       },
       "modelPrefixes": [],
       "aliases": [],
-      "defaultModel": "llama4-maverick",
+      "defaultModel": "",
       "taskRouting": {
-        "fast_completion": "llama4-maverick",
-        "code_generation": "llama4-maverick",
-        "complex_reasoning": "llama4-maverick",
-        "chat": "llama4-maverick",
-        "vision": "llama4-maverick",
-        "long_context": "llama4-maverick"
+        "fast_completion": "",
+        "code_generation": "",
+        "complex_reasoning": "",
+        "chat": "",
+        "vision": "",
+        "long_context": ""
       },
       "canonicalization": {}
     },
@@ -616,12 +616,12 @@
       "aliases": ["ollama-cloud", "ollamacloud"],
       "defaultModel": "llama3.2",
       "taskRouting": {
-        "fast_completion": "llama3.2",
-        "code_generation": "llama4-maverick",
-        "complex_reasoning": "llama4-maverick",
-        "chat": "llama3.2",
-        "vision": "llama4-maverick",
-        "long_context": "llama4-maverick"
+        "fast_completion": "",
+        "code_generation": "",
+        "complex_reasoning": "",
+        "chat": "",
+        "vision": "",
+        "long_context": ""
       },
       "canonicalization": {}
     }

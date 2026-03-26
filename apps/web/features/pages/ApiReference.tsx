@@ -84,12 +84,10 @@ const ApiReferencePage: React.FC = () => {
   };
 
   const rateLimits = [
-    { plan: 'Free', requests: '100 requests/hour', tokens: '1M tokens/month' },
-    {
-      plan: 'Pro',
-      requests: '1,000 requests/hour',
-      tokens: '10M tokens/month',
-    },
+    { plan: 'Free', requests: '100 requests/hour', tokens: 'Local LLMs only' },
+    { plan: 'Hobby', requests: '500 requests/hour', tokens: '350 credits/month' },
+    { plan: 'Pro', requests: '1,000 requests/hour', tokens: '1,200 credits/month' },
+    { plan: 'Max', requests: '5,000 requests/hour', tokens: '15,000 credits/month' },
     { plan: 'Enterprise', requests: 'Unlimited', tokens: 'Custom' },
   ];
 

@@ -46,7 +46,7 @@ export function ThinkingBlock({
   const headerLabel = isStreaming ? 'Thinking...' : 'Thought';
 
   return (
-    <div className={cn('bg-slate-900/30 border border-slate-700/30 rounded-lg overflow-hidden')}>
+    <div className={cn('bg-card/30 border border-border/30 rounded-lg overflow-hidden')}>
       {/* Header */}
       <button
         type="button"
@@ -56,7 +56,7 @@ export function ThinkingBlock({
           setUserExpanded(next);
           setExpanded(next);
         }}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-800/30 transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/30 transition-colors"
         aria-expanded={expanded}
         aria-label={`${expanded ? 'Collapse' : 'Expand'} reasoning`}
       >
