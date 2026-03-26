@@ -112,7 +112,7 @@ export function SpreadsheetArtifact({
   return (
     <div
       className={cn(
-        'flex flex-col h-full bg-white dark:bg-zinc-950 border rounded-lg overflow-hidden',
+        'flex flex-col h-full bg-background border rounded-lg overflow-hidden',
         className,
       )}
     >
@@ -141,17 +141,17 @@ export function SpreadsheetArtifact({
       </div>
 
       {}
-      <div className="flex-1 overflow-auto relative custom-scrollbar bg-white dark:bg-zinc-950">
+      <div className="flex-1 overflow-auto relative custom-scrollbar bg-background">
         <table className="w-full border-collapse text-sm">
-          <thead className="sticky top-0 z-10 shadow-xs ring-1 ring-zinc-200 dark:ring-zinc-800">
+          <thead className="sticky top-0 z-10 shadow-xs ring-1 ring-border">
             <tr>
-              <th className="w-10 border-r border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 p-1 text-center text-[10px] text-muted-foreground font-medium select-none">
+              <th className="w-10 border-r border-b border-border bg-muted p-1 text-center text-[10px] text-muted-foreground font-medium select-none">
                 #
               </th>
               {data.columns.map((col) => (
                 <th
                   key={col}
-                  className="min-w-[120px] border-r border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/80 p-2 text-left font-semibold text-xs text-zinc-700 dark:text-zinc-300 select-none whitespace-nowrap"
+                  className="min-w-[120px] border-r border-b border-border bg-muted/80 p-2 text-left font-semibold text-xs text-foreground select-none whitespace-nowrap"
                 >
                   {col}
                 </th>
@@ -161,7 +161,7 @@ export function SpreadsheetArtifact({
           <tbody>
             {data.rows.map((row, rowIndex) => (
               <tr key={rowIndex} className="group">
-                <td className="border-r border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 p-1 text-center text-[10px] text-muted-foreground font-mono select-none group-hover:bg-zinc-100 dark:group-hover:bg-zinc-800/50 transition-colors">
+                <td className="border-r border-b border-border bg-muted/30 p-1 text-center text-[10px] text-muted-foreground font-mono select-none group-hover:bg-accent/50 transition-colors">
                   {rowIndex + 1}
                 </td>
                 {data.columns.map((col) => {
@@ -172,7 +172,7 @@ export function SpreadsheetArtifact({
                     <td
                       key={`${rowIndex}-${col}`}
                       className={cn(
-                        'border-r border-b border-zinc-100 dark:border-zinc-800 p-0 min-w-[120px] relative transition-colors',
+                        'border-r border-b border-border p-0 min-w-[120px] relative transition-colors',
                         !isEditing &&
                           'hover:bg-blue-50/50 dark:hover:bg-blue-900/10 cursor-pointer',
                         isEditing && 'ring-2 ring-blue-500 z-20 shadow-lg',
@@ -183,14 +183,14 @@ export function SpreadsheetArtifact({
                         <input
                           autoFocus
                           type="text"
-                          className="w-full h-full px-2 py-1.5 bg-white dark:bg-zinc-900 text-sm focus:outline-hidden text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                          className="w-full h-full px-2 py-1.5 bg-card text-sm focus:outline-hidden text-foreground placeholder:text-muted-foreground"
                           value={editValue || ''}
                           onChange={(e) => setEditValue(e.target.value)}
                           onBlur={handleCellBlur}
                           onKeyDown={handleKeyDown}
                         />
                       ) : (
-                        <div className="px-2 py-1.5 truncate text-zinc-700 dark:text-zinc-300 text-xs">
+                        <div className="px-2 py-1.5 truncate text-foreground text-xs">
                           {String(value ?? '')}
                         </div>
                       )}

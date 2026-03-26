@@ -194,9 +194,9 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
                 {isTextFile ? (
                   <FileText className="h-3.5 w-3.5 shrink-0 text-blue-400" />
                 ) : (
-                  <File className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                  <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 )}
-                <span className="text-zinc-300 truncate font-mono text-xs">{file.name}</span>
+                <span className="text-foreground truncate font-mono text-xs">{file.name}</span>
                 {file.size !== undefined && file.size > 0 && (
                   <span className="text-xs text-muted-foreground ml-auto shrink-0">
                     {formatSize(file.size)}

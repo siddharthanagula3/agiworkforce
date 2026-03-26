@@ -23,7 +23,7 @@ function FocusPill({ icon, label, mode: _mode, active, onClick, description }: F
         'focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-terra-cotta',
         active
           ? 'bg-terra-cotta text-white shadow-halo-terra'
-          : 'bg-surface-floating text-zinc-400 hover:bg-surface-floating-hover hover:text-zinc-200',
+          : 'bg-surface-floating text-muted-foreground hover:bg-surface-floating-hover hover:text-foreground',
       )}
       aria-label={`${label} mode${description ? ': ' + description : ''}`}
       aria-pressed={active}
@@ -38,13 +38,13 @@ function FocusPill({ icon, label, mode: _mode, active, onClick, description }: F
         <span
           className={cn(
             'absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5',
-            'bg-zinc-900 text-zinc-100 text-xs rounded-lg shadow-lg',
+            'bg-card text-foreground text-xs rounded-lg shadow-lg',
             'opacity-0 group-hover:opacity-100 transition-opacity duration-200',
             'pointer-events-none whitespace-nowrap z-50',
           )}
         >
           {description}
-          <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-zinc-900" />
+          <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-card" />
         </span>
       )}
     </button>
@@ -120,7 +120,9 @@ export function FocusSelector({ className }: FocusSelectorProps) {
       role="radiogroup"
       aria-label="Focus mode selector"
     >
-      <span className="text-xs font-medium text-zinc-500 uppercase tracking-wide mr-2">Focus</span>
+      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mr-2">
+        Focus
+      </span>
       {modes.map(({ mode, icon, label, description }) => (
         <FocusPill
           key={mode}

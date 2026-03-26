@@ -130,10 +130,10 @@ function getColorClasses(type: ActionTrailEntry['type']) {
       };
     default:
       return {
-        bg: 'bg-zinc-500/10',
-        border: 'border-zinc-500/30',
-        text: 'text-zinc-400',
-        icon: 'text-zinc-400',
+        bg: 'bg-muted-foreground/10',
+        border: 'border-muted-foreground/30',
+        text: 'text-muted-foreground',
+        icon: 'text-muted-foreground',
       };
   }
 }
@@ -209,7 +209,7 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
 
           {/* Progress indicator for multi-step operations */}
           {displayAction.currentStep !== undefined && displayAction.totalSteps !== undefined && (
-            <span className="relative z-10 text-xs text-zinc-500 tabular-nums">
+            <span className="relative z-10 text-xs text-muted-foreground tabular-nums">
               {displayAction.currentStep}/{displayAction.totalSteps}
             </span>
           )}
@@ -273,14 +273,18 @@ export function CurrentActionStack({ className }: CurrentActionBadgeProps) {
                 {action.message}
               </span>
               {action.progress !== undefined && (
-                <span className="text-xs text-zinc-500 tabular-nums">{action.progress}%</span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {action.progress}%
+                </span>
               )}
             </motion.div>
           );
         })}
       </AnimatePresence>
       {activeActions.length > 5 && (
-        <div className="text-xs text-zinc-500 text-center">+{activeActions.length - 5} more</div>
+        <div className="text-xs text-muted-foreground text-center">
+          +{activeActions.length - 5} more
+        </div>
       )}
     </div>
   );

@@ -118,7 +118,7 @@ const BarChart: React.FC<BarChartProps> = memo(
                 y={y}
                 textAnchor="end"
                 dominantBaseline="middle"
-                className="text-xs fill-zinc-500"
+                className="text-xs fill-muted-foreground"
               >
                 {formatValue(tick)}
               </text>
@@ -159,7 +159,7 @@ const BarChart: React.FC<BarChartProps> = memo(
                   x={x + barWidth / 2}
                   y={y - 5}
                   textAnchor="middle"
-                  className="text-xs fill-zinc-600 dark:fill-zinc-400 font-medium"
+                  className="text-xs fill-muted-foreground font-medium"
                 >
                   {formatValue(point.value)}
                 </text>
@@ -168,7 +168,7 @@ const BarChart: React.FC<BarChartProps> = memo(
                 x={x + barWidth / 2}
                 y={height - CHART_PADDING.bottom + 15}
                 textAnchor="middle"
-                className="text-xs fill-zinc-500 dark:fill-zinc-400"
+                className="text-xs fill-muted-foreground"
               >
                 {point.label.length > 10 ? `${point.label.slice(0, 10)}...` : point.label}
               </text>
@@ -267,7 +267,7 @@ const PieChart: React.FC<PieChartProps> = memo(
             {data.map((point, i) => (
               <g key={i} transform={`translate(0, ${i * 24})`}>
                 <rect width={12} height={12} fill={point.color} rx={2} />
-                <text x={18} y={10} className="text-xs fill-zinc-600 dark:fill-zinc-400">
+                <text x={18} y={10} className="text-xs fill-muted-foreground">
                   {point.label} ({formatValue(point.value)})
                 </text>
               </g>
@@ -370,7 +370,7 @@ const LineChart: React.FC<LineChartProps> = memo(
                   x={p.x}
                   y={p.y - 10}
                   textAnchor="middle"
-                  className="text-xs fill-zinc-600 dark:fill-zinc-400"
+                  className="text-xs fill-muted-foreground"
                 >
                   {formatValue(dataPoint.value)}
                 </text>
@@ -379,7 +379,7 @@ const LineChart: React.FC<LineChartProps> = memo(
                 x={p.x}
                 y={height - CHART_PADDING.bottom + 15}
                 textAnchor="middle"
-                className="text-xs fill-zinc-500"
+                className="text-xs fill-muted-foreground"
               >
                 {dataPoint.label.length > 8 ? `${dataPoint.label.slice(0, 8)}...` : dataPoint.label}
               </text>
@@ -437,15 +437,13 @@ const ChartWidgetComponent: React.FC<WidgetRendererProps<ChartWidgetData>> = ({
 
   return (
     <div className="space-y-2">
-      {title && (
-        <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 text-center">
-          {title}
-        </h4>
-      )}
+      {title && <h4 className="text-sm font-medium text-foreground text-center">{title}</h4>}
 
       <div className="flex items-center justify-center">
         {yAxisLabel && (
-          <span className="text-xs text-zinc-500 -rotate-90 origin-center mr-2">{yAxisLabel}</span>
+          <span className="text-xs text-muted-foreground -rotate-90 origin-center mr-2">
+            {yAxisLabel}
+          </span>
         )}
 
         <div className="overflow-x-auto">
@@ -492,7 +490,7 @@ const ChartWidgetComponent: React.FC<WidgetRendererProps<ChartWidgetData>> = ({
         </div>
       </div>
 
-      {xAxisLabel && <p className="text-xs text-zinc-500 text-center">{xAxisLabel}</p>}
+      {xAxisLabel && <p className="text-xs text-muted-foreground text-center">{xAxisLabel}</p>}
     </div>
   );
 };

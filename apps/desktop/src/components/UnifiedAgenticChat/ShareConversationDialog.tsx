@@ -121,12 +121,12 @@ export function ShareConversationDialog({
         if (e.target === e.currentTarget) handleClose();
       }}
     >
-      <div className="relative w-full max-w-md rounded-xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6">
+      <div className="relative w-full max-w-md rounded-xl bg-card shadow-2xl border border-border p-6">
         {/* Close button */}
         <button
           type="button"
           onClick={handleClose}
-          className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
           aria-label="Close"
         >
           <X className="h-4 w-4" />
@@ -138,17 +138,15 @@ export function ShareConversationDialog({
             <Share2 className="h-5 w-5 text-blue-500" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              Share Conversation
-            </h2>
-            <p className="text-xs text-zinc-500">Create a public link anyone can view</p>
+            <h2 className="text-sm font-semibold text-foreground">Share Conversation</h2>
+            <p className="text-xs text-muted-foreground">Create a public link anyone can view</p>
           </div>
         </div>
 
         {/* Body */}
         {!shareUrl ? (
           <div className="space-y-4">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm text-muted-foreground">
               Generate a read-only link to this conversation. The link expires in 30 days.
             </p>
 
@@ -171,16 +169,14 @@ export function ShareConversationDialog({
         ) : (
           <div className="space-y-3">
             <div>
-              <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">
-                Shareable link
-              </p>
+              <p className="text-xs font-medium text-muted-foreground mb-2">Shareable link</p>
               <div className="flex items-center gap-2">
                 <input
                   readOnly
                   value={shareUrl}
                   className={cn(
-                    'flex-1 rounded-lg border border-zinc-200 dark:border-zinc-700',
-                    'bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300',
+                    'flex-1 rounded-lg border border-border',
+                    'bg-muted px-3 py-2 text-xs text-foreground',
                     'focus:outline-none focus:ring-2 focus:ring-blue-500/50 truncate',
                   )}
                 />
@@ -198,7 +194,7 @@ export function ShareConversationDialog({
                   )}
                 </Button>
               </div>
-              <p className="mt-1 text-xs text-zinc-400">Expires in 30 days.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Expires in 30 days.</p>
             </div>
           </div>
         )}

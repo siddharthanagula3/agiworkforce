@@ -108,7 +108,7 @@ export const InlineDocumentSearch: React.FC<ToolResultProps> = ({ result, status
                 {typeof match.page === 'number' && <span>Page {match.page}</span>}
                 {typeof match.line === 'number' && <span>Line {match.line}</span>}
               </div>
-              <p className="text-xs text-zinc-300 whitespace-pre-wrap break-words leading-relaxed">
+              <p className="text-xs text-foreground whitespace-pre-wrap break-words leading-relaxed">
                 {highlightContext(match.context || '', match.match_text || '')}
               </p>
             </div>

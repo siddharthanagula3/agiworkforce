@@ -59,17 +59,17 @@ const ImageInlinePanelComponent: React.FC<ImageInlinePanelProps> = memo(
         <div className="space-y-3">
           {/* Prompt */}
           <div>
-            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Prompt
             </span>
-            <p className="mt-1 text-sm text-gray-800 dark:text-gray-200 italic">
+            <p className="mt-1 text-sm text-foreground italic">
               &ldquo;{imageContent.prompt}&rdquo;
             </p>
           </div>
 
           {/* Status / Content */}
           {imageContent.status === 'loading' && (
-            <div className="flex flex-col items-center justify-center py-10 gap-3 text-gray-500 dark:text-gray-400">
+            <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
               <Loader2 size={28} className="animate-spin" />
               <span className="text-sm">Generating image&hellip;</span>
             </div>
@@ -89,7 +89,7 @@ const ImageInlinePanelComponent: React.FC<ImageInlinePanelProps> = memo(
                 {imageContent.urls.map((url, i) => (
                   <div
                     key={url}
-                    className="relative group rounded-lg overflow-hidden border border-gray-200 dark:border-charcoal-700"
+                    className="relative group rounded-lg overflow-hidden border border-border"
                   >
                     <img
                       src={url}
@@ -125,7 +125,7 @@ const ImageInlinePanelComponent: React.FC<ImageInlinePanelProps> = memo(
 
           {/* Metadata footer */}
           {imageContent.status === 'success' && (
-            <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
               {imageContent.provider && (
                 <span>
                   Provider: <span className="font-medium">{imageContent.provider}</span>

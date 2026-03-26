@@ -116,7 +116,7 @@ export function TimelineStep({
               <pre
                 className={cn(
                   'mt-1.5 max-h-64 overflow-y-auto rounded p-2 text-[11px] font-mono leading-relaxed whitespace-pre-wrap break-words',
-                  isError ? 'bg-red-950/40 text-red-300' : 'bg-zinc-900/60 text-zinc-300',
+                  isError ? 'bg-red-950/40 text-red-300' : 'bg-card/60 text-foreground',
                 )}
               >
                 {result}

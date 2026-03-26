@@ -172,7 +172,7 @@ function FieldWrapper({ field, error, children, id }: FieldWrapperProps) {
           <Label
             htmlFor={id}
             className={cn(
-              'text-sm font-medium text-gray-700 dark:text-gray-300',
+              'text-sm font-medium text-foreground',
               error && 'text-red-600 dark:text-red-400',
             )}
           >
@@ -187,7 +187,7 @@ function FieldWrapper({ field, error, children, id }: FieldWrapperProps) {
       )}
 
       {field.description && !error && (
-        <p id={descId} className="text-xs text-gray-500 dark:text-gray-400">
+        <p id={descId} className="text-xs text-muted-foreground">
           {field.description}
         </p>
       )}
@@ -232,10 +232,7 @@ function TextField({ field, value, onChange, error, disabled, id }: TextFieldPro
         disabled={disabled || field.disabled}
         aria-invalid={error ? 'true' : 'false'}
         aria-describedby={cn(error && errorId, field.description && descId) || undefined}
-        className={cn(
-          'bg-white dark:bg-gray-800',
-          error && 'border-red-500 focus-visible:ring-red-500',
-        )}
+        className={cn('bg-card', error && 'border-red-500 focus-visible:ring-red-500')}
       />
     </FieldWrapper>
   );
@@ -279,10 +276,7 @@ function NumberField({ field, value, onChange, error, disabled, id }: NumberFiel
         max={field.validation?.max}
         aria-invalid={error ? 'true' : 'false'}
         aria-describedby={cn(error && errorId, field.description && descId) || undefined}
-        className={cn(
-          'bg-white dark:bg-gray-800',
-          error && 'border-red-500 focus-visible:ring-red-500',
-        )}
+        className={cn('bg-card', error && 'border-red-500 focus-visible:ring-red-500')}
       />
     </FieldWrapper>
   );
@@ -308,7 +302,7 @@ function SelectField({ field, value, onChange, error, disabled, id }: SelectFiel
           id={id}
           aria-invalid={error ? 'true' : 'false'}
           aria-describedby={cn(error && errorId, field.description && descId) || undefined}
-          className={cn('bg-white dark:bg-gray-800', error && 'border-red-500 focus:ring-red-500')}
+          className={cn('bg-card', error && 'border-red-500 focus:ring-red-500')}
         >
           <SelectValue placeholder={field.placeholder || 'Select an option'} />
         </SelectTrigger>
@@ -353,7 +347,7 @@ function CheckboxField({ field, value, onChange, error, disabled, id }: Checkbox
           <Label
             htmlFor={id}
             className={cn(
-              'text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer',
+              'text-sm font-medium text-foreground cursor-pointer',
               error && 'text-red-600 dark:text-red-400',
             )}
           >
@@ -365,7 +359,7 @@ function CheckboxField({ field, value, onChange, error, disabled, id }: Checkbox
             )}
           </Label>
           {field.description && (
-            <p id={descId} className="text-xs text-gray-500 dark:text-gray-400">
+            <p id={descId} className="text-xs text-muted-foreground">
               {field.description}
             </p>
           )}
@@ -409,13 +403,10 @@ function DateField({ field, value, onChange, error, disabled, id }: DateFieldPro
           disabled={disabled || field.disabled}
           aria-invalid={error ? 'true' : 'false'}
           aria-describedby={cn(error && errorId, field.description && descId) || undefined}
-          className={cn(
-            'bg-white dark:bg-gray-800 pr-10',
-            error && 'border-red-500 focus-visible:ring-red-500',
-          )}
+          className={cn('bg-card pr-10', error && 'border-red-500 focus-visible:ring-red-500')}
         />
         <Calendar
-          className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none"
+          className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
           aria-hidden="true"
         />
       </div>
@@ -477,29 +468,29 @@ function FileField({ field, value, onChange, error, disabled, id }: FileFieldPro
           onKeyDown={handleKeyDown}
           className={cn(
             'flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed rounded-lg cursor-pointer transition-colors',
-            'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800',
-            'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500',
+            'bg-muted/50 hover:bg-muted',
+            'border-border hover:border-border/80',
             error && 'border-red-500 bg-red-50 dark:bg-red-900/10',
             (disabled || field.disabled) && 'opacity-50 cursor-not-allowed',
           )}
         >
-          <FileUp className="h-5 w-5 text-gray-400" aria-hidden="true" />
-          <span className="text-sm text-gray-600 dark:text-gray-400">
+          <FileUp className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <span className="text-sm text-muted-foreground">
             {field.placeholder || 'Click to select a file'}
           </span>
         </div>
 
         {value && (
-          <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{value.name}</span>
+          <div className="flex items-center justify-between px-3 py-2 bg-muted rounded-lg">
+            <span className="text-sm text-foreground truncate">{value.name}</span>
             <button
               type="button"
               onClick={handleClear}
               disabled={disabled || field.disabled}
-              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+              className="p-1 hover:bg-accent rounded transition-colors"
               aria-label={`Remove ${value.name}`}
             >
-              <X className="h-4 w-4 text-gray-500" />
+              <X className="h-4 w-4 text-muted-foreground" />
             </button>
           </div>
         )}
@@ -569,10 +560,8 @@ function ReadOnlyForm({ config, values, className }: ReadOnlyFormProps) {
       <div className="p-4 space-y-3">
         {config.fields.map((field) => (
           <div key={field.name} className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              {field.label}
-            </span>
-            <span className="text-sm text-gray-900 dark:text-gray-100">
+            <span className="text-xs font-medium text-muted-foreground">{field.label}</span>
+            <span className="text-sm text-foreground">
               {formatValue(field, values[field.name])}
             </span>
           </div>
@@ -780,12 +769,10 @@ export const FormWidget: React.FC<FormWidgetProps> = ({
       {(config.title || config.description) && (
         <div className="px-4 py-3 border-b border-blue-200 dark:border-blue-800 bg-blue-100 dark:bg-blue-900/20">
           {config.title && (
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {config.title}
-            </h3>
+            <h3 className="text-sm font-semibold text-foreground">{config.title}</h3>
           )}
           {config.description && (
-            <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{config.description}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{config.description}</p>
           )}
         </div>
       )}

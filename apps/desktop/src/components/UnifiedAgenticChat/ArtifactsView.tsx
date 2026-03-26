@@ -51,26 +51,26 @@ export function ArtifactsView() {
   }, [allArtifacts, searchQuery]);
 
   return (
-    <div className="flex flex-col h-full bg-zinc-50 dark:bg-zinc-950/50">
-      <div className="p-6 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 sticky top-0 z-10">
+    <div className="flex flex-col h-full bg-background/50">
+      <div className="p-6 border-b border-border bg-card sticky top-0 z-10">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
             <Code2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Artifacts</h2>
-            <p className="text-sm text-gray-500">
+            <h2 className="text-xl font-semibold text-foreground">Artifacts</h2>
+            <p className="text-sm text-muted-foreground">
               View and manage generated code, charts, and diagrams
             </p>
           </div>
         </div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search artifacts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 bg-gray-50 dark:bg-zinc-800/50 border-gray-200 dark:border-gray-700"
+            className="pl-9 bg-muted/50 border-border"
           />
         </div>
       </div>
@@ -80,7 +80,7 @@ export function ArtifactsView() {
           {filteredArtifacts.length > 0 ? (
             filteredArtifacts.map((artifact, i) => (
               <div key={`${artifact.id}-${i}`} className="flex flex-col gap-2">
-                <div className="flex items-center justify-between text-xs text-gray-500 px-1">
+                <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
                   <span className="flex items-center gap-1">
                     {getArtifactIcon(artifact.type)}
                     {artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1)}
@@ -96,7 +96,7 @@ export function ArtifactsView() {
               </div>
             ))
           ) : (
-            <div className="col-span-full py-12 text-center text-gray-400">
+            <div className="col-span-full py-12 text-center text-muted-foreground">
               {searchQuery ? 'No artifacts match your search' : 'No artifacts generated yet'}
             </div>
           )}

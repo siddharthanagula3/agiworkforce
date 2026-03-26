@@ -238,10 +238,7 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
 
               if (!isBlockCode) {
                 return (
-                  <code
-                    className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-sm font-mono"
-                    {...rest}
-                  >
+                  <code className="px-1.5 py-0.5 bg-muted rounded text-sm font-mono" {...rest}>
                     {children}
                   </code>
                 );
@@ -299,9 +296,7 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
             table({ children }) {
               return (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                    {children}
-                  </table>
+                  <table className="min-w-full divide-y divide-border">{children}</table>
                 </div>
               );
             },
@@ -336,7 +331,7 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
                 link.click();
               };
               return (
-                <span className="group relative inline-block my-2 rounded-xl overflow-hidden shadow-lg border border-zinc-700/50 bg-zinc-900/50">
+                <span className="group relative inline-block my-2 rounded-xl overflow-hidden shadow-lg border border-border/50 bg-card/50">
                   <img
                     src={src}
                     alt={alt || 'Generated image'}

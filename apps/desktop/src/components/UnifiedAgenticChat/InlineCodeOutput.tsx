@@ -36,9 +36,9 @@ export const InlineCodeOutput: React.FC<InlineCodeOutputProps> = ({
   const exitCodeOk = result.exit_code === 0;
 
   return (
-    <div className="mt-1 mb-3 rounded-md border border-zinc-700 bg-zinc-950 font-mono text-xs overflow-hidden">
+    <div className="mt-1 mb-3 rounded-md border border-border bg-background font-mono text-xs overflow-hidden">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-800/70 border-b border-zinc-700">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-muted/70 border-b border-border">
         <div className="flex items-center gap-2">
           {isRunning ? (
             <Loader2 size={12} className="animate-spin text-amber-400" />
@@ -53,7 +53,7 @@ export const InlineCodeOutput: React.FC<InlineCodeOutputProps> = ({
               <span>exit {result.exit_code}</span>
             </span>
           )}
-          {!isRunning && <span className="text-zinc-500">Ran in {execTimeSec}s</span>}
+          {!isRunning && <span className="text-muted-foreground">Ran in {execTimeSec}s</span>}
           {result.timed_out && <span className="text-amber-400 font-semibold">TIMED OUT</span>}
         </div>
         <div className="flex items-center gap-1">
@@ -61,7 +61,7 @@ export const InlineCodeOutput: React.FC<InlineCodeOutputProps> = ({
             <button
               type="button"
               onClick={() => setCollapsed((c) => !c)}
-              className="p-1 hover:bg-zinc-700 rounded transition-colors text-zinc-400 hover:text-zinc-200"
+              className="p-1 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
               title={collapsed ? 'Expand output' : 'Collapse output'}
             >
               {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
@@ -71,7 +71,7 @@ export const InlineCodeOutput: React.FC<InlineCodeOutputProps> = ({
             <button
               type="button"
               onClick={onRerun}
-              className="p-1 hover:bg-zinc-700 rounded transition-colors text-zinc-400 hover:text-zinc-200"
+              className="p-1 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
               title="Re-run"
             >
               <RotateCcw size={12} />
@@ -84,13 +84,13 @@ export const InlineCodeOutput: React.FC<InlineCodeOutputProps> = ({
       {!collapsed && (
         <div className="p-3 space-y-1 max-h-64 overflow-auto">
           {isRunning && (
-            <div className="flex items-center gap-2 text-zinc-400">
+            <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 size={12} className="animate-spin" />
               <span>Running…</span>
             </div>
           )}
           {!isRunning && result.stdout && (
-            <pre className="text-zinc-200 whitespace-pre-wrap break-all">{result.stdout}</pre>
+            <pre className="text-foreground whitespace-pre-wrap break-all">{result.stdout}</pre>
           )}
           {!isRunning && result.stderr && (
             <pre className="text-red-400 whitespace-pre-wrap break-all">{result.stderr}</pre>
@@ -99,7 +99,7 @@ export const InlineCodeOutput: React.FC<InlineCodeOutputProps> = ({
             <pre className="text-amber-400 whitespace-pre-wrap break-all">{result.error}</pre>
           )}
           {!isRunning && !result.stdout && !result.stderr && !result.error && (
-            <span className="text-zinc-500">(no output)</span>
+            <span className="text-muted-foreground">(no output)</span>
           )}
         </div>
       )}

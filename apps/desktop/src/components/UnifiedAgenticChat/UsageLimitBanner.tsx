@@ -70,21 +70,21 @@ export function UsageLimitBanner({
     'flex items-center gap-3 rounded-lg border px-4 py-2 text-sm',
     urgency === 'critical' && 'bg-red-500/10 border-red-500/20 text-red-300',
     urgency === 'warning' && 'bg-orange-500/10 border-orange-500/20 text-orange-300',
-    urgency === 'info' && 'bg-white/5 border-white/10 text-zinc-300',
+    urgency === 'info' && 'bg-white/5 border-white/10 text-foreground',
   );
 
   const iconClasses = cn(
     'h-4 w-4 shrink-0',
     urgency === 'critical' && 'text-red-400',
     urgency === 'warning' && 'text-orange-400',
-    urgency === 'info' && 'text-zinc-400',
+    urgency === 'info' && 'text-muted-foreground',
   );
 
   const dismissClasses = cn(
     'ml-auto shrink-0 rounded p-0.5 transition-colors',
     urgency === 'critical' && 'hover:bg-red-500/20 text-red-400 hover:text-red-300',
     urgency === 'warning' && 'hover:bg-orange-500/20 text-orange-400 hover:text-orange-300',
-    urgency === 'info' && 'hover:bg-white/10 text-zinc-500 hover:text-zinc-300',
+    urgency === 'info' && 'hover:bg-white/10 text-muted-foreground hover:text-foreground',
   );
 
   return (

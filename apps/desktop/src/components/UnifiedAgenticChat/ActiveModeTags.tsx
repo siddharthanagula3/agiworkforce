@@ -41,7 +41,7 @@ const COLOR_CLASSES: Record<string, { bg: string; text: string }> = {
   rose: { bg: 'bg-rose-500/15', text: 'text-rose-400' },
 };
 
-const DEFAULT_COLOR = { bg: 'bg-gray-500/15', text: 'text-gray-400' };
+const DEFAULT_COLOR = { bg: 'bg-muted-foreground/15', text: 'text-muted-foreground' };
 
 /**
  * Maps IntentType strings to ModeTag configurations.

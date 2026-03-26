@@ -1500,7 +1500,7 @@ export const UnifiedAgenticChat: React.FC<{
           {activeView === 'chat' ? (
             <>
               {/* Header bar with token counter and background task indicator */}
-              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800/50">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border/50">
                 {/* Incognito mode indicator */}
                 {isActiveConversationIncognito && (
                   <div className="flex items-center gap-1.5 text-violet-400 text-xs font-medium">
@@ -1552,11 +1552,11 @@ export const UnifiedAgenticChat: React.FC<{
                     fallback={
                       <div className="flex-1 flex items-center justify-center p-8">
                         <div className="text-center">
-                          <p className="text-zinc-400 mb-4">Failed to load chat messages</p>
+                          <p className="text-muted-foreground mb-4">Failed to load chat messages</p>
                           <button
                             type="button"
                             onClick={() => window.location.reload()}
-                            className="px-4 py-2 bg-zinc-700 text-white rounded-lg hover:bg-zinc-600"
+                            className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/80"
                           >
                             Reload
                           </button>
@@ -1574,7 +1574,7 @@ export const UnifiedAgenticChat: React.FC<{
 
                   {/* AgentStepTimeline — shows execution steps when the agentic loop is active */}
                   {agenticLoopStatus?.active && agentSteps.length > 0 && (
-                    <div className="px-4 py-2 border-t border-gray-800/30 max-h-48 overflow-y-auto">
+                    <div className="px-4 py-2 border-t border-border/30 max-h-48 overflow-y-auto">
                       <AgentStepTimeline steps={agentSteps} compact />
                     </div>
                   )}
@@ -1589,13 +1589,13 @@ export const UnifiedAgenticChat: React.FC<{
 
                 {/* ArtifactsView — toggleable side panel for generated artifacts */}
                 {artifactsPanelOpen && (
-                  <div className="w-[400px] border-l border-gray-800/50 overflow-hidden flex flex-col shrink-0">
-                    <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800/50">
-                      <span className="text-xs font-medium text-zinc-400">Artifacts</span>
+                  <div className="w-[400px] border-l border-border/50 overflow-hidden flex flex-col shrink-0">
+                    <div className="flex items-center justify-between px-4 py-2 border-b border-border/50">
+                      <span className="text-xs font-medium text-muted-foreground">Artifacts</span>
                       <button
                         type="button"
                         onClick={() => setArtifactsPanelOpen(false)}
-                        className="text-xs text-zinc-500 hover:text-zinc-300"
+                        className="text-xs text-muted-foreground hover:text-foreground"
                       >
                         Close
                       </button>
@@ -1608,7 +1608,7 @@ export const UnifiedAgenticChat: React.FC<{
 
                 {/* CouncilView — multi-model council panel for debate mode */}
                 {councilOpen && (
-                  <div className="w-[400px] border-l border-gray-800/50 overflow-hidden flex flex-col shrink-0">
+                  <div className="w-[400px] border-l border-border/50 overflow-hidden flex flex-col shrink-0">
                     <CouncilView
                       onClose={() => setCouncilOpen(false)}
                       onConsensusReady={(consensus) => {

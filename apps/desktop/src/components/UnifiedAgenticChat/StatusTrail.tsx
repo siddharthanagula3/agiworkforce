@@ -46,7 +46,7 @@ function getColorForType(type: ActionTrailEntry['type']) {
     case 'error':
       return 'text-agent-error';
     default:
-      return 'text-zinc-400';
+      return 'text-muted-foreground';
   }
 }
 
@@ -83,7 +83,7 @@ function StatusTrailItem({ entry, prefersReducedMotion = false }: StatusTrailIte
       }
       className={cn(
         'flex flex-col gap-1.5 px-3 py-2 rounded-lg',
-        'bg-zinc-800/50 backdrop-blur-xs',
+        'bg-muted/50 backdrop-blur-xs',
         'border border-white/5',
         isCompleted && 'bg-emerald-900/20 border-emerald-500/20',
         isError && 'bg-rose-900/20 border-rose-500/20',
@@ -100,10 +100,10 @@ function StatusTrailItem({ entry, prefersReducedMotion = false }: StatusTrailIte
           {entry.message}
         </span>
         {progress !== undefined && isInProgress && (
-          <span className="text-xs text-zinc-500 tabular-nums">{progress}%</span>
+          <span className="text-xs text-muted-foreground tabular-nums">{progress}%</span>
         )}
         {entry.currentStep !== undefined && entry.totalSteps !== undefined && (
-          <span className="text-xs text-zinc-500 tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {entry.currentStep}/{entry.totalSteps}
           </span>
         )}
@@ -112,7 +112,7 @@ function StatusTrailItem({ entry, prefersReducedMotion = false }: StatusTrailIte
       {/* Progress bar for multi-step operations */}
       {progress !== undefined && isInProgress && (
         <div
-          className="w-full h-1 bg-zinc-700/50 rounded-full overflow-hidden"
+          className="w-full h-1 bg-accent/50 rounded-full overflow-hidden"
           role="progressbar"
           aria-valuenow={progress}
           aria-valuemin={0}
@@ -227,7 +227,7 @@ export function FloatingStatusTrail({ messageId, className }: FloatingStatusTrai
         'w-80 max-w-[calc(100vw-3rem)]',
         'flex flex-col gap-2',
         'p-4 rounded-xl',
-        'bg-zinc-900/90 backdrop-blur-xl',
+        'bg-card/90 backdrop-blur-xl',
         'border border-white/10',
         'shadow-2xl',
         className,
@@ -237,10 +237,10 @@ export function FloatingStatusTrail({ messageId, className }: FloatingStatusTrai
       aria-busy={hasActiveItems}
     >
       <div className="flex items-center justify-between mb-2">
-        <h4 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide">
+        <h4 className="text-sm font-semibold text-foreground uppercase tracking-wide">
           Agent Activity
         </h4>
-        <span className="text-xs text-zinc-500">{actionTrail.length} active</span>
+        <span className="text-xs text-muted-foreground">{actionTrail.length} active</span>
       </div>
       <AnimatePresence mode="popLayout">
         {actionTrail.map((entry) => (

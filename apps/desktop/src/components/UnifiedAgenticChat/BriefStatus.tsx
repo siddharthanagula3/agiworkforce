@@ -54,7 +54,7 @@ export function BriefStatus({ status, className }: BriefStatusProps) {
             ? 'text-rose-400 bg-rose-500/10'
             : status.isComplete
               ? 'text-emerald-400 bg-emerald-500/10'
-              : 'text-zinc-400 bg-zinc-800/50',
+              : 'text-muted-foreground bg-muted/50',
           className,
         )}
         role="status"
@@ -127,14 +127,14 @@ export function FloatingBriefStatus({ status, className }: FloatingBriefStatusPr
           'fixed top-4 left-1/2 -translate-x-1/2 z-50',
           'flex items-center gap-2 px-4 py-2 rounded-full',
           'text-sm font-medium',
-          'bg-zinc-900/95 backdrop-blur-xs',
+          'bg-card/95 backdrop-blur-xs',
           'border border-white/10',
           'shadow-lg',
           status.isError
             ? 'text-rose-400 border-rose-500/30'
             : status.isComplete
               ? 'text-emerald-400 border-emerald-500/30'
-              : 'text-zinc-300',
+              : 'text-foreground',
           className,
         )}
         role="status"

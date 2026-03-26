@@ -72,10 +72,10 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
   const displayedCitations = isExpanded ? citations : citations.slice(0, 3);
 
   return (
-    <div className={cn('mt-4 pt-3 border-t border-zinc-700/50', 'text-sm', className)}>
+    <div className={cn('mt-4 pt-3 border-t border-border/50', 'text-sm', className)}>
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 text-zinc-400">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Globe className="h-4 w-4" />
           <span className="text-xs font-medium uppercase tracking-wider">
             {citations.length} Source{citations.length !== 1 ? 's' : ''}
@@ -108,7 +108,7 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
               onClick={() => handleSourceClick(citation.url)}
               className={cn(
                 'flex items-center gap-3 p-2.5 rounded-lg text-left w-full',
-                'bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/30 hover:border-teal/30',
+                'bg-muted/50 hover:bg-muted border border-border/30 hover:border-teal/30',
                 'transition-all group',
               )}
             >
@@ -129,20 +129,20 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
                     }}
                   />
                 ) : (
-                  <Globe className="w-4 h-4 text-zinc-500 shrink-0" />
+                  <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-zinc-200 truncate group-hover:text-teal transition-colors">
                     {citation.title || new URL(citation.url).hostname}
                   </p>
-                  <p className="text-[10px] text-zinc-500 truncate">
+                  <p className="text-[10px] text-muted-foreground truncate">
                     {new URL(citation.url).hostname}
                   </p>
                 </div>
               </div>
 
               {/* External link icon */}
-              <ExternalLink className="h-3 w-3 text-zinc-500 group-hover:text-teal shrink-0 transition-colors" />
+              <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-teal shrink-0 transition-colors" />
             </motion.button>
           ))}
         </AnimatePresence>
