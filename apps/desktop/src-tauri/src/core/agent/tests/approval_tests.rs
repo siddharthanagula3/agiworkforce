@@ -411,8 +411,8 @@ mod tests {
             result2
         );
 
-        let error_msg = if result1.is_err() {
-            result1.unwrap_err().to_string()
+        let error_msg = if let Err(e) = result1 {
+            e.to_string()
         } else {
             result2.unwrap_err().to_string()
         };
