@@ -170,6 +170,14 @@ jest.mock('../lib/models', () => ({
   PROVIDERS: [],
 }));
 
+jest.mock('../components/chat/AutoApproveToggle', () => ({
+  AutoApproveToggle: jest.fn().mockReturnValue(null),
+}));
+
+jest.mock('../components/chat/TemporaryChatToggle', () => ({
+  TemporaryChatToggle: jest.fn().mockReturnValue(null),
+}));
+
 jest.mock('../lib/theme', () => ({
   colors: {
     teal: '#14b8a6',
