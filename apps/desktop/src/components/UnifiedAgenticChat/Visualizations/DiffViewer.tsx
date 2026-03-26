@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
 import { Copy, Maximize2, Minimize2, Undo2 } from 'lucide-react';
 import { useConfirm } from '../../ui/ConfirmDialog';
@@ -34,12 +34,20 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const [copied, setCopied] = useState<'old' | 'new' | null>(null);
   const [isReverting, setIsReverting] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirm();
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const handleCopy = async (content: string, type: 'old' | 'new') => {
     try {
       await navigator.clipboard.writeText(content);
       setCopied(type);
-      setTimeout(() => setCopied(null), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(null), 2000);
     } catch (err) {
       console.error('Failed to copy content:', err);
     }

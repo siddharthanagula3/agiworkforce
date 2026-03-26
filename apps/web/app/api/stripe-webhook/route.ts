@@ -17,6 +17,7 @@ import { logInvalidSignature } from '@/lib/security-audit';
 import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constants';
 // AUDIT-P3: Use shared Stripe type helpers for type safety
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
+import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 
 const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
 const STRIPE_WEBHOOK_SECRET = process.env['STRIPE_WEBHOOK_SECRET'];
@@ -37,7 +38,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: '2026-02-25.clover' as Stripe.LatestApiVersion,
+      apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
     })
   : null;
 

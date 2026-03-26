@@ -95,7 +95,7 @@ export const useModelStore = create<ModelState>()(
         if (get().selectedModel === modelId) {
           updates.thinkingModeEnabled = next[modelId] ?? false;
         }
-        set(updates as ModelState);
+        set(updates as Partial<ModelState>);
       },
 
       isThinkingEnabledForSelected: () => {
@@ -106,6 +106,9 @@ export const useModelStore = create<ModelState>()(
     {
       name: 'model-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[modelStore] Hydration failed:', error);
+      },
     },
   ),
 );

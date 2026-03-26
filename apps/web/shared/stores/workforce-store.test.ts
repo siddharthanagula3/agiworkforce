@@ -134,6 +134,7 @@ describe('Workforce Store', () => {
 
     it('should handle no authenticated user', async () => {
       currentUser = null;
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
       await useWorkforceStore.getState().fetchHiredEmployees();
 
@@ -142,7 +143,8 @@ describe('Workforce Store', () => {
       expect(state.error).toBeNull();
 
       // fetch should not have been called
-      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      fetchSpy.mockRestore();
     });
 
     it('should handle fetch errors', async () => {

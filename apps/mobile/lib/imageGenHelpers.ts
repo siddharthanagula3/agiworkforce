@@ -64,9 +64,12 @@ export function formatImageSize(size: string): string {
 
 /**
  * Default model used when the user does not specify one.
+ * Falls back to 'auto-balanced' to let the router pick the best image model.
  */
 export function getDefaultImageModel(): string {
-  return 'gpt-image-1';
+  // Avoid hardcoded model IDs per CLAUDE.md conventions.
+  // 'auto-balanced' delegates to the server-side router.
+  return 'auto-balanced';
 }
 
 /**

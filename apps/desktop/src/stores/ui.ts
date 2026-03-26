@@ -112,7 +112,10 @@ export type SidecarMode =
   | 'messaging'
   | 'productivity'
   | 'cloud'
-  | 'governance';
+  | 'governance'
+  | 'agent-collab'
+  | 'visual-editor'
+  | 'dynamic-canvas';
 
 export interface SidecarState {
   isOpen: boolean;
@@ -395,7 +398,7 @@ export const useUIStore = create<UIState>()(
                   ? console.error
                   : errorData.severity === 'warning'
                     ? console.warn
-                    : console.info;
+                    : console.debug;
 
               consoleMethod(`[${errorData.severity.toUpperCase()}] ${errorData.message}`, {
                 type: errorData.type,

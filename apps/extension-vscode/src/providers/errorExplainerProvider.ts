@@ -13,7 +13,7 @@
  */
 
 import * as vscode from 'vscode';
-import { chatCompletion, type ChatMessage } from '../utils/api';
+import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { applyLlmEdit } from '../utils/applyEdit';
 import { logEvent, logError, TelemetryEvents } from '../services/telemetry';
 
@@ -85,7 +85,7 @@ async function explainErrorCommand(context: vscode.ExtensionContext): Promise<vo
   const lang = document.languageId;
   const filePath = vscode.workspace.asRelativePath(document.uri);
 
-  const messages: ChatMessage[] = [
+  const messages: LlmChatMessage[] = [
     {
       role: 'system',
       content:
@@ -176,7 +176,7 @@ async function askAboutCodeCommand(context: vscode.ExtensionContext): Promise<vo
   const editor = vscode.window.activeTextEditor;
   const codeContext = buildEditorContext(editor);
 
-  const messages: ChatMessage[] = [
+  const messages: LlmChatMessage[] = [
     {
       role: 'system',
       content:

@@ -5,7 +5,7 @@
  * directly to the Tauri backend via invoke(). Shows the result
  * in a formatted output area below the form.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Play, Loader2, CheckCircle2, AlertCircle, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
@@ -114,6 +114,13 @@ export function ToolInvoker({ tool }: ToolInvokerProps) {
   const [error, setError] = useState<string>('');
   const [copied, setCopied] = useState(false);
   const [elapsed, setElapsed] = useState<number | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   // Reset form when tool changes
   const handleFieldChange = useCallback((key: string, val: string | number | boolean) => {
@@ -160,7 +167,8 @@ export function ToolInvoker({ tool }: ToolInvokerProps) {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       // clipboard access may be restricted
     }

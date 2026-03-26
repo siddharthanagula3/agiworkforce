@@ -216,7 +216,7 @@ mod tests {
             .instructions("These instructions should not be returned")
             .requires_bin("this-binary-does-not-exist-12345")
             .build()
-            .expect("Failed to build skill");
+            .unwrap();
 
         manager.add_skill(skill);
 

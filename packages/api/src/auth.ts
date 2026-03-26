@@ -17,3 +17,22 @@ export async function authRetrieveSession(): Promise<string> {
 export async function authRemoveSession(): Promise<void> {
   return command<void>('auth_remove_session');
 }
+
+// ---- Account / Device Management ----
+
+export interface ConnectedDevice {
+  id: string;
+  name: string;
+  type: 'desktop' | 'mobile' | 'extension' | 'web';
+  platform: string;
+  lastSeen: string;
+  current: boolean;
+}
+
+export async function accountListDevices(): Promise<ConnectedDevice[]> {
+  return command<ConnectedDevice[]>('account_list_devices');
+}
+
+export async function accountDisconnectDevice(deviceId: string): Promise<void> {
+  return command<void>('account_disconnect_device', { deviceId });
+}

@@ -55,12 +55,42 @@ struct TriggerEvent {
     context: Option<String>,
 }
 
+/// Simple per-endpoint rate limiter (sliding window, 60 requests/minute).
+#[derive(Clone)]
+struct RateLimiter {
+    requests: std::sync::Arc<tokio::sync::Mutex<std::collections::VecDeque<std::time::Instant>>>,
+    max_per_minute: usize,
+}
+
+impl RateLimiter {
+    fn new(max_per_minute: usize) -> Self {
+        Self {
+            requests: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::VecDeque::new())),
+            max_per_minute,
+        }
+    }
+
+    async fn check(&self) -> bool {
+        let mut reqs = self.requests.lock().await;
+        let cutoff = std::time::Instant::now() - std::time::Duration::from_secs(60);
+        while reqs.front().is_some_and(|t| *t < cutoff) {
+            reqs.pop_front();
+        }
+        if reqs.len() >= self.max_per_minute {
+            return false;
+        }
+        reqs.push_back(std::time::Instant::now());
+        true
+    }
+}
+
 /// Shared state for the axum webhook server.
 #[derive(Clone)]
 struct WebhookState {
     triggers: HashMap<String, TriggerConfig>,
     token: Option<String>,
     tx: mpsc::UnboundedSender<TriggerEvent>,
+    rate_limiter: RateLimiter,
 }
 
 // ---------------------------------------------------------------------------
@@ -160,12 +190,14 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
         .cloned()
         .collect();
 
+    let mut background_handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+
     if !cron_triggers.is_empty() {
         let tx_cron = tx.clone();
         let mut shutdown_rx_cron = shutdown_rx.clone();
-        tokio::spawn(async move {
+        background_handles.push(tokio::spawn(async move {
             run_cron_scheduler(cron_triggers, tx_cron, &mut shutdown_rx_cron).await;
-        });
+        }));
     }
 
     // Spawn webhook server
@@ -178,10 +210,16 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
 
     if !webhook_triggers.is_empty() {
         let port = triggers_config.webhook_port;
+        if port < 1024 {
+            anyhow::bail!(
+                "webhook_port must be >= 1024 to avoid requiring elevated privileges (got {})",
+                port
+            );
+        }
         let token = triggers_config.webhook_token.clone();
         let tx_webhook = tx.clone();
         let mut shutdown_rx_webhook = shutdown_rx.clone();
-        tokio::spawn(async move {
+        background_handles.push(tokio::spawn(async move {
             if let Err(e) = run_webhook_server(
                 webhook_triggers,
                 port,
@@ -193,7 +231,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
             {
                 eprintln!("{} Webhook server error: {}", "daemon:".bright_red(), e);
             }
-        });
+        }));
     }
 
     // Spawn file watcher
@@ -207,13 +245,13 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
     if !watcher_triggers.is_empty() {
         let tx_watcher = tx.clone();
         let mut shutdown_rx_watcher = shutdown_rx.clone();
-        tokio::spawn(async move {
+        background_handles.push(tokio::spawn(async move {
             if let Err(e) =
                 run_file_watcher(watcher_triggers, tx_watcher, &mut shutdown_rx_watcher).await
             {
                 eprintln!("{} File watcher error: {}", "daemon:".bright_red(), e);
             }
-        });
+        }));
     }
 
     // Drop the original sender so the receiver closes when all spawned senders drop
@@ -243,8 +281,13 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
     // Signal all tasks to stop
     let _ = shutdown_tx.send(true);
 
-    // Give tasks a moment to wind down
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), exec_handle).await;
+    // Wait for all background tasks to wind down (5s timeout)
+    background_handles.push(exec_handle);
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        futures_util::future::join_all(background_handles),
+    )
+    .await;
 
     // Fire DaemonStopped hook
     let hooks_config_final = hooks::load_hooks().unwrap_or_default();
@@ -441,6 +484,7 @@ async fn run_webhook_server(
         triggers: trigger_map.clone(),
         token,
         tx,
+        rate_limiter: RateLimiter::new(60), // 60 requests/minute
     };
 
     // Build routes dynamically
@@ -483,6 +527,15 @@ async fn webhook_handler(
     headers: axum::http::HeaderMap,
     body: String,
 ) -> axum::response::Response {
+    // Rate limit: 60 requests/minute per server
+    if !state.rate_limiter.check().await {
+        return (
+            axum::http::StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded (60 requests/minute)".to_string(),
+        )
+            .into_response();
+    }
+
     // Authenticate if token is configured
     if let Some(ref expected_token) = state.token {
         let provided = headers

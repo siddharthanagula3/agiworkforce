@@ -14,7 +14,7 @@ mod r1_phantom_models {
     use crate::core::llm::{Provider, TaskType};
 
     #[test]
-    fn google_complex_reasoning_returns_gemini_2_5_pro_not_phantom() {
+    fn google_complex_reasoning_returns_gemini_3_1_pro_not_phantom() {
         let model = Provider::Google.get_model_for_task(TaskType::ComplexReasoning);
         assert_ne!(
             model, "gemini-3-deep-think",
@@ -22,8 +22,8 @@ mod r1_phantom_models {
             model
         );
         assert_eq!(
-            model, "gemini-2.5-pro",
-            "Google/ComplexReasoning should return 'gemini-2.5-pro', got: {}",
+            model, "gemini-3.1-pro-preview",
+            "Google/ComplexReasoning should return 'gemini-3.1-pro-preview', got: {}",
             model
         );
     }

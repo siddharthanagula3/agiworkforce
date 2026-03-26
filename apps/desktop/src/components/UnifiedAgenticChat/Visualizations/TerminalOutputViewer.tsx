@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Ansi from 'ansi-to-react';
 import { Search, Copy, Download, WrapText } from 'lucide-react';
 
@@ -25,6 +25,13 @@ export const TerminalOutputViewer: React.FC<TerminalOutputViewerProps> = ({
   const [showStdout, setShowStdout] = useState(true);
   const [showStderr, setShowStderr] = useState(true);
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const handleCopy = async () => {
     const content = [
@@ -37,7 +44,8 @@ export const TerminalOutputViewer: React.FC<TerminalOutputViewerProps> = ({
     try {
       await navigator.clipboard.writeText(content);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy output:', err);
     }

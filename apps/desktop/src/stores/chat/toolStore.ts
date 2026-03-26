@@ -1077,10 +1077,10 @@ export const useToolStore = create<ToolState>()(
 
           // Reset
           resetOnLogout: () => {
-            // Clear all approval timeout timers before resetting state
-            get().approvalTimeoutTimers.forEach((timerId) => clearTimeout(timerId));
             set(
               (state) => {
+                // Clear all approval timeout timers inside set() to prevent race with concurrent startApprovalTimeout
+                state.approvalTimeoutTimers.forEach((timerId) => clearTimeout(timerId));
                 state.fileOperations = [];
                 state.terminalCommands = [];
                 state.toolExecutions = [];

@@ -28,11 +28,11 @@ const RECONNECT_COUNTDOWN_SECONDS = 15;
 // QR Code Helpers
 // ---------------------------------------------------------------------------
 
-/** Pattern for valid pairing codes: `agiw:` prefix + 8 uppercase alphanumeric chars (case-insensitive input accepted) */
-const PAIRING_CODE_PATTERN = /^agiw:[A-Za-z0-9]{8}$/;
+/** Pattern for valid pairing codes: `agiw:` prefix + 6-12 alphanumeric chars (case-insensitive input accepted) */
+const PAIRING_CODE_PATTERN = /^agiw:[A-Za-z0-9]{6,12}$/;
 
-/** Pattern for raw codes without prefix: 8 uppercase alphanumeric chars (case-insensitive input accepted) */
-const RAW_CODE_PATTERN = /^[A-Za-z0-9]{8}$/;
+/** Pattern for raw codes without prefix: 6-12 alphanumeric chars (case-insensitive input accepted) */
+const RAW_CODE_PATTERN = /^[A-Za-z0-9]{6,12}$/;
 
 /**
  * Validate a scanned QR string or manually entered code.
@@ -44,15 +44,14 @@ export function isValidPairingCode(code: string): boolean {
 }
 
 /**
- * Extract the raw code from a QR string (strip `agiw:` prefix).
- * Normalizes to uppercase to match server-generated codes.
+ * Extract the raw code from a QR string (strip `agiw:` prefix and trim whitespace).
  */
 export function extractPairingCode(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed.startsWith('agiw:')) {
-    return trimmed.slice(5).toUpperCase();
+    return trimmed.slice(5);
   }
-  return trimmed.toUpperCase();
+  return trimmed;
 }
 
 // ---------------------------------------------------------------------------
@@ -166,7 +165,7 @@ export function startHealthChecks(): void {
         startReconnectCountdown();
       }
     }
-  }, HEARTBEAT_INTERVAL_MS + 5_000);
+  }, HEARTBEAT_INTERVAL_MS + 2_000); // Offset 2s after heartbeat ping to catch missed pongs
 }
 
 /**
@@ -209,7 +208,12 @@ function debouncedReconnect(): void {
     const { pairingCode, connect, status } = useConnectionStore.getState();
     // Only attempt if we're still in a reconnecting/stale state
     if (pairingCode && (status === 'reconnecting' || status === 'stale')) {
-      connect(pairingCode);
+      try {
+        connect(pairingCode);
+      } catch (err) {
+        console.warn('[Companion] Reconnect failed:', err);
+        useConnectionStore.getState().clearError();
+      }
     }
   }, RECONNECT_DEBOUNCE_MS);
 }

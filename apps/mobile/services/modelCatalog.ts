@@ -100,6 +100,10 @@ export async function fetchModelCatalog(): Promise<ModelDef[]> {
 
     const data = (await response.json()) as ApiModelsResponse;
 
+    if (!data || !Array.isArray(data.models)) {
+      throw new Error('Invalid models response');
+    }
+
     // Filter to chat/code/reasoning models (skip image/video-only)
     const models = data.models
       .filter((m) => ['chat', 'code', 'reasoning', 'other'].includes(m.category))

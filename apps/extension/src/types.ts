@@ -23,9 +23,9 @@ export type NativeMessageType =
   | 'CAPTURE_ELEMENT'
   | 'GET_ELEMENT_INFO'
   | 'AUTO_FILL_JOB_APPLICATION'
-  | 'queue_message'
+  | 'QUEUE_MESSAGE'
   | 'CHAT_MESSAGE'
-  | 'open_side_panel'
+  | 'OPEN_SIDE_PANEL'
   | 'GET_COOKIES'
   | 'SET_COOKIE'
   | 'CLEAR_COOKIES'
@@ -427,7 +427,7 @@ export interface ElementInfoResponse {
 
 // Queue message — sent from side panel to background to forward text to the desktop app
 export interface QueueMessageMessage extends BaseMessage {
-  type: 'queue_message';
+  type: 'QUEUE_MESSAGE';
   id: string;
   text: string;
   tabId?: number;
@@ -461,7 +461,7 @@ export interface ChatMessageResponse {
 
 // Open side panel — sent from content script FAB button to background (intra-extension only, not native messaging)
 export interface OpenSidePanelMessage extends BaseMessage {
-  type: 'open_side_panel';
+  type: 'OPEN_SIDE_PANEL';
 }
 
 export interface GetCookiesMessage extends BaseMessage {

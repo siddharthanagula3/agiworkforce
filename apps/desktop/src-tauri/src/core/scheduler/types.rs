@@ -242,6 +242,7 @@ pub enum JobAction {
     /// Execute an AGI workflow by ID.
     ExecuteWorkflow {
         /// The workflow ID to execute.
+        #[serde(rename = "workflowId")]
         workflow_id: String,
         /// Optional input parameters for the workflow.
         #[serde(default)]
@@ -253,14 +254,17 @@ pub enum JobAction {
         /// The message to send.
         message: String,
         /// Optional conversation ID to continue.
+        #[serde(rename = "conversationId")]
         conversation_id: Option<String>,
     },
 
     /// Execute an MCP tool.
     ExecuteMcpTool {
         /// The server name.
+        #[serde(rename = "serverName")]
         server_name: String,
         /// The tool name.
+        #[serde(rename = "toolName")]
         tool_name: String,
         /// Tool arguments.
         #[serde(default)]
@@ -275,12 +279,14 @@ pub enum JobAction {
         #[serde(default)]
         args: Vec<String>,
         /// Working directory for the command.
+        #[serde(rename = "workingDir")]
         working_dir: Option<String>,
     },
 
     /// Emit a custom event.
     EmitEvent {
         /// Event name.
+        #[serde(rename = "eventName")]
         event_name: String,
         /// Event payload.
         #[serde(default)]
@@ -291,6 +297,7 @@ pub enum JobAction {
     #[allow(dead_code)]
     RunMemorySummarization {
         /// Maximum number of conversations to summarize per run.
+        #[serde(rename = "maxConversations")]
         max_conversations: Option<usize>,
     },
 

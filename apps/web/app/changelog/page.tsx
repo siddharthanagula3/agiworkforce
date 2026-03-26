@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     description:
       'Release notes and updates for AGI Workforce. New features, improvements, and bug fixes.',
     type: 'website',
-    url: 'https://agiworkforce.com/changelog',
+    url: '/changelog',
   },
   twitter: {
     card: 'summary',
@@ -47,9 +47,9 @@ const releases: Release[] = [
     date: 'February 2026',
     tag: 'stable',
     highlights: [
-      'Multi-model chat with 9+ providers',
+      'Multi-model chat with 25+ providers',
       'Parallel agent orchestration (swarm engine)',
-      '140+ AI skills across 9 industries',
+      'AI skills across multiple categories',
       'Unlimited MCP tool support (stdio + SSE + HTTP)',
       'Mobile companion app with QR pairing',
     ],
@@ -87,6 +87,19 @@ function TagBadge({ tag }: { tag: Release['tag'] }) {
 export default function ChangelogPage() {
   return (
     <div className="flex min-h-screen flex-col bg-black text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'WebPage',
+            name: 'Changelog',
+            description:
+              'Release notes and updates for AGI Workforce. New features, improvements, and bug fixes.',
+            url: 'https://agiworkforce.com/changelog',
+          }),
+        }}
+      />
       <Header />
 
       <main className="flex-1 pt-24 pb-12">

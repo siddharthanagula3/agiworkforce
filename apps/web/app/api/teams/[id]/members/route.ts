@@ -12,8 +12,6 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -21,62 +19,10 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import type { User } from '@supabase/supabase-js';
+import { getAuthenticatedUser } from '@/lib/api-auth';
 
 const VALID_ROLES = ['admin', 'editor', 'viewer'] as const;
 type TeamRole = (typeof VALID_ROLES)[number];
-
-async function getAuthenticatedUser(request: NextRequest): Promise<User> {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false, flowType: 'pkce' },
-    });
-
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) {
-      throw createError.unauthorized('Invalid token');
-    }
-    return data.user;
-  }
-
-  const cookieStore = await cookies();
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    auth: { flowType: 'pkce' },
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
-      },
-      set(name: string, value: string, options: CookieOptions) {
-        try {
-          cookieStore.set({ name, value, ...options });
-        } catch {
-          // ignore
-        }
-      },
-      remove(name: string, options: CookieOptions) {
-        try {
-          cookieStore.set({ name, value: '', ...options });
-        } catch {
-          // ignore
-        }
-      },
-    },
-  });
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    throw createError.unauthorized();
-  }
-  return user;
-}
 
 /**
  * Verify the requesting user has admin or owner access to the team.
@@ -181,16 +127,20 @@ async function handleInviteMember(
 
   await requireAdminAccess(supabase, teamId, user.id);
 
-  // Look up the invitee's user ID from auth.users via the admin API
-  const { data: userList, error: listError } = await supabase.auth.admin.listUsers();
-  if (listError) {
-    logger.error({ error: listError, teamId }, 'Failed to look up users for invite');
+  // Look up the invitee by email using a targeted profiles query (O(1) index
+  // lookup) instead of loading all users via listUsers() which is O(n) and
+  // degrades as the user base grows.
+  const normalizedEmail = body.email.trim().toLowerCase();
+  const { data: inviteeProfile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, email')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (profileError) {
+    logger.error({ error: profileError, teamId }, 'Failed to look up user profile for invite');
     throw createError.internal('Failed to invite member');
   }
-
-  const invitee = userList.users.find(
-    (u) => u.email?.toLowerCase() === body.email!.trim().toLowerCase(),
-  );
 
   // If no matching Supabase user exists we still create the record, leaving
   // user_id as a placeholder UUID (same email used as lookup key). In a full
@@ -198,9 +148,8 @@ async function handleInviteMember(
   // allow the invite even if the account is not yet created — the RLS policy
   // uses user_id for access control so the invite is inert until the user
   // registers with that email.
-  const inviteeUserId = invitee?.id ?? '00000000-0000-0000-0000-000000000000';
-  const inviteeName =
-    name || invitee?.user_metadata?.['full_name'] || invitee?.email?.split('@')[0] || '';
+  const inviteeUserId = inviteeProfile?.id ?? '00000000-0000-0000-0000-000000000000';
+  const inviteeName = name || normalizedEmail.split('@')[0] || '';
 
   // Check for duplicate membership
   const { data: existing } = await supabase

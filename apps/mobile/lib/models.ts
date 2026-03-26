@@ -387,6 +387,8 @@ export const MODEL_LIST: ModelDef[] = [
 // ---------------------------------------------------------------------------
 
 const modelMap = new Map<string, ModelDef>(MODEL_LIST.map((m) => [m.id, m]));
+const providerMap = new Map<string, ProviderDef>(PROVIDERS.map((p) => [p.id, p]));
+const autoModeMap = new Map<string, AutoModeDef>(AUTO_MODES.map((a) => [a.id, a]));
 
 /** Get a single model by id. Returns undefined if not found. */
 export function getModelById(id: string): ModelDef | undefined {
@@ -398,14 +400,14 @@ export function getModelsByProvider(providerId: string): ModelDef[] {
   return MODEL_LIST.filter((m) => m.provider === providerId);
 }
 
-/** Get a provider definition by id. */
+/** Get a provider definition by id. O(1) via Map. */
 export function getProviderById(id: string): ProviderDef | undefined {
-  return PROVIDERS.find((p) => p.id === id);
+  return providerMap.get(id);
 }
 
-/** Check if a model id is an auto mode. */
+/** Check if a model id is an auto mode. O(1) via Map. */
 export function isAutoMode(id: string): boolean {
-  return AUTO_MODES.some((a) => a.id === id);
+  return autoModeMap.has(id);
 }
 
 /**
@@ -423,7 +425,7 @@ export function formatContextWindow(tokens: number): string {
 
 /** Human-friendly label for a model or auto mode. */
 export function getDisplayName(id: string): string {
-  const auto = AUTO_MODES.find((a) => a.id === id);
+  const auto = autoModeMap.get(id);
   if (auto) return `Auto (${auto.name})`;
 
   const model = getModelById(id);
@@ -432,7 +434,7 @@ export function getDisplayName(id: string): string {
 
 /** Short display name for the model pill in the input bar. */
 export function getShortDisplayName(id: string): string {
-  const auto = AUTO_MODES.find((a) => a.id === id);
+  const auto = autoModeMap.get(id);
   if (auto) return auto.name;
 
   const model = getModelById(id);

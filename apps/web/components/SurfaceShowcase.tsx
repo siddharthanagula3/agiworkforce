@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { MARKETING } from '@/lib/marketing-constants';
 
 interface Surface {
   icon: string;
@@ -19,7 +20,7 @@ const surfaces: Surface[] = [
     color: '#3b82f6',
     features: [
       'Full computer use — browser, keyboard, screen capture',
-      '1,300+ native IPC tools, no plugins required',
+      `${MARKETING.tools.display} native IPC tools, no plugins required`,
       'Runs Ollama, LM Studio, and local models offline',
     ],
     mockup: (

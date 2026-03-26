@@ -20,45 +20,61 @@ interface AgentStatusResponse {
  * Define the background task.
  * Must be called at module load time (top-level), before registerBackgroundFetch.
  */
+/** Max retries for the background fetch API call (with exponential backoff). */
+const BG_FETCH_MAX_RETRIES = 2;
+
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
-  const settings = useSettingsStore.getState();
-  if (!settings.backgroundFetchEnabled || !settings.notificationsEnabled) {
+  const settings = useSettingsStore.getState?.();
+  if (!settings?.backgroundFetchEnabled || !settings.notificationsEnabled) {
     return BackgroundFetch.BackgroundFetchResult.NoData;
   }
 
-  try {
-    const result = await api.get<AgentStatusResponse>('/api/mobile/agent-status', {
-      timeout: 15_000,
-    });
+  const controller = new AbortController();
 
-    if (result.pendingApprovals.length > 0) {
-      // Schedule a local notification for each pending approval
-      for (const approval of result.pendingApprovals) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: `${approval.agentName} needs approval`,
-            body: `${approval.toolName}: ${approval.description}`,
-            data: {
-              type: 'agent_approval_needed',
-              approvalId: approval.id,
-              route: '/(app)/companion',
-            },
-            categoryIdentifier: 'agent-approvals',
-          },
-          trigger: null, // immediate
-        });
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= BG_FETCH_MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
       }
-      return BackgroundFetch.BackgroundFetchResult.NewData;
-    }
 
-    return BackgroundFetch.BackgroundFetchResult.NoData;
-  } catch (err) {
-    console.warn(
-      '[backgroundFetch] Agent status check failed:',
-      err instanceof Error ? err.message : err,
-    );
-    return BackgroundFetch.BackgroundFetchResult.Failed;
+      const result = await api.get<AgentStatusResponse>('/api/mobile/agent-status', {
+        timeout: 15_000,
+        signal: controller.signal,
+      });
+
+      if (result.pendingApprovals.length > 0) {
+        for (const approval of result.pendingApprovals) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `${approval.agentName} needs approval`,
+              body: `${approval.toolName}: ${approval.description}`,
+              data: {
+                type: 'agent_approval_needed',
+                approvalId: approval.id,
+                route: '/(app)/companion',
+              },
+              categoryIdentifier: 'agent-approvals',
+            },
+            trigger: null,
+          });
+        }
+        return BackgroundFetch.BackgroundFetchResult.NewData;
+      }
+
+      return BackgroundFetch.BackgroundFetchResult.NoData;
+    } catch (err) {
+      lastError = err;
+      // Don't retry abort errors
+      if (err instanceof Error && err.name === 'AbortError') break;
+    }
   }
+
+  console.warn(
+    '[backgroundFetch] Agent status check failed after retries:',
+    lastError instanceof Error ? lastError.message : lastError,
+  );
+  return BackgroundFetch.BackgroundFetchResult.Failed;
 });
 
 /**

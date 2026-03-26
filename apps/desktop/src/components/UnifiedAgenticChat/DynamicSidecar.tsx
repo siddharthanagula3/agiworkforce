@@ -88,6 +88,17 @@ const LazyGovernanceDashboard = lazy(() =>
 const LazyCanvasWorkspace = lazy(() =>
   import('../Canvas/CanvasWorkspace').then((m) => ({ default: m.CanvasWorkspace })),
 );
+const LazyAgentCollaborationPanel = lazy(() =>
+  import('../AgentCollaboration/AgentCollaborationPanel').then((m) => ({
+    default: m.AgentCollaborationPanel,
+  })),
+);
+const LazyDynamicCanvas = lazy(() =>
+  import('../DynamicCanvas/DynamicCanvas').then((m) => ({ default: m.DynamicCanvas })),
+);
+const LazyVisualEditor = lazy(() =>
+  import('../editing/VisualEditor').then((m) => ({ default: m.VisualEditor })),
+);
 
 const SidecarLoadingFallback = () => (
   <div className="flex h-full items-center justify-center text-sm text-zinc-500">
@@ -123,6 +134,9 @@ export type DynamicPanelType =
   | 'productivity'
   | 'cloud'
   | 'governance'
+  | 'agent-collab'
+  | 'visual-editor'
+  | 'dynamic-canvas'
   | null;
 
 interface DynamicSidecarProps {
@@ -163,6 +177,9 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
   productivity: <Gauge className="h-4 w-4 text-lime-400" />,
   cloud: <Cloud className="h-4 w-4 text-sky-400" />,
   governance: <GovernanceIcon className="h-4 w-4 text-emerald-400" />,
+  'agent-collab': <Zap className="h-4 w-4 text-fuchsia-400" />,
+  'visual-editor': <Code2 className="h-4 w-4 text-teal-400" />,
+  'dynamic-canvas': <Braces className="h-4 w-4 text-rose-400" />,
 };
 
 // AUDIT-005-018 fix: Separate component to handle video autoPlay with error handling
@@ -574,6 +591,33 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
         return (
           <Suspense fallback={<SidecarLoadingFallback />}>
             <LazyGovernanceDashboard />
+          </Suspense>
+        );
+
+      case 'agent-collab':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyAgentCollaborationPanel />
+          </Suspense>
+        );
+
+      case 'visual-editor':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyVisualEditor
+              rootPath={(payload?.['rootPath'] as string) || '.'}
+              className="h-full"
+            />
+          </Suspense>
+        );
+
+      case 'dynamic-canvas':
+        return (
+          <Suspense fallback={<SidecarLoadingFallback />}>
+            <LazyDynamicCanvas
+              canvasId={(payload?.['canvasId'] as string) || undefined}
+              className="h-full"
+            />
           </Suspense>
         );
 

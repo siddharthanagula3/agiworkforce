@@ -23,7 +23,7 @@ import {
   clearApiKey,
   getApiKey,
   AgiWorkforceApiError,
-  type ChatMessage,
+  type LlmChatMessage,
 } from '../utils/api';
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
@@ -620,6 +620,9 @@ function getWebviewContent(
         navigator.clipboard.writeText(text).then(function() {
           btn.textContent = 'Copied!';
           setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+        }).catch(function() {
+          btn.textContent = 'Failed';
+          setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
         });
       }
     }
@@ -874,7 +877,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   private _view?: vscode.WebviewView;
   private _currentCancelSource?: vscode.CancellationTokenSource;
-  private _conversationHistory: ChatMessage[] = [];
+  private _conversationHistory: LlmChatMessage[] = [];
   private _messageListener?: vscode.Disposable;
 
   constructor(
@@ -1062,7 +1065,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       systemPrompt += '\n\n' + workspaceContext;
     }
 
-    const messages: ChatMessage[] = [
+    const messages: LlmChatMessage[] = [
       { role: 'system', content: systemPrompt },
       ...this._conversationHistory,
     ];

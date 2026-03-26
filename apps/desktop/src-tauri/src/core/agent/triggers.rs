@@ -29,6 +29,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -178,15 +179,18 @@ const DENIED_WATCH_PATHS: &[&str] = &[
 
 /// Constant-time byte comparison to prevent timing side-channel attacks on
 /// webhook authentication tokens.
+/// Pads the shorter input to the longer length so that the comparison time does not
+/// leak the length of either operand.
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut result = 0u8;
-    for (x, y) in a.iter().zip(b.iter()) {
-        result |= x ^ y;
-    }
-    result == 0
+    let max_len = std::cmp::max(a.len(), b.len());
+    let mut a_padded = a.to_vec();
+    let mut b_padded = b.to_vec();
+    a_padded.resize(max_len, 0);
+    b_padded.resize(max_len, 0);
+    // Constant-time compare including original length check
+    let len_eq = a.len() == b.len();
+    let content_eq: bool = a_padded.ct_eq(&b_padded).into();
+    len_eq && content_eq
 }
 
 /// Check that a path does not reside inside any sensitive directory under the

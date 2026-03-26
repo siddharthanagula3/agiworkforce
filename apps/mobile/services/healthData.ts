@@ -11,6 +11,7 @@
 
 import { Platform } from 'react-native';
 import { api } from './api';
+import { supabase } from './supabase';
 
 export type HealthPermissionStatus = 'granted' | 'denied' | 'undetermined' | 'unavailable';
 
@@ -52,6 +53,8 @@ interface HealthSnapshotResponse {
 
 let cachedSummary: HealthSummary | null = null;
 let lastFetchTime = 0;
+/** User ID for cache scope — prevents returning stale data after user switch. */
+let cachedUserId: string | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function getHealthPermissionStatus(): Promise<HealthPermissionStatus> {
@@ -72,6 +75,15 @@ export async function requestHealthPermission(): Promise<boolean> {
 }
 
 export async function getHealthSummary(): Promise<HealthSummary | null> {
+  // Invalidate cache if user changed (multi-user privacy)
+  const { data: sessionData } = await supabase.auth.getSession();
+  const currentUserId = sessionData.session?.user?.id ?? null;
+  if (currentUserId !== cachedUserId) {
+    cachedSummary = null;
+    lastFetchTime = 0;
+    cachedUserId = currentUserId;
+  }
+
   // Use cache if fresh
   if (cachedSummary && Date.now() - lastFetchTime < CACHE_TTL) {
     return cachedSummary;
@@ -87,8 +99,10 @@ export async function getHealthSummary(): Promise<HealthSummary | null> {
     let diastolic: number | null = null;
     if (s.bloodPressure) {
       const parts = s.bloodPressure.split('/');
-      systolic = parts[0] ? parseFloat(parts[0]) : null;
-      diastolic = parts[1] ? parseFloat(parts[1]) : null;
+      const rawSys = parts[0] ? parseFloat(parts[0]) : NaN;
+      const rawDia = parts[1] ? parseFloat(parts[1]) : NaN;
+      systolic = Number.isFinite(rawSys) ? rawSys : null;
+      diastolic = Number.isFinite(rawDia) ? rawDia : null;
     }
 
     cachedSummary = {

@@ -181,9 +181,15 @@ export const useScheduleStore = create<ScheduleState>()(
         set({ loading: true, error: null });
         try {
           const runs = await apiFetchRuns(scheduleId);
-          set((state) => ({
-            runsBySchedule: { ...state.runsBySchedule, [scheduleId]: runs },
-          }));
+          set((state) => {
+            const updated = { ...state.runsBySchedule, [scheduleId]: runs };
+            // Evict runs for deleted schedules to prevent unbounded growth
+            const activeIds = new Set(state.schedules.map((s) => s.id));
+            for (const key of Object.keys(updated)) {
+              if (!activeIds.has(key)) delete updated[key];
+            }
+            return { runsBySchedule: updated };
+          });
         } catch (error) {
           console.warn('Failed to fetch schedule runs:', error);
           set({
@@ -205,6 +211,9 @@ export const useScheduleStore = create<ScheduleState>()(
     {
       name: 'schedule-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[scheduleStore] Hydration failed:', error);
+      },
       partialize: (state) => ({
         // Persist schedules for offline access
         // Do NOT persist loading, error, or runs

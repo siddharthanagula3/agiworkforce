@@ -35,7 +35,14 @@ export function CodeEditor({
   const monacoRef = useRef<Monaco | null>(null);
   const valueRef = useRef(defaultValue);
   const originalRef = useRef(defaultValue);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { theme } = useThemeContext();
+
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
 
   const isDirty = value !== originalValue;
 
@@ -69,7 +76,8 @@ export function CodeEditor({
         if (showLocalToast) {
           toast.success(path ? `Saved ${path}` : 'Code saved');
         }
-        setTimeout(() => setSaved(false), 2000);
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
       } else {
         setSaved(false);
       }

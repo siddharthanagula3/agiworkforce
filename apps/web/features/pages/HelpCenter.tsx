@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion, AnimatePresence } from 'framer-motion';

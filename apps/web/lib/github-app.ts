@@ -79,11 +79,17 @@ export async function getGitHubAppJwt(): Promise<string> {
   return `${signingInput}.${signature}`;
 }
 
+// Cache the dev fallback key so encrypt/decrypt use the same key within a process
+let _devFallbackKey: Buffer | null = null;
+
 function getEncryptionKey(): Buffer {
   const keyHex = GITHUB_TOKEN_ENCRYPTION_KEY;
   if (!keyHex || keyHex.length !== 64) {
     // Fallback for development — in production GITHUB_TOKEN_ENCRYPTION_KEY must be set
-    return randomBytes(32);
+    if (!_devFallbackKey) {
+      _devFallbackKey = randomBytes(32);
+    }
+    return _devFallbackKey;
   }
   return Buffer.from(keyHex, 'hex');
 }
@@ -267,6 +273,15 @@ export async function postIssueComment(
     },
   );
   if (!res.ok) throw new Error(`Failed to post comment: ${res.status}`);
+}
+
+/**
+ * Generate a cryptographically random state parameter for GitHub App installation.
+ * The caller must set this as a cookie (`github_install_state`) before redirecting
+ * the user to GitHub. The callback handler in /api/github/install validates it.
+ */
+export function generateGitHubInstallState(): string {
+  return randomBytes(32).toString('hex');
 }
 
 export { GITHUB_WEBHOOK_SECRET };

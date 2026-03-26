@@ -740,7 +740,7 @@ pub fn run() {
 
             app.manage(Arc::new(LSPState::new()));
 
-            // Codebase indexer state (tokio-rusqlite backed, Send+Sync)
+            // Codebase indexer state (async_sqlite backed, Send+Sync)
             let codebase_workspace = app_data_dir.join("codebase_index");
             match tauri::async_runtime::block_on(
                 crate::core::codebase::CodebaseServiceState::new(codebase_workspace)
@@ -2603,6 +2603,41 @@ pub fn run() {
             crate::core::agent::triggers::toggle_trigger,
             crate::core::agent::triggers::update_trigger,
             crate::core::agent::triggers::get_trigger_executions,
+
+            // ============================================================
+            // Dotfile commands (~/.agiworkforce/ config bridge)
+            // ============================================================
+            crate::sys::commands::read_shared_config,
+            crate::sys::commands::write_shared_config,
+            crate::sys::commands::dotfile_list_mcp_servers,
+            crate::sys::commands::dotfile_add_mcp_server,
+            crate::sys::commands::dotfile_remove_mcp_server,
+            crate::sys::commands::dotfile_list_skills,
+            crate::sys::commands::dotfile_read_instructions,
+            crate::sys::commands::dotfile_write_instructions,
+            crate::sys::commands::dotfile_read_memories,
+
+            // ============================================================
+            // Doctor / Diagnostics commands
+            // ============================================================
+            crate::sys::diagnostics::commands::doctor_run_checks,
+            crate::sys::diagnostics::commands::doctor_run_check,
+            crate::sys::diagnostics::commands::doctor_list_checks,
+            crate::sys::diagnostics::commands::doctor_get_report,
+            crate::sys::diagnostics::commands::doctor_is_running,
+            crate::sys::diagnostics::commands::doctor_format_report,
+
+            // ============================================================
+            // Ecosystem detection (import MCP configs from other tools)
+            // ============================================================
+            crate::sys::commands::detect_ecosystem_tools,
+            crate::sys::commands::import_ecosystem_mcp_servers,
+
+            // ============================================================
+            // Stripe payment method commands
+            // ============================================================
+            crate::sys::billing::stripe_attach_payment_method,
+            crate::sys::billing::stripe_set_default_payment_method,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

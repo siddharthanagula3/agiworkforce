@@ -1,6 +1,6 @@
 use rusqlite::{params, Result as SqliteResult};
 use tokio::fs;
-use tokio_rusqlite::Connection;
+use crate::data::async_sqlite::AsyncConnection as Connection;
 use tracing::{debug, info, warn};
 
 use crate::sys::error::{Error, Result};
@@ -116,7 +116,7 @@ impl ContactManager {
                 let mut stmt = conn
                     .prepare("SELECT id, email, display_name, first_name, last_name, phone, company, notes, created_at, updated_at FROM contacts ORDER BY display_name, email LIMIT ?1 OFFSET ?2")?;
                 let contacts = stmt
-                    .query_map(params![limit, offset], map_contact_row)?
+                    .query_map(params![limit as i64, offset as i64], map_contact_row)?
                     .collect::<SqliteResult<Vec<_>>>()?;
                 Ok(contacts)
             })
@@ -139,7 +139,7 @@ impl ContactManager {
                           ORDER BY display_name, email
                           LIMIT ?2")?;
                 let contacts = stmt
-                    .query_map(params![search_pattern, limit], map_contact_row)?
+                    .query_map(params![search_pattern, limit as i64], map_contact_row)?
                     .collect::<SqliteResult<Vec<_>>>()?;
                 Ok(contacts)
             })

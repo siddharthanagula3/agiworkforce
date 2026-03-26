@@ -125,6 +125,9 @@ export const useAgentStore = create<AgentState>()(
     {
       name: 'agent-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[agentStore] Hydration failed:', error);
+      },
     },
   ),
 );

@@ -200,6 +200,9 @@ export const useMemoryStore = create<MemoryState>()(
     {
       name: 'memory-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[memoryStore] Hydration failed:', error);
+      },
       partialize: (state) => ({
         entries: state.entries,
         lastSyncAt: state.lastSyncAt,

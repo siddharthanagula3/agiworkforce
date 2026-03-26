@@ -978,11 +978,12 @@ export const useChatStore = create<ChatState>()(
             // Optimistically remove from local state immediately
             set(
               (state) => {
-                // Prune tool timeline entries for messages in this conversation
+                // Prune tool timeline and thinking entries for messages in this conversation
                 const msgs = state.messagesByConversation[id];
                 if (msgs) {
                   for (const msg of msgs) {
                     delete state.toolTimelineByMessage[msg.id];
+                    delete state.thinkingByMessage[msg.id];
                   }
                 }
                 state.conversations = state.conversations.filter((c) => c.id !== id);

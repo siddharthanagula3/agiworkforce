@@ -152,6 +152,9 @@ export const EXPORT_FEEDBACK_DURATION_MS = 5_000;
 /** Duration to show error messages before auto-clearing (4 seconds) */
 export const ERROR_AUTO_CLEAR_DURATION_MS = 4_000;
 
+/** Delay before revoking blob Object URLs after triggering download (60 seconds) */
+export const URL_REVOKE_DELAY_MS = 60_000;
+
 /** Debounce delay for subscription change handlers (2 seconds) */
 export const SUBSCRIPTION_CHANGE_DEBOUNCE_MS = 2_000;
 

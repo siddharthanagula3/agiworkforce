@@ -126,10 +126,10 @@ describe('CommandPalette', () => {
       renderPalette();
       const input = screen.getByPlaceholderText('Type a command or search...');
 
-      fireEvent.change(input, { target: { value: 'dashboard' } });
+      fireEvent.change(input, { target: { value: 'settings' } });
 
-      // "Go to Dashboard" should still be visible
-      expect(screen.getByText('Go to Dashboard')).toBeInTheDocument();
+      // "Go to Settings" should still be visible
+      expect(screen.getByText('Go to Settings')).toBeInTheDocument();
       // "New Chat" should be filtered out
       expect(screen.queryByText('New Chat')).not.toBeInTheDocument();
     });
@@ -228,21 +228,21 @@ describe('CommandPalette', () => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
 
-    it('navigates to /dashboard on Go to Dashboard click', () => {
+    it('navigates to /billing on Go to Billing click', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
-      fireEvent.click(screen.getByText('Go to Dashboard'));
-      expect(mockPush).toHaveBeenCalledWith('/dashboard');
+      fireEvent.click(screen.getByText('Go to Billing'));
+      expect(mockPush).toHaveBeenCalledWith('/billing');
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
 
-    it('navigates to /dashboard/settings on Go to Settings click', () => {
+    it('navigates to /chat on Go to Settings click', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
       fireEvent.click(screen.getByText('Go to Settings'));
-      expect(mockPush).toHaveBeenCalledWith('/dashboard/settings');
+      expect(mockPush).toHaveBeenCalledWith('/chat');
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });

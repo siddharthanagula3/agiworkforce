@@ -1,6 +1,9 @@
 use std::sync::RwLock;
 use tauri::State;
 
+use super::security::SecretManagerState;
+use crate::sys::security::{verify_jwt_signature_with_secret, SecretManager};
+
 /// Managed state for session tokens — avoids process-global statics.
 /// Wrapped in an RwLock so multiple readers can coexist with exclusive writers.
 pub struct SessionState(pub RwLock<Option<String>>);
@@ -17,11 +20,10 @@ impl Default for SessionState {
     }
 }
 
-/// Validate that a string has valid JWT structure (three base64url-encoded
-/// segments separated by dots) and that the payload contains a non-expired
-/// `exp` claim. This is a structural check only — it does NOT verify the
-/// cryptographic signature (that is the auth server's responsibility).
-fn validate_jwt_structure(token: &str) -> Result<(), String> {
+/// Validate a JWT token: structural checks (three base64url segments, valid
+/// payload with non-expired `exp` claim) **and** HMAC-SHA256 signature
+/// verification against the secret stored in [`SecretManager`].
+fn validate_jwt(token: &str, secret_manager: &SecretManager) -> Result<(), String> {
     let parts: Vec<&str> = token.split('.').collect();
     if parts.len() != 3 {
         return Err("Invalid JWT: expected 3 dot-separated parts".to_string());
@@ -43,6 +45,13 @@ fn validate_jwt_structure(token: &str) -> Result<(), String> {
         }
     }
 
+    // ── Signature verification (HMAC-SHA256) ────────────────────────────
+    let jwt_secret = secret_manager
+        .get_or_create_jwt_secret()
+        .map_err(|e| format!("Failed to retrieve JWT secret: {}", e))?;
+    verify_jwt_signature_with_secret(token, &jwt_secret)?;
+
+    // ── Payload structural checks ───────────────────────────────────────
     // Decode the payload (segment 1) and check for `exp`
     let payload_b64 = parts[1];
 
@@ -134,6 +143,14 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
 
 /// Extract the user ID (`sub` claim) from the current session JWT.
 /// Returns `"default"` if no session is stored (single-user desktop fallback).
+///
+/// # Security
+///
+/// SECURITY NOTE: This function extracts the `sub` claim WITHOUT verifying the JWT signature.
+/// It MUST only be called after the session has been validated via `auth_store_session`.
+/// The validated user ID should ideally be stored alongside the token to avoid re-parsing.
+/// The `auth_store_session` command validates the JWT signature (HMAC-SHA256) before storing
+/// the token in `SessionState`, so the token returned here has already been verified.
 pub fn get_session_user_id(state: &SessionState) -> Result<String, String> {
     let store = state.0.read().map_err(|e| e.to_string())?;
     let token = match store.as_ref() {
@@ -178,8 +195,9 @@ pub fn get_session_user_id(state: &SessionState) -> Result<String, String> {
 pub async fn auth_store_session(
     session: String,
     state: State<'_, SessionState>,
+    secret_state: State<'_, SecretManagerState>,
 ) -> Result<(), String> {
-    validate_jwt_structure(&session)?;
+    validate_jwt(&session, secret_state.manager())?;
     let mut store = state.0.write().map_err(|e| e.to_string())?;
     *store = Some(session);
     Ok(())

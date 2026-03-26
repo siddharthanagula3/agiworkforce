@@ -41,5 +41,22 @@ export const metadata: Metadata = {
 };
 
 export default function MarketplaceLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'CollectionPage',
+            name: 'AI Agent Marketplace',
+            description:
+              'Browse and deploy pre-built AI agents and skills for your AGI Workforce desktop app. Hundreds of ready-to-use automations.',
+            url: 'https://agiworkforce.com/marketplace',
+          }),
+        }}
+      />
+      {children}
+    </>
+  );
 }

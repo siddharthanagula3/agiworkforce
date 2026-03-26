@@ -48,13 +48,30 @@ async function sendMobileHeartbeat(): Promise<void> {
  * @returns Cleanup function — call when the screen unmounts
  */
 export function startMobileHeartbeat(): () => void {
+  let stopped = false;
+
   void sendMobileHeartbeat();
 
   const intervalId = setInterval(() => {
-    void sendMobileHeartbeat();
+    if (stopped) return;
+    // Skip heartbeat if session has expired (user signed out)
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!data.session) {
+          clearInterval(intervalId);
+          stopped = true;
+        } else {
+          void sendMobileHeartbeat();
+        }
+      })
+      .catch(() => {
+        // Auth check failed — skip this heartbeat cycle
+      });
   }, HEARTBEAT_INTERVAL_MS);
 
   return () => {
+    stopped = true;
     clearInterval(intervalId);
   };
 }

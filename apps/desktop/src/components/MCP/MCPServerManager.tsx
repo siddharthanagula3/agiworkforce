@@ -317,8 +317,9 @@ export function MCPServerManager() {
     } catch (err) {
       console.error('Failed to start server:', err);
       toast.error(`Failed to start server: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setActionLoading(null);
     }
-    setActionLoading(null);
   };
 
   const handleStop = async (serverName: string) => {
@@ -329,8 +330,9 @@ export function MCPServerManager() {
     } catch (err) {
       console.error('Failed to stop server:', err);
       toast.error(`Failed to stop server: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setActionLoading(null);
     }
-    setActionLoading(null);
   };
 
   const handleToggleEnabled = async (serverName: string, nextEnabled: boolean) => {
@@ -345,8 +347,9 @@ export function MCPServerManager() {
     } catch (err) {
       console.error('Failed to update server toggle:', err);
       toast.error(`Failed to toggle server: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setActionLoading(null);
     }
-    setActionLoading(null);
   };
 
   const handleConfigure = (server: McpServerInfo) => {

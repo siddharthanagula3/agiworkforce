@@ -44,7 +44,7 @@ const HIGHLIGHTS = [
   {
     icon: Zap,
     label: 'Tools',
-    description: '140+ AI skills and MCP tools -- from writing to research to code and beyond.',
+    description: 'AI skills and MCP tools -- from writing to research to code and beyond.',
     color: 'text-amber-500 bg-amber-500/10',
   },
   {
@@ -180,5 +180,3 @@ export function WelcomeDialog({ onDismiss }: WelcomeDialogProps) {
     </Dialog>
   );
 }
-
-export default WelcomeDialog;

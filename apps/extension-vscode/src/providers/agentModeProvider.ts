@@ -9,7 +9,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { chatCompletion, type ChatMessage } from '../utils/api';
+import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { WorkspaceIndexer } from '../services/workspaceIndexer';
 import { getContextBuilder } from '../services/contextBuilder';
 import * as telemetry from '../services/telemetry';
@@ -26,6 +26,7 @@ import {
 } from '../services/patchEngine';
 import { getContextPanelProvider } from './contextPanelProvider';
 import { getContextBudget } from '../services/contextBudget';
+import { getCheckpointManager } from '../services/checkpointManager';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,7 +101,7 @@ export class AgentModePanel {
   private readonly indexer: WorkspaceIndexer;
   private disposables: vscode.Disposable[] = [];
 
-  private messages: ChatMessage[] = [];
+  private messages: LlmChatMessage[] = [];
   private editHistory: EditBatch[] = [];
   private patchBatchHistory: BatchResult[] = [];
   private isProcessing = false;
@@ -308,10 +309,14 @@ export class AgentModePanel {
           });
         }
 
-        // Get LLM response
+        // Get LLM response (dispose token source even if chatCompletion throws)
         const cancelSource = new vscode.CancellationTokenSource();
-        const response = await chatCompletion(this.secrets, augmentedMessages, cancelSource.token);
-        cancelSource.dispose();
+        let response: string;
+        try {
+          response = await chatCompletion(this.secrets, augmentedMessages, cancelSource.token);
+        } finally {
+          cancelSource.dispose();
+        }
 
         this.messages.push({ role: 'assistant', content: response });
 
@@ -411,8 +416,12 @@ export class AgentModePanel {
 
       try {
         const cancelSource = new vscode.CancellationTokenSource();
-        const response = await chatCompletion(this.secrets, this.messages, cancelSource.token);
-        cancelSource.dispose();
+        let response: string;
+        try {
+          response = await chatCompletion(this.secrets, this.messages, cancelSource.token);
+        } finally {
+          cancelSource.dispose();
+        }
 
         this.messages.push({ role: 'assistant', content: response });
 
@@ -622,6 +631,13 @@ export class AgentModePanel {
     if (patchesToApply.length === 0) {
       this.postMessage({ type: 'systemMessage', text: 'No patches selected.' });
       return;
+    }
+
+    // Create checkpoint before applying patches.
+    const checkpointMgr = getCheckpointManager();
+    if (checkpointMgr !== undefined) {
+      const fileList = [...new Set(patchesToApply.map((p) => p.filePath))].join(', ');
+      await checkpointMgr.createCheckpoint(`Before patch: ${fileList}`.slice(0, 100));
     }
 
     // Apply patches.
@@ -934,6 +950,13 @@ export class AgentModePanel {
     batchId: string,
     totalProposed: number,
   ): Promise<void> {
+    // Create checkpoint before applying edits.
+    const checkpointMgr = getCheckpointManager();
+    if (checkpointMgr !== undefined) {
+      const fileList = approvedEdits.map((e) => e.filePath).join(', ');
+      await checkpointMgr.createCheckpoint(`Before edit: ${fileList}`.slice(0, 100));
+    }
+
     const batch: EditBatch = {
       id: batchId,
       timestamp: Date.now(),

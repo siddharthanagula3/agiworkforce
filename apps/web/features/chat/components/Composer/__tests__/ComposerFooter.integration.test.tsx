@@ -1,12 +1,12 @@
 /**
  * ComposerFooter — integration tests
  *
- * Verifies that AgentModeSwitcher and the model selector are correctly
- * wired into the ComposerFooter component.
+ * Verifies that the model selector, style selector, and budget tracker
+ * are correctly wired into the ComposerFooter component.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import React from 'react';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -38,23 +38,9 @@ vi.mock('@/components/UnifiedAgenticChat/BudgetTrackerDisplay', () => ({
   BudgetTrackerDisplay: () => <div data-testid="budget-tracker-display" />,
 }));
 
-// AgentModeSwitcher stub that captures mode changes
-vi.mock('../AgentModeSwitcher', () => ({
-  AgentModeSwitcher: ({
-    mode,
-    onChange,
-    disabled,
-  }: {
-    mode: string;
-    onChange: (m: string) => void;
-    disabled?: boolean;
-  }) => (
-    <div data-testid="agent-mode-switcher" data-mode={mode} data-disabled={String(!!disabled)}>
-      <button onClick={() => onChange('engineer')} aria-label="Switch to engineer mode">
-        Switch mode
-      </button>
-    </div>
-  ),
+// StyleSelector stub
+vi.mock('../StyleSelector', () => ({
+  StyleSelector: () => <div data-testid="style-selector" />,
 }));
 
 // Shared popover primitives — minimal pass-through
@@ -98,31 +84,6 @@ import { ComposerFooter } from '../ComposerFooter';
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('ComposerFooter — AgentModeSwitcher integration', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('renders AgentModeSwitcher', () => {
-    render(<ComposerFooter />);
-    expect(screen.getByTestId('agent-mode-switcher')).toBeInTheDocument();
-  });
-
-  it('defaults to solo mode', () => {
-    render(<ComposerFooter />);
-    expect(screen.getByTestId('agent-mode-switcher')).toHaveAttribute('data-mode', 'solo');
-  });
-
-  it('updates mode when AgentModeSwitcher onChange is triggered', () => {
-    render(<ComposerFooter />);
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: /switch to engineer mode/i }));
-    });
-    // After mode change the switcher should reflect 'engineer'
-    expect(screen.getByTestId('agent-mode-switcher')).toHaveAttribute('data-mode', 'engineer');
-  });
-});
-
 describe('ComposerFooter — model selector integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -130,7 +91,6 @@ describe('ComposerFooter — model selector integration', () => {
 
   it('renders the current model name in the selector button', () => {
     render(<ComposerFooter />);
-    // The button that triggers the popover contains the model name
     expect(screen.getByRole('button', { name: /change model/i })).toHaveTextContent('GPT-5.4');
   });
 
@@ -142,6 +102,12 @@ describe('ComposerFooter — model selector integration', () => {
   it('hides model selector when showModelSelector=false', () => {
     render(<ComposerFooter showModelSelector={false} />);
     expect(screen.queryByRole('button', { name: /change model/i })).not.toBeInTheDocument();
+  });
+
+  it('renders model options grouped by provider', () => {
+    render(<ComposerFooter />);
+    expect(screen.getByText('OpenAI')).toBeInTheDocument();
+    expect(screen.getByText('Anthropic')).toBeInTheDocument();
   });
 });
 
@@ -156,12 +122,21 @@ describe('ComposerFooter — layout', () => {
     expect(screen.getByTestId('budget-tracker-display')).toBeInTheDocument();
   });
 
-  it('renders AgentModeSwitcher and model selector in the same row', () => {
+  it('renders StyleSelector', () => {
     render(<ComposerFooter />);
-    const switcher = screen.getByTestId('agent-mode-switcher');
+    expect(screen.getByTestId('style-selector')).toBeInTheDocument();
+  });
+
+  it('renders model selector and style selector in the same row', () => {
+    render(<ComposerFooter />);
+    const styleSelector = screen.getByTestId('style-selector');
     const modelBtn = screen.getByRole('button', { name: /change model/i });
-    // Both should be present simultaneously
-    expect(switcher).toBeInTheDocument();
+    expect(styleSelector).toBeInTheDocument();
     expect(modelBtn).toBeInTheDocument();
+  });
+
+  it('renders default hint when no hint prop is provided', () => {
+    render(<ComposerFooter />);
+    expect(screen.getByText(/Enter to send/)).toBeInTheDocument();
   });
 });

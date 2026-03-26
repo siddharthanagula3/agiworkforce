@@ -274,6 +274,7 @@ impl MarkdownRenderer {
         // Determine column count and max widths
         let col_count = self.table_rows.iter().map(|r| r.len()).max().unwrap_or(0);
         if col_count == 0 {
+            eprintln!("[markdown] Warning: table has rows but all are empty");
             return String::new();
         }
 

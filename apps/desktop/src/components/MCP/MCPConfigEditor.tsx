@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
@@ -23,6 +23,13 @@ export default function MCPConfigEditor() {
   const [localConfig, setLocalConfig] = useState(config);
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const saveSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!config) {
@@ -63,7 +70,8 @@ export default function MCPConfigEditor() {
       await updateConfig(localConfig);
       setHasChanges(false);
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current);
+      saveSuccessTimerRef.current = setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       console.error('Failed to save MCP config:', err);
       toast.error(`Failed to save config: ${err instanceof Error ? err.message : String(err)}`);

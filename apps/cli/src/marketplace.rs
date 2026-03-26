@@ -10,9 +10,63 @@
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::plugins::{InstalledPluginEntry, InstalledPlugins};
+// ---------------------------------------------------------------------------
+// Installed plugin tracking (self-contained, no dependency on plugins.rs)
+// ---------------------------------------------------------------------------
+
+/// A single installed plugin entry in `installed.json`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstalledPluginEntry {
+    pub scope: String,
+    pub install_path: String,
+    pub version: String,
+    pub installed_at: chrono::DateTime<Utc>,
+}
+
+/// Registry of installed plugins, persisted as `plugins/installed.json`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstalledPlugins {
+    #[serde(default = "default_version")]
+    pub version: u32,
+    #[serde(default)]
+    pub plugins: HashMap<String, InstalledPluginEntry>,
+}
+
+fn default_version() -> u32 {
+    1
+}
+
+impl Default for InstalledPlugins {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            plugins: HashMap::new(),
+        }
+    }
+}
+
+impl InstalledPlugins {
+    /// Load installed.json from the plugins directory.
+    /// Returns an empty registry if the file doesn't exist.
+    pub fn load(plugins_dir: &Path) -> Self {
+        let path = plugins_dir.join("installed.json");
+        match std::fs::read_to_string(&path) {
+            Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
+            Err(_) => Self::default(),
+        }
+    }
+
+    /// Save installed.json to the plugins directory.
+    pub fn save(&self, plugins_dir: &Path) -> Result<()> {
+        let path = plugins_dir.join("installed.json");
+        let contents = serde_json::to_string_pretty(self)?;
+        std::fs::write(&path, contents)?;
+        Ok(())
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -465,7 +519,6 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn test_derive_plugin_name_git_url() {

@@ -91,6 +91,114 @@ pub struct SharedTask {
 }
 
 // ---------------------------------------------------------------------------
+// Git Worktree Isolation
+// ---------------------------------------------------------------------------
+
+/// Manages git worktrees for teammate isolation.
+/// Each teammate gets its own worktree so their edits don't conflict.
+#[allow(dead_code)]
+pub struct WorktreeManager;
+
+#[allow(dead_code)]
+impl WorktreeManager {
+    /// Create an isolated git worktree for a teammate.
+    /// Returns the worktree path on success.
+    pub async fn create_worktree(teammate_name: &str) -> anyhow::Result<std::path::PathBuf> {
+        let branch_name = format!("agi-team/{}", teammate_name);
+        let worktree_dir = std::env::temp_dir().join(format!("agi-worktree-{}", teammate_name));
+
+        // Create branch if it doesn't exist (based on current HEAD)
+        let _ = tokio::process::Command::new("git")
+            .args(["branch", &branch_name])
+            .output()
+            .await;
+
+        // Create worktree
+        let output = tokio::process::Command::new("git")
+            .args([
+                "worktree",
+                "add",
+                &worktree_dir.to_string_lossy(),
+                &branch_name,
+            ])
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // If worktree already exists, that's fine
+            if !stderr.contains("already exists") {
+                anyhow::bail!("Failed to create worktree: {}", stderr);
+            }
+        }
+
+        Ok(worktree_dir)
+    }
+
+    /// Remove a teammate's worktree and optionally merge their changes.
+    pub async fn remove_worktree(teammate_name: &str, merge: bool) -> anyhow::Result<()> {
+        let branch_name = format!("agi-team/{}", teammate_name);
+        let worktree_dir = std::env::temp_dir().join(format!("agi-worktree-{}", teammate_name));
+
+        if merge {
+            // Merge the teammate's branch into current branch
+            let output = tokio::process::Command::new("git")
+                .args(["merge", "--no-ff", &branch_name, "-m", &format!("Merge teammate {} work", teammate_name)])
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                anyhow::bail!("Merge failed (resolve conflicts manually): {}", stderr);
+            }
+        }
+
+        // Remove worktree
+        let _ = tokio::process::Command::new("git")
+            .args(["worktree", "remove", &worktree_dir.to_string_lossy(), "--force"])
+            .output()
+            .await;
+
+        // Delete branch
+        let _ = tokio::process::Command::new("git")
+            .args(["branch", "-D", &branch_name])
+            .output()
+            .await;
+
+        Ok(())
+    }
+
+    /// List all active team worktrees.
+    pub async fn list_worktrees() -> anyhow::Result<Vec<(String, String)>> {
+        let output = tokio::process::Command::new("git")
+            .args(["worktree", "list", "--porcelain"])
+            .output()
+            .await?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut worktrees = Vec::new();
+
+        for chunk in stdout.split("\n\n") {
+            let mut path = String::new();
+            let mut branch = String::new();
+            for line in chunk.lines() {
+                if let Some(p) = line.strip_prefix("worktree ") {
+                    path = p.to_string();
+                }
+                if let Some(b) = line.strip_prefix("branch refs/heads/") {
+                    branch = b.to_string();
+                }
+            }
+            if !path.is_empty() && branch.starts_with("agi-team/") {
+                worktrees.push((branch.replace("agi-team/", ""), path));
+            }
+        }
+
+        Ok(worktrees)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // TeamManager
 // ---------------------------------------------------------------------------
 

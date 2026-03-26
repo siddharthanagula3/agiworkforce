@@ -9,6 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { handleCorsPreflightRequest, isOriginAllowed } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 
 // Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
 function getStripeClient(): Stripe {
@@ -17,7 +18,7 @@ function getStripeClient(): Stripe {
     throw createError.serviceUnavailable('STRIPE_SECRET_KEY is not configured');
   }
   return new Stripe(key, {
-    apiVersion: '2026-02-25.clover' as Stripe.LatestApiVersion,
+    apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
   });
 }
 

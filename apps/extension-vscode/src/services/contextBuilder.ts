@@ -215,10 +215,16 @@ export class ContextBuilder {
       const editor = vscode.window.activeTextEditor;
       if (editor === undefined) return [];
 
-      const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
+      const allDiagnostics = vscode.languages.getDiagnostics(editor.document.uri);
+      if (allDiagnostics.length === 0) return [];
+
+      // Prioritize errors and warnings — skip hints/info for context budget
+      const diagnostics = allDiagnostics
+        .filter((d) => d.severity <= vscode.DiagnosticSeverity.Warning)
+        .slice(0, MAX_DIAGNOSTICS);
       if (diagnostics.length === 0) return [];
 
-      return diagnostics.slice(0, MAX_DIAGNOSTICS).map((d) => ({
+      return diagnostics.map((d) => ({
         severity: this._severityToString(d.severity),
         message: d.message,
         line: d.range.start.line + 1, // 1-based
@@ -396,7 +402,26 @@ export class ContextBuilder {
       sql: 'sql',
       sh: 'shellscript',
       bash: 'shellscript',
+      zsh: 'shellscript',
       toml: 'toml',
+      xml: 'xml',
+      svg: 'xml',
+      vue: 'vue',
+      svelte: 'svelte',
+      mts: 'typescript',
+      cts: 'typescript',
+      mjs: 'javascript',
+      cjs: 'javascript',
+      hpp: 'cpp',
+      hxx: 'cpp',
+      scala: 'scala',
+      groovy: 'groovy',
+      lua: 'lua',
+      r: 'r',
+      dart: 'dart',
+      zig: 'zig',
+      tf: 'terraform',
+      dockerfile: 'dockerfile',
     };
     return map[ext] ?? ext;
   }

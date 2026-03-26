@@ -1,4 +1,4 @@
-import { invoke } from '@/lib/tauri-mock';
+import { chat } from '@agiworkforce/api';
 import {
   AlertCircle,
   Check,
@@ -70,9 +70,7 @@ export function CheckpointManager({
   const loadCheckpoints = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await invoke<Checkpoint[]>('checkpoint_list', {
-        conversationId,
-      });
+      const result = (await chat.checkpointList(conversationId)) as unknown as Checkpoint[];
       setCheckpoints(result);
     } catch (error) {
       console.error('Failed to load checkpoints:', error);
@@ -94,7 +92,7 @@ export function CheckpointManager({
 
     setCreating(true);
     try {
-      await invoke('checkpoint_create', {
+      await chat.checkpointCreate({
         conversationId: conversationId,
         checkpointName: newCheckpointName.trim(),
         description: newCheckpointDescription.trim() || null,
@@ -130,7 +128,7 @@ export function CheckpointManager({
     if (type === 'restore') {
       setRestoring(true);
       try {
-        await invoke('checkpoint_restore', {
+        await chat.checkpointRestore({
           checkpointId: checkpointId,
           conversationId: conversationId,
         });
@@ -146,9 +144,7 @@ export function CheckpointManager({
       }
     } else if (type === 'delete') {
       try {
-        await invoke('checkpoint_delete', {
-          checkpointId,
-        });
+        await chat.checkpointDelete(checkpointId);
 
         toast.success('Checkpoint deleted');
         await loadCheckpoints();

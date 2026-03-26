@@ -5343,6 +5343,17 @@ mod tests {
         )
         .unwrap();
 
+        // Stub conversations table required by migration v61 (adds `archived` column)
+        conn.execute(
+            "CREATE TABLE conversations (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )",
+            [],
+        )
+        .unwrap();
+
         conn.execute(
             "CREATE TABLE auth_sessions (
                 session_id TEXT PRIMARY KEY,
@@ -5465,6 +5476,17 @@ mod tests {
         conn.execute(
             "INSERT INTO users (id, email, password_hash, role, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
             params!["user-1", "duplicate@example.com", "pw", "editor", "2026-01-01T00:00:00Z"],
+        )
+        .unwrap();
+
+        // Stub conversations table required by migration v61 (adds `archived` column)
+        conn.execute(
+            "CREATE TABLE conversations (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )",
+            [],
         )
         .unwrap();
 

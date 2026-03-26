@@ -327,6 +327,9 @@ export default [
       'no-unused-vars': 'off',
       'no-useless-catch': 'off',
       'prefer-const': 'warn',
+      // Prevent console.log in production — use toast or structured logging instead.
+      // console.warn and console.error are allowed for error reporting.
+      'no-console': ['warn', { allow: ['warn', 'error', 'debug'] }],
     },
   },
 

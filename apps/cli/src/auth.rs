@@ -36,7 +36,7 @@ pub struct AuthStore {
 
 /// Auth status for a single provider, returned by `auth_status()`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // Public API — callers will be added in repl.rs
+#[allow(dead_code)]
 pub struct AuthStatusEntry {
     pub provider: String,
     pub auth_type: String,
@@ -250,7 +250,6 @@ fn format_duration_short(ms: i64) -> String {
 }
 
 /// Returns the current auth status for all configured providers.
-#[allow(dead_code)] // Public API — callers will be added in repl.rs
 pub fn auth_status() -> Result<Vec<AuthStatusEntry>> {
     let store = AuthStore::load()?;
     let now_ms = chrono::Utc::now().timestamp_millis();
@@ -287,13 +286,20 @@ fn auth_status_from_store(
                     // expires=0 means no expiry info (e.g. copilot GitHub token)
                     ("unknown".to_string(), None)
                 } else {
-                    let remaining = *expires - now_ms;
-                    if remaining <= 0 {
-                        let display = format_duration_ms(remaining);
-                        ("expired".to_string(), Some(display))
+                    // Sanity check: reject expiry timestamps more than 2 years in the future
+                    // (OAuth tokens rarely live longer; this catches clock skew or tampering)
+                    let max_reasonable = now_ms + (2 * 365 * 24 * 3600 * 1000);
+                    if *expires > max_reasonable {
+                        ("unknown".to_string(), Some("expiry too far in future".to_string()))
                     } else {
-                        let display = format_duration_ms(remaining);
-                        ("active".to_string(), Some(display))
+                        let remaining = *expires - now_ms;
+                        if remaining <= 0 {
+                            let display = format_duration_ms(remaining);
+                            ("expired".to_string(), Some(display))
+                        } else {
+                            let display = format_duration_ms(remaining);
+                            ("active".to_string(), Some(display))
+                        }
                     }
                 };
                 AuthStatusEntry {
@@ -326,8 +332,13 @@ fn auth_status_from_store(
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
+/// GitHub OAuth App client ID for Copilot device flow authentication.
+/// Public per OAuth spec (not a secret). Registered at github.com/settings/applications.
 const GITHUB_CLIENT_ID: &str = "Ov23li8tweQw6odWQebz";
+/// OpenAI/ChatGPT OAuth App client ID for device flow authentication.
+/// Public per OAuth spec (not a secret). Registered via OpenAI developer portal.
 const CHATGPT_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
+/// Maximum number of polling attempts during device code authentication (5s intervals = 5min).
 const MAX_POLL_ATTEMPTS: u32 = 60;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -835,6 +846,93 @@ pub async fn interactive_login() -> Result<()> {
         auth_path()?.display()
     );
 
+    Ok(())
+}
+
+/// Login for a specific provider by name (used by onboarding wizard).
+///
+/// Delegates to OAuth flow for known providers, or falls back to
+/// `interactive_login()` for subscription-based providers.
+pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()> {
+    match provider {
+        Some("agiworkforce") | Some("agi") => {
+            let api_base = "https://api.agiworkforce.com";
+            let entry = crate::oauth::device_code_login(api_base).await?;
+            let mut store = AuthStore::load()?;
+            store.entries.insert("agiworkforce".to_string(), entry);
+            store.save()?;
+            Ok(())
+        }
+        Some(pid) => {
+            if let Some(provider_cfg) = crate::oauth::get_provider(pid) {
+                let entry = crate::oauth::oauth_login(provider_cfg).await?;
+                let mut store = AuthStore::load()?;
+                store.entries.insert(pid.to_string(), entry);
+                store.save()?;
+                Ok(())
+            } else {
+                // Fall back to existing interactive flow
+                interactive_login().await
+            }
+        }
+        None => interactive_login().await,
+    }
+}
+
+/// Interactive API key setup (used by onboarding wizard).
+///
+/// Prompts for provider selection and API key entry, then persists to auth.json.
+pub async fn interactive_api_key_login() -> Result<()> {
+    let choices = &[
+        "Anthropic (ANTHROPIC_API_KEY)",
+        "OpenAI (OPENAI_API_KEY)",
+        "Google (GOOGLE_API_KEY)",
+        "xAI (XAI_API_KEY)",
+        "DeepSeek (DEEPSEEK_API_KEY)",
+        "Mistral (MISTRAL_API_KEY)",
+        "Cancel",
+    ];
+
+    let selection = dialoguer::Select::new()
+        .with_prompt("Select provider for API key")
+        .items(choices)
+        .default(0)
+        .interact()
+        .context("Failed to display provider menu")?;
+
+    let provider_id = match selection {
+        0 => "anthropic",
+        1 => "openai",
+        2 => "google",
+        3 => "xai",
+        4 => "deepseek",
+        5 => "mistral",
+        _ => {
+            println!("Cancelled.");
+            return Ok(());
+        }
+    };
+
+    let key = dialoguer::Password::new()
+        .with_prompt(format!("Enter {} API key", provider_id))
+        .interact()
+        .context("Failed to read API key")?;
+
+    if key.trim().is_empty() {
+        bail!("Empty API key.");
+    }
+
+    let mut store = AuthStore::load()?;
+    store
+        .entries
+        .insert(provider_id.to_string(), AuthEntry::ApiKey { key });
+    store.save()?;
+
+    println!(
+        "  {} {} API key saved.",
+        "Done!".green().bold(),
+        provider_id,
+    );
     Ok(())
 }
 

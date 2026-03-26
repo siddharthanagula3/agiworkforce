@@ -28,6 +28,12 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
+// Mock api-auth to avoid server-only import issues in transitive dependencies
+const mockGetAuthenticatedUser = vi.fn();
+vi.mock('@/lib/api-auth', () => ({
+  getAuthenticatedUser: (...args: unknown[]) => mockGetAuthenticatedUser(...args),
+}));
+
 // Mock CreditService
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
@@ -48,6 +54,10 @@ const mockSupabaseAuth = {
 };
 
 const mockSupabaseData = {
+  auth: {
+    getUser: vi.fn(),
+    getSession: vi.fn(),
+  },
   from: vi.fn(),
 };
 
@@ -105,8 +115,18 @@ describe('Chat Messages API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user
+    // Set env vars needed by the route
+    process.env['NEXT_PUBLIC_SITE_URL'] = 'http://localhost:3001';
+
+    // Default: authenticated user via api-auth mock
+    mockGetAuthenticatedUser.mockResolvedValue(mockUser);
+
+    // Also set up supabase auth mocks for direct usage in tests
     mockSupabaseAuth.auth.getUser.mockResolvedValue({
+      data: { user: mockUser },
+      error: null,
+    });
+    mockSupabaseData.auth.getUser.mockResolvedValue({
       data: { user: mockUser },
       error: null,
     });
@@ -131,13 +151,9 @@ describe('Chat Messages API', () => {
   describe('POST /api/chat/conversations/[id]/messages', () => {
     describe('Authentication', () => {
       it('should return 401 if not authenticated', async () => {
-        mockSupabaseAuth.auth.getUser.mockResolvedValue({
-          data: { user: null },
-          error: { message: 'Invalid token' },
-        });
-        mockSupabaseAuth.auth.getSession.mockResolvedValue({
-          data: { session: null },
-        });
+        // Make getAuthenticatedUser throw unauthorized error
+        const { createError } = await import('@/lib/errors');
+        mockGetAuthenticatedUser.mockRejectedValue(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
           method: 'POST',
