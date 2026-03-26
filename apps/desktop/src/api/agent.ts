@@ -78,7 +78,7 @@ export type TrustedWorkflowMap = Record<string, string[]>;
  */
 export async function agentInit(config?: AgentConfig): Promise<void> {
   if (!isTauri) {
-    console.info('[agent] agentInit (mock)', config);
+    console.debug('[agent] agentInit (mock)', config);
     return;
   }
 
@@ -99,7 +99,7 @@ export async function agentSubmitTask(
   autoApprove?: boolean,
 ): Promise<SubmitTaskResponse> {
   if (!isTauri) {
-    console.info('[agent] agentSubmitTask (mock)', description);
+    console.debug('[agent] agentSubmitTask (mock)', description);
     return { taskId: `mock_task_${Date.now()}` };
   }
 
@@ -113,7 +113,7 @@ export async function agentSubmitTask(
  */
 export async function agentGetTaskStatus(taskId: string): Promise<TaskStatusResponse> {
   if (!isTauri) {
-    console.info('[agent] agentGetTaskStatus (mock)', taskId);
+    console.debug('[agent] agentGetTaskStatus (mock)', taskId);
     return {
       task: {
         id: taskId,
@@ -133,7 +133,7 @@ export async function agentGetTaskStatus(taskId: string): Promise<TaskStatusResp
  */
 export async function agentListTasks(): Promise<ListTasksResponse> {
   if (!isTauri) {
-    console.info('[agent] agentListTasks (mock)');
+    console.debug('[agent] agentListTasks (mock)');
     return { tasks: [] };
   }
 
@@ -150,7 +150,7 @@ export async function agentListTasks(): Promise<ListTasksResponse> {
  */
 export async function agentListTrustedWorkflows(): Promise<TrustedWorkflowMap> {
   if (!isTauri) {
-    console.info('[agent] agentListTrustedWorkflows (mock)');
+    console.debug('[agent] agentListTrustedWorkflows (mock)');
     return {};
   }
 
@@ -167,7 +167,7 @@ export async function agentListTrustedWorkflows(): Promise<TrustedWorkflowMap> {
  */
 export async function agentStop(): Promise<void> {
   if (!isTauri) {
-    console.info('[agent] agentStop (mock)');
+    console.debug('[agent] agentStop (mock)');
     return;
   }
 
@@ -189,7 +189,7 @@ export async function startAgentTask(
   userId?: string,
 ): Promise<string> {
   if (!isTauri) {
-    console.info('[agent] startAgentTask (mock)', goal);
+    console.debug('[agent] startAgentTask (mock)', goal);
     return `[Mock] Agent response for: ${goal}`;
   }
 
@@ -217,7 +217,7 @@ export async function resolveApproval(
   options?: { trust?: boolean; reason?: string },
 ): Promise<void> {
   if (!isTauri) {
-    console.info('[agent] resolveApproval (mock)', { approvalId, decision });
+    console.debug('[agent] resolveApproval (mock)', { approvalId, decision });
     return;
   }
 

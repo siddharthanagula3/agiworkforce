@@ -21,6 +21,7 @@ class Logger {
 
   info(message: string, ...args: unknown[]): void {
     if (this.shouldLog('info')) {
+      // eslint-disable-next-line no-console
       console.info(`[INFO] ${message}`, ...args);
     }
   }
@@ -40,12 +41,14 @@ class Logger {
   // Special method for auth-related logs (always show in development)
   auth(message: string, ...args: unknown[]): void {
     if (isDevelopment) {
+      // eslint-disable-next-line no-console
       console.info(`[AUTH] ${message}`, ...args);
     }
   }
 
   // Special method for app initialization (always show)
   app(message: string, ...args: unknown[]): void {
+    // eslint-disable-next-line no-console
     console.info(`[APP] ${message}`, ...args);
   }
 }

@@ -572,6 +572,8 @@ export default function DispatchScreen() {
             renderItem={({ item }) => <MessageBubble message={item} />}
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingVertical: 8 }}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
             onContentSizeChange={() => {
               // Keep scrolled to bottom as content grows
               listRef.current?.scrollToEnd({ animated: false });

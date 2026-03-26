@@ -810,7 +810,7 @@ export async function incrementParticipantStats(
       }
 
       // Success - log for audit trail
-      console.log(
+      console.debug(
         `[incrementParticipantStats] Successfully updated participant ${participantId}:`,
         {
           message_count: `+${stats.message_count || 0}`,
