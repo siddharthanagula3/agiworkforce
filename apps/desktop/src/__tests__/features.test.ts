@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
+import { enableMapSet } from 'immer';
+
+// Enable Immer MapSet plugin for stores that use Map/Set (e.g. toolStore.approvalTimeoutTimers)
+enableMapSet();
 
 // ============================================
 // Model Store Tests
@@ -107,7 +111,7 @@ describe('modelStore', () => {
       useUnifiedAuthStore.setState({ plan: 'hobby' });
 
       const store = useModelStore.getState();
-      await store.selectModel('gpt-5.4-nano', 'openai');
+      await store.selectModel('gpt-5.4-codex-low', 'openai');
 
       const state = useModelStore.getState();
       expect(state.selectedModel).toBe('auto-economy');
@@ -116,11 +120,11 @@ describe('modelStore', () => {
   });
 
   describe('tier restrictions', () => {
-    it('should mark GPT-5.2 Codex Low as unavailable on hobby and available on pro', async () => {
+    it('should mark GPT-5.4 Codex Low as unavailable on hobby and available on pro', async () => {
       const { isModelAllowedForTier } = await import('../constants/llm');
 
-      expect(isModelAllowedForTier('gpt-5.4-nano', 'hobby')).toBe(false);
-      expect(isModelAllowedForTier('gpt-5.4-nano', 'pro')).toBe(true);
+      expect(isModelAllowedForTier('gpt-5.4-codex-low', 'hobby')).toBe(false);
+      expect(isModelAllowedForTier('gpt-5.4-codex-low', 'pro')).toBe(true);
     });
 
     it('should resolve the best allowed auto mode when no model is selected', async () => {
@@ -138,7 +142,7 @@ describe('modelStore', () => {
 
       useUIStore.setState({ mode: 'advanced' });
       useModelStore.setState({
-        selectedModel: 'gpt-5.4-nano',
+        selectedModel: 'gpt-5.4-codex-low',
         selectedProvider: 'openai',
       });
 

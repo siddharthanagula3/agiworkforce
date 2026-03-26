@@ -64,6 +64,18 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
       'perplexity',
       'zhipu',
       'mistral',
+      'groq',
+      'together',
+      'fireworks',
+      'cerebras',
+      'deepinfra',
+      'nvidia_nim',
+      'open_router',
+      'cohere',
+      'ai21',
+      'sambanova',
+      'azure',
+      'bedrock',
     ];
 
     for (const [modelId, metadata] of Object.entries(MODEL_METADATA)) {
