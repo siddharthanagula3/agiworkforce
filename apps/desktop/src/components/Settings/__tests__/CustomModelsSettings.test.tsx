@@ -119,10 +119,15 @@ describe('CustomModelsSettings', () => {
       expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
     });
 
-    it('calls removeCustomModel when delete is clicked', async () => {
+    it('calls removeCustomModel when delete is confirmed', async () => {
       render(<CustomModelsSettings />);
       const deleteBtn = screen.getByRole('button', { name: /delete/i });
       await userEvent.click(deleteBtn);
+
+      // The delete button opens a confirmation dialog; confirm it
+      const confirmBtn = await screen.findByRole('button', { name: /^Delete$/i });
+      await userEvent.click(confirmBtn);
+
       expect(mockRemoveCustomModel).toHaveBeenCalledWith(SAMPLE_MODEL.id);
     });
   });
