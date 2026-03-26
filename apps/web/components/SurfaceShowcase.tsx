@@ -1,12 +1,4 @@
-'use client';
-
-import { useRef, useState } from 'react';
-import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-motion';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { useIsMobile } from '@shared/hooks/use-mobile';
 import { MARKETING } from '@/lib/marketing-constants';
-
-const SPRING_EASE = [0.16, 1, 0.3, 1] as const;
 
 interface Surface {
   icon: string;
@@ -598,187 +590,49 @@ const surfaces: Surface[] = [
   },
 ];
 
-/* ─── Progress Indicator ──────────────────────────────────────────── */
-function ProgressIndicator({ activeIndex, total }: { activeIndex: number; total: number }) {
-  return (
-    <div className="hidden md:flex flex-col items-center gap-2">
-      <span className="mb-1 font-mono text-[10px] text-[#c8892a]">
-        {String(activeIndex + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
-      </span>
-      <div className="relative flex flex-col items-center gap-2">
-        {/* Connecting line */}
-        <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/10" />
-        {/* Active fill */}
-        <motion.div
-          className="absolute left-1/2 top-0 w-px -translate-x-1/2 bg-[#c8892a] origin-top"
-          animate={{ height: `${(activeIndex / (total - 1)) * 100}%` }}
-          transition={{ duration: 0.4, ease: SPRING_EASE }}
-        />
-        {Array.from({ length: total }).map((_, i) => (
-          <motion.div
-            key={i}
-            className="relative z-10 rounded-full"
-            animate={{
-              width: i === activeIndex ? 10 : 6,
-              height: i === activeIndex ? 10 : 6,
-              backgroundColor: i <= activeIndex ? '#c8892a' : 'rgba(255,255,255,0.15)',
-            }}
-            transition={{ duration: 0.3, ease: SPRING_EASE }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Static Fallback (mobile / reduced-motion) ──────────────────── */
-function SurfaceShowcaseStatic() {
+/* ─── Main Component ──────────────────────────────────────────────── */
+export function SurfaceShowcase() {
   return (
     <div className="mt-20 space-y-px bg-[#1a1917]">
-      {surfaces.map((s) => (
-        <div key={s.label} className="bg-[#09090b]">
-          <div className="mx-auto grid max-w-6xl items-center gap-6 px-4 py-10 md:grid-cols-[1fr_2fr] md:py-14">
+      {surfaces.map((s, i) => (
+        <div
+          key={s.label}
+          className="scroll-reveal opacity-0 translate-y-8 transition-all duration-1000 ease-out bg-[#09090b]"
+        >
+          <div className="mx-auto grid max-w-6xl items-center gap-8 px-4 py-12 md:grid-cols-[1fr_2fr] md:py-16">
+            {/* Left — text */}
             <div>
-              <p className="mb-1 font-mono text-xs text-[#555150]">{s.tech}</p>
-              <h3 className="mb-3 text-xl font-bold text-[#edebe8]">{s.label}</h3>
-              <ul className="space-y-2">
+              {/* Color accent bar */}
+              <div className="mb-4 h-0.5 w-12 rounded-full" style={{ backgroundColor: s.color }} />
+              <p className="mb-1 font-mono text-xs" style={{ color: `${s.color}99` }}>
+                {s.tech}
+              </p>
+              <h3 className="mb-1 flex items-center gap-2 text-2xl font-bold text-[#edebe8]">
+                <span>{s.icon}</span>
+                {s.label}
+              </h3>
+              <p className="mb-4 font-mono text-[10px] text-[#555150]">
+                {String(i + 1).padStart(2, '0')} / {String(surfaces.length).padStart(2, '0')}
+              </p>
+              <ul className="space-y-2.5">
                 {s.features.map((f) => (
                   <li
                     key={f}
-                    className="flex items-start gap-2 text-xs leading-relaxed text-[#888480]"
+                    className="flex items-start gap-2 text-sm leading-relaxed text-[#888480]"
                   >
-                    <span className="mt-0.5 text-[#c8892a]">&#8226;</span>
+                    <span className="mt-0.5" style={{ color: s.color }}>
+                      &#8226;
+                    </span>
                     <span dangerouslySetInnerHTML={{ __html: f }} />
                   </li>
                 ))}
               </ul>
             </div>
+            {/* Right — mockup */}
             <div className="flex items-center justify-center">{s.mockup}</div>
           </div>
         </div>
       ))}
     </div>
-  );
-}
-
-/* ─── Main Component ──────────────────────────────────────────────── */
-const VH_PER_SURFACE = 60;
-
-export function SurfaceShowcase() {
-  const sectionRef = useRef<HTMLElement>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const reducedMotion = useReducedMotion();
-  const isMobile = useIsMobile();
-
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ['start 0.3', 'end end'],
-  });
-
-  useMotionValueEvent(scrollYProgress, 'change', (v) => {
-    // Clamp to valid range — progress can be slightly negative before section fully enters
-    const clamped = Math.max(0, Math.min(1, v));
-    const idx = Math.min(Math.floor(clamped * surfaces.length), surfaces.length - 1);
-    if (idx >= 0 && idx !== activeIndex) {
-      setActiveIndex(idx);
-    }
-  });
-
-  // Mobile / reduced-motion fallback
-  if (reducedMotion || isMobile) {
-    return <SurfaceShowcaseStatic />;
-  }
-
-  const active = surfaces[activeIndex];
-  if (!active) return <SurfaceShowcaseStatic />;
-
-  return (
-    <section
-      ref={sectionRef}
-      className="relative bg-[#09090b]"
-      style={{ height: `${surfaces.length * VH_PER_SURFACE}vh` }}
-    >
-      {/* Sticky viewport — offset for fixed header (h-16 = 4rem) */}
-      <div className="sticky top-16 flex h-[calc(100vh-4rem)] items-center overflow-hidden">
-        <div className="mx-auto w-full max-w-6xl px-4">
-          {/* Section header */}
-          <div className="mb-8">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#c8892a]">
-              Surfaces
-            </p>
-            <h2 className="font-heading text-3xl tracking-tight md:text-4xl text-[#edebe8]">
-              Available on every surface
-            </h2>
-          </div>
-
-          {/* Content grid */}
-          <div className="grid items-center gap-8 md:grid-cols-[2fr_1fr]">
-            {/* Left — Mockup */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeIndex}
-                initial={{ opacity: 0, scale: 0.92, y: 30 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 1.04, y: -20 }}
-                transition={{ duration: 0.4, ease: SPRING_EASE }}
-              >
-                {active.mockup}
-              </motion.div>
-            </AnimatePresence>
-
-            {/* Right — Info + Progress */}
-            <div className="flex gap-6">
-              {/* Text content */}
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeIndex}
-                  className="flex-1"
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -16 }}
-                  transition={{ duration: 0.35, ease: SPRING_EASE }}
-                >
-                  {/* Color accent bar */}
-                  <div
-                    className="mb-4 h-0.5 w-12 rounded-full"
-                    style={{ backgroundColor: active.color }}
-                  />
-                  <p className="mb-1 font-mono text-xs" style={{ color: `${active.color}99` }}>
-                    {active.tech}
-                  </p>
-                  <h3 className="mb-1 flex items-center gap-2 text-2xl font-bold text-[#edebe8]">
-                    <span>{active.icon}</span>
-                    {active.label}
-                  </h3>
-                  <ul className="mt-4 space-y-2.5">
-                    {active.features.map((f, i) => (
-                      <motion.li
-                        key={f}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{
-                          delay: 0.1 + i * 0.06,
-                          duration: 0.3,
-                          ease: SPRING_EASE,
-                        }}
-                        className="flex items-start gap-2 text-sm leading-relaxed text-[#888480]"
-                      >
-                        <span className="mt-0.5" style={{ color: active.color }}>
-                          &#8226;
-                        </span>
-                        <span dangerouslySetInnerHTML={{ __html: f }} />
-                      </motion.li>
-                    ))}
-                  </ul>
-                </motion.div>
-              </AnimatePresence>
-
-              {/* Progress dots */}
-              <ProgressIndicator activeIndex={activeIndex} total={surfaces.length} />
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }
