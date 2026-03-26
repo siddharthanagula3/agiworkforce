@@ -873,7 +873,7 @@ export const useUIStore = create<UIState>()(
                 ([{ useModelStore: _useModelStore }, { useAccountStore: _useAccountStore }]) => {
                   const modelStore = _useModelStore.getState();
                   const accountStore = _useAccountStore.getState();
-                  const tier = accountStore.account?.plan ?? 'hobby';
+                  const tier = accountStore.account?.plan ?? 'free';
 
                   // Map tier to the best available auto mode
                   // Max/Enterprise → Premium, Pro → Balanced, Hobby/Free → Economy
