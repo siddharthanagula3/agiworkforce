@@ -9,9 +9,6 @@ import {
   Palette,
   ShoppingCart,
   Briefcase,
-  Sparkles,
-  MessageSquare,
-  CheckCircle2,
   Users,
   Zap,
   Code,
@@ -29,6 +26,7 @@ import {
   TrendingUp,
   Package,
   Globe,
+  type LucideIcon,
 } from 'lucide-react';
 import { Header } from '../../../components/layout/Header';
 import { CtaSection } from '../../../components/marketing/CtaSection';
@@ -101,146 +99,107 @@ const jsonLd = {
   url: 'https://agiworkforce.com/features/ai-skills',
 };
 
-const skillCategories = [
+interface SkillCategory {
+  icon: LucideIcon;
+  name: string;
+  count: number;
+  skills: string[];
+}
+
+const skillCategories: SkillCategory[] = [
   {
     icon: Code,
     name: 'Engineering',
-    color: 'from-cyan-500 to-teal-600',
     count: 26,
     skills: ['Code reviewer', 'Architecture planner', 'CI/CD pipeline builder', 'API designer'],
-    description:
-      'Software engineering specialists for code review, architecture, DevOps, and technical planning.',
   },
   {
     icon: Brain,
     name: 'AI & Data',
-    color: 'from-purple-500 to-violet-600',
     count: 17,
     skills: ['ML pipeline builder', 'Data analyst', 'Prompt engineer', 'Model evaluator'],
-    description:
-      'AI and data science specialists for ML workflows, data analysis, and model evaluation.',
   },
   {
     icon: Megaphone,
     name: 'Marketing',
-    color: 'from-pink-500 to-rose-600',
     count: 16,
     skills: ['Campaign strategist', 'SEO optimizer', 'Content calendar planner', 'Ad copywriter'],
-    description:
-      'Marketing automation for campaigns, SEO, content strategy, and performance analytics.',
   },
   {
     icon: Settings,
     name: 'Operations',
-    color: 'from-slate-500 to-zinc-600',
     count: 15,
     skills: ['Process optimizer', 'Workflow automator', 'Resource allocator', 'SOP writer'],
-    description:
-      'Operations management for process optimization, workflow automation, and resource planning.',
   },
   {
     icon: DollarSign,
     name: 'Finance',
-    color: 'from-emerald-500 to-green-600',
     count: 11,
     skills: ['Financial analyst', 'Budget forecaster', 'Invoice processor', 'Tax preparer'],
-    description:
-      'Financial modeling, budget forecasting, invoice processing, and tax preparation at scale.',
   },
   {
     icon: Monitor,
     name: 'IT & Operations',
-    color: 'from-blue-500 to-indigo-600',
     count: 10,
     skills: ['System administrator', 'Security auditor', 'Incident responder', 'Network planner'],
-    description:
-      'IT infrastructure management, security auditing, incident response, and system monitoring.',
   },
   {
     icon: Headphones,
     name: 'Support',
-    color: 'from-amber-500 to-orange-600',
     count: 9,
     skills: ['Ticket triager', 'Knowledge base writer', 'Escalation handler', 'CSAT analyst'],
-    description:
-      'Customer support automation for ticket triage, knowledge bases, and satisfaction analysis.',
   },
   {
     icon: Palette,
     name: 'Creative',
-    color: 'from-fuchsia-500 to-pink-600',
     count: 8,
     skills: ['Copywriter', 'Video scriptwriter', 'Brand voice editor', 'Social media creator'],
-    description:
-      'Creative content generation for copy, video scripts, brand voice, and social media.',
   },
   {
     icon: UserCheck,
     name: 'Human Resources',
-    color: 'from-teal-500 to-cyan-600',
     count: 6,
     skills: ['Resume screener', 'Onboarding planner', 'Policy drafter', 'Performance reviewer'],
-    description:
-      'HR automation for recruitment screening, onboarding, policy drafting, and performance reviews.',
   },
   {
     icon: Search,
     name: 'Research',
-    color: 'from-indigo-500 to-blue-600',
     count: 5,
     skills: ['Literature reviewer', 'Competitive analyst', 'Market researcher', 'Trend forecaster'],
-    description:
-      'Research specialists for literature reviews, competitive analysis, and market intelligence.',
   },
   {
     icon: FileText,
     name: 'Documentation',
-    color: 'from-stone-500 to-stone-600',
     count: 5,
     skills: ['Technical writer', 'API documenter', 'Changelog generator', 'Style guide enforcer'],
-    description:
-      'Documentation specialists for technical writing, API docs, and style guide enforcement.',
   },
   {
     icon: Zap,
     name: 'Automation',
-    color: 'from-yellow-500 to-amber-600',
     count: 5,
     skills: ['Workflow builder', 'Integration connector', 'Scheduler', 'Event trigger designer'],
-    description:
-      'Automation specialists for building workflows, integrations, schedules, and event triggers.',
   },
   {
     icon: BarChart3,
     name: 'Analytics',
-    color: 'from-sky-500 to-blue-600',
     count: 5,
     skills: ['Dashboard builder', 'KPI tracker', 'Report generator', 'Data visualizer'],
-    description:
-      'Analytics specialists for dashboards, KPI tracking, reporting, and data visualization.',
   },
   {
     icon: Scale,
     name: 'Legal',
-    color: 'from-orange-500 to-red-600',
     count: 4,
     skills: ['Contract reviewer', 'Compliance auditor', 'Legal researcher', 'Policy draft writer'],
-    description:
-      'Legal automation for contract review, regulatory compliance, and legal document preparation.',
   },
   {
     icon: Briefcase,
     name: 'Executive',
-    color: 'from-blue-400 to-blue-600',
     count: 4,
     skills: ['Executive assistant', 'Meeting summarizer', 'Board deck preparer', 'OKR tracker'],
-    description:
-      'Executive support for meeting summaries, board decks, OKR tracking, and strategic planning.',
   },
   {
     icon: ShoppingCart,
     name: 'Business',
-    color: 'from-rose-500 to-pink-600',
     count: 4,
     skills: [
       'Business plan writer',
@@ -248,92 +207,55 @@ const skillCategories = [
       'Partnership evaluator',
       'RFP responder',
     ],
-    description:
-      'Business development for plans, pitch decks, partnership evaluation, and RFP responses.',
   },
   {
     icon: GraduationCap,
     name: 'Education',
-    color: 'from-violet-500 to-purple-600',
     count: 3,
     skills: ['Curriculum designer', 'AI tutor', 'Assessment creator'],
-    description:
-      'Education specialists for curriculum design, AI tutoring, and assessment creation.',
   },
   {
     icon: Users,
     name: 'Consulting',
-    color: 'from-gray-500 to-zinc-600',
     count: 3,
     skills: ['Strategy consultant', 'Change management advisor', 'Process auditor'],
-    description: 'Consulting specialists for strategy, change management, and process improvement.',
   },
   {
     icon: Leaf,
     name: 'Sustainability',
-    color: 'from-green-500 to-emerald-600',
     count: 2,
     skills: ['ESG report writer', 'Carbon footprint analyst'],
-    description: 'Sustainability specialists for ESG reporting and carbon footprint analysis.',
   },
   {
     icon: TrendingUp,
     name: 'Sales',
-    color: 'from-red-500 to-rose-600',
     count: 2,
     skills: ['Lead qualifier', 'Sales email writer'],
-    description: 'Sales specialists for lead qualification and outreach email generation.',
   },
   {
     icon: Package,
     name: 'Product',
-    color: 'from-orange-500 to-amber-600',
     count: 2,
     skills: ['PRD writer', 'Feature prioritizer'],
-    description:
-      'Product management specialists for requirements documents and feature prioritization.',
   },
   {
     icon: Globe,
     name: 'Language',
-    color: 'from-cyan-400 to-blue-500',
     count: 2,
     skills: ['Translator', 'Localization specialist'],
-    description: 'Language specialists for translation and content localization across markets.',
   },
   {
     icon: PenTool,
     name: 'Design',
-    color: 'from-pink-400 to-fuchsia-500',
     count: 1,
     skills: ['UI copy reviewer'],
-    description: 'Design specialists for UI copy review and design system documentation.',
   },
 ];
 
-const howItWorksSteps = [
-  {
-    step: 1,
-    icon: Users,
-    title: 'Choose a Skill',
-    description:
-      'Browse AI employees by category or search by the task you need done. Each skill is pre-configured with domain expertise.',
-  },
-  {
-    step: 2,
-    icon: MessageSquare,
-    title: 'Describe Your Task',
-    description:
-      'Give natural language instructions — just like briefing a real employee. Attach files, set context, and specify your requirements.',
-  },
-  {
-    step: 3,
-    icon: Zap,
-    title: 'AI Delivers Results',
-    description:
-      'Get polished documents, detailed analysis, completed tasks, or structured data — ready to use or iterate on.',
-  },
-];
+const TOP_CATEGORIES = 8;
+const topCategories = skillCategories.slice(0, TOP_CATEGORIES);
+const remainingCount = skillCategories.length - TOP_CATEGORIES;
+const remainingNames = skillCategories.slice(TOP_CATEGORIES).map((c) => c.name);
 
 const comparisonRows = [
   {
@@ -403,6 +325,28 @@ const webPageJsonLd = {
   isPartOf: { '@type': 'WebSite', name: 'AGI Workforce', url: 'https://agiworkforce.com' },
 };
 
+function CategoryRow({ category }: { category: SkillCategory }) {
+  const Icon = category.icon;
+  return (
+    <div className="group flex items-start gap-4 border-b border-[#1a1917] py-4 last:border-0">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#1a1917] bg-[#0f0e0c]">
+        <Icon className="h-4 w-4 text-[#888480]" />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+        <div className="flex shrink-0 items-baseline gap-2">
+          <span className="text-sm font-medium text-[#edebe8]">{category.name}</span>
+          <span className="text-xs tabular-nums text-[#555150]">{category.count}</span>
+        </div>
+        <span className="text-sm text-[#555150] sm:hidden">/</span>
+        <span className="hidden text-sm text-[#555150] sm:inline" aria-hidden="true">
+          /
+        </span>
+        <p className="min-w-0 truncate text-sm text-[#888480]">{category.skills.join(', ')}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function AISkillsPage() {
   return (
     <>
@@ -414,179 +358,149 @@ export default function AISkillsPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
       />
-      <div className="flex min-h-screen flex-col bg-black text-white">
+      <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8]">
         <Header />
 
         <main className="flex-1 pt-24">
-          {/* Hero Section */}
-          <section className="relative overflow-hidden py-20 md:py-32 lg:py-40">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black" />
-            <div className="container relative mx-auto px-4 text-center">
-              <div className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 backdrop-blur-xs">
-                <Sparkles className="mr-2 h-4 w-4" />
-                Pre-Built AI Specialists
-              </div>
-              <h1 className="mx-auto max-w-4xl bg-gradient-to-b from-white to-white/50 bg-clip-text text-5xl font-bold tracking-tight text-transparent md:text-7xl lg:text-8xl">
+          {/* Hero */}
+          <section className="py-20 md:py-28">
+            <div className="mx-auto max-w-3xl px-6 text-center">
+              <h1 className="text-4xl font-bold tracking-tight md:text-6xl">
                 AI Employees, Ready to Work
               </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400 md:text-xl">
-                From healthcare to finance, legal to creative — pre-built AI specialists that handle
-                real work across every industry.
+              <p className="mt-5 text-lg leading-relaxed text-[#888480]">
+                150+ pre-built specialists across 23 categories — engineering, finance, legal,
+                creative, and 19 more.
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <Link
                   href="/download"
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-black"
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-[#c8892a] px-7 text-sm font-medium text-[#09090b] transition-colors hover:bg-[#d49a3a]"
                 >
                   Download Desktop App
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
                 <Link
                   href="#skills"
-                  className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-800 bg-black px-8 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white"
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-[#1a1917] px-7 text-sm font-medium text-[#888480] transition-colors hover:border-[#333130] hover:text-[#edebe8]"
                 >
-                  Browse All Skills
+                  Browse Skills
                 </Link>
               </div>
 
-              {/* Stats */}
-              <div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-3">
-                <div className="p-6">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">150+</div>
-                  <div className="text-lg text-zinc-400">Pre-Built Skills</div>
-                  <p className="mt-2 text-sm text-zinc-600">Domain specialists ready to deploy</p>
-                </div>
-                <div className="p-6">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">23</div>
-                  <div className="text-lg text-zinc-400">Categories</div>
-                  <p className="mt-2 text-sm text-zinc-600">
-                    Engineering, marketing, finance, and more
-                  </p>
-                </div>
-                <div className="p-6">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">6</div>
-                  <div className="text-lg text-zinc-400">Surfaces</div>
-                  <p className="mt-2 text-sm text-zinc-600">
-                    Desktop, web, CLI, VS Code, browser, mobile
-                  </p>
-                </div>
+              {/* Stats — single row */}
+              <div className="mt-14 flex items-center justify-center gap-3 text-sm text-[#555150]">
+                <span>
+                  <span className="font-medium text-[#edebe8]">150+</span> Pre-Built Skills
+                </span>
+                <span aria-hidden="true">|</span>
+                <span>
+                  <span className="font-medium text-[#edebe8]">23</span> Categories
+                </span>
+                <span aria-hidden="true">|</span>
+                <span>
+                  <span className="font-medium text-[#edebe8]">6</span> Surfaces
+                </span>
               </div>
             </div>
           </section>
 
-          {/* Skills Category Grid */}
-          <section id="skills" className="bg-zinc-950 py-24">
-            <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  AI Employees by Category
-                </h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  Every skill is a domain specialist — trained on industry workflows, terminology,
-                  and best practices. Choose a category to explore.
-                </p>
+          {/* Skill Categories — dense list */}
+          <section id="skills" className="border-t border-[#1a1917] py-20">
+            <div className="mx-auto max-w-2xl px-6">
+              <h2 className="text-lg font-medium tracking-tight">Skills by category</h2>
+              <p className="mt-2 text-sm text-[#555150]">
+                Sorted by depth of coverage. Each skill ships with domain-specific system prompts,
+                tool configurations, and output schemas.
+              </p>
+
+              <div className="mt-8">
+                {topCategories.map((category) => (
+                  <CategoryRow key={category.name} category={category} />
+                ))}
               </div>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {skillCategories.map((category) => (
-                  <div
-                    key={category.name}
-                    className="group rounded-2xl border border-zinc-800 bg-black/50 p-8 transition-all hover:border-blue-500/50"
-                  >
-                    <div className="mb-5 flex items-center gap-4">
-                      <div
-                        className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${category.color}`}
-                      >
-                        <category.icon className="h-6 w-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold">{category.name}</h3>
-                        <span className="inline-flex items-center rounded-full bg-blue-500/10 px-2.5 py-0.5 text-xs font-medium text-blue-400">
-                          {category.count} skills
-                        </span>
-                      </div>
-                    </div>
-                    <p className="mb-4 text-sm leading-relaxed text-zinc-500">
-                      {category.description}
+
+              <p className="mt-4 text-sm text-[#555150]">
+                and {remainingCount} more — {remainingNames.join(', ')}.
+              </p>
+            </div>
+          </section>
+
+          {/* Before / After — replaces step 1-2-3 */}
+          <section className="border-t border-[#1a1917] py-20">
+            <div className="mx-auto max-w-3xl px-6">
+              <h2 className="text-lg font-medium tracking-tight">What a skill actually does</h2>
+              <p className="mt-2 text-sm text-[#555150]">
+                A skill is not a prompt template. It configures the model, selects tools, and
+                structures output for a specific domain task.
+              </p>
+
+              <div className="mt-10 grid gap-8 md:grid-cols-2">
+                {/* Before */}
+                <div className="rounded-lg border border-[#1a1917] bg-[#0f0e0c] p-6">
+                  <div className="mb-4 text-xs font-medium uppercase tracking-wider text-[#555150]">
+                    Without skill
+                  </div>
+                  <div className="space-y-3 font-mono text-sm leading-relaxed text-[#888480]">
+                    <p className="text-[#edebe8]">&gt; Review this contract for risks</p>
+                    <p>
+                      Generic response. Misses jurisdiction-specific clauses. No structured output.
+                      You spend 20 minutes reformatting.
                     </p>
-                    <ul className="space-y-2">
-                      {category.skills.map((skill) => (
-                        <li key={skill} className="flex items-center gap-2 text-sm text-zinc-400">
-                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-blue-500" />
-                          {skill}
-                        </li>
-                      ))}
-                    </ul>
                   </div>
-                ))}
+                </div>
+
+                {/* After */}
+                <div className="rounded-lg border border-[#c8892a]/30 bg-[#0f0e0c] p-6">
+                  <div className="mb-4 text-xs font-medium uppercase tracking-wider text-[#c8892a]">
+                    With Legal &rarr; Contract Reviewer
+                  </div>
+                  <div className="space-y-3 font-mono text-sm leading-relaxed text-[#888480]">
+                    <p className="text-[#edebe8]">&gt; Review this contract for risks</p>
+                    <p>
+                      Flags 3 liability clauses, cites relevant UCC sections, outputs a risk matrix
+                      as structured JSON. Ready to paste into your memo.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
 
-          {/* How It Works */}
-          <section className="bg-black py-24">
-            <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">How It Works</h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  From choosing a skill to getting results — three simple steps.
-                </p>
-              </div>
-              <div className="grid gap-8 md:grid-cols-3">
-                {howItWorksSteps.map((item) => (
-                  <div key={item.step} className="relative text-center">
-                    <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900">
-                      <item.icon className="h-8 w-8 text-blue-500" />
-                    </div>
-                    <div className="mb-2 text-sm font-medium text-blue-400">Step {item.step}</div>
-                    <h3 className="mb-3 text-xl font-semibold">{item.title}</h3>
-                    <p className="text-sm leading-relaxed text-zinc-400">{item.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
+          {/* Comparison table */}
+          <section className="border-t border-[#1a1917] py-20">
+            <div className="mx-auto max-w-3xl px-6">
+              <h2 className="text-lg font-medium tracking-tight">
+                Built for real work, not just code
+              </h2>
+              <p className="mt-2 text-sm text-[#555150]">
+                Every competitor focuses on coding. AGI Workforce is the only platform with
+                non-coding AI skills across 23 categories.
+              </p>
 
-          {/* Comparison Section */}
-          <section className="bg-zinc-950 py-24">
-            <div className="container mx-auto px-4">
-              <div className="mb-16 text-center">
-                <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                  Built for Real Work, Not Just Code
-                </h2>
-                <p className="mx-auto max-w-2xl text-zinc-400">
-                  Every competitor focuses on coding. AGI Workforce is the only platform with
-                  non-coding AI skills across 23 categories.
-                </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] border-collapse">
+              <div className="mt-10 overflow-x-auto">
+                <table className="w-full min-w-[600px] border-collapse text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-800">
-                      <th className="py-4 pr-6 text-left text-sm font-medium text-zinc-500">
-                        Feature
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-blue-400">
+                    <tr className="border-b border-[#1a1917]">
+                      <th className="py-3 pr-6 text-left font-medium text-[#555150]">Feature</th>
+                      <th className="px-4 py-3 text-left font-medium text-[#c8892a]">
                         AGI Workforce
                       </th>
-                      <th className="px-6 py-4 text-left text-sm font-medium text-zinc-500">
+                      <th className="px-4 py-3 text-left font-normal text-[#555150]">
                         Claude Desktop
                       </th>
-                      <th className="px-6 py-4 text-left text-sm font-medium text-zinc-500">
-                        ChatGPT
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-medium text-zinc-500">
-                        Cursor
-                      </th>
+                      <th className="px-4 py-3 text-left font-normal text-[#555150]">ChatGPT</th>
+                      <th className="px-4 py-3 text-left font-normal text-[#555150]">Cursor</th>
                     </tr>
                   </thead>
                   <tbody>
                     {comparisonRows.map((row) => (
-                      <tr key={row.feature} className="border-b border-zinc-800/50">
-                        <td className="py-4 pr-6 text-sm text-zinc-400">{row.feature}</td>
-                        <td className="px-6 py-4 text-sm font-medium text-white">{row.agi}</td>
-                        <td className="px-6 py-4 text-sm text-zinc-500">{row.claude}</td>
-                        <td className="px-6 py-4 text-sm text-zinc-500">{row.chatgpt}</td>
-                        <td className="px-6 py-4 text-sm text-zinc-500">{row.cursor}</td>
+                      <tr key={row.feature} className="border-b border-[#1a1917]/50">
+                        <td className="py-3 pr-6 text-[#888480]">{row.feature}</td>
+                        <td className="px-4 py-3 font-medium text-[#edebe8]">{row.agi}</td>
+                        <td className="px-4 py-3 text-[#555150]">{row.claude}</td>
+                        <td className="px-4 py-3 text-[#555150]">{row.chatgpt}</td>
+                        <td className="px-4 py-3 text-[#555150]">{row.cursor}</td>
                       </tr>
                     ))}
                   </tbody>
