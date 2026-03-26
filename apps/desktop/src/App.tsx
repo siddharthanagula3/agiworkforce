@@ -35,6 +35,7 @@ import {
 
 import {
   AlertTriangle,
+  Bot,
   CircleUserRound,
   Maximize2,
   Minimize2,
@@ -45,7 +46,6 @@ import {
 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorHandling';
 import ErrorToastContainer from './components/Errors/ErrorToast';
-import { Spinner } from './components/ui/Spinner';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
 import { initializeWebAuth } from './services/supabaseAuth';
@@ -92,10 +92,11 @@ import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
 
 const LoadingFallback = () => (
-  <div className="flex items-center justify-center h-full w-full">
-    <div className="flex flex-col items-center gap-3">
-      <Spinner size="lg" className="text-primary" />
-      <p className="text-sm text-muted-foreground">Loading...</p>
+  <div className="flex items-center justify-center h-full w-full bg-zinc-950">
+    <div className="animate-pulse flex flex-col items-center gap-4">
+      <Bot className="h-12 w-12 text-blue-500" />
+      <span className="text-2xl font-bold tracking-tighter text-white">AGI Workforce</span>
+      <span className="text-sm text-zinc-500">Loading your workspace...</span>
     </div>
   </div>
 );
