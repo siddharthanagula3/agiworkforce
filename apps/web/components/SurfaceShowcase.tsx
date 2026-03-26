@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useIsMobile } from '@shared/hooks/use-mobile';
 import { MARKETING } from '@/lib/marketing-constants';
@@ -673,27 +673,45 @@ function SurfaceShowcaseStatic() {
   );
 }
 
-/* ─── Main Component (sticky scroll) ─────────────────────────────── */
-const VH_PER_SURFACE = 70;
+/* ─── Main Component (JS-controlled fixed position — bypasses overflow-x:hidden breaking sticky) */
+const PX_PER_SURFACE = 600;
 
 export function SurfaceShowcase() {
-  const sectionRef = useRef<HTMLElement>(null);
+  const sectionRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [pinState, setPinState] = useState<'before' | 'fixed' | 'after'>('before');
   const reducedMotion = useReducedMotion();
   const isMobile = useIsMobile();
 
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ['start start', 'end end'],
-  });
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
 
-  useMotionValueEvent(scrollYProgress, 'change', (v) => {
-    const clamped = Math.max(0, Math.min(1, v));
-    const idx = Math.min(Math.floor(clamped * surfaces.length), surfaces.length - 1);
-    if (idx >= 0 && idx !== activeIndex) {
-      setActiveIndex(idx);
-    }
-  });
+    const onScroll = () => {
+      const rect = section.getBoundingClientRect();
+      const vh = window.innerHeight;
+
+      if (rect.top > 0) {
+        // Section hasn't reached viewport top yet
+        setPinState('before');
+      } else if (rect.bottom <= vh) {
+        // Section bottom has passed viewport bottom — unpin
+        setPinState('after');
+      } else {
+        // Section top is at/above viewport, bottom is below — pin it
+        setPinState('fixed');
+        const scrolled = -rect.top;
+        const scrollable = section.offsetHeight - vh;
+        const progress = Math.max(0, Math.min(1, scrolled / scrollable));
+        const idx = Math.min(Math.floor(progress * surfaces.length), surfaces.length - 1);
+        if (idx >= 0) setActiveIndex(idx);
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   if (reducedMotion || isMobile) {
     return <SurfaceShowcaseStatic />;
@@ -702,18 +720,20 @@ export function SurfaceShowcase() {
   const active = surfaces[activeIndex];
   if (!active) return <SurfaceShowcaseStatic />;
 
+  const overlayPosition =
+    pinState === 'fixed'
+      ? 'fixed top-0 left-0 right-0 z-20'
+      : pinState === 'after'
+        ? 'absolute bottom-0 left-0 right-0'
+        : 'relative';
+
   return (
-    <section
+    <div
       ref={sectionRef}
       className="relative mt-20"
-      style={{ height: `${surfaces.length * VH_PER_SURFACE}vh` }}
+      style={{ height: surfaces.length * PX_PER_SURFACE }}
     >
-      {/*
-        KEY FIX: The sticky container has its own bg-[#09090b] and covers
-        the full viewport (100vh). This prevents any "black gap" from the
-        raw section background showing below the pinned content.
-      */}
-      <div className="sticky top-0 z-10 flex h-screen items-center bg-[#09090b]">
+      <div className={`${overlayPosition} flex h-screen items-center bg-[#09090b]`}>
         <div className="mx-auto w-full max-w-6xl px-4 py-16">
           {/* Section header */}
           <div className="mb-10">
@@ -790,6 +810,6 @@ export function SurfaceShowcase() {
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
