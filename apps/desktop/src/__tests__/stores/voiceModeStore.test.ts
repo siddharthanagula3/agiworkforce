@@ -6,6 +6,7 @@ vi.mock('../../lib/tauri-mock', async () => {
 
   return {
     ...actual,
+    isTauri: true,
     listen: vi.fn(
       async (_event: string, handler: (event: { payload: unknown; id: number }) => void) => {
         (globalThis as Record<string, unknown>)['__deepgramHandler'] = handler;
