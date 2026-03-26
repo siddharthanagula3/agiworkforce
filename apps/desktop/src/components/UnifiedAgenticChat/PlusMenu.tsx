@@ -141,7 +141,7 @@ export function PlusMenu({
         sideOffset={8}
         className={cn(
           'w-56 rounded-xl border border-[hsl(var(--border))] p-1.5',
-          'bg-[hsl(var(--popover))] shadow-xl',
+          'bg-popover shadow-xl',
         )}
       >
         {/* Stash sub-panel */}

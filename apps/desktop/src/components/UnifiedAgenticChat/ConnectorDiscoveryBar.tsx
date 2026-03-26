@@ -22,8 +22,8 @@ interface ConnectorPlaceholder {
 const CONNECTORS: ConnectorPlaceholder[] = [
   { name: 'Gmail', initial: 'G', color: 'bg-red-500/20 text-red-300' },
   { name: 'Slack', initial: 'S', color: 'bg-purple-500/20 text-purple-300' },
-  { name: 'GitHub', initial: 'G', color: 'bg-zinc-500/20 text-zinc-300' },
-  { name: 'Notion', initial: 'N', color: 'bg-zinc-600/20 text-zinc-200' },
+  { name: 'GitHub', initial: 'G', color: 'bg-muted-foreground/20 text-foreground' },
+  { name: 'Notion', initial: 'N', color: 'bg-muted-foreground/20 text-foreground' },
   { name: 'Calendar', initial: 'C', color: 'bg-blue-500/20 text-blue-300' },
 ];
 

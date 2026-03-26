@@ -162,13 +162,13 @@ const GenerativeWidgetComponent: React.FC<GenerativeWidgetProps> = ({
   return (
     <div
       className={cn(
-        'not-prose rounded-xl overflow-hidden border border-zinc-700/60 bg-zinc-900/60 my-3',
+        'not-prose rounded-xl overflow-hidden border border-border bg-card/60 my-3',
         className,
       )}
     >
       {/* Title bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-700/60 bg-zinc-800/70">
-        <span className="text-xs font-medium text-zinc-300 truncate">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-muted/70">
+        <span className="text-xs font-medium text-foreground truncate">
           {title ?? 'Interactive Widget'}
         </span>
         <div className="flex items-center gap-1 shrink-0 ml-2">
@@ -180,7 +180,7 @@ const GenerativeWidgetComponent: React.FC<GenerativeWidgetProps> = ({
               'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors',
               showSource
                 ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50',
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
             )}
           >
             <Code className="h-3 w-3" />
@@ -190,7 +190,7 @@ const GenerativeWidgetComponent: React.FC<GenerativeWidgetProps> = ({
             type="button"
             onClick={() => setIsExpanded((v) => !v)}
             title={isExpanded ? 'Collapse' : 'Expand'}
-            className="flex items-center px-1.5 py-0.5 rounded text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 transition-colors"
+            className="flex items-center px-1.5 py-0.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
           >
             {isExpanded ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
           </button>
@@ -199,7 +199,7 @@ const GenerativeWidgetComponent: React.FC<GenerativeWidgetProps> = ({
 
       {/* Source view */}
       {showSource ? (
-        <pre className="overflow-auto p-3 text-xs font-mono text-zinc-300 bg-zinc-950 leading-relaxed whitespace-pre-wrap break-all max-h-[400px]">
+        <pre className="overflow-auto p-3 text-xs font-mono text-foreground bg-background leading-relaxed whitespace-pre-wrap break-all max-h-[400px]">
           {html}
         </pre>
       ) : /* Sandboxed iframe */

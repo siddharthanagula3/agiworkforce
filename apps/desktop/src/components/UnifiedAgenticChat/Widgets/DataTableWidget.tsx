@@ -184,32 +184,33 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
       {/* Filter input */}
       {filterable && (
         <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
           <input
             type="text"
             value={filterQuery}
             onChange={handleFilterChange}
             placeholder="Filter rows..."
-            className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
+            className="w-full pl-9 pr-4 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
           />
         </div>
       )}
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-zinc-100 dark:bg-zinc-800">
+            <tr className="bg-muted">
               {columns.map((column) => (
                 <th
                   key={column.key}
                   className={cn(
-                    'px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 whitespace-nowrap',
+                    'px-4 py-3 font-medium text-foreground whitespace-nowrap',
                     column.align === 'center' && 'text-center',
                     column.align === 'right' && 'text-right',
-                    sortable &&
-                      column.sortable !== false &&
-                      'cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700',
+                    sortable && column.sortable !== false && 'cursor-pointer hover:bg-accent',
                   )}
                   style={{ width: column.width }}
                   onClick={() => {
@@ -237,7 +238,7 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400"
+                  className="px-4 py-8 text-center text-muted-foreground"
                 >
                   {filterQuery ? 'No matching rows found' : 'No data available'}
                 </td>
@@ -247,13 +248,13 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
                 <tr
                   key={rowIndex}
                   onClick={() => handleRowClick(row, currentPage * pageSize + rowIndex)}
-                  className="border-t border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer transition-colors"
+                  className="border-t border-border hover:bg-accent/50 cursor-pointer transition-colors"
                 >
                   {columns.map((column) => (
                     <td
                       key={column.key}
                       className={cn(
-                        'px-4 py-3 text-zinc-700 dark:text-zinc-300',
+                        'px-4 py-3 text-foreground',
                         column.align === 'center' && 'text-center',
                         column.align === 'right' && 'text-right',
                       )}
@@ -270,7 +271,7 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
 
       {/* Pagination */}
       {sortedRows.length > pageSize && (
-        <div className="flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
             Showing {startRow}-{endRow} of {sortedRows.length}
             {displayedTotal !== sortedRows.length && ` (${displayedTotal} total)`}
@@ -280,7 +281,7 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
               type="button"
               onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
               disabled={currentPage === 0}
-              className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               aria-label="Previous page"
             >
               <ChevronLeft size={16} />
@@ -292,7 +293,7 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
               type="button"
               onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={currentPage >= totalPages - 1}
-              className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               aria-label="Next page"
             >
               <ChevronRight size={16} />

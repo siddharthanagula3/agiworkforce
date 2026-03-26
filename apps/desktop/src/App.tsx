@@ -92,11 +92,11 @@ import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
 
 const LoadingFallback = () => (
-  <div className="flex items-center justify-center h-full w-full bg-zinc-950">
+  <div className="flex items-center justify-center h-full w-full bg-background">
     <div className="animate-pulse flex flex-col items-center gap-4">
       <Bot className="h-12 w-12 text-blue-500" />
-      <span className="text-2xl font-bold tracking-tighter text-white">AGI Workforce</span>
-      <span className="text-sm text-zinc-500">Loading your workspace...</span>
+      <span className="text-2xl font-bold tracking-tighter text-foreground">AGI Workforce</span>
+      <span className="text-sm text-muted-foreground">Loading your workspace...</span>
     </div>
   </div>
 );
@@ -1048,12 +1048,12 @@ const DesktopShell = () => {
 
   if (isAuthLoading || !sessionValidated) {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-950">
+      <div className="flex h-screen items-center justify-center bg-background">
         {/* Skeleton layout — shown while Supabase session is being validated */}
         <div className="flex w-full max-w-sm flex-col items-center gap-4 px-6">
-          <div className="h-10 w-10 animate-pulse rounded-xl bg-zinc-800" />
-          <div className="h-4 w-32 animate-pulse rounded bg-zinc-800" />
-          <div className="h-3 w-48 animate-pulse rounded bg-zinc-800" />
+          <div className="h-10 w-10 animate-pulse rounded-xl bg-muted" />
+          <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+          <div className="h-3 w-48 animate-pulse rounded bg-muted" />
         </div>
       </div>
     );

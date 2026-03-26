@@ -147,13 +147,11 @@ export function ActionLogTimelineContent({ entries, className }: ActionLogTimeli
   }
 
   return (
-    <div
-      className={cn('overflow-hidden rounded-lg border border-white/10 bg-zinc-900/25', className)}
-    >
+    <div className={cn('overflow-hidden rounded-lg border border-white/10 bg-card/25', className)}>
       <button
         type="button"
         onClick={() => setIsExpanded((value) => !value)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-white/5"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-white/5"
         aria-expanded={isOpen}
       >
         <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.15 }}>
@@ -162,7 +160,7 @@ export function ActionLogTimelineContent({ entries, className }: ActionLogTimeli
         <Activity className="h-3.5 w-3.5" />
         <span className="font-medium">
           Agent activity
-          <span className="ml-1 text-zinc-500">({entries.length})</span>
+          <span className="ml-1 text-muted-foreground">({entries.length})</span>
         </span>
       </button>
       <AnimatePresence initial={false}>

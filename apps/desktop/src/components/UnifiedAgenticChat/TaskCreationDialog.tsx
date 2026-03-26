@@ -169,13 +169,13 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="border border-white/10 bg-[#0f1117] text-zinc-100 sm:max-w-[540px]">
+      <DialogContent className="border border-white/10 bg-[#0f1117] text-foreground sm:max-w-[540px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-zinc-100">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <Zap className="h-5 w-5 text-teal-400" />
             New Autonomous Task
           </DialogTitle>
-          <DialogDescription className="text-zinc-500">
+          <DialogDescription className="text-muted-foreground">
             Describe a goal and the AI agent will plan and execute it autonomously.
           </DialogDescription>
         </DialogHeader>
@@ -183,7 +183,7 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
         <div className="flex flex-col gap-5 py-2">
           {/* Goal textarea */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="task-goal" className="text-sm font-medium text-zinc-300">
+            <label htmlFor="task-goal" className="text-sm font-medium text-foreground">
               Goal
               <span className="ml-1 text-red-400">*</span>
             </label>
@@ -195,8 +195,8 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
               rows={4}
               disabled={submitting}
               className={cn(
-                'w-full resize-none rounded-lg border bg-white/5 px-3 py-2 text-sm text-zinc-100',
-                'placeholder-zinc-600 outline-none transition',
+                'w-full resize-none rounded-lg border bg-white/5 px-3 py-2 text-sm text-foreground',
+                'placeholder-muted-foreground outline-none transition',
                 'focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/30',
                 goal.trim().length === 0 ? 'border-white/10' : 'border-teal-500/30',
                 submitting && 'opacity-50',
@@ -207,17 +207,17 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
           {/* Model selector */}
           {modelOptions.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-300">Model</label>
+              <label className="text-sm font-medium text-foreground">Model</label>
               <Select value={chosenModel} onValueChange={setChosenModel} disabled={submitting}>
-                <SelectTrigger className="border-white/10 bg-white/5 text-sm text-zinc-200 focus:ring-teal-500/30">
+                <SelectTrigger className="border-white/10 bg-white/5 text-sm text-foreground focus:ring-teal-500/30">
                   <SelectValue placeholder="Select model..." />
                 </SelectTrigger>
-                <SelectContent className="border-white/10 bg-[#0f1117] text-zinc-200">
+                <SelectContent className="border-white/10 bg-[#0f1117] text-foreground">
                   {modelOptions.map((modelId) => (
                     <SelectItem
                       key={modelId}
                       value={modelId}
-                      className="focus:bg-white/10 focus:text-zinc-100"
+                      className="focus:bg-white/10 focus:text-foreground"
                     >
                       {modelId}
                     </SelectItem>
@@ -229,7 +229,7 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
 
           {/* Max iterations */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="task-iterations" className="text-sm font-medium text-zinc-300">
+            <label htmlFor="task-iterations" className="text-sm font-medium text-foreground">
               Max Iterations
             </label>
             <div className="flex items-center gap-3">
@@ -242,13 +242,13 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
                 onChange={(e) => handleIterationsChange(e.target.value)}
                 disabled={submitting}
                 className={cn(
-                  'w-24 rounded-lg border bg-white/5 px-3 py-2 text-sm text-zinc-100',
+                  'w-24 rounded-lg border bg-white/5 px-3 py-2 text-sm text-foreground',
                   'outline-none transition focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/30',
                   iterationsError ? 'border-red-500/50' : 'border-white/10',
                   submitting && 'opacity-50',
                 )}
               />
-              <span className="text-xs text-zinc-500">
+              <span className="text-xs text-muted-foreground">
                 {ITERATION_MIN}–{ITERATION_MAX} iterations
               </span>
             </div>
@@ -258,8 +258,8 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
           {/* Auto-approve toggle */}
           <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3">
             <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium text-zinc-200">Auto-approve</span>
-              <span className="text-xs text-zinc-500">
+              <span className="text-sm font-medium text-foreground">Auto-approve</span>
+              <span className="text-xs text-muted-foreground">
                 Execute tool calls without pausing for confirmation
               </span>
             </div>
@@ -277,7 +277,7 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
             type="button"
             onClick={() => handleOpenChange(false)}
             disabled={submitting}
-            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/10 disabled:opacity-50"
+            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-foreground transition hover:bg-white/10 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -288,7 +288,7 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
             className={cn(
               'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition',
               submitting || !isValid
-                ? 'cursor-not-allowed bg-white/5 text-zinc-500'
+                ? 'cursor-not-allowed bg-white/5 text-muted-foreground'
                 : 'bg-teal-600 text-white hover:bg-teal-500',
             )}
           >

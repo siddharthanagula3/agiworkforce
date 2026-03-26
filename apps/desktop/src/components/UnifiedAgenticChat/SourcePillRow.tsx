@@ -64,7 +64,7 @@ function SourcePill({ citation, onClick }: PillProps) {
         'rounded-full px-3 py-1.5',
         'bg-white/5 hover:bg-white/10',
         'border border-white/10 hover:border-white/20',
-        'text-xs text-zinc-300 hover:text-zinc-100',
+        'text-xs text-foreground hover:text-foreground',
         'transition-colors cursor-pointer',
         'max-w-[180px]',
       )}
@@ -90,7 +90,7 @@ function SourcePill({ citation, onClick }: PillProps) {
       <span className="truncate">{domain}</span>
 
       {/* External link hint */}
-      <ExternalLink className="shrink-0 w-2.5 h-2.5 text-zinc-500" />
+      <ExternalLink className="shrink-0 w-2.5 h-2.5 text-muted-foreground" />
     </button>
   );
 }
@@ -129,7 +129,7 @@ export function SourcePillRow({ citations, maxVisible = 6, className }: SourcePi
             'rounded-full px-3 py-1.5',
             'bg-white/5 hover:bg-white/10',
             'border border-white/10 hover:border-white/20',
-            'text-xs text-zinc-400 hover:text-zinc-200',
+            'text-xs text-muted-foreground hover:text-foreground',
             'transition-colors cursor-pointer',
           )}
         >
@@ -147,7 +147,7 @@ export function SourcePillRow({ citations, maxVisible = 6, className }: SourcePi
             'rounded-full px-3 py-1.5',
             'bg-white/5 hover:bg-white/10',
             'border border-white/10 hover:border-white/20',
-            'text-xs text-zinc-400 hover:text-zinc-200',
+            'text-xs text-muted-foreground hover:text-foreground',
             'transition-colors cursor-pointer',
           )}
         >

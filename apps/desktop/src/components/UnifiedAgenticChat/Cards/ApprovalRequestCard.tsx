@@ -67,7 +67,7 @@ const STATUS_CONFIG = {
     label: 'Rejected',
   },
   timeout: {
-    color: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
+    color: 'bg-muted text-foreground',
     label: 'Timeout',
   },
 };
@@ -250,7 +250,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
           {}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="text-xs font-medium uppercase text-gray-600 dark:text-gray-400">
+              <span className="text-xs font-medium uppercase text-muted-foreground">
                 Approval Required
               </span>
               <div
@@ -263,15 +263,11 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
             {}
             <div className="flex items-center gap-2 mb-2">
               <RiskIcon size={16} className={riskConfig.color.split(' ')[0]} />
-              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {riskConfig.label}
-              </span>
+              <span className="text-sm font-semibold text-foreground">{riskConfig.label}</span>
             </div>
 
             {}
-            <div className="text-sm text-gray-800 dark:text-gray-200 mb-2">
-              {approval.description}
-            </div>
+            <div className="text-sm text-foreground mb-2">{approval.description}</div>
 
             {}
             {approval.impact && (
@@ -282,7 +278,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
             )}
 
             {}
-            <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400 flex-wrap">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <Clock size={12} />
                 {formattedTime}
@@ -321,7 +317,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
           <button
             type="button"
             onClick={() => setShowDetails(!showDetails)}
-            className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 py-2 hover:text-gray-900 dark:hover:text-gray-100"
+            className="flex items-center gap-2 text-sm font-medium text-foreground py-2 hover:text-foreground"
           >
             {showDetails ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             Details
@@ -349,7 +345,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="Reason for rejection (optional)"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-hidden focus:ring-2 focus:ring-yellow-500"
+                className="w-full px-3 py-2 border border-border rounded-lg bg-card text-foreground text-sm focus:outline-hidden focus:ring-2 focus:ring-yellow-500"
               />
               <div className="flex gap-2">
                 <button
@@ -366,7 +362,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
                     setShowRejectReason(false);
                     setRejectReason('');
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  className="flex-1 px-4 py-2 bg-muted hover:bg-accent text-foreground rounded-lg transition-colors text-sm font-medium"
                 >
                   Cancel
                 </button>

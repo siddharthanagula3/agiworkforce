@@ -230,14 +230,16 @@ export function ReactPreview({ code, className }: ReactPreviewProps) {
     <div
       className={cn(
         'flex flex-col',
-        isExpanded && 'fixed inset-4 z-50 bg-zinc-900 rounded-lg shadow-2xl',
+        isExpanded && 'fixed inset-4 z-50 bg-card rounded-lg shadow-2xl',
         className,
       )}
     >
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-700/50 bg-zinc-800/50">
-        <span className="text-xs text-zinc-400 font-medium">React Preview</span>
-        {isLoading && <span className="text-xs text-zinc-500 animate-pulse">Loading...</span>}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/50">
+        <span className="text-xs text-muted-foreground font-medium">React Preview</span>
+        {isLoading && (
+          <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
+        )}
         {error && (
           <span className="flex items-center gap-1 text-xs text-red-400">
             <AlertTriangle className="h-3 w-3" />
@@ -276,7 +278,7 @@ export function ReactPreview({ code, className }: ReactPreviewProps) {
       </div>
 
       {/* Preview frame */}
-      <div className={cn('relative bg-zinc-900', isExpanded ? 'flex-1 min-h-0' : 'h-[400px]')}>
+      <div className={cn('relative bg-card', isExpanded ? 'flex-1 min-h-0' : 'h-[400px]')}>
         {srcDoc && (
           <iframe
             key={reloadKey}

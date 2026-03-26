@@ -40,7 +40,7 @@ export const DragOverlay: React.FC<DragOverlayProps> = ({ isVisible, visionSuppo
                   transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
                   style={{ padding: '3px' }}
                 />
-                <div className="relative rounded-3xl bg-zinc-900 p-10">
+                <div className="relative rounded-3xl bg-card p-10">
                   <motion.div
                     animate={{ y: [0, -8, 0] }}
                     transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
@@ -52,10 +52,10 @@ export const DragOverlay: React.FC<DragOverlayProps> = ({ isVisible, visionSuppo
               <div className="text-center">
                 <p className="text-2xl font-semibold text-white mb-2">Drop files here</p>
                 {visionSupported ? (
-                  <p className="text-sm text-zinc-400">Images, documents, and more</p>
+                  <p className="text-sm text-muted-foreground">Images, documents, and more</p>
                 ) : (
                   <>
-                    <p className="text-sm text-zinc-400">Documents and files accepted</p>
+                    <p className="text-sm text-muted-foreground">Documents and files accepted</p>
                     <p className="mt-1 text-sm text-amber-400">
                       Images not supported by current model
                     </p>

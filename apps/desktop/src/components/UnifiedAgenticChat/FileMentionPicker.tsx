@@ -83,8 +83,9 @@ function getFileIcon(entry: MentionFile) {
   ];
   const textExts = ['md', 'txt', 'json', 'yaml', 'yml', 'toml', 'css', 'html', 'xml', 'sh'];
   if (codeExts.includes(ext)) return <FileText size={14} className="shrink-0 text-emerald-400" />;
-  if (textExts.includes(ext)) return <FileText size={14} className="shrink-0 text-gray-400" />;
-  return <File size={14} className="shrink-0 text-gray-400" />;
+  if (textExts.includes(ext))
+    return <FileText size={14} className="shrink-0 text-muted-foreground" />;
+  return <File size={14} className="shrink-0 text-muted-foreground" />;
 }
 
 function formatSize(bytes: number): string {
@@ -282,7 +283,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
           'px-4 py-3',
         )}
       >
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-muted-foreground">
           Select a project folder first to use @file mentions.
         </p>
       </div>
@@ -328,12 +329,12 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
 
       {/* Results */}
       {isLoading ? (
-        <div className="flex items-center gap-2 px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+        <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
           <Loader2 size={14} className="animate-spin" />
           <span>Searching…</span>
         </div>
       ) : displayEntries.length === 0 ? (
-        <div className="px-3 py-4 text-sm text-gray-400 dark:text-gray-500">
+        <div className="px-3 py-4 text-sm text-muted-foreground">
           {cleanQuery ? `No files matching "${cleanQuery}"` : 'No files found'}
         </div>
       ) : (
@@ -356,18 +357,16 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
             {getFileIcon(entry)}
             <span className="flex-1 truncate font-medium">{entry.name}</span>
             {isSearchMode && (
-              <span className="shrink-0 max-w-[120px] truncate text-[10px] text-gray-400 dark:text-gray-500">
+              <span className="shrink-0 max-w-[120px] truncate text-[10px] text-muted-foreground">
                 {shortPath(entry.path, currentFolder)}
               </span>
             )}
             {!entry.isDir && !isSearchMode && entry.size > 0 && (
-              <span className="shrink-0 text-[10px] text-gray-400 dark:text-gray-500">
+              <span className="shrink-0 text-[10px] text-muted-foreground">
                 {formatSize(entry.size)}
               </span>
             )}
-            {entry.isDir && (
-              <span className="shrink-0 text-[10px] text-gray-400 dark:text-gray-500">/</span>
-            )}
+            {entry.isDir && <span className="shrink-0 text-[10px] text-muted-foreground">/</span>}
           </button>
         ))
       )}

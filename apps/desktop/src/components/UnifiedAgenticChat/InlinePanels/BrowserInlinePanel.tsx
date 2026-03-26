@@ -52,14 +52,14 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
           {/* URL and Title */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Page Info
               </span>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={handleCopyUrl}
-                  className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400"
+                  className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent transition-colors text-muted-foreground"
                   title="Copy URL"
                 >
                   {copied ? (
@@ -76,7 +76,7 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
                 <button
                   type="button"
                   onClick={handleOpenInBrowser}
-                  className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-charcoal-700 transition-colors text-gray-600 dark:text-gray-400"
+                  className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent transition-colors text-muted-foreground"
                   title="Open in browser"
                 >
                   <ExternalLink size={12} />
@@ -85,16 +85,16 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
             </div>
 
             {/* URL */}
-            <div className="bg-gray-100 dark:bg-charcoal-700 rounded p-2 mb-2 border border-gray-200 dark:border-gray-700">
-              <div className="text-xs font-mono text-gray-700 dark:text-gray-300 break-all">
+            <div className="bg-muted rounded p-2 mb-2 border border-border">
+              <div className="text-xs font-mono text-foreground break-all">
                 {browserContent.url}
               </div>
             </div>
 
             {/* Title */}
             {browserContent.title && (
-              <div className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Title:</span>
+              <div className="text-sm text-foreground mb-2">
+                <span className="text-xs text-muted-foreground block mb-1">Title:</span>
                 {browserContent.title}
               </div>
             )}
@@ -103,14 +103,14 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
           {/* Screenshot or Loading State */}
           {browserContent.screenshot ? (
             <div>
-              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider block mb-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
                 Screenshot
               </span>
-              <div className="relative bg-gray-900 rounded border border-gray-700 overflow-hidden">
+              <div className="relative bg-card rounded border border-border overflow-hidden">
                 {imageLoading && (
-                  <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-muted flex items-center justify-center">
                     <div className="animate-spin">
-                      <div className="w-6 h-6 border-2 border-gray-400 border-t-gray-200 rounded-full" />
+                      <div className="w-6 h-6 border-2 border-muted-foreground border-t-foreground rounded-full" />
                     </div>
                   </div>
                 )}
@@ -124,12 +124,12 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
               </div>
             </div>
           ) : browserContent.status === 'loading' ? (
-            <div className="flex items-center justify-center py-8 bg-gray-100 dark:bg-charcoal-700 rounded border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-center py-8 bg-muted rounded border border-border">
               <div className="flex flex-col items-center gap-3">
                 <div className="animate-spin">
-                  <div className="w-6 h-6 border-2 border-gray-400 border-t-primary rounded-full" />
+                  <div className="w-6 h-6 border-2 border-muted-foreground border-t-primary rounded-full" />
                 </div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Loading page...</span>
+                <span className="text-sm text-muted-foreground">Loading page...</span>
               </div>
             </div>
           ) : browserContent.status === 'error' ? (
@@ -143,13 +143,13 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
           {/* Actions History */}
           {browserContent.actions && browserContent.actions.length > 0 && (
             <div>
-              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider block mb-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
                 Actions
               </span>
-              <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+              <div className="space-y-1 text-xs text-muted-foreground">
                 {browserContent.actions.slice(-5).map((action, idx) => (
                   <div key={idx} className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full shrink-0" />
+                    <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full shrink-0" />
                     <span>
                       {action.type} •{' '}
                       {new Date(action.timestamp).toLocaleTimeString([], {

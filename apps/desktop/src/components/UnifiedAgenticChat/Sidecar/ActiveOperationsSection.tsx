@@ -45,12 +45,10 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
   return (
     <div className={`active-operations-section h-full flex flex-col ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
-          <Activity size={18} className="text-gray-600 dark:text-gray-400" />
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            Active Operations
-          </h3>
+          <Activity size={18} className="text-muted-foreground" />
+          <h3 className="text-sm font-semibold text-foreground">Active Operations</h3>
         </div>
         {totalActive > 0 && (
           <div className="flex items-center gap-2">
@@ -61,7 +59,7 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
             <button
               type="button"
               onClick={() => useUnifiedChatStore.getState().clearBackgroundTasks()}
-              className="text-xs text-gray-500 hover:text-red-500 transition-colors"
+              className="text-xs text-muted-foreground hover:text-red-500 transition-colors"
               title="Clear all tasks"
             >
               Clear
@@ -74,28 +72,21 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
       <div className="flex-1 overflow-y-auto">
         {/* Background Tasks */}
         {activeBackgroundTasks.length > 0 && (
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase">
+          <div className="p-4 border-b border-border">
+            <h4 className="text-xs font-medium text-muted-foreground mb-2 uppercase">
               Background Tasks
             </h4>
             <div className="space-y-2">
               {activeBackgroundTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
-                >
+                <div key={task.id} className="p-3 bg-card rounded-lg border border-border">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {task.name}
-                    </span>
-                    <span className="text-xs text-gray-500">{task.progress}%</span>
+                    <span className="text-sm font-medium text-foreground">{task.name}</span>
+                    <span className="text-xs text-muted-foreground">{task.progress}%</span>
                   </div>
                   {task.description && (
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                      {task.description}
-                    </p>
+                    <p className="text-xs text-muted-foreground mb-2">{task.description}</p>
                   )}
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                  <div className="w-full bg-muted rounded-full h-1.5">
                     <div
                       className="bg-blue-600 h-1.5 rounded-full transition-all"
                       style={{ width: `${task.progress}%` }}
@@ -109,8 +100,8 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
 
         {/* Active Agents */}
         {activeAgents.length > 0 && (
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase flex items-center gap-1">
+          <div className="p-4 border-b border-border">
+            <h4 className="text-xs font-medium text-muted-foreground mb-2 uppercase flex items-center gap-1">
               <Users size={12} />
               Active Agents
             </h4>
@@ -121,20 +112,16 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
                   className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800"
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {agent.name}
-                    </span>
+                    <span className="text-sm font-medium text-foreground">{agent.name}</span>
                     <span className="text-xs text-purple-600 dark:text-purple-400">
                       {agent.status}
                     </span>
                   </div>
                   {agent.currentStep && (
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                      {agent.currentStep}
-                    </p>
+                    <p className="text-xs text-muted-foreground mb-2">{agent.currentStep}</p>
                   )}
                   {agent.progress > 0 && (
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                    <div className="w-full bg-muted rounded-full h-1.5">
                       <div
                         className="bg-purple-600 h-1.5 rounded-full transition-all"
                         style={{ width: `${agent.progress}%` }}
@@ -149,8 +136,8 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
 
         {/* Recent File Operations */}
         {recentFileOps.length > 0 && (
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase flex items-center gap-1">
+          <div className="p-4 border-b border-border">
+            <h4 className="text-xs font-medium text-muted-foreground mb-2 uppercase flex items-center gap-1">
               <FileText size={12} />
               Recent File Operations
             </h4>
@@ -158,17 +145,15 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
               {recentFileOps.map((op) => (
                 <div
                   key={op.id}
-                  className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-900 rounded text-xs"
+                  className="flex items-center gap-2 p-2 hover:bg-accent rounded text-xs"
                 >
                   {op.success ? (
                     <CheckCircle size={14} className="text-green-500 shrink-0" />
                   ) : (
                     <XCircle size={14} className="text-red-500 shrink-0" />
                   )}
-                  <span className="text-gray-600 dark:text-gray-400 uppercase">{op.type}</span>
-                  <span className="flex-1 truncate text-gray-900 dark:text-gray-100 font-mono">
-                    {op.filePath}
-                  </span>
+                  <span className="text-muted-foreground uppercase">{op.type}</span>
+                  <span className="flex-1 truncate text-foreground font-mono">{op.filePath}</span>
                 </div>
               ))}
             </div>
@@ -177,8 +162,8 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
 
         {/* Recent Commands */}
         {recentTerminalCmds.length > 0 && (
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase flex items-center gap-1">
+          <div className="p-4 border-b border-border">
+            <h4 className="text-xs font-medium text-muted-foreground mb-2 uppercase flex items-center gap-1">
               <Terminal size={12} />
               Recent Commands
             </h4>
@@ -186,18 +171,16 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
               {recentTerminalCmds.map((cmd) => (
                 <div
                   key={cmd.id}
-                  className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-900 rounded text-xs"
+                  className="flex items-center gap-2 p-2 hover:bg-accent rounded text-xs"
                 >
                   {cmd.exitCode === 0 || cmd.exitCode === undefined ? (
                     <CheckCircle size={14} className="text-green-500 shrink-0" />
                   ) : (
                     <XCircle size={14} className="text-red-500 shrink-0" />
                   )}
-                  <span className="flex-1 truncate text-gray-900 dark:text-gray-100 font-mono">
-                    {cmd.command}
-                  </span>
+                  <span className="flex-1 truncate text-foreground font-mono">{cmd.command}</span>
                   {cmd.duration && (
-                    <span className="text-gray-500">
+                    <span className="text-muted-foreground">
                       {cmd.duration < 1000
                         ? `${cmd.duration}ms`
                         : `${(cmd.duration / 1000).toFixed(1)}s`}
@@ -212,7 +195,7 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
         {/* Recent Tool Executions */}
         {recentToolExecs.length > 0 && (
           <div className="p-4">
-            <h4 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase flex items-center gap-1">
+            <h4 className="text-xs font-medium text-muted-foreground mb-2 uppercase flex items-center gap-1">
               <Wrench size={12} />
               Recent Tool Executions
             </h4>
@@ -234,7 +217,7 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
                   <ToolCallCard
                     key={exec.id}
                     toolCall={toolCall}
-                    className="bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700"
+                    className="bg-card border-border"
                     showParameters={false}
                   />
                 );
@@ -249,9 +232,9 @@ export const ActiveOperationsSection: React.FC<ActiveOperationsSectionProps> = (
           recentTerminalCmds.length === 0 &&
           recentToolExecs.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
-              <Clock size={48} className="text-gray-300 dark:text-gray-600 mb-4" />
-              <p className="text-sm text-gray-600 dark:text-gray-400">No active operations</p>
-              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+              <Clock size={48} className="text-muted-foreground mb-4" />
+              <p className="text-sm text-muted-foreground">No active operations</p>
+              <p className="text-xs text-muted-foreground mt-1">
                 Operations will appear here as they execute
               </p>
             </div>

@@ -98,11 +98,11 @@ export const FollowUpSuggestions: React.FC<FollowUpSuggestionsProps> = ({
             'bg-white/5 hover:bg-white/10',
             'border border-white/10',
             'rounded-full px-3 py-1.5',
-            'text-xs text-white/70 hover:text-white/90',
+            'text-xs text-foreground/70 hover:text-foreground/90',
             'transition-colors cursor-pointer',
           )}
         >
-          <span className="text-white/50">{suggestion.icon}</span>
+          <span className="text-foreground/50">{suggestion.icon}</span>
           {suggestion.label}
         </button>
       ))}

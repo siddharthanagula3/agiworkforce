@@ -101,13 +101,13 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
       <button
         type="button"
         onClick={onCopy}
-        className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+        className="p-1.5 hover:bg-accent rounded transition-colors"
         title="Copy message"
       >
         {copied ? (
           <Check size={14} className="text-emerald-500" />
         ) : (
-          <Copy size={14} className="text-zinc-600 dark:text-zinc-400" />
+          <Copy size={14} className="text-muted-foreground" />
         )}
       </button>
 
@@ -121,9 +121,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
           onClick={onSpeak}
           className={cn(
             'p-1.5 rounded transition-colors',
-            isSpeaking
-              ? 'bg-teal-500/20 text-teal-400 hover:bg-teal-500/30'
-              : 'hover:bg-zinc-200 dark:hover:bg-zinc-700',
+            isSpeaking ? 'bg-teal-500/20 text-teal-400 hover:bg-teal-500/30' : 'hover:bg-accent',
           )}
           title={isSpeaking ? 'Stop speaking' : 'Read aloud'}
           aria-label={isSpeaking ? 'Stop reading aloud' : 'Read message aloud'}
@@ -131,7 +129,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
           {isSpeaking ? (
             <Square size={14} className="text-teal-400" />
           ) : (
-            <Volume2 size={14} className="text-zinc-600 dark:text-zinc-400" />
+            <Volume2 size={14} className="text-muted-foreground" />
           )}
         </button>
       )}
@@ -140,13 +138,13 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
       <button
         type="button"
         onClick={onBookmark}
-        className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+        className="p-1.5 hover:bg-accent rounded transition-colors"
         title={bookmarked ? 'Remove bookmark' : 'Bookmark message'}
       >
         {bookmarked ? (
           <BookmarkCheck size={14} className="text-amber-500" />
         ) : (
-          <Bookmark size={14} className="text-zinc-600 dark:text-zinc-400" />
+          <Bookmark size={14} className="text-muted-foreground" />
         )}
       </button>
 
@@ -155,10 +153,10 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
         <button
           type="button"
           onClick={onFork}
-          className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+          className="p-1.5 hover:bg-accent rounded transition-colors"
           title="Fork conversation from here"
         >
-          <GitFork size={14} className="text-zinc-600 dark:text-zinc-400" />
+          <GitFork size={14} className="text-muted-foreground" />
         </button>
       )}
 
@@ -169,19 +167,17 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
           onClick={onToggleReactionPicker}
           className={cn(
             'p-1.5 rounded transition-colors',
-            showReactionPicker
-              ? 'bg-zinc-200 dark:bg-zinc-700'
-              : 'hover:bg-zinc-200 dark:hover:bg-zinc-700',
+            showReactionPicker ? 'bg-accent' : 'hover:bg-accent',
           )}
           title="Add reaction"
         >
-          <SmilePlus size={14} className="text-zinc-600 dark:text-zinc-400" />
+          <SmilePlus size={14} className="text-muted-foreground" />
         </button>
 
         {/* Reaction picker dropdown */}
         {showReactionPicker && (
           <div
-            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 flex items-center gap-0.5 p-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full shadow-lg z-10"
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 flex items-center gap-0.5 p-1 bg-card border border-border rounded-full shadow-lg z-10"
             onClick={(e) => e.stopPropagation()}
           >
             {reactionConfigs.map((reaction) => (
@@ -190,7 +186,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
                 type="button"
                 onClick={() => onReaction(reaction.type)}
                 className={cn(
-                  'p-1.5 rounded-full transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-700',
+                  'p-1.5 rounded-full transition-colors hover:bg-accent',
                   reactions?.includes(reaction.type) && 'bg-primary/20 text-primary',
                 )}
                 title={reaction.label}
@@ -204,7 +200,7 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
 
       {/* Existing reactions display */}
       {reactions && reactions.length > 0 && (
-        <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-full">
+        <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-muted rounded-full">
           {reactionConfigs
             .filter((r) => reactions?.includes(r.type))
             .map((reaction) => (
@@ -226,10 +222,10 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
         <button
           type="button"
           onClick={onRegenerate}
-          className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+          className="p-1.5 hover:bg-accent rounded transition-colors"
           title="Regenerate"
         >
-          <RotateCw size={14} className="text-zinc-600 dark:text-zinc-400" />
+          <RotateCw size={14} className="text-muted-foreground" />
         </button>
       )}
 
@@ -250,10 +246,10 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
         <button
           type="button"
           onClick={onStartEdit}
-          className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+          className="p-1.5 hover:bg-accent rounded transition-colors"
           title="Edit message"
         >
-          <Edit2 size={14} className="text-zinc-600 dark:text-zinc-400" />
+          <Edit2 size={14} className="text-muted-foreground" />
         </button>
       )}
 
@@ -262,10 +258,10 @@ const MessageActionsComponent: React.FC<MessageActionsProps> = ({
         <button
           type="button"
           onClick={onDelete}
-          className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+          className="p-1.5 hover:bg-accent rounded transition-colors"
           title="Delete"
         >
-          <Trash2 size={14} className="text-zinc-600 dark:text-zinc-400" />
+          <Trash2 size={14} className="text-muted-foreground" />
         </button>
       )}
     </div>

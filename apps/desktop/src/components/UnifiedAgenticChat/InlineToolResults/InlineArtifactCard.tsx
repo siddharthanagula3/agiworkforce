@@ -65,16 +65,16 @@ export function InlineArtifactCard({ result, status, onExpand }: ToolResultProps
 
   if (status === 'running') {
     return (
-      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-zinc-900/80 border border-white/10">
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-card/80 border border-white/10">
         <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-        <span className="text-sm text-zinc-400">Creating artifact...</span>
+        <span className="text-sm text-muted-foreground">Creating artifact...</span>
       </div>
     );
   }
 
   if (status === 'failed' || status === 'error') {
     return (
-      <div className="mt-3 p-3 rounded-lg bg-zinc-900/80 border border-red-500/30">
+      <div className="mt-3 p-3 rounded-lg bg-card/80 border border-red-500/30">
         <div className="flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <p className="text-sm text-red-300 font-medium">Artifact creation failed</p>
@@ -89,18 +89,18 @@ export function InlineArtifactCard({ result, status, onExpand }: ToolResultProps
   const config = TYPE_CONFIG_MAP[type] ?? DEFAULT_TYPE_CONFIG;
 
   return (
-    <div className="mt-3 rounded-lg bg-zinc-900/80 border border-white/10 overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2.5 bg-zinc-800/60 border-b border-white/10">
+    <div className="mt-3 rounded-lg bg-card/80 border border-white/10 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/60 border-b border-white/10">
         <span className={cn(config.color)}>{config.icon}</span>
-        <span className="text-sm font-medium text-zinc-200 flex-1 truncate">{title}</span>
+        <span className="text-sm font-medium text-foreground flex-1 truncate">{title}</span>
         <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', config.badge)}>
           {language ?? config.label}
         </span>
       </div>
 
       {contentPreview && (
-        <div className="px-3 py-2 bg-zinc-950/40 max-h-24 overflow-hidden">
-          <pre className="text-xs font-mono text-zinc-500 whitespace-pre-wrap break-words line-clamp-4">
+        <div className="px-3 py-2 bg-background/40 max-h-24 overflow-hidden">
+          <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-words line-clamp-4">
             {contentPreview}
           </pre>
         </div>

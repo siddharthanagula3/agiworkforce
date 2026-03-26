@@ -60,20 +60,20 @@ const MessageAttachmentsComponent: React.FC<MessageAttachmentsProps> = ({
                 Your browser does not support video playback.
               </video>
             ) : isAudio && mediaSource ? (
-              <div className="flex items-center gap-3 px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
+              <div className="flex items-center gap-3 px-4 py-3 bg-muted rounded-lg">
                 <audio src={mediaSource} controls className="w-full max-w-xs">
                   Your browser does not support audio playback.
                 </audio>
               </div>
             ) : (
-              <div className="flex items-center gap-3 px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
-                <FileText className="h-5 w-5 text-zinc-500" />
+              <div className="flex items-center gap-3 px-4 py-3 bg-muted rounded-lg">
+                <FileText className="h-5 w-5 text-muted-foreground" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                  <div className="text-sm font-medium text-foreground truncate">
                     {attachment.name}
                   </div>
                   {attachment.size && (
-                    <div className="text-xs text-zinc-500 message-meta">
+                    <div className="text-xs text-muted-foreground message-meta">
                       {(attachment.size / 1024).toFixed(1)} KB
                     </div>
                   )}
