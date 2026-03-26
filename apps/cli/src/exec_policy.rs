@@ -10,17 +10,25 @@ pub struct PolicyRule {
     pub source: String,
 }
 
+/// The effect of a matched policy rule on command execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PolicyEffect {
+    /// Permit the command to execute without user confirmation.
     Allow,
+    /// Block the command from executing. Deny always takes precedence over Allow.
     Deny,
 }
 
+/// Matching strategy for a policy rule against a command string.
 #[derive(Debug, Clone)]
 pub enum PolicyMatcher {
+    /// Match if the command starts with the given prefix string.
     Prefix(String),
+    /// Match if the command matches the given regular expression.
     Regex(regex::Regex),
+    /// Match if the first word of the command equals the given program name.
     Heuristic(String),
+    /// Match if the base program name (without path) equals the given name.
     Program(String),
 }
 
@@ -99,8 +107,9 @@ impl ExecPolicy {
     }
     pub fn evaluate(&self, command: &str) -> PolicyEvaluation {
         let trimmed = command.trim();
-        for rule in &self.rules {
-            let matches = match &rule.matcher {
+
+        let rule_matches = |rule: &PolicyRule| -> bool {
+            match &rule.matcher {
                 PolicyMatcher::Prefix(p) => trimmed.starts_with(p.as_str()),
                 PolicyMatcher::Program(p) => {
                     trimmed
@@ -116,18 +125,27 @@ impl ExecPolicy {
                 PolicyMatcher::Heuristic(cmd) => {
                     trimmed.split_whitespace().next().unwrap_or("") == cmd.as_str()
                 }
-            };
-            if matches {
-                return match rule.effect {
-                    PolicyEffect::Allow => PolicyEvaluation::Allowed {
-                        rule: rule.source.clone(),
-                    },
-                    PolicyEffect::Deny => PolicyEvaluation::Denied {
-                        rule: rule.source.clone(),
-                    },
+            }
+        };
+
+        // Deny takes precedence: scan ALL deny rules first, regardless of order.
+        for rule in &self.rules {
+            if rule.effect == PolicyEffect::Deny && rule_matches(rule) {
+                return PolicyEvaluation::Denied {
+                    rule: rule.source.clone(),
                 };
             }
         }
+
+        // Then check allow rules (first match wins among allows).
+        for rule in &self.rules {
+            if rule.effect == PolicyEffect::Allow && rule_matches(rule) {
+                return PolicyEvaluation::Allowed {
+                    rule: rule.source.clone(),
+                };
+            }
+        }
+
         PolicyEvaluation::NoMatch
     }
 }

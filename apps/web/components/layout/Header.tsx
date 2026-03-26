@@ -28,7 +28,7 @@ const featureItems = [
     name: 'AI Skills',
     href: '/features/ai-skills',
     icon: Users,
-    description: '140+ specialized AI employees',
+    description: 'Specialized AI employees across multiple categories',
   },
   {
     name: 'Plugins & MCP',

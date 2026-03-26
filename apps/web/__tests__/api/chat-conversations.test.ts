@@ -37,6 +37,10 @@ const mockSupabaseAuth = {
 };
 
 const mockSupabaseData = {
+  auth: {
+    getUser: vi.fn(),
+    getSession: vi.fn(),
+  },
   from: vi.fn(),
 };
 
@@ -83,8 +87,13 @@ describe('Chat Conversations API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user
+    // Default: authenticated user (both auth and service-role clients)
     mockSupabaseAuth.auth.getUser.mockResolvedValue({
+      data: { user: mockUser },
+      error: null,
+    });
+    // Service-role client is used by getAuthenticatedUser for Bearer token auth
+    mockSupabaseData.auth.getUser.mockResolvedValue({
       data: { user: mockUser },
       error: null,
     });
@@ -131,7 +140,7 @@ describe('Chat Conversations API', () => {
       });
 
       it('should reject invalid Bearer token', async () => {
-        mockSupabaseAuth.auth.getUser.mockResolvedValue({
+        mockSupabaseData.auth.getUser.mockResolvedValue({
           data: { user: null },
           error: { message: 'Invalid token' },
         });

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { View, Pressable, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -167,14 +167,20 @@ function DotIndicator({ count, active }: { count: number; active: number }) {
   ).current;
 
   // Animate widths whenever active changes
-  widths.forEach((anim, i) => {
-    Animated.spring(anim, {
-      toValue: i === active ? 1 : 0,
-      useNativeDriver: false,
-      tension: 120,
-      friction: 10,
-    }).start();
-  });
+  useEffect(() => {
+    const animations = widths.map((anim, i) =>
+      Animated.spring(anim, {
+        toValue: i === active ? 1 : 0,
+        useNativeDriver: false,
+        tension: 120,
+        friction: 10,
+      }),
+    );
+    animations.forEach((a) => a.start());
+    return () => {
+      animations.forEach((a) => a.stop());
+    };
+  }, [active, widths]);
 
   return (
     <View className="flex-row justify-center gap-2 pb-4">

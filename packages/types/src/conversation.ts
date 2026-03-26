@@ -140,7 +140,7 @@ export type ActionStatus =
 // ============================================================================
 
 /** Roles a message can have in a conversation. */
-export type MessageRole = 'user' | 'assistant' | 'system';
+export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
 /**
  * Artifact types produced by AI models.
@@ -180,7 +180,7 @@ export interface ArtifactBase {
 }
 
 /** Risk level for tool approval requests. */
-export type RiskLevel = 'low' | 'medium' | 'high';
+export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
 /** Tool approval request — shared contract for desktop and mobile. */
 export interface ApprovalRequestBase {

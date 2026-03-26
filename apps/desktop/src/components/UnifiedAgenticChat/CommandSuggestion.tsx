@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Copy, Edit3, Play, Terminal, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
@@ -38,13 +38,21 @@ export function CommandSuggestion({
   const [copied, setCopied] = useState(false);
   const [executed, setExecuted] = useState(false);
   const [result, setResult] = useState<ExecuteResult | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(editedCommand);
       setCopied(true);
       toast.success('Command copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Failed to copy command');
     }

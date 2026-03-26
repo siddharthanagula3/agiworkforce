@@ -455,7 +455,7 @@ pub async fn get_command_history(
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     let commands = stmt
-        .query_map(params![session_id, limit], |row| row.get(0))
+        .query_map(params![session_id, limit as i64], |row| row.get(0))
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?
         .collect::<std::result::Result<Vec<String>, _>>()
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;

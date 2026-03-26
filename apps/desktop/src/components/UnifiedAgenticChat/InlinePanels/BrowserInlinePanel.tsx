@@ -5,7 +5,7 @@
  * and action history.
  */
 
-import React, { memo, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { InlinePanel as InlinePanelType } from '../../../stores/unifiedChatStore';
@@ -21,7 +21,14 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
   ({ panel, onToggleCollapse }) => {
     const [copied, setCopied] = useState(false);
     const [imageLoading, setImageLoading] = useState(true);
+    const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const browserContent = panel.content.browser;
+
+    useEffect(() => {
+      return () => {
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      };
+    }, []);
 
     if (!browserContent) {
       return null;
@@ -31,7 +38,8 @@ const BrowserInlinePanelComponent: React.FC<BrowserInlinePanelProps> = memo(
       navigator.clipboard.writeText(browserContent.url);
       setCopied(true);
       toast.success('URL copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     };
 
     const handleOpenInBrowser = () => {

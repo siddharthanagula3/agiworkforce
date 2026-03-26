@@ -39,10 +39,7 @@ async function handleTranscriptions(request: NextRequest) {
 
   const token = authHeader.substring(7);
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, flowType: 'pkce' },
-  });
+  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) {

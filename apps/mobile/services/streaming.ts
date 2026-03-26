@@ -30,8 +30,15 @@ const RECONNECT_DELAYS = [1_000, 2_500, 5_000];
  */
 function isNetworkError(err: unknown): boolean {
   if (err instanceof TypeError) {
-    // fetch throws TypeError on network failure / stream read failure
-    return true;
+    // fetch throws TypeError on network failure, but also for malformed requests.
+    // Only treat network-specific messages as transient (worth retrying).
+    const msg = err.message.toLowerCase();
+    return (
+      msg.includes('network') ||
+      msg.includes('fetch') ||
+      msg.includes('load failed') ||
+      msg.includes('cancelled')
+    );
   }
   if (
     err instanceof AbortError ||
@@ -162,10 +169,11 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  // Combine caller signal with streaming timeout
-  const timeoutController = new AbortController();
-  const timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
-  const combinedSignal = signal
+  // Per-attempt timeout — each stream attempt gets a fresh timeout so backoff
+  // waits don't eat into the next attempt's time budget.
+  let timeoutController = new AbortController();
+  let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
+  let combinedSignal = signal
     ? combineAbortSignals([signal, timeoutController.signal])
     : timeoutController.signal;
 
@@ -209,6 +217,14 @@ export async function streamChat(
         clearTimeout(timeoutId);
         return;
       }
+
+      // Reset timeout for this new attempt so backoff waits don't eat the budget
+      clearTimeout(timeoutId);
+      timeoutController = new AbortController();
+      timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
+      combinedSignal = signal
+        ? combineAbortSignals([signal, timeoutController.signal])
+        : timeoutController.signal;
     }
 
     try {

@@ -68,6 +68,11 @@ impl Database {
         f(&conn)
     }
 
+    /// DEPRECATED: Prefer `with_connection()` which ensures the lock is not held across await points.
+    /// Holding this `std::sync::Mutex` lock across an `.await` can starve the Tokio runtime
+    /// because the lock is not async-aware. Callers that receive this `Arc<Mutex<Connection>>`
+    /// must take care to acquire the lock, execute their query, and release the lock
+    /// synchronously — never holding it across an `.await` boundary.
     pub fn get_connection(&self) -> Arc<Mutex<Connection>> {
         Arc::clone(&self.conn)
     }

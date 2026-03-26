@@ -185,6 +185,9 @@ export const useCrossDeviceStore = create<CrossDeviceStore>()(
     {
       name: 'cross-device-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[crossDeviceStore] Hydration failed:', error);
+      },
       partialize: (state) => ({
         // Cap persisted data: keep newest 50 threads, 100 messages each
         threads: state.threads.slice(0, 50).map((t) => ({

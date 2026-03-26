@@ -236,12 +236,17 @@ export const useIntegrationStore = create<IntegrationState>()(
       // ------------------------------------------------------------------
 
       checkDeviceIntegrations: async () => {
-        set({ deviceLoading: true });
+        set({ deviceLoading: true, error: null });
         try {
           const [calStat, contactsStat, notifResult] = await Promise.all([
-            getCalendarPermissionStatus(),
-            getContactsPermissionStatus(),
-            Notifications.getPermissionsAsync(),
+            getCalendarPermissionStatus().catch(() => 'undetermined' as PermissionStatus),
+            getContactsPermissionStatus().catch(() => 'undetermined' as PermissionStatus),
+            Notifications.getPermissionsAsync().catch(
+              () =>
+                ({
+                  status: 'undetermined' as Notifications.PermissionStatus,
+                }) as Notifications.NotificationPermissionsStatus,
+            ),
           ]);
 
           const notifPerm = notifResult.status as Notifications.PermissionStatus;
@@ -284,6 +289,11 @@ export const useIntegrationStore = create<IntegrationState>()(
           ];
 
           set({ deviceIntegrations: next });
+        } catch (err) {
+          console.warn('[integrationStore] checkDeviceIntegrations failed:', err);
+          set({
+            error: err instanceof Error ? err.message : 'Failed to check device integrations',
+          });
         } finally {
           set({ deviceLoading: false });
         }
@@ -330,6 +340,9 @@ export const useIntegrationStore = create<IntegrationState>()(
     {
       name: 'integration-store',
       storage: createJSONStorage(() => mmkvStorage),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[integrationStore] Hydration failed:', error);
+      },
       partialize: (state) => ({
         // Persist platform + connector connection state — not loading/error/device status
         platforms: state.platforms,

@@ -31,6 +31,16 @@ function setCachedAccountStatus(userId: string, status: string): void {
   accountStatusCache.set(userId, { status, cachedAt: Date.now() });
 }
 
+// Periodic cleanup of expired cache entries to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, entry] of accountStatusCache) {
+    if (now - entry.cachedAt > ACCOUNT_STATUS_CACHE_TTL_MS) {
+      accountStatusCache.delete(userId);
+    }
+  }
+}, 300_000);
+
 declare global {
   namespace Express {
     interface Request {

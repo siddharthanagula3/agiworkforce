@@ -234,7 +234,7 @@ class AnalyticsService {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
     return data;
   }

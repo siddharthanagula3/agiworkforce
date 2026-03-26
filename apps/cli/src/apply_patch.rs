@@ -14,7 +14,20 @@ pub struct PatchResult {
 pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchResult> {
     let cwd = cwd.unwrap_or_else(|| Path::new("."));
     let tmp = std::env::temp_dir().join(format!("agi-patch-{}.patch", uuid::Uuid::new_v4()));
-    std::fs::write(&tmp, patch)?;
+    // Write with restricted permissions (0o600) to prevent other users from reading
+    {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        }
+        file.write_all(patch.as_bytes())?;
+    }
     let stat = tokio::process::Command::new("git")
         .args(["apply", "--stat"])
         .arg(&tmp)

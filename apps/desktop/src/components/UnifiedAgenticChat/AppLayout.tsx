@@ -28,6 +28,8 @@ import { SkillMarketplace } from '../SkillMarketplace/SkillMarketplace';
 import { ScheduledTasksPanel } from '../Scheduler/ScheduledTasksPanel';
 import { ArtifactsGallery } from '../Artifacts/ArtifactsGallery';
 import { ShareConversationDialog } from './ShareConversationDialog';
+import { ExecutionSidecar } from '../ExecutionSidecar';
+import { ReminderList } from '../Reminders/ReminderList';
 
 // Lazy load MediaLab for code splitting
 const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
@@ -82,6 +84,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     | 'skills'
     | 'schedules'
     | 'artifacts'
+    | 'reminders'
     | null;
   const [activeRightPanel, setActiveRightPanel] = useState<RightPanel>(null);
   const RIGHT_PANEL_WIDTH = 420;
@@ -279,6 +282,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         e.preventDefault();
         openRightPanel('artifacts');
       }
+
+      if (isMeta && e.shiftKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        openRightPanel('reminders');
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -321,6 +329,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         onOpenMcpWorkspace={() => openRightPanel('mcp-workspace')}
         onOpenMcpBundles={() => openRightPanel('mcp-bundles')}
         onOpenCanvas={() => openRightPanel('canvas')}
+        onOpenCollaboration={() => useUnifiedChatStore.getState().openSidecar('agent-collab')}
       />
 
       {}
@@ -377,6 +386,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           />
         </div>
       )}
+
+      {/* Execution Sidecar — computer use visualization panel */}
+      <ExecutionSidecar />
 
       {/* Dialogs */}
       <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
@@ -473,7 +485,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                               ? 'Schedules'
                               : activeRightPanel === 'artifacts'
                                 ? 'Artifacts Gallery'
-                                : activeRightPanel}
+                                : activeRightPanel === 'reminders'
+                                  ? 'Reminders'
+                                  : activeRightPanel}
             </h2>
             <button
               type="button"
@@ -512,6 +526,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {activeRightPanel === 'skills' && <SkillMarketplace />}
             {activeRightPanel === 'schedules' && <ScheduledTasksPanel />}
             {activeRightPanel === 'artifacts' && <ArtifactsGallery />}
+            {activeRightPanel === 'reminders' && <ReminderList />}
           </div>
         </div>
       )}

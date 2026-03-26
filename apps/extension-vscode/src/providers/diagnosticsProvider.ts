@@ -6,7 +6,7 @@
  */
 
 import * as vscode from 'vscode';
-import { chatCompletion, type ChatMessage } from '../utils/api';
+import { chatCompletion, type LlmChatMessage } from '../utils/api';
 
 const DIAGNOSTIC_SOURCE = 'AGI Workforce';
 
@@ -39,7 +39,7 @@ export class AgiDiagnosticsProvider implements vscode.Disposable {
     const lang = editor.document.languageId;
     const startLine = selection.isEmpty ? 0 : selection.start.line;
 
-    const messages: ChatMessage[] = [
+    const messages: LlmChatMessage[] = [
       {
         role: 'system',
         content:
@@ -122,7 +122,7 @@ function parseReviewResponse(
 
         if (!isNaN(lineOffset) && message !== '') {
           issues.push({
-            lineOffset: isNaN(lineOffset) ? 0 : lineOffset,
+            lineOffset,
             severity: parseSeverity(severityStr),
             message,
           });

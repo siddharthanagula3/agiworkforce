@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-`agiworkforce-cli` — a multi-model AI agent CLI. Binary name: `agiworkforce`. Rust crate at `apps/cli/` within the AGI Workforce monorepo. ~39K LOC across 52 modules, plus a 104K LOC TUI subsystem (`src/tui/`) ported from Codex CLI.
+`agiworkforce-cli` — a multi-model AI agent CLI. Binary name: `agiworkforce`. Rust crate at `apps/cli/` within the AGI Workforce monorepo. ~39K LOC across 50 modules, plus a 104K LOC TUI subsystem (`src/tui/`, 124 .rs files) ported from Codex CLI.
 
 ## Build & Run Commands
 
@@ -23,9 +23,10 @@ cargo test -p agiworkforce-cli -- test_name # Single test
 ## Lint Configuration
 
 Defined in `Cargo.toml` `[lints.rust]`:
+
 - `deny`: `unsafe_code`, `dead_code`, `unused_imports`, `unused_variables`, `unused_mut`
 - `allow`: `clippy::await_holding_lock`
-- Three modules use `#[allow(dead_code)]`: `a2a`, `marketplace`, `memory_pipeline`, `skill_learner` — these are in-progress
+- Only `a2a` has `#[allow(dead_code)]` in main.rs. `marketplace`, `memory_pipeline`, `skill_learner` exist as files but are NOT declared in main.rs (unwired)
 
 ## Architecture
 
@@ -37,13 +38,14 @@ main.rs (Cli struct via clap derive)
   ├─ PROMPT arg → agent::execute_prompt() (one-shot agentic turn)
   ├─ --daemon → daemon::run_daemon() (cron/webhooks/file watchers via Axum)
   └─ Subcommand → exec, review, apply, sandbox, mcp-server, app-server,
-                   resume, fork, cloud, plugin, features, execpolicy,
-                   ecosystem, sync, login, logout, auth-status
+                   resume, fork, cloud, plugin, features, execpolicy
+                   (ecosystem, sync, login, logout, auth-status — NOT yet implemented)
 ```
 
 ### Core Loop (agent.rs)
 
 The agentic loop in `agent.rs` drives all execution:
+
 1. Assembles system prompt via `context.rs` (memory tiers + CLAUDE.md + skills + MCP tools)
 2. Sends messages to LLM via `models.rs` (streaming SSE)
 3. Receives tool calls → classifies safety via `safety.rs` → executes via `tools.rs`
@@ -52,27 +54,32 @@ The agentic loop in `agent.rs` drives all execution:
 
 ### Module Map (by layer)
 
-**LLM & Providers**: `models.rs` (7 providers: Anthropic/OpenAI/Google/Ollama/Mistral/xAI/DeepSeek, SSE parser), `provider.rs` (token limits, costs, fallback chains), `model_catalog.rs` (3-tier registry: bundled → disk cache 5min TTL → remote fetch from models.dev)
+**LLM & Providers**: `models.rs` (8 providers: Anthropic/OpenAI/Google/Ollama/Mistral/xAI/DeepSeek/OllamaCloud, SSE parser), `provider.rs` (token limits, costs, fallback chains), `model_catalog.rs` (3-tier registry: bundled → disk cache 5min TTL → remote fetch from models.dev), `routing/` (composable model routing strategies: fallback, cost-aware, default — chain-of-responsibility pattern)
 
-**Agent & Tools**: `agent.rs` (agentic loop), `tools.rs` (9 built-in tools + 4 team tools), `safety.rs` (3-tier: safe/unknown/dangerous), `permissions.rs`, `subagent.rs` (parallel delegation), `teams.rs` (multi-agent messaging)
+**Agent & Tools**: `agent.rs` (agentic loop with context normalization), `agents.rs` (multi-agent), `tools.rs` (18 built-in tools + 4 team tools: read_file, write_file, edit_file, run_command, search_files, list_directory, web_search, web_fetch, apply_patch, grep_files, glob, batch, multiedit, todo_read, todo_write, ask_user, plan_mode, read_many_files), `tool_search.rs`, `safety.rs` (3-tier: safe/unknown/dangerous with quote-aware parsing + subshell detection), `permissions.rs`, `subagent.rs` (parallel delegation with JSON metadata support), `teams.rs` (multi-agent messaging)
 
-**Session & Memory**: `sessions.rs` (SQLite at `~/.agiworkforce/sessions.db`), `memory.rs` (3-tier: global/project/local), `compaction.rs` (context window management), `context.rs` (system prompt assembly), `history.rs`
+**Session & Memory**: `sessions.rs` (SQLite at `~/.agiworkforce/sessions.db`), `conversations.rs`, `memory.rs` (3-tier: global/project/local), `memory_pipeline.rs` (2-phase memory extraction+consolidation), `compaction.rs` (context window management), `context.rs` (system prompt assembly), `history.rs`
 
-**Config**: `config.rs` (4-layer TOML merge: bundled defaults → system `~/.agiworkforce/config.toml` → project `.agiworkforce/config.toml` → env vars)
+**Config & Policy**: `config.rs` (4-layer TOML merge: bundled defaults → system `~/.agiworkforce/config.toml` → project `.agiworkforce/config.toml` → env vars), `policy/` (declarative TOML workspace policy engine: tool+pattern+priority rules in `.agiworkforce/policy.toml`)
 
 **Interactive**: `repl.rs` (rustyline editor, 30+ slash commands, vim mode via `AGIWORKFORCE_VI=1`), `voice.rs` (Whisper STT via cpal/hound), `onboarding.rs` (first-run provider setup)
 
 **Auth**: `auth.rs` (OAuth refresh + API key management, tokens at `~/.agiworkforce/auth.json`), `oauth.rs` (OAuth flow), `agiworkforce-login` crate
 
-**Extensibility**: `mcp.rs` (MCP stdio client, JSON-RPC 2.0), `plugins.rs` (discovery from `~/.agiworkforce/plugins/`), `skills.rs` (YAML frontmatter markdown, keyword matching), `hooks.rs` (event triggers), `ecosystem.rs` (scans Claude/Codex/Cursor/Gemini dotfiles)
+**Extensibility**: `mcp.rs` (MCP stdio client, JSON-RPC 2.0), `plugins.rs` (discovery from `~/.agiworkforce/plugins/`), `marketplace.rs` (remote plugin search/install/uninstall), `skills.rs` (YAML frontmatter markdown, keyword matching, env-var dependency tracking), `skill_learner.rs` (auto-learns skills from repeated tool patterns), `hooks.rs` (event triggers), `ecosystem.rs` (scans 14 competing tools' dotfiles, imports MCP configs)
 
-**Infrastructure**: `daemon.rs` (Axum HTTP for webhooks, cron, file watchers), `sandbox.rs` (macOS Seatbelt, Linux Bubblewrap/Landlock), `a2a.rs` (agent-to-agent protocol), `cloud.rs` (BYOK cloud tasks), `sync.rs` (dotfile export/import)
+**Infrastructure**: `daemon.rs` (Axum HTTP for webhooks, cron, file watchers with rate limiting), `sandbox.rs` (deny-default macOS Seatbelt + PID/UTS-isolated Linux Bubblewrap), `a2a.rs` (agent-to-agent protocol), `cloud.rs` (BYOK cloud tasks), `sync.rs` (dotfile export/import with path traversal protection), `init.rs` (directory structure setup), `errors.rs` (error types)
 
-**TUI**: `src/tui/` (121 files, ratatui-based full-screen UI ported from Codex CLI — chat widget, diff rendering, history, audio)
+**Output & Rendering**: `output.rs` (structured output with named constants), `markdown.rs` (terminal markdown rendering with table warning), `shell_snapshot.rs` (shell state capture)
+
+**Codex CLI Parity**: `app_server.rs`, `apply_patch.rs`, `exec_policy.rs` (deny-first evaluation with doc'd types), `review.rs`, `model_catalog.rs` (named default constants), `models_cache.rs`, `project_registry.rs` — ported from Codex CLI crates
+
+**TUI**: `src/tui/` (124 .rs files + 226 snapshot tests, ratatui-based full-screen UI ported from Codex CLI — chat widget, diff rendering, history, audio)
 
 ### Tool Safety Classification
 
 Tools are classified into three tiers that determine confirmation behavior:
+
 - **Safe** (`-y` auto-approves): `read_file`, `search_files`, `list_directory`, `web_search`, `web_fetch`
 - **Unknown** (always prompts): `mkdir`, `cp`, custom scripts
 - **Dangerous** (always prompts, even with `-y`): `sudo`, `rm -rf`, `git push --force`, `dd`
@@ -90,23 +97,23 @@ Later layers override earlier ones. User model overrides in config always win ov
 
 ### Storage Locations
 
-| Path | Purpose |
-|------|---------|
-| `~/.agiworkforce/config.toml` | Global config |
-| `~/.agiworkforce/auth.json` | OAuth tokens + API keys (0o600) |
-| `~/.agiworkforce/sessions.db` | SQLite: messages, metadata, costs |
-| `~/.agiworkforce/cache/models.json` | Model catalog cache (5min TTL) |
-| `~/.agiworkforce/skills/` | Global skill files |
-| `~/.agiworkforce/plugins/` | Plugin registry |
-| `~/.agiworkforce/triggers.json` | Cron/webhook/file-watcher config |
-| `~/.agiworkforce/daemon-logs/` | Trigger execution logs |
-| `.agiworkforce/config.toml` | Project-level config |
-| `CLAUDE.md` (git root) | Project memory (auto-loaded into system prompt) |
+| Path                                | Purpose                                         |
+| ----------------------------------- | ----------------------------------------------- |
+| `~/.agiworkforce/config.toml`       | Global config                                   |
+| `~/.agiworkforce/auth.json`         | OAuth tokens + API keys (0o600)                 |
+| `~/.agiworkforce/sessions.db`       | SQLite: messages, metadata, costs               |
+| `~/.agiworkforce/cache/models.json` | Model catalog cache (5min TTL)                  |
+| `~/.agiworkforce/skills/`           | Global skill files                              |
+| `~/.agiworkforce/plugins/`          | Plugin registry                                 |
+| `~/.agiworkforce/triggers.json`     | Cron/webhook/file-watcher config                |
+| `~/.agiworkforce/daemon-logs/`      | Trigger execution logs                          |
+| `.agiworkforce/config.toml`         | Project-level config                            |
+| `CLAUDE.md` (git root)              | Project memory (auto-loaded into system prompt) |
 
 ## Key Dependencies
 
 - `tokio` (full) — async runtime
-- `clap` (derive) — CLI parsing with 20+ flags and 18 subcommands
+- `clap` (derive) — CLI parsing with 35+ flags and 12 subcommands
 - `reqwest` (stream, json) — HTTP client for LLM APIs
 - `rustyline` — terminal editor for REPL
 - `ratatui` + `crossterm` — full-screen TUI
@@ -120,7 +127,7 @@ Later layers override earlier ones. User model overrides in config always win ov
 ## Conventions & Gotchas
 
 - **No feature flags** in this crate — all capabilities compile unconditionally (unlike the desktop app). Platform-specific deps use `[target.'cfg(...)'.dependencies]` instead.
-- **`#[allow(dead_code)]` on modules** (`a2a`, `marketplace`, `memory_pipeline`, `skill_learner`) means they're wired but not fully called yet — don't delete the allow annotations.
+- **`#[allow(dead_code)]`**: Only `a2a` is wired in main.rs with this annotation. `marketplace`, `memory_pipeline`, `skill_learner` exist as files but are not declared as modules — they need `mod` declarations in main.rs before they can be used.
 - **Effort presets** (`--effort low/medium/high/max`) bundle `max_turns`, `max_tokens`, and `temperature` together — modify all three when changing a preset.
 - **Model catalog is 3-tier**: bundled defaults → disk cache → remote API. Never hardcode model IDs; read from the catalog or `models.json`.
 - **Context compaction** triggers automatically at 90% capacity. The summarization itself uses the same LLM, so compaction failures can cascade.

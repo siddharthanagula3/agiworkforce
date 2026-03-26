@@ -5,6 +5,8 @@ import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendButton } from './SendButton';
 import { CommandPalette } from './CommandPalette';
+import { AutoApproveToggle } from './AutoApproveToggle';
+import { TemporaryChatToggle } from './TemporaryChatToggle';
 import { VoiceInputButton } from '@/components/voice/VoiceInputButton';
 import { RecordingOverlay } from '@/components/voice/RecordingOverlay';
 import * as VoiceService from '@/services/voice';
@@ -289,6 +291,12 @@ export function ChatInput({
 
             {/* Model pill -- hidden during streaming to save space */}
             {!isStreaming && <ModelSelectorButton onPress={onOpenModelPicker ?? (() => {})} />}
+
+            {/* Auto-approve mode toggle */}
+            {!isStreaming && <AutoApproveToggle />}
+
+            {/* Temporary chat toggle */}
+            {!isStreaming && <TemporaryChatToggle />}
           </View>
 
           {/* Right group: [connectors] [mic] [send/stop] */}

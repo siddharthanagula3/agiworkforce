@@ -20,7 +20,9 @@ use crate::models::{ContentBlock, Message, MessageContent};
 pub const BYTES_PER_TOKEN: usize = 4;
 
 /// Warn user when context exceeds this fraction of the model's limit.
-pub const CONTEXT_WARN_THRESHOLD: f64 = 0.80;
+/// Auto-compaction triggers at 0.90 (see CompressionConfig); this is the
+/// earlier warning threshold.
+pub const CONTEXT_WARN_THRESHOLD: f64 = 0.85;
 
 /// Token budget to protect during compaction (keep the most recent content).
 /// Used by the compaction algorithm when deciding which messages to preserve.

@@ -22,7 +22,9 @@ import { Header } from '../components/layout/Header';
 import { SurfaceShowcase } from '../components/SurfaceShowcase';
 import { CtaSection } from '../components/marketing/CtaSection';
 import { MarketingFooter } from '../components/marketing/MarketingFooter';
+import { ScrollRevealInit } from '../components/marketing/ScrollRevealInit';
 import { AnimatedStats } from '../components/marketing/AnimatedStats';
+import { MARKETING } from '../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'AGI Workforce | AI Desktop Assistant',
@@ -69,12 +71,12 @@ const jsonLd = {
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'macOS, Windows, Linux',
   featureList: [
-    '20+ AI skills across 9 industries',
-    '1,300+ built-in IPC tools',
+    `AI skills across ${MARKETING.categories.display} categories`,
+    `${MARKETING.tools.display} built-in IPC tools`,
     'Computer use with 6-layer security (Rust)',
     'Parallel AI agent orchestration',
-    '70+ AI models across 25 providers',
-    '45MB native app (Rust/Tauri, not Electron)',
+    `${MARKETING.models.display} AI models across ${MARKETING.providers.display} providers`,
+    `${MARKETING.appSize.display} native app (Rust/Tauri, not Electron)`,
     'Mobile companion with live agent dashboard',
     'Privacy-first: all processing happens locally',
     'Bring Your Own Keys (BYOK) — AES-256 encrypted',
@@ -85,8 +87,8 @@ const jsonLd = {
 const features = [
   {
     icon: Users,
-    title: '20+ AI Skills',
-    desc: 'Pre-built AI specialists for healthcare, legal, finance, creative, education, and more. Start working in seconds — no setup, no prompt engineering.',
+    title: 'AI Skills',
+    desc: `Pre-built AI specialists across ${MARKETING.categories.display} categories — engineering, marketing, finance, legal, creative, and more. Start working in seconds.`,
     href: '/features/ai-skills',
   },
   {
@@ -122,10 +124,24 @@ const features = [
 ];
 
 const stats = [
-  { value: 70, suffix: '+', label: 'AI Models', description: 'across 25 providers' },
-  { value: 20, suffix: '+', label: 'AI Skills', description: '9 industries covered' },
-  { value: 45, suffix: 'MB', label: 'App size', description: 'native Rust binary' },
-  { value: 1300, suffix: '+', label: 'Built-in tools', description: 'IPC-registered' },
+  {
+    value: MARKETING.models.count,
+    suffix: '+',
+    label: MARKETING.models.label,
+    description: `across ${MARKETING.providers.display} providers`,
+  },
+  {
+    value: MARKETING.appSize.value,
+    suffix: 'MB',
+    label: 'App size',
+    description: 'native Rust binary',
+  },
+  {
+    value: MARKETING.tools.count,
+    suffix: '+',
+    label: MARKETING.tools.label,
+    description: 'IPC-registered',
+  },
 ];
 
 const surfaces = [
@@ -144,23 +160,7 @@ export default function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            document.addEventListener('DOMContentLoaded', () => {
-              const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                  if (entry.isIntersecting) {
-                    entry.target.classList.add('opacity-100', 'translate-y-0');
-                    entry.target.classList.remove('opacity-0', 'translate-y-8');
-                  }
-                });
-              }, { threshold: 0.12 });
-              document.querySelectorAll('.scroll-reveal').forEach(el => observer.observe(el));
-            });
-          `,
-        }}
-      />
+      <ScrollRevealInit />
 
       <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8] overflow-x-hidden">
         <Header />
@@ -247,7 +247,7 @@ export default function Home() {
           {/* ── PROVIDER TRUST BAR ── */}
           <section className="border-y border-white/[0.05] bg-[#0c0c0e] py-10 overflow-hidden">
             <p className="mb-7 text-center text-[10px] font-semibold uppercase tracking-[0.25em] text-[#555150]">
-              Supports 25+ AI providers
+              Supports {MARKETING.providers.display} AI providers
             </p>
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-28 bg-gradient-to-r from-[#0c0c0e] to-transparent" />
@@ -542,16 +542,23 @@ export default function Home() {
 
               <div className="mt-10 flex flex-wrap justify-center gap-3">
                 {[
-                  '🦀 Memory-safe by default — no buffer overflows',
-                  '⚡ Zero-cost abstractions — pays only for what it uses',
-                  '🔒 Capability-based IPC — every tool call is permission-gated',
-                  '🖥️ Direct access to OS APIs — GPU, camera, files, clipboard',
-                ].map((badge) => (
+                  { icon: Shield, text: 'Memory-safe by default — no buffer overflows' },
+                  { icon: Zap, text: 'Zero-cost abstractions — pays only for what it uses' },
+                  {
+                    icon: Lock,
+                    text: 'Capability-based IPC — every tool call is permission-gated',
+                  },
+                  {
+                    icon: Monitor,
+                    text: 'Direct access to OS APIs — GPU, camera, files, clipboard',
+                  },
+                ].map(({ icon: Icon, text }) => (
                   <div
-                    key={badge}
-                    className="rounded-full border border-white/[0.06] bg-[#0f0f11] px-4 py-2 text-xs text-[#666260]"
+                    key={text}
+                    className="flex items-center gap-2 rounded-full border border-white/[0.06] bg-[#0f0f11] px-4 py-2 text-xs text-[#666260]"
                   >
-                    {badge}
+                    <Icon className="h-3.5 w-3.5 shrink-0 text-[#c8892a]" />
+                    {text}
                   </div>
                 ))}
               </div>

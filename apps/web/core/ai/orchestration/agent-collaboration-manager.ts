@@ -1,6 +1,6 @@
 /**
  * Advanced Multi-Agent Orchestrator
- * Intelligently coordinates 165+ AI Employees to work together autonomously
+ * Intelligently coordinates AI Employees to work together autonomously
  * Runs continuously until task completion
  */
 
@@ -178,7 +178,7 @@ class MultiAgentOrchestrator {
 
     const now = Date.now();
     const plan: TimestampedPlan = {
-      id: `plan-${now}`,
+      id: `plan-${crypto.randomUUID()}`,
       userRequest,
       intent,
       complexity,
@@ -900,6 +900,7 @@ class MultiAgentOrchestrator {
     const completedTasks = plan.tasks.filter((t) => t.status === 'completed').length;
     const totalTasks = plan.tasks.length;
 
+    if (totalTasks === 0) return;
     plan.currentPhase = Math.ceil((completedTasks / totalTasks) * plan.totalPhases);
   }
 
@@ -923,6 +924,15 @@ class MultiAgentOrchestrator {
     this.cleanupIntervalId = setInterval(() => {
       this.cleanup();
     }, CLEANUP_INTERVAL_MS);
+
+    // Prevent interval from keeping the Node.js process alive in serverless environments
+    if (
+      this.cleanupIntervalId &&
+      typeof this.cleanupIntervalId === 'object' &&
+      'unref' in this.cleanupIntervalId
+    ) {
+      (this.cleanupIntervalId as NodeJS.Timeout).unref();
+    }
   }
 
   /**

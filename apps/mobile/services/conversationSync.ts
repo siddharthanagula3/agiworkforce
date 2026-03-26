@@ -63,6 +63,7 @@ export class MobileConversationSyncService {
   private channel: RealtimeChannel | null = null;
   private appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
   private _status: SyncStatus = 'idle';
+  private _inFlightOps = 0;
   private statusListeners: Set<(status: SyncStatus) => void> = new Set();
   private lastSyncAt: Date | null = null;
   private onSyncCallback: ((conversations: SyncedConversation[]) => void) | null = null;
@@ -90,6 +91,7 @@ export class MobileConversationSyncService {
   // -------------------------------------------------------------------------
 
   async pushConversation(conversation: SyncedConversation): Promise<void> {
+    this._inFlightOps++;
     this.setStatus('syncing');
     try {
       const { error } = await supabase.from('web_conversations').upsert(
@@ -109,13 +111,16 @@ export class MobileConversationSyncService {
       );
 
       if (error) {
-        this.setStatus('error');
         throw new Error(`[MobileSync] pushConversation failed: ${error.message}`);
       }
-      this.setStatus('synced');
     } catch (err) {
       this.setStatus('error');
       throw err;
+    } finally {
+      this._inFlightOps = Math.max(0, this._inFlightOps - 1);
+      if (this._inFlightOps === 0 && this._status === 'syncing') {
+        this.setStatus('synced');
+      }
     }
   }
 
@@ -156,6 +161,7 @@ export class MobileConversationSyncService {
   // -------------------------------------------------------------------------
 
   async pullConversations(since?: Date): Promise<SyncedConversation[]> {
+    this._inFlightOps++;
     this.setStatus('syncing');
     try {
       let query = supabase
@@ -172,16 +178,19 @@ export class MobileConversationSyncService {
       const { data, error } = await query;
 
       if (error) {
-        this.setStatus('error');
         throw new Error(`[MobileSync] pullConversations failed: ${error.message}`);
       }
 
-      this.setStatus('synced');
       this.lastSyncAt = new Date();
       return (data ?? []) as unknown as SyncedConversation[];
     } catch (err) {
       this.setStatus('error');
       throw err;
+    } finally {
+      this._inFlightOps = Math.max(0, this._inFlightOps - 1);
+      if (this._inFlightOps === 0 && this._status === 'syncing') {
+        this.setStatus('synced');
+      }
     }
   }
 

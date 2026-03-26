@@ -146,7 +146,7 @@ impl KnowledgeBase {
                     entry.category,
                     entry.content,
                     metadata_json,
-                    entry.timestamp,
+                    entry.timestamp as i64,
                     entry.importance
                 ],
             )?;
@@ -168,14 +168,14 @@ impl KnowledgeBase {
         )?;
 
         let search_term = format!("%{}%", query);
-        let rows = stmt.query_map(params![search_term, limit], |row| {
+        let rows = stmt.query_map(params![search_term, limit as i64], |row| {
             Ok(KnowledgeEntry {
                 id: row.get(0)?,
                 category: row.get(1)?,
                 content: row.get(2)?,
                 metadata: serde_json::from_str(row.get::<_, String>(3)?.as_str())
                     .unwrap_or_default(),
-                timestamp: row.get(4)?,
+                timestamp: row.get::<_, i64>(4)? as u64,
                 importance: row.get(5)?,
             })
         })?;
@@ -239,7 +239,7 @@ impl KnowledgeBase {
                 content: row.get(2)?,
                 metadata: serde_json::from_str(row.get::<_, String>(3)?.as_str())
                     .unwrap_or_default(),
-                timestamp: row.get(4)?,
+                timestamp: row.get::<_, i64>(4)? as u64,
                 importance: row.get(5)?,
             })
         })?;

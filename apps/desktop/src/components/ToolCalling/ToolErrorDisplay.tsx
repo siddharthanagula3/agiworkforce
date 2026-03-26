@@ -4,7 +4,7 @@
  * Beautiful error message display with retry functionality and troubleshooting tips.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   XCircle,
   AlertCircle,
@@ -39,6 +39,13 @@ export function ToolErrorDisplay({
   const [retrying, setRetrying] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const handleRetry = async () => {
     if (!onRetry) return;
@@ -62,7 +69,8 @@ export function ToolErrorDisplay({
 
     await navigator.clipboard.writeText(errorReport);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   // Get error-specific details

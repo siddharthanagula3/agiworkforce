@@ -1,14 +1,12 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { MARKETING } from '@/lib/marketing-constants';
 import {
   ArrowRight,
-  Stethoscope,
   Scale,
   DollarSign,
   GraduationCap,
   Palette,
-  Target,
-  Wrench,
   ShoppingCart,
   Briefcase,
   Sparkles,
@@ -17,15 +15,30 @@ import {
   Users,
   Layers,
   Zap,
+  Code,
+  Brain,
+  Megaphone,
+  Settings,
+  Monitor,
+  Headphones,
+  PenTool,
+  UserCheck,
+  Search,
+  FileText,
+  BarChart3,
+  Leaf,
+  TrendingUp,
+  Package,
+  Globe,
 } from 'lucide-react';
 import { Header } from '../../../components/layout/Header';
 import { CtaSection } from '../../../components/marketing/CtaSection';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'AI Skills | AGI Workforce — 140 AI Employees Across 9 Industries',
+  title: 'AI Skills | AGI Workforce — AI Employees Across Multiple Categories',
   description:
-    'Explore 140+ pre-built AI employee skills across healthcare, legal, finance, education, creative, sales, engineering, e-commerce, and general business. Real work, not just code.',
+    'Explore pre-built AI employee skills across engineering, AI & data, marketing, operations, finance, IT, support, creative, HR, and more. Real work, not just code.',
   keywords: [
     'AI skills',
     'AI employees',
@@ -39,9 +52,9 @@ export const metadata: Metadata = {
     'desktop AI app',
   ],
   openGraph: {
-    title: 'AI Skills | AGI Workforce — 140 AI Employees',
+    title: 'AI Skills | AGI Workforce — Pre-Built AI Employees',
     description:
-      '140+ pre-built AI specialists across 9 industries. From healthcare to finance, legal to creative — AI employees that handle real work.',
+      'Pre-built AI specialists across 23 categories. From engineering to finance, marketing to creative — AI employees that handle real work.',
     type: 'website',
     url: 'https://agiworkforce.com/features/ai-skills',
     images: [
@@ -49,7 +62,7 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce — 140 AI Skills across 9 industries',
+        alt: 'AGI Workforce — AI Skills across 23 categories',
       },
     ],
   },
@@ -58,9 +71,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AI Skills | AGI Workforce — 140 AI Employees',
+    title: 'AI Skills | AGI Workforce — Pre-Built AI Employees',
     description:
-      '140+ pre-built AI specialists across healthcare, legal, finance, and more. Real work, not just code.',
+      'Pre-built AI specialists across 23 categories including engineering, marketing, finance, and more. Real work, not just code.',
     images: ['/app-preview.png'],
   },
 };
@@ -72,119 +85,230 @@ const jsonLd = {
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'macOS, Windows, Linux',
   description:
-    'AI desktop application with 140+ pre-built AI employee skills across 9 industries including healthcare, legal, finance, education, creative, sales, engineering, e-commerce, and general business.',
+    'AI desktop application with pre-built AI employee skills across 23 categories including engineering, AI & data, marketing, operations, finance, IT, support, creative, HR, and more.',
   featureList: [
-    '140+ AI employee skills',
-    '9 industry categories',
-    'Healthcare and medical AI specialists',
-    'Legal and compliance AI assistants',
-    'Finance and accounting AI tools',
-    'Education and training AI support',
-    'Creative and content AI generation',
-    'Sales and marketing AI automation',
-    'Engineering and trades AI planning',
-    'E-commerce and retail AI operations',
-    'General business AI workforce',
+    'Pre-built AI employee skills',
+    '23 skill categories',
+    'Engineering AI specialists',
+    'AI & data science tools',
+    'Marketing automation',
+    'Operations management',
+    'Finance and accounting AI',
+    'IT & operations support',
+    'Creative content generation',
+    'Human resources AI',
+    'Research and analytics',
   ],
   url: 'https://agiworkforce.com/features/ai-skills',
 };
 
 const skillCategories = [
   {
-    icon: Stethoscope,
-    name: 'Healthcare & Medical',
-    color: 'from-red-500 to-rose-600',
-    count: 18,
-    skills: [
-      'Medical coder',
-      'Clinical trial analyst',
-      'Patient intake processor',
-      'Diagnosis research assistant',
-    ],
+    icon: Code,
+    name: 'Engineering',
+    color: 'from-cyan-500 to-teal-600',
+    count: 26,
+    skills: ['Code reviewer', 'Architecture planner', 'CI/CD pipeline builder', 'API designer'],
     description:
-      'AI specialists trained on medical workflows, coding standards, and clinical documentation.',
+      'Software engineering specialists for code review, architecture, DevOps, and technical planning.',
   },
   {
-    icon: Scale,
-    name: 'Legal & Compliance',
-    color: 'from-amber-500 to-orange-600',
-    count: 16,
-    skills: ['Contract reviewer', 'Compliance auditor', 'Legal researcher', 'Policy draft writer'],
+    icon: Brain,
+    name: 'AI & Data',
+    color: 'from-purple-500 to-violet-600',
+    count: 17,
+    skills: ['ML pipeline builder', 'Data analyst', 'Prompt engineer', 'Model evaluator'],
     description:
-      'Automate contract review, regulatory compliance checks, and legal document preparation.',
+      'AI and data science specialists for ML workflows, data analysis, and model evaluation.',
+  },
+  {
+    icon: Megaphone,
+    name: 'Marketing',
+    color: 'from-pink-500 to-rose-600',
+    count: 16,
+    skills: ['Campaign strategist', 'SEO optimizer', 'Content calendar planner', 'Ad copywriter'],
+    description:
+      'Marketing automation for campaigns, SEO, content strategy, and performance analytics.',
+  },
+  {
+    icon: Settings,
+    name: 'Operations',
+    color: 'from-slate-500 to-zinc-600',
+    count: 15,
+    skills: ['Process optimizer', 'Workflow automator', 'Resource allocator', 'SOP writer'],
+    description:
+      'Operations management for process optimization, workflow automation, and resource planning.',
   },
   {
     icon: DollarSign,
-    name: 'Finance & Accounting',
+    name: 'Finance',
     color: 'from-emerald-500 to-green-600',
-    count: 17,
-    skills: ['Financial analyst', 'Tax preparer', 'Invoice processor', 'Budget forecaster'],
+    count: 11,
+    skills: ['Financial analyst', 'Budget forecaster', 'Invoice processor', 'Tax preparer'],
     description:
-      'Financial modeling, tax preparation, invoice processing, and budget analysis at scale.',
+      'Financial modeling, budget forecasting, invoice processing, and tax preparation at scale.',
   },
   {
-    icon: GraduationCap,
-    name: 'Education & Training',
+    icon: Monitor,
+    name: 'IT & Operations',
     color: 'from-blue-500 to-indigo-600',
-    count: 15,
-    skills: ['Curriculum designer', 'AI tutor', 'Assessment creator', 'Learning path builder'],
+    count: 10,
+    skills: ['System administrator', 'Security auditor', 'Incident responder', 'Network planner'],
     description:
-      'Design curricula, create assessments, build personalized learning paths, and tutor students.',
+      'IT infrastructure management, security auditing, incident response, and system monitoring.',
+  },
+  {
+    icon: Headphones,
+    name: 'Support',
+    color: 'from-amber-500 to-orange-600',
+    count: 9,
+    skills: ['Ticket triager', 'Knowledge base writer', 'Escalation handler', 'CSAT analyst'],
+    description:
+      'Customer support automation for ticket triage, knowledge bases, and satisfaction analysis.',
   },
   {
     icon: Palette,
-    name: 'Creative & Content',
-    color: 'from-purple-500 to-violet-600',
-    count: 16,
-    skills: ['Copywriter', 'Social media manager', 'Video scriptwriter', 'Brand voice editor'],
+    name: 'Creative',
+    color: 'from-fuchsia-500 to-pink-600',
+    count: 8,
+    skills: ['Copywriter', 'Video scriptwriter', 'Brand voice editor', 'Social media creator'],
     description:
-      'Content creation, social media management, video scripts, and brand-consistent copywriting.',
+      'Creative content generation for copy, video scripts, brand voice, and social media.',
   },
   {
-    icon: Target,
-    name: 'Sales & Marketing',
-    color: 'from-pink-500 to-rose-600',
-    count: 15,
-    skills: ['Lead qualifier', 'Email campaign writer', 'Market researcher', 'Competitive analyst'],
+    icon: UserCheck,
+    name: 'Human Resources',
+    color: 'from-teal-500 to-cyan-600',
+    count: 6,
+    skills: ['Resume screener', 'Onboarding planner', 'Policy drafter', 'Performance reviewer'],
     description:
-      'Qualify leads, write campaigns, research markets, and analyze competitive landscapes.',
+      'HR automation for recruitment screening, onboarding, policy drafting, and performance reviews.',
   },
   {
-    icon: Wrench,
-    name: 'Engineering & Trades',
-    color: 'from-cyan-500 to-teal-600',
-    count: 14,
-    skills: ['Project estimator', 'Safety inspector', 'Maintenance planner', 'Permit reviewer'],
+    icon: Search,
+    name: 'Research',
+    color: 'from-indigo-500 to-blue-600',
+    count: 5,
+    skills: ['Literature reviewer', 'Competitive analyst', 'Market researcher', 'Trend forecaster'],
     description:
-      'Project estimation, safety inspections, maintenance scheduling, and permit documentation.',
+      'Research specialists for literature reviews, competitive analysis, and market intelligence.',
   },
   {
-    icon: ShoppingCart,
-    name: 'E-Commerce & Retail',
-    color: 'from-orange-500 to-amber-600',
-    count: 14,
-    skills: [
-      'Product description writer',
-      'Inventory analyst',
-      'Customer support agent',
-      'Pricing optimizer',
-    ],
+    icon: FileText,
+    name: 'Documentation',
+    color: 'from-stone-500 to-stone-600',
+    count: 5,
+    skills: ['Technical writer', 'API documenter', 'Changelog generator', 'Style guide enforcer'],
     description:
-      'Product listings, inventory management, customer support, and dynamic pricing analysis.',
+      'Documentation specialists for technical writing, API docs, and style guide enforcement.',
+  },
+  {
+    icon: Zap,
+    name: 'Automation',
+    color: 'from-yellow-500 to-amber-600',
+    count: 5,
+    skills: ['Workflow builder', 'Integration connector', 'Scheduler', 'Event trigger designer'],
+    description:
+      'Automation specialists for building workflows, integrations, schedules, and event triggers.',
+  },
+  {
+    icon: BarChart3,
+    name: 'Analytics',
+    color: 'from-sky-500 to-blue-600',
+    count: 5,
+    skills: ['Dashboard builder', 'KPI tracker', 'Report generator', 'Data visualizer'],
+    description:
+      'Analytics specialists for dashboards, KPI tracking, reporting, and data visualization.',
+  },
+  {
+    icon: Scale,
+    name: 'Legal',
+    color: 'from-orange-500 to-red-600',
+    count: 4,
+    skills: ['Contract reviewer', 'Compliance auditor', 'Legal researcher', 'Policy draft writer'],
+    description:
+      'Legal automation for contract review, regulatory compliance, and legal document preparation.',
   },
   {
     icon: Briefcase,
-    name: 'General Business',
+    name: 'Executive',
     color: 'from-blue-400 to-blue-600',
-    count: 15,
+    count: 4,
+    skills: ['Executive assistant', 'Meeting summarizer', 'Board deck preparer', 'OKR tracker'],
+    description:
+      'Executive support for meeting summaries, board decks, OKR tracking, and strategic planning.',
+  },
+  {
+    icon: ShoppingCart,
+    name: 'Business',
+    color: 'from-rose-500 to-pink-600',
+    count: 4,
     skills: [
-      'Executive assistant',
-      'Meeting summarizer',
-      'Data entry specialist',
-      'Report generator',
+      'Business plan writer',
+      'Pitch deck creator',
+      'Partnership evaluator',
+      'RFP responder',
     ],
     description:
-      'Executive support, meeting notes, data entry automation, and business report generation.',
+      'Business development for plans, pitch decks, partnership evaluation, and RFP responses.',
+  },
+  {
+    icon: GraduationCap,
+    name: 'Education',
+    color: 'from-violet-500 to-purple-600',
+    count: 3,
+    skills: ['Curriculum designer', 'AI tutor', 'Assessment creator'],
+    description:
+      'Education specialists for curriculum design, AI tutoring, and assessment creation.',
+  },
+  {
+    icon: Users,
+    name: 'Consulting',
+    color: 'from-gray-500 to-zinc-600',
+    count: 3,
+    skills: ['Strategy consultant', 'Change management advisor', 'Process auditor'],
+    description: 'Consulting specialists for strategy, change management, and process improvement.',
+  },
+  {
+    icon: Leaf,
+    name: 'Sustainability',
+    color: 'from-green-500 to-emerald-600',
+    count: 2,
+    skills: ['ESG report writer', 'Carbon footprint analyst'],
+    description: 'Sustainability specialists for ESG reporting and carbon footprint analysis.',
+  },
+  {
+    icon: TrendingUp,
+    name: 'Sales',
+    color: 'from-red-500 to-rose-600',
+    count: 2,
+    skills: ['Lead qualifier', 'Sales email writer'],
+    description: 'Sales specialists for lead qualification and outreach email generation.',
+  },
+  {
+    icon: Package,
+    name: 'Product',
+    color: 'from-orange-500 to-amber-600',
+    count: 2,
+    skills: ['PRD writer', 'Feature prioritizer'],
+    description:
+      'Product management specialists for requirements documents and feature prioritization.',
+  },
+  {
+    icon: Globe,
+    name: 'Language',
+    color: 'from-cyan-400 to-blue-500',
+    count: 2,
+    skills: ['Translator', 'Localization specialist'],
+    description: 'Language specialists for translation and content localization across markets.',
+  },
+  {
+    icon: PenTool,
+    name: 'Design',
+    color: 'from-pink-400 to-fuchsia-500',
+    count: 1,
+    skills: ['UI copy reviewer'],
+    description: 'Design specialists for UI copy review and design system documentation.',
   },
 ];
 
@@ -194,7 +318,7 @@ const howItWorksSteps = [
     icon: Users,
     title: 'Choose a Skill',
     description:
-      'Browse 140+ AI employees by category or search by the task you need done. Each skill is pre-configured with domain expertise.',
+      'Browse AI employees by category or search by the task you need done. Each skill is pre-configured with domain expertise.',
   },
   {
     step: 2,
@@ -215,14 +339,14 @@ const howItWorksSteps = [
 const comparisonRows = [
   {
     feature: 'Non-coding AI skills',
-    agi: '140+',
+    agi: 'Extensive',
     claude: 'None',
     chatgpt: 'GPTs (community)',
     cursor: 'None',
   },
   {
     feature: 'Industry categories',
-    agi: '9 industries',
+    agi: '23 categories',
     claude: 'Coding only',
     chatgpt: 'General chat',
     cursor: 'Code only',
@@ -236,7 +360,7 @@ const comparisonRows = [
   },
   {
     feature: 'Multi-model support',
-    agi: '9+ providers',
+    agi: `${MARKETING.providers.display} providers`,
     claude: 'Claude only',
     chatgpt: 'GPT only',
     cursor: 'Multi-model',
@@ -275,7 +399,7 @@ const webPageJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebPage',
   name: 'AI Skills - AGI Workforce',
-  description: '140+ non-coding AI skills across healthcare, legal, finance, education, and more.',
+  description: 'Non-coding AI skills across engineering, marketing, finance, operations, and more.',
   url: 'https://agiworkforce.com/features/ai-skills',
   isPartOf: { '@type': 'WebSite', name: 'AGI Workforce', url: 'https://agiworkforce.com' },
 };
@@ -301,10 +425,10 @@ export default function AISkillsPage() {
             <div className="container relative mx-auto px-4 text-center">
               <div className="mb-8 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-blue-400 backdrop-blur-xs">
                 <Sparkles className="mr-2 h-4 w-4" />
-                140+ Pre-Built AI Specialists
+                Pre-Built AI Specialists
               </div>
               <h1 className="mx-auto max-w-4xl bg-gradient-to-b from-white to-white/50 bg-clip-text text-5xl font-bold tracking-tight text-transparent md:text-7xl lg:text-8xl">
-                140 AI Employees, Ready to Work
+                AI Employees, Ready to Work
               </h1>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400 md:text-xl">
                 From healthcare to finance, legal to creative — pre-built AI specialists that handle
@@ -329,16 +453,18 @@ export default function AISkillsPage() {
               {/* Stats */}
               <div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-3">
                 <div className="p-6">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">140+</div>
-                  <div className="text-lg text-zinc-400">AI Skills</div>
+                  <div className="mb-2 text-5xl font-bold text-blue-500">23</div>
+                  <div className="text-lg text-zinc-400">Skill Categories</div>
                   <p className="mt-2 text-sm text-zinc-600">
                     Pre-built specialists ready to deploy
                   </p>
                 </div>
                 <div className="p-6">
-                  <div className="mb-2 text-5xl font-bold text-blue-500">9</div>
+                  <div className="mb-2 text-5xl font-bold text-blue-500">23</div>
                   <div className="text-lg text-zinc-400">Categories</div>
-                  <p className="mt-2 text-sm text-zinc-600">Healthcare, legal, finance, and more</p>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Engineering, marketing, finance, and more
+                  </p>
                 </div>
                 <div className="p-6">
                   <div className="mb-2 text-5xl font-bold text-blue-500">Every</div>
@@ -429,8 +555,8 @@ export default function AISkillsPage() {
                   Built for Real Work, Not Just Code
                 </h2>
                 <p className="mx-auto max-w-2xl text-zinc-400">
-                  Every competitor focuses on coding. AGI Workforce is the only platform with 140+
-                  non-coding AI skills across 9 industries.
+                  Every competitor focuses on coding. AGI Workforce is the only platform with
+                  non-coding AI skills across 23 categories.
                 </p>
               </div>
               <div className="overflow-x-auto">
@@ -473,7 +599,7 @@ export default function AISkillsPage() {
           <CtaSection
             icon={Layers}
             headline="Start With Any Skill Today"
-            body="Download AGI Workforce and put 140 AI employees to work — healthcare, legal, finance, creative, and beyond."
+            body="Download AGI Workforce and put AI employees to work — engineering, marketing, finance, creative, and beyond."
           />
         </main>
 

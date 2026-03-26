@@ -164,7 +164,7 @@ impl SyncQueue {
              LIMIT ?1",
         )?;
 
-        let items = stmt.query_map([limit], |row| {
+        let items = stmt.query_map([limit as i64], |row| {
             Ok(SyncQueueItem {
                 id: row.get(0)?,
                 entity_type: match row.get::<_, String>(1)?.as_str() {
@@ -319,7 +319,7 @@ impl SyncQueue {
                 format!("{:?}", action),
                 data,
                 timestamp,
-                version,
+                version as i64,
             ],
         )?;
 
@@ -351,7 +351,7 @@ impl SyncQueue {
              LIMIT ?1",
         )?;
 
-        let items = stmt.query_map([limit], |row| {
+        let items = stmt.query_map([limit as i64], |row| {
             Ok(SyncQueueItem {
                 id: row.get(0)?,
                 entity_type: match row.get::<_, String>(1)?.as_str() {

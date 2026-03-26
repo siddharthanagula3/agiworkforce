@@ -26,6 +26,8 @@ interface CacheEntry {
 
 export class WorkspaceIndexer {
   private _fileWatcher: vscode.FileSystemWatcher | undefined;
+  /** Serializes async index updates to prevent concurrent workspaceState writes. */
+  private _updateQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -39,25 +41,32 @@ export class WorkspaceIndexer {
    * Call once during extension activation.
    */
   registerFileWatcher(): vscode.Disposable[] {
+    // Dispose previous watcher to prevent accumulation on re-registration
+    if (this._fileWatcher !== undefined) {
+      this._fileWatcher.dispose();
+      this._fileWatcher = undefined;
+    }
+
     const disposables: vscode.Disposable[] = [];
 
     this._fileWatcher = vscode.workspace.createFileSystemWatcher(
       '**/*.{ts,tsx,js,jsx,py,go,rs,java,cs,cpp,c,h,rb,php,swift,kt}',
     );
 
-    const handleChange = (uri: vscode.Uri): void => {
-      void this._reindexFile(uri);
+    const enqueueReindex = (uri: vscode.Uri): void => {
+      this._updateQueue = this._updateQueue.then(() => this._reindexFile(uri)).catch(() => {}); // Errors don't block future updates
+    };
+    const enqueueRemove = (uri: vscode.Uri): void => {
+      this._updateQueue = this._updateQueue.then(() => this._removeFile(uri)).catch(() => {});
     };
 
     disposables.push(
       this._fileWatcher,
-      this._fileWatcher.onDidChange(handleChange),
-      this._fileWatcher.onDidCreate(handleChange),
-      this._fileWatcher.onDidDelete((uri) => {
-        void this._removeFile(uri);
-      }),
+      this._fileWatcher.onDidChange(enqueueReindex),
+      this._fileWatcher.onDidCreate(enqueueReindex),
+      this._fileWatcher.onDidDelete(enqueueRemove),
       vscode.workspace.onDidSaveTextDocument((doc) => {
-        void this._reindexFile(doc.uri);
+        enqueueReindex(doc.uri);
       }),
     );
 

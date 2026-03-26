@@ -200,3 +200,8 @@ leads/
 dist-web
 # Build artifacts (Vite SPA output)
 apps/web/public/chat
+
+# Claude Code local files
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/*.local.*

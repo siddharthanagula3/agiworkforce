@@ -19,11 +19,13 @@ interface AppModeState {
   mode: AppMode;
   planTier: PlanTier;
   hasOnboarded: boolean;
+  hasSelectedMode: boolean;
   isOnline: boolean;
 
   setMode: (mode: AppMode) => void;
   setPlanTier: (tier: PlanTier) => void;
   completeOnboarding: () => void;
+  setHasSelectedMode: (selected: boolean) => void;
   setOnline: (online: boolean) => void;
 }
 
@@ -36,6 +38,7 @@ export const useAppModeStore = create<AppModeState>()(
         mode: isTauri ? 'local' : 'cloud',
         planTier: 'free',
         hasOnboarded: false,
+        hasSelectedMode: false,
         isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
 
         setMode: (mode: AppMode) => {
@@ -87,6 +90,10 @@ export const useAppModeStore = create<AppModeState>()(
           set({ hasOnboarded: true }, undefined, 'appMode/completeOnboarding');
         },
 
+        setHasSelectedMode: (selected: boolean) => {
+          set({ hasSelectedMode: selected }, undefined, 'appMode/setHasSelectedMode');
+        },
+
         setOnline: (online: boolean) => {
           set({ isOnline: online }, undefined, 'appMode/setOnline');
         },
@@ -101,6 +108,7 @@ export const useAppModeStore = create<AppModeState>()(
           mode: state.mode,
           planTier: state.planTier,
           hasOnboarded: state.hasOnboarded,
+          hasSelectedMode: state.hasSelectedMode,
         }),
         migrate: (persistedState: unknown, _version: number) => {
           const state = persistedState as AppModeState;

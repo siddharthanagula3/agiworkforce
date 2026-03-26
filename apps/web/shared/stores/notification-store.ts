@@ -138,6 +138,18 @@ const DEFAULT_SETTINGS: NotificationState['settings'] = {
   },
 };
 
+// Shared AudioContext to prevent resource leaks from repeated allocations
+let sharedAudioCtx: AudioContext | null = null;
+function getAudioContext(): AudioContext {
+  if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+    sharedAudioCtx = new (
+      window.AudioContext ||
+      (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    )();
+  }
+  return sharedAudioCtx;
+}
+
 const INITIAL_STATE: NotificationState = {
   notifications: {},
   unreadCount: 0,
@@ -462,11 +474,8 @@ export const useNotificationStore = create<NotificationStore>()(
 
         playNotificationSound: () => {
           try {
-            // Create a simple beep sound
-            const audioContext = new (
-              window.AudioContext ||
-              (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-            )();
+            // Reuse a shared AudioContext to prevent resource leaks
+            const audioContext = getAudioContext();
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
 
@@ -522,6 +531,14 @@ export const useNotificationStore = create<NotificationStore>()(
           unreadCount: state.unreadCount,
           settings: state.settings,
         }),
+        onRehydrateStorage: () => {
+          return (_state, error) => {
+            if (!error) {
+              // Prune old notifications on rehydration
+              useNotificationStore.getState().cleanup();
+            }
+          };
+        },
       },
     ),
     {

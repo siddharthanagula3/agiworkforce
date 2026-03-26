@@ -25,12 +25,19 @@ let _refreshing: Promise<boolean> | null = null;
  * Returns true if the refresh succeeded and we have a new token.
  * Serialises concurrent callers so only one network call is made.
  */
+/** Maximum time to wait for a token refresh before giving up (ms). */
+const REFRESH_TIMEOUT_MS = 10_000;
+
 async function tryRefreshToken(): Promise<boolean> {
   if (_refreshing) return _refreshing;
 
   _refreshing = (async () => {
     try {
-      const { data, error } = await supabase.auth.refreshSession();
+      const refreshPromise = supabase.auth.refreshSession();
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Token refresh timed out')), REFRESH_TIMEOUT_MS),
+      );
+      const { data, error } = await Promise.race([refreshPromise, timeoutPromise]);
       return !error && !!data.session;
     } catch {
       return false;
@@ -109,7 +116,9 @@ async function request<T>(
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`HTTP ${response.status}: ${body}`);
+      // Avoid leaking sensitive data — truncate long error bodies
+      const safeBody = body.length > 500 ? body.slice(0, 500) + '...(truncated)' : body;
+      throw new Error(`HTTP ${response.status}: ${safeBody}`);
     }
 
     return (await response.json()) as T;

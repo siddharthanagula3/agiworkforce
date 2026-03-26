@@ -232,8 +232,8 @@ export async function downloadUserData(): Promise<string> {
   link.click();
   document.body.removeChild(link);
 
-  // Cleanup after browser initiates download
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Cleanup after browser initiates download (60s delay for async download start)
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
   return filename;
 }

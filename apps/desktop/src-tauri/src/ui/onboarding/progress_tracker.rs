@@ -78,7 +78,7 @@ impl ProgressTracker {
             "SELECT current_step, completed_steps FROM tutorial_progress
                  WHERE user_id = ?1 AND tutorial_id = ?2",
             params![user_id, tutorial_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get::<_, i64>(0)? as usize, row.get(1)?)),
         )?;
 
         let mut completed_steps: Vec<String> =
@@ -93,7 +93,7 @@ impl ProgressTracker {
                  SET current_step = ?1, completed_steps = ?2, last_updated = ?3
                  WHERE user_id = ?4 AND tutorial_id = ?5",
                 params![
-                    current_step + 1,
+                    (current_step + 1) as i64,
                     completed_steps_json,
                     now,
                     user_id,
@@ -176,7 +176,7 @@ impl ProgressTracker {
                 Ok(OnboardingProgress {
                     user_id: row.get(0)?,
                     tutorial_id: row.get(1)?,
-                    current_step: row.get(2)?,
+                    current_step: row.get::<_, i64>(2)? as usize,
                     completed_steps,
                     started_at: row.get(4)?,
                     completed_at: row.get(5)?,
@@ -225,7 +225,7 @@ impl ProgressTracker {
                 Ok(OnboardingProgress {
                     user_id: row.get(0)?,
                     tutorial_id: row.get(1)?,
-                    current_step: row.get(2)?,
+                    current_step: row.get::<_, i64>(2)? as usize,
                     completed_steps,
                     started_at: row.get(4)?,
                     completed_at: row.get(5)?,

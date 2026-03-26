@@ -63,6 +63,10 @@ impl SandboxManager {
         }
     }
     pub fn disabled() -> Self {
+        eprintln!(
+            "{}",
+            colored::Colorize::yellow("warning: running without OS-level sandboxing — system commands will have unrestricted access")
+        );
         Self {
             sandbox_type: SandboxType::None,
             policy: SandboxPolicy::DangerFullAccess,
@@ -83,9 +87,31 @@ pub async fn execute_sandboxed(
     }
     match manager.sandbox_type {
         SandboxType::MacosSeatbelt => {
-            let profile = "(version 1)(allow default)";
+            let ws = manager.workspace_dir.to_string_lossy().to_string();
+            // Restrictive Seatbelt profile: deny by default, allow only workspace I/O,
+            // reading system libs/tools, and basic process/network operations.
+            let profile = format!(
+                r#"(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target self))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow system-socket)
+(allow network-outbound)
+(allow file-read* (subpath "/usr") (subpath "/bin") (subpath "/sbin")
+                   (subpath "/Library") (subpath "/System")
+                   (subpath "/private/var/db") (subpath "/dev")
+                   (subpath "/etc") (subpath "/tmp") (subpath "/private/tmp")
+                   (literal "/") (subpath "/opt"))
+(allow file-read* (subpath "{ws}"))
+(allow file-write* (subpath "{ws}") (subpath "/tmp") (subpath "/private/tmp") (subpath "/dev/null"))
+"#,
+                ws = ws
+            );
             let mut scmd = tokio::process::Command::new("sandbox-exec");
-            scmd.arg("-p").arg(profile).arg("sh").arg("-c").arg(command);
+            scmd.arg("-p").arg(&profile).arg("sh").arg("-c").arg(command);
             if let Some(dir) = cwd {
                 scmd.current_dir(dir);
             }
@@ -98,18 +124,14 @@ pub async fn execute_sandboxed(
             let mut bcmd = tokio::process::Command::new("bwrap");
             bcmd.args([
                 "--die-with-parent",
-                "--ro-bind",
-                "/",
-                "/",
-                "--bind",
-                &ws,
-                &ws,
-                "--tmpfs",
-                "/tmp",
-                "--",
-                "sh",
-                "-c",
-                command,
+                "--unshare-pid",   // isolate process namespace
+                "--unshare-uts",   // isolate hostname
+                "--ro-bind", "/", "/",
+                "--bind", &ws, &ws,
+                "--tmpfs", "/tmp",
+                "--dev", "/dev",
+                "--proc", "/proc",
+                "--", "sh", "-c", command,
             ]);
             if let Some(dir) = cwd {
                 bcmd.current_dir(dir);

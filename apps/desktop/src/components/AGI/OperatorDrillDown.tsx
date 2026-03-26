@@ -7,7 +7,7 @@
  * - Cost breakdown: estimated cost per tool call and total run cost
  * - Operator Notes: free-text annotation field persisted in local state
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -328,10 +328,13 @@ function OperatorNotes({ taskId }: OperatorNotesProps) {
     }
   });
   const [saved, setSaved] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Prune notes older than 30 days on mount
   useEffect(() => {
     pruneStaleOperatorNotes();
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
   }, []);
 
   const handleSave = useCallback(() => {
@@ -339,7 +342,8 @@ function OperatorNotes({ taskId }: OperatorNotesProps) {
       localStorage.setItem(storageKey, note.slice(0, NOTES_MAX_LENGTH));
       localStorage.setItem(tsKey, String(Date.now()));
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error('[OperatorNotes] Failed to save:', err);
     }

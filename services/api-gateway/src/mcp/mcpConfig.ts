@@ -20,16 +20,72 @@ import { logger } from '../lib/logger';
 // SCHEMAS
 // =============================================================================
 
+/**
+ * SECURITY: Allowlist of permitted MCP server binary names.
+ * Only simple binary names are allowed — no paths, no shell metacharacters.
+ * Add new entries here when onboarding a new MCP server type.
+ */
+const ALLOWED_MCP_COMMANDS = new Set([
+  'npx',
+  'node',
+  'python',
+  'python3',
+  'uvx',
+  'deno',
+  'bun',
+  'mcp-server-fetch',
+  'mcp-server-filesystem',
+  'mcp-server-git',
+  'mcp-server-github',
+  'mcp-server-postgres',
+  'mcp-server-sqlite',
+  'mcp-server-memory',
+  'mcp-server-brave-search',
+  'mcp-server-puppeteer',
+  'mcp-server-sequential-thinking',
+]);
+
+/** Validate that a stdio command is in the allowlist and contains no path separators */
+function validateStdioCommand(command: string): boolean {
+  // Reject any path separators — only allow simple binary names
+  if (command.includes('/') || command.includes('\\')) {
+    return false;
+  }
+  // Reject shell metacharacters
+  if (/[;&|`$(){}]/.test(command)) {
+    return false;
+  }
+  return ALLOWED_MCP_COMMANDS.has(command);
+}
+
 const stdioTransportSchema = z.object({
   type: z.literal('stdio'),
-  command: z.string().min(1),
+  command: z
+    .string()
+    .min(1)
+    .refine((cmd) => validateStdioCommand(cmd), {
+      message: 'Command not in MCP server allowlist or contains disallowed characters',
+    }),
   args: z.array(z.string()).optional().default([]),
   env: z.record(z.string(), z.string()).optional().default({}),
 });
 
 const httpTransportSchema = z.object({
   type: z.literal('http'),
-  url: z.url(),
+  url: z.url().refine(
+    (urlStr) => {
+      try {
+        const hostname = new URL(urlStr).hostname;
+        // Reject loopback, link-local, and private network addresses to prevent SSRF
+        return !/(^localhost$|^127\.|^10\.|^172\.(1[6-9]|2\d|3[01])\.|^192\.168\.|^169\.254\.|^0\.0\.0\.0$|^::1$|^::ffff:127\.|^\[::1\]$)/i.test(
+          hostname,
+        );
+      } catch {
+        return false;
+      }
+    },
+    { message: 'Private/internal URLs are not allowed for MCP HTTP transport' },
+  ),
   headers: z.record(z.string(), z.string()).optional().default({}),
 });
 

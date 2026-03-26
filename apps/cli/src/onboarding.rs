@@ -8,12 +8,15 @@ use colored::Colorize;
 // Amber/gold brand color (OpenCode-style warm palette)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Print text in brand amber color (TrueColor: #FFB000, fallback: yellow)
+/// Print text in brand amber color (TrueColor: #FFB000, fallback: yellow).
+///
+/// Checks `COLORTERM` env var for truecolor support instead of depending on
+/// the `supports_color` crate.
 fn amber(text: &str) -> String {
-    if supports_color::on(supports_color::Stream::Stderr)
-        .map(|c| c.has_16m)
-        .unwrap_or(false)
-    {
+    let has_truecolor = std::env::var("COLORTERM")
+        .map(|v| v == "truecolor" || v == "24bit")
+        .unwrap_or(false);
+    if has_truecolor {
         format!("\x1b[38;2;255;176;0m{text}\x1b[0m")
     } else {
         format!("{}", text.yellow())
@@ -22,10 +25,10 @@ fn amber(text: &str) -> String {
 
 /// Print text in brand amber + bold
 fn amber_bold(text: &str) -> String {
-    if supports_color::on(supports_color::Stream::Stderr)
-        .map(|c| c.has_16m)
-        .unwrap_or(false)
-    {
+    let has_truecolor = std::env::var("COLORTERM")
+        .map(|v| v == "truecolor" || v == "24bit")
+        .unwrap_or(false);
+    if has_truecolor {
         format!("\x1b[1;38;2;255;176;0m{text}\x1b[0m")
     } else {
         format!("{}", text.yellow().bold())

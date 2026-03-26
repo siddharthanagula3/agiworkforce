@@ -183,6 +183,18 @@ export const useAuthStore = create<AuthState>()(
         if (state?.session) {
           state.isLoading = false;
           state.isInitialized = true;
+
+          // Set up auth listener early so token refreshes are observed
+          // before initialize() is explicitly called after the biometric gate.
+          // Guard prevents double-subscription if initialize() runs later.
+          if (!authSubscription) {
+            const {
+              data: { subscription },
+            } = supabase.auth.onAuthStateChange((_event, session) => {
+              useAuthStore.setState({ session, user: session?.user ?? null });
+            });
+            authSubscription = subscription;
+          }
         }
       },
     },

@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';

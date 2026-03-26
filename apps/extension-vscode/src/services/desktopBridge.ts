@@ -315,8 +315,10 @@ export class DesktopBridge implements vscode.Disposable {
   }
 
   private _wsSend(message: BridgeMessage): void {
-    if (this._ws !== undefined && this._ws.readyState === WebSocket.OPEN) {
-      this._ws.send(JSON.stringify(message));
+    // Capture local ref to prevent TOCTOU race with _closeWebSocket()
+    const ws = this._ws;
+    if (ws !== undefined && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
     }
   }
 
@@ -402,7 +404,10 @@ export class DesktopBridge implements vscode.Disposable {
     );
 
     this._reconnectTimer = setTimeout(() => {
-      void this.connect();
+      void this.connect().catch(() => {
+        // connect() handles its own errors via _setStatus('error') + _scheduleReconnect(),
+        // but catch here to prevent unhandled promise rejection in the timer callback.
+      });
     }, delay);
   }
 
@@ -420,14 +425,17 @@ export class DesktopBridge implements vscode.Disposable {
 
   private _startHealthLoop(): void {
     this._clearHealthLoop();
-    this._healthTimer = setInterval(async () => {
+    this._healthTimer = setInterval(() => {
       if (this._disposed) return;
-      const ok = await this.healthCheck();
-      if (!ok && this._status === 'connected') {
-        this._setStatus('error');
-        this._closeWebSocket();
-        this._scheduleReconnect();
-      }
+      void this.healthCheck()
+        .catch(() => false)
+        .then((ok) => {
+          if (!ok && this._status === 'connected') {
+            this._setStatus('error');
+            this._closeWebSocket();
+            this._scheduleReconnect();
+          }
+        });
     }, DesktopBridge.HEALTH_CHECK_INTERVAL_MS);
   }
 

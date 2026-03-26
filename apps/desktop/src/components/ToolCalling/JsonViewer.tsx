@@ -5,7 +5,7 @@
  * search, and copy functionality. Optimized for large JSON objects.
  */
 
-import { useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Copy, Check, ChevronRight, ChevronDown, Search, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -174,6 +174,13 @@ export function JsonViewer({
   searchable = true,
 }: JsonViewerProps) {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
@@ -200,7 +207,8 @@ export function JsonViewer({
   const handleCopy = async () => {
     await navigator.clipboard.writeText(jsonString);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const handleToggle = (path: string) => {

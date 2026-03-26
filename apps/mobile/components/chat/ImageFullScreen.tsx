@@ -129,7 +129,7 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
     savedTranslateX.value = 0;
     savedTranslateY.value = 0;
     onClose();
-  }, [onClose, scale, savedScale, translateX, translateY, savedTranslateX, savedTranslateY]);
+  }, [onClose]); // Shared values are stable refs — omit from deps
 
   if (!imageUrl) return null;
 

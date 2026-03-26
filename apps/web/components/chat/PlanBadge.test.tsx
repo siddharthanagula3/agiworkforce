@@ -16,7 +16,7 @@
  *   - Valid ISO date → "Mon D" format
  *   - Invalid string → "next month"
  *   - Empty string → "next month"
- * - Click navigates to /dashboard/billing
+ * - Click navigates to /billing
  * - aria-label includes plan name and tooltip text
  */
 
@@ -186,10 +186,10 @@ describe('PlanBadge — free tier', () => {
     expect(btn?.className).not.toContain('bg-red');
   });
 
-  it('navigates to /dashboard/billing on click', () => {
+  it('navigates to /billing on click', () => {
     render(<PlanBadge />);
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.push).toHaveBeenCalledWith('/dashboard/billing');
+    expect(mocks.push).toHaveBeenCalledWith('/billing');
   });
 });
 
@@ -348,14 +348,14 @@ describe('PlanBadge — formatResetDate edge cases', () => {
 // ---------------------------------------------------------------------------
 
 describe('PlanBadge — click navigation', () => {
-  it('navigates to /dashboard/billing when paid-plan pill is clicked', () => {
+  it('navigates to /billing when paid-plan pill is clicked', () => {
     mocks.billingData = makeBilling('pro', 600, 100_000);
     render(<PlanBadge />);
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.push).toHaveBeenCalledWith('/dashboard/billing');
+    expect(mocks.push).toHaveBeenCalledWith('/billing');
   });
 
-  it('navigates to /dashboard/billing on a single click (no double-nav)', () => {
+  it('navigates to /billing on a single click (no double-nav)', () => {
     mocks.billingData = makeBilling('pro', 600, 100_000);
     render(<PlanBadge />);
     fireEvent.click(screen.getByRole('button'));

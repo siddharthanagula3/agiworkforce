@@ -7,45 +7,12 @@
  */
 
 import * as vscode from 'vscode';
-
-// ─── Context window limits per model (tokens) ───────────────────────────────
-
-const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  'claude-opus-4.6': 1_000_000,
-  'claude-sonnet-4.6': 200_000,
-  'claude-haiku-4.5': 200_000,
-  'gpt-5-pro': 256_000,
-  'gpt-5.4': 128_000,
-  'gpt-5.4-nano': 128_000,
-  'gemini-3-pro-preview': 2_000_000,
-  'gemini-3-flash-preview': 1_000_000,
-  'deepseek-r1': 128_000,
-  'deepseek-chat': 128_000,
-  'sonar-pro': 128_000,
-  'grok-4': 128_000,
-  'auto-balanced': 200_000,
-  'auto-economy': 128_000,
-  'auto-premium': 1_000_000,
-};
-
-const DEFAULT_CONTEXT_LIMIT = 128_000;
-
-// ─── Rough cost estimates (per 1M tokens, input/output blended) ─────────────
-
-const COST_PER_MILLION: Record<string, { input: number; output: number }> = {
-  'claude-opus-4.6': { input: 15.0, output: 75.0 },
-  'claude-sonnet-4.6': { input: 3.0, output: 15.0 },
-  'claude-haiku-4.5': { input: 0.25, output: 1.25 },
-  'gpt-5-pro': { input: 10.0, output: 60.0 },
-  'gpt-5.4': { input: 2.5, output: 10.0 },
-  'gpt-5.4-nano': { input: 0.1, output: 0.5 },
-  'gemini-3-pro-preview': { input: 1.25, output: 5.0 },
-  'gemini-3-flash-preview': { input: 0.075, output: 0.3 },
-  'deepseek-r1': { input: 4.0, output: 16.0 },
-  'deepseek-chat': { input: 0.27, output: 1.1 },
-  'sonar-pro': { input: 3.0, output: 15.0 },
-  'grok-4': { input: 3.0, output: 15.0 },
-};
+import {
+  MODEL_CONTEXT_LIMITS,
+  DEFAULT_CONTEXT_LIMIT,
+  MODEL_COST_RATES,
+  DEFAULT_BLENDED_RATE,
+} from './modelConstants';
 
 export class TokenCounter implements vscode.Disposable {
   private _promptTokens = 0;
@@ -100,13 +67,14 @@ export class TokenCounter implements vscode.Disposable {
 
     // Estimate cost based on current model
     const model = this._getCurrentModel();
-    const rates = COST_PER_MILLION[model];
+    const rates = MODEL_COST_RATES[model];
     if (rates !== undefined) {
       this._estimatedCostUsd +=
         (promptDelta / 1_000_000) * rates.input + (completionDelta / 1_000_000) * rates.output;
     } else {
       // Fallback blended rate
-      this._estimatedCostUsd += ((promptDelta + completionDelta) / 1_000_000) * 5.0;
+      this._estimatedCostUsd +=
+        ((promptDelta + completionDelta) / 1_000_000) * DEFAULT_BLENDED_RATE;
     }
 
     this._updateDisplay();

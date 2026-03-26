@@ -860,7 +860,7 @@ impl BackgroundAgentManager {
                         row.get::<_, Option<String>>(9)?,
                         row.get::<_, String>(10)?,
                         row.get::<_, u8>(11)?,
-                        row.get::<_, u64>(12)?,
+                        row.get::<_, i64>(12)? as u64,
                     ))
                 })?;
 
@@ -1013,7 +1013,7 @@ impl BackgroundAgentManager {
                 agent.completed_at.map(|dt| dt.to_rfc3339()),
                 context_json,
                 agent.priority,
-                agent.timeout_secs,
+                agent.timeout_secs as i64,
             ],
         )?;
 
@@ -1162,7 +1162,11 @@ async fn execute_background_agent(
                     let mut agents_lock = agents.write().await;
                     if let Some(a) = agents_lock.get_mut(&agent_id) {
                         a.fail(format!("Failed to initialize agent: {e}"));
-                        let _ = persist_agent_to_db(&db_conn, a);
+                        let db = db_conn.clone();
+                        let agent_snapshot = a.clone();
+                        let _ = tokio::task::spawn_blocking(move || {
+                            persist_agent_to_db(&db, &agent_snapshot)
+                        });
                     }
                     return;
                 }
@@ -1177,7 +1181,11 @@ async fn execute_background_agent(
             let mut agents_lock = agents.write().await;
             if let Some(a) = agents_lock.get_mut(&agent_id) {
                 a.fail("No LLM router or automation service available".to_string());
-                let _ = persist_agent_to_db(&db_conn, a);
+                let db = db_conn.clone();
+                let agent_snapshot = a.clone();
+                let _ = tokio::task::spawn_blocking(move || {
+                    persist_agent_to_db(&db, &agent_snapshot)
+                });
             }
             return;
         }
@@ -1285,7 +1293,11 @@ async fn execute_background_agent(
                     a.fail(e.to_string());
                 }
             }
-            let _ = persist_agent_to_db(&db_conn, a);
+            let db = db_conn.clone();
+            let agent_snapshot = a.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                persist_agent_to_db(&db, &agent_snapshot)
+            });
         }
     }
 
@@ -1432,7 +1444,7 @@ fn persist_agent_to_db(
             agent.completed_at.map(|dt| dt.to_rfc3339()),
             context_json,
             agent.priority,
-            agent.timeout_secs,
+            agent.timeout_secs as i64,
         ],
     )?;
 

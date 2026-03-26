@@ -35,6 +35,24 @@ interface MessageMetadata {
   isThinking?: boolean;
   isSearching?: boolean;
   isToolProcessing?: boolean;
+  // Extended thinking (ThinkingBlock)
+  thinkingContent?: string;
+  isThinkingStreaming?: boolean;
+  thinkingStartedAt?: string;
+  thinkingCompletedAt?: string;
+  thinkingDurationSeconds?: number;
+  // Streaming state
+  isStreaming?: boolean;
+  // Multi-agent collaboration
+  isMultiAgent?: boolean;
+  collaborationMessages?: Array<{
+    employeeName: string;
+    employeeAvatar: string;
+    content: string;
+    messageType?: string;
+  }>;
+  employeesInvolved?: string[];
+  isSynthesis?: boolean;
   // Tool execution result fields for inline display
   toolType?: string;
   toolResult?: unknown;
@@ -46,6 +64,13 @@ interface MessageMetadata {
   searchResults?: Array<{ title: string; url: string; snippet: string }>;
   documentData?: { title?: string; content?: string; format?: string };
   downloadData?: { filename: string; content: string; contentType: string };
+  // Citations from server-managed web search tools
+  citations?: Array<{
+    type?: string;
+    cited_text?: string;
+    title?: string;
+    url?: string;
+  }>;
 }
 
 /**
@@ -99,6 +124,28 @@ function getValidatedMetadata(
     result.thinkingSteps = md['thinkingSteps'] as string[];
   }
 
+  // Extended thinking (ThinkingBlock)
+  result.thinkingContent = validateField<string>(md['thinkingContent'], 'string');
+  result.isThinkingStreaming = validateField<boolean>(md['isThinkingStreaming'], 'boolean');
+  result.thinkingStartedAt = validateField<string>(md['thinkingStartedAt'], 'string');
+  result.thinkingCompletedAt = validateField<string>(md['thinkingCompletedAt'], 'string');
+  result.thinkingDurationSeconds = validateField<number>(md['thinkingDurationSeconds'], 'number');
+
+  // Streaming state
+  result.isStreaming = validateField<boolean>(md['isStreaming'], 'boolean');
+
+  // Multi-agent collaboration
+  result.isMultiAgent = validateField<boolean>(md['isMultiAgent'], 'boolean');
+  result.isSynthesis = validateField<boolean>(md['isSynthesis'], 'boolean');
+  if (Array.isArray(md['collaborationMessages'])) {
+    result.collaborationMessages = md[
+      'collaborationMessages'
+    ] as MessageMetadata['collaborationMessages'];
+  }
+  if (Array.isArray(md['employeesInvolved'])) {
+    result.employeesInvolved = md['employeesInvolved'] as string[];
+  }
+
   // Tool execution result fields for inline display
   result.toolType = validateField<string>(md['toolType'], 'string');
   if (md['toolResult'] !== undefined) {
@@ -121,6 +168,11 @@ function getValidatedMetadata(
   }
   if (md['downloadData'] && typeof md['downloadData'] === 'object') {
     result.downloadData = md['downloadData'] as MessageMetadata['downloadData'];
+  }
+
+  // Citations from server-managed web search tools
+  if (Array.isArray(md['citations'])) {
+    result.citations = md['citations'] as MessageMetadata['citations'];
   }
 
   return result;
@@ -277,6 +329,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                     employeeId: meta.employeeId,
                     employeeName: meta.employeeName,
                     employeeAvatar: meta.employeeAvatar,
+                    isStreaming: meta.isStreaming || message.isStreaming,
                     reactions: [],
                     metadata: {
                       tokensUsed: meta.tokens ?? meta.tokensUsed,
@@ -287,6 +340,17 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                       isPinned: meta.isPinned,
                       selectionReason: meta.selectionReason,
                       thinkingSteps: meta.thinkingSteps,
+                      // Extended thinking (ThinkingBlock)
+                      thinkingContent: meta.thinkingContent,
+                      isThinkingStreaming: meta.isThinkingStreaming,
+                      thinkingStartedAt: meta.thinkingStartedAt,
+                      thinkingCompletedAt: meta.thinkingCompletedAt,
+                      thinkingDurationSeconds: meta.thinkingDurationSeconds,
+                      // Multi-agent collaboration
+                      isMultiAgent: meta.isMultiAgent,
+                      collaborationMessages: meta.collaborationMessages,
+                      employeesInvolved: meta.employeesInvolved,
+                      isSynthesis: meta.isSynthesis,
                       // Tool execution result fields - cast to expected types
                       toolType: meta.toolType,
                       toolResult: meta.toolResult as boolean | undefined,
@@ -297,6 +361,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                       videoData: meta.videoData as MediaGenerationResult | undefined,
                       searchResults: meta.searchResults as unknown as SearchResponse | undefined,
                       documentData: meta.documentData as GeneratedDocument | undefined,
+                      citations: meta.citations,
                     },
                   }}
                   onEdit={handleEdit}

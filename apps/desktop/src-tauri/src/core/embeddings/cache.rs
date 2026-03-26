@@ -180,8 +180,8 @@ impl EmbeddingCache {
         )?;
 
         let results = stmt
-            .query_map(params![limit], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?))
+            .query_map(params![limit as i64], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u64))
             })?
             .collect::<Result<Vec<_>, _>>()?;
 

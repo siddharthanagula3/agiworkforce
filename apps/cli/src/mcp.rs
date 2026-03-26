@@ -69,6 +69,27 @@ impl Default for McpTimeouts {
     }
 }
 
+impl McpTimeouts {
+    /// Create timeouts from config, falling back to defaults for unset values.
+    #[allow(dead_code)]
+    pub fn from_config(config: &crate::config::CliConfig) -> Self {
+        let defaults = Self::default();
+        Self {
+            initialize: config
+                .default
+                .mcp_initialize_timeout
+                .map(Duration::from_secs)
+                .unwrap_or(defaults.initialize),
+            call_tool: config
+                .default
+                .mcp_call_tool_timeout
+                .map(Duration::from_secs)
+                .unwrap_or(defaults.call_tool),
+            ..defaults
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // JSON-RPC types
 // ---------------------------------------------------------------------------
@@ -451,7 +472,14 @@ impl McpConnection {
 
                 let response: JsonRpcResponse = match serde_json::from_str(line.trim()) {
                     Ok(r) => r,
-                    Err(_) => continue, // Skip non-JSON-RPC lines (notifications, etc.)
+                    Err(_) => {
+                        // Log non-JSON lines for debugging (e.g. server stderr leaking to stdout)
+                        let trimmed = line.trim();
+                        if !trimmed.is_empty() {
+                            eprintln!("[{}] Skipped non-JSON line: {}", server_name, trimmed);
+                        }
+                        continue;
+                    }
                 };
 
                 // Check if this is our response (matching ID)
@@ -531,15 +559,17 @@ impl McpConnection {
 
 impl Drop for McpConnection {
     fn drop(&mut self) {
-        // Best-effort cleanup — use sync version (Drop cannot be async)
+        // Best-effort sync cleanup — Drop cannot be async.
+        // Use platform-appropriate sync kill on all platforms to avoid
+        // block_on() deadlock risk inside async task contexts.
         #[cfg(unix)]
         kill_process_gracefully_sync(&mut self.child);
 
         #[cfg(not(unix))]
         {
-            if let Ok(rt) = tokio::runtime::Handle::try_current() {
-                let _ = rt.block_on(self.child.kill());
-            }
+            // Sync kill via tokio Child::start_kill() — non-blocking, safe in Drop.
+            // Falls back gracefully if the process already exited.
+            let _ = self.child.start_kill();
         }
     }
 }

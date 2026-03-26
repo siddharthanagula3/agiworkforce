@@ -498,12 +498,16 @@ export default function DispatchScreen() {
   // Auto-scroll when new messages arrive
   const prevMessageCount = useRef(messages.length);
   useEffect(() => {
+    let scrollTimeout: ReturnType<typeof setTimeout> | undefined;
     if (messages.length > prevMessageCount.current) {
-      setTimeout(() => {
+      scrollTimeout = setTimeout(() => {
         listRef.current?.scrollToEnd({ animated: true });
       }, 150);
     }
     prevMessageCount.current = messages.length;
+    return () => {
+      if (scrollTimeout !== undefined) clearTimeout(scrollTimeout);
+    };
   }, [messages.length]);
 
   const handleBack = useCallback(() => {

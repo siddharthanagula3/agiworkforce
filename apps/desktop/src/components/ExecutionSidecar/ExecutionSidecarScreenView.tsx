@@ -1,15 +1,33 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Monitor, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useComputerUseStore } from '../../stores/computerUseStore';
 import { useBrowserStore } from '../../stores/browserStore';
 import { useExecutionSidecarStore } from '../../stores/executionSidecarStore';
+import { ComputerUseOverlay } from './ComputerUseOverlay';
 
 export function ExecutionSidecarScreenView() {
   const [isExpanded, setIsExpanded] = useState(false);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const computerUseActive = useComputerUseStore((s) => s.isActive);
   const computerUseScreenshot = useComputerUseStore((s) => s.currentScreenshot);
+  const actionLog = useComputerUseStore((s) => s.actionLog);
+  const screenWidth = useComputerUseStore((s) => s.screenWidth);
+  const screenHeight = useComputerUseStore((s) => s.screenHeight);
+
+  // Derive last action from action log for overlay positioning
+  const lastAction = actionLog.length > 0 ? actionLog[actionLog.length - 1] : undefined;
+
+  const handleImageLoad = useCallback(() => {
+    if (imageContainerRef.current) {
+      setContainerSize({
+        width: imageContainerRef.current.clientWidth,
+        height: imageContainerRef.current.clientHeight,
+      });
+    }
+  }, []);
 
   const browserSessions = useBrowserStore((s) => s.sessions);
   const browserScreenshots = useBrowserStore((s) => s.screenshots);
@@ -64,10 +82,11 @@ export function ExecutionSidecarScreenView() {
         </button>
       </div>
 
-      {/* Image display */}
+      {/* Image display with computer use overlay */}
       <div
+        ref={imageContainerRef}
         className={cn(
-          'flex-1 overflow-auto flex items-center justify-center p-2 bg-black/20',
+          'relative flex-1 overflow-auto flex items-center justify-center p-2 bg-black/20',
           isExpanded && 'p-0',
         )}
       >
@@ -78,7 +97,22 @@ export function ExecutionSidecarScreenView() {
             'rounded border border-white/10 object-contain',
             isExpanded ? 'w-full h-full' : 'max-w-full max-h-full',
           )}
+          onLoad={handleImageLoad}
         />
+        {computerUseActive && lastAction && containerSize.width > 0 && (
+          <ComputerUseOverlay
+            lastAction={{
+              type: lastAction.action_type,
+              x: lastAction.coordinates?.[0],
+              y: lastAction.coordinates?.[1],
+              text: lastAction.text ?? undefined,
+            }}
+            containerWidth={containerSize.width}
+            containerHeight={containerSize.height}
+            displayWidth={screenWidth ?? 1920}
+            displayHeight={screenHeight ?? 1080}
+          />
+        )}
       </div>
     </div>
   );

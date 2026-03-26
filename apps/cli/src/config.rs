@@ -66,6 +66,14 @@ pub struct DefaultConfig {
     /// Cloud mode default model (top agentic coding models only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cloud_model: Option<String>,
+
+    /// MCP server initialize timeout in seconds (default: 30).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_initialize_timeout: Option<u64>,
+
+    /// MCP tool call timeout in seconds (default: 120).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_call_tool_timeout: Option<u64>,
 }
 
 fn default_approval_mode() -> String {
@@ -111,6 +119,8 @@ impl DefaultConfig {
             sandbox_mode: None,
             review_model: None,
             cloud_model: None,
+            mcp_initialize_timeout: None,
+            mcp_call_tool_timeout: None,
         }
     }
 }
@@ -186,9 +196,19 @@ impl Default for CliConfig {
 
 impl CliConfig {
     /// Returns the path to the config directory: ~/.agiworkforce/
+    /// Creates the directory with mode 0o700 (owner-only) if it doesn't exist.
     pub fn config_dir() -> Result<PathBuf> {
         let home = dirs::home_dir().context("Could not determine home directory")?;
-        Ok(home.join(".agiworkforce"))
+        let dir = home.join(".agiworkforce");
+        if !dir.exists() {
+            std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+            }
+        }
+        Ok(dir)
     }
 
     /// Returns the path to the config file: ~/.agiworkforce/config.toml
@@ -281,6 +301,22 @@ impl CliConfig {
         // If other has fast_model, use it
         if other.default.fast_model.is_some() {
             self.default.fast_model = other.default.fast_model.clone();
+        }
+        // Merge approval_mode if non-default
+        if other.default.approval_mode != default_approval_mode() {
+            self.default.approval_mode = other.default.approval_mode.clone();
+        }
+        // Merge sandbox_mode if set
+        if other.default.sandbox_mode.is_some() {
+            self.default.sandbox_mode = other.default.sandbox_mode.clone();
+        }
+        // Merge review_model if set
+        if other.default.review_model.is_some() {
+            self.default.review_model = other.default.review_model.clone();
+        }
+        // Merge cloud_model if set
+        if other.default.cloud_model.is_some() {
+            self.default.cloud_model = other.default.cloud_model.clone();
         }
         // Merge providers: other's entries override self's for matching keys
         for (key, value) in &other.providers {

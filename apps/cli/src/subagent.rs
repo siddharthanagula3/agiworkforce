@@ -411,13 +411,31 @@ async fn run_subagent(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Heuristically extract file paths that appear to have been modified,
-/// based on common tool output patterns (write_file, edit_file results).
+/// Extract file paths modified by a subagent. Tries structured JSON first
+/// (a `__modified_files` key in the last line), then falls back to regex
+/// pattern matching against tool output messages.
 fn extract_modified_files(output: &str) -> Vec<String> {
+    // Try structured JSON first — subagents can emit a trailing metadata line
+    for line in output.lines().rev().take(5) {
+        let trimmed = line.trim();
+        if trimmed.starts_with('{') && trimmed.contains("__modified_files") {
+            if let Ok(meta) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                if let Some(arr) = meta.get("__modified_files").and_then(|v| v.as_array()) {
+                    let paths: Vec<String> = arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect();
+                    if !paths.is_empty() {
+                        return paths;
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: regex heuristics on tool output patterns
     let mut files = Vec::new();
 
-    // Match patterns like "Successfully wrote ... to /path/to/file"
-    // and "Successfully edited /path/to/file"
     for line in output.lines() {
         if let Some(idx) = line.find("Successfully wrote") {
             if let Some(to_idx) = line[idx..].find(" to ") {

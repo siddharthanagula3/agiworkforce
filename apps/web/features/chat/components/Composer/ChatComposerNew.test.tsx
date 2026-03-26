@@ -185,6 +185,10 @@ describe('ChatComposerNew', () => {
     const onSendMock = vi.fn();
     render(<ChatComposerNew onSend={onSendMock} />);
 
+    // Open the overflow menu first to reveal AgentModeSwitcher
+    const moreBtn = screen.getByRole('button', { name: /more options/i });
+    fireEvent.click(moreBtn);
+
     // Click our mocked AgentModeSwitcher which calls onChange('engineer')
     const switcher = screen.getByTestId('agent-mode-switcher');
     fireEvent.click(switcher);
@@ -206,6 +210,10 @@ describe('ChatComposerNew', () => {
   it('passes selected folderId in meta when FolderContextSelector sets one', async () => {
     const onSendMock = vi.fn();
     render(<ChatComposerNew onSend={onSendMock} />);
+
+    // Open the overflow menu first to reveal FolderContextSelector
+    const moreBtn = screen.getByRole('button', { name: /more options/i });
+    fireEvent.click(moreBtn);
 
     // Click mocked FolderContextSelector which calls onChange('folder-1')
     const folderSelector = screen.getByTestId('folder-context-selector');
@@ -240,8 +248,13 @@ describe('ChatComposerNew', () => {
     expect(screen.getByTestId('ghost-text-overlay')).toBeInTheDocument();
   });
 
-  it('renders the agent mode switcher and folder context selector', () => {
+  it('renders the agent mode switcher and folder context selector in overflow menu', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
+
+    // Open the overflow menu to reveal sub-components
+    const moreBtn = screen.getByRole('button', { name: /more options/i });
+    fireEvent.click(moreBtn);
+
     expect(screen.getByTestId('agent-mode-switcher')).toBeInTheDocument();
     expect(screen.getByTestId('folder-context-selector')).toBeInTheDocument();
   });

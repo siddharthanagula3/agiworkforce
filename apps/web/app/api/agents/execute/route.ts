@@ -3,7 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { readFileSync, existsSync } from 'fs';
+import { readFile, access } from 'fs/promises';
 import { join } from 'path';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { requireCsrfToken } from '@/lib/csrf';
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
@@ -40,7 +41,7 @@ const ExecuteRequestSchema = z.object({
  * Load the canonical system prompt for an employee from the filesystem.
  * Returns the markdown content after YAML frontmatter, or null if not found.
  */
-function loadEmployeeSystemPrompt(employeeId: string): string | null {
+async function loadEmployeeSystemPrompt(employeeId: string): Promise<string | null> {
   // Sanitize employeeId to prevent path traversal
   const sanitized = employeeId.replace(/[^a-zA-Z0-9_-]/g, '');
   if (sanitized !== employeeId) {
@@ -48,11 +49,13 @@ function loadEmployeeSystemPrompt(employeeId: string): string | null {
   }
 
   const filePath = join(process.cwd(), '.agi', 'employees', `${sanitized}.md`);
-  if (!existsSync(filePath)) {
+  try {
+    await access(filePath);
+  } catch {
     return null;
   }
 
-  const content = readFileSync(filePath, 'utf-8');
+  const content = await readFile(filePath, 'utf-8');
 
   // Extract content after YAML frontmatter (--- ... ---)
   const frontmatterMatch = content.match(/^---\s*\n[\s\S]*?\n---\s*\n([\s\S]*)$/);
@@ -92,6 +95,10 @@ function estimateCostCents(messages: Array<{ content: string }>): number {
  * 3. Post-flight: Deduct actual cost based on real token counts
  */
 async function handler(request: NextRequest) {
+  // AUDIT-008-006: Enforce CSRF protection for credit-deducting endpoint
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -154,7 +161,7 @@ async function handler(request: NextRequest) {
     validationResult.data;
 
   // H10: Load canonical skill from filesystem — caller's systemPrompt is appended as context, never replaces
-  const canonicalPrompt = loadEmployeeSystemPrompt(employeeId);
+  const canonicalPrompt = await loadEmployeeSystemPrompt(employeeId);
   if (!canonicalPrompt) {
     throw createError.badRequest(`Employee "${employeeId}" not found`);
   }

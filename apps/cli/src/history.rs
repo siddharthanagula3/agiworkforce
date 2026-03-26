@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use anyhow::Result;
 use serde::Serialize;
 use std::fs::OpenOptions;
@@ -18,9 +19,11 @@ pub struct HistoryEntry {
 
 impl HistoryEntry {
     /// Append a single entry to ~/.agiworkforce/history.jsonl.
-    /// Errors are intentionally swallowed so logging never blocks the agent loop.
+    /// Errors are logged to stderr but never block the agent loop.
     pub fn append(home: &Path, entry: &HistoryEntry) {
-        let _ = Self::append_inner(home, entry);
+        if let Err(e) = Self::append_inner(home, entry) {
+            eprintln!("[history] failed to append entry: {}", e);
+        }
     }
 
     fn append_inner(home: &Path, entry: &HistoryEntry) -> Result<()> {

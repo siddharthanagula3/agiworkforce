@@ -54,7 +54,7 @@ app.disable('x-powered-by'); // Remove X-Powered-By header for security
 
 // Trust proxy if behind a reverse proxy (e.g., Nginx, load balancer)
 if (process.env['TRUST_PROXY'] === 'true') {
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1);
 }
 
 const corsOrigins = (() => {
@@ -141,7 +141,8 @@ app.use(errorHandler);
 
 const server = createServer(app);
 
-const wss = new WebSocketServer({ server, path: '/ws' });
+const MAX_WS_PAYLOAD = Number(process.env['WS_MAX_MESSAGE_SIZE'] ?? 65536);
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_WS_PAYLOAD });
 setupWebSocket(wss);
 
 server.listen(port, () => {
@@ -151,6 +152,11 @@ server.listen(port, () => {
 
 process.on('SIGTERM', () => {
   logger.info({}, 'SIGTERM received, closing server');
+  // Close all WebSocket connections gracefully before shutting down
+  wss.clients.forEach((client) => {
+    client.close(1001, 'Server shutting down');
+  });
+  wss.close();
   server.close(() => {
     logger.info({}, 'Server closed');
     process.exit(0);

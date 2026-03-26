@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authenticatedUserSchema } from './authenticated-user';
 import { requireEnv } from './env';
 import { logger } from './lib/logger';
+import { supabase } from './lib/supabase';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
@@ -168,7 +169,16 @@ export function setupWebSocket(wss: WebSocketServer) {
     logger.error({ error }, 'WebSocketServer error');
   });
 
-  wss.on('connection', (ws: AuthenticatedWebSocket) => {
+  wss.on('connection', (ws: AuthenticatedWebSocket, request) => {
+    // SECURITY: Validate Origin header to prevent cross-site WebSocket hijacking
+    const origin = request.headers['origin'];
+    const corsOrigins = (process.env['CORS_ORIGINS'] ?? '').split(',').filter(Boolean);
+    if (origin && corsOrigins.length > 0 && !corsOrigins.includes(origin)) {
+      logger.warn({ origin }, 'WebSocket connection rejected: disallowed origin');
+      ws.close(1008, 'Forbidden origin');
+      return;
+    }
+
     logger.debug({}, 'New WebSocket connection');
 
     ws.isAlive = true;
@@ -188,13 +198,17 @@ export function setupWebSocket(wss: WebSocketServer) {
     ws.authTimeout = setTimeout(() => {
       if (!ws.userId) {
         logger.warn({}, 'WebSocket connection closed due to authentication timeout');
-        ws.send(
-          JSON.stringify({
-            type: 'error',
-            error: 'Authentication timeout. Please authenticate within 30 seconds.',
-          }),
-        );
-        ws.close(4001, 'Authentication timeout');
+        try {
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              error: 'Authentication timeout. Please authenticate within 30 seconds.',
+            }),
+          );
+          ws.close(4001, 'Authentication timeout');
+        } catch {
+          /* socket may already be closed */
+        }
       }
     }, AUTH_TIMEOUT_MS);
 
@@ -307,8 +321,22 @@ export function setupWebSocket(wss: WebSocketServer) {
     });
   }, 30000);
 
+  // Periodic cleanup of expired pending commands to prevent memory leaks
+  const pendingCleanup = setInterval(() => {
+    const now = Date.now();
+    for (const [key, queue] of pendingCommands) {
+      const valid = queue.filter((cmd) => now - cmd.timestamp < PENDING_COMMAND_TTL);
+      if (valid.length === 0) {
+        pendingCommands.delete(key);
+      } else {
+        pendingCommands.set(key, valid);
+      }
+    }
+  }, 60_000);
+
   wss.on('close', () => {
     clearInterval(interval);
+    clearInterval(pendingCleanup);
   });
 }
 
@@ -339,7 +367,7 @@ function parseMessage(message: RawData): GatewayMessage | null {
   }
 }
 
-function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
+async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
   try {
     const payload = jwt.verify(message.token, JWT_SECRET, {
       algorithms: ['HS256'],
@@ -360,8 +388,27 @@ function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessage) {
 
     const { userId } = parseResult.data;
     ws.userId = userId;
-    if (typeof message.deviceId === 'string') {
-      ws.deviceId = message.deviceId;
+
+    // SECURITY: Verify deviceId ownership before accepting it
+    if (typeof message.deviceId === 'string' && message.deviceId.length > 0) {
+      const { data: pairing } = await supabase
+        .from('device_pairings')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('device_id', message.deviceId)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+
+      if (pairing) {
+        ws.deviceId = message.deviceId;
+      } else {
+        logger.warn(
+          { userId, claimedDeviceId: message.deviceId },
+          'WebSocket auth: deviceId ownership verification failed — ignoring deviceId',
+        );
+        // Do not set ws.deviceId — connection proceeds without device binding
+      }
     } else if (ws.deviceId) {
       delete ws.deviceId;
     }

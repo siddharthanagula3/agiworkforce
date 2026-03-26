@@ -14,6 +14,7 @@ import {
 } from 'lucide-react-native';
 import { type DrawerContentComponentProps } from '@react-navigation/drawer';
 import { Text } from '@/components/ui/text';
+import { DesktopCompanionWidget } from '@/components/shared/DesktopCompanionWidget';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/lib/theme';
@@ -166,6 +167,11 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
             </Pressable>
           );
         })}
+      </View>
+
+      {/* Desktop companion widget */}
+      <View className="px-3 pt-3">
+        <DesktopCompanionWidget compact />
       </View>
 
       {/* Recents section */}

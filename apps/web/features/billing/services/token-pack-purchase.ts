@@ -1,6 +1,7 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { captureError } from '@shared/lib/sentry';
 import { logger } from '@shared/lib/logger';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 interface BuyTokenPackParams {
   userId: string;
@@ -29,7 +30,7 @@ async function getAuthToken(): Promise<string | null> {
  * UPDATED: January 17, 2026 - Added authorization header
  */
 export async function buyTokenPack(params: BuyTokenPackParams): Promise<void> {
-  const { userId, userEmail, packId, tokens, price } = params;
+  const { userId, packId, tokens, price } = params;
 
   // Get auth token first
   const authToken = await getAuthToken();
@@ -48,18 +49,15 @@ export async function buyTokenPack(params: BuyTokenPackParams): Promise<void> {
     }
 
     // Create Stripe checkout session for token pack via API
+    // Server expects amount_cents (not price in dollars), and requires CSRF headers
     const response = await fetch('/api/credit-topup', {
       method: 'POST',
-      headers: {
+      headers: await addCsrfHeaders({
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`,
-      },
+      }),
       body: JSON.stringify({
-        userId,
-        userEmail,
-        packId,
-        tokens,
-        price,
+        amount_cents: Math.round(price * 100),
       }),
     });
 

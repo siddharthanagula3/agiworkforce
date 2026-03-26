@@ -5,7 +5,7 @@ import { Checkbox } from '../ui/Checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
-import { invoke } from '../../lib/tauri-mock';
+import { feedback } from '@agiworkforce/api';
 import { supabaseAuth } from '../../services/supabaseAuth';
 
 interface FeedbackDialogProps {
@@ -37,7 +37,8 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     let cancelled = false;
     setLoadingLogs(true);
 
-    invoke<string[]>('get_filtered_logs')
+    feedback
+      .getFilteredLogs()
       .then((logs) => {
         if (!cancelled) {
           setLogCount(logs.length);
@@ -72,7 +73,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
       let logsText: string | null = null;
       if (attachLogs) {
         try {
-          const logLines = await invoke<string[]>('get_filtered_logs');
+          const logLines = await feedback.getFilteredLogs();
           if (logLines.length > 0) {
             logsText = logLines.join('\n');
           }
@@ -81,17 +82,17 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
         }
       }
 
-      await invoke('submit_feedback', {
+      await feedback.submitFeedback(
         subject,
         message,
-        userId: user?.id,
-        metadata: {
+        user?.id,
+        {
           platform: 'desktop',
           version: '5.0.0',
           userAgent: navigator.userAgent,
         },
-        logs: logsText,
-      });
+        logsText,
+      );
     } catch (err) {
       console.error('Error submitting feedback:', err);
       setError('Failed to send feedback. Please try again.');
