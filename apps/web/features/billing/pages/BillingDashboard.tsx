@@ -9,7 +9,9 @@ import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
 import { Progress } from '@shared/ui/progress';
 import {
+  upgradeToHobbyPlan,
   upgradeToProPlan,
+  upgradeToMaxPlan,
   contactEnterpriseSales,
   openBillingPortal,
   isStripeConfigured,
@@ -107,43 +109,43 @@ interface BillingInfo {
   }[];
 }
 
-interface TokenPack {
+interface CreditPack {
   id: string;
   name: string;
-  tokens: number;
+  credits: number;
   price: number;
   popular?: boolean;
   savings?: string;
 }
 
-const TOKEN_PACKS: TokenPack[] = [
+const CREDIT_PACKS: CreditPack[] = [
   {
-    id: 'pack_500k',
+    id: 'pack_500',
     name: 'Starter Pack',
-    tokens: 500000,
-    price: 10,
+    credits: 500,
+    price: 5,
   },
   {
-    id: 'pack_1.5m',
+    id: 'pack_1500',
     name: 'Popular Pack',
-    tokens: 1500000,
-    price: 25,
+    credits: 1500,
+    price: 12,
     popular: true,
-    savings: 'Save 17%',
+    savings: 'Save 20%',
   },
   {
-    id: 'pack_5m',
+    id: 'pack_5000',
     name: 'Power Pack',
-    tokens: 5000000,
-    price: 75,
-    savings: 'Save 25%',
+    credits: 5000,
+    price: 35,
+    savings: 'Save 30%',
   },
   {
-    id: 'pack_10m',
+    id: 'pack_15000',
     name: 'Enterprise Pack',
-    tokens: 10000000,
-    price: 130,
-    savings: 'Save 35%',
+    credits: 15000,
+    price: 90,
+    savings: 'Save 40%',
   },
 ];
 
@@ -255,15 +257,15 @@ const BillingPage: React.FC = () => {
       });
     };
 
-    // Handle successful token purchase (only show once)
+    // Handle successful credit purchase (only show once)
     if (success === 'true' && tokensParam && user && !hasShownSuccessToast.current) {
       const tokens = parseInt(tokensParam, 10);
       if (!Number.isNaN(tokens) && tokens > 0) {
-        toast.success(`Success! ${tokens.toLocaleString()} tokens added to your account.`, {
+        toast.success(`Success! ${tokens.toLocaleString()} credits added to your account.`, {
           duration: 5000,
         });
       } else {
-        toast.success('Token purchase successful!', { duration: 5000 });
+        toast.success('Credit purchase successful!', { duration: 5000 });
       }
       hasShownSuccessToast.current = true;
 
@@ -286,7 +288,7 @@ const BillingPage: React.FC = () => {
   }, [searchParams, user, invalidateBillingQueries]);
 
   const handleUpgrade = async (
-    plan: 'pro' | 'enterprise',
+    plan: 'hobby' | 'pro' | 'max' | 'enterprise',
     billingPeriod: 'monthly' | 'yearly' = 'monthly',
   ) => {
     if (!user) {
@@ -295,9 +297,23 @@ const BillingPage: React.FC = () => {
     }
 
     try {
-      if (plan === 'pro') {
+      if (plan === 'hobby') {
+        toast.loading('Redirecting to checkout...');
+        await upgradeToHobbyPlan({
+          userId: user.id,
+          userEmail: user.email || '',
+          billingPeriod,
+        });
+      } else if (plan === 'pro') {
         toast.loading('Redirecting to checkout...');
         await upgradeToProPlan({
+          userId: user.id,
+          userEmail: user.email || '',
+          billingPeriod,
+        });
+      } else if (plan === 'max') {
+        toast.loading('Redirecting to checkout...');
+        await upgradeToMaxPlan({
           userId: user.id,
           userEmail: user.email || '',
           billingPeriod,
@@ -355,9 +371,9 @@ const BillingPage: React.FC = () => {
     }
   };
 
-  const handleBuyTokenPack = async (pack: TokenPack) => {
+  const handleBuyTokenPack = async (pack: CreditPack) => {
     if (!user) {
-      toast.error('Please log in to purchase tokens');
+      toast.error('Please log in to purchase credits');
       return;
     }
 
@@ -368,7 +384,7 @@ const BillingPage: React.FC = () => {
         userId: user.id,
         userEmail: user.email || '',
         packId: pack.id,
-        tokens: pack.tokens,
+        tokens: pack.credits,
         price: pack.price,
       });
 
@@ -523,14 +539,29 @@ const BillingPage: React.FC = () => {
                 <ExternalLink className="h-4 w-4" />
               </Button>
             )}
-            {(normalizePlan(billing?.plan) === 'free' ||
-              normalizePlan(billing?.plan) === 'hobby') && (
-              <Button onClick={() => handleUpgrade('pro')} size="sm" className="gradient-primary">
-                <Crown className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Upgrade to Pro</span>
-                <span className="sm:hidden">Upgrade</span>
-              </Button>
-            )}
+            {normalizePlan(billing?.plan) !== 'max' &&
+              normalizePlan(billing?.plan) !== 'enterprise' && (
+                <Button
+                  onClick={() => {
+                    const current = normalizePlan(billing?.plan);
+                    const next = current === 'free' ? 'hobby' : current === 'hobby' ? 'pro' : 'max';
+                    handleUpgrade(next);
+                  }}
+                  size="sm"
+                  className="gradient-primary"
+                >
+                  <Crown className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    Upgrade to{' '}
+                    {normalizePlan(billing?.plan) === 'free'
+                      ? 'Hobby'
+                      : normalizePlan(billing?.plan) === 'hobby'
+                        ? 'Pro'
+                        : 'Max'}
+                  </span>
+                  <span className="sm:hidden">Upgrade</span>
+                </Button>
+              )}
           </div>
         </div>
 
@@ -625,9 +656,9 @@ const BillingPage: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Zap className="h-5 w-5" />
-                <span>Total Token Usage</span>
+                <span>Credit Usage</span>
               </CardTitle>
-              <CardDescription>Combined usage across all LLM providers</CardDescription>
+              <CardDescription>Combined credit usage across all LLM providers</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -643,29 +674,29 @@ const BillingPage: React.FC = () => {
                 <Progress
                   value={safePercentage(
                     billing?.usage?.totalTokens ?? 0,
-                    billing?.usage?.totalLimit ?? 1,
+                    billing?.usage?.totalLimit || 1,
                   )}
                   className="h-3"
                 />
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">
-                    {billing?.plan === 'free' ? 'Monthly Limit' : 'Token Allocation'}
+                    {billing?.plan === 'free' ? 'Monthly Limit' : 'Credit Allocation'}
                   </span>
                   <span className="font-medium">
-                    {((billing?.usage?.totalLimit ?? 1) || 1000000).toLocaleString()} tokens
+                    {(billing?.usage?.totalLimit ?? 0).toLocaleString()} credits
                   </span>
                 </div>
                 {(billing?.usage?.totalTokens ?? 0) > 0 &&
-                  (billing?.usage?.totalTokens ?? 0) >=
-                    ((billing?.usage?.totalLimit ?? 1) || 1000000) * 0.8 && (
+                  (billing?.usage?.totalLimit ?? 0) > 0 &&
+                  (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit ?? 0) * 0.8 && (
                     <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-500">
                       <AlertTriangle className="h-4 w-4" />
                       <span>
                         Approaching limit -{' '}
                         {(
-                          (((billing?.usage?.totalLimit ?? 1) -
+                          (((billing?.usage?.totalLimit || 1) -
                             (billing?.usage?.totalTokens ?? 0)) /
-                            (billing?.usage?.totalLimit ?? 1)) *
+                            (billing?.usage?.totalLimit || 1)) *
                           100
                         ).toFixed(0)}
                         % remaining
@@ -733,20 +764,21 @@ const BillingPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Buy More Tokens Section */}
+        {/* Buy More Credits Section */}
         {(showBuyTokens ||
           ((billing?.usage?.totalTokens ?? 0) > 0 &&
-            (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit ?? 1) * 0.85)) && (
+            (billing?.usage?.totalLimit ?? 0) > 0 &&
+            (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit ?? 0) * 0.85)) && (
           <Card id="buy-tokens-section" className="border-2 border-primary/50">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Zap className="h-6 w-6 text-primary" />
-                    Buy More Tokens
+                    Buy More Credits
                   </CardTitle>
                   <CardDescription>
-                    Purchase additional tokens to keep your AI employees working without
+                    Purchase additional credits to keep your AI employees working without
                     interruption
                   </CardDescription>
                 </div>
@@ -760,10 +792,11 @@ const BillingPage: React.FC = () => {
             <CardContent>
               {/* Warning if near limit */}
               {(billing?.usage?.totalTokens ?? 0) > 0 &&
-                (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit ?? 1) * 0.85 && (
+                (billing?.usage?.totalLimit ?? 0) > 0 &&
+                (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit ?? 0) * 0.85 && (
                   <div
                     className={`mb-6 rounded-lg border p-4 ${
-                      (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit ?? 1) * 0.95
+                      (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit || 1) * 0.95
                         ? 'border-red-500/50 bg-red-500/10'
                         : 'border-yellow-500/50 bg-yellow-500/10'
                     }`}
@@ -772,7 +805,7 @@ const BillingPage: React.FC = () => {
                       <AlertTriangle
                         className={`mt-0.5 h-5 w-5 ${
                           (billing?.usage?.totalTokens ?? 0) >=
-                          (billing?.usage?.totalLimit ?? 1) * 0.95
+                          (billing?.usage?.totalLimit || 1) * 0.95
                             ? 'text-red-500'
                             : 'text-yellow-500'
                         }`}
@@ -780,7 +813,7 @@ const BillingPage: React.FC = () => {
                       <div className="flex-1">
                         <h4 className="mb-1 font-semibold">
                           {(billing?.usage?.totalTokens ?? 0) >=
-                          (billing?.usage?.totalLimit ?? 1) * 0.95
+                          (billing?.usage?.totalLimit || 1) * 0.95
                             ? '🚨 Critical: 95% Usage Reached'
                             : '⚠️ Warning: 85% Usage Reached'}
                         </h4>
@@ -788,20 +821,20 @@ const BillingPage: React.FC = () => {
                           You&apos;ve used{' '}
                           {(
                             ((billing?.usage?.totalTokens ?? 0) /
-                              (billing?.usage?.totalLimit ?? 1)) *
+                              (billing?.usage?.totalLimit || 1)) *
                             100
                           ).toFixed(1)}
-                          % of your {billing?.plan === 'pro' ? '10M' : '1M'} token limit. Buy more
-                          tokens now to avoid service interruption.
+                          % of your {(billing?.usage?.totalLimit ?? 0).toLocaleString()} credit
+                          limit. Buy more credits now to avoid service interruption.
                         </p>
                       </div>
                     </div>
                   </div>
                 )}
 
-              {/* Token Packs Grid */}
+              {/* Credit Packs Grid */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {TOKEN_PACKS.map((pack) => (
+                {CREDIT_PACKS.map((pack) => (
                   <Card
                     key={pack.id}
                     className={cn(
@@ -836,13 +869,13 @@ const BillingPage: React.FC = () => {
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Tokens</span>
-                          <span className="font-bold">{(pack.tokens / 1000000).toFixed(1)}M</span>
+                          <span className="text-muted-foreground">Credits</span>
+                          <span className="font-bold">{pack.credits.toLocaleString()}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Cost per 1K</span>
+                          <span className="text-muted-foreground">Cost per credit</span>
                           <span className="font-medium">
-                            {formatCurrency((pack.price / pack.tokens) * 1000, 'USD')}
+                            {formatCurrency(pack.price / pack.credits, 'USD')}
                           </span>
                         </div>
                       </div>
@@ -863,16 +896,16 @@ const BillingPage: React.FC = () => {
                 ))}
               </div>
 
-              {/* Token Pack Benefits */}
+              {/* Credit Pack Benefits */}
               <div className="mt-6 rounded-lg border border-dashed bg-muted/50 p-4">
-                <h4 className="mb-3 font-medium">✨ Token Pack Benefits</h4>
+                <h4 className="mb-3 font-medium">✨ Credit Pack Benefits</h4>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div className="flex items-start gap-2 text-sm">
                     <CheckCircle className="mt-0.5 h-4 w-4 text-success" />
                     <div>
                       <span className="font-medium">Instant Activation</span>
                       <p className="text-muted-foreground">
-                        Tokens available immediately after purchase
+                        Credits available immediately after purchase
                       </p>
                     </div>
                   </div>
@@ -881,15 +914,17 @@ const BillingPage: React.FC = () => {
                     <div>
                       <span className="font-medium">No Expiration</span>
                       <p className="text-muted-foreground">
-                        Use your tokens whenever you need them
+                        Use your credits whenever you need them
                       </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2 text-sm">
                     <CheckCircle className="mt-0.5 h-4 w-4 text-success" />
                     <div>
-                      <span className="font-medium">Market-Rate Pricing</span>
-                      <p className="text-muted-foreground">Same as direct OpenAI/Anthropic usage</p>
+                      <span className="font-medium">Zero Markup</span>
+                      <p className="text-muted-foreground">
+                        Same input/output token prices as the LLM providers — no extra charge
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-2 text-sm">
@@ -912,8 +947,8 @@ const BillingPage: React.FC = () => {
                     <div className="flex-1">
                       <h4 className="mb-1 font-semibold">💡 Better Value: Upgrade to Pro</h4>
                       <p className="mb-3 text-sm text-muted-foreground">
-                        Get 10M tokens/month for $29/month ($24.99/month if billed yearly) - Better
-                        value than buying token packs if you use AI regularly
+                        Get 1,200 credits/month for $29.99/month — better value than buying credit
+                        packs if you use AI regularly
                       </p>
                       <Button
                         variant="outline"
@@ -932,162 +967,277 @@ const BillingPage: React.FC = () => {
         )}
 
         {/* Upgrade Options */}
-        {(normalizePlan(billing?.plan) === 'free' || normalizePlan(billing?.plan) === 'hobby') && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Upgrade Your Plan</CardTitle>
-                  <CardDescription>Choose a plan that fits your needs</CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Billing:</span>
-                  <div className="flex items-center rounded-lg bg-muted p-1">
-                    <button
-                      onClick={() => setBillingPeriod('monthly')}
-                      className={`rounded-md px-3 py-1 text-sm transition-colors ${
-                        billingPeriod === 'monthly'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Monthly
-                    </button>
-                    <button
-                      onClick={() => setBillingPeriod('yearly')}
-                      className={`rounded-md px-3 py-1 text-sm transition-colors ${
-                        billingPeriod === 'yearly'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Yearly
-                      <Badge variant="secondary" className="ml-1 text-xs">
-                        Save 14%
-                      </Badge>
-                    </button>
+        {normalizePlan(billing?.plan) !== 'max' &&
+          normalizePlan(billing?.plan) !== 'enterprise' && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Upgrade Your Plan</CardTitle>
+                    <CardDescription>Choose a plan that fits your needs</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Billing:</span>
+                    <div className="flex items-center rounded-lg bg-muted p-1">
+                      <button
+                        onClick={() => setBillingPeriod('monthly')}
+                        className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                          billingPeriod === 'monthly'
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Monthly
+                      </button>
+                      <button
+                        onClick={() => setBillingPeriod('yearly')}
+                        className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                          billingPeriod === 'yearly'
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Yearly
+                        <Badge variant="secondary" className="ml-1 text-xs">
+                          Save 14%
+                        </Badge>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                {/* Pro Plan */}
-                <Card className="border-2 border-primary">
-                  <CardHeader>
-                    <div className="flex items-center space-x-2">
-                      <Crown className="h-5 w-5 text-primary" />
-                      <CardTitle>Pro Plan</CardTitle>
-                    </div>
-                    <div className="text-2xl font-bold">
-                      {billingPeriod === 'yearly' ? (
-                        <>
-                          <div className="text-3xl font-bold text-white">
-                            $24.99
-                            <span className="text-lg text-muted-foreground">/month</span>
-                          </div>
-                          <div className="mt-1 text-sm text-muted-foreground">
-                            Billed yearly as $299.88
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          $29
-                          <span className="text-sm text-muted-foreground">/month</span>
-                        </>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2 text-sm">
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>10M tokens/month</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>2.5M tokens per LLM</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>All 4 AI providers</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>Advanced analytics</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>Priority support</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>API access</span>
-                      </li>
-                    </ul>
-                    <Button
-                      className="gradient-primary mt-4 w-full"
-                      onClick={() => handleUpgrade('pro', billingPeriod)}
-                    >
-                      Upgrade to Pro
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                  {/* Hobby Plan */}
+                  {normalizePlan(billing?.plan) === 'free' && (
+                    <Card className="border-2 border-muted-foreground/30">
+                      <CardHeader>
+                        <div className="flex items-center space-x-2">
+                          <Zap className="h-5 w-5 text-primary" />
+                          <CardTitle>Hobby</CardTitle>
+                        </div>
+                        <div className="text-2xl font-bold">
+                          {billingPeriod === 'yearly' ? (
+                            <>
+                              <div className="text-3xl font-bold">
+                                $4.99
+                                <span className="text-lg text-muted-foreground">/month</span>
+                              </div>
+                              <div className="mt-1 text-sm text-muted-foreground">
+                                Billed yearly as $59.88
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              $10
+                              <span className="text-sm text-muted-foreground">/month</span>
+                            </>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2 text-sm">
+                          <li className="flex items-center space-x-2">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>350 credits/month ($3.50 in AI usage)</span>
+                          </li>
+                          <li className="flex items-center space-x-2">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>Speed-optimized AI models</span>
+                          </li>
+                          <li className="flex items-center space-x-2">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>Vision &amp; image analysis</span>
+                          </li>
+                          <li className="flex items-center space-x-2">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>Basic computer use</span>
+                          </li>
+                        </ul>
+                        <Button
+                          className="mt-4 w-full"
+                          variant="outline"
+                          onClick={() => handleUpgrade('hobby', billingPeriod)}
+                        >
+                          Get Hobby
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
 
-                {/* Enterprise Plan */}
-                <Card className="border-2 border-secondary">
-                  <CardHeader>
-                    <div className="flex items-center space-x-2">
-                      <Building className="h-5 w-5 text-primary" />
-                      <CardTitle>Enterprise</CardTitle>
-                    </div>
-                    <div className="text-2xl font-bold">
-                      Custom
-                      <span className="text-sm text-muted-foreground"> pricing</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2 text-sm">
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>Everything in Pro</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>Unlimited tokens</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>White-label option</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>Custom workflows</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>Dedicated account manager</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>SLA guarantee</span>
-                      </li>
-                    </ul>
-                    <Button
-                      className="mt-4 w-full"
-                      variant="outline"
-                      onClick={() => handleUpgrade('enterprise', 'monthly')}
-                    >
-                      Contact Sales
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                  {/* Pro Plan */}
+                  {(normalizePlan(billing?.plan) === 'free' ||
+                    normalizePlan(billing?.plan) === 'hobby') && (
+                    <Card className="border-2 border-primary">
+                      <CardHeader>
+                        <div className="flex items-center space-x-2">
+                          <Crown className="h-5 w-5 text-primary" />
+                          <CardTitle>Pro</CardTitle>
+                          <Badge className="bg-primary text-primary-foreground">Popular</Badge>
+                        </div>
+                        <div className="text-2xl font-bold">
+                          {billingPeriod === 'yearly' ? (
+                            <>
+                              <div className="text-3xl font-bold">
+                                $24.99
+                                <span className="text-lg text-muted-foreground">/month</span>
+                              </div>
+                              <div className="mt-1 text-sm text-muted-foreground">
+                                Billed yearly as $299.88
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              $29.99
+                              <span className="text-sm text-muted-foreground">/month</span>
+                            </>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2 text-sm">
+                          <li className="flex items-center space-x-2">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>1,200 credits/month ($12 in AI usage)</span>
+                          </li>
+                          <li className="flex items-center space-x-2">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>Same price as direct provider rates</span>
+                          </li>
+                          <li className="flex items-center space-x-2">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>Full computer use &amp; browser automation</span>
+                          </li>
+                          <li className="flex items-center space-x-2">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>Image generation &amp; analysis</span>
+                          </li>
+                          <li className="flex items-center space-x-2">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>Email support</span>
+                          </li>
+                        </ul>
+                        <Button
+                          className="gradient-primary mt-4 w-full"
+                          onClick={() => handleUpgrade('pro', billingPeriod)}
+                        >
+                          Upgrade to Pro
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Max Plan */}
+                  <Card className="border-2 border-secondary">
+                    <CardHeader>
+                      <div className="flex items-center space-x-2">
+                        <Star className="h-5 w-5 text-primary" />
+                        <CardTitle>Max</CardTitle>
+                      </div>
+                      <div className="text-2xl font-bold">
+                        {billingPeriod === 'yearly' ? (
+                          <>
+                            <div className="text-3xl font-bold">
+                              $249.99
+                              <span className="text-lg text-muted-foreground">/month</span>
+                            </div>
+                            <div className="mt-1 text-sm text-muted-foreground">
+                              Billed yearly as $2,999.88
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            $299.99
+                            <span className="text-sm text-muted-foreground">/month</span>
+                          </>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2 text-sm">
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>15,000 credits/month ($150 in AI usage)</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>Deep reasoning &amp; thinking models</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>Advanced agentic coding models</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>Video generation &amp; analysis</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>Priority support</span>
+                        </li>
+                      </ul>
+                      <Button
+                        className="mt-4 w-full"
+                        variant="outline"
+                        onClick={() => handleUpgrade('max', billingPeriod)}
+                      >
+                        Upgrade to Max
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Enterprise Plan */}
+                  <Card className="border-2 border-muted-foreground/30">
+                    <CardHeader>
+                      <div className="flex items-center space-x-2">
+                        <Building className="h-5 w-5 text-primary" />
+                        <CardTitle>Enterprise</CardTitle>
+                      </div>
+                      <div className="text-2xl font-bold">
+                        Custom
+                        <span className="text-sm text-muted-foreground"> pricing</span>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2 text-sm">
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>Everything in Max</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>Custom credit allocation</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>White-label option</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>Dedicated account manager</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>SLA guarantee</span>
+                        </li>
+                      </ul>
+                      <Button
+                        className="mt-4 w-full"
+                        variant="outline"
+                        onClick={() => handleUpgrade('enterprise', 'monthly')}
+                      >
+                        Contact Sales
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
         {/* Payment Methods */}
         {billing?.plan !== 'free' && (

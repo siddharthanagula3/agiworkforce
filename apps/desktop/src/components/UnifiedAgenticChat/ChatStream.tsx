@@ -194,7 +194,7 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
                         )}
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-zinc-200">
+                        <div className="text-sm font-medium text-foreground">
                           {art.title ?? 'Generated Artifact'}
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -459,11 +459,11 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
 
   const renderThought = (messageId: string, title: string, body: string) => (
     <details className={card} key={messageId} open>
-      <summary className="flex items-center gap-2 cursor-pointer text-sm text-zinc-200">
+      <summary className="flex items-center gap-2 cursor-pointer text-sm text-foreground">
         <Wand2 className="h-4 w-4 text-indigo-300" />
         {title}
       </summary>
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200/90">{body}</p>
+      <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{body}</p>
     </details>
   );
 
@@ -484,7 +484,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       {toolRationale?.toolName && <ToolRationaleDisplay rationale={toolRationale} />}
       <div className={card} key={messageId}>
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-sm text-zinc-200">
+          <div className="flex items-center gap-2 text-sm text-foreground">
             {panel === 'terminal' && <Terminal className="h-4 w-4 text-emerald-300" />}
             {panel === 'browser' && <MousePointerClick className="h-4 w-4 text-sky-300" />}
             {panel === 'code' && <Braces className="h-4 w-4 text-amber-400" />}

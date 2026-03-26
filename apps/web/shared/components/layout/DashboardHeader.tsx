@@ -119,11 +119,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, classNam
               currentPlan={billingData.plan || 'free'}
               remainingCents={Math.max(
                 0,
-                ((billingData.usage?.totalLimit ?? 1000000) -
-                  (billingData.usage?.totalTokens ?? 0)) /
+                ((billingData.usage?.totalLimit ?? 0) - (billingData.usage?.totalTokens ?? 0)) /
                   100,
               )}
-              allocatedCents={(billingData.usage?.totalLimit ?? 1000000) / 100}
+              allocatedCents={(billingData.usage?.totalLimit ?? 0) / 100}
               usagePercentage={
                 billingData.usage?.totalLimit
                   ? Math.round(
