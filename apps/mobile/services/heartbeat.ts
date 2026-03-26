@@ -65,8 +65,9 @@ export function startMobileHeartbeat(): () => void {
           void sendMobileHeartbeat();
         }
       })
-      .catch(() => {
+      .catch((err) => {
         // Auth check failed — skip this heartbeat cycle
+        console.warn('[Heartbeat] Auth check failed, skipping cycle:', err);
       });
   }, HEARTBEAT_INTERVAL_MS);
 

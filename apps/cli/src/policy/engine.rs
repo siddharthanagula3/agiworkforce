@@ -134,7 +134,10 @@ impl PolicyEngine {
                             continue;
                         }
                     }
-                    Err(_) => continue, // Invalid regex → skip rule
+                    Err(e) => {
+                        eprintln!("[policy] invalid regex pattern '{}': {e}, skipping rule", pattern);
+                        continue;
+                    }
                 }
             }
 

@@ -51,15 +51,15 @@ export function activate(context: vscode.ExtensionContext): void {
   // ── 0. Telemetry ──────────────────────────────────────────────────────────
   try {
     context.subscriptions.push(telemetry.activate(context));
-  } catch {
-    // Telemetry failure must not block extension activation
+  } catch (err) {
+    console.warn('[AGI Workforce] Telemetry activation failed:', err);
   }
 
   // ── 0a. Model Metrics ──────────────────────────────────────────────────────
   try {
     initModelMetrics(context);
-  } catch {
-    // Metrics failure must not block extension activation
+  } catch (err) {
+    console.warn('[AGI Workforce] Model metrics init failed:', err);
   }
 
   // ── 0b. Desktop Bridge ──────────────────────────────────────────────────────
@@ -76,8 +76,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // ── 0c. Checkpoint manager ──────────────────────────────────────────────────
   try {
     initCheckpointManager(context);
-  } catch {
-    // Checkpoint manager is non-critical — don't block activation
+  } catch (err) {
+    console.warn('[AGI Workforce] Checkpoint manager init failed:', err);
   }
 
   // ── 0d. MCP enabled → ensure bridge connects on startup ────────────────────
@@ -267,8 +267,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   try {
     syncCodeLensProvider();
-  } catch {
-    /* non-critical */
+  } catch (err) {
+    console.warn('[AGI Workforce] CodeLens provider init failed:', err);
   }
 
   // ── 4c. Diagnostics provider (AI code review) ────────────────────────────
@@ -278,22 +278,22 @@ export function activate(context: vscode.ExtensionContext): void {
   // ── 4d. Token counter ────────────────────────────────────────────────────
   try {
     activateTokenCounter(context);
-  } catch {
-    // Token counter is non-critical — don't block activation
+  } catch (err) {
+    console.warn('[AGI Workforce] Token counter init failed:', err);
   }
 
   // ── 4e. Terminal integration ──────────────────────────────────────────────
   try {
     activateTerminal(context, context.secrets);
-  } catch {
-    // Terminal integration is non-critical
+  } catch (err) {
+    console.warn('[AGI Workforce] Terminal integration init failed:', err);
   }
 
   // ── 4f. Error explainer + "Ask about code" ───────────────────────────────
   try {
     activateErrorExplainer(context);
-  } catch {
-    // Error explainer is non-critical
+  } catch (err) {
+    console.warn('[AGI Workforce] Error explainer init failed:', err);
   }
 
   let inlineCompletionRegistration: vscode.Disposable | undefined;
@@ -322,8 +322,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   try {
     syncInlineCompletionProvider();
-  } catch {
-    /* non-critical */
+  } catch (err) {
+    console.warn('[AGI Workforce] Inline completion provider init failed:', err);
   }
 
   // ── 5. Commands ─────────────────────────────────────────────────────────────

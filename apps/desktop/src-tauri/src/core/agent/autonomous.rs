@@ -329,7 +329,7 @@ impl AutonomousAgent {
             // Enforce cumulative cost cap (same as run_autonomous_loop)
             if let Ok(router) = self.router.try_read() {
                 let cost = router.get_cumulative_cost();
-                if cost > self.config.max_session_cost as f64 {
+                if cost > self.config.max_session_cost {
                     return Err(anyhow!(
                         "run_goal exceeded session cost cap (${:.2} > ${:.2})",
                         cost,

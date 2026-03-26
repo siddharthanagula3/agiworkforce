@@ -75,7 +75,7 @@ pub(crate) enum StatusLineItem {
     /// Remaining usage on the weekly rate limit.
     WeeklyLimit,
 
-    /// Codex application version.
+    /// Application version.
     AgiWorkforceVersion,
 
     /// Total context window size in tokens.
@@ -118,7 +118,7 @@ impl StatusLineItem {
             StatusLineItem::WeeklyLimit => {
                 "Remaining usage on weekly usage limit (omitted when unavailable)"
             }
-            StatusLineItem::AgiWorkforceVersion => "Codex application version",
+            StatusLineItem::AgiWorkforceVersion => "AGI Workforce application version",
             StatusLineItem::ContextWindowSize => {
                 "Total context window size in tokens (omitted when unknown)"
             }

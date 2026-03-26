@@ -51,8 +51,9 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
           setRemoteModels(models);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         // Fall through — use embedded MODEL_LIST
+        console.warn('[ModelPickerSheet] Remote model catalog fetch failed:', err);
       });
   }, []);
 

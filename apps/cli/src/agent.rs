@@ -190,7 +190,7 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["description", "prompt"]
             }),
         },
-        // --- Codex CLI parity tools ---
+        // --- Extended tool set ---
         ToolDefinition {
             name: "apply_patch".to_string(),
             description: "Apply a unified diff/patch to the working directory.".to_string(),
@@ -582,7 +582,7 @@ impl AgentSession {
     /// get synthetic "aborted" results so the LLM API doesn't reject the
     /// malformed history.
     ///
-    /// Pattern from Codex CLI's `context_manager/normalize.rs`.
+    /// Ensures orphaned tool_use calls get synthetic results.
     #[allow(dead_code)]
     pub fn normalize_history(&mut self) {
         use crate::models::ContentBlock;
@@ -971,7 +971,8 @@ impl AgentSession {
                     ));
                 }
 
-                let mgr = self.subagent_manager.as_ref().unwrap();
+                // SAFETY: We just set subagent_manager above if it was None.
+                let mgr = self.subagent_manager.as_ref().expect("subagent_manager was just initialized above");
                 let id_result = mgr.spawn(&description, &prompt).await;
                 task_spawn_results.push((
                     tc.id.clone(),

@@ -12,7 +12,7 @@ use std::sync::atomic::AtomicUsize;
 #[cfg(not(target_os = "linux"))]
 use std::time::Duration;
 
-const REALTIME_CONVERSATION_PROMPT: &str = "You are in a realtime voice conversation in the Codex TUI. Respond conversationally and concisely.";
+const REALTIME_CONVERSATION_PROMPT: &str = "You are in a realtime voice conversation in the AGI Workforce TUI. Respond conversationally and concisely.";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum RealtimeConversationPhase {

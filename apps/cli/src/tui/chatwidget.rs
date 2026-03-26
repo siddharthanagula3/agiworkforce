@@ -1,4 +1,4 @@
-//! The main Codex TUI chat surface.
+//! The main AGI Workforce TUI chat surface.
 //!
 //! `ChatWidget` consumes protocol events, builds and updates history cells, and drives rendering
 //! for both the main viewport and overlay UIs.
@@ -712,7 +712,7 @@ pub(crate) struct ChatWidget {
     stream_controller: Option<StreamController>,
     // Stream lifecycle controller for proposed plan output.
     plan_stream_controller: Option<PlanStreamController>,
-    // Latest completed user-visible Codex output that `/copy` should place on the clipboard.
+    // Latest completed user-visible output that `/copy` should place on the clipboard.
     last_copyable_output: Option<String>,
     running_commands: HashMap<String, RunningCommand>,
     pending_collab_spawn_requests: HashMap<String, multi_agents::SpawnRequestSummary>,
@@ -2186,7 +2186,7 @@ impl ChatWidget {
         self.finalize_turn();
 
         let message = if message.trim().is_empty() {
-            "Codex is currently experiencing high load.".to_string()
+            "The service is currently experiencing high load.".to_string()
         } else {
             message
         };
@@ -4722,7 +4722,7 @@ impl ChatWidget {
             SlashCommand::Copy => {
                 let Some(text) = self.last_copyable_output.as_deref() else {
                     self.add_info_message(
-                        "`/copy` is unavailable before the first Codex output or right after a rollback."
+                        "`/copy` is unavailable before the first output or right after a rollback."
                             .to_string(),
                         /*hint*/ None,
                     );
@@ -4738,7 +4738,7 @@ impl ChatWidget {
                                 .to_string(),
                         );
                         self.add_info_message(
-                            "Copied latest Codex output to clipboard.".to_string(),
+                            "Copied latest output to clipboard.".to_string(),
                             hint,
                         );
                     }
@@ -6363,7 +6363,7 @@ impl ChatWidget {
 
         let mut header = ColumnRenderable::new();
         header.push(Line::from("Select Personality".bold()));
-        header.push(Line::from("Choose a communication style for Codex.".dim()));
+        header.push(Line::from("Choose a communication style for AGI Workforce.".dim()));
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             header: Box::new(header),
@@ -6399,7 +6399,7 @@ impl ChatWidget {
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             title: Some("Settings".to_string()),
-            subtitle: Some("Configure settings for Codex.".to_string()),
+            subtitle: Some("Configure settings for AGI Workforce.".to_string()),
             footer_hint: Some(standard_popup_hint_line()),
             items,
             ..Default::default()
@@ -7416,7 +7416,7 @@ impl ChatWidget {
         let mut header_children: Vec<Box<dyn Renderable>> = Vec::new();
         let title_line = Line::from("Enable full access?").bold();
         let info_line = Line::from(vec![
-            "When Codex runs with full access, it can edit any file on your computer and run commands with network, without your approval. "
+            "When AGI Workforce runs with full access, it can edit any file on your computer and run commands with network, without your approval. "
                 .into(),
             "Exercise caution when enabling full access. This significantly increases the risk of data loss, leaks, or unexpected behavior."
                 .fg(Color::Red),
@@ -7669,7 +7669,7 @@ impl ChatWidget {
         let mut header = ColumnRenderable::new();
         header.push(*Box::new(
             Paragraph::new(vec![
-                line!["Set up the Codex agent sandbox to protect your files and control network access. Learn more <https://agiworkforce.com/docs/windows>"],
+                line!["Set up the agent sandbox to protect your files and control network access. Learn more <https://agiworkforce.com/docs/windows>"],
             ])
             .wrap(Wrap { trim: false }),
         ));
@@ -7749,7 +7749,7 @@ impl ChatWidget {
         ]);
         lines.push(line![""]);
         lines.push(line![
-            "You can still use Codex in a non-admin sandbox. It carries greater risk if prompt injected."
+            "You can still use AGI Workforce in a non-admin sandbox. It carries greater risk if prompt injected."
         ]);
         lines.push(line![
             "Learn more <https://agiworkforce.com/docs/windows>"
@@ -7783,7 +7783,7 @@ impl ChatWidget {
                 ..Default::default()
             },
             SelectionItem {
-                name: "Use Codex with non-admin sandbox".to_string(),
+                name: "Use AGI Workforce with non-admin sandbox".to_string(),
                 description: None,
                 actions: vec![Box::new({
                     let otel = self.session_telemetry.clone();
@@ -8600,7 +8600,7 @@ impl ChatWidget {
             let instructions = if connector.is_accessible {
                 "Manage this app in your browser."
             } else {
-                "Install this app in your browser, then reload Codex."
+                "Install this app in your browser, then reload AGI Workforce."
             };
             if let Some(install_url) = connector.install_url.clone() {
                 let app_id = connector.id.clone();
@@ -9492,7 +9492,7 @@ impl Notification {
             }
             Notification::EditApprovalRequested { cwd, changes } => {
                 format!(
-                    "Codex wants to edit {}",
+                    "AGI Workforce wants to edit {}",
                     if changes.len() == 1 {
                         #[allow(clippy::unwrap_used)]
                         display_path_for(changes.first().unwrap(), cwd)

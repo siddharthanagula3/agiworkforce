@@ -76,7 +76,10 @@ impl SkillLearner {
         // Query recent sessions from the database
         let recent_patterns = match load_recent_tool_patterns() {
             Ok(patterns) => patterns,
-            Err(_) => return None,
+            Err(e) => {
+                eprintln!("[skill_learner] failed to load recent tool patterns: {e}");
+                return None;
+            }
         };
 
         // Find matching patterns across sessions

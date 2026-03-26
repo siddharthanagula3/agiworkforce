@@ -23,6 +23,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { cn } from '@shared/lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -97,7 +98,7 @@ export const MermaidRenderer = memo(function MermaidRenderer({
         const { svg } = await mermaid.render(renderTargetId, code.trim());
 
         if (!cancelled) {
-          setSvgHtml(svg);
+          setSvgHtml(DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } }));
           setError(null);
         }
       } catch (err) {

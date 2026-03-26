@@ -1,11 +1,11 @@
 // First-run onboarding wizard for AGI Workforce CLI
-// Inspired by Codex CLI and Claude Code onboarding flows
+// First-run onboarding wizard
 
 use anyhow::{Context, Result};
 use colored::Colorize;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Amber/gold brand color (OpenCode-style warm palette)
+// Amber/gold brand color (warm palette)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Print text in brand amber color (TrueColor: #FFB000, fallback: yellow).

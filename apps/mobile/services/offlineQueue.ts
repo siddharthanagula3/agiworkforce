@@ -90,8 +90,9 @@ class OfflineMessageQueue {
         }),
       );
       storage.set(QUEUE_STORAGE_KEY, JSON.stringify(entries));
-    } catch {
+    } catch (err) {
       // Non-fatal — queue will be in-memory only
+      console.warn('[OfflineQueue] Failed to persist queue to MMKV:', err);
     }
   }
 
@@ -111,8 +112,9 @@ class OfflineMessageQueue {
           this.queue.push(entry);
         }
       }
-    } catch {
+    } catch (err) {
       // Corrupted data — start fresh
+      console.warn('[OfflineQueue] Corrupted queue data, resetting:', err);
       storage.delete(QUEUE_STORAGE_KEY);
     }
   }
