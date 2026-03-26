@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { MARKETING } from '@/lib/marketing-constants';
+
 import {
   ArrowRight,
   Scale,
@@ -257,65 +257,6 @@ const topCategories = skillCategories.slice(0, TOP_CATEGORIES);
 const remainingCount = skillCategories.length - TOP_CATEGORIES;
 const remainingNames = skillCategories.slice(TOP_CATEGORIES).map((c) => c.name);
 
-const comparisonRows = [
-  {
-    feature: 'Non-coding AI skills',
-    agi: 'Extensive',
-    claude: 'None',
-    chatgpt: 'GPTs (community)',
-    cursor: 'None',
-  },
-  {
-    feature: 'Industry categories',
-    agi: '23 categories',
-    claude: 'Coding only',
-    chatgpt: 'General chat',
-    cursor: 'Code only',
-  },
-  {
-    feature: 'Desktop app',
-    agi: 'Native (Tauri)',
-    claude: 'Electron',
-    chatgpt: 'Web only',
-    cursor: 'VS Code fork',
-  },
-  {
-    feature: 'Multi-model support',
-    agi: `${MARKETING.providers.display} providers`,
-    claude: 'Claude only',
-    chatgpt: 'GPT only',
-    cursor: 'Multi-model',
-  },
-  {
-    feature: 'Local LLM support',
-    agi: 'Ollama + LM Studio',
-    claude: 'No',
-    chatgpt: 'No',
-    cursor: 'No',
-  },
-  {
-    feature: 'Desktop automation',
-    agi: 'Full control',
-    claude: 'Limited',
-    chatgpt: 'None',
-    cursor: 'Editor only',
-  },
-  {
-    feature: 'Mobile companion',
-    agi: 'iOS + Android',
-    claude: 'None',
-    chatgpt: 'Mobile app',
-    cursor: 'None',
-  },
-  {
-    feature: 'MCP tools',
-    agi: 'Unlimited',
-    claude: 'Limited',
-    chatgpt: 'None',
-    cursor: '40 tool cap',
-  },
-];
-
 const webPageJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebPage',
@@ -463,48 +404,6 @@ export default function AISkillsPage() {
                     </p>
                   </div>
                 </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Comparison table */}
-          <section className="border-t border-[#1a1917] py-20">
-            <div className="mx-auto max-w-3xl px-6">
-              <h2 className="text-lg font-medium tracking-tight">
-                Built for real work, not just code
-              </h2>
-              <p className="mt-2 text-sm text-[#555150]">
-                Every competitor focuses on coding. AGI Workforce is the only platform with
-                non-coding AI skills across 23 categories.
-              </p>
-
-              <div className="mt-10 overflow-x-auto">
-                <table className="w-full min-w-[600px] border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-[#1a1917]">
-                      <th className="py-3 pr-6 text-left font-medium text-[#555150]">Feature</th>
-                      <th className="px-4 py-3 text-left font-medium text-[#c8892a]">
-                        AGI Workforce
-                      </th>
-                      <th className="px-4 py-3 text-left font-normal text-[#555150]">
-                        Claude Desktop
-                      </th>
-                      <th className="px-4 py-3 text-left font-normal text-[#555150]">ChatGPT</th>
-                      <th className="px-4 py-3 text-left font-normal text-[#555150]">Cursor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {comparisonRows.map((row) => (
-                      <tr key={row.feature} className="border-b border-[#1a1917]/50">
-                        <td className="py-3 pr-6 text-[#888480]">{row.feature}</td>
-                        <td className="px-4 py-3 font-medium text-[#edebe8]">{row.agi}</td>
-                        <td className="px-4 py-3 text-[#555150]">{row.claude}</td>
-                        <td className="px-4 py-3 text-[#555150]">{row.chatgpt}</td>
-                        <td className="px-4 py-3 text-[#555150]">{row.cursor}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </div>
           </section>

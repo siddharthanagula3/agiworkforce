@@ -125,8 +125,8 @@ export default function DownloadPage() {
           <section aria-label="Before you install">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-8 space-y-6">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
-                  <Info className="h-5 w-5 text-blue-400" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#c8892a]/10">
+                  <Info className="h-5 w-5 text-[#c8892a]" />
                 </div>
                 <h2 className="text-xl font-semibold">Before you install</h2>
               </div>
@@ -151,8 +151,8 @@ export default function DownloadPage() {
           <section aria-label="What to expect on first launch">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-8 space-y-6">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
-                  <Monitor className="h-5 w-5 text-blue-400" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#c8892a]/10">
+                  <Monitor className="h-5 w-5 text-[#c8892a]" />
                 </div>
                 <h2 className="text-xl font-semibold">What to expect on first launch</h2>
               </div>

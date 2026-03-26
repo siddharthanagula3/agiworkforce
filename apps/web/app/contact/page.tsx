@@ -34,7 +34,7 @@ export default function ContactPage() {
       <main className="flex-1 pt-24">
         {/* Hero Section */}
         <section className="relative overflow-hidden py-16 md:py-24">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black" />
+          <div className="absolute inset-0 bg-black" />
           <div className="container relative mx-auto px-4 text-center">
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
               Get in Touch
@@ -63,10 +63,10 @@ export default function ContactPage() {
                 <div className="space-y-6">
                   <a
                     href="mailto:contact@agiworkforce.com"
-                    className="flex items-start gap-4 p-4 rounded-xl border border-zinc-800 bg-black/50 hover:border-blue-500/50 transition-colors"
+                    className="flex items-start gap-4 p-4 rounded-xl border border-zinc-800 bg-black/50 hover:border-[#c8892a]/50 transition-colors"
                   >
-                    <div className="p-3 rounded-lg bg-blue-500/10">
-                      <Mail className="h-6 w-6 text-blue-500" />
+                    <div className="p-3 rounded-lg bg-[#c8892a]/10">
+                      <Mail className="h-6 w-6 text-[#c8892a]" />
                     </div>
                     <div>
                       <div className="font-semibold mb-1">Email Us</div>
@@ -75,8 +75,8 @@ export default function ContactPage() {
                   </a>
 
                   <div className="flex items-start gap-4 p-4 rounded-xl border border-zinc-800 bg-black/50">
-                    <div className="p-3 rounded-lg bg-blue-500/10">
-                      <MapPin className="h-6 w-6 text-blue-500" />
+                    <div className="p-3 rounded-lg bg-[#c8892a]/10">
+                      <MapPin className="h-6 w-6 text-[#c8892a]" />
                     </div>
                     <div>
                       <div className="font-semibold mb-1">Location</div>
@@ -85,8 +85,8 @@ export default function ContactPage() {
                   </div>
 
                   <div className="flex items-start gap-4 p-4 rounded-xl border border-zinc-800 bg-black/50">
-                    <div className="p-3 rounded-lg bg-blue-500/10">
-                      <MessageSquare className="h-6 w-6 text-blue-500" />
+                    <div className="p-3 rounded-lg bg-[#c8892a]/10">
+                      <MessageSquare className="h-6 w-6 text-[#c8892a]" />
                     </div>
                     <div>
                       <div className="font-semibold mb-1">Response Time</div>
@@ -105,7 +105,7 @@ export default function ContactPage() {
                       href="https://www.linkedin.com/company/agi-automation-llc"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-3 rounded-lg border border-zinc-800 bg-black/50 hover:border-blue-500/50 hover:text-blue-400 transition-colors"
+                      className="p-3 rounded-lg border border-zinc-800 bg-black/50 hover:border-[#c8892a]/50 hover:text-[#c8892a] transition-colors"
                     >
                       <Linkedin className="h-5 w-5" />
                     </a>
@@ -113,7 +113,7 @@ export default function ContactPage() {
                       href="https://www.instagram.com/agiworkforce"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-3 rounded-lg border border-zinc-800 bg-black/50 hover:border-blue-500/50 hover:text-blue-400 transition-colors"
+                      className="p-3 rounded-lg border border-zinc-800 bg-black/50 hover:border-[#c8892a]/50 hover:text-[#c8892a] transition-colors"
                     >
                       <Instagram className="h-5 w-5" />
                     </a>
@@ -135,7 +135,7 @@ export default function ContactPage() {
                     </p>
                     <button
                       onClick={() => setSubmitted(false)}
-                      className="text-blue-400 hover:text-blue-300"
+                      className="text-[#c8892a] hover:text-[#d4993a]"
                     >
                       Send another message
                     </button>
@@ -154,7 +154,7 @@ export default function ContactPage() {
                         required
                         value={formState.name}
                         onChange={(e) => setFormState({ ...formState, name: e.target.value })}
-                        className="w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+                        className="w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 focus:border-[#c8892a] focus:outline-none focus:ring-1 focus:ring-[#c8892a]/50 transition-colors"
                         placeholder="John Doe"
                       />
                     </div>
@@ -169,7 +169,7 @@ export default function ContactPage() {
                         required
                         value={formState.email}
                         onChange={(e) => setFormState({ ...formState, email: e.target.value })}
-                        className="w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+                        className="w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 focus:border-[#c8892a] focus:outline-none focus:ring-1 focus:ring-[#c8892a]/50 transition-colors"
                         placeholder="john@example.com"
                       />
                     </div>
@@ -183,7 +183,7 @@ export default function ContactPage() {
                         required
                         value={formState.subject}
                         onChange={(e) => setFormState({ ...formState, subject: e.target.value })}
-                        className="w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+                        className="w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 focus:border-[#c8892a] focus:outline-none focus:ring-1 focus:ring-[#c8892a]/50 transition-colors"
                       >
                         <option value="">Select a topic</option>
                         <option value="General Inquiry">General Inquiry</option>
@@ -205,7 +205,7 @@ export default function ContactPage() {
                         rows={5}
                         value={formState.message}
                         onChange={(e) => setFormState({ ...formState, message: e.target.value })}
-                        className="w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors resize-none"
+                        className="w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 focus:border-[#c8892a] focus:outline-none focus:ring-1 focus:ring-[#c8892a]/50 transition-colors resize-none"
                         placeholder="How can we help you?"
                       />
                     </div>
@@ -213,7 +213,7 @@ export default function ContactPage() {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full py-3 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full py-3 px-6 rounded-md bg-[#c8892a] hover:bg-[#d4993a] text-[#09090b] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {isSubmitting ? (
                         'Sending...'
