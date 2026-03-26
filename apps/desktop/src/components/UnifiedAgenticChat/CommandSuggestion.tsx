@@ -144,7 +144,7 @@ export function CommandSuggestion({
 
       {}
       {description && (
-        <p className="px-4 py-2 text-xs text-gray-600 dark:text-gray-400 border-b border-emerald-500/10">
+        <p className="px-4 py-2 text-xs text-muted-foreground border-b border-emerald-500/10">
           {description}
         </p>
       )}
@@ -156,7 +156,7 @@ export function CommandSuggestion({
             <textarea
               value={editedCommand}
               onChange={(e) => setEditedCommand(e.target.value)}
-              className="w-full p-2 font-mono text-sm bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/50 resize-none"
+              className="w-full p-2 font-mono text-sm bg-card border border-border rounded-lg text-foreground focus:outline-hidden focus:ring-2 focus:ring-emerald-500/50 resize-none"
               rows={Math.min(editedCommand.split('\n').length + 1, 5)}
               autoFocus
             />
@@ -170,7 +170,7 @@ export function CommandSuggestion({
             </div>
           </div>
         ) : (
-          <div className="font-mono text-sm text-gray-800 dark:text-gray-200 bg-gray-900/50 rounded-lg p-3 overflow-x-auto">
+          <div className="font-mono text-sm text-foreground bg-card/50 rounded-lg p-3 overflow-x-auto">
             <code className="whitespace-pre-wrap break-all">{editedCommand}</code>
           </div>
         )}
@@ -178,7 +178,7 @@ export function CommandSuggestion({
 
       {}
       {workingDirectory && (
-        <div className="px-4 pb-2 text-[10px] text-gray-500">
+        <div className="px-4 pb-2 text-[10px] text-muted-foreground">
           <span className="opacity-60">in</span> {workingDirectory}
         </div>
       )}
@@ -192,7 +192,7 @@ export function CommandSuggestion({
             exit={{ height: 0, opacity: 0 }}
             className="border-t border-emerald-500/20 overflow-hidden"
           >
-            <div className="px-4 py-3 bg-gray-950/50">
+            <div className="px-4 py-3 bg-background/50">
               <div className="flex items-center gap-2 mb-2 text-xs">
                 <span
                   className={cn(
@@ -204,10 +204,10 @@ export function CommandSuggestion({
                 >
                   Exit: {result.exitCode ?? 'N/A'}
                 </span>
-                <span className="text-gray-500">{result.durationMs}ms</span>
+                <span className="text-muted-foreground">{result.durationMs}ms</span>
               </div>
               {result.stdout && (
-                <pre className="font-mono text-xs text-gray-300 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                <pre className="font-mono text-xs text-foreground whitespace-pre-wrap max-h-40 overflow-y-auto">
                   {result.stdout}
                 </pre>
               )}
@@ -223,7 +223,7 @@ export function CommandSuggestion({
 
       {}
       {!executed && !isEditing && (
-        <div className="flex items-center gap-2 px-4 py-3 bg-gray-50/50 dark:bg-gray-900/30 border-t border-emerald-500/10">
+        <div className="flex items-center gap-2 px-4 py-3 bg-card/30 border-t border-emerald-500/10">
           <Button
             size="sm"
             onClick={handleExecute}
@@ -266,7 +266,7 @@ export function CommandSuggestion({
 
       {}
       {executed && !isEditing && (
-        <div className="flex items-center gap-2 px-4 py-3 bg-gray-50/50 dark:bg-gray-900/30 border-t border-emerald-500/10">
+        <div className="flex items-center gap-2 px-4 py-3 bg-card/30 border-t border-emerald-500/10">
           <Button
             size="sm"
             variant="outline"

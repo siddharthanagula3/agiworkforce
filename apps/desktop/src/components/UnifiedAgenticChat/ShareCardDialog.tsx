@@ -97,12 +97,12 @@ export function ShareCardDialog({
         if (e.target === e.currentTarget) handleClose();
       }}
     >
-      <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+      <div className="relative w-full max-w-md rounded-2xl bg-card shadow-2xl border border-border overflow-hidden">
         {/* Close button */}
         <button
           type="button"
           onClick={handleClose}
-          className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+          className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground transition-colors"
           aria-label="Close share dialog"
         >
           <X className="h-4 w-4" />
@@ -134,7 +134,9 @@ export function ShareCardDialog({
 
           {/* First message preview */}
           {truncatedMessage && (
-            <p className="text-sm text-zinc-400 leading-relaxed line-clamp-3">{truncatedMessage}</p>
+            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+              {truncatedMessage}
+            </p>
           )}
 
           {/* AGI Workforce branding */}
@@ -156,7 +158,7 @@ export function ShareCardDialog({
 
         {/* Share buttons section */}
         <div className="px-6 py-5">
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-4 text-center uppercase tracking-wider">
+          <p className="text-xs font-medium text-muted-foreground mb-4 text-center uppercase tracking-wider">
             Share via
           </p>
 
@@ -169,8 +171,8 @@ export function ShareCardDialog({
               icon={
                 copied ? <Check className="h-5 w-5 text-green-500" /> : <Link className="h-5 w-5" />
               }
-              bgClass="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-              iconClass="text-zinc-600 dark:text-zinc-300"
+              bgClass="bg-muted hover:bg-accent"
+              iconClass="text-foreground"
             />
 
             {/* X / Twitter */}
@@ -178,7 +180,7 @@ export function ShareCardDialog({
               label="X"
               onClick={handleShareX}
               icon={<XIcon className="h-5 w-5" />}
-              bgClass="bg-black hover:bg-zinc-800"
+              bgClass="bg-black hover:bg-accent"
               iconClass="text-white"
             />
 
@@ -208,7 +210,7 @@ export function ShareCardDialog({
             variant="outline"
             size="sm"
             onClick={handleClose}
-            className="w-full text-xs text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+            className="w-full text-xs text-muted-foreground border-border"
           >
             Done
           </Button>
@@ -252,7 +254,7 @@ function ShareCircleButton({ label, onClick, icon, bgClass, iconClass }: ShareCi
       >
         {icon}
       </button>
-      <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">{label}</span>
+      <span className="text-[10px] font-medium text-muted-foreground">{label}</span>
     </div>
   );
 }

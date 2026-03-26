@@ -42,7 +42,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
   return (
     <Card
       className={cn(
-        'w-full overflow-hidden border border-indigo-500/20 bg-linear-to-br from-zinc-950 to-indigo-950/20',
+        'w-full overflow-hidden border border-indigo-500/20 bg-linear-to-br from-background to-indigo-950/20',
         className,
       )}
     >
@@ -65,10 +65,10 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-lg font-medium text-zinc-100 line-clamp-1" title={task.query}>
+            <h3 className="text-lg font-medium text-foreground line-clamp-1" title={task.query}>
               {task.query}
             </h3>
-            <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
               {task.timeElapsed && (
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" /> {task.timeElapsed}
@@ -89,7 +89,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
           >
             <ChevronDown
               className={cn(
-                'h-5 w-5 text-zinc-400 transition-transform',
+                'h-5 w-5 text-muted-foreground transition-transform',
                 isExpanded && 'rotate-180',
               )}
             />
@@ -107,7 +107,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
         <div className="mt-3">
           <Progress
             value={task.progress}
-            className="h-1 bg-zinc-800"
+            className="h-1 bg-muted"
             indicatorClassName="bg-indigo-500 transition-all duration-500"
           />
         </div>
@@ -130,7 +130,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                   'flex-1 py-2 px-4 text-center border-b-2 transition-colors',
                   activeTab === 'process'
                     ? 'border-indigo-500 text-indigo-400 font-medium'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-300',
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
                 )}
               >
                 Process
@@ -142,7 +142,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                   'flex-1 py-2 px-4 text-center border-b-2 transition-colors',
                   activeTab === 'findings'
                     ? 'border-indigo-500 text-indigo-400 font-medium'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-300',
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
                 )}
               >
                 Findings ({task.findings.length})
@@ -154,7 +154,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                   'flex-1 py-2 px-4 text-center border-b-2 transition-colors',
                   activeTab === 'sources'
                     ? 'border-indigo-500 text-indigo-400 font-medium'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-300',
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
                 )}
               >
                 Sources ({task.sources.length})
@@ -168,7 +168,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                     <div key={step.id || idx} className="flex gap-3 relative">
                       {}
                       {idx !== task.steps.length - 1 && (
-                        <div className="absolute left-[9px] top-6 bottom-[-12px] w-[2px] bg-zinc-800" />
+                        <div className="absolute left-[9px] top-6 bottom-[-12px] w-[2px] bg-muted" />
                       )}
 
                       <div
@@ -180,7 +180,7 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                               ? 'bg-indigo-500/20 text-indigo-400'
                               : step.status === 'failed'
                                 ? 'bg-red-500/20 text-red-400'
-                                : 'bg-zinc-800 text-zinc-500',
+                                : 'bg-muted text-muted-foreground',
                         )}
                       >
                         {step.status === 'completed' ? (
@@ -200,18 +200,18 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                             'text-sm',
                             step.status === 'running'
                               ? 'text-indigo-200 font-medium'
-                              : 'text-zinc-300',
+                              : 'text-foreground',
                           )}
                         >
                           {step.description}
                         </p>
                         {step.details && (
-                          <p className="text-xs text-zinc-500 mt-0.5">{step.details}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{step.details}</p>
                         )}
                       </div>
 
                       {step.timestamp && (
-                        <span className="text-[10px] text-zinc-600 tabular-nums">
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
                           {new Date(step.timestamp).toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit',
@@ -230,14 +230,14 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                     task.findings.map((finding, idx) => (
                       <li
                         key={idx}
-                        className="flex gap-2 text-sm text-zinc-300 bg-white/5 p-2 rounded"
+                        className="flex gap-2 text-sm text-foreground bg-white/5 p-2 rounded"
                       >
                         <BookOpen className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
                         <span>{finding}</span>
                       </li>
                     ))
                   ) : (
-                    <div className="text-center text-zinc-500 py-8 text-sm">
+                    <div className="text-center text-muted-foreground py-8 text-sm">
                       No findings yet. Research is in progress...
                     </div>
                   )}
@@ -262,10 +262,10 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-zinc-200 truncate group-hover:text-indigo-300 transition-colors">
+                          <div className="text-sm font-medium text-foreground truncate group-hover:text-indigo-300 transition-colors">
                             {source.title}
                           </div>
-                          <div className="text-xs text-zinc-500 truncate">
+                          <div className="text-xs text-muted-foreground truncate">
                             {/* AUDIT-005-011 fix: Wrap URL parsing in try/catch with fallback */}
                             {source.domain ||
                               (() => {
@@ -277,11 +277,11 @@ export function DeepResearchPanel({ task, className, onViewSource }: DeepResearc
                               })()}
                           </div>
                         </div>
-                        <ExternalLink className="h-3 w-3 text-zinc-600 group-hover:text-zinc-400" />
+                        <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-muted-foreground" />
                       </button>
                     ))
                   ) : (
-                    <div className="text-center text-zinc-500 py-8 text-sm">
+                    <div className="text-center text-muted-foreground py-8 text-sm">
                       No sources gathered yet.
                     </div>
                   )}

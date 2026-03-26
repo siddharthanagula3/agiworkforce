@@ -65,15 +65,13 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
         onClick={() => setShowExpanded(true)}
         className={`w-full text-left px-3 py-2 rounded-lg ${
           isSuccess
-            ? 'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800'
+            ? 'bg-muted/50 hover:bg-muted'
             : 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
         } transition-colors ${className}`}
       >
         <div className="flex items-center gap-2 text-sm">
           <Terminal size={14} className={isSuccess ? 'text-green-600' : 'text-red-600'} />
-          <span className="text-gray-700 dark:text-gray-300 truncate">
-            Executing terminal command...
-          </span>
+          <span className="text-foreground truncate">Executing terminal command...</span>
           {isSuccess ? (
             <Check size={14} className="text-green-600 shrink-0" />
           ) : (
@@ -87,15 +85,15 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
   return (
     <div
       className={`terminal-command-card rounded-lg border ${
-        isSuccess ? 'border-gray-200 dark:border-gray-700' : 'border-red-200 dark:border-red-900'
-      } bg-white dark:bg-gray-800 overflow-hidden ${className}`}
+        isSuccess ? 'border-border' : 'border-red-200 dark:border-red-900'
+      } bg-card overflow-hidden ${className}`}
     >
       {compactMode && (
         <div className="px-4 pt-3 pb-2">
           <button
             type="button"
             onClick={() => setShowExpanded(false)}
-            className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            className="text-xs text-muted-foreground hover:text-foreground"
           >
             ← Hide details
           </button>
@@ -118,7 +116,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
           {}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-medium uppercase text-gray-600 dark:text-gray-400">
+              <span className="text-xs font-medium uppercase text-muted-foreground">
                 Terminal Command
               </span>
               {isSuccess ? (
@@ -136,21 +134,21 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
 
             {}
             <div className="flex items-center gap-2 mb-2">
-              <div className="flex-1 font-mono text-sm bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 overflow-x-auto">
-                <code className="text-gray-900 dark:text-gray-100">{command.command}</code>
+              <div className="flex-1 font-mono text-sm bg-muted px-3 py-2 rounded border border-border overflow-x-auto">
+                <code className="text-foreground">{command.command}</code>
               </div>
               <button
                 type="button"
                 onClick={handleCopyCommand}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors shrink-0"
+                className="p-1.5 hover:bg-accent rounded transition-colors shrink-0"
                 title="Copy command"
               >
-                <Copy size={14} className="text-gray-600 dark:text-gray-400" />
+                <Copy size={14} className="text-muted-foreground" />
               </button>
             </div>
 
             {}
-            <div className="flex items-center gap-2 mb-2 text-xs text-gray-600 dark:text-gray-400">
+            <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
               <FolderOpen size={12} />
               <span className="font-mono truncate" title={command.cwd}>
                 {command.cwd}
@@ -158,7 +156,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
             </div>
 
             {}
-            <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Clock size={12} />
                 {formattedTime}
@@ -180,10 +178,10 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
             <button
               type="button"
               onClick={onRerun}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-accent rounded transition-colors"
               title="Re-run command"
             >
-              <RotateCw size={14} className="text-gray-600 dark:text-gray-400" />
+              <RotateCw size={14} className="text-muted-foreground" />
             </button>
           )}
         </div>
@@ -195,7 +193,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
           {!showFullOutput ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div className="text-xs text-gray-600 dark:text-gray-400">
+                <div className="text-xs text-muted-foreground">
                   Output available ({command.stdout?.split('\n').length || 0} stdout,{' '}
                   {command.stderr?.split('\n').length || 0} stderr lines)
                 </div>
@@ -214,7 +212,7 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowFullOutput(false)}
-                className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:underline mb-2"
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:underline mb-2"
               >
                 <ChevronDown size={14} />
                 Hide output

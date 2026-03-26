@@ -179,7 +179,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
       />
       {(pendingAction || actionError || (requiresApproval && !confirmationRequestId)) && (
         <div className="mt-2 px-1 text-[11px]">
-          {pendingAction && <p className="text-zinc-400">Waiting for {pendingAction}...</p>}
+          {pendingAction && <p className="text-muted-foreground">Waiting for {pendingAction}...</p>}
           {actionError && <p className="text-red-400">{actionError}</p>}
           {!actionError && requiresApproval && !confirmationRequestId && (
             <p className="text-amber-400">Approval request is no longer available.</p>
@@ -200,7 +200,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
           <button
             type="button"
             onClick={() => onToggleSidecar(targetTab as SidecarMode)}
-            className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
           >
             Open in {targetTab} view
           </button>

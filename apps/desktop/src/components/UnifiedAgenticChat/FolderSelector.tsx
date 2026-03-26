@@ -174,7 +174,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
           <ChevronDown
             size={14}
             className={cn(
-              'text-gray-400 dark:text-gray-500 shrink-0 transition-transform',
+              'text-muted-foreground shrink-0 transition-transform',
               isOpen && 'rotate-180',
             )}
             aria-hidden="true"
@@ -184,23 +184,19 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     }
 
     if (compact) {
-      return <Folder size={18} className="text-gray-400 dark:text-gray-500" aria-hidden="true" />;
+      return <Folder size={18} className="text-muted-foreground" aria-hidden="true" />;
     }
 
     return (
       <>
-        <Folder
-          size={16}
-          className="text-gray-400 dark:text-gray-500 shrink-0"
-          aria-hidden="true"
-        />
-        <span className="text-sm text-gray-500 dark:text-gray-400">
+        <Folder size={16} className="text-muted-foreground shrink-0" aria-hidden="true" />
+        <span className="text-sm text-muted-foreground">
           {isSimpleMode ? 'Select folder' : 'No folder selected'}
         </span>
         <ChevronDown
           size={14}
           className={cn(
-            'text-gray-400 dark:text-gray-500 shrink-0 transition-transform',
+            'text-muted-foreground shrink-0 transition-transform',
             isOpen && 'rotate-180',
           )}
           aria-hidden="true"
@@ -215,7 +211,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
       disabled={disabled || isSelecting}
       className={cn(
         'flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors',
-        'hover:bg-gray-100 dark:hover:bg-charcoal-700',
+        'hover:bg-accent',
         'focus:outline-none focus:ring-2 focus:ring-primary/20',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         currentFolder && 'bg-primary/5 dark:bg-primary/10',
@@ -232,7 +228,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
       <DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel className="text-xs text-gray-500 dark:text-gray-400">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
           Project Folder
         </DropdownMenuLabel>
 
@@ -250,10 +246,10 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
                 <button
                   type="button"
                   onClick={handleClearFolder}
-                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-charcoal-600 transition-colors"
+                  className="p-1 rounded hover:bg-accent transition-colors"
                   title="Clear folder selection"
                 >
-                  <X size={14} className="text-gray-500 dark:text-gray-400" />
+                  <X size={14} className="text-muted-foreground" />
                 </button>
               </div>
             </div>
@@ -267,7 +263,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
           disabled={isSelecting}
           className="cursor-pointer"
         >
-          <Folder size={14} className="mr-2 text-gray-500 dark:text-gray-400" />
+          <Folder size={14} className="mr-2 text-muted-foreground" />
           <span>{isSelecting ? 'Opening...' : 'Browse for folder...'}</span>
         </DropdownMenuItem>
 
@@ -276,7 +272,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
           <>
             <DropdownMenuSeparator />
             <div className="flex items-center justify-between px-2 py-1.5">
-              <DropdownMenuLabel className="text-xs text-gray-500 dark:text-gray-400 p-0">
+              <DropdownMenuLabel className="text-xs text-muted-foreground p-0">
                 <Clock size={12} className="inline mr-1" />
                 Recent Folders
               </DropdownMenuLabel>
@@ -286,7 +282,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
                   e.stopPropagation();
                   clearRecentFolders();
                 }}
-                className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 title="Clear recent folders"
               >
                 Clear all
@@ -298,17 +294,17 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
                 onClick={() => handleSelectRecentFolder(folder)}
                 className="cursor-pointer group"
               >
-                <Folder size={14} className="mr-2 text-gray-400 dark:text-gray-500 shrink-0" />
+                <Folder size={14} className="mr-2 text-muted-foreground shrink-0" />
                 <span className="truncate flex-1" title={folder}>
                   {formatFolderPath(folder)}
                 </span>
                 <button
                   type="button"
                   onClick={(e) => handleRemoveRecentFolder(e, folder)}
-                  className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-gray-200 dark:hover:bg-charcoal-600 transition-all"
+                  className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-all"
                   title="Remove from recent"
                 >
-                  <Trash2 size={12} className="text-gray-400" />
+                  <Trash2 size={12} className="text-muted-foreground" />
                 </button>
               </DropdownMenuItem>
             ))}
@@ -317,7 +313,7 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
 
         {/* Help text */}
         <DropdownMenuSeparator />
-        <div className="px-2 py-1.5 text-xs text-gray-400 dark:text-gray-500">
+        <div className="px-2 py-1.5 text-xs text-muted-foreground">
           {isSimpleMode
             ? 'Select a folder to work with files in that location.'
             : 'Scope your session to a specific project directory for file operations.'}

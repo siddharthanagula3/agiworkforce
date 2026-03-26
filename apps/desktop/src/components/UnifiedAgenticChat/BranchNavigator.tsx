@@ -52,7 +52,7 @@ const BranchNavigatorComponent: React.FC<BranchNavigatorProps> = ({
   const displayIndex = currentIndex === -1 ? '?' : currentIndex + 1;
 
   return (
-    <div className="inline-flex items-center gap-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-1 py-0.5">
+    <div className="inline-flex items-center gap-0.5 rounded bg-muted border border-border px-1 py-0.5">
       <button
         type="button"
         onClick={handlePrev}
@@ -60,8 +60,8 @@ const BranchNavigatorComponent: React.FC<BranchNavigatorProps> = ({
         className={cn(
           'flex items-center justify-center w-4 h-4 rounded transition-colors',
           currentIndex <= 0
-            ? 'text-zinc-300 dark:text-zinc-600 cursor-not-allowed'
-            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700',
+            ? 'text-muted-foreground cursor-not-allowed'
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent',
         )}
         aria-label="Previous branch"
       >
@@ -69,7 +69,7 @@ const BranchNavigatorComponent: React.FC<BranchNavigatorProps> = ({
       </button>
 
       <span
-        className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 px-0.5 min-w-[28px] text-center cursor-default"
+        className="text-[10px] font-mono text-muted-foreground px-0.5 min-w-[28px] text-center cursor-default"
         title={activeBranch?.name ?? activeBranchId}
       >
         {displayIndex}/{total}
@@ -82,8 +82,8 @@ const BranchNavigatorComponent: React.FC<BranchNavigatorProps> = ({
         className={cn(
           'flex items-center justify-center w-4 h-4 rounded transition-colors',
           currentIndex >= total - 1
-            ? 'text-zinc-300 dark:text-zinc-600 cursor-not-allowed'
-            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700',
+            ? 'text-muted-foreground cursor-not-allowed'
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent',
         )}
         aria-label="Next branch"
       >

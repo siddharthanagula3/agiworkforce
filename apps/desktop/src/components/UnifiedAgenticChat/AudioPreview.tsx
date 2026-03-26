@@ -226,7 +226,7 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
     return (
       <div
         className={cn(
-          'group relative inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-charcoal-700 px-3 py-2 text-sm',
+          'group relative inline-flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm',
           className,
         )}
       >
@@ -240,11 +240,11 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
           {isPlaying ? <Pause size={14} /> : <Play size={14} />}
         </button>
 
-        <Volume2 size={14} className="text-gray-400" />
+        <Volume2 size={14} className="text-muted-foreground" />
 
-        <span className="truncate max-w-[120px] text-gray-700 dark:text-gray-300">{name}</span>
+        <span className="truncate max-w-[120px] text-foreground">{name}</span>
 
-        <span className="text-xs text-gray-400 tabular-nums">
+        <span className="text-xs text-muted-foreground tabular-nums">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
 
@@ -252,7 +252,7 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
           <button
             type="button"
             onClick={onRemove}
-            className="text-gray-400 hover:text-gray-600 transition"
+            className="text-muted-foreground hover:text-foreground transition"
           >
             <X size={14} />
           </button>
@@ -264,7 +264,7 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
   return (
     <div
       className={cn(
-        'relative rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-charcoal-700/50 p-3 overflow-hidden',
+        'relative rounded-xl border border-border bg-muted/50 p-3 overflow-hidden',
         className,
       )}
     >
@@ -287,7 +287,7 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
 
         {/* Waveform visualization */}
         <div className="flex-1 min-w-0">
-          <div className="relative h-10 rounded-lg overflow-hidden bg-gray-100 dark:bg-charcoal-800">
+          <div className="relative h-10 rounded-lg overflow-hidden bg-muted">
             <canvas ref={canvasRef} width={200} height={40} className="w-full h-full" />
             {/* Progress overlay */}
             <div
@@ -298,13 +298,13 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
 
           {/* Time display */}
           <div className="flex items-center justify-between mt-1.5 px-1">
-            <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+            <span className="text-xs text-muted-foreground tabular-nums">
               {formatTime(currentTime)}
             </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[150px] mx-2">
+            <span className="text-xs text-muted-foreground truncate max-w-[150px] mx-2">
               {name}
             </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+            <span className="text-xs text-muted-foreground tabular-nums">
               {formatTime(duration)}
             </span>
           </div>
@@ -315,7 +315,7 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
           <button
             type="button"
             onClick={onRemove}
-            className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-200 dark:hover:bg-charcoal-600 transition-colors"
+            className="flex-shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >
             <X size={16} />
           </button>

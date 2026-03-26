@@ -77,63 +77,59 @@ export function TransferDialog({
         if (e.target === e.currentTarget && !isLoading) onClose();
       }}
     >
-      <div className="relative w-full max-w-md rounded-xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6">
+      <div className="relative w-full max-w-md rounded-xl bg-card shadow-2xl border border-border p-6">
         {/* Close button */}
         <button
           type="button"
           onClick={onClose}
           disabled={isLoading}
-          className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors disabled:opacity-50"
+          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
           aria-label="Close"
         >
           <X className="h-4 w-4" />
         </button>
 
         {/* Header */}
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
-          Transfer Conversation
-        </h2>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-5">
+        <h2 className="text-sm font-semibold text-foreground mb-1">Transfer Conversation</h2>
+        <p className="text-xs text-muted-foreground mb-5">
           {isLocalToCloud
             ? 'Copy this conversation from your device to cloud storage.'
             : 'Download this conversation from cloud to your device.'}
         </p>
 
         {/* Direction indicator */}
-        <div className="flex items-center justify-center gap-4 py-4 mb-5 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700">
+        <div className="flex items-center justify-center gap-4 py-4 mb-5 rounded-lg bg-muted border border-border">
           {isLocalToCloud ? (
             <>
               <div className="flex flex-col items-center gap-1">
                 <HardDrive className="h-6 w-6 text-emerald-500" />
-                <span className="text-[10px] font-medium text-zinc-500">Local</span>
+                <span className="text-[10px] font-medium text-muted-foreground">Local</span>
               </div>
-              <ArrowRight className="h-4 w-4 text-zinc-400" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
               <div className="flex flex-col items-center gap-1">
                 <Cloud className="h-6 w-6 text-blue-500" />
-                <span className="text-[10px] font-medium text-zinc-500">Cloud</span>
+                <span className="text-[10px] font-medium text-muted-foreground">Cloud</span>
               </div>
             </>
           ) : (
             <>
               <div className="flex flex-col items-center gap-1">
                 <Cloud className="h-6 w-6 text-blue-500" />
-                <span className="text-[10px] font-medium text-zinc-500">Cloud</span>
+                <span className="text-[10px] font-medium text-muted-foreground">Cloud</span>
               </div>
-              <ArrowRight className="h-4 w-4 text-zinc-400" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
               <div className="flex flex-col items-center gap-1">
                 <HardDrive className="h-6 w-6 text-emerald-500" />
-                <span className="text-[10px] font-medium text-zinc-500">Local</span>
+                <span className="text-[10px] font-medium text-muted-foreground">Local</span>
               </div>
             </>
           )}
         </div>
 
         {/* Conversation title */}
-        <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-4">
+        <p className="text-xs text-muted-foreground mb-4">
           Transferring:{' '}
-          <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            &ldquo;{conversationTitle}&rdquo;
-          </span>
+          <span className="font-medium text-foreground">&ldquo;{conversationTitle}&rdquo;</span>
         </p>
 
         {/* Delete original checkbox */}
@@ -144,12 +140,12 @@ export function TransferDialog({
             onChange={(e) => setDeleteOriginal(e.target.checked)}
             disabled={isLoading}
             className={cn(
-              'h-4 w-4 rounded border-zinc-300 dark:border-zinc-600',
+              'h-4 w-4 rounded border-border',
               'text-blue-500 focus:ring-blue-500/50 cursor-pointer',
               'disabled:opacity-50 disabled:cursor-not-allowed',
             )}
           />
-          <span className="text-xs text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors">
+          <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
             Delete original after transfer
           </span>
         </label>

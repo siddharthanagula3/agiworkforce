@@ -48,7 +48,7 @@ function StepIcon({ status }: { status: SubtaskStep['status'] }) {
     case 'running':
       return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-400" />;
     default:
-      return <Circle className="h-4 w-4 shrink-0 text-zinc-600" />;
+      return <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />;
   }
 }
 
@@ -68,12 +68,12 @@ function StepRow({ step, isLast }: StepRowProps) {
 
   const descriptionColor =
     step.status === 'done'
-      ? 'text-zinc-300'
+      ? 'text-foreground'
       : step.status === 'failed'
         ? 'text-red-300'
         : step.status === 'running'
           ? 'text-blue-300'
-          : 'text-zinc-500';
+          : 'text-muted-foreground';
 
   return (
     <div className="flex gap-3">
@@ -90,7 +90,7 @@ function StepRow({ step, isLast }: StepRowProps) {
                 ? 'bg-green-400/30'
                 : step.status === 'failed'
                   ? 'bg-red-400/30'
-                  : 'bg-zinc-700',
+                  : 'bg-border',
             )}
             style={{ minHeight: 16 }}
           />
@@ -116,13 +116,15 @@ function StepRow({ step, isLast }: StepRowProps) {
 
           <div className="flex shrink-0 items-center gap-2">
             {duration && (
-              <span className="font-mono text-[10px] tabular-nums text-zinc-500">{duration}</span>
+              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                {duration}
+              </span>
             )}
             {hasOutput && (
               <motion.span
                 animate={{ rotate: expanded ? 180 : 0 }}
                 transition={{ duration: 0.15 }}
-                className="text-zinc-500"
+                className="text-muted-foreground"
               >
                 <ChevronDown className="h-3.5 w-3.5" />
               </motion.span>
@@ -144,7 +146,7 @@ function StepRow({ step, isLast }: StepRowProps) {
               }}
               className="overflow-hidden"
             >
-              <pre className="mt-2 overflow-x-auto rounded border border-white/10 bg-zinc-900/60 px-3 py-2 font-mono text-[11px] leading-relaxed text-zinc-400 whitespace-pre-wrap">
+              <pre className="mt-2 overflow-x-auto rounded border border-white/10 bg-card/60 px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
                 {step.output}
               </pre>
             </motion.div>
@@ -161,7 +163,9 @@ function StepRow({ step, isLast }: StepRowProps) {
 
 export function SubtaskTimeline({ taskId: _taskId, steps }: SubtaskTimelineProps) {
   if (steps.length === 0) {
-    return <p className="py-3 text-center text-xs text-zinc-600">No execution steps yet.</p>;
+    return (
+      <p className="py-3 text-center text-xs text-muted-foreground">No execution steps yet.</p>
+    );
   }
 
   return (

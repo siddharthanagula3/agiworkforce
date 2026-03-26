@@ -36,7 +36,7 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
   }
 
   return (
-    <div className={cn('border-b border-gray-100 dark:border-gray-700/50 px-4 py-3', className)}>
+    <div className={cn('border-b border-border px-4 py-3', className)}>
       <div className="flex flex-wrap items-center gap-2">
         {attachments.map((attachment) => {
           const isImage = attachment.type === 'image' || attachment.type === 'screenshot';
@@ -62,7 +62,7 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
             <div
               key={attachment.id}
               className={cn(
-                'group relative inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-charcoal-700 text-sm overflow-hidden',
+                'group relative inline-flex items-center gap-2 rounded-lg border border-border bg-muted text-sm overflow-hidden',
                 isImage ? 'p-1' : 'px-3 py-2',
               )}
             >
@@ -87,10 +87,8 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
                 </div>
               ) : (
                 <>
-                  <Paperclip size={16} className="text-gray-400" />
-                  <span className="truncate max-w-[150px] text-gray-700 dark:text-gray-300">
-                    {attachment.name}
-                  </span>
+                  <Paperclip size={16} className="text-muted-foreground" />
+                  <span className="truncate max-w-[150px] text-foreground">{attachment.name}</span>
                 </>
               )}
               <button
@@ -101,7 +99,7 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
                   'transition',
                   isImage
                     ? 'absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100'
-                    : 'text-gray-400 hover:text-gray-600',
+                    : 'text-muted-foreground hover:text-foreground',
                   disableRemove && 'cursor-not-allowed opacity-40',
                 )}
                 aria-label={`Remove ${attachment.name}`}

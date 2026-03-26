@@ -3,8 +3,6 @@
 import {
   Bot,
   ChevronDown,
-  FolderKanban,
-  LayoutDashboard,
   Menu,
   MessageSquare,
   MonitorSmartphone,
@@ -47,18 +45,6 @@ const featureItems = [
     href: '/features/agents',
     icon: Bot,
     description: 'Parallel autonomous execution with mobile oversight',
-  },
-  {
-    name: 'Dashboards',
-    href: '/features/ai-dashboards',
-    icon: LayoutDashboard,
-    description: 'Real-time agent monitoring & analytics',
-  },
-  {
-    name: 'Projects',
-    href: '/features/ai-project-manager',
-    icon: FolderKanban,
-    description: 'AI task decomposition & workflow orchestration',
   },
 ];
 

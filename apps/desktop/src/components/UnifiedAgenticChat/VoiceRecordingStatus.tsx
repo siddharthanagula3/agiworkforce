@@ -40,7 +40,7 @@ export const VoiceRecordingStatus: React.FC<VoiceRecordingStatusProps> = ({
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             className={cn(
-              'pointer-events-none select-none px-4 py-2 border-t border-gray-100 dark:border-gray-700/50',
+              'pointer-events-none select-none px-4 py-2 border-t border-border/50',
               isTranscribing ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-red-50 dark:bg-red-900/10',
             )}
           >
@@ -71,11 +71,11 @@ export const VoiceRecordingStatus: React.FC<VoiceRecordingStatusProps> = ({
                   {isTranscribing ? 'Transcribing...' : 'Recording'}
                 </span>
                 {preferWhisperCloud && !isTranscribing && (
-                  <span className="text-xs text-gray-600 dark:text-gray-300">(Whisper)</span>
+                  <span className="text-xs text-foreground">(Whisper)</span>
                 )}
               </div>
               {interimTranscript && (
-                <span className="text-xs text-gray-700 dark:text-gray-300 italic truncate flex-1">
+                <span className="text-xs text-foreground italic truncate flex-1">
                   {interimTranscript}
                 </span>
               )}
@@ -91,7 +91,7 @@ export const VoiceRecordingStatus: React.FC<VoiceRecordingStatusProps> = ({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="pointer-events-none select-none px-4 py-2 border-t border-gray-100 dark:border-gray-700/50 bg-amber-50 dark:bg-amber-900/10"
+            className="pointer-events-none select-none px-4 py-2 border-t border-border/50 bg-amber-50 dark:bg-amber-900/10"
           >
             <span className="text-xs text-amber-600 dark:text-amber-400">{voiceError}</span>
           </motion.div>

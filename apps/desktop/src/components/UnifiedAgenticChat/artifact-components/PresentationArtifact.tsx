@@ -63,18 +63,18 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
       )}
     >
       {}
-      <div className="flex-1 relative bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-zinc-800 via-zinc-950 to-black p-8 flex flex-col justify-center items-center overflow-hidden">
+      <div className="flex-1 relative bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-muted via-background to-black p-8 flex flex-col justify-center items-center overflow-hidden">
         {}
         <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:20px_20px]" />
         <div className="absolute -left-20 -top-20 h-64 w-64 rounded-full bg-purple-500/10 blur-[100px]" />
         <div className="absolute -right-20 -bottom-20 h-64 w-64 rounded-full bg-blue-500/10 blur-[100px]" />
 
         {}
-        <div className="w-full max-w-4xl aspect-[16/9] bg-zinc-900/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8 sm:p-12 shadow-2xl flex flex-col relative z-10 transition-transform duration-500">
+        <div className="w-full max-w-4xl aspect-[16/9] bg-card/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8 sm:p-12 shadow-2xl flex flex-col relative z-10 transition-transform duration-500">
           <div className="prose prose-invert prose-lg max-w-none flex-1 flex flex-col justify-center leading-relaxed">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{slides[currentSlide]}</ReactMarkdown>
           </div>
-          <div className="mt-8 pt-4 border-t border-white/5 flex justify-between items-center text-xs text-zinc-500 font-medium tracking-wide uppercase">
+          <div className="mt-8 pt-4 border-t border-white/5 flex justify-between items-center text-xs text-muted-foreground font-medium tracking-wide uppercase">
             <span>{artifact.title || 'Presentation'}</span>
           </div>
         </div>
@@ -86,12 +86,12 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
             size="icon"
             onClick={prevSlide}
             disabled={currentSlide === 0}
-            className="h-8 w-8 rounded-full hover:bg-white/10 text-zinc-300 disabled:opacity-30"
+            className="h-8 w-8 rounded-full hover:bg-white/10 text-foreground disabled:opacity-30"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
 
-          <span className="text-xs font-medium text-zinc-300 w-16 text-center tabular-nums">
+          <span className="text-xs font-medium text-foreground w-16 text-center tabular-nums">
             {currentSlide + 1} / {slides.length}
           </span>
 
@@ -100,7 +100,7 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
             size="icon"
             onClick={nextSlide}
             disabled={currentSlide === slides.length - 1}
-            className="h-8 w-8 rounded-full hover:bg-white/10 text-zinc-300 disabled:opacity-30"
+            className="h-8 w-8 rounded-full hover:bg-white/10 text-foreground disabled:opacity-30"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -110,7 +110,7 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-full hover:bg-white/10 text-zinc-300"
+            className="h-8 w-8 rounded-full hover:bg-white/10 text-foreground"
             title="Maximize"
           >
             <Maximize2 className="h-3.5 w-3.5" />

@@ -39,7 +39,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
           ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/25'
           : isTranscribing
             ? 'bg-amber-500 text-white animate-pulse'
-            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-charcoal-700',
+            : 'text-muted-foreground hover:text-foreground hover:bg-accent',
         'disabled:opacity-50 disabled:cursor-not-allowed',
       )}
       title={isRecording ? 'Stop recording' : 'Voice input'}

@@ -149,9 +149,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
           onMouseEnter={() => setSelectedIndex(i)}
         >
           <span className="font-medium truncate">{skill.name}</span>
-          <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">
-            {skill.category}
-          </span>
+          <span className="text-[10px] text-muted-foreground shrink-0">{skill.category}</span>
         </button>
       ))}
     </div>
