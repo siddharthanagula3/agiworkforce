@@ -8,7 +8,7 @@
 /// - StreamChunk and TokenUsage struct behaviour
 /// - Serialization round-trips
 #[cfg(test)]
-mod llm_tests {
+mod llm_test_cases {
     use crate::core::llm::sse_parser::{
         parse_sse_event, StreamChunk, StreamingToolCall, TokenUsage,
     };

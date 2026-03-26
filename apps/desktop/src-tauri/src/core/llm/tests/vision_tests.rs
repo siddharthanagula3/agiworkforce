@@ -241,8 +241,7 @@ mod unit_tests {
             detail: ImageDetail::Auto,
         };
 
-        let messages = vec![
-            ChatMessage {
+        let messages = [ChatMessage {
                 role: "user".to_string(),
                 content: "What's in this image?".to_string(),
                 multimodal_content: Some(vec![ContentPart::Image { image }]),
@@ -262,8 +261,7 @@ mod unit_tests {
                 multimodal_content: None,
                 tool_calls: None,
                 tool_call_id: None,
-            },
-        ];
+            }];
 
         assert_eq!(messages.len(), 3);
         assert!(messages[0].multimodal_content.is_some());
@@ -388,8 +386,7 @@ mod function_calling_tests {
 
     #[test]
     fn test_multi_turn_function_calling() {
-        let messages = vec![
-            ChatMessage {
+        let messages = [ChatMessage {
                 role: "user".to_string(),
                 content: "What's the weather in SF?".to_string(),
                 multimodal_content: None,
@@ -420,8 +417,7 @@ mod function_calling_tests {
                 multimodal_content: None,
                 tool_calls: None,
                 tool_call_id: None,
-            },
-        ];
+            }];
 
         assert_eq!(messages.len(), 4);
         assert!(messages[1].tool_calls.is_some());

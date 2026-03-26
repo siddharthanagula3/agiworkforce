@@ -45,6 +45,8 @@ vi.mock('../../../lib/tauri-mock', () => ({
   invoke: vi.fn().mockResolvedValue({}),
   listen: vi.fn().mockResolvedValue(() => {}),
   isTauri: false,
+  isCloudWeb: false,
+  isTestEnvironment: true,
   isTauriContext: vi.fn(() => false),
 }));
 

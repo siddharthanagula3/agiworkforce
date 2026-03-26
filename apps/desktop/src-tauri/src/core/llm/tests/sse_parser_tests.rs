@@ -117,8 +117,7 @@ mod tests {
 
     #[test]
     fn test_multiple_chunks_accumulation() {
-        let chunks = vec![
-            StreamChunk {
+        let chunks = [StreamChunk {
                 content: "Hello".to_string(),
                 done: false,
                 finish_reason: None,
@@ -150,8 +149,7 @@ mod tests {
                 tool_calls: None,
                 reasoning: None,
                 keepalive: false,
-            },
-        ];
+            }];
 
         let full_content: String = chunks.iter().map(|c| c.content.as_str()).collect();
         assert_eq!(full_content, "Hello world!");
@@ -1076,8 +1074,7 @@ mod keepalive_tests {
     fn test_multi_line_sse_event_accumulation() {
         // A multi-line SSE event (split across chunks) must accumulate into the
         // correct final content when reassembled.
-        let chunks = vec![
-            StreamChunk {
+        let chunks = [StreamChunk {
                 content: "Part one".to_string(),
                 done: false,
                 finish_reason: None,
@@ -1109,8 +1106,7 @@ mod keepalive_tests {
                 tool_calls: None,
                 reasoning: None,
                 keepalive: false,
-            },
-        ];
+            }];
 
         let accumulated: String = chunks.iter().map(|c| c.content.as_str()).collect();
         assert_eq!(accumulated, "Part one part two part three");

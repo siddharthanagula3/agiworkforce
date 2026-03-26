@@ -243,8 +243,7 @@ mod tests {
 
     #[test]
     fn test_multiple_tool_results_filtering() {
-        let results = vec![
-            ToolExecutionResult {
+        let results = [ToolExecutionResult {
                 tool_id: "tool_1".to_string(),
                 step_id: "test_step_1".to_string(),
                 success: true,
@@ -282,8 +281,7 @@ mod tests {
                     memory_mb: 15,
                     network_mb: 0.0,
                 },
-            },
-        ];
+            }];
 
         let successful: Vec<_> = results.iter().filter(|r| r.success).collect();
         let failed: Vec<_> = results.iter().filter(|r| !r.success).collect();
