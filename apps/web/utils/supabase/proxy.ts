@@ -100,8 +100,18 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect authenticated users away from login/signup to dashboard
   if (user && isAuthOnlyPath) {
+    // When redirectTo targets /chat (the Vite SPA), let the login page render
+    // so its useEffect can bridge cookie→localStorage sessions by passing
+    // tokens via hash fragment. The middleware can't do this because the SPA
+    // uses createClient (localStorage) while the middleware uses SSR (cookies).
+    const redirectTo = request.nextUrl.searchParams.get('redirectTo');
+    if (redirectTo && (redirectTo === '/chat' || redirectTo.includes('/chat'))) {
+      return supabaseResponse;
+    }
+
     const url = request.nextUrl.clone();
-    url.pathname = '/chat';
+    url.pathname = redirectTo || '/chat';
+    url.search = ''; // Don't carry query params to the destination
     const redirectResponse = NextResponse.redirect(url);
     // Preserve session cookies on the redirect response
     supabaseResponse.cookies.getAll().forEach((cookie) => {
