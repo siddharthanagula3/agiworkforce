@@ -360,9 +360,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl bg-zinc-900 border-zinc-700">
+      <DialogContent className="max-w-2xl bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-white flex items-center gap-2">
+          <DialogTitle className="text-foreground flex items-center gap-2">
             <div
               className="w-6 h-6 rounded-md flex items-center justify-center"
               style={{ backgroundColor: color }}
@@ -371,7 +371,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             </div>
             {mode === 'create' ? 'Create New Project' : 'Edit Project'}
           </DialogTitle>
-          <DialogDescription className="text-zinc-400">
+          <DialogDescription className="text-muted-foreground">
             {mode === 'create'
               ? 'Create a new project to organize your conversations and files.'
               : 'Update your project settings and organization.'}
@@ -379,28 +379,28 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="bg-zinc-800 border-zinc-700 flex-wrap">
-            <TabsTrigger value="general" className="data-[state=active]:bg-zinc-700">
+          <TabsList className="bg-muted border-border flex-wrap">
+            <TabsTrigger value="general" className="data-[state=active]:bg-accent">
               <Settings className="w-4 h-4 mr-2" />
               General
             </TabsTrigger>
-            <TabsTrigger value="instructions" className="data-[state=active]:bg-zinc-700">
+            <TabsTrigger value="instructions" className="data-[state=active]:bg-accent">
               <FileText className="w-4 h-4 mr-2" />
               Instructions
             </TabsTrigger>
-            <TabsTrigger value="knowledge" className="data-[state=active]:bg-zinc-700">
+            <TabsTrigger value="knowledge" className="data-[state=active]:bg-accent">
               <Database className="w-4 h-4 mr-2" />
               Knowledge
             </TabsTrigger>
-            <TabsTrigger value="files" className="data-[state=active]:bg-zinc-700">
+            <TabsTrigger value="files" className="data-[state=active]:bg-accent">
               <File className="w-4 h-4 mr-2" />
               Files
             </TabsTrigger>
-            <TabsTrigger value="memory" className="data-[state=active]:bg-zinc-700">
+            <TabsTrigger value="memory" className="data-[state=active]:bg-accent">
               <Brain className="w-4 h-4 mr-2" />
               Memory
             </TabsTrigger>
-            <TabsTrigger value="conversations" className="data-[state=active]:bg-zinc-700">
+            <TabsTrigger value="conversations" className="data-[state=active]:bg-accent">
               <MessageSquare className="w-4 h-4 mr-2" />
               Conversations
             </TabsTrigger>
@@ -410,7 +410,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             {/* General Tab */}
             <TabsContent value="general" className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="project-name" className="text-zinc-300">
+                <Label htmlFor="project-name" className="text-foreground">
                   Project Name
                 </Label>
                 <Input
@@ -418,12 +418,12 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="My Awesome Project"
-                  className="bg-zinc-800 border-zinc-700 text-white"
+                  className="bg-muted border-border text-foreground"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="project-description" className="text-zinc-300">
+                <Label htmlFor="project-description" className="text-foreground">
                   Description
                 </Label>
                 <Textarea
@@ -431,12 +431,12 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="A brief description of your project..."
-                  className="bg-zinc-800 border-zinc-700 text-white min-h-[80px]"
+                  className="bg-muted border-border text-foreground min-h-[80px]"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label className="text-zinc-300 flex items-center gap-2">
+                <Label className="text-foreground flex items-center gap-2">
                   <Palette className="w-4 h-4" />
                   Color
                 </Label>
@@ -448,7 +448,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                       onClick={() => setColor(c.value)}
                       className={cn(
                         'w-8 h-8 rounded-full transition-all',
-                        color === c.value && 'ring-2 ring-white ring-offset-2 ring-offset-zinc-900',
+                        color === c.value &&
+                          'ring-2 ring-white ring-offset-2 ring-offset-background',
                       )}
                       style={{ backgroundColor: c.value }}
                       title={c.name}
@@ -458,7 +459,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-zinc-300">Icon</Label>
+                <Label className="text-foreground">Icon</Label>
                 <div className="flex gap-2 flex-wrap">
                   {PROJECT_ICONS.map((i) => {
                     // BUG-PS-05: render actual Lucide icon; fall back to first letter if not in map
@@ -469,8 +470,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                         key={i.value}
                         onClick={() => setIcon(i.value)}
                         className={cn(
-                          'w-10 h-10 rounded-md bg-zinc-800 flex items-center justify-center transition-all text-zinc-400 hover:text-white',
-                          icon === i.value && 'ring-2 ring-blue-500 text-white',
+                          'w-10 h-10 rounded-md bg-muted flex items-center justify-center transition-all text-muted-foreground hover:text-foreground',
+                          icon === i.value && 'ring-2 ring-blue-500 text-foreground',
                         )}
                         title={i.name}
                       >
@@ -486,26 +487,26 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-zinc-300 flex items-center gap-2">
+                <Label className="text-foreground flex items-center gap-2">
                   <Cpu className="w-4 h-4" />
                   Preferred Model
                 </Label>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   When set, this model will be auto-selected when entering a conversation in this
                   project. Leave blank to use the global default.
                 </p>
                 <Select value={preferredModel} onValueChange={setPreferredModel}>
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                  <SelectTrigger className="bg-muted border-border text-foreground">
                     <SelectValue placeholder="Use global default" />
                   </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60">
-                    <SelectItem value="" className="text-zinc-300">
+                  <SelectContent className="bg-card border-border max-h-60">
+                    <SelectItem value="" className="text-foreground">
                       Use global default
                     </SelectItem>
                     {getAllModels()
                       .filter((m) => m.id !== 'auto' && !m.id.startsWith('auto:'))
                       .map((m) => (
-                        <SelectItem key={m.id} value={m.id} className="text-zinc-300">
+                        <SelectItem key={m.id} value={m.id} className="text-foreground">
                           {m.name ?? m.id}
                         </SelectItem>
                       ))}
@@ -517,10 +518,10 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             {/* Instructions Tab */}
             <TabsContent value="instructions" className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="custom-instructions" className="text-zinc-300">
+                <Label htmlFor="custom-instructions" className="text-foreground">
                   Custom Instructions
                 </Label>
-                <p className="text-sm text-zinc-500">
+                <p className="text-sm text-muted-foreground">
                   These instructions will be included in every conversation within this project.
                 </p>
                 <Textarea
@@ -528,11 +529,11 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                   value={customInstructions}
                   onChange={(e) => setCustomInstructions(e.target.value)}
                   placeholder="You are an expert in React and TypeScript. Always use functional components and hooks..."
-                  className="bg-zinc-800 border-zinc-700 text-white min-h-[200px] font-mono text-sm"
+                  className="bg-muted border-border text-foreground min-h-[200px] font-mono text-sm"
                 />
               </div>
-              <div className="p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
-                <p className="text-xs text-zinc-400">
+              <div className="p-3 bg-muted/50 rounded-lg border border-border">
+                <p className="text-xs text-muted-foreground">
                   Tip: Use custom instructions to define coding standards, preferred libraries,
                   documentation style, or any context the AI should know about your project.
                 </p>
@@ -542,21 +543,21 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             {/* Files Tab */}
             <TabsContent value="files" className="space-y-4">
               <div className="flex items-center justify-between">
-                <Label className="text-zinc-300">Project Files & Knowledge</Label>
+                <Label className="text-foreground">Project Files & Knowledge</Label>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleAddFile}
-                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  className="border-border text-foreground hover:bg-accent"
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   Add Files
                 </Button>
               </div>
 
-              <ScrollArea className="h-[220px] border border-zinc-700 rounded-lg p-2">
+              <ScrollArea className="h-[220px] border border-border rounded-lg p-2">
                 {files.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-zinc-500">
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                     <File className="w-12 h-12 mb-2 opacity-50" />
                     <p className="text-sm">No files added yet</p>
                     <p className="text-xs">Add files to provide context for your conversations</p>
@@ -566,18 +567,18 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     {files.map((file) => (
                       <div
                         key={file.id}
-                        className="flex items-center justify-between p-2 bg-zinc-800 rounded-md group"
+                        className="flex items-center justify-between p-2 bg-muted rounded-md group"
                       >
                         <div className="flex items-center gap-2">
-                          <File className="w-4 h-4 text-zinc-400" />
-                          <span className="text-sm text-zinc-300">{file.name}</span>
-                          <span className="text-xs text-zinc-500">{file.path}</span>
+                          <File className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm text-foreground">{file.name}</span>
+                          <span className="text-xs text-muted-foreground">{file.path}</span>
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoveFile(file.id)}
-                          className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-400"
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -592,8 +593,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             <TabsContent value="knowledge" className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-zinc-300">Knowledge Base</Label>
-                  <p className="text-xs text-zinc-500 mt-0.5">
+                  <Label className="text-foreground">Knowledge Base</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Upload files to give the AI persistent context about this project. Supported:
                     .txt .md .pdf .csv .json .py .js .ts .rs
                   </p>
@@ -603,7 +604,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                   size="sm"
                   onClick={handleAddKbFiles}
                   disabled={isUploadingKb}
-                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  className="border-border text-foreground hover:bg-accent"
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   {isUploadingKb ? 'Reading...' : 'Browse Files'}
@@ -615,7 +616,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 ref={kbDropZoneRef}
                 onDrop={handleKbDrop}
                 onDragOver={handleKbDragOver}
-                className="border-2 border-dashed border-zinc-700 rounded-lg p-6 flex flex-col items-center justify-center gap-2 text-zinc-500 hover:border-zinc-500 transition-colors cursor-pointer"
+                className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-muted-foreground transition-colors cursor-pointer"
                 onClick={handleAddKbFiles}
               >
                 <Database className="w-8 h-8 opacity-40" />
@@ -624,9 +625,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
               </div>
 
               {/* Knowledge base file list */}
-              <ScrollArea className="h-[160px] border border-zinc-700 rounded-lg p-2">
+              <ScrollArea className="h-[160px] border border-border rounded-lg p-2">
                 {knowledgeBaseFiles.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-zinc-500">
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                     <Database className="w-10 h-10 mb-2 opacity-30" />
                     <p className="text-sm">No knowledge base files yet</p>
                   </div>
@@ -635,16 +636,16 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     {knowledgeBaseFiles.map((file) => (
                       <div
                         key={file.id}
-                        className="flex items-center justify-between p-2 bg-zinc-800 rounded-md group"
+                        className="flex items-center justify-between p-2 bg-muted rounded-md group"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <File className="w-4 h-4 text-green-400 shrink-0" />
                           <div className="min-w-0">
-                            <span className="text-sm text-zinc-300 truncate block">
+                            <span className="text-sm text-foreground truncate block">
                               {file.name}
                             </span>
                             {file.content && (
-                              <span className="text-xs text-zinc-600">
+                              <span className="text-xs text-muted-foreground">
                                 {file.content.length.toLocaleString()} chars
                               </span>
                             )}
@@ -654,7 +655,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoveKbFile(file.id)}
-                          className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-400 shrink-0"
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 shrink-0"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -676,12 +677,12 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             <TabsContent value="memory" className="space-y-4">
               <div className="space-y-4">
                 {/* Auto-save Toggle */}
-                <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border">
                   <div className="flex items-center gap-2">
                     <Brain className="w-4 h-4 text-blue-400" />
                     <div className="flex flex-col">
-                      <Label className="text-zinc-300 font-medium">Auto-save Memories</Label>
-                      <p className="text-xs text-zinc-500">
+                      <Label className="text-foreground font-medium">Auto-save Memories</Label>
+                      <p className="text-xs text-muted-foreground">
                         Automatically save architectural decisions and important context
                       </p>
                     </div>
@@ -691,7 +692,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     onClick={() => setAutoSaveMemories(!autoSaveMemories)}
                     className={cn(
                       'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                      autoSaveMemories ? 'bg-blue-600' : 'bg-zinc-700',
+                      autoSaveMemories ? 'bg-blue-600' : 'bg-accent',
                     )}
                   >
                     <span
@@ -704,7 +705,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 </div>
 
                 {/* Memory Manager */}
-                <div className="border border-zinc-700 rounded-lg overflow-hidden">
+                <div className="border border-border rounded-lg overflow-hidden">
                   <MemoryManager
                     showCreateButton={true}
                     showImportExport={false}
@@ -726,15 +727,15 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             {/* Conversations Tab */}
             <TabsContent value="conversations" className="space-y-4">
               <div className="flex items-center justify-between">
-                <Label className="text-zinc-300">Linked Conversations</Label>
-                <Badge variant="secondary" className="bg-zinc-800">
+                <Label className="text-foreground">Linked Conversations</Label>
+                <Badge variant="secondary" className="bg-muted">
                   {conversationIds.length} linked
                 </Badge>
               </div>
 
-              <ScrollArea className="h-[220px] border border-zinc-700 rounded-lg p-2">
+              <ScrollArea className="h-[220px] border border-border rounded-lg p-2">
                 {conversations.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-zinc-500">
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                     <MessageSquare className="w-12 h-12 mb-2 opacity-50" />
                     <p className="text-sm">No conversations available</p>
                     <p className="text-xs">Start a conversation to link it here</p>
@@ -752,12 +753,12 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                             'w-full flex items-center justify-between p-2 rounded-md transition-colors',
                             isLinked
                               ? 'bg-blue-500/20 border border-blue-500/50'
-                              : 'bg-zinc-800 hover:bg-zinc-700',
+                              : 'bg-muted hover:bg-accent',
                           )}
                         >
                           <div className="flex items-center gap-2">
-                            <MessageSquare className="w-4 h-4 text-zinc-400" />
-                            <span className="text-sm text-zinc-300 text-left truncate max-w-[300px]">
+                            <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-foreground text-left truncate max-w-[300px]">
                               {conv.title || 'Untitled Conversation'}
                             </span>
                           </div>
@@ -778,7 +779,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="border-zinc-700 text-zinc-300"
+            className="border-border text-foreground"
           >
             Cancel
           </Button>

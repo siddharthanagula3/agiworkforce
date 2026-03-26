@@ -176,7 +176,7 @@ export const ComputerUseActionCard: React.FC<ComputerUseActionCardProps> = ({
           </div>
 
           {/* Action description */}
-          <p className="text-sm text-gray-800 dark:text-gray-200">{description}</p>
+          <p className="text-sm text-foreground">{description}</p>
 
           {/* Error message */}
           {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
@@ -184,7 +184,7 @@ export const ComputerUseActionCard: React.FC<ComputerUseActionCardProps> = ({
           {/* Metadata row */}
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             {coordinates && (
-              <span className="text-xs text-muted-foreground bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded font-mono">
+              <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">
                 ({coordinates.x}, {coordinates.y})
               </span>
             )}
@@ -204,7 +204,7 @@ export const ComputerUseActionCard: React.FC<ComputerUseActionCardProps> = ({
             <CollapsibleTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Camera size={12} />
                 Screenshot

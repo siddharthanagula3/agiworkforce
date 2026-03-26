@@ -58,20 +58,20 @@ export function InlineLSPResult({ result, status }: ToolResultProps) {
 
   if (status === 'running') {
     return (
-      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-zinc-900/80 border border-white/10">
+      <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-card/80 border border-white/10">
         <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-        <span className="text-sm text-zinc-400">Querying language server...</span>
+        <span className="text-sm text-muted-foreground">Querying language server...</span>
       </div>
     );
   }
 
   if (status === 'failed' || status === 'error') {
     return (
-      <div className="mt-3 p-3 rounded-lg bg-zinc-900/80 border border-red-500/30">
+      <div className="mt-3 p-3 rounded-lg bg-card/80 border border-red-500/30">
         <div className="flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
           <p className="text-sm text-red-300 font-medium">LSP query failed</p>
-          {result?.error && <p className="text-xs text-zinc-500 mt-1">{result.error}</p>}
+          {result?.error && <p className="text-xs text-muted-foreground mt-1">{result.error}</p>}
         </div>
       </div>
     );
@@ -82,15 +82,15 @@ export function InlineLSPResult({ result, status }: ToolResultProps) {
   const { type = 'hover', content, location, items = [] } = data;
 
   return (
-    <div className="mt-3 rounded-lg bg-zinc-900/80 border border-white/10 overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/60 border-b border-white/10">
+    <div className="mt-3 rounded-lg bg-card/80 border border-white/10 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 bg-muted/60 border-b border-white/10">
         <Code2 className="h-4 w-4 text-indigo-400" />
-        <span className="text-xs font-medium text-zinc-300 capitalize">{type}</span>
+        <span className="text-xs font-medium text-foreground capitalize">{type}</span>
       </div>
 
       <div className="p-3 space-y-2">
         {(type === 'hover' || type === 'definition') && content && (
-          <pre className="text-xs font-mono text-zinc-300 bg-zinc-950/60 p-2 rounded overflow-auto whitespace-pre-wrap break-words max-h-32">
+          <pre className="text-xs font-mono text-foreground bg-background/60 p-2 rounded overflow-auto whitespace-pre-wrap break-words max-h-32">
             {content}
           </pre>
         )}
@@ -111,9 +111,11 @@ export function InlineLSPResult({ result, status }: ToolResultProps) {
           >
             <MapPin className="h-3 w-3" />
             <span className="font-mono truncate">{location.file}</span>
-            {location.line !== undefined && <span className="text-zinc-500">:{location.line}</span>}
+            {location.line !== undefined && (
+              <span className="text-muted-foreground">:{location.line}</span>
+            )}
             {location.column !== undefined && (
-              <span className="text-zinc-600">:{location.column}</span>
+              <span className="text-muted-foreground">:{location.column}</span>
             )}
           </div>
         )}
@@ -132,7 +134,7 @@ export function InlineLSPResult({ result, status }: ToolResultProps) {
                   <div className="flex-1 min-w-0">
                     <p className={cn('font-medium', cfg.color)}>{item.message}</p>
                     {item.location?.file && (
-                      <p className="text-zinc-500 font-mono mt-0.5 truncate">
+                      <p className="text-muted-foreground font-mono mt-0.5 truncate">
                         {item.location.file}
                         {item.location.line !== undefined ? `:${item.location.line}` : ''}
                       </p>
@@ -145,7 +147,7 @@ export function InlineLSPResult({ result, status }: ToolResultProps) {
         )}
 
         {items.length === 0 && !content && (
-          <p className="text-xs text-zinc-500 italic">No results</p>
+          <p className="text-xs text-muted-foreground italic">No results</p>
         )}
       </div>
     </div>

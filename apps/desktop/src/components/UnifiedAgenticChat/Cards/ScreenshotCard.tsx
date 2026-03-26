@@ -45,10 +45,10 @@ export const ScreenshotCard: React.FC<ScreenshotCardProps> = ({ screenshot, clas
 
   return (
     <div
-      className={`screenshot-card rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden ${className}`}
+      className={`screenshot-card rounded-lg border border-border bg-card overflow-hidden ${className}`}
     >
       {}
-      <div className="flex items-start justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-start justify-between p-4 border-b border-border">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           {}
           <div className="p-2 rounded-lg text-purple-500 bg-purple-50 dark:bg-purple-900/20 shrink-0">
@@ -58,20 +58,18 @@ export const ScreenshotCard: React.FC<ScreenshotCardProps> = ({ screenshot, clas
           {}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-medium uppercase text-gray-600 dark:text-gray-400">
+              <span className="text-xs font-medium uppercase text-muted-foreground">
                 Screenshot
               </span>
             </div>
 
             {}
             {screenshot.action && (
-              <div className="text-sm text-gray-800 dark:text-gray-200 mb-2">
-                {screenshot.action}
-              </div>
+              <div className="text-sm text-foreground mb-2">{screenshot.action}</div>
             )}
 
             {}
-            <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400 flex-wrap">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <Clock size={12} />
                 {formattedTime}
@@ -94,41 +92,41 @@ export const ScreenshotCard: React.FC<ScreenshotCardProps> = ({ screenshot, clas
           <button
             type="button"
             onClick={handleCopyImage}
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-1.5 hover:bg-accent rounded transition-colors"
             title="Copy image"
           >
-            <Copy size={14} className="text-gray-600 dark:text-gray-400" />
+            <Copy size={14} className="text-muted-foreground" />
           </button>
           <button
             type="button"
             onClick={handleDownload}
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-1.5 hover:bg-accent rounded transition-colors"
             title="Download image"
           >
-            <Download size={14} className="text-gray-600 dark:text-gray-400" />
+            <Download size={14} className="text-muted-foreground" />
           </button>
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-1.5 hover:bg-accent rounded transition-colors"
             title={isExpanded ? 'Collapse' : 'Expand'}
           >
             {isExpanded ? (
-              <Minimize2 size={14} className="text-gray-600 dark:text-gray-400" />
+              <Minimize2 size={14} className="text-muted-foreground" />
             ) : (
-              <Maximize2 size={14} className="text-gray-600 dark:text-gray-400" />
+              <Maximize2 size={14} className="text-muted-foreground" />
             )}
           </button>
         </div>
       </div>
 
       {}
-      <div className={`relative bg-gray-50 dark:bg-gray-900 ${isExpanded ? 'p-4' : 'p-2'}`}>
+      <div className={`relative bg-muted ${isExpanded ? 'p-4' : 'p-2'}`}>
         <div className="relative inline-block">
           <img
             src={imageUrl}
             alt={screenshot.action || 'Screenshot'}
-            className={`rounded border border-gray-200 dark:border-gray-700 ${
+            className={`rounded border border-border ${
               isExpanded ? 'max-w-full h-auto' : 'max-w-md max-h-64 object-contain'
             }`}
             onLoad={() => setIsImageLoaded(true)}
@@ -168,7 +166,7 @@ export const ScreenshotCard: React.FC<ScreenshotCardProps> = ({ screenshot, clas
         {}
         {!isImageLoaded && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-sm text-gray-500">Loading image...</div>
+            <div className="text-sm text-muted-foreground">Loading image...</div>
           </div>
         )}
       </div>

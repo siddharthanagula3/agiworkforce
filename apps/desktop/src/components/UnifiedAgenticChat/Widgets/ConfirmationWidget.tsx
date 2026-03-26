@@ -110,7 +110,7 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
   // Variant styles
   const variantStyles = {
     default: {
-      container: 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50',
+      container: 'border-border bg-muted/50',
       icon: <HelpCircle className="h-5 w-5 text-blue-500" />,
       confirmButton: 'bg-blue-600 hover:bg-blue-700 text-white',
     },
@@ -151,13 +151,13 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
   // Cancelled state
   if (isCancelled) {
     return (
-      <div className="flex items-center gap-3 p-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-700">
-          <X className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+      <div className="flex items-center gap-3 p-4 rounded-lg border border-border bg-muted/50">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent">
+          <X className="h-4 w-4 text-muted-foreground" />
         </div>
         <div>
-          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Cancelled</p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-500">{message}</p>
+          <p className="text-sm font-medium text-muted-foreground">Cancelled</p>
+          <p className="text-xs text-muted-foreground">{message}</p>
         </div>
       </div>
     );
@@ -170,8 +170,8 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
       <div className="flex gap-3 p-4">
         <div className="shrink-0 mt-0.5">{styles.icon}</div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{message}</p>
-          {details && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{details}</p>}
+          <p className="text-sm font-medium text-foreground">{message}</p>
+          {details && <p className="mt-1 text-xs text-muted-foreground">{details}</p>}
         </div>
       </div>
 
@@ -202,8 +202,8 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
             disabled={isLoading}
             className={cn(
               'flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors',
-              'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600',
-              'text-zinc-700 dark:text-zinc-300',
+              'bg-muted hover:bg-accent',
+              'text-foreground',
               'disabled:opacity-60 disabled:cursor-not-allowed',
             )}
           >

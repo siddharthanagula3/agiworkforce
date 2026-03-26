@@ -95,7 +95,7 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
       {/* Left: spinning indicator + task description */}
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-teal-400" aria-hidden="true" />
-        <span className="truncate text-xs font-medium text-zinc-300" title={description}>
+        <span className="truncate text-xs font-medium text-foreground" title={description}>
           {description}
         </span>
       </div>
@@ -103,7 +103,7 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
       {/* Center: step counter + thin progress bar */}
       {hasStepInfo && (
         <div className="flex shrink-0 flex-col items-center gap-0.5">
-          <span className="text-[10px] font-medium tabular-nums text-zinc-500">
+          <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
             Step {completedSteps}/{totalSteps}
           </span>
           <div className="h-1 w-24 overflow-hidden rounded-full bg-white/10">
@@ -118,7 +118,7 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
 
       {/* Right: elapsed timer + expand button */}
       <div className="flex shrink-0 items-center gap-2">
-        <div className="flex items-center gap-1 text-[10px] tabular-nums text-zinc-500">
+        <div className="flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground">
           <Timer className="h-3 w-3" aria-hidden="true" />
           <span>{formatElapsed(elapsedMs)}</span>
         </div>
@@ -127,8 +127,8 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
           type="button"
           onClick={onExpandSidecar}
           className={cn(
-            'rounded p-1 text-zinc-500 transition-colors',
-            'hover:bg-white/10 hover:text-zinc-300',
+            'rounded p-1 text-muted-foreground transition-colors',
+            'hover:bg-white/10 hover:text-foreground',
             'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-500',
           )}
           aria-label="Open execution panel"

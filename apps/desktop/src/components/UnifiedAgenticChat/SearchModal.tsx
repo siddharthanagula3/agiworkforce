@@ -54,7 +54,7 @@ function formatTimestamp(date: Date | string | undefined): string {
 // ─── Result icon ──────────────────────────────────────────────────────────────
 
 function ResultIcon({ type, selected }: { type: ResultType; selected: boolean }) {
-  const className = cn('h-4 w-4', selected ? 'text-teal-400' : 'text-zinc-500');
+  const className = cn('h-4 w-4', selected ? 'text-teal-400' : 'text-muted-foreground');
 
   switch (type) {
     case 'chat':
@@ -261,7 +261,7 @@ export function SearchModal() {
           'flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors',
           isSelected
             ? 'bg-teal-500/15 border-l-2 border-teal-500'
-            : 'hover:bg-zinc-900/50 border-l-2 border-transparent',
+            : 'hover:bg-accent border-l-2 border-transparent',
         )}
         role="option"
         aria-selected={isSelected}
@@ -269,7 +269,7 @@ export function SearchModal() {
         <div
           className={cn(
             'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
-            isSelected ? 'bg-teal-500/20' : 'bg-zinc-900',
+            isSelected ? 'bg-teal-500/20' : 'bg-card',
           )}
         >
           <ResultIcon type={result.type} selected={isSelected} />
@@ -277,21 +277,21 @@ export function SearchModal() {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-zinc-100">{result.title}</span>
+            <span className="truncate text-sm font-medium text-foreground">{result.title}</span>
             {result.updatedAt && (
-              <span className="flex items-center gap-1 shrink-0 text-xs text-zinc-500">
+              <span className="flex items-center gap-1 shrink-0 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 {formatTimestamp(result.updatedAt)}
               </span>
             )}
           </div>
           {result.subtitle && (
-            <p className="mt-0.5 truncate text-xs text-zinc-500">{result.subtitle}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{result.subtitle}</p>
           )}
         </div>
 
         {isSelected && (
-          <kbd className="mt-1 rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-mono text-zinc-400 shrink-0">
+          <kbd className="mt-1 rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-muted-foreground shrink-0">
             ↵
           </kbd>
         )}
@@ -305,8 +305,10 @@ export function SearchModal() {
       if (results.length === 0) {
         return (
           <div className="px-4 py-10 text-center" role="status">
-            <Search className="mx-auto h-10 w-10 text-zinc-700" aria-hidden="true" />
-            <p className="mt-3 text-sm text-zinc-500">No chats, projects, or artifacts yet</p>
+            <Search className="mx-auto h-10 w-10 text-muted-foreground" aria-hidden="true" />
+            <p className="mt-3 text-sm text-muted-foreground">
+              No chats, projects, or artifacts yet
+            </p>
           </div>
         );
       }
@@ -318,9 +320,9 @@ export function SearchModal() {
     if (results.length === 0) {
       return (
         <div className="px-4 py-10 text-center" role="status">
-          <Search className="mx-auto h-10 w-10 text-zinc-700" aria-hidden="true" />
-          <p className="mt-3 text-sm text-zinc-500">No results for &ldquo;{query}&rdquo;</p>
-          <p className="mt-1 text-xs text-zinc-600">Try different keywords</p>
+          <Search className="mx-auto h-10 w-10 text-muted-foreground" aria-hidden="true" />
+          <p className="mt-3 text-sm text-muted-foreground">No results for &ldquo;{query}&rdquo;</p>
+          <p className="mt-1 text-xs text-muted-foreground">Try different keywords</p>
         </div>
       );
     }
@@ -332,7 +334,7 @@ export function SearchModal() {
       <div className="py-2">
         {chats.length > 0 && (
           <div>
-            <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+            <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Chats
             </div>
             {chats.map((result) => renderResultItem(result, orderedResults.indexOf(result)))}
@@ -340,7 +342,7 @@ export function SearchModal() {
         )}
         {projectItems.length > 0 && (
           <div>
-            <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+            <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Projects
             </div>
             {projectItems.map((result) => renderResultItem(result, orderedResults.indexOf(result)))}
@@ -348,7 +350,7 @@ export function SearchModal() {
         )}
         {artifacts.length > 0 && (
           <div>
-            <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+            <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Artifacts
             </div>
             {artifacts.map((result) => renderResultItem(result, orderedResults.indexOf(result)))}
@@ -388,16 +390,16 @@ export function SearchModal() {
           onClick={(e) => e.stopPropagation()}
           className={cn(
             'relative w-full max-w-2xl',
-            'rounded-2xl border border-zinc-800',
-            'bg-zinc-950/95 backdrop-blur-xl',
+            'rounded-2xl border border-border',
+            'bg-background/95 backdrop-blur-xl',
             'shadow-2xl shadow-black/50',
             'overflow-hidden',
           )}
           style={{ willChange: prefersReducedMotion ? 'auto' : 'opacity, transform' }}
         >
           {/* Search header */}
-          <div className="flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
-            <Search className="h-5 w-5 shrink-0 text-zinc-500" aria-hidden="true" />
+          <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+            <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <input
               ref={inputRef}
               type="text"
@@ -405,8 +407,8 @@ export function SearchModal() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search chats and projects..."
               className={cn(
-                'flex-1 bg-transparent text-sm text-zinc-100 outline-hidden',
-                'placeholder:text-zinc-500',
+                'flex-1 bg-transparent text-sm text-foreground outline-hidden',
+                'placeholder:text-muted-foreground',
               )}
               role="searchbox"
               aria-label="Search chats, projects, and artifacts"
@@ -419,7 +421,7 @@ export function SearchModal() {
             <button
               type="button"
               onClick={close}
-              className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               aria-label="Close search"
             >
               <X className="h-4 w-4" aria-hidden="true" />
@@ -427,7 +429,7 @@ export function SearchModal() {
           </div>
 
           {/* Filter tabs */}
-          <div className="flex items-center gap-1 border-b border-zinc-800/60 px-4 py-2">
+          <div className="flex items-center gap-1 border-b border-border/60 px-4 py-2">
             {(['all', 'chats', 'projects'] as const).map((tab) => (
               <button
                 key={tab}
@@ -437,7 +439,7 @@ export function SearchModal() {
                   'rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors',
                   filter === tab
                     ? 'bg-teal-500/20 text-teal-300'
-                    : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300',
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                 )}
               >
                 {tab}
@@ -456,19 +458,19 @@ export function SearchModal() {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-zinc-800 bg-zinc-900/50 px-4 py-2 text-xs text-zinc-500">
+          <div className="flex items-center justify-between border-t border-border bg-card/50 px-4 py-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1">
-                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">↑</kbd>
-                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">↓</kbd>
+                <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">↑</kbd>
+                <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">↓</kbd>
                 <span className="ml-1">Navigate</span>
               </div>
               <div className="flex items-center gap-1">
-                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">↵</kbd>
+                <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">↵</kbd>
                 <span className="ml-1">Open</span>
               </div>
               <div className="flex items-center gap-1">
-                <kbd className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">Esc</kbd>
+                <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono">Esc</kbd>
                 <span className="ml-1">Close</span>
               </div>
             </div>

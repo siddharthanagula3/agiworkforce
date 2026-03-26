@@ -197,7 +197,7 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
                         <div className="text-sm font-medium text-zinc-200">
                           {art.title ?? 'Generated Artifact'}
                         </div>
-                        <div className="text-xs text-zinc-400">
+                        <div className="text-xs text-muted-foreground">
                           {art.type === 'code'
                             ? (art.language ?? art.type)
                             : (art.type ?? 'artifact')}
@@ -207,7 +207,7 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 group-hover:text-white"
+                      className="text-muted-foreground group-hover:text-white"
                     >
                       View <PanelTopOpen className="ml-2 w-3 h-3" />
                     </Button>
@@ -496,7 +496,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
             View output
           </Button>
         </div>
-        <p className="mt-2 text-sm text-zinc-300">{body}</p>
+        <p className="mt-2 text-sm text-foreground">{body}</p>
       </div>
     </div>
   );
@@ -511,12 +511,12 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -20 }}
             transition={{ duration: prefersReducedMotion ? 0.1 : 0.15 }}
-            className="absolute top-0 left-0 right-0 z-20 p-2 bg-zinc-900/95 backdrop-blur-xs border-b border-white/10"
+            className="absolute top-0 left-0 right-0 z-20 p-2 bg-card/95 backdrop-blur-xs border-b border-white/10"
           >
             <div className="flex items-center gap-2 max-w-xl mx-auto">
               <div className="relative flex-1">
                 <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
                   aria-hidden="true"
                 />
                 <input
@@ -534,12 +534,12 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                   }}
                   placeholder="Search messages..."
                   aria-label="Search messages"
-                  className="w-full pl-10 pr-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-hidden focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
+                  className="w-full pl-10 pr-4 py-2 bg-muted border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
                 />
               </div>
               {searchQuery && (
                 <span
-                  className="text-xs text-zinc-400 tabular-nums whitespace-nowrap"
+                  className="text-xs text-muted-foreground tabular-nums whitespace-nowrap"
                   role="status"
                   aria-live="polite"
                   aria-atomic="true"
@@ -554,21 +554,21 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                   type="button"
                   onClick={() => navigateSearch('prev')}
                   disabled={searchMatches.length === 0}
-                  className="p-1.5 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="p-1.5 rounded hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   title="Previous match"
                   aria-label="Go to previous search match"
                 >
-                  <ChevronUp className="h-4 w-4 text-zinc-400" aria-hidden="true" />
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 </button>
                 <button
                   type="button"
                   onClick={() => navigateSearch('next')}
                   disabled={searchMatches.length === 0}
-                  className="p-1.5 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="p-1.5 rounded hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   title="Next match"
                   aria-label="Go to next search match"
                 >
-                  <ChevronDown className="h-4 w-4 text-zinc-400" aria-hidden="true" />
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 </button>
               </div>
               <button
@@ -578,11 +578,11 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                   setSearchQuery('');
                   setCurrentMatchIndex(0);
                 }}
-                className="p-1.5 rounded hover:bg-zinc-700 transition-colors"
+                className="p-1.5 rounded hover:bg-accent transition-colors"
                 title="Close search"
                 aria-label="Close search"
               >
-                <X className="h-4 w-4 text-zinc-400" aria-hidden="true" />
+                <X className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </button>
             </div>
           </motion.div>
@@ -805,7 +805,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.9 }}
             transition={{ duration: prefersReducedMotion ? 0.15 : 0.2 }}
             onClick={scrollToBottom}
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-800/90 backdrop-blur-xs border border-white/10 text-sm text-zinc-200 hover:bg-zinc-700/90 hover:text-white shadow-lg transition-colors z-10"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-muted/90 backdrop-blur-xs border border-white/10 text-sm text-foreground hover:bg-accent/90 hover:text-white shadow-lg transition-colors z-10"
             aria-label="Scroll to bottom"
           >
             <ArrowDown className="h-4 w-4" />

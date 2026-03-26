@@ -90,9 +90,9 @@ const STATUS_CONFIG: Record<
   },
   cancelled: {
     label: 'Cancelled',
-    textColor: 'text-zinc-400',
-    bgColor: 'bg-zinc-400/10',
-    dotClass: 'bg-zinc-500',
+    textColor: 'text-muted-foreground',
+    bgColor: 'bg-muted-foreground/10',
+    dotClass: 'bg-muted-foreground',
   },
   paused: {
     label: 'Paused',
@@ -178,7 +178,7 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
           transition={{ duration: 0.4, ease: 'easeOut' }}
         />
       </div>
-      <span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-500">
+      <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
         {current}/{total}
       </span>
     </div>
@@ -266,7 +266,7 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
         <motion.span
           animate={{ rotate: expanded ? 180 : 0 }}
           transition={{ duration: 0.15 }}
-          className="mt-0.5 shrink-0 text-zinc-500"
+          className="mt-0.5 shrink-0 text-muted-foreground"
         >
           <ChevronDown className="h-4 w-4" />
         </motion.span>
@@ -275,7 +275,7 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={task.status} />
             {task.iterations !== undefined && task.status !== 'running' && (
-              <span className="text-xs text-zinc-600">{task.iterations} iterations</span>
+              <span className="text-xs text-muted-foreground">{task.iterations} iterations</span>
             )}
           </div>
 
@@ -289,7 +289,7 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
             </div>
           )}
 
-          <p className="mt-1.5 text-xs text-zinc-600">{timeLabel}</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">{timeLabel}</p>
         </div>
 
         {/* Action buttons — stop propagation so click doesn't expand */}
@@ -300,7 +300,7 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
                 type="button"
                 onClick={handlePause}
                 title="Pause task"
-                className="rounded-md p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-yellow-400"
+                className="rounded-md p-1.5 text-muted-foreground transition hover:bg-white/10 hover:text-yellow-400"
               >
                 <Pause className="h-3.5 w-3.5" />
               </button>
@@ -310,7 +310,7 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
                 type="button"
                 onClick={handleResume}
                 title="Resume task"
-                className="rounded-md p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-green-400"
+                className="rounded-md p-1.5 text-muted-foreground transition hover:bg-white/10 hover:text-green-400"
               >
                 <Play className="h-3.5 w-3.5" />
               </button>
@@ -319,7 +319,7 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
               type="button"
               onClick={handleCancel}
               title="Cancel task"
-              className="rounded-md p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-red-400"
+              className="rounded-md p-1.5 text-muted-foreground transition hover:bg-white/10 hover:text-red-400"
             >
               <Square className="h-3.5 w-3.5" />
             </button>
@@ -360,12 +360,12 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
 
               {task.insights && task.insights.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Insights
                   </p>
                   <ul className="space-y-1">
                     {task.insights.map((insight, i) => (
-                      <li key={i} className="text-xs text-zinc-400">
+                      <li key={i} className="text-xs text-muted-foreground">
                         &bull; {insight}
                       </li>
                     ))}
@@ -374,7 +374,7 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
               )}
 
               {liveSteps.length === 0 && !task.result && !task.error && (
-                <p className="text-xs text-zinc-600">
+                <p className="text-xs text-muted-foreground">
                   {task.status === 'running'
                     ? 'Waiting for first step...'
                     : 'No step details available.'}
@@ -408,7 +408,7 @@ function EmptyState({ tab, onNew }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
       <Icon className="h-10 w-10 text-zinc-700" />
-      <p className="text-sm text-zinc-500">{text}</p>
+      <p className="text-sm text-muted-foreground">{text}</p>
       {tab === 'active' && (
         <button
           type="button"
@@ -618,7 +618,7 @@ export function TasksView() {
         <div className="flex items-center gap-3">
           <ListTodo className="h-5 w-5 text-teal-400" />
           <h1 className="text-lg font-semibold text-zinc-100">Tasks</h1>
-          {loading && <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />}
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
         </div>
         <button
           type="button"
@@ -633,7 +633,7 @@ export function TasksView() {
       {/* ── Search ─────────────────────────────────────────────────────────── */}
       <div className="border-b border-white/10 px-6 py-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             value={searchQuery}
@@ -658,7 +658,7 @@ export function TasksView() {
                 'flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition',
                 isActive
                   ? 'border-teal-500 text-teal-400'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-300',
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
               )}
             >
               <Icon className="h-4 w-4" />
@@ -667,7 +667,7 @@ export function TasksView() {
                 <span
                   className={cn(
                     'rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
-                    isActive ? 'bg-teal-500/20 text-teal-400' : 'bg-white/10 text-zinc-500',
+                    isActive ? 'bg-teal-500/20 text-teal-400' : 'bg-white/10 text-muted-foreground',
                   )}
                 >
                   {count}

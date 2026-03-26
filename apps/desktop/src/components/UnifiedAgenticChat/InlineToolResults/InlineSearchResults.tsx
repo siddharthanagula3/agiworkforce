@@ -69,7 +69,7 @@ const CollapsibleSearchHeader: React.FC<CollapsibleSearchHeaderProps> = ({
         </span>
       )}
       {durationMs !== undefined && (
-        <span className="flex items-center gap-1 text-xs text-zinc-500 shrink-0">
+        <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
           <Clock className="h-3 w-3" />
           {durationMs}ms
         </span>
@@ -196,7 +196,7 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
             <div className="space-y-2 pt-1">
               {/* Provider + query meta row */}
               <div className="flex items-center gap-3 text-xs text-muted-foreground px-1">
-                <div className="flex items-center gap-1.5 text-zinc-500">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
                   <Zap className="h-3 w-3" />
                   <span>{provider}</span>
                 </div>

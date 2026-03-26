@@ -21,11 +21,9 @@ export const ContextDisplay: React.FC<ContextDisplayProps> = ({ items, onRemove 
   }
 
   return (
-    <div className="border-b border-gray-100 dark:border-gray-700/50 px-4 py-3">
+    <div className="border-b border-border px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs uppercase tracking-wider text-gray-400 dark:text-gray-500">
-          Context
-        </span>
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">Context</span>
         {items.map((item) => (
           <div
             key={item.id}

@@ -129,10 +129,10 @@ export function ReasoningAccordion({
     <div
       className={cn(
         'overflow-hidden rounded-2xl',
-        'border bg-zinc-950',
+        'border bg-background',
         isStreaming
           ? 'border-agent-thinking/50 shadow-lg shadow-agent-thinking/10'
-          : 'border-zinc-800',
+          : 'border-border',
         className,
       )}
     >
@@ -144,7 +144,7 @@ export function ReasoningAccordion({
           'w-full flex items-center justify-between gap-3',
           'px-4 py-3',
           'text-left',
-          'hover:bg-zinc-900/50 transition-colors',
+          'hover:bg-card/50 transition-colors',
           'focus:outline-hidden focus:ring-2 focus:ring-agent-thinking/50',
         )}
         aria-expanded={isOpen}
@@ -159,7 +159,7 @@ export function ReasoningAccordion({
                 ? 'text-agent-thinking animate-pulse'
                 : isOpen
                   ? 'text-agent-thinking'
-                  : 'text-zinc-400',
+                  : 'text-muted-foreground',
             )}
           />
 
@@ -169,7 +169,7 @@ export function ReasoningAccordion({
               {isSimpleMode ? 'Thinking...' : `Thinking\u2026 ${formatThinkingDuration(elapsedMs)}`}
             </span>
           ) : (
-            <span className={cn('font-medium text-sm', isOpen ? 'text-zinc-200' : 'text-zinc-300')}>
+            <span className="font-medium text-sm text-foreground">
               {isSimpleMode
                 ? 'Thought about this'
                 : (() => {
@@ -182,7 +182,7 @@ export function ReasoningAccordion({
 
           {/* Streaming preview when collapsed (hidden in simple mode) */}
           {streamingPreview && !isOpen && !isSimpleMode && (
-            <span className="text-xs text-zinc-500 font-mono truncate opacity-70 hidden sm:inline">
+            <span className="text-xs text-muted-foreground font-mono truncate opacity-70 hidden sm:inline">
               {streamingPreview}
             </span>
           )}
@@ -193,7 +193,7 @@ export function ReasoningAccordion({
           transition={{ duration: 0.2 }}
           className="shrink-0"
         >
-          <ChevronDown className="w-4 h-4 text-zinc-400" />
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
         </motion.div>
       </button>
 
@@ -210,10 +210,10 @@ export function ReasoningAccordion({
             }}
             className="overflow-hidden"
           >
-            <div className="border-t border-zinc-800">
+            <div className="border-t border-border">
               {/* Secondary stats row — shown in body when expanded, hidden in simple mode */}
               {!isSimpleMode && (
-                <div className="flex items-center gap-3 px-4 pt-3 pb-1 text-xs text-zinc-500">
+                <div className="flex items-center gap-3 px-4 pt-3 pb-1 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Layers className="w-3 h-3" />
                     {stats.steps} {stats.steps === 1 ? 'step' : 'steps'}

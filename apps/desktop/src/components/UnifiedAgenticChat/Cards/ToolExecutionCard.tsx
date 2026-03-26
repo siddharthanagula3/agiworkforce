@@ -77,10 +77,8 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
   return (
     <div
       className={`tool-execution-card rounded-lg border ${
-        execution.success
-          ? 'border-gray-200 dark:border-gray-700'
-          : 'border-red-200 dark:border-red-900'
-      } bg-white dark:bg-gray-800 overflow-hidden ${className}`}
+        execution.success ? 'border-border' : 'border-red-200 dark:border-red-900'
+      } bg-card overflow-hidden ${className}`}
     >
       {}
       <div className="flex items-start justify-between p-4">
@@ -99,7 +97,7 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
           {}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-medium uppercase text-gray-600 dark:text-gray-400">
+              <span className="text-xs font-medium uppercase text-muted-foreground">
                 Tool Execution
               </span>
               {execution.success ? (
@@ -111,14 +109,14 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
 
             {}
             <div className="flex items-center gap-2 mb-2">
-              <Code size={16} className="text-gray-600 dark:text-gray-400" />
-              <span className="font-mono text-sm font-semibold text-gray-900 dark:text-gray-100">
+              <Code size={16} className="text-muted-foreground" />
+              <span className="font-mono text-sm font-semibold text-foreground">
                 {execution.toolName}
               </span>
             </div>
 
             {}
-            <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Clock size={12} />
                 {formattedTime}
@@ -141,10 +139,10 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
             <button
               type="button"
               onClick={onRetry}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-accent rounded transition-colors"
               title="Retry execution"
             >
-              <RotateCw size={14} className="text-gray-600 dark:text-gray-400" />
+              <RotateCw size={14} className="text-muted-foreground" />
             </button>
           )}
         </div>
@@ -152,16 +150,16 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
 
       {}
       {showInputOutput && (
-        <div className="border-t border-gray-200 dark:border-gray-700">
+        <div className="border-t border-border">
           {/* CHT-004 fix: Add null guard for execution.input */}
           {execution.input &&
           typeof execution.input === 'object' &&
           Object.keys(execution.input).length > 0 ? (
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="p-4 border-b border-border">
               <button
                 type="button"
                 onClick={() => setShowInput(!showInput)}
-                className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-gray-100"
+                className="flex items-center gap-2 text-sm font-medium text-foreground mb-2 hover:text-foreground"
               >
                 {showInput ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 Input
@@ -171,10 +169,10 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
                   <button
                     type="button"
                     onClick={() => handleCopy(inputJson)}
-                    className="absolute top-2 right-2 p-1.5 hover:bg-gray-700 rounded transition-colors z-10"
+                    className="absolute top-2 right-2 p-1.5 hover:bg-accent rounded transition-colors z-10"
                     title="Copy input"
                   >
-                    <Copy size={12} className="text-gray-400" />
+                    <Copy size={12} className="text-muted-foreground" />
                   </button>
                   <CodeBlock
                     code={inputJson}
@@ -193,7 +191,7 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowOutput(!showOutput)}
-                className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-gray-100"
+                className="flex items-center gap-2 text-sm font-medium text-foreground mb-2 hover:text-foreground"
               >
                 {showOutput ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 Output
@@ -203,10 +201,10 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
                   <button
                     type="button"
                     onClick={() => handleCopy(outputJson)}
-                    className="absolute top-2 right-2 p-1.5 hover:bg-gray-700 rounded transition-colors z-10"
+                    className="absolute top-2 right-2 p-1.5 hover:bg-accent rounded transition-colors z-10"
                     title="Copy output"
                   >
-                    <Copy size={12} className="text-gray-400" />
+                    <Copy size={12} className="text-muted-foreground" />
                   </button>
                   <CodeBlock
                     code={outputJson}

@@ -83,7 +83,7 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
     <div
       role="menu"
       aria-label="Message actions"
-      className="fixed z-50 min-w-[160px] rounded-lg border border-zinc-700 bg-zinc-800/95 backdrop-blur-xs py-1 shadow-xl"
+      className="fixed z-50 min-w-[160px] rounded-lg border border-border bg-muted/95 backdrop-blur-xs py-1 shadow-xl"
       style={{ left: clampedLeft, top: clampedTop }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -92,7 +92,7 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
         type="button"
         role="menuitem"
         onClick={() => handleAction(onCopy)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors"
+        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-accent/50 transition-colors"
       >
         <Copy size={14} />
         Copy message
@@ -103,7 +103,7 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
         type="button"
         role="menuitem"
         onClick={() => handleAction(onBookmark)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors"
+        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-accent/50 transition-colors"
       >
         {bookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
         {bookmarked ? 'Remove bookmark' : 'Bookmark'}
@@ -115,7 +115,7 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
           type="button"
           role="menuitem"
           onClick={() => handleAction(onEdit)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors"
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-accent/50 transition-colors"
         >
           <Edit2 size={14} />
           Edit message
@@ -128,7 +128,7 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
           type="button"
           role="menuitem"
           onClick={() => handleAction(onRegenerate)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors"
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-accent/50 transition-colors"
         >
           <RotateCw size={14} />
           Regenerate
@@ -138,7 +138,7 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
       {/* Delete */}
       {onDelete && (
         <>
-          <div role="separator" className="my-1 border-t border-zinc-700" />
+          <div role="separator" className="my-1 border-t border-border" />
           <button
             type="button"
             role="menuitem"
