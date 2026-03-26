@@ -410,7 +410,7 @@ export default function AIDashboardsFeaturePage() {
           </section>
 
           <CtaSection
-            icon={LayoutDashboard}
+            icon="LayoutDashboard"
             headline="Monitor Your AI Workforce in Real Time"
             body="Download the desktop app and get full visibility into every agent, tool call, and token spent — from your desktop or mobile device."
           />
