@@ -38,6 +38,8 @@ use std::sync::Arc;
 use std::time::Duration as StdDuration;
 use tokio::sync::RwLock;
 
+use crate::core::llm::{Provider, TaskType};
+
 use crate::sys::error::{Error, LLMError, Result};
 
 use super::memory_persistence::{
@@ -669,7 +671,7 @@ impl HttpSummaryLLM {
             .post("https://api.openai.com/v1/chat/completions")
             .header("Authorization", format!("Bearer {}", api_key))
             .json(&serde_json::json!({
-                "model": "gpt-4o-mini",
+                "model": Provider::OpenAI.get_model_for_task(TaskType::FastCompletion),
                 "messages": [{"role": "user", "content": full_prompt}],
                 "response_format": {"type": "json_object"}
             }))
