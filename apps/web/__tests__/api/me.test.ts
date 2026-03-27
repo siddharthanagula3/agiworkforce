@@ -172,7 +172,7 @@ describe('Me API', () => {
 
         expect(data.feature_flags).toBeDefined();
         expect(data.feature_flags.beta_features).toBe(true);
-        expect(data.feature_flags.advanced_model_access).toBe(true); // pro tier
+        expect(data.feature_flags.advanced_model_access).toBe(false); // pro tier stays auto-only
       });
 
       it('should include credit balance', async () => {
@@ -331,6 +331,29 @@ describe('Me API', () => {
         const data = await response.json();
 
         expect(data.feature_flags.advanced_model_access).toBe(false); // hobby tier
+      });
+
+      it('should enable advanced_model_access for max tier', async () => {
+        const { SubscriptionService } = await import('@/lib/services/subscription-service');
+        vi.mocked(SubscriptionService.getSubscription).mockResolvedValueOnce({
+          id: 'sub-test-max',
+          user_id: mockUser.id,
+          plan_tier: 'max',
+          status: 'active',
+          current_period_start: new Date('2024-12-01T00:00:00Z'),
+          current_period_end: new Date('2024-12-31T00:00:00Z'),
+          stripe_subscription_id: 'sub_test_max',
+          stripe_price_id: 'price_max_monthly',
+        });
+
+        const request = new NextRequest('http://localhost/api/me', {
+          method: 'GET',
+        });
+
+        const response = await GET(request);
+        const data = await response.json();
+
+        expect(data.feature_flags.advanced_model_access).toBe(true);
       });
     });
   });
