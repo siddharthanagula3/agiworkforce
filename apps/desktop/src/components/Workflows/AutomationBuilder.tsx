@@ -649,12 +649,12 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="claude-opus-4-5">Claude Opus 4.5</SelectItem>
-                  <SelectItem value="claude-sonnet-4-5">Claude Sonnet 4.5</SelectItem>
-                  <SelectItem value="claude-haiku-3-5">Claude Haiku 3.5</SelectItem>
+                  <SelectItem value="claude-opus-4.6">Claude Opus 4.6</SelectItem>
+                  <SelectItem value="claude-sonnet-4.6">Claude Sonnet 4.6</SelectItem>
                   <SelectItem value="gpt-5.4">GPT-5.4</SelectItem>
-                  <SelectItem value="gpt-5.4-mini">GPT-5.4 mini</SelectItem>
-                  <SelectItem value="gemini-2.0-pro">Gemini 2.0 Pro</SelectItem>
+                  <SelectItem value="gpt-5.4-mini">GPT-5.4 Mini</SelectItem>
+                  <SelectItem value="gemini-3.1-pro-preview">Gemini 3.1 Pro</SelectItem>
+                  <SelectItem value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</SelectItem>
                 </SelectContent>
               </Select>
             </div>

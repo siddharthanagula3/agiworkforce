@@ -1,7 +1,13 @@
 import Link from 'next/link';
 import { Sparkles, ExternalLink } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
+import { getCoreManualModelOptions } from '@agiworkforce/types';
 import { useVibeChatStore } from '../stores/vibe-chat-store';
+
+const VIBE_MODEL_IDS = new Set(['claude-sonnet-4.6', 'gpt-5.4', 'gemini-3.1-flash-lite']);
+const VIBE_MODEL_OPTIONS = getCoreManualModelOptions().filter((model) =>
+  VIBE_MODEL_IDS.has(model.id),
+);
 
 export function VibeTopNav() {
   const { selectedModel, setSelectedModel } = useVibeChatStore();
@@ -33,26 +39,13 @@ export function VibeTopNav() {
             <SelectValue placeholder="Select model" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="claude-sonnet-4-20250514">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">Claude Sonnet 4.6</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="claude-3-5-sonnet-20241022">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">Claude Sonnet 4.6</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="gpt-5.4">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">GPT-5.4</span>
-              </div>
-            </SelectItem>
-            <SelectItem value="gemini-2.0-flash">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">Gemini 3.1 Flash Lite</span>
-              </div>
-            </SelectItem>
+            {VIBE_MODEL_OPTIONS.map((model) => (
+              <SelectItem key={model.id} value={model.id}>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{model.label}</span>
+                </div>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

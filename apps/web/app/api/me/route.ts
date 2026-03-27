@@ -11,6 +11,7 @@ import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import type { User } from '@supabase/supabase-js';
+import { canAccessManualModelSelection } from '@agiworkforce/types';
 
 async function handleGetMe(request: NextRequest) {
   // Rate limiting
@@ -108,10 +109,7 @@ async function handleGetMe(request: NextRequest) {
 
     const feature_flags = {
       beta_features: true,
-      advanced_model_access:
-        subscription?.plan_tier === 'pro' ||
-        subscription?.plan_tier === 'max' ||
-        subscription?.plan_tier === 'enterprise',
+      advanced_model_access: canAccessManualModelSelection(subscription?.plan_tier),
     };
 
     const plan = {
