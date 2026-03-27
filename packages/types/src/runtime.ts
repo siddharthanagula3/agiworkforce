@@ -70,6 +70,56 @@ export interface RuntimeActivity {
   agentSessionId?: string;
 }
 
+/** Cross-surface routing task classification used by auto model selection. */
+export type RoutingTaskType =
+  | 'coding'
+  | 'reasoning'
+  | 'general'
+  | 'agentic'
+  | 'multimodal'
+  | 'research'
+  | 'computer-use';
+
+/** Shared model-routing decision emitted by auto mode selectors across surfaces. */
+export interface RoutingDecision {
+  /** The canonical model ID selected for the request. */
+  routedModelId: string;
+  /** High-level task bucket detected from the user request. */
+  taskType: RoutingTaskType;
+  /** Human-readable explanation shown in the UI. */
+  reason: string;
+  /** False when the user manually picked a model and routing was bypassed. */
+  wasRouted: boolean;
+  /** Epoch millis when the decision was made. */
+  timestamp: number;
+}
+
+/** Shared browser-agent lifecycle state used by desktop, web, and extension surfaces. */
+export type BrowserAgentStatus = 'idle' | 'planning' | 'executing' | 'done' | 'error';
+
+/** Shared browser activity snapshot for badges, panels, and sidecars. */
+export interface BrowserActivityState {
+  currentPageUrl: string | null;
+  currentPageTitle: string | null;
+  lastAction: string | null;
+  agentStatus: BrowserAgentStatus;
+  hasError: boolean;
+  lastError: string | null;
+  lastTaskActionsPerformed: number;
+  extensionConnected: boolean;
+}
+
+/** DOM/custom-event payload used for lightweight browser activity indicators. */
+export interface BrowserActivityEventDetail {
+  active: boolean;
+  url: string;
+  title?: string | null;
+  status?: BrowserAgentStatus;
+  lastAction?: string | null;
+  extensionConnected?: boolean;
+  hasError?: boolean;
+}
+
 // ============================================================================
 // Approval Request
 // ============================================================================

@@ -6,7 +6,8 @@ import { ActionBar } from './ActionBar';
 import { ThinkingBlock } from './ThinkingBlock';
 import { WebSearchCard } from './WebSearchCard';
 import { CitationPill } from './CitationPill';
-import type { ChatMessage, Artifact } from '../lib/types';
+import { DownloadCard } from './DownloadCard';
+import type { ChatMessage, Artifact, ToolCall } from '../lib/types';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -321,14 +322,95 @@ function renderInline(text: string): React.ReactNode {
   return parts.length === 1 ? parts[0] : parts;
 }
 
-export function MessageBubble({
-  message,
-  isLast,
-  onRetry,
-  onArtifactClick: _onArtifactClick,
-}: MessageBubbleProps) {
+function formatToolArgsPreview(toolCall: ToolCall): string | null {
+  const entries = Object.entries(toolCall.args ?? {});
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const preview = entries
+    .slice(0, 2)
+    .map(([key, value]) => {
+      if (typeof value === 'string') {
+        return `${key}: ${value}`;
+      }
+      return `${key}: ${JSON.stringify(value)}`;
+    })
+    .join(' · ');
+
+  return entries.length > 2 ? `${preview} · …` : preview;
+}
+
+function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
+  const preview = formatToolArgsPreview(toolCall);
+  const hasResult = typeof toolCall.result === 'string' && toolCall.result.trim().length > 0;
+
+  return (
+    <div className="rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-[var(--chat-text-primary)]">
+            {toolCall.name}
+          </p>
+          {preview && (
+            <p className="mt-0.5 truncate text-xs text-[var(--chat-text-muted)]">{preview}</p>
+          )}
+        </div>
+        <span
+          className={cn(
+            'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+            toolCall.status === 'failed'
+              ? 'bg-red-500/10 text-red-300'
+              : toolCall.status === 'completed'
+                ? 'bg-emerald-500/10 text-emerald-300'
+                : 'bg-blue-500/10 text-blue-300',
+          )}
+        >
+          {toolCall.status ?? 'running'}
+        </span>
+      </div>
+
+      {hasResult && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs text-[var(--chat-text-muted)]">Result</summary>
+          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-[var(--chat-surface-overlay)] px-3 py-2 text-xs leading-relaxed text-[var(--chat-text-secondary)]">
+            {toolCall.result}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
+export function MessageBubble({ message, isLast, onRetry, onArtifactClick }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isStreaming = Boolean(message.isStreaming);
+
+  function handleDownloadArtifact(artifact: Artifact) {
+    const ext =
+      artifact.type === 'html'
+        ? 'html'
+        : artifact.type === 'react'
+          ? 'tsx'
+          : artifact.type === 'markdown'
+            ? 'md'
+            : artifact.type === 'json'
+              ? 'json'
+              : artifact.type === 'svg'
+                ? 'svg'
+                : artifact.type === 'document'
+                  ? 'md'
+                  : artifact.type === 'image'
+                    ? 'png'
+                    : (artifact.language ?? 'txt');
+    const blob = new Blob([artifact.content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   if (isUser) {
     return (
@@ -375,6 +457,27 @@ export function MessageBubble({
         <div className="flex flex-wrap gap-1.5 mt-1">
           {message.citations.map((citation, idx) => (
             <CitationPill key={citation.id ?? idx} citation={citation} />
+          ))}
+        </div>
+      )}
+
+      {message.toolCalls && message.toolCalls.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {message.toolCalls.map((toolCall) => (
+            <ToolCallRow key={toolCall.id} toolCall={toolCall} />
+          ))}
+        </div>
+      )}
+
+      {message.artifacts && message.artifacts.length > 0 && (
+        <div className="mt-2">
+          {message.artifacts.map((artifact) => (
+            <DownloadCard
+              key={artifact.id}
+              artifact={artifact}
+              onClick={() => onArtifactClick?.(artifact)}
+              onDownload={() => handleDownloadArtifact(artifact)}
+            />
           ))}
         </div>
       )}

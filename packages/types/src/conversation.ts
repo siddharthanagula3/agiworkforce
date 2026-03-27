@@ -149,6 +149,7 @@ export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
  */
 export type ArtifactType =
   | 'code'
+  | 'react'
   | 'chart'
   | 'diagram'
   | 'table'

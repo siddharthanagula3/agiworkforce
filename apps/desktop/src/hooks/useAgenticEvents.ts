@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import { sha256 } from '../lib/hash';
 import { isTauri } from '../lib/tauri-mock';
 import { agent, automation, browserExtension } from '@agiworkforce/api';
+import type { BrowserActivityEventDetail } from '@agiworkforce/types';
 import type {
   ActionLogEntry,
   ActionLogEntryType,
@@ -1166,11 +1167,16 @@ export function useAgenticEvents() {
         // Dispatch browser activity indicator for all steps; only active for browser steps
         const isBrowserStep =
           event.payload.tool === 'browser_navigate' || event.payload.type === 'browser';
-        window.dispatchEvent(
-          new CustomEvent('agi:browser-active', {
-            detail: { active: isBrowserStep, url: isBrowserStep ? (event.payload.url ?? '') : '' },
-          }),
-        );
+        const detail: BrowserActivityEventDetail = {
+          active: isBrowserStep,
+          url: isBrowserStep ? (event.payload.url ?? '') : '',
+          title: event.payload.step ?? null,
+          status: isBrowserStep ? 'executing' : 'idle',
+          lastAction: event.payload.step ?? null,
+          extensionConnected: isBrowserStep,
+          hasError: false,
+        };
+        window.dispatchEvent(new CustomEvent('agi:browser-active', { detail }));
       });
       push(unlistenStepStarted);
 
@@ -1235,9 +1241,15 @@ export function useAgenticEvents() {
           status: 'success',
         });
         // Clear browser activity indicator when task finishes
-        window.dispatchEvent(
-          new CustomEvent('agi:browser-active', { detail: { active: false, url: '' } }),
-        );
+        const detail: BrowserActivityEventDetail = {
+          active: false,
+          url: '',
+          status: 'done',
+          lastAction: `Task completed (${stepsCompleted} steps)`,
+          extensionConnected: true,
+          hasError: false,
+        };
+        window.dispatchEvent(new CustomEvent('agi:browser-active', { detail }));
       });
       push(unlistenTaskCompleted2);
 
@@ -1262,9 +1274,15 @@ export function useAgenticEvents() {
           error: taskError,
         });
         // Clear browser activity indicator when task fails
-        window.dispatchEvent(
-          new CustomEvent('agi:browser-active', { detail: { active: false, url: '' } }),
-        );
+        const detail: BrowserActivityEventDetail = {
+          active: false,
+          url: '',
+          status: 'error',
+          lastAction: taskError,
+          extensionConnected: true,
+          hasError: true,
+        };
+        window.dispatchEvent(new CustomEvent('agi:browser-active', { detail }));
       });
       push(unlistenTaskFailed2);
 
@@ -1296,9 +1314,15 @@ export function useAgenticEvents() {
           status: 'success',
         });
         // Clear any active browser indicator when agent task ends
-        window.dispatchEvent(
-          new CustomEvent('agi:browser-active', { detail: { active: false, url: '' } }),
-        );
+        const detail: BrowserActivityEventDetail = {
+          active: false,
+          url: '',
+          status: 'done',
+          lastAction: 'Background task completed',
+          extensionConnected: true,
+          hasError: false,
+        };
+        window.dispatchEvent(new CustomEvent('agi:browser-active', { detail }));
       });
       push(unlistenBgAgentCompleted);
 
@@ -1327,9 +1351,15 @@ export function useAgenticEvents() {
           error,
         });
         // Clear any active browser indicator when agent task ends
-        window.dispatchEvent(
-          new CustomEvent('agi:browser-active', { detail: { active: false, url: '' } }),
-        );
+        const detail: BrowserActivityEventDetail = {
+          active: false,
+          url: '',
+          status: 'error',
+          lastAction: error,
+          extensionConnected: true,
+          hasError: true,
+        };
+        window.dispatchEvent(new CustomEvent('agi:browser-active', { detail }));
       });
       push(unlistenBgAgentFailed);
 

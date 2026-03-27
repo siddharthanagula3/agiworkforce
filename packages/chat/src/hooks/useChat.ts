@@ -212,11 +212,49 @@ export function useChat(
             if (msg) {
               const updatedCalls = (msg.toolCalls ?? []).map((tc) =>
                 tc.id === event.toolCallId
-                  ? { ...tc, result: event.result, status: 'completed' as const }
+                  ? {
+                      ...tc,
+                      result: event.result ?? event.error ?? tc.result,
+                      status: event.error ? ('failed' as const) : ('completed' as const),
+                    }
                   : tc,
               );
               store.updateMessage(convId, assistantMessageIdRef.current, {
                 toolCalls: updatedCalls,
+              });
+            }
+          }
+          break;
+        }
+        case 'artifact': {
+          if (!assistantMessageIdRef.current) {
+            const id = crypto.randomUUID();
+            assistantMessageIdRef.current = id;
+            addMsg({
+              id,
+              role: 'assistant',
+              content: '',
+              timestamp: new Date().toISOString(),
+              isStreaming: true,
+              artifacts: [event.artifact],
+            });
+          } else {
+            const msgs = store.messagesByConversation[convId];
+            const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
+            if (msg) {
+              const existingArtifacts = msg.artifacts ?? [];
+              const artifactIndex = existingArtifacts.findIndex(
+                (artifact) => artifact.id === event.artifact.id,
+              );
+              const updatedArtifacts =
+                artifactIndex >= 0
+                  ? existingArtifacts.map((artifact, index) =>
+                      index === artifactIndex ? event.artifact : artifact,
+                    )
+                  : [...existingArtifacts, event.artifact];
+
+              store.updateMessage(convId, assistantMessageIdRef.current, {
+                artifacts: updatedArtifacts,
               });
             }
           }

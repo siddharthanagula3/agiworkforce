@@ -11,6 +11,7 @@
  * - subscribeWithSelector for granular subscriptions
  */
 import { create } from 'zustand';
+import type { RoutingDecision } from '@agiworkforce/types';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { toast } from 'sonner';
 import type { ModelMetadata } from '../constants/llm';
@@ -29,12 +30,7 @@ import {
 } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
-import {
-  getModelForRequest,
-  getModelForRequestAsync,
-  isManualSelection,
-  type TaskType,
-} from '../lib/modelRouter';
+import { getModelForRequest, getModelForRequestAsync, isManualSelection } from '../lib/modelRouter';
 import type { Provider } from '../types/provider';
 import type { SubscriptionTier } from '../constants/planModels';
 import { useAccountStore } from './auth';
@@ -205,23 +201,6 @@ export interface ModelInfo {
   name: string;
   provider: Provider;
   available: boolean;
-}
-
-/**
- * Routing decision from the intelligent model router.
- * This tracks what model was selected for the current/last message.
- */
-export interface RoutingDecision {
-  /** The actual model ID that will be used */
-  routedModelId: string;
-  /** The task type that was detected */
-  taskType: TaskType;
-  /** Human-readable reason for the selection */
-  reason: string;
-  /** Whether routing was performed (false if manual selection) */
-  wasRouted: boolean;
-  /** Timestamp of the routing decision */
-  timestamp: number;
 }
 
 /** Ollama model details from the Rust backend */
