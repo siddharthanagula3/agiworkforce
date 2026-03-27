@@ -52,6 +52,14 @@ const InlineDocumentSearch = React.lazy(() =>
   import('./InlineDocumentSearch').then((m) => ({ default: m.InlineDocumentSearch })),
 );
 
+const InlineArtifactCard = React.lazy(() =>
+  import('./InlineArtifactCard').then((m) => ({ default: m.InlineArtifactCard })),
+);
+
+const InlineConversationSearch = React.lazy(() =>
+  import('./InlineConversationSearch').then((m) => ({ default: m.InlineConversationSearch })),
+);
+
 const InlineGitHubPR = React.lazy(() =>
   import('./InlineGitHub').then((m) => ({ default: m.InlineGitHubPR })),
 );
@@ -186,6 +194,14 @@ export const TOOL_RENDERERS: Record<
   document_read: InlineDocumentRead,
   document_extract_text: InlineDocumentRead,
   document_search: InlineDocumentSearch,
+  artifact_create: InlineArtifactCard,
+  artifact_generate: InlineArtifactCard,
+  create_artifact: InlineArtifactCard,
+  search_chat_history: InlineConversationSearch,
+  search_past_conversations: InlineConversationSearch,
+  search_conversations: InlineConversationSearch,
+  conversation_search: InlineConversationSearch,
+  find_relevant_chats: InlineConversationSearch,
 
   // ============================================
   // BROWSER AUTOMATION

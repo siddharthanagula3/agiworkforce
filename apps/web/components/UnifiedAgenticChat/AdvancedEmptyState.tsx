@@ -1,9 +1,7 @@
 /**
  * Advanced Empty State
  *
- * A completely minimal empty state - just empty space.
- * The input area at the bottom is the only UI element visible.
- * The AI is smart enough to figure out what to do from the conversation.
+ * Keeps the landing view disciplined: one headline, one composer.
  */
 import React from 'react';
 import { cn } from '@/lib/utils';
@@ -14,8 +12,19 @@ interface AdvancedEmptyStateProps {
 }
 
 export const AdvancedEmptyState: React.FC<AdvancedEmptyStateProps> = ({ className }) => {
-  // Completely empty - only the input area shows
-  return <div className={cn('flex-1 min-h-[40vh]', className)} />;
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        'pointer-events-none flex min-h-[56vh] items-center justify-center px-6 pb-44 pt-10 text-center',
+        className,
+      )}
+    >
+      <h1 className="max-w-3xl text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+        What’s on your mind today?
+      </h1>
+    </div>
+  );
 };
 
 export default AdvancedEmptyState;

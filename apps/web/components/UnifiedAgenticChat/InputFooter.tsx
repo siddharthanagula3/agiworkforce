@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 export interface InputFooterProps {
   /** Whether in simple mode */
   isSimpleMode?: boolean;
+  /** Whether the composer is in the empty-state layout */
+  isEmptyState?: boolean;
   /** Whether there's an inline suggestion */
   hasInlineSuggestion: boolean;
   /** Whether to show credit usage */
@@ -26,6 +28,7 @@ export interface InputFooterProps {
 
 export const InputFooter: React.FC<InputFooterProps> = ({
   isSimpleMode = false,
+  isEmptyState = false,
   hasInlineSuggestion,
   showCreditUsage,
   creditPercentage,
@@ -39,18 +42,30 @@ export const InputFooter: React.FC<InputFooterProps> = ({
       : 0;
 
   const hasTokenUsage = tokenCurrent != null && tokenMax != null;
+  const showUsage = (!isSimpleMode && showCreditUsage) || (!isSimpleMode && hasTokenUsage);
+
+  if (isEmptyState && !showUsage) {
+    return null;
+  }
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 border-t border-border/50">
-      <span className="text-xs text-muted-foreground">
-        {isSimpleMode ? (
-          <>Press Enter to send</>
-        ) : hasInlineSuggestion ? (
-          <>Tab to accept suggestion / Esc to dismiss</>
-        ) : (
-          <>Enter to send / Shift+Enter for newline</>
-        )}
-      </span>
+    <div
+      className={cn(
+        'flex items-center px-4 py-2 border-t border-border/50',
+        isEmptyState ? 'justify-end' : 'justify-between',
+      )}
+    >
+      {!isEmptyState && (
+        <span className="text-xs text-muted-foreground">
+          {isSimpleMode ? (
+            <>Press Enter to send</>
+          ) : hasInlineSuggestion ? (
+            <>Tab to accept suggestion / Esc to dismiss</>
+          ) : (
+            <>Enter to send / Shift+Enter for newline</>
+          )}
+        </span>
+      )}
 
       {/* Usage meters - hidden in simple mode */}
       {!isSimpleMode && showCreditUsage ? (

@@ -67,7 +67,7 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
 
   return (
     <div
-      className="group flex gap-3 px-4 py-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors"
+      className="group flex gap-3 px-4 py-3 transition-colors hover:bg-muted/20"
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
@@ -86,6 +86,8 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
           summary={summary}
           metadata={{ duration, steps, thinkingPattern: thinkingMatch.pattern }}
           isStreaming={Boolean(message.metadata?.streaming)}
+          autoExpandOnStream={false}
+          showPreview={false}
         />
 
         {/* Remaining content after thinking block */}
@@ -110,10 +112,7 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
                       enableCopy={true}
                     />
                   ) : (
-                    <code
-                      className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-sm font-mono"
-                      {...rest}
-                    >
+                    <code className="rounded bg-muted px-1.5 py-0.5 text-sm font-mono" {...rest}>
                       {children}
                     </code>
                   );
@@ -145,14 +144,14 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
           >
             <button
               onClick={onCopy}
-              className="p-1 text-zinc-500 hover:text-zinc-300"
+              className="p-1 text-muted-foreground hover:text-foreground"
               title="Copy message"
             >
               {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
             </button>
             <button
               onClick={onBookmark}
-              className="p-1 text-zinc-500 hover:text-zinc-300"
+              className="p-1 text-muted-foreground hover:text-foreground"
               title={message.bookmarked ? 'Remove bookmark' : 'Bookmark message'}
             >
               {message.bookmarked ? (
