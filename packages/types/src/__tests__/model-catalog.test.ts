@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  detectProviderFromModelId,
   getModelCostRates,
   getModelContextLimits,
+  getModelIdsForProvider,
   getPickerModelTier,
   getPickerModels,
   listCanonicalModels,
   normalizeModelId,
+  resolveAutoModeModel,
 } from '../model-catalog';
 
 describe('model catalog helpers', () => {
@@ -50,5 +53,23 @@ describe('model catalog helpers', () => {
     expect(contextLimits['claude-sonnet-4.6']).toBeGreaterThan(0);
     expect(costRates['gpt-5.4']).toMatchObject({ provider: 'openai' });
     expect(costRates['claude-sonnet-4.6']).toMatchObject({ provider: 'anthropic' });
+  });
+
+  it('derives provider model lists from the canonical catalog', () => {
+    const anthropicIds = getModelIdsForProvider('anthropic', {
+      modelTypes: ['chat', 'code', 'reasoning', 'multimodal'],
+    });
+
+    expect(anthropicIds).toContain('claude-sonnet-4.6');
+    expect(anthropicIds).toContain('claude-opus-4.6');
+    expect(anthropicIds).not.toContain('claude-3-haiku-20240307');
+  });
+
+  it('detects providers and resolves auto modes from shared routing defaults', () => {
+    expect(detectProviderFromModelId('claude-sonnet-4-6')).toBe('anthropic');
+    expect(resolveAutoModeModel('auto-economy', 'hobby')).toBe('gpt-5.4-nano');
+    expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.4');
+    expect(resolveAutoModeModel('auto-premium', 'max')).toBe('claude-opus-4.6');
+    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gpt-5.4-nano');
   });
 });

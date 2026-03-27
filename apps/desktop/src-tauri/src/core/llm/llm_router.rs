@@ -502,14 +502,14 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::DeepSeek,
-                        "deepseek-chat".to_string(),
+                        provider_task_model(Provider::DeepSeek, "chat"),
                         "Coding intent + budget plan - routing to DeepSeek Chat.2 (best coding value).".to_string(),
                     )
                 } else {
                     (
                         Provider::Anthropic,
-                        "claude-sonnet-4-6".to_string(),
-                        "Coding intent detected - routing to Claude Sonnet 4-6 (excellent coding)."
+                        provider_task_model(Provider::Anthropic, "code_generation"),
+                        "Coding intent detected - routing using Anthropic catalog code-generation default."
                             .to_string(),
                     )
                 }
@@ -520,15 +520,15 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::XAI,
-                        "grok-4-1-fast-reasoning".to_string(),
-                        "Reasoning intent + budget plan - routing to Grok 4.1 Fast Reasoning."
+                        provider_task_model(Provider::XAI, "complex_reasoning"),
+                        "Reasoning intent + budget plan - routing using xAI catalog reasoning default."
                             .to_string(),
                     )
                 } else {
                     (
                         Provider::OpenAI,
-                        "o3".to_string(),
-                        "Reasoning intent detected - routing to OpenAI o3 (reasoning specialist)."
+                        provider_task_model(Provider::OpenAI, "complex_reasoning"),
+                        "Reasoning intent detected - routing using OpenAI catalog reasoning default."
                             .to_string(),
                     )
                 }
@@ -539,15 +539,16 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::Google,
-                        "gemini-3-flash".to_string(),
-                        "Agentic intent + budget plan - routing to Gemini 3 Flash for tool use."
+                        provider_task_model(Provider::Google, "chat"),
+                        "Agentic intent + budget plan - routing using Google catalog chat default."
                             .to_string(),
                     )
                 } else {
                     (
                         Provider::Anthropic,
-                        "claude-sonnet-4-6".to_string(),
-                        "Agentic intent detected - routing to Claude Sonnet 4-6 for tool orchestration.".to_string(),
+                        provider_task_model(Provider::Anthropic, "chat"),
+                        "Agentic intent detected - routing using Anthropic catalog chat default."
+                            .to_string(),
                     )
                 }
             }
@@ -555,12 +556,11 @@ impl LLMRouter {
             // === Multimodal intent - route to vision-capable models ===
             "multimodal" => (
                 Provider::Google,
-                if is_budget_plan {
-                    "gemini-3-flash".to_string()
-                } else {
-                    "gemini-3.1-pro-preview".to_string()
-                },
-                "Multimodal intent detected - routing to Google Gemini for vision capabilities."
+                provider_task_model(
+                    Provider::Google,
+                    if is_budget_plan { "chat" } else { "vision" },
+                ),
+                "Multimodal intent detected - routing using Google catalog vision-capable default."
                     .to_string(),
             ),
 
@@ -578,14 +578,16 @@ impl LLMRouter {
                 if is_budget_plan {
                     (
                         Provider::Google,
-                        "gemini-3-flash".to_string(),
-                        "Chat intent + budget plan - routing to Gemini 3 Flash.".to_string(),
+                        provider_task_model(Provider::Google, "fast_completion"),
+                        "Chat intent + budget plan - routing using Google catalog fast model."
+                            .to_string(),
                     )
                 } else {
                     (
                         Provider::Google,
-                        "gemini-3.1-pro-preview".to_string(),
-                        "Chat intent detected - routing to Gemini 3 Pro.".to_string(),
+                        provider_task_model(Provider::Google, "chat"),
+                        "Chat intent detected - routing using Google catalog chat default."
+                            .to_string(),
                     )
                 }
             }
@@ -1084,7 +1086,7 @@ impl LLMRouter {
             routed_request.model =
                 crate::core::llm::models_config::get_default_model(&candidate.provider).to_string();
         } else {
-            routed_request.model = candidate.model.clone();
+            routed_request.model = normalize_model_id(&candidate.model);
         }
 
         // Enforce output protocol to prevent XML/tool-tag leakage
@@ -1982,21 +1984,10 @@ impl LLMRouter {
     /// - **Google**: Reasoning variants (Deep Think) priced higher than non-reasoning (Pro/Flash)
     fn default_model(&self, provider: Provider, task: TaskCategory) -> String {
         match provider {
-            Provider::OpenAI => match task {
-                TaskCategory::Simple => "gpt-5.4-nano".to_string(),
-                TaskCategory::Complex => "gpt-5.4".to_string(),
-                TaskCategory::Creative => "gpt-5.4-nano".to_string(),
-            },
-            Provider::Anthropic => match task {
-                TaskCategory::Simple => "claude-haiku-4-5".to_string(),
-                TaskCategory::Complex => "claude-sonnet-4-6".to_string(),
-                TaskCategory::Creative => "claude-sonnet-4-6".to_string(),
-            },
-            Provider::Google => match task {
-                TaskCategory::Simple => "gemini-3-flash".to_string(),
-                TaskCategory::Complex => "gemini-3.1-pro-preview".to_string(),
-                TaskCategory::Creative => "gemini-3.1-pro-preview".to_string(),
-            },
+            Provider::OpenAI | Provider::Anthropic | Provider::Google | Provider::ManagedCloud => {
+                super::models_config::get_task_model(&provider, task_category_to_routing_key(task))
+                    .to_string()
+            }
             Provider::Ollama => "llama4-maverick".to_string(),
             Provider::XAI => match task {
                 // grok-4-1-fast-reasoning is the current latest (March 2026): $0.20/$0.50 per 1M, 2M context
@@ -2034,11 +2025,6 @@ impl LLMRouter {
                 TaskCategory::Simple => "mistral-medium-3".to_string(),
                 TaskCategory::Complex => "mistral-large-3".to_string(),
                 TaskCategory::Creative => "mistral-large-3".to_string(),
-            },
-            Provider::ManagedCloud => match task {
-                TaskCategory::Simple => "gpt-5.4-nano".to_string(),
-                TaskCategory::Complex => "gpt-5.4".to_string(),
-                TaskCategory::Creative => "gpt-5.4".to_string(),
             },
             // New providers — use their best available models
             Provider::Groq => match task {
@@ -2093,11 +2079,10 @@ impl LLMRouter {
                 TaskCategory::Complex => "gpt-5.4".to_string(),
                 TaskCategory::Creative => "gpt-5.4".to_string(),
             },
-            Provider::Bedrock => match task {
-                TaskCategory::Simple => "anthropic.claude-haiku-4-5-v1:0".to_string(),
-                TaskCategory::Complex => "anthropic.claude-sonnet-4-6-v1:0".to_string(),
-                TaskCategory::Creative => "anthropic.claude-sonnet-4-6-v1:0".to_string(),
-            },
+            Provider::Bedrock => {
+                super::models_config::get_task_model(&provider, task_category_to_routing_key(task))
+                    .to_string()
+            }
             Provider::NvidiaNim => match task {
                 TaskCategory::Simple => "meta/llama-3.3-70b-instruct".to_string(),
                 TaskCategory::Complex => "meta/llama-3.3-70b-instruct".to_string(),
@@ -2132,29 +2117,34 @@ impl LLMRouter {
             RoutingStrategy::AutoEconomy => {
                 // Cost-optimized: simple queries use cheap models, complex use capable
                 if token_count < 1000 {
-                    "gpt-5.4-nano".to_string() // $0.20/$1.25 per 1M - cheapest OpenAI
+                    super::models_config::get_task_model(&Provider::OpenAI, "fast_completion")
+                        .to_string()
                 } else if token_count < 8000 {
-                    "deepseek-chat".to_string() // $0.28/$0.42 per 1M - best value for medium context
+                    super::models_config::get_task_model(&Provider::ManagedCloud, "chat")
+                        .to_string()
                 } else {
-                    "gemini-3-flash".to_string() // $0.50/$3.00 per 1M - long context value
+                    super::models_config::get_task_model(&Provider::ManagedCloud, "long_context")
+                        .to_string()
                 }
             }
             RoutingStrategy::AutoBalanced => {
                 // Balance: cheap for simple, quality for complex
                 if token_count < 500 {
-                    "gpt-5.4-nano".to_string() // $0.20/$1.25 per 1M - fast and cheap
+                    super::models_config::get_task_model(&Provider::OpenAI, "fast_completion")
+                        .to_string()
                 } else if token_count < 4000 {
-                    "claude-sonnet-4-6".to_string() // $3/$15 per 1M - excellent quality
+                    super::models_config::get_task_model(&Provider::Anthropic, "chat").to_string()
                 } else {
-                    "gpt-5.4".to_string() // Strong OpenAI balanced model
+                    super::models_config::get_task_model(&Provider::OpenAI, "chat").to_string()
                 }
             }
             RoutingStrategy::AutoPremium => {
                 // Premium: Always best models, switch based on context window needs
                 if token_count < 16000 {
-                    "claude-sonnet-4-6".to_string() // $3/$15 per 1M - excellent coding
+                    super::models_config::get_task_model(&Provider::Anthropic, "chat").to_string()
                 } else {
-                    "claude-opus-4-6".to_string() // $5/$25 per 1M - best for heavy lifting
+                    super::models_config::get_task_model(&Provider::Anthropic, "complex_reasoning")
+                        .to_string()
                 }
             }
             _ => candidate_model.to_string(),
@@ -2167,6 +2157,18 @@ enum TaskCategory {
     Simple,
     Complex,
     Creative,
+}
+
+fn task_category_to_routing_key(task: TaskCategory) -> &'static str {
+    match task {
+        TaskCategory::Simple => "fast_completion",
+        TaskCategory::Complex => "chat",
+        TaskCategory::Creative => "vision",
+    }
+}
+
+fn provider_task_model(provider: Provider, task: &'static str) -> String {
+    super::models_config::get_task_model(&provider, task).to_string()
 }
 
 /// Checks if `text` contains `word` as a whole word using regex `\b` word boundaries.
@@ -2497,7 +2499,7 @@ impl LLMRouter {
             routed_request.model =
                 crate::core::llm::models_config::get_default_model(&candidate.provider).to_string();
         } else {
-            routed_request.model = candidate.model.clone();
+            routed_request.model = normalize_model_id(&candidate.model);
         }
 
         routed_request.stream = true;

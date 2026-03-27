@@ -33,6 +33,12 @@ import { toast } from 'sonner';
 
 import { settingsService } from '@features/settings/services/user-preferences';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
+import {
+  getModelIdsForProvider,
+  getModelMetadataById,
+  getProviderDefaultModel,
+  providerLabels,
+} from '@agiworkforce/types';
 
 interface ProviderConfig {
   name: string;
@@ -47,125 +53,163 @@ interface ProviderConfig {
   pricing: string;
 }
 
-const PROVIDER_CONFIGS: Record<string, Omit<ProviderConfig, 'apiKey' | 'isConfigured'>> = {
-  OpenAI: {
-    name: 'OpenAI',
-    models: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-4-turbo', 'o1', 'o1-mini'],
-    defaultModel: 'gpt-5.4',
-    costPerToken: 0.000005,
-    maxTokens: 8192,
-    features: ['Streaming', 'Function Calling', 'Vision', 'Reasoning', 'Image Gen'],
+const SUPPORTED_PROVIDER_IDS = [
+  'openai',
+  'anthropic',
+  'google',
+  'perplexity',
+  'grok',
+  'deepseek',
+  'qwen',
+  'moonshot',
+  'zhipu',
+] as const;
+
+type SupportedProviderId = (typeof SUPPORTED_PROVIDER_IDS)[number];
+
+const CATALOG_PROVIDER_ID: Record<SupportedProviderId, string> = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  google: 'google',
+  perplexity: 'perplexity',
+  grok: 'xai',
+  deepseek: 'deepseek',
+  qwen: 'qwen',
+  moonshot: 'moonshot',
+  zhipu: 'zhipu',
+};
+
+const PROVIDER_LINKS: Record<
+  SupportedProviderId,
+  { documentation: string; pricing: string; label?: string }
+> = {
+  openai: {
     documentation: 'https://platform.openai.com/docs',
     pricing: 'https://openai.com/pricing',
   },
-  Anthropic: {
-    name: 'Anthropic',
-    models: ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-3-5-sonnet-20241022'],
-    defaultModel: 'claude-sonnet-4-6',
-    costPerToken: 0.000003,
-    maxTokens: 8192,
-    features: ['Streaming', 'Computer Use', 'Extended Thinking', 'Vision', 'Long Context'],
+  anthropic: {
     documentation: 'https://docs.anthropic.com',
     pricing: 'https://www.anthropic.com/pricing',
   },
-  Google: {
-    name: 'Google',
-    models: ['gemini-3.1-flash-lite', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview'],
-    defaultModel: 'gemini-3.1-flash-lite',
-    costPerToken: 0.0000004,
-    maxTokens: 8192,
-    features: ['Streaming', 'Thinking Mode', 'Vision', 'Long Context', 'Grounding'],
+  google: {
     documentation: 'https://ai.google.dev/docs',
     pricing: 'https://ai.google.dev/pricing',
   },
-  Perplexity: {
-    name: 'Perplexity (Sonar)',
-    models: ['sonar-deep-research', 'sonar-reasoning-pro', 'sonar-reasoning', 'sonar-pro', 'sonar'],
-    defaultModel: 'sonar-pro',
-    costPerToken: 0.000005,
-    maxTokens: 4096,
-    features: ['Web Search', 'Real-time Data', 'Deep Research', 'Reasoning', 'Citations'],
+  perplexity: {
     documentation: 'https://docs.perplexity.ai',
     pricing: 'https://www.perplexity.ai/pricing',
+    label: 'Perplexity (Sonar)',
   },
-  Grok: {
-    name: 'xAI (Grok 4)',
-    models: [
-      'grok-4',
-      'grok-4-1-fast-reasoning',
-      'grok-4-1-fast-non-reasoning',
-      'grok-3',
-      'grok-2-vision-1212',
-    ],
-    defaultModel: 'grok-4',
-    costPerToken: 0.00001,
-    maxTokens: 8192,
-    features: ['Streaming', 'Real-time X/Twitter', 'Agent Tools', 'Vision', 'Image Gen'],
+  grok: {
     documentation: 'https://docs.x.ai',
     pricing: 'https://x.ai/pricing',
+    label: 'xAI (Grok)',
   },
-  DeepSeek: {
-    name: 'DeepSeek',
-    models: ['deepseek-chat', 'deepseek-reasoner'],
-    defaultModel: 'deepseek-chat',
-    costPerToken: 0.0000014,
-    maxTokens: 8192,
-    features: ['Streaming', 'Chain-of-Thought', 'Coding', 'Tool Use', 'Cost Effective'],
+  deepseek: {
     documentation: 'https://platform.deepseek.com/docs',
     pricing: 'https://platform.deepseek.com/pricing',
   },
-  Qwen: {
-    name: 'Qwen (Alibaba)',
-    models: [
-      'qwen3-max',
-      'qwq-plus',
-      'qwen3-coder-plus',
-      'qwen3-coder-flash',
-      'qwen-plus',
-      'qwen-flash',
-      'qwen3-vl-plus',
-    ],
-    defaultModel: 'qwen-plus',
-    costPerToken: 0.000002,
-    maxTokens: 8192,
-    features: ['Streaming', 'Thinking Mode', 'Coding', 'Multilingual', 'Vision', 'Video Gen'],
+  qwen: {
     documentation: 'https://help.aliyun.com/qwen',
     pricing: 'https://www.alibabacloud.com/qwen/pricing',
+    label: 'Qwen (Alibaba)',
   },
-  Moonshot: {
-    name: 'Moonshot (Kimi)',
-    models: ['kimi-k2', 'moonshot-v1-128k', 'moonshot-v1-32k', 'moonshot-v1-8k'],
-    defaultModel: 'kimi-k2',
-    costPerToken: 0.000002,
-    maxTokens: 8192,
-    features: ['Streaming', 'Long Context', 'Multilingual', 'Tool Use', 'Coding'],
+  moonshot: {
     documentation: 'https://platform.moonshot.cn/docs',
     pricing: 'https://platform.moonshot.cn/pricing',
+    label: 'Moonshot (Kimi)',
   },
-  Zhipu: {
-    name: 'Zhipu (GLM)',
-    models: ['glm-4-plus', 'glm-4-flash', 'glm-4-long', 'glm-4v-plus'],
-    defaultModel: 'glm-4-plus',
-    costPerToken: 0.000003,
-    maxTokens: 8192,
-    features: ['Streaming', 'Vision', 'Tool Use', 'Long Context', 'Multilingual'],
+  zhipu: {
     documentation: 'https://open.bigmodel.cn/dev/api',
     pricing: 'https://open.bigmodel.cn/pricing',
+    label: 'Zhipu (GLM)',
   },
 };
 
-/** Map lowercase Select values to PascalCase PROVIDER_CONFIGS keys */
-const PROVIDER_KEY_MAP: Record<string, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic',
-  google: 'Google',
-  perplexity: 'Perplexity',
-  grok: 'Grok',
-  deepseek: 'DeepSeek',
-  qwen: 'Qwen',
-  moonshot: 'Moonshot',
-  zhipu: 'Zhipu',
-};
+const FEATURE_LABELS: Array<{
+  label: string;
+  matches: (provider: SupportedProviderId) => boolean;
+}> = [
+  { label: 'Streaming', matches: () => true },
+  { label: 'Tool Use', matches: (provider) => providerHasCapability(provider, 'tools') },
+  { label: 'Vision', matches: (provider) => providerHasCapability(provider, 'vision') },
+  { label: 'Reasoning', matches: (provider) => providerHasCapability(provider, 'thinking') },
+  { label: 'Computer Use', matches: (provider) => providerHasCapability(provider, 'computerUse') },
+  {
+    label: 'Code Execution',
+    matches: (provider) => providerHasCapability(provider, 'codeExecution'),
+  },
+  { label: 'Web Search', matches: (provider) => providerHasCapability(provider, 'search') },
+  { label: 'Research', matches: (provider) => providerHasCapability(provider, 'research') },
+  { label: 'Image Gen', matches: (provider) => providerHasCapability(provider, 'imageGen') },
+  { label: 'Video Gen', matches: (provider) => providerHasCapability(provider, 'videoGen') },
+  { label: 'Long Context', matches: (provider) => providerHasLongContext(provider) },
+];
+
+function toCatalogProviderId(provider: SupportedProviderId): string {
+  return CATALOG_PROVIDER_ID[provider];
+}
+
+function getProviderModelIds(provider: SupportedProviderId): string[] {
+  return getModelIdsForProvider(toCatalogProviderId(provider), {
+    includeDeprecated: false,
+    modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+  });
+}
+
+function providerHasCapability(
+  provider: SupportedProviderId,
+  capability: keyof NonNullable<ReturnType<typeof getModelMetadataById>>['capabilities'],
+): boolean {
+  return getProviderModelIds(provider).some((modelId) => {
+    const metadata = getModelMetadataById(modelId);
+    return Boolean(metadata?.capabilities?.[capability]);
+  });
+}
+
+function providerHasLongContext(provider: SupportedProviderId): boolean {
+  return getProviderModelIds(provider).some((modelId) => {
+    const metadata = getModelMetadataById(modelId);
+    return (metadata?.contextWindow ?? 0) >= 128_000;
+  });
+}
+
+function getProviderFeatures(provider: SupportedProviderId): string[] {
+  return FEATURE_LABELS.filter((feature) => feature.matches(provider)).map(
+    (feature) => feature.label,
+  );
+}
+
+function getProviderDisplayName(provider: SupportedProviderId): string {
+  return (
+    PROVIDER_LINKS[provider].label ?? providerLabels[toCatalogProviderId(provider)] ?? provider
+  );
+}
+
+const PROVIDER_CONFIGS: Record<
+  SupportedProviderId,
+  Omit<ProviderConfig, 'apiKey' | 'isConfigured'>
+> = Object.fromEntries(
+  SUPPORTED_PROVIDER_IDS.map((provider) => {
+    const models = getProviderModelIds(provider);
+    const defaultModel = getProviderDefaultModel(toCatalogProviderId(provider)) ?? models[0] ?? '';
+    const defaultModelMetadata = getModelMetadataById(defaultModel);
+
+    return [
+      provider,
+      {
+        name: getProviderDisplayName(provider),
+        models,
+        defaultModel,
+        costPerToken: (defaultModelMetadata?.inputCost ?? 0) / 1_000_000,
+        maxTokens: defaultModelMetadata?.maxOutputTokens ?? 8192,
+        features: getProviderFeatures(provider),
+        documentation: PROVIDER_LINKS[provider].documentation,
+        pricing: PROVIDER_LINKS[provider].pricing,
+      },
+    ];
+  }),
+) as Record<SupportedProviderId, Omit<ProviderConfig, 'apiKey' | 'isConfigured'>>;
 
 const AIConfigurationPageContent: React.FC = () => {
   const [configs, setConfigs] = useState<Record<string, ProviderConfig>>({});
@@ -177,7 +221,7 @@ const AIConfigurationPageContent: React.FC = () => {
 
   // User AI preferences
   const [defaultProvider, setDefaultProvider] = useState<string>('openai');
-  const [defaultModel, setDefaultModel] = useState<string>('gpt-5.4');
+  const [defaultModel, setDefaultModel] = useState<string>(PROVIDER_CONFIGS.openai.defaultModel);
   const [preferStreaming, setPreferStreaming] = useState<boolean>(true);
   const [aiTemperature, setAiTemperature] = useState<number>(0.7);
   const [aiMaxTokens, setAiMaxTokens] = useState<number>(4000);
@@ -323,8 +367,7 @@ const AIConfigurationPageContent: React.FC = () => {
   };
 
   const getModelsForProvider = (provider: string): string[] => {
-    const configKey = PROVIDER_KEY_MAP[provider.toLowerCase()] ?? provider;
-    const config = PROVIDER_CONFIGS[configKey];
+    const config = PROVIDER_CONFIGS[provider as SupportedProviderId];
     return config ? config.models : [];
   };
 
@@ -625,10 +668,7 @@ const AIConfigurationPageContent: React.FC = () => {
                     value={defaultProvider}
                     onValueChange={(value) => {
                       setDefaultProvider(value);
-                      // Update model to match the provider's default
-                      // Select values are lowercase but PROVIDER_CONFIGS keys are PascalCase
-                      const configKey = PROVIDER_KEY_MAP[value] ?? value;
-                      const providerConfig = PROVIDER_CONFIGS[configKey];
+                      const providerConfig = PROVIDER_CONFIGS[value as SupportedProviderId];
                       if (providerConfig) {
                         setDefaultModel(providerConfig.defaultModel);
                       }
@@ -638,15 +678,11 @@ const AIConfigurationPageContent: React.FC = () => {
                       <SelectValue placeholder="Select provider" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="openai">OpenAI</SelectItem>
-                      <SelectItem value="anthropic">Anthropic</SelectItem>
-                      <SelectItem value="google">Google</SelectItem>
-                      <SelectItem value="perplexity">Perplexity (Sonar)</SelectItem>
-                      <SelectItem value="grok">xAI (Grok 4)</SelectItem>
-                      <SelectItem value="deepseek">DeepSeek</SelectItem>
-                      <SelectItem value="qwen">Qwen (Alibaba)</SelectItem>
-                      <SelectItem value="moonshot">Moonshot (Kimi)</SelectItem>
-                      <SelectItem value="zhipu">Zhipu (GLM)</SelectItem>
+                      {SUPPORTED_PROVIDER_IDS.map((provider) => (
+                        <SelectItem key={provider} value={provider}>
+                          {PROVIDER_CONFIGS[provider].name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <p className="text-sm text-muted-foreground">
