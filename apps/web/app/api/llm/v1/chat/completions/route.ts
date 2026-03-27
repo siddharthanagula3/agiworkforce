@@ -136,8 +136,8 @@ function findCheaperFallbackModel(
   const fallbackModels = [
     { model: 'deepseek-chat', provider: 'deepseek' },
     { model: 'qwen-flash', provider: 'qwen' },
-    { model: 'gpt-5.4-nano', provider: 'openai' },
-    { model: 'gemini-3-flash-lite', provider: 'google' },
+    { model: 'gpt-5.4-mini', provider: 'openai' },
+    { model: 'gemini-3.1-flash-lite', provider: 'google' },
     { model: 'claude-haiku-4.5', provider: 'anthropic' },
   ];
 
