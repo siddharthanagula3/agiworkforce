@@ -19,6 +19,7 @@ import { supabase } from '@shared/lib/supabase-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { logger } from '@shared/lib/logger';
 import { PaymentAPI } from '@shared/lib/stripe';
+import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -154,24 +155,23 @@ interface UserPlanData {
   stripeSubscriptionId: string | null;
 }
 
-// Per-tier configuration — credits are in CENTS (e.g., 350 = $3.50/mo)
-// Source of truth: desktop pricing.ts tokenCredits + subscription-service.ts PLAN_CREDITS
+// Per-tier billing metadata — prices and usage budgets come from the shared billing catalog.
 const TIER_CONFIG: Record<
   BillingPlan,
   { creditLimitCents: number; price: number; name: string; features: string[] }
 > = {
   free: {
-    creditLimitCents: 0,
-    price: 0,
+    creditLimitCents: getPlanUsageBudgetCents('free'),
+    price: getPlanPriceUsd('free'),
     name: 'Free',
     features: ['Local LLMs only (Ollama, LM Studio)', 'Basic automations', 'Community support'],
   },
   hobby: {
-    creditLimitCents: 350, // $3.50/mo
-    price: 10,
+    creditLimitCents: getPlanUsageBudgetCents('hobby'),
+    price: getPlanPriceUsd('hobby'),
     name: 'Hobby',
     features: [
-      '$3.50/mo in AI credits',
+      `${getPlanUsageBudgetCents('hobby').toLocaleString()} credits per billing cycle`,
       'Speed-optimized AI models',
       'Vision & image analysis',
       'Basic computer use',
@@ -179,11 +179,11 @@ const TIER_CONFIG: Record<
     ],
   },
   pro: {
-    creditLimitCents: 1200, // $12/mo
-    price: 29.99,
+    creditLimitCents: getPlanUsageBudgetCents('pro'),
+    price: getPlanPriceUsd('pro'),
     name: 'Pro',
     features: [
-      '$12/mo in AI credits',
+      `${getPlanUsageBudgetCents('pro').toLocaleString()} credits per billing cycle`,
       'Balanced AI models (chat, tool use, vision)',
       'Full computer use & browser automation',
       'Image generation & analysis',
@@ -191,11 +191,11 @@ const TIER_CONFIG: Record<
     ],
   },
   max: {
-    creditLimitCents: 15000, // $150/mo
-    price: 299.99,
+    creditLimitCents: getPlanUsageBudgetCents('max'),
+    price: getPlanPriceUsd('max'),
     name: 'Max',
     features: [
-      '$150/mo in AI credits',
+      `${getPlanUsageBudgetCents('max').toLocaleString()} credits per billing cycle`,
       'Deep reasoning & thinking models',
       'Advanced agentic coding models',
       'Video generation & analysis',
@@ -203,8 +203,8 @@ const TIER_CONFIG: Record<
     ],
   },
   enterprise: {
-    creditLimitCents: 100000, // $1000/mo default, overridden per-contract
-    price: 0,
+    creditLimitCents: getPlanUsageBudgetCents('enterprise'),
+    price: getPlanPriceUsd('enterprise'),
     name: 'Enterprise',
     features: [
       'Custom credit allocation',
@@ -231,11 +231,27 @@ async function fetchTokenBalance(userId: string): Promise<TokenBalance> {
   );
 
   if (!rpcError && rpcData !== null && rpcData !== undefined) {
-    const creditsCents = Math.max(Number(rpcData), 0);
+    const balanceRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+    const creditsCents = Math.max(
+      Number(
+        balanceRow && typeof balanceRow === 'object'
+          ? ((balanceRow as { credits_remaining_cents?: number }).credits_remaining_cents ?? 0)
+          : 0,
+      ),
+      0,
+    );
+    const allocatedCents = Math.max(
+      Number(
+        balanceRow && typeof balanceRow === 'object'
+          ? ((balanceRow as { credits_allocated_cents?: number }).credits_allocated_cents ?? 0)
+          : 0,
+      ),
+      0,
+    );
     return {
       currentBalance: creditsCents,
-      totalGranted: creditsCents,
-      totalUsed: 0,
+      totalGranted: allocatedCents,
+      totalUsed: Math.max(allocatedCents - creditsCents, 0),
     };
   }
 

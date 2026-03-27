@@ -2378,8 +2378,7 @@ async fn run_continuous_loop(
                     if !balance.has_credits() {
                         update_status(|status| {
                             status.stop_reason = Some(
-                                "Credits exhausted (monthly or daily remaining is zero)"
-                                    .to_string(),
+                                "Usage budget exhausted for the current billing period".to_string(),
                             );
                             status.current_phase = "stopping".to_string();
                         })

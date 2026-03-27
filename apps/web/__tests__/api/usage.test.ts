@@ -215,9 +215,10 @@ describe('GET /api/usage', () => {
     expect(data.credits_remaining_cents).toBe(900);
     expect(data.usage_percentage).toBeCloseTo(25, 1); // 300/1200 * 100 = 25%
     expect(data.subscription_status).toBe('active');
-    expect(data.daily_limit_cents).toBe(360);
-    expect(data.daily_used_cents).toBe(50);
-    expect(data.daily_remaining_cents).toBe(310);
+    expect(data.daily_limit_cents).toBe(0);
+    expect(data.daily_used_cents).toBe(0);
+    expect(data.daily_remaining_cents).toBe(0);
+    expect(data.has_daily_limit).toBe(false);
   });
 
   it('should return period dates from balance when available', async () => {
