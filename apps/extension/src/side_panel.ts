@@ -1,11 +1,12 @@
 import DOMPurify from 'dompurify';
+import { getCoreManualModelOptions, normalizeModelId } from '@agiworkforce/types';
 
 /**
  * Side-panel UI message shape.
  *
  * File-local type for the Chrome extension side panel renderer.
- * Cannot import from `@agiworkforce/types` (workspace package, not bundled
- * with the extension). Field mapping to canonical ChatMessage:
+ * Kept local because the extension renderer only needs a subset of the
+ * canonical chat contract. Field mapping to canonical ChatMessage:
  *   - `id`        → canonical `id`
  *   - `role`      → canonical `role`
  *   - `content`   → canonical `content`
@@ -39,6 +40,34 @@ let lastRenderedCount = 0;
 
 let currentApiKey: string | null = null;
 let isConnected = false;
+
+const SIDE_PANEL_MODEL_OPTIONS = [
+  { value: 'auto', label: 'Auto (Best Available)' },
+  ...getCoreManualModelOptions().map((option) => ({
+    value: option.id,
+    label: option.label,
+  })),
+  { value: 'mistral-large-3', label: 'Mistral Large 3' },
+  { value: 'ollama-local', label: 'Ollama (Local)' },
+];
+
+const SIDE_PANEL_MODEL_BADGES: Record<string, string> = {
+  auto: 'Auto',
+  'claude-sonnet-4.6': 'Sonnet 4.6',
+  'claude-opus-4.6': 'Opus 4.6',
+  'claude-haiku-4.5': 'Haiku 4.5',
+  'gpt-5.4-pro': 'GPT-5.4 Pro',
+  'gpt-5.4': 'GPT-5.4',
+  'gpt-5.4-mini': 'GPT-5.4 Mini',
+  'gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
+  'gemini-3.1-flash-lite': 'Gemini 3.1 Flash Lite',
+  'deepseek-r1': 'DeepSeek R1',
+  'deepseek-chat': 'DeepSeek',
+  'sonar-pro': 'Sonar Pro',
+  'grok-4': 'Grok 4',
+  'mistral-large-3': 'Mistral',
+  'ollama-local': 'Local',
+};
 
 interface WebMCPToolEntry {
   name: string;
@@ -1454,20 +1483,8 @@ function updateContextButton(): void {
 function updateModelBadge(modelId: string): void {
   const badge = document.getElementById('sp-model-badge');
   if (!badge) return;
-  const short: Record<string, string> = {
-    auto: 'Auto',
-    'claude-sonnet-4-6': 'Sonnet 4.6',
-    'claude-opus-4-6': 'Opus 4.6',
-    'claude-haiku-4-5': 'Haiku 4.5',
-    'gpt-5.4': 'GPT-5.4',
-    'gpt-5.4-mini': 'GPT-5.4 Mini',
-    'gemini-3.1-pro-preview': 'Gemini Pro',
-    'gemini-3-flash': 'Gemini Flash',
-    'mistral-large': 'Mistral',
-    'deepseek-chat': 'DeepSeek',
-    'ollama-local': 'Local',
-  };
-  badge.textContent = short[modelId] ?? modelId;
+  const normalizedModelId = normalizeModelId(modelId) ?? modelId;
+  badge.textContent = SIDE_PANEL_MODEL_BADGES[normalizedModelId] ?? normalizedModelId;
 }
 
 function updateSendButton(): void {
@@ -1531,23 +1548,10 @@ function buildUI(): void {
   modelSelectorBtn.innerHTML =
     '<span id="sp-model-badge">AI Assistant</span><span class="sp-chevron">▾</span>';
   const modelDropdownEl = el('div', { id: 'sp-model-dropdown' });
-  const modelOptionsList = [
-    { value: 'auto', label: 'Auto (Best Available)' },
-    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-    { value: 'gpt-5.4', label: 'GPT-5.4' },
-    { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-    { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
-    { value: 'gemini-3-flash', label: 'Gemini 3 Flash' },
-    { value: 'mistral-large', label: 'Mistral Large' },
-    { value: 'deepseek-chat', label: 'DeepSeek Chat' },
-    { value: 'ollama-local', label: 'Ollama (Local)' },
-  ];
   let currentModelValue = 'auto';
   function renderModelDropdown(): void {
     modelDropdownEl.innerHTML = '';
-    for (const m of modelOptionsList) {
+    for (const m of SIDE_PANEL_MODEL_OPTIONS) {
       const opt = el('div', {
         class: `sp-model-option${m.value === currentModelValue ? ' selected' : ''}`,
       });
@@ -1580,8 +1584,10 @@ function buildUI(): void {
   chrome.storage.local.get('agi_model', (result) => {
     if (chrome.runtime.lastError) return;
     const stored = result['agi_model'] as string | undefined;
-    if (stored) currentModelValue = stored;
-    updateModelBadge(stored ?? 'auto');
+    if (stored) {
+      currentModelValue = normalizeModelId(stored) ?? stored;
+    }
+    updateModelBadge(currentModelValue);
     renderModelDropdown();
   });
   modelSelectorWrap.appendChild(modelSelectorBtn);

@@ -17,6 +17,7 @@ import { streamChatCompletion, AgiWorkforceApiError, type LlmChatMessage } from 
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
 import { getContextBuilder } from '../services/contextBuilder';
+import { normalizeConfiguredModelId } from '../services/modelConstants';
 import { getContextPanelProvider } from './contextPanelProvider';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
@@ -365,9 +366,9 @@ export function createChatHandler(
             if (conversationStore !== undefined && conversationTreeProvider !== undefined) {
               const fullResponse = responseTokens.join('');
               const title = userMessage.slice(0, 60).replace(/\n/g, ' ');
-              const model =
-                vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ??
-                'auto-balanced';
+              const model = normalizeConfiguredModelId(
+                vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
+              );
               const conv = conversationStore.create(title, model);
               const now = Date.now();
               conv.messages = [

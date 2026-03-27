@@ -231,6 +231,15 @@ export interface RuntimeFallbackModel {
   outputCost: number;
 }
 
+export interface CoreModelOption {
+  id: string;
+  label: string;
+  provider: Provider | string;
+  providerLabel: string;
+  description: string;
+  detail: string;
+}
+
 export interface ModelQueryOptions {
   includeDeprecated?: boolean;
   modelTypes?: ModelType[];
@@ -247,6 +256,20 @@ const AUTO_MODE_IDS = new Set<AutoModeModelId>([
   'auto-balanced',
   'auto-premium',
 ]);
+const CORE_MANUAL_MODEL_IDS = [
+  'claude-opus-4.6',
+  'claude-sonnet-4.6',
+  'claude-haiku-4.5',
+  'gpt-5.4-pro',
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gemini-3.1-pro-preview',
+  'gemini-3.1-flash-lite',
+  'deepseek-r1',
+  'deepseek-chat',
+  'sonar-pro',
+  'grok-4',
+] as const;
 
 function resolveCanonicalTarget(target: string): string {
   if (modelsCatalog.models[target]) {
@@ -473,6 +496,45 @@ export function getEconomyFallbackModels(): RuntimeFallbackModel[] {
       inputCost: model.inputCost,
       outputCost: model.outputCost,
     }));
+}
+
+function describeQualityBand(model: ModelMetadata): string {
+  switch (model.qualityTier) {
+    case 'best':
+      return 'flagship reasoning';
+    case 'balanced':
+      return 'balanced all-rounder';
+    case 'fast':
+    default:
+      return 'fast, efficient';
+  }
+}
+
+function formatCoreModelDetail(model: ModelMetadata): string {
+  const tierLabel: Record<PickerModelTier, string> = {
+    economy: 'Economy',
+    balanced: 'Balanced',
+    premium: 'Premium',
+  };
+  const tier = tierLabel[getPickerModelTier(model.id)];
+  const bestFor = model.bestFor.slice(0, 2).join(', ');
+  return bestFor ? `${tier} · ${bestFor}` : tier;
+}
+
+export function getCoreManualModelOptions(): CoreModelOption[] {
+  return CORE_MANUAL_MODEL_IDS.map((modelId) => getModelMetadataById(modelId))
+    .filter((model): model is ModelMetadata => Boolean(model))
+    .map((model) => {
+      const providerLabel = providerLabels[model.provider] ?? model.provider;
+      return {
+        id: model.id,
+        label: model.name,
+        provider: model.provider,
+        providerLabel,
+        description: `${providerLabel} — ${describeQualityBand(model)}`,
+        detail: formatCoreModelDetail(model),
+      };
+    });
 }
 
 function normalizeSubscriptionTierKey(tier: string | null | undefined): TierKey | 'free' {
