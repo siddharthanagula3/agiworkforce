@@ -9,7 +9,12 @@
  */
 
 import * as vscode from 'vscode';
-import { MODEL_CONTEXT_LIMITS, DEFAULT_CONTEXT_LIMIT, CHARS_PER_TOKEN } from './modelConstants';
+import {
+  MODEL_CONTEXT_LIMITS,
+  DEFAULT_CONTEXT_LIMIT,
+  CHARS_PER_TOKEN,
+  normalizeConfiguredModelId,
+} from './modelConstants';
 
 // ─── Budget modes ────────────────────────────────────────────────────────────
 
@@ -41,7 +46,7 @@ export interface ContextBudget {
  */
 export function getContextBudget(mode: 'chat' | 'agent'): ContextBudget {
   const config = vscode.workspace.getConfiguration('agiWorkforce');
-  const model = config.get<string>('model') ?? 'auto-balanced';
+  const model = normalizeConfiguredModelId(config.get<string>('model'));
   const userOverride = config.get<number>('contextBudgetPercent');
 
   const modelContextWindow = MODEL_CONTEXT_LIMITS[model] ?? DEFAULT_CONTEXT_LIMIT;

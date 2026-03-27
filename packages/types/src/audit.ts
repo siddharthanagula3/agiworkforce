@@ -145,7 +145,7 @@ export function createAuditEvent(
     severity?: AuditSeverity;
   },
 ): AuditEvent {
-  return {
+  const event: AuditEvent = {
     eventId: params.eventId ?? crypto.randomUUID(),
     timestamp: params.timestamp ?? new Date().toISOString(),
     severity: params.severity ?? defaultSeverityForAction(params.action),
@@ -154,6 +154,11 @@ export function createAuditEvent(
     action: params.action,
     resource: params.resource,
     outcome: params.outcome,
-    metadata: params.metadata,
   };
+
+  if (params.metadata !== undefined) {
+    event.metadata = params.metadata;
+  }
+
+  return event;
 }
