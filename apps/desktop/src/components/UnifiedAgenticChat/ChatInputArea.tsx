@@ -45,10 +45,12 @@ import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { useChatStore } from '../../stores/chat/chatStore';
 import { useModelCapabilities } from '../../hooks/useModelCapabilities';
 import { isAutoModel } from '../../lib/modelCapabilities';
+import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 
 // Sub-components
 import { ActiveModeTags, ModeTag, intentToModeTag } from './ActiveModeTags';
 import { AttachmentPreview } from './AttachmentPreview';
+import { BrowserActivityBadge } from './BrowserActivityBadge';
 import { ContextDisplay } from './ContextDisplay';
 import { DragOverlay } from './DragOverlay';
 import { FocusModeButtons, getFocusModePlaceholder } from './FocusModeButtons';
@@ -145,7 +147,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [fileMentionQuery, setFileMentionQuery] = useState<string | null>(null);
 
   // Voice transcription state
-  const [preferWhisperCloud] = useState(false);
+  const [preferWhisperCloud, setPreferWhisperCloud] = useState(false);
+  const [showTranscriptionModeSelector, setShowTranscriptionModeSelector] = useState(false);
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -254,13 +257,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     isSupported: isVoiceSupported,
     interimTranscript,
     error: voiceError,
+    availableLocalWhisper,
     toggleRecording,
   } = useVoiceTranscription({
     preferWhisperCloud: preferWhisperCloud,
     language: 'en',
     onResult: useCallback(
       (transcript: string) => {
-        const next = content + (content ? ' ' : '') + transcript;
+        const cleanedTranscript = cleanupVoiceDictation(transcript);
+        const isCommand = detectVoiceCommand(cleanedTranscript);
+        const next = isCommand
+          ? cleanedTranscript
+          : content + (content ? ' ' : '') + cleanedTranscript;
         setContent(next);
         setDraftContent(next);
       },
@@ -1433,6 +1441,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                     setDraftContent(text);
                   }}
                 />
+                <BrowserActivityBadge />
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {content.length > maxLength * 0.8 && (
@@ -1455,6 +1464,12 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
                   isSupported={isVoiceSupported}
                   isRecording={isListening}
                   isTranscribing={isTranscribing}
+                  isSimpleMode={isSimpleMode}
+                  preferWhisperCloud={preferWhisperCloud}
+                  availableLocalWhisper={availableLocalWhisper}
+                  showModeSelector={showTranscriptionModeSelector}
+                  onModeSelectorChange={setShowTranscriptionModeSelector}
+                  onPreferWhisperCloudChange={setPreferWhisperCloud}
                   onToggleRecording={toggleListening}
                 />
                 <SendButton

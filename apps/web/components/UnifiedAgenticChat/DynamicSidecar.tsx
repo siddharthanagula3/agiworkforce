@@ -225,6 +225,25 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
           <BrowserVisualization
             className="flex-1"
             tabId={payload?.['tabId'] as string | undefined}
+            url={
+              (payload?.['url'] as string | undefined) ||
+              (typeof contextId === 'string' && /^https?:\/\//i.test(contextId)
+                ? contextId
+                : undefined)
+            }
+            title={payload?.['title'] as string | null | undefined}
+            lastAction={payload?.['lastAction'] as string | null | undefined}
+            status={
+              payload?.['status'] as
+                | 'idle'
+                | 'planning'
+                | 'executing'
+                | 'done'
+                | 'error'
+                | undefined
+            }
+            extensionConnected={payload?.['extensionConnected'] as boolean | undefined}
+            hasError={payload?.['hasError'] as boolean | undefined}
           />
         );
       case 'code':
