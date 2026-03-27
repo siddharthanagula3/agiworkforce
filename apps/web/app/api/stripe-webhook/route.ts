@@ -18,6 +18,7 @@ import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constant
 // AUDIT-P3: Use shared Stripe type helpers for type safety
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { getUsageBudgetCentsFromPriceCents } from '@agiworkforce/types';
 
 const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
 const STRIPE_WEBHOOK_SECRET = process.env['STRIPE_WEBHOOK_SECRET'];
@@ -48,6 +49,16 @@ const supabaseAdmin =
         auth: { persistSession: false },
       })
     : null;
+
+function getUsageBudgetOverrideCentsFromStripePrice(
+  price: Pick<Stripe.Price, 'unit_amount'> | null | undefined,
+): number | undefined {
+  const unitAmountCents = price?.unit_amount;
+  if (typeof unitAmountCents !== 'number' || unitAmountCents < 0) {
+    return undefined;
+  }
+  return getUsageBudgetCentsFromPriceCents(unitAmountCents);
+}
 
 /**
  * Ensure a profile exists for the user (required for subscriptions FK constraint)
@@ -499,8 +510,12 @@ async function upsertSubscriptionFromSession(
   );
 
   let stripePriceId: string | null = null;
+  let overrideCreditsCents: number | undefined;
   if (session.line_items?.data && session.line_items.data.length > 0) {
     stripePriceId = session.line_items.data[0]?.price?.id || null;
+    overrideCreditsCents = getUsageBudgetOverrideCentsFromStripePrice(
+      session.line_items.data[0]?.price,
+    );
   } else if (stripe && session.id) {
     try {
       const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
@@ -508,6 +523,9 @@ async function upsertSubscriptionFromSession(
       });
       if (expandedSession.line_items?.data && expandedSession.line_items.data.length > 0) {
         stripePriceId = expandedSession.line_items.data[0]?.price?.id || null;
+        overrideCreditsCents = getUsageBudgetOverrideCentsFromStripePrice(
+          expandedSession.line_items.data[0]?.price,
+        );
       }
     } catch (error) {
       logger.error({ error, sessionId: session.id }, 'Failed to retrieve expanded session');
@@ -546,6 +564,8 @@ async function upsertSubscriptionFromSession(
           'Retrieved price_id from subscription',
         );
       }
+      overrideCreditsCents =
+        overrideCreditsCents ?? getUsageBudgetOverrideCentsFromStripePrice(firstItem?.price);
 
       // AUDIT-P3: Use shared type-safe helper for coupon ID (v20 API: discount -> discounts)
       stripeCouponId = getSubscriptionCouponId(subscription);
@@ -570,6 +590,8 @@ async function upsertSubscriptionFromSession(
       const retryItem = subscription.items.data[0];
       if (retryItem) {
         stripePriceId = retryItem.price.id;
+        overrideCreditsCents =
+          overrideCreditsCents ?? getUsageBudgetOverrideCentsFromStripePrice(retryItem.price);
         logger.info(
           { priceId: stripePriceId, subscriptionId: stripeSubId },
           'Successfully retrieved price_id from subscription on retry',
@@ -594,6 +616,8 @@ async function upsertSubscriptionFromSession(
       const finalItem = finalSubscription.items.data[0];
       if (finalItem) {
         stripePriceId = finalItem.price?.id || finalItem.plan?.id || null;
+        overrideCreditsCents =
+          overrideCreditsCents ?? getUsageBudgetOverrideCentsFromStripePrice(finalItem.price);
         if (stripePriceId) {
           logger.info(
             { priceId: stripePriceId },
@@ -687,6 +711,10 @@ async function upsertSubscriptionFromSession(
           planTier,
           new Date(currentPeriodStart),
           new Date(currentPeriodEnd),
+          {
+            stripePriceId: stripePriceId ?? undefined,
+            overrideCreditsCents,
+          },
         );
         logger.info(
           {
@@ -749,9 +777,11 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
   const stripeCustomerId = subscription.customer as string | null;
 
   let stripePriceId: string | null = null;
+  let overrideCreditsCents: number | undefined;
   const firstSubItem = subscription.items.data[0];
   if (firstSubItem) {
     stripePriceId = firstSubItem.price.id;
+    overrideCreditsCents = getUsageBudgetOverrideCentsFromStripePrice(firstSubItem.price);
   }
 
   // SECURITY: Validate that the price ID is one of our configured prices.
@@ -900,6 +930,10 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
               planTier,
               new Date(periodStart),
               new Date(periodEnd),
+              {
+                stripePriceId: stripePriceId ?? undefined,
+                overrideCreditsCents,
+              },
             );
             logger.info(
               {
@@ -917,6 +951,10 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
               planTier,
               new Date(periodStart),
               new Date(periodEnd),
+              {
+                stripePriceId: stripePriceId ?? undefined,
+                overrideCreditsCents,
+              },
             );
             logger.info(
               {
@@ -1097,6 +1135,10 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
               planTier,
               new Date(periodStart),
               new Date(periodEnd),
+              {
+                stripePriceId: stripePriceId ?? undefined,
+                overrideCreditsCents,
+              },
             );
             logger.info(
               {

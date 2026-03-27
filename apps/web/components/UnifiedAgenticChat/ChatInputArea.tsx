@@ -653,7 +653,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           setDraftContent(messageContent);
           if (messageAttachments) setAttachments(messageAttachments);
           setSubmitError(
-            'Insufficient credits to send message. Please upgrade your plan or wait for credits to refresh.',
+            'Insufficient credits to send message. Please upgrade your plan or wait for the next billing reset.',
           );
           setIsSending(false);
           sendAbortControllerRef.current = null;

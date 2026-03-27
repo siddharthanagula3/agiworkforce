@@ -109,7 +109,7 @@ describe('Token Enforcement Service', () => {
       expect(result.allowed).toBe(false);
       expect(result.currentBalance).toBe(500);
       expect(result.estimatedCost).toBe(1000);
-      expect(result.reason).toContain('Insufficient tokens');
+      expect(result.reason).toContain('Insufficient credits');
     });
 
     it('should deny request when balance fetch fails', async () => {
@@ -330,9 +330,13 @@ describe('Token Enforcement Service', () => {
         'deduct_credits',
         expect.objectContaining({
           p_user_id: mockUserId,
-          p_amount_cents: 150,
+          p_amount_cents: expect.any(Number),
           p_description: 'anthropic/claude-3-5-sonnet-20241022 usage',
-          p_metadata: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' },
+          p_metadata: expect.objectContaining({
+            provider: 'anthropic',
+            model: 'claude-3-5-sonnet-20241022',
+            usage_cost_cents: expect.any(Number),
+          }),
         }),
       );
     });
@@ -418,8 +422,8 @@ describe('Token Enforcement Service', () => {
 
       const result = await checkMonthlyAllowance(mockUserId);
 
-      expect(result.allowed).toBe(true);
-      expect(result.limit).toBe(1000000); // 1M for free tier
+      expect(result.allowed).toBe(false);
+      expect(result.limit).toBe(0);
       expect(result.used).toBe(500000);
     });
 
@@ -472,9 +476,9 @@ describe('Token Enforcement Service', () => {
 
       const result = await checkMonthlyAllowance(mockUserId);
 
-      // Should default to allowing with free tier limits on error
+      // On lookup errors we fail open for UX, but free tier still has no cloud-credit budget.
       expect(result.allowed).toBe(true);
-      expect(result.limit).toBe(1000000);
+      expect(result.limit).toBe(0);
     });
   });
 
@@ -563,7 +567,7 @@ describe('Token Enforcement Service', () => {
       const result = await canUserMakeRequest(mockUserId, 1000);
 
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('Insufficient tokens');
+      expect(result.reason).toContain('Insufficient credits');
     });
   });
 });

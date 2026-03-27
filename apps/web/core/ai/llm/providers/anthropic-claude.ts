@@ -76,9 +76,9 @@ export interface AnthropicConfig {
  */
 const HTTP_ERROR_MESSAGES: Record<number, { title: string; message: string; action?: string }> = {
   402: {
-    title: 'Insufficient Tokens',
+    title: 'Insufficient Credits',
     message:
-      'You have run out of AI tokens. Please upgrade your plan or purchase more tokens to continue.',
+      'You have exhausted your AI credits for this billing period. Please upgrade your plan or add credits to continue.',
     action: 'Upgrade Plan',
   },
   429: {
@@ -151,7 +151,7 @@ function handleHttpError(status: number, errorData: Record<string, unknown>): ne
   const errorInfo = HTTP_ERROR_MESSAGES[status];
 
   if (status === 402) {
-    // Payment Required - Insufficient tokens
+    // Payment Required - Insufficient credits
     toast.error(errorInfo?.title, {
       description: errorInfo?.message,
       action: errorInfo?.action
@@ -166,7 +166,7 @@ function handleHttpError(status: number, errorData: Record<string, unknown>): ne
       duration: 10000, // Show for 10 seconds
     });
     throw new AnthropicError(
-      'Insufficient tokens. Please upgrade your plan or purchase more tokens.',
+      'Insufficient credits. Please upgrade your plan or add credits.',
       'PAYMENT_REQUIRED',
       false,
       402,

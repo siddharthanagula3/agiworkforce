@@ -94,22 +94,18 @@ function findCheaperFallbackModel(
  * Used when checkAvailable() returns false before any deductCredits() call.
  */
 function buildCreditErrorFromBalance(balance: CreditBalance | null) {
-  if (balance?.daily_remaining_cents != null && balance.daily_remaining_cents === 0) {
-    return {
-      code: 'DAILY_CREDIT_LIMIT_REACHED',
-      daily_limit: balance.daily_limit_cents ?? 0,
-      daily_used: balance.daily_used_cents ?? 0,
-      daily_remaining: 0,
-    };
-  }
-  return { code: 'MONTHLY_CREDIT_LIMIT_REACHED' };
+  return {
+    code: 'MONTHLY_CREDIT_LIMIT_REACHED',
+    monthly_limit: balance?.credits_allocated_cents ?? 0,
+    monthly_remaining: balance?.credits_remaining_cents ?? 0,
+  };
 }
 
 /**
  * Handle credit error and return appropriate response
  */
 function handleCreditError(
-  deductResult: {
+  _deductResult: {
     code?: string;
     daily_remaining?: number;
     daily_limit?: number;
@@ -117,35 +113,16 @@ function handleCreditError(
   },
   balance: CreditBalance | null,
 ): NextResponse {
-  // Check if it's a daily limit issue
-  if (deductResult.code === 'DAILY_CREDIT_LIMIT_REACHED') {
-    const resetAt = balance?.last_daily_reset_at
-      ? new Date(balance.last_daily_reset_at)
-      : new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const hoursUntilReset = Math.max(0, (resetAt.getTime() - Date.now()) / (1000 * 60 * 60));
+  const resetAt = balance?.period_end ? new Date(balance.period_end) : null;
+  const hoursUntilReset =
+    resetAt != null ? Math.max(0, (resetAt.getTime() - Date.now()) / (1000 * 60 * 60)) : null;
 
-    return NextResponse.json(
-      {
-        error: `Daily credit limit reached. You can use $${((deductResult.daily_remaining || 0) / 100).toFixed(2)} more in ${Math.ceil(hoursUntilReset)} hours.`,
-        code: 'DAILY_CREDIT_LIMIT_REACHED',
-        daily_limit: deductResult.daily_limit,
-        daily_used: deductResult.daily_used,
-        daily_remaining: deductResult.daily_remaining,
-        reset_in_hours: hoursUntilReset,
-        monthly_limit: balance?.credits_allocated_cents,
-        monthly_remaining: balance?.credits_remaining_cents,
-        balance,
-      },
-      { status: 402 },
-    );
-  }
-
-  // Monthly limit issue
   return NextResponse.json(
     {
       error:
-        'Monthly credit limit reached. Please upgrade your plan (Pro/Max) to continue using Cloud models.',
+        'Usage budget exhausted for this billing period. Upgrade your plan or wait for the next billing reset.',
       code: 'MONTHLY_CREDIT_LIMIT_REACHED',
+      reset_in_hours: hoursUntilReset,
       balance,
     },
     { status: 402 },
@@ -676,7 +653,7 @@ async function handleLLMCompletion(request: NextRequest) {
   }
 
   // Get updated balance for response
-  const updatedBalance = await CreditService.getBalance(user.id);
+  await CreditService.getBalance(user.id);
 
   // Calculate cache savings if applicable
   const cacheMetrics = calculateCacheSavings(
@@ -717,10 +694,10 @@ async function handleLLMCompletion(request: NextRequest) {
     credits: {
       cost_cents: actualCostCents,
       remaining_cents: deductResult.remaining_cents,
-      daily_limit: updatedBalance?.daily_limit_cents,
-      daily_used: updatedBalance?.daily_used_cents,
-      daily_remaining: updatedBalance?.daily_remaining_cents,
-      daily_reset_at: updatedBalance?.last_daily_reset_at,
+      daily_limit: 0,
+      daily_used: 0,
+      daily_remaining: 0,
+      daily_reset_at: null,
     },
     cache: {
       cached_input_tokens: llmResponse.cachedInputTokens || 0,

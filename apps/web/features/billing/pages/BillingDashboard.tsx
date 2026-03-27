@@ -50,6 +50,7 @@ import {
 } from 'lucide-react';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { cn } from '@shared/lib/utils';
+import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 
 // Known valid plan tiers — used to validate API responses before rendering
 const VALID_PLANS = ['free', 'hobby', 'pro', 'max', 'enterprise'] as const;
@@ -148,6 +149,27 @@ const CREDIT_PACKS: CreditPack[] = [
     savings: 'Save 40%',
   },
 ];
+
+function formatPlanPrice(plan: 'hobby' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
+  if (billingPeriod === 'monthly') {
+    return `$${getPlanPriceUsd(plan, 'monthly')}`;
+  }
+  return `$${(getPlanPriceUsd(plan, 'yearly') / 12).toFixed(2)}`;
+}
+
+function formatPlanBilledAmount(
+  plan: 'hobby' | 'pro' | 'max',
+  billingPeriod: 'monthly' | 'yearly',
+) {
+  const interval = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
+  return `$${getPlanPriceUsd(plan, interval).toFixed(2).replace(/\.00$/, '')}`;
+}
+
+function formatUsageBudgetLine(plan: 'hobby' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
+  const interval = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
+  const budgetCents = getPlanUsageBudgetCents(plan, interval);
+  return `${budgetCents.toLocaleString()} credits/${billingPeriod === 'yearly' ? 'year' : 'month'} ($${(budgetCents / 100).toFixed(2)} in AI usage)`;
+}
 
 const BillingPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -947,8 +969,9 @@ const BillingPage: React.FC = () => {
                     <div className="flex-1">
                       <h4 className="mb-1 font-semibold">💡 Better Value: Upgrade to Pro</h4>
                       <p className="mb-3 text-sm text-muted-foreground">
-                        Get 1,200 credits/month for $29.99/month — better value than buying credit
-                        packs if you use AI regularly
+                        Get {getPlanUsageBudgetCents('pro').toLocaleString()} credits/month for $
+                        {getPlanPriceUsd('pro', 'monthly')} — better value than buying credit packs
+                        if you use AI regularly
                       </p>
                       <Button
                         variant="outline"
@@ -1020,16 +1043,16 @@ const BillingPage: React.FC = () => {
                           {billingPeriod === 'yearly' ? (
                             <>
                               <div className="text-3xl font-bold">
-                                $4.99
+                                {formatPlanPrice('hobby', 'yearly')}
                                 <span className="text-lg text-muted-foreground">/month</span>
                               </div>
                               <div className="mt-1 text-sm text-muted-foreground">
-                                Billed yearly as $59.88
+                                Billed yearly as {formatPlanBilledAmount('hobby', 'yearly')}
                               </div>
                             </>
                           ) : (
                             <>
-                              $10
+                              {formatPlanPrice('hobby', 'monthly')}
                               <span className="text-sm text-muted-foreground">/month</span>
                             </>
                           )}
@@ -1039,7 +1062,7 @@ const BillingPage: React.FC = () => {
                         <ul className="space-y-2 text-sm">
                           <li className="flex items-center space-x-2">
                             <CheckCircle className="h-4 w-4 text-success" />
-                            <span>350 credits/month ($3.50 in AI usage)</span>
+                            <span>{formatUsageBudgetLine('hobby', billingPeriod)}</span>
                           </li>
                           <li className="flex items-center space-x-2">
                             <CheckCircle className="h-4 w-4 text-success" />
@@ -1080,16 +1103,16 @@ const BillingPage: React.FC = () => {
                           {billingPeriod === 'yearly' ? (
                             <>
                               <div className="text-3xl font-bold">
-                                $24.99
+                                {formatPlanPrice('pro', 'yearly')}
                                 <span className="text-lg text-muted-foreground">/month</span>
                               </div>
                               <div className="mt-1 text-sm text-muted-foreground">
-                                Billed yearly as $299.88
+                                Billed yearly as {formatPlanBilledAmount('pro', 'yearly')}
                               </div>
                             </>
                           ) : (
                             <>
-                              $29.99
+                              {formatPlanPrice('pro', 'monthly')}
                               <span className="text-sm text-muted-foreground">/month</span>
                             </>
                           )}
@@ -1099,7 +1122,7 @@ const BillingPage: React.FC = () => {
                         <ul className="space-y-2 text-sm">
                           <li className="flex items-center space-x-2">
                             <CheckCircle className="h-4 w-4 text-success" />
-                            <span>1,200 credits/month ($12 in AI usage)</span>
+                            <span>{formatUsageBudgetLine('pro', billingPeriod)}</span>
                           </li>
                           <li className="flex items-center space-x-2">
                             <CheckCircle className="h-4 w-4 text-success" />
@@ -1140,16 +1163,16 @@ const BillingPage: React.FC = () => {
                         {billingPeriod === 'yearly' ? (
                           <>
                             <div className="text-3xl font-bold">
-                              $249.99
+                              {formatPlanPrice('max', 'yearly')}
                               <span className="text-lg text-muted-foreground">/month</span>
                             </div>
                             <div className="mt-1 text-sm text-muted-foreground">
-                              Billed yearly as $2,999.88
+                              Billed yearly as {formatPlanBilledAmount('max', 'yearly')}
                             </div>
                           </>
                         ) : (
                           <>
-                            $299.99
+                            {formatPlanPrice('max', 'monthly')}
                             <span className="text-sm text-muted-foreground">/month</span>
                           </>
                         )}
@@ -1159,7 +1182,7 @@ const BillingPage: React.FC = () => {
                       <ul className="space-y-2 text-sm">
                         <li className="flex items-center space-x-2">
                           <CheckCircle className="h-4 w-4 text-success" />
-                          <span>15,000 credits/month ($150 in AI usage)</span>
+                          <span>{formatUsageBudgetLine('max', billingPeriod)}</span>
                         </li>
                         <li className="flex items-center space-x-2">
                           <CheckCircle className="h-4 w-4 text-success" />
