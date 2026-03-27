@@ -247,6 +247,45 @@ export interface ModelQueryOptions {
 }
 
 export type AutoModeModelId = 'auto' | 'auto-economy' | 'auto-balanced' | 'auto-premium';
+export type ProductTier = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
+export type ProviderSurface = 'managed_cloud' | 'byok' | 'local' | 'hidden';
+export type TierSurfaceMode = 'auto_only' | 'auto_plus_manual';
+export type RoutingSlot =
+  | 'general_fast'
+  | 'general_balanced'
+  | 'general_premium'
+  | 'coding_fast'
+  | 'coding_premium'
+  | 'search_fast'
+  | 'search_premium'
+  | 'vision_fast'
+  | 'vision_premium'
+  | 'browser_dom'
+  | 'computer_use'
+  | 'image_generation'
+  | 'video_generation'
+  | 'voice_transcription'
+  | 'voice_rewrite';
+
+export interface RoutingSlotDefinition {
+  slot: RoutingSlot;
+  label: string;
+  description: string;
+  modelId: string;
+  provider: Provider | string;
+}
+
+export interface TierPolicy {
+  tier: ProductTier;
+  surfacedUx: TierSurfaceMode;
+  allowedSlots: RoutingSlot[];
+  allowedProviderSurfaces: ProviderSurface[];
+  manualModelSelection: boolean;
+  allowBrowserDom: boolean;
+  allowComputerUse: boolean;
+  allowSearch: boolean;
+  allowMediaGeneration: boolean;
+}
 
 export const modelsCatalog = modelsCatalogJson as ModelsCatalog;
 export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
@@ -256,20 +295,274 @@ const AUTO_MODE_IDS = new Set<AutoModeModelId>([
   'auto-balanced',
   'auto-premium',
 ]);
-const CORE_MANUAL_MODEL_IDS = [
+const MANAGED_CLOUD_PROVIDER_IDS = [
+  'openai',
+  'anthropic',
+  'google',
+  'xai',
+  'qwen',
+  'moonshot',
+  'deepseek',
+  'perplexity',
+  'zhipu',
+] as const;
+const SEARCH_ONLY_MANAGED_CLOUD_PROVIDER_IDS = ['perplexity'] as const;
+const BYOK_PROVIDER_IDS = ['open_router', 'nvidia_nim'] as const;
+const LOCAL_PROVIDER_IDS = ['ollama'] as const;
+const MANAGED_CLOUD_PROVIDER_SET = new Set<string>([
+  'managed_cloud',
+  ...MANAGED_CLOUD_PROVIDER_IDS,
+]);
+const SEARCH_ONLY_MANAGED_CLOUD_PROVIDER_SET = new Set<string>(
+  SEARCH_ONLY_MANAGED_CLOUD_PROVIDER_IDS,
+);
+const BYOK_PROVIDER_SET = new Set<string>(BYOK_PROVIDER_IDS);
+const LOCAL_PROVIDER_SET = new Set<string>(LOCAL_PROVIDER_IDS);
+const MANUAL_OVERRIDE_MODEL_IDS = [
   'claude-opus-4.6',
   'claude-sonnet-4.6',
   'claude-haiku-4.5',
   'gpt-5.4-pro',
   'gpt-5.4',
   'gpt-5.4-mini',
+  'gpt-5.4-codex',
   'gemini-3.1-pro-preview',
   'gemini-3.1-flash-lite',
-  'deepseek-r1',
   'deepseek-chat',
-  'sonar-pro',
+  'deepseek-reasoner',
+  'qwen-max',
+  'kimi-k2.5-thinking',
+  'glm-4.7',
   'grok-4',
 ] as const;
+const MANUAL_OVERRIDE_MODEL_SET = new Set<string>(MANUAL_OVERRIDE_MODEL_IDS);
+
+export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
+  general_fast: {
+    slot: 'general_fast',
+    label: 'General Fast',
+    description: 'Default low-cost general chat and advice lane.',
+    modelId: 'gemini-3.1-flash-lite',
+    provider: 'google',
+  },
+  general_balanced: {
+    slot: 'general_balanced',
+    label: 'General Balanced',
+    description: 'Default balanced lane for day-to-day chat, coding help, and tool use.',
+    modelId: 'gpt-5.4-mini',
+    provider: 'openai',
+  },
+  general_premium: {
+    slot: 'general_premium',
+    label: 'General Premium',
+    description: 'High-burn flagship lane for max-quality conversations.',
+    modelId: 'claude-opus-4.6',
+    provider: 'anthropic',
+  },
+  coding_fast: {
+    slot: 'coding_fast',
+    label: 'Coding Fast',
+    description: 'Cost-efficient coding lane for edits, debugging, and refactors.',
+    modelId: 'deepseek-chat',
+    provider: 'deepseek',
+  },
+  coding_premium: {
+    slot: 'coding_premium',
+    label: 'Coding Premium',
+    description: 'Premium coding lane for agentic code generation and tool use.',
+    modelId: 'gpt-5.4-codex',
+    provider: 'openai',
+  },
+  search_fast: {
+    slot: 'search_fast',
+    label: 'Search Fast',
+    description: 'Fast web-search lane with citations.',
+    modelId: 'sonar',
+    provider: 'perplexity',
+  },
+  search_premium: {
+    slot: 'search_premium',
+    label: 'Search Premium',
+    description: 'Deep research lane for long-form synthesis and citations.',
+    modelId: 'sonar-deep-research',
+    provider: 'perplexity',
+  },
+  vision_fast: {
+    slot: 'vision_fast',
+    label: 'Vision Fast',
+    description: 'Fast multimodal lane for screenshots and image inputs.',
+    modelId: 'gemini-3.1-flash-lite',
+    provider: 'google',
+  },
+  vision_premium: {
+    slot: 'vision_premium',
+    label: 'Vision Premium',
+    description: 'Premium multimodal lane for high-context vision and analysis.',
+    modelId: 'gemini-3.1-pro-preview',
+    provider: 'google',
+  },
+  browser_dom: {
+    slot: 'browser_dom',
+    label: 'Browser DOM',
+    description: 'DOM and browser automation lane.',
+    modelId: 'claude-sonnet-4.6',
+    provider: 'anthropic',
+  },
+  computer_use: {
+    slot: 'computer_use',
+    label: 'Computer Use',
+    description: 'Desktop and computer-use lane with tool support.',
+    modelId: 'gpt-5.4-mini',
+    provider: 'openai',
+  },
+  image_generation: {
+    slot: 'image_generation',
+    label: 'Image Generation',
+    description: 'High-quality image generation lane.',
+    modelId: 'gpt-image-1.5',
+    provider: 'openai',
+  },
+  video_generation: {
+    slot: 'video_generation',
+    label: 'Video Generation',
+    description: 'High-quality video generation lane.',
+    modelId: 'veo-3',
+    provider: 'google',
+  },
+  voice_transcription: {
+    slot: 'voice_transcription',
+    label: 'Voice Transcription',
+    description: 'Speech-to-text lane.',
+    modelId: 'whisper-1',
+    provider: 'openai',
+  },
+  voice_rewrite: {
+    slot: 'voice_rewrite',
+    label: 'Voice Rewrite',
+    description: 'Cleanup and rewrite lane for dictated text.',
+    modelId: 'gpt-5.4-mini',
+    provider: 'openai',
+  },
+};
+
+export const TIER_POLICIES: Record<ProductTier, TierPolicy> = {
+  free: {
+    tier: 'free',
+    surfacedUx: 'auto_only',
+    allowedSlots: [
+      'general_fast',
+      'general_balanced',
+      'coding_fast',
+      'search_fast',
+      'vision_fast',
+      'voice_transcription',
+      'voice_rewrite',
+    ],
+    allowedProviderSurfaces: ['managed_cloud'],
+    manualModelSelection: false,
+    allowBrowserDom: false,
+    allowComputerUse: false,
+    allowSearch: true,
+    allowMediaGeneration: false,
+  },
+  hobby: {
+    tier: 'hobby',
+    surfacedUx: 'auto_only',
+    allowedSlots: [
+      'general_fast',
+      'general_balanced',
+      'coding_fast',
+      'search_fast',
+      'vision_fast',
+      'voice_transcription',
+      'voice_rewrite',
+    ],
+    allowedProviderSurfaces: ['managed_cloud'],
+    manualModelSelection: false,
+    allowBrowserDom: false,
+    allowComputerUse: false,
+    allowSearch: true,
+    allowMediaGeneration: false,
+  },
+  pro: {
+    tier: 'pro',
+    surfacedUx: 'auto_only',
+    allowedSlots: [
+      'general_fast',
+      'general_balanced',
+      'coding_fast',
+      'coding_premium',
+      'search_fast',
+      'search_premium',
+      'vision_fast',
+      'vision_premium',
+      'browser_dom',
+      'computer_use',
+      'voice_transcription',
+      'voice_rewrite',
+    ],
+    allowedProviderSurfaces: ['managed_cloud'],
+    manualModelSelection: false,
+    allowBrowserDom: true,
+    allowComputerUse: true,
+    allowSearch: true,
+    allowMediaGeneration: false,
+  },
+  max: {
+    tier: 'max',
+    surfacedUx: 'auto_plus_manual',
+    allowedSlots: [
+      'general_fast',
+      'general_balanced',
+      'general_premium',
+      'coding_fast',
+      'coding_premium',
+      'search_fast',
+      'search_premium',
+      'vision_fast',
+      'vision_premium',
+      'browser_dom',
+      'computer_use',
+      'image_generation',
+      'video_generation',
+      'voice_transcription',
+      'voice_rewrite',
+    ],
+    allowedProviderSurfaces: ['managed_cloud', 'byok', 'local'],
+    manualModelSelection: true,
+    allowBrowserDom: true,
+    allowComputerUse: true,
+    allowSearch: true,
+    allowMediaGeneration: true,
+  },
+  enterprise: {
+    tier: 'enterprise',
+    surfacedUx: 'auto_plus_manual',
+    allowedSlots: [
+      'general_fast',
+      'general_balanced',
+      'general_premium',
+      'coding_fast',
+      'coding_premium',
+      'search_fast',
+      'search_premium',
+      'vision_fast',
+      'vision_premium',
+      'browser_dom',
+      'computer_use',
+      'image_generation',
+      'video_generation',
+      'voice_transcription',
+      'voice_rewrite',
+    ],
+    allowedProviderSurfaces: ['managed_cloud', 'byok', 'local'],
+    manualModelSelection: true,
+    allowBrowserDom: true,
+    allowComputerUse: true,
+    allowSearch: true,
+    allowMediaGeneration: true,
+  },
+};
 
 function resolveCanonicalTarget(target: string): string {
   if (modelsCatalog.models[target]) {
@@ -351,6 +644,80 @@ export function getProviderConfig(provider: Provider | string): ProviderConfig |
 
 export function getProviderDefaultModel(provider: Provider | string): string | null {
   return normalizeModelId(getProviderConfig(provider)?.defaultModel);
+}
+
+function normalizeProductTier(tier: string | null | undefined): ProductTier {
+  switch ((tier ?? '').toLowerCase()) {
+    case 'hobby':
+      return 'hobby';
+    case 'pro':
+      return 'pro';
+    case 'max':
+      return 'max';
+    case 'enterprise':
+      return 'enterprise';
+    default:
+      return 'free';
+  }
+}
+
+export function getProviderSurface(provider: Provider | string): ProviderSurface {
+  const normalizedProvider = provider.toLowerCase();
+  if (MANAGED_CLOUD_PROVIDER_SET.has(normalizedProvider)) {
+    return 'managed_cloud';
+  }
+  if (BYOK_PROVIDER_SET.has(normalizedProvider)) {
+    return 'byok';
+  }
+  if (LOCAL_PROVIDER_SET.has(normalizedProvider)) {
+    return 'local';
+  }
+  return 'hidden';
+}
+
+export function getManagedCloudProviderIds(
+  options: {
+    includeSearchProviders?: boolean;
+  } = {},
+): Provider[] {
+  const { includeSearchProviders = true } = options;
+  return MANAGED_CLOUD_PROVIDER_IDS.filter(
+    (provider) => includeSearchProviders || !SEARCH_ONLY_MANAGED_CLOUD_PROVIDER_SET.has(provider),
+  ) as unknown as Provider[];
+}
+
+export function getTierPolicy(tier: string | null | undefined): TierPolicy {
+  return TIER_POLICIES[normalizeProductTier(tier)];
+}
+
+export function canAccessManualModelSelection(tier: string | null | undefined): boolean {
+  return getTierPolicy(tier).manualModelSelection;
+}
+
+export function getRoutingSlotDefinition(slot: RoutingSlot): RoutingSlotDefinition {
+  return SLOT_REGISTRY[slot];
+}
+
+export function getRoutingSlotModel(slot: RoutingSlot): string {
+  return getRoutingSlotDefinition(slot).modelId;
+}
+
+export function getManualOverrideModelIds(): string[] {
+  return [...MANUAL_OVERRIDE_MODEL_IDS];
+}
+
+export function isManualOverrideModel(modelId: string | null | undefined): boolean {
+  const canonicalModelId = normalizeModelId(modelId);
+  return canonicalModelId ? MANUAL_OVERRIDE_MODEL_SET.has(canonicalModelId) : false;
+}
+
+export function getManualOverrideModels(
+  options: { includeSearch?: boolean } = {},
+): ModelMetadata[] {
+  const { includeSearch = false } = options;
+  return MANUAL_OVERRIDE_MODEL_IDS.map((modelId) => getModelMetadataById(modelId))
+    .filter((model): model is ModelMetadata => Boolean(model))
+    .filter((model) => includeSearch || model.modelType !== 'search');
 }
 
 export function getTaskModelForProvider(
@@ -522,34 +889,17 @@ function formatCoreModelDetail(model: ModelMetadata): string {
 }
 
 export function getCoreManualModelOptions(): CoreModelOption[] {
-  return CORE_MANUAL_MODEL_IDS.map((modelId) => getModelMetadataById(modelId))
-    .filter((model): model is ModelMetadata => Boolean(model))
-    .map((model) => {
-      const providerLabel = providerLabels[model.provider] ?? model.provider;
-      return {
-        id: model.id,
-        label: model.name,
-        provider: model.provider,
-        providerLabel,
-        description: `${providerLabel} — ${describeQualityBand(model)}`,
-        detail: formatCoreModelDetail(model),
-      };
-    });
-}
-
-function normalizeSubscriptionTierKey(tier: string | null | undefined): TierKey | 'free' {
-  switch ((tier ?? '').toLowerCase()) {
-    case 'pro':
-      return 'pro_additions';
-    case 'max':
-    case 'enterprise':
-      return 'flagship_additions';
-    case 'free':
-      return 'free';
-    case 'hobby':
-    default:
-      return 'economy';
-  }
+  return getManualOverrideModels().map((model) => {
+    const providerLabel = providerLabels[model.provider] ?? model.provider;
+    return {
+      id: model.id,
+      label: model.name,
+      provider: model.provider,
+      providerLabel,
+      description: `${providerLabel} — ${describeQualityBand(model)}`,
+      detail: formatCoreModelDetail(model),
+    };
+  });
 }
 
 export function resolveAutoModeModel(
@@ -557,52 +907,32 @@ export function resolveAutoModeModel(
   subscriptionTier?: string | null,
 ): string | null {
   const normalizedMode = (autoMode ?? 'auto-balanced').toLowerCase() as AutoModeModelId;
-  const normalizedTier = normalizeSubscriptionTierKey(subscriptionTier);
+  const normalizedTier = normalizeProductTier(subscriptionTier);
 
   if (!AUTO_MODE_IDS.has(normalizedMode)) {
     return normalizeModelId(normalizedMode);
   }
 
   if (
-    normalizedTier === 'free' &&
+    (normalizedTier === 'free' || normalizedTier === 'hobby') &&
     (normalizedMode === 'auto-balanced' || normalizedMode === 'auto-premium')
   ) {
     return resolveAutoModeModel('auto-economy', subscriptionTier);
   }
 
-  if (
-    normalizedTier === 'economy' &&
-    (normalizedMode === 'auto-balanced' || normalizedMode === 'auto-premium')
-  ) {
-    return resolveAutoModeModel('auto-economy', subscriptionTier);
-  }
-
-  if (normalizedTier === 'pro_additions' && normalizedMode === 'auto-premium') {
+  if (normalizedTier === 'pro' && normalizedMode === 'auto-premium') {
     return resolveAutoModeModel('auto-balanced', subscriptionTier);
   }
 
   switch (normalizedMode) {
     case 'auto':
     case 'auto-balanced':
-      return (
-        getTaskModelForProvider('openai', 'chat') ??
-        getTaskModelForProvider('managed_cloud', 'chat') ??
-        'gpt-5.4'
-      );
+      return getRoutingSlotModel('general_balanced');
     case 'auto-premium':
-      return (
-        getTaskModelForProvider('anthropic', 'complex_reasoning') ??
-        getTaskModelForProvider('openai', 'complex_reasoning') ??
-        getTaskModelForProvider('anthropic', 'chat') ??
-        'claude-opus-4.6'
-      );
+      return getRoutingSlotModel('general_premium');
     case 'auto-economy':
     default:
-      return (
-        getTaskModelForProvider('openai', 'fast_completion') ??
-        getTaskModelForProvider('managed_cloud', 'fast_completion') ??
-        'gpt-5.4-mini'
-      );
+      return getRoutingSlotModel('general_fast');
   }
 }
 

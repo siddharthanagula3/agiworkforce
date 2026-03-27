@@ -39,59 +39,60 @@ vi.mock('@shared/stores/user-profile-store', () => ({
 // Mock LLM constants — keep real implementation but control a small subset
 vi.mock('@/constants/llm', async () => {
   const actual = await vi.importActual<typeof import('@/constants/llm')>('@/constants/llm');
+  const manualModels = [
+    {
+      id: 'claude-sonnet-4.6',
+      name: 'Claude Sonnet 4.6',
+      provider: 'anthropic',
+      modelType: 'chat',
+      contextWindow: 200_000,
+      inputCost: 3,
+      outputCost: 15,
+      qualityTier: 'best',
+      bestFor: ['coding'],
+      capabilities: { tools: true, vision: true, thinking: true, search: false },
+    },
+    {
+      id: 'claude-haiku-4.5',
+      name: 'Claude Haiku 4.5',
+      provider: 'anthropic',
+      modelType: 'chat',
+      contextWindow: 200_000,
+      inputCost: 1,
+      outputCost: 5,
+      qualityTier: 'fast',
+      bestFor: ['general'],
+      capabilities: { tools: true, vision: false, thinking: false, search: false },
+    },
+    {
+      id: 'gpt-5.4',
+      name: 'GPT-5.4',
+      provider: 'openai',
+      modelType: 'chat',
+      contextWindow: 400_000,
+      inputCost: 1.75,
+      outputCost: 14,
+      qualityTier: 'best',
+      bestFor: ['coding'],
+      capabilities: { tools: true, vision: true, thinking: false, search: false },
+    },
+    {
+      id: 'gemini-3.1-pro-preview',
+      name: 'Gemini 3.1 Pro',
+      provider: 'google',
+      modelType: 'chat',
+      contextWindow: 2_000_000,
+      inputCost: 2,
+      outputCost: 12,
+      qualityTier: 'best',
+      bestFor: ['long-context'],
+      capabilities: { tools: true, vision: true, thinking: true, search: false },
+    },
+  ];
   return {
     ...actual,
     // Use a small catalog for test speed / determinism
-    getAllModels: () => [
-      {
-        id: 'claude-sonnet-4.6',
-        name: 'Claude Sonnet 4.6',
-        provider: 'anthropic',
-        modelType: 'chat',
-        contextWindow: 200_000,
-        inputCost: 3,
-        outputCost: 15,
-        qualityTier: 'best',
-        bestFor: ['coding'],
-        capabilities: { tools: true, vision: true, thinking: true, search: false },
-      },
-      {
-        id: 'claude-haiku-4.5',
-        name: 'Claude Haiku 4.5',
-        provider: 'anthropic',
-        modelType: 'chat',
-        contextWindow: 200_000,
-        inputCost: 1,
-        outputCost: 5,
-        qualityTier: 'fast',
-        bestFor: ['general'],
-        capabilities: { tools: true, vision: false, thinking: false, search: false },
-      },
-      {
-        id: 'gpt-5.4',
-        name: 'GPT-5.2',
-        provider: 'openai',
-        modelType: 'chat',
-        contextWindow: 400_000,
-        inputCost: 1.75,
-        outputCost: 14,
-        qualityTier: 'best',
-        bestFor: ['coding'],
-        capabilities: { tools: true, vision: true, thinking: false, search: false },
-      },
-      {
-        id: 'gemini-3.1-pro-preview',
-        name: 'Gemini 3.1 Pro',
-        provider: 'google',
-        modelType: 'chat',
-        contextWindow: 2_000_000,
-        inputCost: 2,
-        outputCost: 12,
-        qualityTier: 'best',
-        bestFor: ['long-context'],
-        capabilities: { tools: true, vision: true, thinking: true, search: false },
-      },
-    ],
+    getManualOverrideModels: () => manualModels,
     isModelAllowedForTier: (modelId: string, tier: string) => {
       const econModels = ['claude-haiku-4.5'];
       const proModels = ['claude-sonnet-4.6', 'gemini-3.1-pro-preview'];
@@ -101,12 +102,22 @@ vi.mock('@/constants/llm', async () => {
         return [...econModels, ...proModels, 'gpt-5.4'].includes(modelId);
       return false;
     },
+    canAccessManualModelSelection: (tier: string | null | undefined) =>
+      tier === 'max' || tier === 'enterprise',
     getAllowedAutoModesForTier: (tier: string | null | undefined) => {
       if (tier === 'max' || tier === 'enterprise')
         return ['auto-economy', 'auto-balanced', 'auto-premium'];
       if (tier === 'pro') return ['auto-economy', 'auto-balanced'];
       return ['auto-economy'];
     },
+    getManagedCloudProviderIds: ({
+      includeSearchProviders = true,
+    }: {
+      includeSearchProviders?: boolean;
+    } = {}) =>
+      includeSearchProviders
+        ? ['anthropic', 'openai', 'google', 'perplexity']
+        : ['anthropic', 'openai', 'google'],
     PROVIDERS_IN_ORDER: ['managed_cloud', 'anthropic', 'openai', 'google'],
     PROVIDER_LABELS: {
       managed_cloud: 'Managed Cloud',
@@ -124,7 +135,7 @@ vi.mock('@/constants/llm', async () => {
           capabilities: { thinking: false },
           name: 'Claude Haiku 4.5',
         },
-        'gpt-5.4': { capabilities: { thinking: false }, name: 'GPT-5.2' },
+        'gpt-5.4': { capabilities: { thinking: false }, name: 'GPT-5.4' },
       };
       return map[id] ?? null;
     },
@@ -147,9 +158,9 @@ describe('QuickModelSelector', () => {
   });
 
   describe('rendering', () => {
-    it('renders search input', () => {
+    it('hides manual search input when manual selection is unavailable', () => {
       renderSelector();
-      expect(screen.getByPlaceholderText('Search models...')).toBeDefined();
+      expect(screen.queryByPlaceholderText('Search models...')).toBeNull();
     });
 
     it('renders "Models" heading', () => {
@@ -160,6 +171,12 @@ describe('QuickModelSelector', () => {
     it('renders Auto Selection section when not searching', () => {
       renderSelector();
       expect(screen.getByText('Auto Selection')).toBeDefined();
+    });
+
+    it('renders search input for max tier manual override surfaces', () => {
+      userPlan = 'max';
+      renderSelector();
+      expect(screen.getByPlaceholderText('Search models...')).toBeDefined();
     });
   });
 
@@ -209,55 +226,45 @@ describe('QuickModelSelector', () => {
     });
   });
 
-  describe('provider grouping', () => {
-    it('shows anthropic group heading', () => {
+  describe('manual model visibility', () => {
+    it('hides provider groups for free tier', () => {
       userPlan = 'free';
       renderSelector();
-      expect(screen.getByText('Anthropic')).toBeDefined();
+      expect(screen.queryByText('Anthropic')).toBeNull();
+      expect(screen.queryByText('Claude Haiku 4.5')).toBeNull();
     });
 
-    it('shows claude-haiku (allowed for free tier)', () => {
-      userPlan = 'free';
-      renderSelector();
-      expect(screen.getByText('Claude Haiku 4.5')).toBeDefined();
-    });
-
-    it('shows claude-sonnet as locked for free tier', () => {
-      userPlan = 'free';
-      renderSelector();
-      // Model appears but with lock indicator
-      expect(screen.getByText('Claude Sonnet 4.6')).toBeDefined();
-      // The button should be disabled
-      const btn = screen.getByRole('button', { name: 'Claude Sonnet 4.6' });
-      expect(btn).toHaveProperty('disabled', true);
-    });
-
-    it('shows claude-sonnet as unlocked for pro tier', () => {
+    it('hides provider groups for pro tier', () => {
       userPlan = 'pro';
       renderSelector();
-      const btn = screen.getByRole('button', { name: 'Claude Sonnet 4.6' });
-      expect(btn).toHaveProperty('disabled', false);
+      expect(screen.queryByText('Anthropic')).toBeNull();
+      expect(screen.queryByText('Claude Sonnet 4.6')).toBeNull();
     });
 
-    it('calls setSelectedModelId when an unlocked model is clicked', () => {
-      userPlan = 'free';
+    it('shows curated provider groups for max tier', () => {
+      userPlan = 'max';
+      renderSelector();
+      expect(screen.getByText('Anthropic')).toBeDefined();
+      expect(screen.getByText('OpenAI')).toBeDefined();
+      expect(screen.getByText('Google')).toBeDefined();
+      expect(screen.getByText('Claude Haiku 4.5')).toBeDefined();
+      expect(screen.getByText('Claude Sonnet 4.6')).toBeDefined();
+      expect(screen.getByText('GPT-5.4')).toBeDefined();
+    });
+
+    it('allows manual model selection for max tier', () => {
+      userPlan = 'max';
       const onClose = vi.fn();
       renderSelector({ onClose });
-      fireEvent.click(screen.getByRole('button', { name: 'Claude Haiku 4.5' }));
-      expect(mockSetSelectedModelId).toHaveBeenCalledWith('claude-haiku-4.5');
-      expect(onClose).toHaveBeenCalled();
-    });
-
-    it('does not call setSelectedModelId when a locked model is clicked', () => {
-      userPlan = 'free';
-      renderSelector();
       fireEvent.click(screen.getByRole('button', { name: 'Claude Sonnet 4.6' }));
-      expect(mockSetSelectedModelId).not.toHaveBeenCalled();
+      expect(mockSetSelectedModelId).toHaveBeenCalledWith('claude-sonnet-4.6');
+      expect(onClose).toHaveBeenCalled();
     });
   });
 
   describe('search/filter', () => {
-    it('hides Auto Selection section when searching', () => {
+    it('hides Auto Selection section when searching manual models', () => {
+      userPlan = 'max';
       renderSelector();
       fireEvent.change(screen.getByPlaceholderText('Search models...'), {
         target: { value: 'haiku' },
@@ -266,7 +273,7 @@ describe('QuickModelSelector', () => {
     });
 
     it('shows only matching models when search query is entered', () => {
-      userPlan = 'pro';
+      userPlan = 'max';
       renderSelector();
       fireEvent.change(screen.getByPlaceholderText('Search models...'), {
         target: { value: 'haiku' },
@@ -276,6 +283,7 @@ describe('QuickModelSelector', () => {
     });
 
     it('shows no-results state when nothing matches', () => {
+      userPlan = 'max';
       renderSelector();
       fireEvent.change(screen.getByPlaceholderText('Search models...'), {
         target: { value: 'xxxxxxxxxnotamodel' },
@@ -284,6 +292,7 @@ describe('QuickModelSelector', () => {
     });
 
     it('clears search when X button is clicked', () => {
+      userPlan = 'max';
       renderSelector();
       const input = screen.getByPlaceholderText('Search models...');
       fireEvent.change(input, { target: { value: 'haiku' } });
@@ -295,14 +304,14 @@ describe('QuickModelSelector', () => {
 
   describe('context window and pricing', () => {
     it('shows formatted context window for unlocked models', () => {
-      userPlan = 'free';
+      userPlan = 'max';
       renderSelector();
-      // Claude Haiku 4.5 has 200K ctx window and is unlocked for free
-      expect(screen.getByText('200K ctx')).toBeDefined();
+      // Claude Haiku 4.5 has 200K ctx window and is available in manual override mode
+      expect(screen.getAllByText('200K ctx').length).toBeGreaterThan(0);
     });
 
     it('shows pricing for unlocked models', () => {
-      userPlan = 'free';
+      userPlan = 'max';
       renderSelector();
       // Claude Haiku: $1/$5 per 1M
       expect(screen.getByText('$1/$5')).toBeDefined();
@@ -359,10 +368,10 @@ describe('QuickModelSelector', () => {
 
   describe('onClose callback', () => {
     it('calls onClose after selecting a model', () => {
-      userPlan = 'free';
+      userPlan = 'max';
       const onClose = vi.fn();
       renderSelector({ onClose });
-      fireEvent.click(screen.getByRole('button', { name: 'Claude Haiku 4.5' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Claude Sonnet 4.6' }));
       expect(onClose).toHaveBeenCalledTimes(1);
     });
   });

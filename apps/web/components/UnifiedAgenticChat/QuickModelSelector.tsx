@@ -1,23 +1,12 @@
-import {
-  Brain,
-  Check,
-  Crown,
-  DollarSign,
-  Lock,
-  Search,
-  Sparkles,
-  Wand2,
-  X,
-  Zap,
-} from 'lucide-react';
+import { Brain, Check, Crown, DollarSign, Search, Sparkles, Wand2, X, Zap } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import {
   getAllowedAutoModesForTier,
-  getAllModels,
+  canAccessManualModelSelection,
+  getManagedCloudProviderIds,
+  getManualOverrideModels,
   getModelMetadata,
-  isModelAllowedForTier,
   PROVIDER_LABELS,
-  PROVIDERS_IN_ORDER,
   type ModelMetadata,
 } from '@/constants/llm';
 import { cn } from '@/lib/utils';
@@ -104,6 +93,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     selectedModelId,
     thinkingEnabled,
     thinkingBudget,
+    lastRoutingDecision,
     setSelectedModelId,
     setThinkingBudget,
   } = useModelStore();
@@ -113,48 +103,50 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isAutoMode = AUTO_IDS.has(selectedModelId);
+  const manualSelectionEnabled = useMemo(() => canAccessManualModelSelection(userPlan), [userPlan]);
+  const visibleManagedProviders = useMemo(
+    () => getManagedCloudProviderIds({ includeSearchProviders: false }),
+    [],
+  );
+  const effectiveSearchQuery = manualSelectionEnabled ? searchQuery.toLowerCase().trim() : '';
 
   const availableAutoModes = useMemo(() => getAllowedAutoModesForTier(userPlan), [userPlan]);
 
-  // Build grouped model list from the full catalog (models.json), not just AVAILABLE_MODELS
   const modelGroups = useMemo(() => {
-    const groups: Record<string, Array<ModelMetadata & { locked: boolean }>> = {};
-    const query = searchQuery.toLowerCase().trim();
+    const groups: Record<string, ModelMetadata[]> = {};
+    if (!manualSelectionEnabled) {
+      return groups;
+    }
 
-    for (const p of PROVIDERS_IN_ORDER) {
+    for (const p of visibleManagedProviders) {
       groups[p] = [];
     }
 
-    for (const model of getAllModels()) {
-      // Skip auto-mode entries from the provider grouping (handled separately above)
-      if (AUTO_IDS.has(model.id) || model.id === 'auto') continue;
-      // Skip image/video/audio/TTS-only models from the chat selector
+    for (const model of getManualOverrideModels()) {
       if (model.modelType && !['chat', 'multimodal', 'reasoning'].includes(model.modelType)) {
         continue;
       }
-
-      const providerKey = model.provider.toLowerCase();
-      if (!groups[providerKey]) {
-        groups[providerKey] = [];
+      if (!visibleManagedProviders.includes(model.provider)) {
+        continue;
       }
 
-      if (query) {
-        const matchesName = model.name.toLowerCase().includes(query);
-        const matchesId = model.id.toLowerCase().includes(query);
-        const matchesProvider = model.provider.toLowerCase().includes(query);
-        const matchesBestFor = model.bestFor?.some((tag) => tag.toLowerCase().includes(query));
+      if (effectiveSearchQuery) {
+        const matchesName = model.name.toLowerCase().includes(effectiveSearchQuery);
+        const matchesId = model.id.toLowerCase().includes(effectiveSearchQuery);
+        const matchesProvider = model.provider.toLowerCase().includes(effectiveSearchQuery);
+        const matchesBestFor = model.bestFor?.some((tag) =>
+          tag.toLowerCase().includes(effectiveSearchQuery),
+        );
         if (!matchesName && !matchesId && !matchesProvider && !matchesBestFor) continue;
       }
 
-      const locked = !isModelAllowedForTier(model.id, userPlan);
-      groups[providerKey]!.push({ ...model, locked });
+      groups[model.provider]?.push(model);
     }
 
     return groups;
-  }, [searchQuery, userPlan]);
+  }, [effectiveSearchQuery, manualSelectionEnabled, visibleManagedProviders]);
 
-  const handleSelectModel = (modelId: string, locked: boolean) => {
-    if (locked) return;
+  const handleSelectModel = (modelId: string) => {
     setSelectedModelId(modelId);
     onClose?.();
   };
@@ -176,7 +168,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   const isThinkingDisabled = !supportsThinking;
 
   const noResults =
-    searchQuery !== '' && Object.values(modelGroups).every((models) => models.length === 0);
+    effectiveSearchQuery !== '' &&
+    Object.values(modelGroups).every((models) => models.length === 0);
 
   return (
     <div
@@ -191,43 +184,47 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
         <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
           Models
         </p>
-        <span className="text-[10px] text-gray-400 dark:text-gray-500">Choose a provider</span>
+        <span className="text-[10px] text-gray-400 dark:text-gray-500">
+          {manualSelectionEnabled ? 'Choose a model' : 'Auto routing'}
+        </span>
       </div>
 
       {/* Search */}
-      <div className="relative mb-2">
-        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          ref={searchInputRef}
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search models..."
-          aria-label="Search models"
-          className={cn(
-            'w-full pl-7 pr-7 py-1.5 text-xs rounded-lg border transition-colors',
-            'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700',
-            'placeholder:text-gray-400 dark:placeholder:text-gray-500',
-            'focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50',
+      {manualSelectionEnabled && (
+        <div className="relative mb-2">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search models..."
+            aria-label="Search models"
+            className={cn(
+              'w-full pl-7 pr-7 py-1.5 text-xs rounded-lg border transition-colors',
+              'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700',
+              'placeholder:text-gray-400 dark:placeholder:text-gray-500',
+              'focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50',
+            )}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => {
+                setSearchQuery('');
+                searchInputRef.current?.focus();
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <X size={12} />
+            </button>
           )}
-        />
-        {searchQuery && (
-          <button
-            type="button"
-            aria-label="Clear search"
-            onClick={() => {
-              setSearchQuery('');
-              searchInputRef.current?.focus();
-            }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
-            <X size={12} />
-          </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Auto Selection Section */}
-      {!searchQuery && (
+      {!effectiveSearchQuery && (
         <div className="mb-2 space-y-1">
           <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Auto Selection
@@ -270,136 +267,148 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
             <div className="ml-6 mt-1 rounded-md bg-gray-50 px-3 py-1.5 text-[10px] dark:bg-gray-800">
               <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
                 <Sparkles size={10} className="text-amber-500" />
-                <span>Best model selected automatically for each request</span>
+                {lastRoutingDecision?.wasRouted ? (
+                  <span>
+                    Last used{' '}
+                    <span className="font-medium text-gray-800 dark:text-gray-100">
+                      {getModelMetadata(lastRoutingDecision.routedModelId)?.name ??
+                        lastRoutingDecision.routedModelId}
+                    </span>
+                    <span className="ml-1">({lastRoutingDecision.taskType})</span>
+                  </span>
+                ) : (
+                  <span>Best model selected automatically for each request</span>
+                )}
               </div>
             </div>
           )}
         </div>
       )}
 
-      <hr className="my-2 border-gray-200 dark:border-gray-700" />
+      {manualSelectionEnabled && (
+        <>
+          <hr className="my-2 border-gray-200 dark:border-gray-700" />
 
-      {/* Model List */}
-      <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
-        {noResults && (
-          <div className="py-6 text-center">
-            <Search size={24} className="mx-auto mb-2 text-gray-400" />
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              No models found for &quot;{searchQuery}&quot;
-            </p>
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="mt-2 text-[10px] text-primary hover:underline"
-            >
-              Clear search
-            </button>
+          {/* Model List */}
+          <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
+            {noResults && (
+              <div className="py-6 text-center">
+                <Search size={24} className="mx-auto mb-2 text-gray-400" />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  No models found for &quot;{searchQuery}&quot;
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="mt-2 text-[10px] text-primary hover:underline"
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+
+            {visibleManagedProviders.map((provider) => {
+              const models = modelGroups[provider] ?? [];
+              if (models.length === 0) return null;
+              const providerLabel = PROVIDER_LABELS[provider] ?? provider;
+
+              return (
+                <div key={provider} className="space-y-1">
+                  <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {providerLabel}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {models.map((model) => {
+                      const isActive = model.id === selectedModelId;
+                      const qualityLabel = getQualityLabel(model.qualityTier);
+
+                      return (
+                        <button
+                          type="button"
+                          key={model.id}
+                          onClick={() => handleSelectModel(model.id)}
+                          title={model.name}
+                          aria-label={model.name}
+                          className={cn(
+                            'flex w-full flex-col rounded-lg border px-3 py-1.5 text-xs transition-colors text-left',
+                            isActive
+                              ? 'border-primary bg-primary/10 text-primary shadow-sm dark:border-primary/50 dark:bg-primary/20'
+                              : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-gray-700',
+                          )}
+                        >
+                          <div className="flex w-full items-center justify-between gap-1">
+                            <span className="flex items-center gap-1 truncate">
+                              <span className="truncate font-medium">{model.name}</span>
+                              <span className="flex items-center gap-0.5 shrink-0">
+                                {model.capabilities?.tools && (
+                                  <span aria-label="Tool use">
+                                    <Wand2 size={10} className="text-blue-500 dark:text-blue-400" />
+                                  </span>
+                                )}
+                                {model.capabilities?.thinking && (
+                                  <span aria-label="Extended thinking">
+                                    <Brain
+                                      size={10}
+                                      className="text-purple-500 dark:text-purple-400"
+                                    />
+                                  </span>
+                                )}
+                                {model.capabilities?.vision && (
+                                  <span aria-label="Vision">
+                                    <Sparkles
+                                      size={10}
+                                      className="text-amber-500 dark:text-amber-400"
+                                    />
+                                  </span>
+                                )}
+                                {model.capabilities?.search && (
+                                  <span aria-label="Web search">
+                                    <Search
+                                      size={10}
+                                      className="text-green-500 dark:text-green-400"
+                                    />
+                                  </span>
+                                )}
+                              </span>
+                            </span>
+                            {isActive ? (
+                              <Check size={14} className="text-primary shrink-0" />
+                            ) : (
+                              <span
+                                className={cn(
+                                  'text-[10px] font-medium shrink-0',
+                                  qualityLabel.className,
+                                )}
+                              >
+                                {qualityLabel.text}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mt-0.5 flex items-center gap-2">
+                            {model.contextWindow > 0 && (
+                              <span className="text-[9px] text-gray-400 dark:text-gray-500">
+                                {formatContextWindow(model.contextWindow)} ctx
+                              </span>
+                            )}
+                            {(model.inputCost !== undefined || model.outputCost !== undefined) && (
+                              <span className="text-[9px] text-gray-400 dark:text-gray-500">
+                                {formatPrice(model.inputCost ?? 0)}/
+                                {formatPrice(model.outputCost ?? 0)}
+                                <span className="ml-0.5 text-gray-300 dark:text-gray-600">/1M</span>
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
-
-        {PROVIDERS_IN_ORDER.map((provider) => {
-          const models = modelGroups[provider] ?? [];
-          if (models.length === 0) return null;
-          const providerLabel = PROVIDER_LABELS[provider] ?? provider;
-
-          return (
-            <div key={provider} className="space-y-1">
-              <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                {providerLabel}
-              </div>
-              <div className="flex flex-col gap-1">
-                {models.map((model) => {
-                  const isActive = model.id === selectedModelId;
-                  const { locked } = model;
-                  const qualityLabel = getQualityLabel(model.qualityTier);
-
-                  return (
-                    <button
-                      type="button"
-                      key={model.id}
-                      onClick={() => handleSelectModel(model.id, locked)}
-                      title={locked ? 'Requires PRO subscription or higher' : model.name}
-                      disabled={locked}
-                      aria-label={model.name}
-                      className={cn(
-                        'flex w-full flex-col rounded-lg border px-3 py-1.5 text-xs transition-colors text-left',
-                        locked
-                          ? 'border-gray-200 bg-gray-50 text-gray-400 opacity-60 cursor-not-allowed dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-500'
-                          : isActive
-                            ? 'border-primary bg-primary/10 text-primary shadow-sm dark:border-primary/50 dark:bg-primary/20'
-                            : 'border-gray-200 bg-white text-gray-900 hover:border-primary/50 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-primary/40 dark:hover:bg-gray-700',
-                      )}
-                    >
-                      {/* Top row: name + capability badges + check/quality */}
-                      <div className="flex w-full items-center justify-between gap-1">
-                        <span className="flex items-center gap-1 truncate">
-                          <span className="truncate font-medium">{model.name}</span>
-                          {locked && <Lock size={10} className="text-amber-500 shrink-0" />}
-                          <span className="flex items-center gap-0.5 shrink-0">
-                            {model.capabilities?.tools && (
-                              <span aria-label="Tool use">
-                                <Wand2 size={10} className="text-blue-500 dark:text-blue-400" />
-                              </span>
-                            )}
-                            {model.capabilities?.thinking && (
-                              <span aria-label="Extended thinking">
-                                <Brain size={10} className="text-purple-500 dark:text-purple-400" />
-                              </span>
-                            )}
-                            {model.capabilities?.vision && (
-                              <span aria-label="Vision">
-                                <Sparkles
-                                  size={10}
-                                  className="text-amber-500 dark:text-amber-400"
-                                />
-                              </span>
-                            )}
-                            {model.capabilities?.search && (
-                              <span aria-label="Web search">
-                                <Search size={10} className="text-green-500 dark:text-green-400" />
-                              </span>
-                            )}
-                          </span>
-                        </span>
-                        {isActive ? (
-                          <Check size={14} className="text-primary shrink-0" />
-                        ) : (
-                          <span
-                            className={cn(
-                              'text-[10px] font-medium shrink-0',
-                              qualityLabel.className,
-                            )}
-                          >
-                            {qualityLabel.text}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Bottom row: context window + pricing */}
-                      {!locked && (
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {model.contextWindow > 0 && (
-                            <span className="text-[9px] text-gray-400 dark:text-gray-500">
-                              {formatContextWindow(model.contextWindow)} ctx
-                            </span>
-                          )}
-                          {(model.inputCost !== undefined || model.outputCost !== undefined) && (
-                            <span className="text-[9px] text-gray-400 dark:text-gray-500">
-                              {formatPrice(model.inputCost ?? 0)}/
-                              {formatPrice(model.outputCost ?? 0)}
-                              <span className="ml-0.5 text-gray-300 dark:text-gray-600">/1M</span>
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+        </>
+      )}
 
       {/* Thinking Budget Section */}
       <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
