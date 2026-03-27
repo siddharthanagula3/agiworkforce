@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { Search, X } from 'lucide-react';
 import type { ChatRuntime } from '../lib/runtime';
-import type { ChatMessage } from '../lib/types';
+import type { Artifact, ChatMessage } from '../lib/types';
 import type { ChipType } from './QuickChips';
 import { Sidebar } from './Sidebar';
 import { EmptyState } from './EmptyState';
@@ -28,6 +28,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useKeyboard } from '../hooks/useKeyboard';
 import { useArtifact } from '../hooks/useArtifact';
 import { SettingsModal } from './SettingsModal';
+import { ArtifactPanel } from './ArtifactPanel';
 import { cn } from '../lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -272,7 +273,15 @@ export function ChatInterface({
   const { sendMessage, stopGeneration } = useChat(runtime, onAddMessage);
 
   // Artifact panel state (single source — must not be called in child components separately)
-  const { isOpen: artifactOpen, panelWidth: artifactPanelWidth } = useArtifact();
+  const {
+    isOpen: artifactOpen,
+    panelWidth: artifactPanelWidth,
+    activeArtifact,
+    viewMode: artifactViewMode,
+    openArtifact,
+    closeArtifact,
+    setViewMode: setArtifactViewMode,
+  } = useArtifact();
 
   // Store state
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -341,6 +350,13 @@ export function ChatInterface({
     onVoiceClickProp?.();
   }, [onVoiceClickProp]);
 
+  const handleArtifactClick = useCallback(
+    (artifact: Artifact) => {
+      openArtifact(artifact);
+    },
+    [openArtifact],
+  );
+
   // Notify host app when a non-chat view is selected so it can render the content
   const handleViewNavigation = useCallback(
     (view: string) => {
@@ -405,7 +421,10 @@ export function ChatInterface({
             MessageList's own internal scroll container */}
         <div className="flex-1 overflow-hidden">
           {hasMessages && activeConversationId ? (
-            <MessageList conversationId={activeConversationId} />
+            <MessageList
+              conversationId={activeConversationId}
+              onArtifactClick={handleArtifactClick}
+            />
           ) : (
             <EmptyState />
           )}
@@ -454,9 +473,12 @@ export function ChatInterface({
             className="shrink-0 border-l border-[var(--chat-border)] bg-[var(--chat-surface-base)]"
             style={{ width: artifactPanelWidth }}
           >
-            <div className="flex h-full items-center justify-center text-sm text-[var(--chat-text-muted)]">
-              Artifact Panel (Phase 3)
-            </div>
+            <ArtifactPanel
+              artifact={activeArtifact}
+              viewMode={artifactViewMode}
+              onViewModeChange={setArtifactViewMode}
+              onClose={closeArtifact}
+            />
           </div>
         )}
       </div>

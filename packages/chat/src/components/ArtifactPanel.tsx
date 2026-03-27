@@ -17,6 +17,10 @@ function getTypeLabel(artifact: Artifact): string {
       return 'HTML';
     case 'react':
       return 'React';
+    case 'markdown':
+      return 'Markdown';
+    case 'json':
+      return 'JSON';
     case 'code':
       return artifact.language?.toUpperCase() ?? 'Code';
     case 'document':
@@ -41,8 +45,10 @@ function getTypeCategory(artifact: Artifact): string {
     case 'code':
     case 'svg':
     case 'mermaid':
+    case 'json':
       return 'Code';
     case 'document':
+    case 'markdown':
       return 'Document';
     case 'research':
       return 'Research';
@@ -198,16 +204,20 @@ export function ArtifactPanel({
         ? 'html'
         : artifact.type === 'react'
           ? 'tsx'
-          : artifact.type === 'svg'
-            ? 'svg'
-            : artifact.type === 'document'
-              ? 'md'
-              : (artifact.language ?? 'txt');
+          : artifact.type === 'markdown'
+            ? 'md'
+            : artifact.type === 'json'
+              ? 'json'
+              : artifact.type === 'svg'
+                ? 'svg'
+                : artifact.type === 'document'
+                  ? 'md'
+                  : (artifact.language ?? 'txt');
     const blob = new Blob([artifact.content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${artifact.title.replace(/\s+/g, '-').toLowerCase()}.${ext}`;
+    a.download = `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -217,7 +227,12 @@ export function ArtifactPanel({
   }
 
   const canPreview =
-    artifact?.type === 'html' || artifact?.type === 'react' || artifact?.type === 'svg';
+    artifact?.type === 'html' ||
+    artifact?.type === 'react' ||
+    artifact?.type === 'svg' ||
+    artifact?.type === 'markdown' ||
+    artifact?.type === 'document' ||
+    artifact?.type === 'image';
 
   return (
     <div className="flex h-full flex-col bg-[var(--chat-surface-base)]">
@@ -264,7 +279,7 @@ export function ArtifactPanel({
         <div className="flex flex-1 items-center gap-1.5 min-w-0 overflow-hidden">
           {artifact ? (
             <span className="truncate text-sm font-medium text-[var(--chat-text-secondary)]">
-              {artifact.title}
+              {artifact.title ?? 'Untitled artifact'}
               <span className="text-[var(--chat-text-muted)] font-normal"> · </span>
               <span className="text-[var(--chat-text-muted)] font-normal">
                 {getTypeCategory(artifact)} · {getTypeLabel(artifact)}
@@ -327,9 +342,24 @@ export function ArtifactPanel({
           <div className="flex h-full items-center justify-center overflow-auto p-4 bg-white">
             <img
               src={`data:image/svg+xml;base64,${btoa(artifact.content)}`}
-              alt={artifact.title}
+              alt={artifact.title ?? 'Artifact preview'}
               className="max-h-full max-w-full object-contain"
             />
+          </div>
+        ) : viewMode === 'preview' && artifact.type === 'image' ? (
+          <div className="flex h-full items-center justify-center overflow-auto bg-[var(--chat-surface-overlay)] p-4">
+            <img
+              src={artifact.content}
+              alt={artifact.title ?? 'Artifact image'}
+              className="max-h-full max-w-full rounded-lg object-contain"
+            />
+          </div>
+        ) : viewMode === 'preview' &&
+          (artifact.type === 'markdown' || artifact.type === 'document') ? (
+          <div className="h-full overflow-auto bg-[var(--chat-surface-overlay)] px-5 py-4">
+            <article className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--chat-text-primary)]">
+              {artifact.content}
+            </article>
           </div>
         ) : viewMode === 'preview' && canPreview ? (
           // HTML/React: sandboxed iframe without allow-scripts is safe for layout-only preview
@@ -337,7 +367,7 @@ export function ArtifactPanel({
             srcDoc={artifact.content}
             sandbox="allow-forms"
             className="h-full w-full border-0 bg-white"
-            title={artifact.title}
+            title={artifact.title ?? 'Artifact preview'}
           />
         ) : (
           <CodeView content={artifact.content} />

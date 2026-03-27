@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import type { RoutingDecision, RoutingTaskType } from '@agiworkforce/types';
 import {
   MODEL_PRESETS,
   PROVIDER_LABELS,
@@ -18,22 +19,7 @@ export interface AIModel {
   description: string;
 }
 
-export type RoutingTaskType =
-  | 'coding'
-  | 'reasoning'
-  | 'general'
-  | 'agentic'
-  | 'multimodal'
-  | 'research'
-  | 'computer-use';
-
-export interface RoutingDecision {
-  routedModelId: string;
-  taskType: RoutingTaskType;
-  reason: string;
-  wasRouted: boolean;
-  timestamp: number;
-}
+export type { RoutingDecision, RoutingTaskType };
 
 type PersistedModelState = {
   selectedModelId: string;

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { BrowserActivityState, BrowserAgentStatus } from '@agiworkforce/types';
 import { invoke, isTauri, listen } from '../lib/tauri-mock';
 import { EVENTS } from '../constants/event-names';
 import type {
@@ -6,18 +7,8 @@ import type {
   ExtensionTaskResultEvent,
 } from '../hooks/useAgenticEvents';
 
-export type ExtensionAgentStatus = 'idle' | 'planning' | 'executing' | 'done' | 'error';
-
-export interface ExtensionEventState {
-  currentPageUrl: string | null;
-  currentPageTitle: string | null;
-  lastAction: string | null;
-  agentStatus: ExtensionAgentStatus;
-  hasError: boolean;
-  lastError: string | null;
-  lastTaskActionsPerformed: number;
-  extensionConnected: boolean;
-}
+export type ExtensionAgentStatus = BrowserAgentStatus;
+export type ExtensionEventState = BrowserActivityState;
 
 interface ExtensionEventsStore extends ExtensionEventState {
   applyPageContext: (payload: ExtensionPageContextEvent) => void;
