@@ -17,6 +17,7 @@ import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-hel
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
+import { getEconomyFallbackModels, normalizeModelId } from '@agiworkforce/types';
 
 /**
  * Check if a subscription tier allows access to a model.
@@ -52,24 +53,14 @@ function findCheaperFallbackModel(
     maxTokens,
   );
 
-  // Define fallback models ordered by cost (cheapest first)
-  // These are the most cost-effective models available as of January 2026
-  const fallbackModels = [
-    { model: 'deepseek-chat', provider: 'deepseek' }, // $0.28/$0.42 per 1M - DeepSeek Chat (V3), best value
-    { model: 'qwen-flash', provider: 'qwen' }, // $0.05/$0.15 per 1M - Ultra cheap Qwen
-    { model: 'gpt-5.4-mini', provider: 'openai' }, // Latest lightweight GPT-5.4 with full tool routing support
-    { model: 'qwen-turbo', provider: 'qwen' }, // $0.1/$0.3 per 1M - Fast Qwen
-    { model: 'gemini-3.1-flash-lite', provider: 'google' }, // Latest lightweight Gemini 3.1
-    { model: 'grok-4-fast-reasoning', provider: 'xai' }, // $0.1/$0.4 per 1M - Grok 4 Fast Reasoning
-    { model: 'claude-haiku-4.5', provider: 'anthropic' }, // $1.0/$5.0 per 1M - Claude 4.5 Haiku
-    { model: 'glm-4.7', provider: 'zhipu' }, // $0.14/$0.42 per 1M - GLM-4.7
-  ];
+  const canonicalCurrentModel = normalizeModelId(currentModel) ?? currentModel.toLowerCase();
+  const fallbackModels = getEconomyFallbackModels();
 
   // Try each fallback model and find the cheapest one that's cheaper than current
   for (const fallback of fallbackModels) {
     // Skip only if it's the exact same model (not same provider — cheaper same-provider
     // models like claude-haiku should be valid fallbacks for claude-opus)
-    if (fallback.model === modelLower) {
+    if (fallback.model === canonicalCurrentModel || fallback.model === modelLower) {
       continue;
     }
 
