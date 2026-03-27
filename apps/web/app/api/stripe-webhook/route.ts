@@ -211,11 +211,11 @@ async function handleCreditTopUp(session: Stripe.Checkout.Session) {
     // Get balance before adding credits for verification
     const { data: balanceBefore } = await supabaseAdmin
       .from('token_credits')
-      .select('balance_cents')
+      .select('credits_remaining_cents')
       .eq('id', creditAccount.id)
       .single();
 
-    const previousBalance = balanceBefore?.balance_cents ?? 0;
+    const previousBalance = balanceBefore?.credits_remaining_cents ?? 0;
 
     // Add credits to the user's account using the correct credit account ID
     const { data: rpcResult, error: creditError } = await supabaseAdmin.rpc('add_credits', {
@@ -237,11 +237,11 @@ async function handleCreditTopUp(session: Stripe.Checkout.Session) {
     // Verify credits were actually added by checking the new balance
     const { data: balanceAfter } = await supabaseAdmin
       .from('token_credits')
-      .select('balance_cents')
+      .select('credits_remaining_cents')
       .eq('id', creditAccount.id)
       .single();
 
-    const newBalance = balanceAfter?.balance_cents ?? 0;
+    const newBalance = balanceAfter?.credits_remaining_cents ?? 0;
     const actualDifference = newBalance - previousBalance;
 
     if (actualDifference !== creditAmountCents) {

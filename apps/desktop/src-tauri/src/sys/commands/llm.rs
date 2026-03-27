@@ -5,7 +5,7 @@ use crate::core::llm::providers::{
 use crate::core::llm::{
     cache_manager::CacheManager,
     llm_router::{RouterContext, RouterPreferences, RoutingStrategy},
-    ChatMessage, LLMRequest, LLMResponse, LLMRouter, Provider,
+    ChatMessage, LLMRequest, LLMResponse, LLMRouter, Provider, TaskType,
 };
 use crate::sys::commands::chat::AppDatabase;
 use crate::sys::security::rate_limit::{RateLimitConfig, RateLimiter};
@@ -17,7 +17,11 @@ use tokio::sync::RwLock;
 
 use crate::core::llm::OLLAMA_DEFAULT_BASE_URL;
 
-const DEFAULT_MODEL: &str = "gpt-5.4-mini";
+fn default_model() -> String {
+    Provider::OpenAI
+        .get_model_for_task(TaskType::FastCompletion)
+        .to_string()
+}
 
 /// Managed state holding rate limiters for LLM and MCP tool execution.
 ///
@@ -189,10 +193,7 @@ pub async fn llm_send_message(
         .as_deref()
         .and_then(resolve_provider_for_routing);
 
-    let model = request
-        .model
-        .clone()
-        .unwrap_or_else(|| DEFAULT_MODEL.to_string());
+    let model = request.model.clone().unwrap_or_else(default_model);
 
     let llm_request = LLMRequest {
         messages: request.messages,
@@ -235,10 +236,7 @@ pub async fn llm_send_message(
             // We use "managed-cloud-auto" or pass the requested model as a hint if compatible
             let fallback_candidate = crate::core::llm::llm_router::RouteCandidate {
                 provider: Provider::ManagedCloud,
-                model: request
-                    .model
-                    .clone()
-                    .unwrap_or_else(|| DEFAULT_MODEL.to_string()),
+                model: request.model.clone().unwrap_or_else(default_model),
                 reason: "fallback-redirect-to-managed-cloud",
                 strategy: None,
             };
