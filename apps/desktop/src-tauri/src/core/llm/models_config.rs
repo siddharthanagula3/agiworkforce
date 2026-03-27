@@ -184,12 +184,15 @@ pub fn get_default_model(provider: &Provider) -> &'static str {
         .get(provider.as_string())
         .and_then(|p| p.default_model.as_deref())
         .filter(|model_id| !model_id.is_empty())
-        .unwrap_or_else(|| {
-            debug_assert!(
-                CONFIG.models.contains_key("gpt-5.4-mini"),
-                "Fallback model 'gpt-5.4-mini' not found in models.json"
-            );
-            "gpt-5.4-mini"
+        .unwrap_or_else(|| match provider {
+            Provider::Ollama | Provider::OllamaCloud => "llama4-maverick",
+            _ => {
+                debug_assert!(
+                    CONFIG.models.contains_key("gpt-5.4-mini"),
+                    "Fallback model 'gpt-5.4-mini' not found in models.json"
+                );
+                "gpt-5.4-mini"
+            }
         })
 }
 
