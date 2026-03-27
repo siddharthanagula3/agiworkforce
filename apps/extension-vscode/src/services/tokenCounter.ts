@@ -12,6 +12,7 @@ import {
   DEFAULT_CONTEXT_LIMIT,
   MODEL_COST_RATES,
   DEFAULT_BLENDED_RATE,
+  normalizeConfiguredModelId,
 } from './modelConstants';
 
 export class TokenCounter implements vscode.Disposable {
@@ -94,8 +95,8 @@ export class TokenCounter implements vscode.Disposable {
   }
 
   private _getCurrentModel(): string {
-    return (
-      vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ?? 'auto-balanced'
+    return normalizeConfiguredModelId(
+      vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
     );
   }
 

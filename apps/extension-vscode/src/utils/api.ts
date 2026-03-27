@@ -13,6 +13,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
 import { getModelMetrics } from '../services/modelMetrics';
+import { normalizeConfiguredModelId } from '../services/modelConstants';
 import { getTokenCounter } from '../services/tokenCounter';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -141,7 +142,7 @@ function getCloudApiEndpoint(): string {
 
 function getModel(): string {
   const config = vscode.workspace.getConfiguration('agiWorkforce');
-  return config.get<string>('model') ?? 'auto-balanced';
+  return normalizeConfiguredModelId(config.get<string>('model'));
 }
 
 function isStreamingEnabled(): boolean {
