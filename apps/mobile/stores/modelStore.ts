@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { normalizeModelId } from '@agiworkforce/types';
 import { mmkvStorage } from '@/lib/mmkv';
 import { isAutoMode, getModelById } from '@/lib/models';
 
@@ -47,14 +48,15 @@ export const useModelStore = create<ModelState>()(
       thinkingEnabledPerModel: {},
 
       setModel: (modelId: string) => {
-        const prev = get().recentModels.filter((id) => id !== modelId);
-        const recentModels = [modelId, ...prev].slice(0, MAX_RECENT);
+        const resolvedModelId = normalizeModelId(modelId) ?? modelId;
+        const prev = get().recentModels.filter((id) => id !== resolvedModelId);
+        const recentModels = [resolvedModelId, ...prev].slice(0, MAX_RECENT);
 
         // Sync legacy thinkingModeEnabled with per-model state.
         const perModel = get().thinkingEnabledPerModel;
-        const thinkingModeEnabled = perModel[modelId] ?? false;
+        const thinkingModeEnabled = perModel[resolvedModelId] ?? false;
 
-        set({ selectedModel: modelId, recentModels, thinkingModeEnabled });
+        set({ selectedModel: resolvedModelId, recentModels, thinkingModeEnabled });
       },
 
       setProvider: (providerId: string) => {
@@ -62,10 +64,11 @@ export const useModelStore = create<ModelState>()(
       },
 
       toggleFavorite: (modelId: string) => {
+        const resolvedModelId = normalizeModelId(modelId) ?? modelId;
         const current = get().favorites;
-        const next = current.includes(modelId)
-          ? current.filter((id) => id !== modelId)
-          : [...current, modelId];
+        const next = current.includes(resolvedModelId)
+          ? current.filter((id) => id !== resolvedModelId)
+          : [...current, resolvedModelId];
         set({ favorites: next });
       },
 
@@ -80,20 +83,21 @@ export const useModelStore = create<ModelState>()(
       },
 
       toggleThinkingForModel: (modelId: string) => {
+        const resolvedModelId = normalizeModelId(modelId) ?? modelId;
         // Auto modes don't have thinking state
-        if (isAutoMode(modelId)) return;
+        if (isAutoMode(resolvedModelId)) return;
 
         // Only toggle for models that support thinking.
-        const model = getModelById(modelId);
+        const model = getModelById(resolvedModelId);
         if (model && !model.supportsThinking) return;
 
         const current = get().thinkingEnabledPerModel;
-        const next = { ...current, [modelId]: !current[modelId] };
+        const next = { ...current, [resolvedModelId]: !current[resolvedModelId] };
         const updates: Partial<ModelState> = { thinkingEnabledPerModel: next };
 
         // If toggling the currently selected model, sync legacy field.
-        if (get().selectedModel === modelId) {
-          updates.thinkingModeEnabled = next[modelId] ?? false;
+        if (get().selectedModel === resolvedModelId) {
+          updates.thinkingModeEnabled = next[resolvedModelId] ?? false;
         }
         set(updates as Partial<ModelState>);
       },
