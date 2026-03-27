@@ -1,53 +1,105 @@
 /**
- * modelConstants.ts — Shared model context limits and pricing
+ * modelConstants.ts — catalog-derived model metadata for the VS Code extension
  *
- * Single source of truth for model metadata used across tokenCounter,
- * contextBudget, and other services. Adding/updating a model requires
- * changes only in this file.
+ * Single source of truth lives in `packages/types/src/models.json`.
+ * This module adapts that shared catalog into the small, UI-friendly shape
+ * the extension needs for pickers, token tracking, and context budgeting.
  */
 
-// ─── Context window limits per model (tokens) ───────────────────────────────
+import {
+  getCoreManualModelOptions,
+  getModelContextLimits,
+  getModelCostRates,
+  getModelMetadataById,
+  normalizeModelId,
+  resolveAutoModeModel,
+} from '@agiworkforce/types';
+
+export interface ModelPickerOption {
+  id: string;
+  label: string;
+  description: string;
+  detail: string;
+}
+
+const DEFAULT_CONTEXT_LIMIT = 128_000;
+
+const AUTO_MODEL_DEFAULTS = {
+  'auto-balanced': resolveAutoModeModel('auto-balanced', 'pro') ?? 'gpt-5.4',
+  'auto-economy': resolveAutoModeModel('auto-economy', 'hobby') ?? 'gpt-5.4-mini',
+  'auto-premium': resolveAutoModeModel('auto-premium', 'max') ?? 'claude-opus-4.6',
+} as const;
+
+const MANUAL_MODEL_OPTIONS = getCoreManualModelOptions();
+const MANUAL_MODEL_IDS = MANUAL_MODEL_OPTIONS.map((option) => option.id);
+
+const manualContextLimits = getModelContextLimits(MANUAL_MODEL_IDS);
+const manualCostRates = getModelCostRates(MANUAL_MODEL_IDS);
+
+function getAutoContextLimit(modelId: string): number {
+  return getModelMetadataById(modelId)?.contextWindow ?? DEFAULT_CONTEXT_LIMIT;
+}
+
+function getAutoCostRate(modelId: string): { input: number; output: number } {
+  const rate = getModelCostRates([modelId])[modelId];
+  return rate ? { input: rate.input, output: rate.output } : { input: 0, output: 0 };
+}
+
+export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
+  {
+    id: 'auto-balanced',
+    label: 'Auto (Balanced)',
+    description: 'Smart routing — best model per task',
+    detail: 'Recommended: AGI Workforce picks the optimal model automatically',
+  },
+  {
+    id: 'auto-economy',
+    label: 'Auto (Economy)',
+    description: 'Smart routing — fastest and cheapest',
+    detail: 'Best for quick questions and simple tasks',
+  },
+  {
+    id: 'auto-premium',
+    label: 'Auto (Premium)',
+    description: 'Smart routing — highest quality',
+    detail: 'Best for complex reasoning and long contexts',
+  },
+  ...MANUAL_MODEL_OPTIONS.map((option) => ({
+    id: option.id,
+    label: option.label,
+    description: option.description,
+    detail: option.detail,
+  })),
+];
+
+const MODEL_PICKER_OPTION_IDS = new Set(MODEL_PICKER_OPTIONS.map((option) => option.id));
+
+export function normalizeConfiguredModelId(modelId: string | null | undefined): string {
+  const normalized = normalizeModelId(modelId) ?? modelId ?? 'auto-balanced';
+  return MODEL_PICKER_OPTION_IDS.has(normalized) ? normalized : 'auto-balanced';
+}
 
 export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  'claude-opus-4.6': 1_000_000,
-  'claude-sonnet-4.6': 200_000,
-  'claude-haiku-4.5': 200_000,
-  'gpt-5-pro': 256_000,
-  'gpt-5.4': 128_000,
-  'gpt-5.4-nano': 128_000,
-  'gemini-3-pro-preview': 2_000_000,
-  'gemini-3-flash-preview': 1_000_000,
-  'deepseek-r1': 128_000,
-  'deepseek-chat': 128_000,
-  'sonar-pro': 128_000,
-  'grok-4': 128_000,
-  'auto-balanced': 200_000,
-  'auto-economy': 128_000,
-  'auto-premium': 1_000_000,
+  ...manualContextLimits,
+  'auto-balanced': getAutoContextLimit(AUTO_MODEL_DEFAULTS['auto-balanced']),
+  'auto-economy': getAutoContextLimit(AUTO_MODEL_DEFAULTS['auto-economy']),
+  'auto-premium': getAutoContextLimit(AUTO_MODEL_DEFAULTS['auto-premium']),
 };
 
-export const DEFAULT_CONTEXT_LIMIT = 128_000;
+export const MODEL_COST_RATES: Record<string, { input: number; output: number }> = {
+  ...Object.fromEntries(
+    Object.entries(manualCostRates).map(([modelId, rates]) => [
+      modelId,
+      { input: rates.input, output: rates.output },
+    ]),
+  ),
+  'auto-balanced': getAutoCostRate(AUTO_MODEL_DEFAULTS['auto-balanced']),
+  'auto-economy': getAutoCostRate(AUTO_MODEL_DEFAULTS['auto-economy']),
+  'auto-premium': getAutoCostRate(AUTO_MODEL_DEFAULTS['auto-premium']),
+};
 
 /** Chars-per-token heuristic used for estimation when exact counts are unavailable. */
 export const CHARS_PER_TOKEN = 4;
-
-// ─── Cost estimates per 1M tokens ────────────────────────────────────────────
-
-/** Per-model pricing with separate input/output rates (per 1M tokens, USD). */
-export const MODEL_COST_RATES: Record<string, { input: number; output: number }> = {
-  'claude-opus-4.6': { input: 15.0, output: 75.0 },
-  'claude-sonnet-4.6': { input: 3.0, output: 15.0 },
-  'claude-haiku-4.5': { input: 0.25, output: 1.25 },
-  'gpt-5-pro': { input: 10.0, output: 60.0 },
-  'gpt-5.4': { input: 2.5, output: 10.0 },
-  'gpt-5.4-nano': { input: 0.1, output: 0.5 },
-  'gemini-3-pro-preview': { input: 1.25, output: 5.0 },
-  'gemini-3-flash-preview': { input: 0.075, output: 0.3 },
-  'deepseek-r1': { input: 4.0, output: 16.0 },
-  'deepseek-chat': { input: 0.27, output: 1.1 },
-  'sonar-pro': { input: 3.0, output: 15.0 },
-  'grok-4': { input: 3.0, output: 15.0 },
-};
 
 /** Blended cost per 1M tokens for rough single-rate estimation (dashboard). */
 export const MODEL_COST_BLENDED: Record<string, number> = Object.fromEntries(
@@ -59,3 +111,5 @@ export const MODEL_COST_BLENDED: Record<string, number> = Object.fromEntries(
 
 /** Fallback blended rate when model is not in the table. */
 export const DEFAULT_BLENDED_RATE = 5.0;
+
+export { DEFAULT_CONTEXT_LIMIT };

@@ -28,6 +28,7 @@ import {
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
 import { getContextBuilder } from '../services/contextBuilder';
+import { MODEL_PICKER_OPTIONS, normalizeConfiguredModelId } from '../services/modelConstants';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -55,6 +56,15 @@ type ExtToWebviewMessage =
 
 // ─── HTML template ────────────────────────────────────────────────────────────
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 /**
  * Generates the webview HTML. Uses a nonce for CSP.
  * Tailored to match AGI Workforce design tokens:
@@ -69,6 +79,9 @@ function getWebviewContent(
 ): string {
   // Build CSP-safe URIs for any local assets we might need
   const cspSource = webview.cspSource;
+  const modelOptionsHtml = MODEL_PICKER_OPTIONS.map(
+    (option) => `<option value="${option.id}">${escapeHtml(option.label)}</option>`,
+  ).join('');
 
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -456,21 +469,7 @@ function getWebviewContent(
     <div class="model-row">
       <span class="model-label">Model:</span>
       <select class="model-select" id="modelSelect">
-        <option value="auto-balanced">Auto (balanced)</option>
-        <option value="auto-economy">Auto (economy)</option>
-        <option value="auto-premium">Auto (premium)</option>
-        <option value="claude-opus-4.6">Claude Opus 4.6</option>
-        <option value="claude-sonnet-4.6">Claude Sonnet 4.6</option>
-        <option value="claude-haiku-4.5">Claude Haiku 4.5</option>
-        <option value="gpt-5-pro">GPT-5 Pro</option>
-        <option value="gpt-5.4">GPT-5.4</option>
-        <option value="gpt-5.4-nano">GPT-5.4 Nano</option>
-        <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
-        <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-        <option value="deepseek-r1">DeepSeek R1</option>
-        <option value="deepseek-chat">DeepSeek Chat</option>
-        <option value="sonar-pro">Sonar Pro</option>
-        <option value="grok-4">Grok 4</option>
+        ${modelOptionsHtml}
       </select>
     </div>
     <div class="input-row">
@@ -929,8 +928,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         this._post({ type: 'apiKeyStatus', payload: { hasKey } });
 
         // Send current model setting
-        const model =
-          vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ?? 'auto';
+        const model = normalizeConfiguredModelId(
+          vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
+        );
         this._post({ type: 'model', payload: { model } });
         break;
       }
@@ -954,8 +954,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       }
 
       case 'getModel': {
-        const model =
-          vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ?? 'auto';
+        const model = normalizeConfiguredModelId(
+          vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
+        );
         this._post({ type: 'model', payload: { model } });
         break;
       }
@@ -1105,9 +1106,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
               const userText = text;
               const conv = this._conversationStore.create(
                 userText.slice(0, 60).replace(/\n/g, ' '),
-                model ??
-                  vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ??
-                  'auto-balanced',
+                normalizeConfiguredModelId(
+                  model ?? vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
+                ),
               );
               // Replace the auto-created empty messages with the full history (excluding system)
               const now = Date.now();
