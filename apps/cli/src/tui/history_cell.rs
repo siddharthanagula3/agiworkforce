@@ -1883,6 +1883,21 @@ pub(crate) fn new_warning_event(message: String) -> PrefixedWrappedHistoryCell {
     PrefixedWrappedHistoryCell::new(message.yellow(), "⚠ ".yellow(), "  ")
 }
 
+#[allow(clippy::disallowed_methods)]
+pub(crate) fn new_model_reroute_event(
+    from_model: impl Into<String>,
+    to_model: impl Into<String>,
+    reason: impl Into<String>,
+) -> PrefixedWrappedHistoryCell {
+    let message = format!(
+        "Model rerouted {} → {} ({})",
+        from_model.into(),
+        to_model.into(),
+        reason.into()
+    );
+    PrefixedWrappedHistoryCell::new(message.yellow(), "⇄ ".yellow(), "  ")
+}
+
 #[derive(Debug)]
 pub(crate) struct DeprecationNoticeCell {
     summary: String,
