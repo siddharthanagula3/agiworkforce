@@ -43,10 +43,9 @@ interface ApiModelsResponse {
 
 function qualityToTier(quality: string | null): ModelTier {
   switch (quality) {
-    case 'high':
-    case 'very-high':
+    case 'excellent':
       return 'premium';
-    case 'medium':
+    case 'good':
       return 'balanced';
     default:
       return 'economy';

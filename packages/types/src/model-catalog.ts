@@ -62,6 +62,7 @@ export type ModelQuality = 'excellent' | 'good' | 'fair';
 
 /** Quality tier category for routing decisions. */
 export type ModelQualityTier = 'fast' | 'balanced' | 'best';
+export type PickerModelTier = 'economy' | 'balanced' | 'premium';
 
 /** Benchmark scores for a model (all optional). */
 export interface ModelBenchmarks {
@@ -196,7 +197,33 @@ export interface ModelsCatalog {
 
 type TierKey = keyof TierAllowedModels;
 
+export interface PickerModelView {
+  id: string;
+  name: string;
+  provider: Provider | string;
+  contextWindow: number;
+  maxOutput: number;
+  supportsVision: boolean;
+  supportsThinking: boolean;
+  tier: PickerModelTier;
+  released: string | null;
+}
+
+export interface PickerModelOptions {
+  includeDeprecated?: boolean;
+  includeSearchModels?: boolean;
+  allowedProviders?: Array<Provider | string>;
+  modelTypes?: ModelType[];
+}
+
+export interface ModelCostRate {
+  input: number;
+  output: number;
+  provider: Provider | string;
+}
+
 export const modelsCatalog = modelsCatalogJson as ModelsCatalog;
+export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
 function resolveCanonicalTarget(target: string): string {
   if (modelsCatalog.models[target]) {
@@ -270,6 +297,8 @@ export const providerLabels: Record<string, string> = Object.fromEntries(
   ]),
 );
 
+export const PROVIDERS_IN_ORDER = [...modelsCatalog.providersInOrder];
+
 export function getProviderConfig(provider: Provider | string): ProviderConfig | null {
   return modelsCatalog.providers[provider] ?? null;
 }
@@ -317,4 +346,137 @@ export function isModelAllowedForTier(modelId: string, tier: TierKey): boolean {
   }
 
   return getAllowedModelsForTier(tier).includes(canonicalModelId);
+}
+
+export function listCanonicalModels(): ModelMetadata[] {
+  return Object.values(modelsCatalog.models);
+}
+
+export function getPickerModelTier(modelId: string | null | undefined): PickerModelTier {
+  const canonicalModelId = normalizeModelId(modelId);
+  if (!canonicalModelId) {
+    return 'economy';
+  }
+
+  if (isModelAllowedForTier(canonicalModelId, 'flagship_additions')) {
+    return 'premium';
+  }
+
+  if (isModelAllowedForTier(canonicalModelId, 'pro_additions')) {
+    return 'balanced';
+  }
+
+  if (isModelAllowedForTier(canonicalModelId, 'economy')) {
+    return 'economy';
+  }
+
+  const qualityTier = getModelMetadataById(canonicalModelId)?.qualityTier;
+  if (qualityTier === 'best') {
+    return 'premium';
+  }
+  if (qualityTier === 'balanced') {
+    return 'balanced';
+  }
+  return 'economy';
+}
+
+function getUnifiedAllowedModelIds(): string[] {
+  return normalizeModelList([
+    ...getAllowedModelsForTier('economy'),
+    ...getAllowedModelsForTier('pro_additions'),
+    ...getAllowedModelsForTier('flagship_additions'),
+  ]);
+}
+
+export function getPickerModels(options: PickerModelOptions = {}): PickerModelView[] {
+  const {
+    includeDeprecated = false,
+    includeSearchModels = true,
+    allowedProviders,
+    modelTypes = ['chat', 'reasoning', 'multimodal', 'search'],
+  } = options;
+
+  const allowedProviderSet = allowedProviders ? new Set(allowedProviders) : null;
+  const allowedTypes = new Set(
+    includeSearchModels ? modelTypes : modelTypes.filter((type) => type !== 'search'),
+  );
+  const providerOrder = new Map(
+    modelsCatalog.providersInOrder.map((providerId, index) => [providerId, index]),
+  );
+  const tierOrder: Record<PickerModelTier, number> = {
+    economy: 0,
+    balanced: 1,
+    premium: 2,
+  };
+
+  return getUnifiedAllowedModelIds()
+    .map((modelId) => getModelMetadataById(modelId))
+    .filter((model): model is ModelMetadata => Boolean(model))
+    .filter((model) => includeDeprecated || model.status !== 'deprecated')
+    .filter((model) => allowedTypes.has(model.modelType))
+    .filter((model) => (allowedProviderSet ? allowedProviderSet.has(model.provider) : true))
+    .sort((left, right) => {
+      const providerDiff =
+        (providerOrder.get(left.provider) ?? Number.MAX_SAFE_INTEGER) -
+        (providerOrder.get(right.provider) ?? Number.MAX_SAFE_INTEGER);
+      if (providerDiff !== 0) {
+        return providerDiff;
+      }
+
+      const tierDiff =
+        tierOrder[getPickerModelTier(left.id)] - tierOrder[getPickerModelTier(right.id)];
+      if (tierDiff !== 0) {
+        return tierDiff;
+      }
+
+      return left.name.localeCompare(right.name);
+    })
+    .map((model) => ({
+      id: model.id,
+      name: model.name,
+      provider: model.provider,
+      contextWindow: model.contextWindow,
+      maxOutput: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      supportsVision: model.capabilities.vision,
+      supportsThinking: model.capabilities.thinking,
+      tier: getPickerModelTier(model.id),
+      released: model.released ?? null,
+    }));
+}
+
+export function getModelContextLimits(modelIds?: string[]): Record<string, number> {
+  const ids = modelIds?.length ? normalizeModelList(modelIds) : Object.keys(modelsCatalog.models);
+  const entries: Array<[string, number]> = [];
+
+  for (const modelId of ids) {
+    const metadata = getModelMetadataById(modelId);
+    if (!metadata) {
+      continue;
+    }
+    entries.push([metadata.id, metadata.contextWindow]);
+  }
+
+  return Object.fromEntries(entries);
+}
+
+export function getModelCostRates(modelIds?: string[]): Record<string, ModelCostRate> {
+  const ids = modelIds?.length ? normalizeModelList(modelIds) : Object.keys(modelsCatalog.models);
+  const entries: Array<[string, ModelCostRate]> = [];
+
+  for (const modelId of ids) {
+    const metadata = getModelMetadataById(modelId);
+    if (!metadata) {
+      continue;
+    }
+    entries.push([
+      metadata.id,
+      {
+        input: metadata.inputCost,
+        output: metadata.outputCost,
+        provider: metadata.provider,
+      },
+    ]);
+  }
+
+  return Object.fromEntries(entries);
 }
