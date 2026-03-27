@@ -482,7 +482,7 @@ describe('POST /api/llm/completion', () => {
       expect(data.code).toBe('MONTHLY_CREDIT_LIMIT_REACHED');
     });
 
-    it('should return 402 when daily limit reached', async () => {
+    it('should return 402 when the billing-period usage budget is exhausted', async () => {
       mockCheckAvailable.mockResolvedValue(false);
       mockDeductCredits.mockResolvedValue({
         success: false,
@@ -517,8 +517,7 @@ describe('POST /api/llm/completion', () => {
       const data = await response.json();
 
       expect(response.status).toBe(402);
-      expect(data.code).toBe('DAILY_CREDIT_LIMIT_REACHED');
-      expect(data.daily_limit).toBeDefined();
+      expect(data.code).toBe('MONTHLY_CREDIT_LIMIT_REACHED');
       expect(data.reset_in_hours).toBeDefined();
     });
   });

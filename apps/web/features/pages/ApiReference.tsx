@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { Code, Key, BookOpen, ExternalLink, Copy, CheckCircle2 } from 'lucide-react';
 import { SEOHead } from '@shared/components/seo/SEOHead';
 import { toast } from 'sonner';
+import { getPlanUsageBudgetCents } from '@agiworkforce/types';
 
 const ApiReferencePage: React.FC = () => {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -85,9 +86,21 @@ const ApiReferencePage: React.FC = () => {
 
   const rateLimits = [
     { plan: 'Free', requests: '100 requests/hour', tokens: 'Local LLMs only' },
-    { plan: 'Hobby', requests: '500 requests/hour', tokens: '350 credits/month' },
-    { plan: 'Pro', requests: '1,000 requests/hour', tokens: '1,200 credits/month' },
-    { plan: 'Max', requests: '5,000 requests/hour', tokens: '15,000 credits/month' },
+    {
+      plan: 'Hobby',
+      requests: '500 requests/hour',
+      tokens: `${getPlanUsageBudgetCents('hobby').toLocaleString()} credits/month`,
+    },
+    {
+      plan: 'Pro',
+      requests: '1,000 requests/hour',
+      tokens: `${getPlanUsageBudgetCents('pro').toLocaleString()} credits/month`,
+    },
+    {
+      plan: 'Max',
+      requests: '5,000 requests/hour',
+      tokens: `${getPlanUsageBudgetCents('max').toLocaleString()} credits/month`,
+    },
     { plan: 'Enterprise', requests: 'Unlimited', tokens: 'Custom' },
   ];
 

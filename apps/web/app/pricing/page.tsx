@@ -18,6 +18,7 @@ import { Header } from '../../components/layout/Header';
 import { getSupabaseClient } from '../../services/supabase';
 import { getPlanLevel, isActiveSubscriptionStatus } from '@/lib/constants';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { getPlanPriceUsd } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Plan Recommendation Calculator — data
@@ -84,12 +85,26 @@ interface PlanRecommendation {
   description: string;
 }
 
+function formatCatalogPlanPrice(plan: 'hobby' | 'pro' | 'max', interval: 'monthly' | 'annual') {
+  if (interval === 'annual') {
+    return (getPlanPriceUsd(plan, 'yearly') / 12).toFixed(2);
+  }
+  return getPlanPriceUsd(plan, 'monthly').toString();
+}
+
+function formatCatalogBilledAmount(plan: 'hobby' | 'pro' | 'max', interval: 'monthly' | 'annual') {
+  if (interval === 'annual') {
+    return getPlanPriceUsd(plan, 'yearly').toFixed(2);
+  }
+  return getPlanPriceUsd(plan, 'monthly').toFixed(2).replace(/\.00$/, '');
+}
+
 function getRecommendation(totalPoints: number): PlanRecommendation {
   if (totalPoints <= 4) {
     return {
       plan: 'hobby',
       label: 'Hobby',
-      price: '$10/mo',
+      price: `$${formatCatalogPlanPrice('hobby', 'monthly')}/mo`,
       color: 'emerald',
       ringColor: 'ring-emerald-500',
       badgeColor: 'bg-emerald-500 text-black',
@@ -100,7 +115,7 @@ function getRecommendation(totalPoints: number): PlanRecommendation {
     return {
       plan: 'pro',
       label: 'Pro',
-      price: '$29.99/mo',
+      price: `$${formatCatalogPlanPrice('pro', 'monthly')}/mo`,
       color: 'amber',
       ringColor: 'ring-[#c8892a]',
       badgeColor: 'bg-[#c8892a] text-white',
@@ -110,7 +125,7 @@ function getRecommendation(totalPoints: number): PlanRecommendation {
   return {
     plan: 'max',
     label: 'Max',
-    price: '$299.99/mo',
+    price: `$${formatCatalogPlanPrice('max', 'monthly')}/mo`,
     color: 'purple',
     ringColor: 'ring-purple-500',
     badgeColor: 'bg-purple-600 text-white',
@@ -840,7 +855,7 @@ function PricingContent() {
 
                   <div className="flex items-baseline gap-2 mb-1">
                     <div className="text-3xl font-bold text-emerald-100">
-                      ${billingInterval === 'annual' ? '4.99' : '10'}
+                      ${formatCatalogPlanPrice('hobby', billingInterval)}
                     </div>
                     {billingInterval === 'annual' && (
                       <div className="text-zinc-400 text-sm line-through">$10</div>
@@ -849,9 +864,8 @@ function PricingContent() {
                   </div>
                   <div className="text-xs text-zinc-500 mb-6 font-medium">
                     <span className="text-zinc-300">
-                      {billingInterval === 'annual'
-                        ? '$59.88 billed yearly'
-                        : '$10/month billed monthly'}
+                      ${formatCatalogBilledAmount('hobby', billingInterval)} billed{' '}
+                      {billingInterval === 'annual' ? 'yearly' : 'monthly'}
                     </span>
                   </div>
                 </div>
@@ -914,12 +928,12 @@ function PricingContent() {
                   </p>
                   <div className="flex items-baseline gap-2 mb-1">
                     <div className="text-3xl font-bold">
-                      ${billingInterval === 'annual' ? '24.99' : '29.99'}
+                      ${formatCatalogPlanPrice('pro', billingInterval)}
                     </div>
                     <div className="text-zinc-300 text-sm">/month</div>
                   </div>
                   <div className="text-xs text-zinc-500 mb-6">
-                    Billed ${billingInterval === 'annual' ? '299.88' : '29.99'}{' '}
+                    Billed ${formatCatalogBilledAmount('pro', billingInterval)}{' '}
                     {billingInterval === 'annual' ? 'yearly' : 'monthly'}
                   </div>
                 </div>
@@ -995,12 +1009,12 @@ function PricingContent() {
                   </p>
                   <div className="flex items-baseline gap-2 mb-1">
                     <div className="text-3xl font-bold">
-                      ${billingInterval === 'annual' ? '249.99' : '299.99'}
+                      ${formatCatalogPlanPrice('max', billingInterval)}
                     </div>
                     <div className="text-zinc-300 text-sm">/month</div>
                   </div>
                   <div className="text-xs text-zinc-500 mb-6">
-                    Billed ${billingInterval === 'annual' ? '2,999.88' : '299.99'}{' '}
+                    Billed ${formatCatalogBilledAmount('max', billingInterval)}{' '}
                     {billingInterval === 'annual' ? 'yearly' : 'monthly'}
                   </div>
                 </div>

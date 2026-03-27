@@ -62,10 +62,7 @@ export function useCreditRefresh(options: UseCreditRefreshOptions = {}): CreditR
     try {
       const creditBalance = await accountApi.fetchCreditBalance();
 
-      // Check if user has credits (both monthly and daily remaining)
-      const hasCredits =
-        creditBalance.credits.monthly_remaining_cents > 0 &&
-        creditBalance.credits.daily_remaining_cents > 0;
+      const hasCredits = creditBalance.credits.monthly_remaining_cents > 0;
 
       if (hasCredits) {
         // Update the account store with new credit info
@@ -87,16 +84,7 @@ export function useCreditRefresh(options: UseCreditRefreshOptions = {}): CreditR
               creditBalance.credits.monthly_allocated_cents) *
             100;
 
-          // Check daily limits too
-          const dailyRemainingPercent =
-            creditBalance.credits.daily_limit_cents > 0
-              ? (creditBalance.credits.daily_remaining_cents /
-                  creditBalance.credits.daily_limit_cents) *
-                100
-              : 100;
-
-          // Use the lower of the two
-          const effectivePercent = Math.min(remainingPercent, dailyRemainingPercent);
+          const effectivePercent = remainingPercent;
 
           if (effectivePercent <= CRITICAL_CREDIT_THRESHOLD_PERCENT) {
             if (lastWarningRef.current !== 'critical') {
@@ -173,10 +161,7 @@ export async function refreshCreditsAfterMessage(): Promise<void> {
   try {
     const creditBalance = await accountApi.fetchCreditBalance();
 
-    // Check if user has credits (both monthly and daily remaining)
-    const hasCredits =
-      creditBalance.credits.monthly_remaining_cents > 0 &&
-      creditBalance.credits.daily_remaining_cents > 0;
+    const hasCredits = creditBalance.credits.monthly_remaining_cents > 0;
 
     if (hasCredits) {
       useAccountStore.getState().setAccount({
@@ -197,16 +182,7 @@ export async function refreshCreditsAfterMessage(): Promise<void> {
             creditBalance.credits.monthly_allocated_cents) *
           100;
 
-        // Check daily limits too
-        const dailyRemainingPercent =
-          creditBalance.credits.daily_limit_cents > 0
-            ? (creditBalance.credits.daily_remaining_cents /
-                creditBalance.credits.daily_limit_cents) *
-              100
-            : 100;
-
-        // Use the lower of the two
-        const effectivePercent = Math.min(remainingPercent, dailyRemainingPercent);
+        const effectivePercent = remainingPercent;
 
         if (effectivePercent <= CRITICAL_CREDIT_THRESHOLD_PERCENT) {
           if (lastWarningLevel !== 'critical') {

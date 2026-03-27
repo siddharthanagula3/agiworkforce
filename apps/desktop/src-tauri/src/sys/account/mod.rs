@@ -620,7 +620,7 @@ pub struct CreditBalanceResponse {
 impl CreditBalanceResponse {
     /// Helper method to check if user has credits available
     pub fn has_credits(&self) -> bool {
-        self.credits.monthly_remaining_cents > 0 && self.credits.daily_remaining_cents > 0
+        self.credits.monthly_remaining_cents > 0
     }
 }
 

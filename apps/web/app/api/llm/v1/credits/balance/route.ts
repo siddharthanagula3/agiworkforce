@@ -110,19 +110,18 @@ async function handleGetBalance(request: NextRequest) {
     );
   }
 
-  // Calculate time until daily reset (midnight UTC)
   const now = new Date();
-  const nextMidnightUTC = new Date(now);
-  nextMidnightUTC.setUTCDate(nextMidnightUTC.getUTCDate() + 1);
-  nextMidnightUTC.setUTCHours(0, 0, 0, 0);
-  const secondsUntilDailyReset = Math.floor((nextMidnightUTC.getTime() - now.getTime()) / 1000);
 
-  // Calculate time until monthly reset
-  const nextMonthReset = new Date(now);
-  nextMonthReset.setUTCMonth(nextMonthReset.getUTCMonth() + 1);
-  nextMonthReset.setUTCDate(1);
-  nextMonthReset.setUTCHours(0, 0, 0, 0);
-  const secondsUntilMonthlyReset = Math.floor((nextMonthReset.getTime() - now.getTime()) / 1000);
+  const billingPeriodEnd =
+    balance?.period_end ??
+    subscription.current_period_end?.toISOString?.() ??
+    subscription.current_period_end ??
+    null;
+  const nextMonthReset = billingPeriodEnd ? new Date(billingPeriodEnd) : null;
+  const secondsUntilMonthlyReset =
+    nextMonthReset != null
+      ? Math.max(0, Math.floor((nextMonthReset.getTime() - now.getTime()) / 1000))
+      : 0;
 
   return NextResponse.json(
     {
@@ -138,22 +137,23 @@ async function handleGetBalance(request: NextRequest) {
         monthly_remaining_cents: balance?.credits_remaining_cents || 0,
         monthly_used_cents:
           (balance?.credits_allocated_cents || 0) - (balance?.credits_remaining_cents || 0),
-        monthly_reset_at: nextMonthReset.toISOString(),
+        monthly_reset_at: nextMonthReset?.toISOString() ?? null,
         seconds_until_monthly_reset: secondsUntilMonthlyReset,
 
         // Daily limits
-        daily_limit_cents: balance?.daily_limit_cents || 0,
-        daily_used_cents: balance?.daily_used_cents || 0,
-        daily_remaining_cents: balance?.daily_remaining_cents || 0,
-        daily_reset_at: nextMidnightUTC.toISOString(),
-        seconds_until_daily_reset: secondsUntilDailyReset,
+        daily_limit_cents: 0,
+        daily_used_cents: 0,
+        daily_remaining_cents: 0,
+        daily_reset_at: null,
+        seconds_until_daily_reset: null,
+        has_daily_limit: false,
       },
       // Formatted for display
       formatted: {
         monthly_remaining: `$${((balance?.credits_remaining_cents || 0) / 100).toFixed(2)}`,
         monthly_allocated: `$${((balance?.credits_allocated_cents || 0) / 100).toFixed(2)}`,
-        daily_remaining: `$${((balance?.daily_remaining_cents || 0) / 100).toFixed(2)}`,
-        daily_limit: `$${((balance?.daily_limit_cents || 0) / 100).toFixed(2)}`,
+        daily_remaining: '$0.00',
+        daily_limit: '$0.00',
       },
     },
     {

@@ -84,6 +84,9 @@ export * from './model';
 // User types (User, ExtendedUserProfile, SubscriptionTier)
 export * from './user';
 
+// Billing plan pricing and included-usage budget helpers
+export * from './billing-catalog';
+
 // Scheduler types (ScheduledTask, ScheduleConfig, CronExpression)
 export * from './scheduler';
 

@@ -1406,11 +1406,10 @@ export function hasFeature(featureKey: string): boolean {
  */
 export function getPlanDescription(plan: PlanTier): string {
   const descriptions: Record<PlanTier, string> = {
-    hobby:
-      'Perfect for getting started; 3-month free trial with BETATESTER code; $1/mo cloud credits; $10/month',
+    hobby: 'Perfect for getting started; 350 credits per billing cycle on the $10 Hobby plan.',
     free: 'Limited automations; Community support',
-    pro: 'Unlimited automations; Priority support',
-    max: 'Maximum performance; $250/mo credits; Dedicated support',
+    pro: 'Unlimited automations; 1,050 credits per billing cycle; Priority support',
+    max: 'Maximum performance; 10,500 credits per billing cycle; Dedicated support',
     enterprise: 'Custom solutions; Dedicated support; SSO',
   };
 

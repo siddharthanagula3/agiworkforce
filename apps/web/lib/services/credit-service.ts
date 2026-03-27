@@ -31,7 +31,7 @@ export interface DeductCreditsResult {
   account_id?: string;
   remaining_cents?: number;
   error?: string;
-  code?: string; // 'DAILY_CREDIT_LIMIT_REACHED' | 'MONTHLY_CREDIT_LIMIT_REACHED'
+  code?: string; // 'MONTHLY_CREDIT_LIMIT_REACHED' | 'NO_ACCOUNT'
   available?: number;
   required?: number;
   daily_limit?: number;
@@ -41,10 +41,11 @@ export interface DeductCreditsResult {
 
 export class CreditService {
   /**
-   * Calculate daily limit (30% of monthly credits)
+   * Daily limits are disabled. The current product model uses a single
+   * billing-period usage budget, Cursor-style.
    */
   static getDailyLimit(monthlyCents: number): number {
-    return Math.floor(monthlyCents * 0.3);
+    return monthlyCents;
   }
 
   /**
@@ -134,24 +135,6 @@ export class CreditService {
         logger.debug(
           { userId, remaining: balance.credits_remaining_cents, required: amountCents },
           'Insufficient monthly credits (fallback)',
-        );
-        return false;
-      }
-
-      // Check daily limit — fail closed if daily data is unavailable.
-      // Substituting monthly remaining as daily remaining would silently bypass the daily cap.
-      const dailyRemaining = balance.daily_remaining_cents;
-      if (dailyRemaining == null) {
-        logger.warn(
-          { userId },
-          'daily_remaining_cents unavailable in fallback credit check; failing closed',
-        );
-        return false;
-      }
-      if (dailyRemaining < amountCents) {
-        logger.debug(
-          { userId, dailyRemaining, required: amountCents },
-          'Insufficient daily credits (fallback)',
         );
         return false;
       }
