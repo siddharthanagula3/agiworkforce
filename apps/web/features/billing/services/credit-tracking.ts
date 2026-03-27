@@ -1,9 +1,14 @@
 /**
  * Token Tracking Service
- * Comprehensive token usage tracking and billing calculation for all AI providers
- * Based on official pricing from OpenAI, Anthropic, Google, and Perplexity
+ * Comprehensive token usage tracking and billing calculation for all AI providers.
+ * Pricing comes from the shared catalog so model updates happen in one place.
  */
 
+import {
+  getModelMetadataById,
+  getProviderDefaultModel,
+  normalizeModelId,
+} from '@agiworkforce/types';
 import { logger } from '@shared/lib/logger';
 
 export interface TokenUsage {
@@ -51,30 +56,32 @@ export interface TokenStats {
   }>;
 }
 
-// Official pricing as of Jan 2026 (per 1M tokens)
-const PRICING = {
-  openai: {
-    'gpt-5.4': { input: 2.5, output: 10 },
-    'gpt-5.4-mini': { input: 0.15, output: 0.6 },
-    o1: { input: 15, output: 60 },
-    'o1-mini': { input: 3, output: 12 },
-  },
-  anthropic: {
-    'claude-sonnet-4-20250514': { input: 3, output: 15 },
-    'claude-3-5-sonnet-20241022': { input: 3, output: 15 },
-    'claude-3-5-haiku-20241022': { input: 0.25, output: 1.25 },
-  },
-  google: {
-    'gemini-2.0-flash': { input: 0.1, output: 0.4 },
-    'gemini-1.5-pro': { input: 1.25, output: 10 },
-    'gemini-1.5-flash': { input: 0.075, output: 0.3 },
-  },
-  perplexity: {
-    'sonar-pro': { input: 3, output: 15 },
-    sonar: { input: 1, output: 1 },
-    'sonar-reasoning': { input: 5, output: 20 },
-  },
-};
+const FALLBACK_PRICING = { input: 1, output: 2 };
+
+function getCatalogPricing(
+  provider: string,
+  model: string,
+): { input: number; output: number } | null {
+  const canonicalModelId = normalizeModelId(model) ?? model;
+  const metadata = getModelMetadataById(canonicalModelId);
+  if (metadata) {
+    return {
+      input: metadata.inputCost,
+      output: metadata.outputCost,
+    };
+  }
+
+  const providerDefaultModel = getProviderDefaultModel(provider as never);
+  const providerDefaultMetadata = getModelMetadataById(providerDefaultModel);
+  if (providerDefaultMetadata) {
+    return {
+      input: providerDefaultMetadata.inputCost,
+      output: providerDefaultMetadata.outputCost,
+    };
+  }
+
+  return null;
+}
 
 export class TokenTrackingService {
   private static instance: TokenTrackingService;
@@ -100,21 +107,12 @@ export class TokenTrackingService {
     sessionId?: string,
     userId?: string,
   ): TokenUsage {
-    const providerKey = provider.toLowerCase();
-    const modelKey = model.toLowerCase();
-
-    // Get pricing for the model
-    const providerPricing = PRICING[providerKey as keyof typeof PRICING] as
-      | Record<string, { input: number; output: number }>
-      | undefined;
-    const pricing = providerPricing?.[modelKey];
+    const pricing = getCatalogPricing(provider.toLowerCase(), model);
 
     if (!pricing) {
       logger.warn(`No pricing found for ${provider}/${model}, using default rates`);
-      // Default fallback pricing
-      const defaultPricing = { input: 1, output: 2 };
-      const inputCost = (inputTokens / 1000000) * defaultPricing.input;
-      const outputCost = (outputTokens / 1000000) * defaultPricing.output;
+      const inputCost = (inputTokens / 1000000) * FALLBACK_PRICING.input;
+      const outputCost = (outputTokens / 1000000) * FALLBACK_PRICING.output;
 
       return {
         provider,

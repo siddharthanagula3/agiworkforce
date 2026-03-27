@@ -13,6 +13,7 @@ import { logger } from '@shared/lib/logger';
 import { unifiedLLMService } from '@core/ai/llm/unified-language-model';
 import { systemPromptsService } from '@core/ai/employees/prompt-management';
 import type { AIEmployee } from '@core/types/ai-employee';
+import { DEFAULT_ANTHROPIC_COLLABORATION_MODEL } from '@shared/config/supported-models';
 
 export interface CollaborationMessage {
   from: string;
@@ -348,7 +349,8 @@ Focus on your area of expertise and provide actionable insights. Keep it concise
           }>),
           { role: 'user' as const, content: prompt },
         ],
-        model: employee.model === 'inherit' ? 'claude-3-5-sonnet-20241022' : employee.model,
+        model:
+          employee.model === 'inherit' ? DEFAULT_ANTHROPIC_COLLABORATION_MODEL : employee.model,
         temperature: 0.7,
         maxTokens: 1000,
       });
@@ -388,7 +390,8 @@ Based on your expertise in ${employee.description}, provide a brief response or 
           { role: 'system', content: employee.systemPrompt },
           { role: 'user', content: prompt },
         ],
-        model: employee.model === 'inherit' ? 'claude-3-5-sonnet-20241022' : employee.model,
+        model:
+          employee.model === 'inherit' ? DEFAULT_ANTHROPIC_COLLABORATION_MODEL : employee.model,
         temperature: 0.7,
         maxTokens: 500,
       });
@@ -450,7 +453,7 @@ Provide the final synthesized answer:`;
           }>),
           { role: 'user' as const, content: supervisorPrompt },
         ],
-        model: 'claude-3-5-sonnet-20241022',
+        model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
         temperature: 0.6,
         maxTokens: 2000,
       });

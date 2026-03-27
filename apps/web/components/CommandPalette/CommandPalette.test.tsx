@@ -57,7 +57,7 @@ vi.mock('@/shared/stores/model-store', () => ({
       description: 'Most capable GPT model',
     },
     {
-      id: 'claude-sonnet-4-6',
+      id: 'claude-sonnet-4.6',
       name: 'Claude Sonnet 4.6',
       provider: 'Anthropic',
       description: 'Balanced intelligence',

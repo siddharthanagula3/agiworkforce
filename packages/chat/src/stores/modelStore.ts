@@ -56,7 +56,7 @@ function buildFallbackModel(provider: Provider, modelId: string | null): ModelIn
   };
 }
 
-const CORE_CLOUD_PROVIDERS: Provider[] = ['anthropic', 'openai', 'google', 'deepseek'];
+const CORE_CLOUD_PROVIDERS: Provider[] = ['anthropic', 'openai', 'google'];
 
 const AUTO_MODE_FALLBACKS: ModelInfo[] = [
   {

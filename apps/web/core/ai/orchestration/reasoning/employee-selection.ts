@@ -7,6 +7,9 @@ import { Task, AgentType } from './task-breakdown';
 import { IntentType, DomainType, ComplexityLevel } from './natural-language-processor';
 import type { SelectionAgentCapability } from '@shared/types';
 import { logger } from '@shared/lib/logger';
+import { getTaskModelForProvider } from '@agiworkforce/types';
+
+const DEFAULT_RESEARCH_MODEL = getTaskModelForProvider('google', 'chat') ?? 'gemini-3.1-flash-lite';
 
 /**
  * Extended AgentCapability for employee selection with typed domain/intent support
@@ -198,7 +201,7 @@ export class AgentSelector {
       maxComplexity: 'complex',
       tools: ['web-search', 'web-fetch', 'analyzer', 'content-generator'],
       apiProvider: 'google',
-      model: 'gemini-2.0-flash',
+      model: DEFAULT_RESEARCH_MODEL,
     });
 
     // Web Search - Best for gathering information
