@@ -135,6 +135,8 @@ use agiworkforce_protocol::protocol::McpStartupStatus;
 use agiworkforce_protocol::protocol::McpStartupUpdateEvent;
 use agiworkforce_protocol::protocol::McpToolCallBeginEvent;
 use agiworkforce_protocol::protocol::McpToolCallEndEvent;
+use agiworkforce_protocol::protocol::ModelRerouteEvent;
+use agiworkforce_protocol::protocol::ModelRerouteReason;
 use agiworkforce_protocol::protocol::Op;
 use agiworkforce_protocol::protocol::PatchApplyBeginEvent;
 use agiworkforce_protocol::protocol::RateLimitSnapshot;
@@ -2214,6 +2216,18 @@ impl ChatWidget {
 
     fn on_warning(&mut self, message: impl Into<String>) {
         self.add_to_history(history_cell::new_warning_event(message.into()));
+        self.request_redraw();
+    }
+
+    fn on_model_reroute(&mut self, event: ModelRerouteEvent) {
+        let reason = match event.reason {
+            ModelRerouteReason::HighRiskCyberActivity => "high-risk safety fallback",
+        };
+        self.add_to_history(history_cell::new_model_reroute_event(
+            event.from_model,
+            event.to_model,
+            reason,
+        ));
         self.request_redraw();
     }
 
@@ -5495,7 +5509,7 @@ impl ChatWidget {
             }
             EventMsg::Warning(WarningEvent { message }) => self.on_warning(message),
             EventMsg::GuardianAssessment(ev) => self.on_guardian_assessment(ev),
-            EventMsg::ModelReroute(_) => {}
+            EventMsg::ModelReroute(event) => self.on_model_reroute(event),
             EventMsg::Error(ErrorEvent {
                 message,
                 agi_error_info,
