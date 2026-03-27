@@ -40,6 +40,7 @@ import { activateDesktopBridge, getDesktopBridge } from './services/desktopBridg
 import { activateTerminal } from './providers/terminalProvider';
 import { activateErrorExplainer } from './providers/errorExplainerProvider';
 import { ModelMetricsPanel, initModelMetrics } from './services/modelMetrics';
+import { MODEL_PICKER_OPTIONS, normalizeConfiguredModelId } from './services/modelConstants';
 import { ContextPanelProvider, setContextPanelInstance } from './providers/contextPanelProvider';
 import { DiffDecorationProvider } from './providers/diffDecorationProvider';
 import { showOriginalContext, getPatchOutputChannel } from './services/patchEngine';
@@ -467,87 +468,21 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // ── agi-workforce.selectModel ─────────────────────────────────────────────
     vscode.commands.registerCommand('agi-workforce.selectModel', async () => {
-      const models: vscode.QuickPickItem[] = [
-        {
-          label: 'auto-balanced',
-          description: 'Smart routing — best model per task',
-          detail: 'Recommended: AGI Workforce picks the optimal model automatically',
-        },
-        {
-          label: 'auto-economy',
-          description: 'Smart routing — fastest & cheapest',
-          detail: 'Best for quick questions and simple tasks',
-        },
-        {
-          label: 'auto-premium',
-          description: 'Smart routing — highest quality',
-          detail: 'Best for complex reasoning and long contexts',
-        },
-        {
-          label: 'claude-opus-4.6',
-          description: 'Anthropic — flagship reasoning',
-          detail: 'Max tier · best for complex architecture, long contexts',
-        },
-        {
-          label: 'claude-sonnet-4.6',
-          description: 'Anthropic — best all-rounder',
-          detail: 'Pro tier · excellent for most coding tasks',
-        },
-        {
-          label: 'claude-haiku-4.5',
-          description: 'Anthropic — ultra-fast',
-          detail: 'Economy · ideal for quick completions',
-        },
-        {
-          label: 'gpt-5-pro',
-          description: 'OpenAI — flagship',
-          detail: "Max tier · OpenAI's most capable model",
-        },
-        {
-          label: 'gpt-5.4',
-          description: 'OpenAI — flagship general',
-          detail: 'Pro tier · great for general coding',
-        },
-        {
-          label: 'gpt-5.4-nano',
-          description: 'OpenAI — ultra-fast & cheap',
-          detail: 'Economy · best OpenAI speed/cost ratio',
-        },
-        {
-          label: 'gemini-3-pro-preview',
-          description: 'Google — strong all-rounder',
-          detail: 'Pro tier · multimodal, long context',
-        },
-        {
-          label: 'gemini-3-flash-preview',
-          description: 'Google — fast',
-          detail: 'Economy · very fast Google model',
-        },
-        {
-          label: 'deepseek-r1',
-          description: 'DeepSeek — reasoning',
-          detail: 'Max tier · strong at algorithmic problems',
-        },
-        {
-          label: 'deepseek-chat',
-          description: 'DeepSeek — balanced',
-          detail: 'Pro tier · cost-effective',
-        },
-        {
-          label: 'sonar-pro',
-          description: 'Perplexity — search + reasoning',
-          detail: 'Pro tier · web search integrated',
-        },
-        { label: 'grok-4', description: 'xAI — flagship', detail: "Max tier · xAI's best model" },
-      ];
+      type ModelQuickPickItem = vscode.QuickPickItem & { modelId: string };
+      const models: ModelQuickPickItem[] = MODEL_PICKER_OPTIONS.map((option) => ({
+        label: option.label,
+        description: option.description,
+        detail: `${option.id} · ${option.detail}`,
+        modelId: option.id,
+      }));
 
       const config = vscode.workspace.getConfiguration('agiWorkforce');
-      const currentModel = config.get<string>('model') ?? 'auto-balanced';
+      const currentModel = normalizeConfiguredModelId(config.get<string>('model'));
 
       // Mark the current selection
       const items = models.map((m) => ({
         ...m,
-        picked: m.label === currentModel,
+        picked: m.modelId === currentModel,
       }));
 
       const picked = await vscode.window.showQuickPick(items, {
@@ -559,11 +494,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
       if (picked === undefined) return;
 
-      await config.update('model', picked.label, vscode.ConfigurationTarget.Global);
+      await config.update('model', picked.modelId, vscode.ConfigurationTarget.Global);
 
-      telemetry.logEvent(telemetry.TelemetryEvents.MODEL_SELECTED, { model: picked.label });
+      telemetry.logEvent(telemetry.TelemetryEvents.MODEL_SELECTED, { model: picked.modelId });
 
-      vscode.window.showInformationMessage(`AGI Workforce model set to: ${picked.label}`);
+      vscode.window.showInformationMessage(`AGI Workforce model set to: ${picked.modelId}`);
     }),
 
     // ── agi-workforce.openConversation ────────────────────────────────────────
@@ -1014,7 +949,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   function updateStatusBar(): void {
     const config = vscode.workspace.getConfiguration('agiWorkforce');
-    const model = config.get<string>('model') ?? 'auto-balanced';
+    const model = normalizeConfiguredModelId(config.get<string>('model'));
     const chips: string[] = [];
 
     if (config.get<boolean>('agent.planMode') ?? false) {

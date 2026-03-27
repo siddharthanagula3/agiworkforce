@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getCoreManualModelOptions,
   detectProviderFromModelId,
   getModelCostRates,
   getModelContextLimits,
@@ -89,5 +90,9 @@ describe('model catalog helpers', () => {
     expect(fallbackIds.indexOf('qwen-turbo')).toBeLessThan(fallbackIds.indexOf('gpt-5.4-mini'));
     expect(fallbackIds).toContain('gpt-5.4-mini');
     expect(fallbackIds).not.toContain('gpt-5.4-nano');
+
+    const coreOptions = getCoreManualModelOptions();
+    expect(coreOptions.find((entry) => entry.id === 'gpt-5.4-pro')?.label).toBe('GPT-5.4 Pro');
+    expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-nano')).toBe(false);
   });
 });
