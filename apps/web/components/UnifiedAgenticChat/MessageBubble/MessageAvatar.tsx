@@ -17,7 +17,7 @@ const MessageAvatarComponent: React.FC<MessageAvatarProps> = ({ isUser, isSystem
       isUser
         ? 'bg-blue-600'
         : isSystem
-          ? 'bg-zinc-600'
+          ? 'bg-muted-foreground'
           : 'bg-gradient-to-br from-amber-500 to-orange-600',
     [isUser, isSystem],
   );

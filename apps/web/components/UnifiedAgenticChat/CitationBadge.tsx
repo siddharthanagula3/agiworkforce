@@ -65,7 +65,9 @@ export function CitationBadge({ index, className, onClick }: CitationBadgeProps)
       </HoverCardTrigger>
       <HoverCardContent
         side="top"
-        className={cn('w-80 p-3', 'bg-zinc-900 border-zinc-700/50', 'rounded-xl shadow-2xl')}
+        className={cn(
+          'w-80 rounded-xl border border-border/50 bg-popover p-3 text-popover-foreground shadow-2xl',
+        )}
       >
         <div className="flex flex-col gap-2">
           {}
@@ -80,11 +82,11 @@ export function CitationBadge({ index, className, onClick }: CitationBadgeProps)
                 }}
               />
             ) : (
-              <FileText className="w-4 h-4 mt-0.5 text-zinc-400" />
+              <FileText className="mt-0.5 h-4 w-4 text-muted-foreground" />
             )}
             <div className="flex-1 min-w-0">
               {citation.title && (
-                <h4 className="text-sm font-semibold text-zinc-100 line-clamp-2 mb-1">
+                <h4 className="mb-1 line-clamp-2 text-sm font-semibold text-foreground">
                   {citation.title}
                 </h4>
               )}
@@ -103,11 +105,13 @@ export function CitationBadge({ index, className, onClick }: CitationBadgeProps)
 
           {}
           {citation.snippet && (
-            <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed">{citation.snippet}</p>
+            <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+              {citation.snippet}
+            </p>
           )}
 
           {}
-          <div className="text-xs text-zinc-500 pt-1 border-t border-white/5">
+          <div className="border-t border-border/40 pt-1 text-xs text-muted-foreground">
             Click to open in Sidecar Browser
           </div>
         </div>

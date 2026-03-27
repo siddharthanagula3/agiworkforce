@@ -1,7 +1,14 @@
-import { X, Keyboard, Search } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState, useMemo } from 'react';
+import { Keyboard, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/Dialog';
 
 interface KeyboardShortcutsDialogProps {
   isOpen: boolean;
@@ -63,27 +70,20 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
 export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDialogProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset search when dialog closes
   useEffect(() => {
     if (!isOpen) {
       setSearchQuery('');
       setFocusedIndex(null);
+      return;
     }
+
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
   }, [isOpen]);
 
-  // Close on Escape
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  // Filter shortcuts based on search query
   const filteredGroups = useMemo(() => {
     if (!searchQuery.trim()) {
       return SHORTCUT_GROUPS;
@@ -100,10 +100,8 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
     })).filter((group) => group.shortcuts.length > 0);
   }, [searchQuery]);
 
-  // Count total filtered shortcuts
   const totalShortcuts = filteredGroups.reduce((sum, group) => sum + group.shortcuts.length, 0);
 
-  // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -114,157 +112,105 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
     }
   };
 
+  let shortcutIndex = -1;
+
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50"
-            data-testid="dialog-backdrop"
-          />
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl p-0">
+        <DialogHeader className="border-b border-border/60 px-5 py-4">
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <Keyboard className="h-5 w-5 text-primary" />
+            Keyboard shortcuts
+          </DialogTitle>
+          <DialogDescription>
+            Browse the main chat, navigation, and model shortcuts.
+          </DialogDescription>
+        </DialogHeader>
 
-          {/* Dialog */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.2 }}
-            className={cn(
-              'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
-              'w-full max-w-2xl max-h-[80vh] overflow-hidden',
-              'rounded-2xl border border-gray-200 dark:border-gray-700',
-              'bg-white dark:bg-charcoal-900 shadow-2xl',
-              'flex flex-col',
-            )}
-            role="dialog"
-            aria-labelledby="shortcuts-title"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <Keyboard className="h-5 w-5 text-primary" />
-                <h2
-                  id="shortcuts-title"
-                  className="text-lg font-semibold text-gray-900 dark:text-gray-100"
-                >
-                  Keyboard Shortcuts
-                </h2>
-              </div>
-              <button
-                onClick={onClose}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                aria-label="Close dialog"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
-            </div>
-
-            {/* Search Input */}
-            <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search shortcuts..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setFocusedIndex(null);
-                  }}
-                  onKeyDown={handleKeyDown}
-                  className={cn(
-                    'w-full pl-9 pr-4 py-2 text-sm',
-                    'bg-gray-50 dark:bg-gray-800',
-                    'border border-gray-200 dark:border-gray-700',
-                    'rounded-lg',
-                    'focus:outline-none focus:ring-2 focus:ring-primary/50',
-                    'text-gray-900 dark:text-gray-100',
-                    'placeholder-gray-500 dark:placeholder-gray-400',
-                  )}
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="overflow-y-auto flex-1 p-5">
-              {totalShortcuts === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">No shortcuts found</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {filteredGroups.map((group) => (
-                    <div key={group.title}>
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">
-                        {group.title}
-                      </h3>
-                      <div className="space-y-2">
-                        {group.shortcuts.map((shortcut) => (
-                          <div
-                            key={shortcut.description}
-                            className={cn(
-                              'flex items-center justify-between py-2 px-3 rounded-lg',
-                              'transition-colors',
-                              focusedIndex !== null
-                                ? 'hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer'
-                                : '',
-                            )}
-                            data-shortcut="true"
-                            role="button"
-                            tabIndex={0}
-                          >
-                            <span className="text-sm text-gray-700 dark:text-gray-300">
-                              {shortcut.description}
-                            </span>
-                            <div className="flex items-center gap-1">
-                              {shortcut.keys.map((key, idx) => (
-                                <span key={idx}>
-                                  <kbd
-                                    className={cn(
-                                      'px-2 py-1 text-xs font-medium rounded',
-                                      'bg-gray-100 dark:bg-gray-800',
-                                      'border border-gray-200 dark:border-gray-700',
-                                      'text-gray-700 dark:text-gray-300',
-                                      'shadow-xs',
-                                    )}
-                                  >
-                                    {key}
-                                  </kbd>
-                                  {idx < shortcut.keys.length - 1 && (
-                                    <span className="mx-0.5 text-gray-400">+</span>
-                                  )}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        <div className="border-b border-border/60 px-5 py-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search shortcuts..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setFocusedIndex(null);
+              }}
+              onKeyDown={handleKeyDown}
+              className={cn(
+                'w-full rounded-xl border border-border/70 bg-muted/40 py-2 pl-9 pr-4 text-sm text-foreground outline-none transition-colors',
+                'placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/20',
               )}
-            </div>
+            />
+          </div>
+        </div>
 
-            {/* Footer */}
-            <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex-shrink-0">
-              <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-                Press{' '}
-                <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 text-[10px]">
-                  Escape
-                </kbd>{' '}
-                to close
-              </p>
+        <div className="max-h-[60vh] overflow-y-auto px-5 py-5">
+          {totalShortcuts === 0 ? (
+            <div className="flex min-h-48 flex-col items-center justify-center">
+              <p className="text-sm text-muted-foreground">No shortcuts found</p>
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+          ) : (
+            <div className="space-y-6">
+              {filteredGroups.map((group) => (
+                <div key={group.title}>
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {group.title}
+                  </h3>
+                  <div className="space-y-2">
+                    {group.shortcuts.map((shortcut) => {
+                      shortcutIndex += 1;
+                      const isFocused = shortcutIndex === focusedIndex;
+
+                      return (
+                        <div
+                          key={shortcut.description}
+                          className={cn(
+                            'flex items-center justify-between rounded-xl border border-transparent px-3 py-2 transition-colors',
+                            isFocused ? 'border-primary/30 bg-primary/5' : 'hover:bg-muted/50',
+                          )}
+                        >
+                          <span className="text-sm text-foreground">{shortcut.description}</span>
+                          <div className="flex items-center gap-1">
+                            {shortcut.keys.map((key, idx) => (
+                              <span key={`${shortcut.description}-${key}-${idx}`}>
+                                <kbd
+                                  className={cn(
+                                    'rounded-md border border-border/70 bg-muted/70 px-2 py-1 text-xs font-medium text-muted-foreground shadow-sm',
+                                  )}
+                                >
+                                  {key}
+                                </kbd>
+                                {idx < shortcut.keys.length - 1 && (
+                                  <span className="mx-0.5 text-muted-foreground">+</span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="bg-muted/20 px-5 pb-4 pt-3">
+          <p className="w-full text-center text-xs text-muted-foreground">
+            Press{' '}
+            <kbd className="rounded border border-border/70 bg-background px-1.5 py-0.5">
+              Escape
+            </kbd>{' '}
+            to close
+          </p>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
