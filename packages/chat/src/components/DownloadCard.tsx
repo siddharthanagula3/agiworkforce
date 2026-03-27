@@ -27,6 +27,10 @@ function getTypeLabel(artifact: Artifact): string {
       return 'Code · HTML';
     case 'react':
       return 'Code · React';
+    case 'markdown':
+      return 'Document · Markdown';
+    case 'json':
+      return 'Data · JSON';
     case 'svg':
       return 'Code · SVG';
     case 'mermaid':
@@ -74,7 +78,7 @@ export function DownloadCard({ artifact, onClick, onDownload }: DownloadCardProp
 
       <div className="flex flex-1 min-w-0 flex-col gap-0.5">
         <span className="truncate text-sm font-medium text-[var(--chat-text-primary)]">
-          {artifact.title}
+          {artifact.title ?? 'Untitled artifact'}
         </span>
         <span className="text-[12px] text-[var(--chat-text-muted)]">{getTypeLabel(artifact)}</span>
       </div>

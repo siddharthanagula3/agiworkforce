@@ -13,6 +13,7 @@
 
 import type {
   ChatRuntime,
+  Artifact,
   SendMessageOptions,
   StreamCallback,
   StreamEvent,
@@ -28,6 +29,7 @@ import {
   type CloudConversation,
   type CloudMessage,
 } from '../api/cloudApi';
+import { getProviderDefaultModel, normalizeModelId } from '../constants/llm';
 
 // ---------------------------------------------------------------------------
 // Mapping helpers — cloud API uses snake_case, ChatRuntime uses camelCase
@@ -65,6 +67,12 @@ export class WebRuntime implements ChatRuntime {
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
 
+  private emit(event: StreamEvent): void {
+    for (const cb of this._streamCallbacks) {
+      cb(event);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // sendMessage — streams via SSE through the cloud API
   // -------------------------------------------------------------------------
@@ -74,9 +82,21 @@ export class WebRuntime implements ChatRuntime {
     content: string,
     options?: SendMessageOptions,
   ): Promise<void> {
-    const model = options?.model ?? 'claude-sonnet-4-20250514';
+    const model =
+      normalizeModelId(options?.model ?? '') ??
+      getProviderDefaultModel('anthropic') ??
+      'claude-sonnet-4.6';
     const controller = new AbortController();
     this._abortControllers.set(conversationId, controller);
+    const toolCallBuffer = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        argsJson: string;
+      }
+    >();
+    let inThinkingBlock = false;
 
     // If the caller provided an external signal, chain it
     if (options?.signal) {
@@ -90,27 +110,109 @@ export class WebRuntime implements ChatRuntime {
         model,
         // onChunk
         (text: string) => {
-          const event: StreamEvent = { type: 'content', content: text };
-          for (const cb of this._streamCallbacks) {
-            cb(event);
+          if (text === '<thinking>') {
+            inThinkingBlock = true;
+            return;
           }
+
+          if (text === '</thinking>') {
+            inThinkingBlock = false;
+            return;
+          }
+
+          this.emit({
+            type: inThinkingBlock ? 'thinking' : 'content',
+            content: text,
+          });
         },
         // onDone
         () => {
-          const event: StreamEvent = { type: 'done' };
-          for (const cb of this._streamCallbacks) {
-            cb(event);
-          }
+          this.emit({ type: 'done' });
         },
         // onError
         (err: Error) => {
-          const event: StreamEvent = { type: 'error', error: err.message };
-          for (const cb of this._streamCallbacks) {
-            cb(event);
-          }
+          this.emit({ type: 'error', error: err.message });
         },
         controller.signal,
-        undefined, // onEvent
+        (payload) => {
+          const choices = Array.isArray(payload['choices']) ? payload['choices'] : [];
+          const delta =
+            choices.length > 0 && choices[0] && typeof choices[0] === 'object'
+              ? ((choices[0] as Record<string, unknown>)['delta'] as
+                  | Record<string, unknown>
+                  | undefined)
+              : undefined;
+
+          const toolCalls = Array.isArray(delta?.['tool_calls']) ? delta['tool_calls'] : [];
+          for (const entry of toolCalls) {
+            if (!entry || typeof entry !== 'object') {
+              continue;
+            }
+
+            const toolCall = entry as Record<string, unknown>;
+            const functionData =
+              toolCall['function'] && typeof toolCall['function'] === 'object'
+                ? (toolCall['function'] as Record<string, unknown>)
+                : null;
+            const callId =
+              (typeof toolCall['id'] === 'string' && toolCall['id']) ||
+              `tool-${toolCall['index'] ?? toolCallBuffer.size}`;
+            const existing = toolCallBuffer.get(callId) ?? {
+              id: callId,
+              name: typeof functionData?.['name'] === 'string' ? functionData['name'] : 'tool',
+              argsJson: '',
+            };
+
+            const nextName =
+              typeof functionData?.['name'] === 'string' && functionData['name'].length > 0
+                ? functionData['name']
+                : existing.name;
+            const nextArgsJson =
+              existing.argsJson +
+              (typeof functionData?.['arguments'] === 'string' ? functionData['arguments'] : '');
+
+            toolCallBuffer.set(callId, {
+              id: callId,
+              name: nextName,
+              argsJson: nextArgsJson,
+            });
+
+            let parsedArgs: Record<string, unknown> = {};
+            if (nextArgsJson.trim().length > 0) {
+              try {
+                const parsed = JSON.parse(nextArgsJson);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                  parsedArgs = parsed as Record<string, unknown>;
+                } else {
+                  parsedArgs = { value: parsed };
+                }
+              } catch {
+                parsedArgs = { _partial: nextArgsJson };
+              }
+            }
+
+            this.emit({
+              type: 'tool_call',
+              toolCall: {
+                id: callId,
+                name: nextName,
+                args: parsedArgs,
+              },
+            });
+          }
+
+          const artifactPayload =
+            payload['artifact'] && typeof payload['artifact'] === 'object'
+              ? (payload['artifact'] as Artifact)
+              : null;
+          if (
+            artifactPayload?.id &&
+            artifactPayload?.type &&
+            typeof artifactPayload.content === 'string'
+          ) {
+            this.emit({ type: 'artifact', artifact: artifactPayload });
+          }
+        },
         options?.webSearch,
         options?.messageHistory,
         options?.thinkingEnabled,
@@ -119,10 +221,7 @@ export class WebRuntime implements ChatRuntime {
       // Only emit error if it wasn't an intentional abort
       if (!controller.signal.aborted) {
         const message = err instanceof Error ? err.message : String(err);
-        const event: StreamEvent = { type: 'error', error: message };
-        for (const cb of this._streamCallbacks) {
-          cb(event);
-        }
+        this.emit({ type: 'error', error: message });
       }
     } finally {
       this._abortControllers.delete(conversationId);
@@ -157,7 +256,7 @@ export class WebRuntime implements ChatRuntime {
   async createConversation(title?: string): Promise<Conversation> {
     const cloud = await createCloudConversation(
       title ?? 'New Conversation',
-      'claude-sonnet-4-20250514',
+      getProviderDefaultModel('anthropic') ?? 'claude-sonnet-4.6',
     );
     return mapConversation(cloud);
   }
