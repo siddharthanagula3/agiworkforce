@@ -1,192 +1,234 @@
 'use client';
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import {
+  MODEL_PRESETS,
+  PROVIDER_LABELS,
+  getModelMetadata,
+  normalizeModelId,
+  type ModelMetadata,
+} from '@/constants/llm';
 
 export interface AIModel {
   id: string;
   name: string;
   provider: string;
+  providerKey: string;
   description: string;
 }
 
-export const AVAILABLE_MODELS: AIModel[] = [
-  // OpenAI
-  {
-    id: 'gpt-5.4',
-    name: 'GPT-5.4',
-    provider: 'OpenAI',
-    description: 'Most capable GPT model for complex tasks',
-  },
-  {
-    id: 'gpt-5.4-mini',
-    name: 'GPT-5.4 Mini',
-    provider: 'OpenAI',
-    description: 'Fast and affordable for everyday tasks',
-  },
-  {
-    id: 'o1',
-    name: 'o1',
-    provider: 'OpenAI',
-    description: 'Advanced reasoning model for complex problems',
-  },
-  {
-    id: 'o3-mini',
-    name: 'o3 Mini',
-    provider: 'OpenAI',
-    description: 'Fast reasoning model for STEM tasks',
-  },
-  {
-    id: 'o4-mini',
-    name: 'o4 Mini',
-    provider: 'OpenAI',
-    description: 'Latest efficient reasoning model',
-  },
+export type RoutingTaskType =
+  | 'coding'
+  | 'reasoning'
+  | 'general'
+  | 'agentic'
+  | 'multimodal'
+  | 'research'
+  | 'computer-use';
 
-  // Anthropic
-  // Model IDs use hyphen format (claude-opus-4-6) matching Anthropic API conventions
-  {
-    id: 'claude-opus-4-6',
-    name: 'Claude Opus 4.6',
-    provider: 'Anthropic',
-    description: 'Most intelligent Claude model',
-  },
-  {
-    id: 'claude-sonnet-4-6',
-    name: 'Claude Sonnet 4.6',
-    provider: 'Anthropic',
-    description: 'Balanced intelligence and speed',
-  },
-  {
-    id: 'claude-haiku-4-5-20251001',
-    name: 'Claude Haiku 4.5',
-    provider: 'Anthropic',
-    description: 'Fastest Claude model for everyday tasks',
-  },
+export interface RoutingDecision {
+  routedModelId: string;
+  taskType: RoutingTaskType;
+  reason: string;
+  wasRouted: boolean;
+  timestamp: number;
+}
 
-  // Google
-  {
-    id: 'gemini-3.1-pro-preview',
-    name: 'Gemini 3.1 Pro',
-    provider: 'Google',
-    description: 'Most advanced Gemini with 1M context',
-  },
-  {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
-    provider: 'Google',
-    description: 'Fast multimodal model with 1M context',
-  },
-  {
-    id: 'gemini-2.0-flash-lite',
-    name: 'Gemini 2.0 Flash Lite',
-    provider: 'Google',
-    description: 'Most cost-efficient Gemini model',
-  },
-
-  // DeepSeek
-  {
-    id: 'deepseek-reasoner',
-    name: 'DeepSeek R1',
-    provider: 'DeepSeek',
-    description: 'Reasoning model rivaling top competitors',
-  },
-  {
-    id: 'deepseek-chat',
-    name: 'DeepSeek V3',
-    provider: 'DeepSeek',
-    description: 'Cost-effective general chat model',
-  },
-
-  // Perplexity
-  {
-    id: 'sonar-pro',
-    name: 'Perplexity Sonar Pro',
-    provider: 'Perplexity',
-    description: 'Advanced search-augmented reasoning',
-  },
-  {
-    id: 'sonar',
-    name: 'Perplexity Sonar',
-    provider: 'Perplexity',
-    description: 'Search-augmented AI with web access',
-  },
-
-  // xAI
-  {
-    id: 'grok-3',
-    name: 'Grok 3',
-    provider: 'xAI',
-    description: 'Most capable Grok model',
-  },
-  {
-    id: 'grok-2',
-    name: 'Grok 2',
-    provider: 'xAI',
-    description: 'Real-time knowledge with wit and depth',
-  },
-
-  // Mistral
-  {
-    id: 'mistral-large-latest',
-    name: 'Mistral Large',
-    provider: 'Mistral',
-    description: 'Top-tier reasoning model',
-  },
-  {
-    id: 'mistral-small-latest',
-    name: 'Mistral Small',
-    provider: 'Mistral',
-    description: 'Lightweight and fast model',
-  },
-];
-
-interface ModelState {
+type PersistedModelState = {
   selectedModelId: string;
+  selectedProvider: string | null;
   thinkingEnabled: boolean;
-  /** Token budget for extended thinking (0 = off). Mirrors desktop thinkingBudget. */
   thinkingBudget: number;
+};
+
+interface ModelState extends PersistedModelState {
+  selectedModel: string;
+  thinkingModeEnabled: boolean;
+  availableModels: AIModel[];
+  loading: boolean;
+  lastRoutingDecision: RoutingDecision | null;
   setSelectedModelId: (id: string) => void;
+  setSelectedModel: (id: string, provider?: string | null) => void;
+  selectModel: (id: string, provider?: string | null) => Promise<void>;
+  setSelectedProvider: (provider: string | null) => void;
   setThinkingEnabled: (enabled: boolean) => void;
-  /** Set thinking budget in tokens (0 = disabled). Auto-enables thinkingEnabled when > 0. */
+  setThinkingModeEnabled: (enabled: boolean) => void;
   setThinkingBudget: (budget: number) => void;
   getSelectedModel: () => AIModel;
+  getAvailableModels: () => Promise<AIModel[]>;
+  setLastRoutingDecision: (decision: RoutingDecision | null) => void;
+}
+
+const CHAT_MODEL_TYPES = new Set(['chat', 'code', 'reasoning', 'multimodal']);
+
+function describeModel(metadata: ModelMetadata): string {
+  const bestFor = metadata.bestFor?.slice(0, 2).join(' · ');
+  if (bestFor) {
+    return bestFor;
+  }
+  if (metadata.qualityTier === 'best') {
+    return 'Highest capability';
+  }
+  if (metadata.qualityTier === 'balanced') {
+    return 'Balanced quality and speed';
+  }
+  return 'Fast and cost-efficient';
+}
+
+function buildAvailableModels(): AIModel[] {
+  const seen = new Set<string>();
+  const orderedIds = Object.values(MODEL_PRESETS).flatMap((entries) =>
+    entries.map((entry) => entry.value),
+  );
+
+  return orderedIds
+    .filter((modelId) => {
+      if (seen.has(modelId)) {
+        return false;
+      }
+      seen.add(modelId);
+      return true;
+    })
+    .map((modelId) => getModelMetadata(modelId))
+    .filter(
+      (metadata): metadata is ModelMetadata =>
+        !!metadata && CHAT_MODEL_TYPES.has(metadata.modelType),
+    )
+    .map((metadata) => ({
+      id: metadata.id,
+      name: metadata.name,
+      provider: PROVIDER_LABELS[metadata.provider] ?? metadata.provider,
+      providerKey: metadata.provider,
+      description: describeModel(metadata),
+    }));
+}
+
+export const AVAILABLE_MODELS: AIModel[] = buildAvailableModels();
+
+const DEFAULT_MODEL_ID =
+  AVAILABLE_MODELS.find((model) => model.id === 'auto-balanced')?.id ??
+  AVAILABLE_MODELS[0]?.id ??
+  'auto-balanced';
+
+function resolveProvider(modelId: string, explicitProvider?: string | null): string | null {
+  const canonicalModelId = normalizeModelId(modelId) ?? modelId;
+  if (explicitProvider) {
+    return explicitProvider;
+  }
+  return getModelMetadata(canonicalModelId)?.provider ?? null;
+}
+
+function applyModelSelection(
+  modelId: string,
+  explicitProvider?: string | null,
+): Pick<
+  ModelState,
+  | 'selectedModelId'
+  | 'selectedModel'
+  | 'selectedProvider'
+  | 'thinkingEnabled'
+  | 'thinkingModeEnabled'
+> {
+  const canonicalModelId = normalizeModelId(modelId) ?? modelId;
+  const metadata = getModelMetadata(canonicalModelId);
+  const provider = resolveProvider(canonicalModelId, explicitProvider);
+  const supportsThinking = metadata?.capabilities?.thinking ?? false;
+
+  return {
+    selectedModelId: canonicalModelId,
+    selectedModel: canonicalModelId,
+    selectedProvider: provider,
+    thinkingEnabled: supportsThinking,
+    thinkingModeEnabled: supportsThinking,
+  };
 }
 
 export const useModelStore = create<ModelState>()(
   persist(
     (set, get) => ({
-      selectedModelId: 'claude-sonnet-4-6',
-      thinkingEnabled: false,
+      ...applyModelSelection(DEFAULT_MODEL_ID),
       thinkingBudget: 0,
+      availableModels: AVAILABLE_MODELS,
+      loading: false,
+      lastRoutingDecision: null,
 
-      setSelectedModelId: (id: string) => {
-        set({ selectedModelId: id });
+      setSelectedModelId: (id) => {
+        set((state) => ({
+          ...state,
+          ...applyModelSelection(id),
+        }));
       },
 
-      setThinkingEnabled: (enabled: boolean) => {
-        set({ thinkingEnabled: enabled });
+      setSelectedModel: (id, provider) => {
+        set((state) => ({
+          ...state,
+          ...applyModelSelection(id, provider),
+        }));
       },
 
-      setThinkingBudget: (budget: number) => {
-        set({ thinkingBudget: budget, thinkingEnabled: budget > 0 });
+      selectModel: async (id, provider) => {
+        set((state) => ({
+          ...state,
+          ...applyModelSelection(id, provider),
+        }));
+      },
+
+      setSelectedProvider: (provider) => {
+        set({ selectedProvider: provider });
+      },
+
+      setThinkingEnabled: (enabled) => {
+        set({ thinkingEnabled: enabled, thinkingModeEnabled: enabled });
+      },
+
+      setThinkingModeEnabled: (enabled) => {
+        set({ thinkingEnabled: enabled, thinkingModeEnabled: enabled });
+      },
+
+      setThinkingBudget: (budget) => {
+        const supportsThinking =
+          getModelMetadata(get().selectedModelId)?.capabilities?.thinking ?? false;
+        set({
+          thinkingBudget: budget,
+          thinkingEnabled: supportsThinking && budget > 0,
+          thinkingModeEnabled: supportsThinking && budget > 0,
+        });
       },
 
       getSelectedModel: () => {
         const { selectedModelId } = get();
-        return AVAILABLE_MODELS.find((m) => m.id === selectedModelId) || AVAILABLE_MODELS[0]!;
+        return (
+          AVAILABLE_MODELS.find((model) => model.id === selectedModelId) ?? AVAILABLE_MODELS[0]!
+        );
+      },
+
+      getAvailableModels: async () => AVAILABLE_MODELS,
+
+      setLastRoutingDecision: (decision) => {
+        set({ lastRoutingDecision: decision });
       },
     }),
     {
       name: 'agi-model-store',
-      version: 2,
-      migrate: (persistedState: unknown, version: number) => {
-        // v1 -> v2: add thinkingBudget field
-        if (version < 2) {
-          const state = persistedState as Partial<ModelState>;
-          return { ...state, thinkingBudget: 0 };
-        }
-        return persistedState as ModelState;
+      version: 4,
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state): PersistedModelState => ({
+        selectedModelId: state.selectedModelId,
+        selectedProvider: state.selectedProvider,
+        thinkingEnabled: state.thinkingEnabled,
+        thinkingBudget: state.thinkingBudget,
+      }),
+      migrate: (persistedState: unknown) => {
+        const state = (persistedState as Partial<PersistedModelState>) ?? {};
+        const selectedModelId =
+          normalizeModelId(state.selectedModelId) ?? state.selectedModelId ?? DEFAULT_MODEL_ID;
+        return {
+          selectedModelId,
+          selectedProvider: state.selectedProvider ?? resolveProvider(selectedModelId),
+          thinkingEnabled: state.thinkingEnabled ?? false,
+          thinkingBudget: state.thinkingBudget ?? 0,
+        };
       },
     },
   ),

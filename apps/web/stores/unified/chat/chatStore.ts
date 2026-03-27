@@ -1625,9 +1625,18 @@ export const useConversationUISelector = () => {
 if (typeof window !== 'undefined') {
   import('../modelStore').then(({ useModelStore }) => {
     // Guard: modelStore may be a stub without subscribe support
-    if (typeof useModelStore?.subscribe === 'function') {
+    const subscribeWithSelector = (
+      useModelStore as typeof useModelStore & {
+        subscribe?: (
+          selector: (state: { selectedModel?: string | null }) => string | null | undefined,
+          listener: (selectedModel: string | null | undefined) => void,
+        ) => () => void;
+      }
+    ).subscribe;
+
+    if (typeof subscribeWithSelector === 'function') {
       try {
-        useModelStore.subscribe(
+        subscribeWithSelector(
           (state: { selectedModel?: string | null }) => state.selectedModel,
           (selectedModel: string | null | undefined) => {
             if (selectedModel) {
