@@ -28,8 +28,8 @@ export function ReasoningAccordion({
   metadata,
   className,
   isStreaming = false,
-  autoExpandOnStream = true,
-  showPreview = true,
+  autoExpandOnStream = false,
+  showPreview = false,
 }: ReasoningAccordionProps) {
   const isSimpleMode = useSimpleModeStore((state) => state.mode === 'simple');
   const [isOpen, setIsOpen] = useState(false);
@@ -124,6 +124,22 @@ export function ReasoningAccordion({
     return { lines: lines.length, words, duration, steps };
   }, [content, metadata]);
 
+  const collapsedLabel = useMemo(() => {
+    if (isStreaming) {
+      return isSimpleMode ? 'Thinking...' : 'Thinking';
+    }
+
+    if (metadata?.duration && metadata.duration > 0) {
+      return `Thought for ${metadata.duration}s`;
+    }
+
+    if (stats.steps > 0) {
+      return `Thought in ${stats.steps} step${stats.steps === 1 ? '' : 's'}`;
+    }
+
+    return 'Thought';
+  }, [isSimpleMode, isStreaming, metadata?.duration, stats.steps]);
+
   // Get last few lines for streaming preview
   const streamingPreview = useMemo(() => {
     if (!isStreaming || !showPreview || isOpen) return null;
@@ -135,11 +151,11 @@ export function ReasoningAccordion({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-2xl',
-        'border bg-zinc-950',
+        'overflow-hidden border bg-card/80',
+        isOpen ? 'w-full rounded-2xl' : 'inline-flex max-w-full rounded-full shadow-xs',
         isStreaming
           ? 'border-agent-thinking/50 shadow-lg shadow-agent-thinking/10'
-          : 'border-zinc-800',
+          : 'border-border',
         className,
       )}
     >
@@ -149,16 +165,22 @@ export function ReasoningAccordion({
       <button
         onClick={handleToggle}
         className={cn(
-          'w-full flex items-center justify-between gap-3',
-          'px-4 py-3',
-          'text-left',
-          'hover:bg-zinc-900/50 transition-colors',
+          'text-left transition-colors hover:bg-muted/30',
           'focus:outline-hidden focus:ring-2 focus:ring-agent-thinking/50',
+          isOpen
+            ? 'flex w-full items-center justify-between gap-3 px-4 py-3'
+            : 'flex items-center gap-2 px-3 py-2',
+          'text-left',
         )}
         aria-expanded={isOpen}
         aria-label={`${isOpen ? 'Hide' : 'Show'} thinking process`}
       >
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div
+          className={cn(
+            'min-w-0 flex-1',
+            isOpen ? 'flex items-center gap-3' : 'flex items-center gap-2',
+          )}
+        >
           {isStreaming ? (
             <div className="relative">
               <Brain className="w-4 h-4 shrink-0 text-agent-thinking" />
@@ -166,51 +188,69 @@ export function ReasoningAccordion({
             </div>
           ) : (
             <Brain
-              className={cn('w-4 h-4 shrink-0', isOpen ? 'text-agent-thinking' : 'text-zinc-400')}
+              className={cn(
+                'w-4 h-4 shrink-0',
+                isOpen ? 'text-agent-thinking' : 'text-muted-foreground',
+              )}
             />
           )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <span
-                className={cn(
-                  'font-semibold text-sm truncate',
-                  isStreaming ? 'text-agent-thinking' : 'text-zinc-200',
-                )}
-              >
-                {displaySummary}
-              </span>
-              {isStreaming && <Loader2 className="w-3 h-3 text-agent-thinking animate-spin" />}
-            </div>
-            <div className="flex items-center gap-3 text-xs text-zinc-500">
-              {isStreaming ? (
-                <span className="flex items-center gap-1 text-agent-thinking/70">
-                  <Sparkles className="w-3 h-3" />
-                  {isSimpleMode ? 'Thinking...' : 'Reasoning in progress...'}
-                </span>
-              ) : isSimpleMode ? (
-                <span className="text-zinc-400">Done thinking</span>
-              ) : (
-                <>
-                  <span className="flex items-center gap-1">
-                    <Layers className="w-3 h-3" />
-                    {stats.steps} {stats.steps === 1 ? 'step' : 'steps'}
-                  </span>
-                  {stats.duration > 0 && (
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {stats.duration}s
-                    </span>
+          <div className="min-w-0 flex-1">
+            {!isOpen ? (
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    'truncate text-sm font-medium',
+                    isStreaming ? 'text-agent-thinking' : 'text-foreground',
                   )}
-                  <span>{stats.words} words</span>
-                </>
-              )}
-            </div>
-            {/* Streaming preview when collapsed (hidden in simple mode) */}
-            {streamingPreview && !isOpen && !isSimpleMode && (
-              <div className="mt-1.5 text-xs text-zinc-500 font-mono truncate max-w-md opacity-70">
-                {streamingPreview}
-                <span className="inline-block w-1.5 h-3 bg-agent-thinking/70 ml-0.5 animate-pulse" />
+                >
+                  {collapsedLabel}
+                </span>
+                {isStreaming && <Loader2 className="h-3 w-3 animate-spin text-agent-thinking" />}
               </div>
+            ) : (
+              <>
+                <div className="mb-0.5 flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'truncate text-sm font-semibold',
+                      isStreaming ? 'text-agent-thinking' : 'text-foreground',
+                    )}
+                  >
+                    {displaySummary}
+                  </span>
+                  {isStreaming && <Loader2 className="w-3 h-3 animate-spin text-agent-thinking" />}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  {isStreaming ? (
+                    <span className="flex items-center gap-1 text-agent-thinking/70">
+                      <Sparkles className="w-3 h-3" />
+                      {isSimpleMode ? 'Thinking...' : 'Reasoning in progress...'}
+                    </span>
+                  ) : isSimpleMode ? (
+                    <span className="text-muted-foreground">Done thinking</span>
+                  ) : (
+                    <>
+                      <span className="flex items-center gap-1">
+                        <Layers className="w-3 h-3" />
+                        {stats.steps} {stats.steps === 1 ? 'step' : 'steps'}
+                      </span>
+                      {stats.duration > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {stats.duration}s
+                        </span>
+                      )}
+                      <span>{stats.words} words</span>
+                    </>
+                  )}
+                </div>
+                {streamingPreview && !isSimpleMode && (
+                  <div className="mt-1.5 max-w-md truncate font-mono text-xs text-muted-foreground opacity-70">
+                    {streamingPreview}
+                    <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-agent-thinking/70" />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -220,7 +260,7 @@ export function ReasoningAccordion({
           transition={{ duration: 0.2 }}
           className="shrink-0"
         >
-          <ChevronDown className="w-4 h-4 text-zinc-400" />
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
         </motion.div>
       </button>
 
@@ -237,7 +277,7 @@ export function ReasoningAccordion({
             }}
             className="overflow-hidden"
           >
-            <div className="border-t border-zinc-800">
+            <div className="border-t border-border">
               <div ref={contentRef} className="max-h-96 overflow-y-auto custom-scrollbar">
                 <div className="relative p-4 text-xs font-mono leading-relaxed">
                   <SyntaxHighlighter

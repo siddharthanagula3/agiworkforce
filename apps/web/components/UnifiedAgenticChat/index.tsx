@@ -1741,8 +1741,9 @@ export const UnifiedAgenticChat: React.FC<{
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
+            const existingSteps = task.steps ?? [];
             // Update the step status
-            const updatedSteps = task.steps.map((step: any, index: any) => {
+            const updatedSteps = existingSteps.map((step: any, index: any) => {
               if (index === payload.step_index || step.id === payload.step_id) {
                 return { ...step, status: 'running' as const, timestamp: Date.now() };
               }
@@ -1750,7 +1751,10 @@ export const UnifiedAgenticChat: React.FC<{
             });
             executionStore.updateResearchTask(payload.task_id, {
               steps: updatedSteps,
-              progress: Math.round((payload.step_index / task.steps.length) * 100),
+              progress:
+                existingSteps.length > 0
+                  ? Math.round((payload.step_index / existingSteps.length) * 100)
+                  : (task.progress ?? 0),
             });
           }
         }),
@@ -1767,7 +1771,8 @@ export const UnifiedAgenticChat: React.FC<{
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
-            const updatedSteps = task.steps.map((step: any, index: any) => {
+            const existingSteps = task.steps ?? [];
+            const updatedSteps = existingSteps.map((step: any, index: any) => {
               if (index === payload.step_index || step.id === payload.step_id) {
                 return {
                   ...step,
@@ -1780,7 +1785,10 @@ export const UnifiedAgenticChat: React.FC<{
             const completedCount = updatedSteps.filter((s: any) => s.status === 'completed').length;
             executionStore.updateResearchTask(payload.task_id, {
               steps: updatedSteps,
-              progress: Math.round((completedCount / task.steps.length) * 100),
+              progress:
+                existingSteps.length > 0
+                  ? Math.round((completedCount / existingSteps.length) * 100)
+                  : (task.progress ?? 0),
             });
           }
         }),
@@ -1795,7 +1803,7 @@ export const UnifiedAgenticChat: React.FC<{
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
             executionStore.updateResearchTask(payload.task_id, {
-              findings: [...task.findings, payload.finding],
+              findings: [...(task.findings ?? []), payload.finding],
             });
           }
         }),
@@ -1809,8 +1817,20 @@ export const UnifiedAgenticChat: React.FC<{
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
+            const existingSources = task.sources ?? [];
             executionStore.updateResearchTask(payload.task_id, {
-              sources: [...task.sources, payload.source],
+              sources: [
+                ...existingSources,
+                {
+                  id: `${payload.task_id}-source-${existingSources.length}-${Date.now()}`,
+                  title: payload.source.title,
+                  url: payload.source.url,
+                  domain: payload.source.domain,
+                  snippet: '',
+                  relevanceScore: 0,
+                  fetchedAt: new Date(),
+                },
+              ],
             });
           }
         }),
@@ -1825,7 +1845,7 @@ export const UnifiedAgenticChat: React.FC<{
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
-            const updatedSteps = task.steps.map((step: any) => ({
+            const updatedSteps = (task.steps ?? []).map((step: any) => ({
               ...step,
               status: payload.success ? ('completed' as const) : step.status,
             }));

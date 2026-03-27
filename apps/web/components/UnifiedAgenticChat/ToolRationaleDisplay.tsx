@@ -48,18 +48,18 @@ const ToolRationaleDisplayComponent: React.FC<ToolRationaleDisplayProps> = ({
           <Lightbulb className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
           <div className="flex flex-col gap-1">
             <div className="text-sm">
-              <span className="text-zinc-400">Selected tool: </span>
+              <span className="text-muted-foreground">Selected tool: </span>
               <span className="font-medium text-indigo-300">{rationale.toolName}</span>
             </div>
             {rationale.rationale && (
-              <p className="text-xs text-zinc-300 leading-relaxed">{rationale.rationale}</p>
+              <p className="text-xs text-foreground/80 leading-relaxed">{rationale.rationale}</p>
             )}
           </div>
         </div>
         {onDismiss && (
           <button
             onClick={onDismiss}
-            className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+            className="rounded p-1 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
             aria-label="Dismiss rationale"
           >
             <X className="h-3 w-3" />
@@ -70,10 +70,10 @@ const ToolRationaleDisplayComponent: React.FC<ToolRationaleDisplayProps> = ({
       {/* Capabilities */}
       {rationale.capabilities && rationale.capabilities.length > 0 && (
         <div className="mt-2 pl-6">
-          <div className="text-xs text-zinc-400">This tool can:</div>
+          <div className="text-xs text-muted-foreground">This tool can:</div>
           <ul className="mt-1 space-y-0.5">
             {rationale.capabilities.slice(0, 3).map((capability, idx) => (
-              <li key={idx} className="text-xs text-zinc-300 flex items-center gap-1.5">
+              <li key={idx} className="flex items-center gap-1.5 text-xs text-foreground/80">
                 <span className="w-1 h-1 rounded-full bg-indigo-400" />
                 {capability}
               </li>
@@ -87,7 +87,7 @@ const ToolRationaleDisplayComponent: React.FC<ToolRationaleDisplayProps> = ({
         <div className="mt-2 pl-6">
           <button
             onClick={() => setShowAlternatives(!showAlternatives)}
-            className="flex items-center gap-1 text-xs text-zinc-400 hover:text-indigo-300 transition-colors"
+            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-indigo-300"
           >
             {showAlternatives ? (
               <ChevronDown className="h-3 w-3" />

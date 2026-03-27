@@ -62,10 +62,10 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
   code: <Braces className="h-4 w-4 text-amber-400" />,
   video: <Video className="h-4 w-4 text-orange-400" />,
   media: <ImageIcon className="h-4 w-4 text-indigo-400" />,
-  files: <FileText className="h-4 w-4 text-slate-300" />,
+  files: <FileText className="h-4 w-4 text-muted-foreground" />,
   data: <Database className="h-4 w-4 text-blue-400" />,
   preview: <PanelTopOpen className="h-4 w-4 text-orange-400" />,
-  diff: <FileText className="h-4 w-4 text-zinc-300" />,
+  diff: <FileText className="h-4 w-4 text-muted-foreground" />,
   canvas: <Braces className="h-4 w-4 text-pink-400" />,
   artifact: <Code2 className="h-4 w-4 text-amber-400" />,
   tasks: <Activity className="h-4 w-4 text-cyan-400" />,
@@ -99,7 +99,7 @@ function VideoPanel({ src, title }: { src?: string; title?: string }) {
 
   return (
     <div className="flex h-full flex-col gap-3">
-      {title && <div className="text-sm font-medium text-zinc-200">{title}</div>}
+      {title && <div className="text-sm font-medium text-foreground">{title}</div>}
       <div className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-black/60">
         <video
           ref={videoRef}
@@ -109,7 +109,7 @@ function VideoPanel({ src, title }: { src?: string; title?: string }) {
           aria-label={title || 'Video output'}
         />
         {autoPlayFailed && (
-          <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/70 rounded text-xs text-zinc-400">
+          <div className="absolute bottom-2 left-2 rounded bg-background/80 px-2 py-1 text-xs text-muted-foreground">
             Click play to start video
           </div>
         )}
@@ -240,10 +240,10 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
       case 'files':
         return (
           <div className="grid h-full grid-cols-1 md:grid-cols-3">
-            <div className="hidden h-full bg-black/50 px-3 py-4 text-xs text-zinc-400 md:block">
+            <div className="hidden h-full bg-background/50 px-3 py-4 text-xs text-muted-foreground md:block">
               File tree is visible in the primary sidecar. Previewing selected file here.
             </div>
-            <div className="col-span-2 h-full bg-black/70">
+            <div className="col-span-2 h-full bg-background/70">
               <MonacoEditor
                 value={String(payload?.['content'] ?? '')}
                 filePath={payload?.['filePath'] as string | undefined}
@@ -272,7 +272,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
       case 'artifact':
         if (!payload?.['artifact']) {
           return (
-            <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               No artifact data provided
             </div>
           );
@@ -303,8 +303,8 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
         // Fall back to content-based rendering
         if (typeof payload?.['content'] === 'string') {
           return (
-            <div className="h-full overflow-auto rounded-lg border border-white/10 bg-black/30 p-4">
-              <pre className="whitespace-pre-wrap break-words text-sm text-zinc-200">
+            <div className="h-full overflow-auto rounded-lg border border-border/50 bg-background/40 p-4">
+              <pre className="whitespace-pre-wrap break-words text-sm text-foreground/80">
                 {payload['content'] as string}
               </pre>
             </div>
@@ -315,7 +315,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
           (payload?.['src'] as string | undefined) || (payload?.['imageUrl'] as string | undefined);
         if (imageSrc) {
           return (
-            <div className="flex h-full items-center justify-center rounded-lg border border-white/10 bg-black/30 p-4">
+            <div className="flex h-full items-center justify-center rounded-lg border border-border/50 bg-background/40 p-4">
               <img
                 src={imageSrc}
                 alt="Preview"
@@ -326,11 +326,11 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
         }
 
         return (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-zinc-400">
-            <Shield className="h-6 w-6 text-zinc-500" />
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+            <Shield className="h-6 w-6 text-muted-foreground" />
             <span>No preview content is available yet.</span>
             {contextId ? (
-              <span className="text-xs text-zinc-500">Message ID: {contextId}</span>
+              <span className="text-xs text-muted-foreground">Message ID: {contextId}</span>
             ) : null}
           </div>
         );
@@ -339,12 +339,12 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
       case 'data':
         return (
           <div className="flex h-full flex-col">
-            <div className="bg-black/40 p-2 text-xs text-zinc-400 border-b border-white/5">
+            <div className="border-b border-border/40 bg-background/40 p-2 text-xs text-muted-foreground">
               Data Preview (Read-Only)
             </div>
             <div className="flex-1 overflow-auto p-0">
-              <table className="w-full text-sm text-left text-zinc-300">
-                <thead className="bg-white/5 text-xs uppercase text-zinc-500 sticky top-0">
+              <table className="w-full text-left text-sm text-foreground/80">
+                <thead className="sticky top-0 bg-muted/40 text-xs uppercase text-muted-foreground">
                   <tr>
                     <th className="px-4 py-2 border-b border-white/10">Key</th>
                     <th className="px-4 py-2 border-b border-white/10">Value</th>
@@ -354,13 +354,16 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
                   {payload?.['data'] && typeof payload['data'] === 'object' ? (
                     Object.entries(payload['data'] as Record<string, unknown>).map(([k, v]) => (
                       <tr key={k} className="hover:bg-white/5">
-                        <td className="px-4 py-2 font-mono text-xs text-zinc-500">{k}</td>
+                        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{k}</td>
                         <td className="px-4 py-2">{String(v)}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={2} className="px-4 py-4 text-center text-zinc-500 italic">
+                      <td
+                        colSpan={2}
+                        className="px-4 py-4 text-center text-muted-foreground italic"
+                      >
                         No structured data available
                       </td>
                     </tr>
@@ -374,8 +377,8 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
       case 'diff':
         if (typeof payload?.['content'] === 'string') {
           return (
-            <div className="h-full overflow-auto rounded-lg border border-white/10 bg-black/30 p-4">
-              <pre className="whitespace-pre-wrap break-words text-sm text-zinc-200">
+            <div className="h-full overflow-auto rounded-lg border border-border/50 bg-background/40 p-4">
+              <pre className="whitespace-pre-wrap break-words text-sm text-foreground/80">
                 {payload['content'] as string}
               </pre>
             </div>
@@ -385,8 +388,8 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
 
       default:
         return (
-          <div className="flex h-full flex-col items-center justify-center text-sm text-zinc-400">
-            <Shield className="mb-2 h-6 w-6 text-zinc-500" />
+          <div className="flex h-full flex-col items-center justify-center text-sm text-muted-foreground">
+            <Shield className="mb-2 h-6 w-6 text-muted-foreground" />
             Awaiting panel content…
           </div>
         );
@@ -396,7 +399,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
   if (isMinimized) {
     return (
       <motion.div
-        className="flex flex-col items-center py-4 px-1 bg-gray-900/95 border-l border-gray-700/50 h-full"
+        className="flex h-full flex-col items-center border-l border-border/50 bg-background/95 px-1 py-4"
         initial="hidden"
         animate="visible"
         variants={sidecarVariants}
@@ -404,14 +407,14 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
         <button
           type="button"
           onClick={() => setIsMinimized(false)}
-          className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition-colors mb-4"
+          className="mb-4 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label="Expand sidecar"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
 
         {panelType && (
-          <div className="p-2 rounded-lg bg-gray-800/50 text-gray-300">
+          <div className="rounded-lg bg-muted/50 p-2 text-foreground/80">
             {headerIconMap[panelType]}
           </div>
         )}
@@ -421,16 +424,16 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
 
   return (
     <motion.div
-      className="flex h-full flex-col bg-gray-900/95 dark:bg-gray-950/95 backdrop-blur-xs"
+      className="flex h-full flex-col bg-background/95 backdrop-blur-xs"
       initial="hidden"
       animate="visible"
       exit="hidden"
       variants={sidecarVariants}
     >
       {}
-      <div className="flex items-center justify-between border-b border-gray-700/50 px-4 py-3 bg-gray-800/30">
+      <div className="flex items-center justify-between border-b border-border/50 bg-muted/30 px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm text-zinc-100">
+          <div className="flex items-center gap-2 text-sm text-foreground">
             {panelType ? headerIconMap[panelType] : null}
             <span className="font-medium">
               {panelType ? panelType.charAt(0).toUpperCase() + panelType.slice(1) : 'Workspace'}
@@ -444,7 +447,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
             type="button"
             onClick={() => setIsMinimized(true)}
             className={cn(
-              'flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-gray-700/50 transition-colors',
+              'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
             )}
             aria-label="Minimize sidecar"
             title="Minimize"
@@ -455,7 +458,7 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
             type="button"
             onClick={onClose}
             className={cn(
-              'flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-gray-700/50 transition-colors',
+              'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
               !onClose && 'opacity-60 pointer-events-none',
             )}
             aria-label="Close sidecar"
