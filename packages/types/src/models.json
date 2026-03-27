@@ -21,7 +21,7 @@
         "code_generation": "deepseek-chat",
         "complex_reasoning": "deepseek-reasoner",
         "chat": "deepseek-chat",
-        "vision": "gemini-3-flash-preview",
+        "vision": "gemini-3.1-flash-lite",
         "long_context": "deepseek-chat"
       },
       "canonicalization": {}
@@ -43,7 +43,7 @@
       "taskRouting": {
         "fast_completion": "gpt-5.4-nano",
         "code_generation": "gpt-5.4-codex-medium",
-        "complex_reasoning": "o3",
+        "complex_reasoning": "gpt-5.4-pro",
         "chat": "gpt-5.4",
         "vision": "gpt-5.4",
         "long_context": "gpt-5.4"
@@ -76,20 +76,20 @@
       },
       "modelPrefixes": ["claude"],
       "aliases": [],
-      "defaultModel": "claude-sonnet-4-6",
+      "defaultModel": "claude-sonnet-4.6",
       "taskRouting": {
-        "fast_completion": "claude-haiku-4-5",
-        "code_generation": "claude-sonnet-4-6",
-        "complex_reasoning": "claude-opus-4-6",
-        "chat": "claude-sonnet-4-6",
-        "vision": "claude-sonnet-4-6",
-        "long_context": "claude-sonnet-4-6"
+        "fast_completion": "claude-haiku-4.5",
+        "code_generation": "claude-sonnet-4.6",
+        "complex_reasoning": "claude-opus-4.6",
+        "chat": "claude-sonnet-4.6",
+        "vision": "claude-sonnet-4.6",
+        "long_context": "claude-sonnet-4.6"
       },
       "canonicalization": {
-        "claude-haiku-4.5": "claude-haiku-4-5",
-        "claude-sonnet-4.5": "claude-sonnet-4-5",
-        "claude-sonnet-4.6": "claude-sonnet-4-6",
-        "claude-opus-4.6": "claude-opus-4-6"
+        "claude-haiku-4-5": "claude-haiku-4.5",
+        "claude-sonnet-4-5": "claude-sonnet-4.5",
+        "claude-sonnet-4-6": "claude-sonnet-4.6",
+        "claude-opus-4-6": "claude-opus-4.6"
       }
     },
     "google": {
@@ -107,14 +107,18 @@
       "aliases": [],
       "defaultModel": "gemini-3.1-pro-preview",
       "taskRouting": {
-        "fast_completion": "gemini-3-flash-preview",
-        "code_generation": "gemini-3-pro-preview",
+        "fast_completion": "gemini-3.1-flash-lite",
+        "code_generation": "gemini-3.1-pro-preview",
         "complex_reasoning": "gemini-3.1-pro-preview",
-        "chat": "gemini-3-flash-preview",
-        "vision": "gemini-3-pro-preview",
-        "long_context": "gemini-3-pro-preview"
+        "chat": "gemini-3.1-flash-lite",
+        "vision": "gemini-3.1-pro-preview",
+        "long_context": "gemini-3.1-pro-preview"
       },
-      "canonicalization": {}
+      "canonicalization": {
+        "gemini-3-flash-preview": "gemini-3.1-flash-lite",
+        "gemini-3-pro-preview": "gemini-3.1-pro-preview",
+        "gemini-3.1-flash-preview": "gemini-3.1-flash-lite"
+      }
     },
     "xai": {
       "label": "xAI",

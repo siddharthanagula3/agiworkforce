@@ -21,6 +21,7 @@
 // Provider is the canonical union type for all LLM provider identifiers.
 // It lives in its own module so surfaces can import it without pulling in
 // the full model catalog schema.
+import modelsCatalogJson from './models.json';
 import type { Provider } from './provider';
 export type { Provider };
 
@@ -184,11 +185,136 @@ export interface TierAllowedModels {
 
 /** Top-level models.json schema. */
 export interface ModelsCatalog {
-  version: string;
+  version: number | string;
   lastUpdated: string;
   providers: Record<string, ProviderConfig>;
   models: Record<string, ModelMetadata>;
   tierAllowedModels: TierAllowedModels;
   modelPresets: Record<string, Array<{ value: string; label: string }>>;
   providersInOrder: string[];
+}
+
+type TierKey = keyof TierAllowedModels;
+
+export const modelsCatalog = modelsCatalogJson as ModelsCatalog;
+
+function resolveCanonicalTarget(target: string): string {
+  if (modelsCatalog.models[target]) {
+    return target;
+  }
+
+  const byApiModelId = Object.entries(modelsCatalog.models).find(
+    ([, metadata]) => metadata.apiModelId === target,
+  );
+
+  return byApiModelId?.[0] ?? target;
+}
+
+export const modelIdAliases: Record<string, string> = (() => {
+  const aliases: Record<string, string> = {};
+
+  for (const [modelId, metadata] of Object.entries(modelsCatalog.models)) {
+    aliases[modelId] = modelId;
+    if (metadata.apiModelId) {
+      aliases[metadata.apiModelId] = modelId;
+    }
+  }
+
+  for (const providerConfig of Object.values(modelsCatalog.providers)) {
+    for (const [alias, target] of Object.entries(providerConfig.canonicalization ?? {})) {
+      aliases[alias] = resolveCanonicalTarget(target);
+    }
+  }
+
+  return aliases;
+})();
+
+export function normalizeModelId(modelId: string | null | undefined): string | null {
+  if (!modelId) {
+    return null;
+  }
+
+  return modelIdAliases[modelId] ?? resolveCanonicalTarget(modelId);
+}
+
+export function getModelMetadataById(modelId: string | null | undefined): ModelMetadata | null {
+  const canonicalModelId = normalizeModelId(modelId);
+  if (!canonicalModelId) {
+    return null;
+  }
+
+  return modelsCatalog.models[canonicalModelId] ?? null;
+}
+
+export const modelsById: Record<string, ModelMetadata> = (() => {
+  const entries: Array<[string, ModelMetadata]> = [];
+
+  for (const [modelId, metadata] of Object.entries(modelsCatalog.models)) {
+    entries.push([modelId, metadata]);
+  }
+
+  for (const [alias, canonicalModelId] of Object.entries(modelIdAliases)) {
+    const metadata = modelsCatalog.models[canonicalModelId];
+    if (metadata) {
+      entries.push([alias, metadata]);
+    }
+  }
+
+  return Object.fromEntries(entries);
+})();
+
+export const providerLabels: Record<string, string> = Object.fromEntries(
+  Object.entries(modelsCatalog.providers).map(([providerId, providerConfig]) => [
+    providerId,
+    providerConfig.label,
+  ]),
+);
+
+export function getProviderConfig(provider: Provider | string): ProviderConfig | null {
+  return modelsCatalog.providers[provider] ?? null;
+}
+
+export function getProviderDefaultModel(provider: Provider | string): string | null {
+  return normalizeModelId(getProviderConfig(provider)?.defaultModel);
+}
+
+export function getTaskModelForProvider(
+  provider: Provider | string,
+  task: keyof TaskRouting,
+): string | null {
+  const providerConfig = getProviderConfig(provider);
+  if (!providerConfig) {
+    return null;
+  }
+
+  return normalizeModelId(providerConfig.taskRouting?.[task] ?? providerConfig.defaultModel);
+}
+
+function normalizeModelList(modelIds: string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const modelId of modelIds) {
+    const canonicalModelId = normalizeModelId(modelId);
+    if (!canonicalModelId || seen.has(canonicalModelId)) {
+      continue;
+    }
+    seen.add(canonicalModelId);
+    normalized.push(canonicalModelId);
+  }
+
+  return normalized;
+}
+
+export function getAllowedModelsForTier(tier: TierKey): string[] {
+  return normalizeModelList(modelsCatalog.tierAllowedModels[tier] ?? []);
+}
+
+export function isModelAllowedForTier(modelId: string, tier: TierKey): boolean {
+  const canonicalModelId = normalizeModelId(modelId);
+  if (!canonicalModelId) {
+    return false;
+  }
+
+  return getAllowedModelsForTier(tier).includes(canonicalModelId);
 }

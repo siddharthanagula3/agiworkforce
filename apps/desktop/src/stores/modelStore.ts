@@ -19,8 +19,12 @@ import {
   getAllowedAutoModesForTier,
   getBestAutoModeForTier as getBestAutoModeForSubscriptionTier,
   getModelMetadata,
+  getProviderDefaultModel,
+  getTaskModelForProvider,
   isModelAllowedForTier,
   normalizeSubscriptionTier,
+  normalizeModelId,
+  PROVIDER_LABELS,
   PROVIDERS_IN_ORDER,
 } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
@@ -54,68 +58,88 @@ interface ManagedCloudModel {
   maxOutput: number;
 }
 
-const MANAGED_CLOUD_MODELS: ManagedCloudModel[] = [
-  {
-    id: 'claude-haiku-4-5',
-    displayName: 'Claude Haiku 4.5',
-    provider: 'anthropic',
-    providerDisplayName: 'Anthropic',
-    tier: 'hobby',
-    category: 'instant',
-    contextWindow: 200000,
-    maxOutput: 8192,
-  },
-  {
-    id: 'gpt-5.4-nano',
-    displayName: 'GPT-5.4 Nano',
-    provider: 'openai',
-    providerDisplayName: 'OpenAI',
-    tier: 'hobby',
-    category: 'instant',
-    contextWindow: 128000,
-    maxOutput: 16384,
-  },
-  {
-    id: 'gemini-3.1-flash-preview',
-    displayName: 'Gemini 3.1 Flash',
-    provider: 'google',
-    providerDisplayName: 'Google',
-    tier: 'hobby',
-    category: 'instant',
-    contextWindow: 1000000,
-    maxOutput: 8192,
-  },
-  {
-    id: 'claude-sonnet-4-6',
-    displayName: 'Claude Sonnet 4.6',
-    provider: 'anthropic',
-    providerDisplayName: 'Anthropic',
-    tier: 'pro',
-    category: 'latest',
-    contextWindow: 200000,
-    maxOutput: 8192,
-  },
-  {
-    id: 'gpt-5.4',
-    displayName: 'GPT-5.4',
-    provider: 'openai',
-    providerDisplayName: 'OpenAI',
-    tier: 'pro',
-    category: 'latest',
-    contextWindow: 256000,
-    maxOutput: 32768,
-  },
-  {
-    id: 'gemini-3.1-pro-preview',
-    displayName: 'Gemini 3.1 Pro',
-    provider: 'google',
-    providerDisplayName: 'Google',
-    tier: 'pro',
-    category: 'thinking',
-    contextWindow: 1000000,
-    maxOutput: 65536,
-  },
-];
+const MANAGED_CLOUD_CORE_PROVIDERS: Provider[] = ['anthropic', 'openai', 'google'];
+
+const MANAGED_CLOUD_FALLBACK_MAX_OUTPUT: Record<ManagedCloudModel['category'], number> = {
+  instant: 8192,
+  latest: 32768,
+  thinking: 65536,
+};
+
+const MANAGED_CLOUD_DEFAULT_CATEGORY: Record<Provider, ManagedCloudModel['category']> = {
+  anthropic: 'latest',
+  openai: 'latest',
+  google: 'thinking',
+  ollama: 'latest',
+  xai: 'latest',
+  deepseek: 'thinking',
+  qwen: 'thinking',
+  moonshot: 'latest',
+  perplexity: 'thinking',
+  zhipu: 'thinking',
+  managed_cloud: 'latest',
+  mistral: 'latest',
+  groq: 'instant',
+  together: 'latest',
+  fireworks: 'latest',
+  cerebras: 'instant',
+  deepinfra: 'latest',
+  nvidia_nim: 'latest',
+  open_router: 'latest',
+  cohere: 'latest',
+  ai21: 'latest',
+  sambanova: 'latest',
+  azure: 'latest',
+  bedrock: 'latest',
+};
+
+function buildManagedCloudModel(
+  modelId: string | null,
+  tier: ManagedCloudModel['tier'],
+  category: ManagedCloudModel['category'],
+): ManagedCloudModel | null {
+  const metadata = getModelMetadata(modelId ?? '');
+  if (!metadata) {
+    return null;
+  }
+
+  return {
+    id: metadata.id,
+    displayName: metadata.name,
+    provider: metadata.provider,
+    providerDisplayName: PROVIDER_LABELS[metadata.provider] ?? metadata.provider,
+    tier,
+    category,
+    contextWindow: metadata.contextWindow,
+    maxOutput: metadata.maxOutputTokens ?? MANAGED_CLOUD_FALLBACK_MAX_OUTPUT[category],
+  };
+}
+
+function getManagedCloudCatalogModels(): ManagedCloudModel[] {
+  const models: ManagedCloudModel[] = [];
+
+  for (const provider of MANAGED_CLOUD_CORE_PROVIDERS) {
+    const fastModel = buildManagedCloudModel(
+      getTaskModelForProvider(provider, 'fast_completion'),
+      'hobby',
+      'instant',
+    );
+    if (fastModel) {
+      models.push(fastModel);
+    }
+
+    const defaultModel = buildManagedCloudModel(
+      getProviderDefaultModel(provider),
+      'pro',
+      MANAGED_CLOUD_DEFAULT_CATEGORY[provider],
+    );
+    if (defaultModel) {
+      models.push(defaultModel);
+    }
+  }
+
+  return Array.from(new Map(models.map((model) => [model.id, model])).values());
+}
 
 /**
  * Returns the managed cloud models available for the given plan tier.
@@ -124,7 +148,7 @@ const MANAGED_CLOUD_MODELS: ManagedCloudModel[] = [
  */
 export function getManagedCloudModelsForTier(tier: PlanTier | string): ManagedCloudModel[] {
   const isPro = tier === 'pro' || tier === 'max' || tier === 'enterprise';
-  return MANAGED_CLOUD_MODELS.filter((m) => isPro || m.tier === 'hobby');
+  return getManagedCloudCatalogModels().filter((model) => isPro || model.tier === 'hobby');
 }
 
 export interface ProviderStatus {
@@ -345,7 +369,7 @@ interface ModelState {
 
   /**
    * Cycle the currently selected model to its thinking/reasoning counterpart, or back.
-   * E.g. claude-sonnet-4-6 ↔ claude-sonnet-4-6-thinking, gpt-5.4 ↔ o3, etc.
+   * E.g. claude-sonnet-4.6 ↔ claude-opus-4.6, gpt-5.4 ↔ gpt-5.4-pro, gemini-3.1-flash-lite ↔ gemini-3.1-pro-preview.
    * Shows a toast with the result.
    */
   cycleModelVariant: () => void;
@@ -399,22 +423,19 @@ const defaultUsageStats: UsageStats = {
 // ---------------------------------------------------------------------------
 
 const MODEL_VARIANT_MAP: Record<string, string> = {
-  'claude-sonnet-4-6': 'claude-sonnet-4-6-thinking',
-  'claude-sonnet-4-6-thinking': 'claude-sonnet-4-6',
-  'claude-opus-4-6': 'claude-opus-4-6-thinking',
-  'claude-opus-4-6-thinking': 'claude-opus-4-6',
-  'gpt-5.4': 'o3',
-  o3: 'gpt-5.4',
-  'gpt-5.4-mini': 'o3-mini',
-  'o3-mini': 'gpt-5.4-mini',
-  'gemini-3.1-flash-lite': 'gemini-3.1-flash-lite-thinking',
-  'gemini-3.1-flash-lite-thinking': 'gemini-3.1-flash-lite',
+  'claude-sonnet-4.6': 'claude-opus-4.6',
+  'claude-opus-4.6': 'claude-sonnet-4.6',
+  'gpt-5.4': 'gpt-5.4-pro',
+  'gpt-5.4-pro': 'gpt-5.4',
+  'gpt-5.4-mini': 'gpt-5.4',
+  'gemini-3.1-flash-lite': 'gemini-3.1-pro-preview',
+  'gemini-3.1-pro-preview': 'gemini-3.1-flash-lite',
   'deepseek-chat': 'deepseek-reasoner',
   'deepseek-reasoner': 'deepseek-chat',
 };
 
 // Version for storage migration
-const MODEL_STORE_VERSION = 1;
+const MODEL_STORE_VERSION = 2;
 
 export const useModelStore = create<ModelState>()(
   devtools(
@@ -487,8 +508,15 @@ export const useModelStore = create<ModelState>()(
 
         selectModel: async (modelId: string, provider: Provider) => {
           try {
-            let nextModelId = modelId;
+            let nextModelId = normalizeModelId(modelId) ?? modelId;
             let nextProvider = provider;
+
+            if (!nextModelId.startsWith('auto') && nextModelId !== 'auto') {
+              const selectedMetadata = getModelMetadata(nextModelId);
+              if (selectedMetadata?.provider) {
+                nextProvider = selectedMetadata.provider;
+              }
+            }
 
             if (provider !== 'ollama' && modelId !== 'auto') {
               const { useUnifiedAuthStore } = await import('./auth');
@@ -538,11 +566,12 @@ export const useModelStore = create<ModelState>()(
         },
 
         toggleFavorite: (modelId: string) => {
+          const canonicalModelId = normalizeModelId(modelId) ?? modelId;
           set(
             (state) => {
-              const favorites = state.favorites.includes(modelId)
-                ? state.favorites.filter((id) => id !== modelId)
-                : [...state.favorites, modelId];
+              const favorites = state.favorites.includes(canonicalModelId)
+                ? state.favorites.filter((id) => id !== canonicalModelId)
+                : [...state.favorites, canonicalModelId];
               return { favorites };
             },
             undefined,
@@ -570,10 +599,11 @@ export const useModelStore = create<ModelState>()(
         },
 
         addToRecent: (modelId: string) => {
+          const canonicalModelId = normalizeModelId(modelId) ?? modelId;
           set(
             (state) => {
-              const filtered = state.recentModels.filter((id) => id !== modelId);
-              const recentModels = [modelId, ...filtered].slice(0, 5);
+              const filtered = state.recentModels.filter((id) => id !== canonicalModelId);
+              const recentModels = [canonicalModelId, ...filtered].slice(0, 5);
               return { recentModels };
             },
             undefined,
@@ -986,7 +1016,8 @@ export const useModelStore = create<ModelState>()(
             toast.info('No model selected');
             return;
           }
-          const variantId = MODEL_VARIANT_MAP[selectedModel];
+          const canonicalSelectedModel = normalizeModelId(selectedModel) ?? selectedModel;
+          const variantId = MODEL_VARIANT_MAP[canonicalSelectedModel];
           if (!variantId) {
             toast.info('No thinking/reasoning variant available for this model');
             return;
@@ -1073,9 +1104,24 @@ export const useModelStore = create<ModelState>()(
           speedQualityMode: state.speedQualityMode,
         }),
         migrate: (persistedState: unknown, _version: number) => {
-          // No schema changes yet — MODEL_STORE_VERSION started at 1.
-          // Add sequential if (version < N) blocks here when schema changes are needed.
-          return persistedState as ModelState;
+          const state = persistedState as Partial<ModelState> | null;
+          if (!state) {
+            return (persistedState ?? {}) as ModelState;
+          }
+
+          return {
+            ...state,
+            selectedModel:
+              state.selectedModel === undefined
+                ? state.selectedModel
+                : (normalizeModelId(state.selectedModel) ?? state.selectedModel),
+            favorites: (state.favorites ?? []).map(
+              (modelId) => normalizeModelId(modelId) ?? modelId,
+            ),
+            recentModels: (state.recentModels ?? []).map(
+              (modelId) => normalizeModelId(modelId) ?? modelId,
+            ),
+          } as ModelState;
         },
       },
     ),
@@ -1120,7 +1166,7 @@ export const selectSelectedModelMetadata = (state: ModelState): ModelMetadata | 
 };
 
 export const selectIsModelFavorite = (modelId: string) => (state: ModelState) =>
-  state.favorites.includes(modelId);
+  state.favorites.includes(normalizeModelId(modelId) ?? modelId);
 
 export const selectProviderStatus = (provider: Provider) => (state: ModelState) =>
   state.providerStatuses[provider];
@@ -1231,7 +1277,11 @@ export const resolveEffectiveModelForTier = (
   selectedModel: string | null,
   tier: string | null | undefined,
 ): string => {
-  return selectedModel || getBestAutoModeForSubscriptionTier(tier ?? 'hobby');
+  return (
+    normalizeModelId(selectedModel) ??
+    selectedModel ??
+    getBestAutoModeForSubscriptionTier(tier ?? 'hobby')
+  );
 };
 
 /**
