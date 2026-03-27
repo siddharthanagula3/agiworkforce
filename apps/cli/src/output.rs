@@ -4,6 +4,7 @@ use std::env;
 use std::time::Duration;
 
 use crate::markdown::MarkdownRenderer;
+use crate::provider;
 
 // ---------------------------------------------------------------------------
 // Color depth detection
@@ -86,7 +87,11 @@ pub fn format_duration_ms(ms: u64) -> String {
     } else if ms < MS_PER_MINUTE {
         format!("{:.1}s", ms as f64 / THOUSAND)
     } else {
-        format!("{}m {}s", ms / MS_PER_MINUTE, (ms % MS_PER_MINUTE) / MS_PER_SECOND)
+        format!(
+            "{}m {}s",
+            ms / MS_PER_MINUTE,
+            (ms % MS_PER_MINUTE) / MS_PER_SECOND
+        )
     }
 }
 
@@ -237,45 +242,9 @@ pub fn print_error(message: &str) {
 /// Rough cost estimation per 1M tokens (USD) for well-known models.
 /// Returns (input_cost_per_1m, output_cost_per_1m).
 pub fn model_pricing(model: &str) -> (f64, f64) {
-    let m = model.to_lowercase();
-    if m.contains("opus") {
-        (15.0, 75.0)
-    } else if m.contains("sonnet") {
-        (3.0, 15.0)
-    } else if m.contains("haiku") {
-        (0.25, 1.25)
-    } else if m.contains("gpt-4o-mini") {
-        (0.15, 0.60)
-    } else if m.contains("gpt-4o") {
-        (2.50, 10.0)
-    } else if m.contains("gpt-4-turbo") {
-        (10.0, 30.0)
-    } else if m.contains("o3-mini") {
-        (1.10, 4.40)
-    } else if m.contains("o3") {
-        (10.0, 40.0)
-    } else if m.contains("gemini-3") {
-        (0.10, 0.40)
-    } else if m.contains("gemini-1.5-pro") {
-        (1.25, 5.0)
-    } else if m.contains("mistral-large") {
-        (2.0, 6.0)
-    } else if m.contains("mistral-small") {
-        (0.1, 0.3)
-    } else if m.contains("codestral") {
-        (0.3, 0.9)
-    } else if m.contains("grok-beta") {
-        (5.0, 15.0)
-    } else if m.contains("grok-4") {
-        (2.0, 10.0)
-    } else if m.contains("deepseek-reasoner") {
-        (0.55, 2.19)
-    } else if m.contains("deepseek-chat") || m.contains("deepseek-v") {
-        (0.14, 0.28)
-    } else {
-        // Local / unknown models — no cost
-        (0.0, 0.0)
-    }
+    provider::find_model(model)
+        .map(|info| (info.input_price_per_1m, info.output_price_per_1m))
+        .unwrap_or((0.0, 0.0))
 }
 
 /// Format a cost summary string.
@@ -474,57 +443,65 @@ pub fn flush_markdown(renderer: &mut MarkdownRenderer) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    fn env_test_lock() -> MutexGuard<'static, ()> {
+        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env test lock")
+    }
 
     // -- model_pricing tests ------------------------------------------------
 
     #[test]
     fn test_model_pricing_anthropic_opus() {
         let (i, o) = model_pricing("claude-opus-4-6");
-        assert_eq!(i, 15.0);
-        assert_eq!(o, 75.0);
+        assert_eq!(i, 5.0);
+        assert_eq!(o, 25.0);
     }
 
     #[test]
     fn test_model_pricing_anthropic_sonnet() {
-        let (i, o) = model_pricing("claude-sonnet-4-20250514");
+        let (i, o) = model_pricing("claude-sonnet-4-6");
         assert_eq!(i, 3.0);
         assert_eq!(o, 15.0);
     }
 
     #[test]
     fn test_model_pricing_anthropic_haiku() {
-        let (i, o) = model_pricing("claude-3-5-haiku-20241022");
-        assert_eq!(i, 0.25);
-        assert_eq!(o, 1.25);
+        let (i, o) = model_pricing("claude-haiku-4-5-20251001");
+        assert_eq!(i, 1.0);
+        assert_eq!(o, 5.0);
     }
 
     #[test]
-    fn test_model_pricing_openai_gpt4o() {
-        let (i, o) = model_pricing("gpt-4o");
+    fn test_model_pricing_openai_gpt54() {
+        let (i, o) = model_pricing("gpt-5.4");
         assert_eq!(i, 2.50);
-        assert_eq!(o, 10.0);
+        assert_eq!(o, 15.0);
     }
 
     #[test]
-    fn test_model_pricing_openai_gpt4o_mini() {
-        // gpt-4o-mini must match before the broader gpt-4o pattern
-        let (i, o) = model_pricing("gpt-4o-mini");
-        assert_eq!(i, 0.15);
-        assert_eq!(o, 0.60);
+    fn test_model_pricing_openai_gpt54_mini() {
+        let (i, o) = model_pricing("gpt-5.4-mini");
+        assert_eq!(i, 0.75);
+        assert_eq!(o, 4.50);
     }
 
     #[test]
-    fn test_model_pricing_openai_o3_mini() {
-        let (i, o) = model_pricing("o3-mini");
-        assert_eq!(i, 1.10);
-        assert_eq!(o, 4.40);
+    fn test_model_pricing_openai_gpt54_pro() {
+        let (i, o) = model_pricing("gpt-5.4-pro");
+        assert_eq!(i, 30.0);
+        assert_eq!(o, 180.0);
     }
 
     #[test]
     fn test_model_pricing_deepseek_reasoner() {
         let (i, o) = model_pricing("deepseek-reasoner");
-        assert_eq!(i, 0.55);
-        assert_eq!(o, 2.19);
+        assert_eq!(i, 0.28);
+        assert_eq!(o, 0.42);
     }
 
     #[test]
@@ -536,8 +513,8 @@ mod tests {
 
     #[test]
     fn test_model_pricing_case_insensitive() {
-        let (i1, o1) = model_pricing("Claude-Opus-4");
-        let (i2, o2) = model_pricing("claude-opus-4");
+        let (i1, o1) = model_pricing("Claude-Opus-4-6");
+        let (i2, o2) = model_pricing("claude-opus-4-6");
         assert_eq!(i1, i2);
         assert_eq!(o1, o2);
     }
@@ -546,7 +523,7 @@ mod tests {
 
     #[test]
     fn test_format_cost_with_known_model() {
-        let result = format_cost("claude-sonnet-4-20250514", 1_000_000, 500_000);
+        let result = format_cost("claude-sonnet-4-6", 1_000_000, 500_000);
         // Input: 1M * $3.0/1M = $3.0000
         // Output: 500K * $15.0/1M = $7.5000
         // Total: $10.5000
@@ -568,7 +545,7 @@ mod tests {
 
     #[test]
     fn test_format_cost_zero_tokens() {
-        let result = format_cost("gpt-4o", 0, 0);
+        let result = format_cost("gpt-5.4", 0, 0);
         // 0 tokens of anything is $0.00 — treated as local/zero
         assert!(result.contains("no cost"));
     }
@@ -609,23 +586,18 @@ mod tests {
     fn test_all_pricing_branches_non_negative() {
         let models = [
             "claude-opus-4-6",
-            "claude-sonnet-4-20250514",
-            "claude-3-5-haiku-20241022",
-            "gpt-4o-mini",
-            "gpt-4o",
-            "gpt-4-turbo",
-            "o3-mini",
-            "o3",
-            "gemini-3-flash-preview",
-            "gemini-1.5-pro",
-            "mistral-large-latest",
-            "mistral-small-latest",
-            "codestral-latest",
-            "grok-beta",
-            "grok-4",
+            "claude-sonnet-4-6",
+            "claude-haiku-4-5-20251001",
+            "gpt-5.4-mini",
+            "gpt-5.4",
+            "gpt-5.4-pro",
+            "gemini-3.1-flash-lite",
+            "gemini-3.1-pro-preview",
+            "mistral-large-2512",
+            "mistral-medium-2508",
+            "grok-4-0709",
             "deepseek-reasoner",
             "deepseek-chat",
-            "deepseek-v3",
             "unknown-local-model",
         ];
 
@@ -640,6 +612,7 @@ mod tests {
 
     #[test]
     fn test_color_level_no_color_env() {
+        let _guard = env_test_lock();
         // Save and set NO_COLOR
         let prev_no = env::var("NO_COLOR").ok();
         let prev_ct = env::var("COLORTERM").ok();
@@ -668,6 +641,7 @@ mod tests {
 
     #[test]
     fn test_color_level_truecolor() {
+        let _guard = env_test_lock();
         let prev_no = env::var("NO_COLOR").ok();
         let prev_ct = env::var("COLORTERM").ok();
 
@@ -688,6 +662,7 @@ mod tests {
 
     #[test]
     fn test_color_level_24bit() {
+        let _guard = env_test_lock();
         let prev_no = env::var("NO_COLOR").ok();
         let prev_ct = env::var("COLORTERM").ok();
 
@@ -708,6 +683,7 @@ mod tests {
 
     #[test]
     fn test_color_level_256color_term() {
+        let _guard = env_test_lock();
         let prev_no = env::var("NO_COLOR").ok();
         let prev_ct = env::var("COLORTERM").ok();
         let prev_term = env::var("TERM").ok();
@@ -734,6 +710,7 @@ mod tests {
 
     #[test]
     fn test_color_level_fallback_ansi16() {
+        let _guard = env_test_lock();
         let prev_no = env::var("NO_COLOR").ok();
         let prev_ct = env::var("COLORTERM").ok();
         let prev_term = env::var("TERM").ok();
@@ -760,6 +737,7 @@ mod tests {
 
     #[test]
     fn test_color_level_no_color_takes_priority() {
+        let _guard = env_test_lock();
         // NO_COLOR should override COLORTERM=truecolor
         let prev_no = env::var("NO_COLOR").ok();
         let prev_ct = env::var("COLORTERM").ok();
@@ -849,7 +827,7 @@ mod tests {
     fn test_format_table_alignment() {
         let headers = &["Model", "Cost"];
         let rows = vec![
-            vec!["gpt-4o".to_string(), "$2.50".to_string()],
+            vec!["gpt-5.4".to_string(), "$2.50".to_string()],
             vec!["claude-opus-4".to_string(), "$15.00".to_string()],
         ];
         let result = format_table(headers, &rows);
@@ -859,7 +837,7 @@ mod tests {
         // Widest cell in col 0 is "claude-opus-4" (13 chars), so all rows
         // in col 0 should be padded to at least that width.
         assert!(lines[0].starts_with("Model"));
-        assert!(lines[2].starts_with("gpt-4o"));
+        assert!(lines[2].starts_with("gpt-5.4"));
         assert!(lines[3].starts_with("claude-opus-4"));
     }
 
