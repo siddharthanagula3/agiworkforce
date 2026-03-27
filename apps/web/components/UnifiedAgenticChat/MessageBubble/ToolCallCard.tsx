@@ -20,6 +20,12 @@ export interface ToolCallCardProps {
   toolName?: string;
   toolStatus?: string;
   toolCommand?: string;
+  toolParameters?: Record<string, unknown>;
+  toolError?: string;
+  toolStartedAt?: string;
+  toolCompletedAt?: string;
+  toolDurationMs?: number;
+  createdAt?: string;
   requiresApproval: boolean;
   actionId?: string;
   confirmationRequestId?: string; // AUDIT-UI-052: ID for tool confirmation requests
@@ -31,6 +37,12 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   toolName,
   toolStatus,
   toolCommand,
+  toolParameters,
+  toolError,
+  toolStartedAt,
+  toolCompletedAt,
+  toolDurationMs,
+  createdAt,
   requiresApproval,
   actionId,
   confirmationRequestId,
@@ -130,16 +142,33 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
       id: actionId || messageId, // Use actionId if avail, fallback to messageId
       type: 'tool_use',
       name: toolName || 'Unknown Tool',
-      tool_id: actionId || 'unknown',
+      tool_id: toolName || actionId || 'unknown',
       tool_name: toolName || 'Unknown Tool',
       tool_description: toolCommand || '',
-      parameters: {}, // We don't have structured params here easily without parsing toolCommand
+      parameters: toolParameters || {},
       status,
-      created_at: new Date().toISOString(),
+      error: toolError,
+      created_at: createdAt || new Date().toISOString(),
+      started_at: toolStartedAt,
+      completed_at: toolCompletedAt,
+      duration_ms: toolDurationMs,
       requires_approval: requiresApproval,
       // If we could parse duration from toolStatus string or similar, we would add it here
     };
-  }, [actionId, messageId, toolName, toolCommand, toolStatus, requiresApproval]);
+  }, [
+    actionId,
+    messageId,
+    toolName,
+    toolCommand,
+    toolParameters,
+    toolStatus,
+    toolError,
+    toolStartedAt,
+    toolCompletedAt,
+    toolDurationMs,
+    createdAt,
+    requiresApproval,
+  ]);
 
   return (
     <div className="w-full">
@@ -165,7 +194,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
         <div className="flex justify-end mt-1 px-1">
           <button
             onClick={() => onToggleSidecar(targetTab as SidecarMode)}
-            className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
           >
             Open in {targetTab} view
           </button>

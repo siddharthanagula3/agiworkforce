@@ -30,24 +30,24 @@ export function SubscriptionLockDialog({
 }: SubscriptionLockDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-zinc-900 border-zinc-700 max-w-md">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-zinc-800 mx-auto mb-2">
-            <Lock className="w-5 h-5 text-zinc-400" aria-hidden="true" />
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <Lock className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           </div>
-          <DialogTitle className="text-center text-zinc-100">{featureName}</DialogTitle>
-          <DialogDescription className="text-center text-zinc-400">
+          <DialogTitle className="text-center">{featureName}</DialogTitle>
+          <DialogDescription className="text-center">
             {description || `This feature requires the ${TIER_LABEL[requiredTier]} plan or higher.`}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3 mt-2">
+        <div className="mt-2 flex flex-col gap-3">
           <Link href="/pricing" onClick={() => onOpenChange(false)}>
-            <Button className="w-full bg-white text-black hover:bg-zinc-200">View Plans</Button>
+            <Button className="w-full">View Plans</Button>
           </Link>
           <Button
             variant="ghost"
-            className="w-full text-zinc-400"
+            className="w-full text-muted-foreground"
             onClick={() => onOpenChange(false)}
           >
             Maybe Later

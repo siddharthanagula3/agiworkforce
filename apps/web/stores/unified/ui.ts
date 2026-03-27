@@ -90,7 +90,15 @@ export type SidecarSection =
   | 'tasks'
   | 'agents';
 
-export type SidecarMode = 'code' | 'browser' | 'terminal' | 'preview' | 'diff' | 'canvas' | 'data';
+export type SidecarMode =
+  | 'code'
+  | 'browser'
+  | 'terminal'
+  | 'preview'
+  | 'diff'
+  | 'canvas'
+  | 'data'
+  | 'tasks';
 
 export interface SidecarState {
   isOpen: boolean;

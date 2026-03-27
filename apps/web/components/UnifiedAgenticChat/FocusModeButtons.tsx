@@ -39,12 +39,18 @@ export interface FocusModeButtonsProps {
   onFocusModeChange: (mode: FocusMode) => void;
   /** Whether reduced motion is preferred */
   prefersReducedMotion?: boolean;
+  /** Whether buttons are rendered inside the composer shell */
+  compact?: boolean;
+  /** Alignment inside the parent layout */
+  align?: 'start' | 'center';
 }
 
 export const FocusModeButtons: React.FC<FocusModeButtonsProps> = ({
   focusMode,
   onFocusModeChange,
   prefersReducedMotion = false,
+  compact = false,
+  align = 'center',
 }) => {
   return (
     <motion.div
@@ -52,14 +58,19 @@ export const FocusModeButtons: React.FC<FocusModeButtonsProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: prefersReducedMotion ? 0.1 : 0.2 }}
-      className="mb-3 flex items-center justify-center gap-2 flex-wrap"
+      className={cn(
+        'flex items-center gap-2 flex-wrap',
+        compact ? 'justify-start' : 'mb-3 justify-center',
+        align === 'start' && 'justify-start',
+      )}
     >
       {FOCUS_MODES.map((mode) => (
         <button
           key={mode.value || 'all'}
           onClick={() => onFocusModeChange(mode.value)}
           className={cn(
-            'px-3 py-1.5 text-xs font-medium rounded-full transition-all duration-200',
+            'font-medium rounded-full transition-all duration-200',
+            compact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs',
             focusMode === mode.value
               ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25'
               : 'bg-background/80 text-muted-foreground hover:bg-muted hover:text-foreground border border-border',

@@ -88,6 +88,7 @@ export interface ResearchSource {
   id: string;
   url: string;
   title: string;
+  domain?: string;
   snippet: string;
   relevanceScore: number;
   fetchedAt: Date;
