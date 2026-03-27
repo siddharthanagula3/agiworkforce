@@ -394,17 +394,13 @@ impl LLMRouter {
         // For free and hobby plans, prefer ultra-cheap models
         let is_budget_plan = matches!(context.plan_tier.as_str(), "free" | "hobby");
 
-        let mut provider = if is_budget_plan {
-            Provider::DeepSeek // DeepSeek Chat is best value
-        } else {
-            Provider::Google // Gemini 3 Pro is best balanced/quality
-        };
+        let mut provider = Provider::Google;
         let mut task_category = TaskCategory::Simple;
         let mut reason = if is_budget_plan {
-            "Budget plan detected - routing to best value options (DeepSeek or Gemini Flash)."
+            "Budget plan detected - routing to current low-cost core models (Gemini Flash Lite / GPT-5.4 Mini)."
                 .to_string()
         } else {
-            "General developer chat - routing to balanced cost/quality model.".to_string()
+            "General developer chat - routing to balanced core models.".to_string()
         };
 
         if context.requires_vision {
@@ -429,10 +425,11 @@ impl LLMRouter {
             )
         }) {
             if is_budget_plan {
-                // Budget plans use affordable models
-                provider = Provider::DeepSeek; // DeepSeek Chat is excellent for code
+                provider = Provider::OpenAI;
                 task_category = TaskCategory::Complex;
-                reason = "Developer workflow + budget plan - routing to DeepSeek Chat.".to_string();
+                reason =
+                    "Developer workflow + budget plan - routing to GPT-5.4 Mini for affordable coding."
+                        .to_string();
             } else {
                 provider = Provider::Anthropic;
                 task_category = TaskCategory::Complex;
@@ -457,10 +454,11 @@ impl LLMRouter {
                     .to_string()
             };
         } else if context.cost_priority == CostPriority::Low || is_budget_plan {
-            provider = Provider::DeepSeek; // Use DeepSeek for low cost high quality
+            provider = Provider::OpenAI;
             task_category = TaskCategory::Simple;
-            reason = "Cost priority is low - routing to affordable DeepSeek for efficient loops."
-                .to_string();
+            reason =
+                "Cost priority is low - routing to GPT-5.4 Mini for efficient low-cost loops."
+                    .to_string();
         }
 
         if context.token_estimate > 12_000 && provider == Provider::OpenAI && !is_budget_plan {
@@ -501,9 +499,10 @@ impl LLMRouter {
             "coding" => {
                 if is_budget_plan {
                     (
-                        Provider::DeepSeek,
-                        provider_task_model(Provider::DeepSeek, "chat"),
-                        "Coding intent + budget plan - routing to DeepSeek Chat.2 (best coding value).".to_string(),
+                        Provider::OpenAI,
+                        provider_task_model(Provider::OpenAI, "fast_completion"),
+                        "Coding intent + budget plan - routing using OpenAI fast-completion default."
+                            .to_string(),
                     )
                 } else {
                     (
@@ -519,9 +518,9 @@ impl LLMRouter {
             "reasoning" => {
                 if is_budget_plan {
                     (
-                        Provider::XAI,
-                        provider_task_model(Provider::XAI, "complex_reasoning"),
-                        "Reasoning intent + budget plan - routing using xAI catalog reasoning default."
+                        Provider::Google,
+                        provider_task_model(Provider::Google, "chat"),
+                        "Reasoning intent + budget plan - routing using Google catalog chat default."
                             .to_string(),
                     )
                 } else {
@@ -1510,458 +1509,308 @@ impl LLMRouter {
                 self.strategy_order(task, strategy, plan_tier)
             }
             RoutingStrategy::AutoEconomy => {
-                // AutoEconomy: Cost-optimized routing - Best value models ranked by cost efficiency
-                // Focuses on maximum tokens per dollar (Hobby plan models)
+                // AutoEconomy: current low-cost defaults derived from the shared catalog.
+                // Keep the dynamic ManagedCloud lane first, then fall back through the core
+                // OpenAI / Google / Anthropic stack before the generic provider fallback chain.
                 match task {
-                    TaskCategory::Simple => {
-                        vec![
-                            // Dynamic Economy Strategy
-                            RouteCandidate {
-                                strategy: Some(RoutingStrategy::AutoEconomy),
-                                provider: Provider::ManagedCloud,
-                                model: "auto-economy".to_string(),
-                                reason: "auto-economy-dynamic",
-                            },
-                            // Anthropic early fallback — ensures users with only an Anthropic key
-                            // don't hit 403s from unconfigured providers (DeepSeek, Google) first
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-haiku-4-5".to_string(),
-                                reason: "auto-economy-quality",
-                            },
-                            // Remaining fallbacks by cost efficiency
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "deepseek-chat".to_string(), // Managed Cloud supports DeepSeek Chat ($0.28/1M)
-                                reason: "auto-economy-best-value-cloud",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::DeepSeek,
-                                model: "deepseek-chat".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench
-                                reason: "auto-economy-best-value",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Google,
-                                model: "gemini-3.1-flash-lite".to_string(), // Latest lightweight Gemini 3.1
-                                reason: "auto-economy-best-chat-value",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "managed-cloud-auto".to_string(), // Fallback
-                                reason: "auto-economy-cloud",
-                            },
-                        ]
-                    }
-                    TaskCategory::Complex => {
-                        vec![
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "deepseek-chat".to_string(), // Managed Cloud supports DeepSeek Chat ($0.28/1M)
-                                reason: "auto-economy-best-value-cloud",
-                            },
-                            // Anthropic early fallback — ensures users with only an Anthropic key
-                            // don't hit 403s from unconfigured providers (DeepSeek, Google, XAI) first
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-haiku-4-5".to_string(), // Best quality/price: 208 Elo/$
-                                reason: "auto-economy-quality",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::DeepSeek,
-                                model: "deepseek-chat".to_string(), // Best cost efficiency: $0.28/1M, 73.1% SWE-bench, 87.5% AIME
-                                reason: "auto-economy-best-value",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Google,
-                                model: "gemini-3.1-flash-lite".to_string(), // Latest lightweight Gemini 3.1
-                                reason: "auto-economy",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "grok-4-1-fast-reasoning".to_string(), // Managed Cloud Reasoning
-                                reason: "auto-economy-xai-reasoning-cloud",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::XAI,
-                                model: "grok-4-1-fast-reasoning".to_string(), // Reasoning: $0.20/$0.50 per 1M, 2M context
-                                reason: "auto-economy-xai-reasoning",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::XAI,
-                                model: "grok-4-1-fast-reasoning".to_string(), // $0.20/$0.50 per 1M, 2M context
-                                reason: "auto-economy-xai",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::XAI,
-                                model: "grok-4-1-fast".to_string(), // General purpose: $0.80/1M (legacy)
-                                reason: "auto-economy-xai-legacy",
-                            },
-                        ]
-                    }
-                    TaskCategory::Creative => {
-                        vec![
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Google,
-                                model: "gemini-3.1-flash-lite".to_string(), // Latest lightweight Gemini 3.1
-                                reason: "auto-economy",
-                            },
-                            // Anthropic early fallback — ensures users with only an Anthropic key
-                            // don't hit 403s from unconfigured providers first
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-haiku-4-5".to_string(),
-                                reason: "auto-economy-quality",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "deepseek-chat".to_string(), // Managed Cloud supports DeepSeek Chat ($0.28/1M)
-                                reason: "auto-economy-deepseek-cloud",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::DeepSeek,
-                                model: "deepseek-chat".to_string(), // Best cost efficiency: $0.28/1M
-                                reason: "auto-economy-deepseek",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "gpt-5.4-mini".to_string(), // Managed Cloud fallback
-                                reason: "auto-economy-fast-cloud",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::OpenAI,
-                                model: "gpt-5.4-mini".to_string(), // Latest lightweight GPT-5.4 with tool routing
-                                reason: "auto-economy",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::XAI,
-                                model: "grok-4-1-fast-reasoning".to_string(), // $0.20/$0.50 per 1M, 2M context
-                                reason: "auto-economy-xai-reasoning",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::XAI,
-                                model: "grok-4-1-fast".to_string(), // General purpose: $0.30/$0.50 per 1M
-                                reason: "auto-economy-xai-legacy",
-                            },
-                        ]
-                    }
+                    TaskCategory::Simple => vec![
+                        RouteCandidate {
+                            strategy: Some(RoutingStrategy::AutoEconomy),
+                            provider: Provider::ManagedCloud,
+                            model: "auto-economy".to_string(),
+                            reason: "auto-economy-dynamic",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Google,
+                            model: provider_task_model(Provider::Google, "fast_completion"),
+                            reason: "auto-economy-fast",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::OpenAI,
+                            model: provider_task_model(Provider::OpenAI, "fast_completion"),
+                            reason: "auto-economy-fast",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::ManagedCloud,
+                            model: provider_task_model(Provider::ManagedCloud, "chat"),
+                            reason: "auto-economy-cloud",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Anthropic,
+                            model: provider_task_model(Provider::Anthropic, "chat"),
+                            reason: "auto-economy-quality",
+                        },
+                    ],
+                    TaskCategory::Complex => vec![
+                        RouteCandidate {
+                            strategy: Some(RoutingStrategy::AutoEconomy),
+                            provider: Provider::ManagedCloud,
+                            model: "auto-economy".to_string(),
+                            reason: "auto-economy-dynamic",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::OpenAI,
+                            model: provider_task_model(Provider::OpenAI, "fast_completion"),
+                            reason: "auto-economy-fast",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Google,
+                            model: provider_task_model(Provider::Google, "chat"),
+                            reason: "auto-economy-balanced",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::ManagedCloud,
+                            model: provider_task_model(Provider::ManagedCloud, "chat"),
+                            reason: "auto-economy-cloud",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Anthropic,
+                            model: provider_task_model(Provider::Anthropic, "chat"),
+                            reason: "auto-economy-quality",
+                        },
+                    ],
+                    TaskCategory::Creative => vec![
+                        RouteCandidate {
+                            strategy: Some(RoutingStrategy::AutoEconomy),
+                            provider: Provider::ManagedCloud,
+                            model: "auto-economy".to_string(),
+                            reason: "auto-economy-dynamic",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Google,
+                            model: provider_task_model(Provider::Google, "chat"),
+                            reason: "auto-economy-creative",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Anthropic,
+                            model: provider_task_model(Provider::Anthropic, "chat"),
+                            reason: "auto-economy-quality",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::OpenAI,
+                            model: provider_task_model(Provider::OpenAI, "chat"),
+                            reason: "auto-economy-creative",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::ManagedCloud,
+                            model: provider_task_model(Provider::ManagedCloud, "chat"),
+                            reason: "auto-economy-cloud",
+                        },
+                    ],
                 }
             }
             RoutingStrategy::AutoBalanced => {
-                // AutoBalanced: Quality/cost balance - Balanced models (Pro plan focus)
-                // Best quality per dollar with good performance
-                //
-                // Reasoning Model Priority (December 2025):
-                // When same provider offers reasoning and non-reasoning at same price, prioritize reasoning.
-                // Example: grok-4-fast-reasoning ($0.50/1M) over grok-4-fast ($0.50/1M)
+                // AutoBalanced: current quality/cost defaults derived from the shared catalog.
                 match task {
-                    TaskCategory::Simple => {
-                        vec![
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "managed-cloud-auto".to_string(),
-                                reason: "auto-balanced-cloud",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Google,
-                                model: "gemini-3.1-pro-preview".to_string(), // Best chat: 1501 Elo, best reasoning
-                                reason: "auto-balanced-best-quality",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-sonnet-4-6".to_string(),
-                                reason: "auto-balanced-sonnet",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Moonshot,
-                                model: "kimi-k2.5".to_string(),
-                                reason: "auto-balanced-reasoning",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::DeepSeek,
-                                model: "deepseek-chat".to_string(),
-                                reason: "auto-balanced-deepseek",
-                            },
-                        ]
-                    }
-                    TaskCategory::Complex => {
-                        vec![
-                            RouteCandidate {
-                                strategy: Some(RoutingStrategy::AutoBalanced),
-                                provider: Provider::ManagedCloud,
-                                model: "auto-balanced".to_string(),
-                                reason: "auto-balanced-dynamic",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::OpenAI,
-                                model: "gpt-5.4".to_string(),
-                                reason: "auto-balanced-performance",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-sonnet-4-6".to_string(),
-                                reason: "auto-balanced-performance",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "managed-cloud-auto".to_string(),
-                                reason: "auto-balanced-cloud",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-sonnet-4-6".to_string(), // Excellent coding: 77.2% SWE-bench
-                                reason: "auto-balanced-coding",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Moonshot,
-                                model: "kimi-k2.5".to_string(), // Reasoning model: $7.50/1M, exceptional math: 99.1% AIME, 84.5% GPQA (prioritized over non-reasoning at same price)
-                                reason: "auto-balanced-reasoning",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Qwen,
-                                model: "qwen-max".to_string(), // Reasoning model with thinking mode: $12.50/1M, best open-source coding: 69.6% SWE-bench, 92.1% HumanEval
-                                reason: "auto-balanced-reasoning-coding",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Google,
-                                model: "gemini-3.1-pro-preview".to_string(), // Best chat: 1501 Elo, best reasoning: 91.9% GPQA ($7.50/1M)
-                                reason: "auto-balanced",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::OpenAI,
-                                model: "gpt-5.4".to_string(), // Fast inference: 187 tok/s, 76.3% SWE-bench, 88.1% GPQA
-                                reason: "auto-balanced",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::XAI,
-                                model: "grok-4-1-fast-reasoning".to_string(), // $0.20/$0.50 per 1M, 2M context
-                                reason: "auto-balanced-xai-reasoning",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::DeepSeek,
-                                model: "deepseek-chat".to_string(), // Best cost efficiency: $0.28/1M
-                                reason: "auto-balanced-deepseek",
-                            },
-                        ]
-                    }
-                    TaskCategory::Creative => {
-                        vec![
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "managed-cloud-auto".to_string(),
-                                reason: "auto-balanced-cloud",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Moonshot,
-                                model: "kimi-k2.5".to_string(),
-                                reason: "auto-balanced-reasoning",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Qwen,
-                                model: "qwen-max".to_string(),
-                                reason: "auto-balanced-reasoning",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Google,
-                                model: "gemini-3.1-pro-preview".to_string(),
-                                reason: "auto-balanced",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::OpenAI,
-                                model: "gpt-5.4".to_string(),
-                                reason: "auto-balanced",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-sonnet-4-6".to_string(),
-                                reason: "auto-balanced",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::XAI,
-                                model: "grok-4-1-fast-reasoning".to_string(), // $0.20/$0.50 per 1M, 2M context
-                                reason: "auto-balanced-xai-reasoning",
-                            },
-                        ]
-                    }
+                    TaskCategory::Simple => vec![
+                        RouteCandidate {
+                            strategy: Some(RoutingStrategy::AutoBalanced),
+                            provider: Provider::ManagedCloud,
+                            model: "auto-balanced".to_string(),
+                            reason: "auto-balanced-dynamic",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Anthropic,
+                            model: provider_task_model(Provider::Anthropic, "chat"),
+                            reason: "auto-balanced-quality",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::OpenAI,
+                            model: provider_task_model(Provider::OpenAI, "chat"),
+                            reason: "auto-balanced-quality",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Google,
+                            model: provider_task_model(Provider::Google, "chat"),
+                            reason: "auto-balanced-quality",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::ManagedCloud,
+                            model: provider_task_model(Provider::ManagedCloud, "chat"),
+                            reason: "auto-balanced-cloud",
+                        },
+                    ],
+                    TaskCategory::Complex => vec![
+                        RouteCandidate {
+                            strategy: Some(RoutingStrategy::AutoBalanced),
+                            provider: Provider::ManagedCloud,
+                            model: "auto-balanced".to_string(),
+                            reason: "auto-balanced-dynamic",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Anthropic,
+                            model: provider_task_model(Provider::Anthropic, "chat"),
+                            reason: "auto-balanced-quality",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::OpenAI,
+                            model: provider_task_model(Provider::OpenAI, "complex_reasoning"),
+                            reason: "auto-balanced-reasoning",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Google,
+                            model: provider_task_model(Provider::Google, "complex_reasoning"),
+                            reason: "auto-balanced-reasoning",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::ManagedCloud,
+                            model: provider_task_model(Provider::ManagedCloud, "chat"),
+                            reason: "auto-balanced-cloud",
+                        },
+                    ],
+                    TaskCategory::Creative => vec![
+                        RouteCandidate {
+                            strategy: Some(RoutingStrategy::AutoBalanced),
+                            provider: Provider::ManagedCloud,
+                            model: "auto-balanced".to_string(),
+                            reason: "auto-balanced-dynamic",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Google,
+                            model: provider_task_model(Provider::Google, "vision"),
+                            reason: "auto-balanced-creative",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Anthropic,
+                            model: provider_task_model(Provider::Anthropic, "chat"),
+                            reason: "auto-balanced-quality",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::OpenAI,
+                            model: provider_task_model(Provider::OpenAI, "chat"),
+                            reason: "auto-balanced-quality",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::ManagedCloud,
+                            model: provider_task_model(Provider::ManagedCloud, "chat"),
+                            reason: "auto-balanced-cloud",
+                        },
+                    ],
                 }
             }
             RoutingStrategy::AutoPremium => {
-                // AutoPremium: Performance optimized - Best possible models regardless of cost (Max plan)
+                // AutoPremium: latest flagship defaults from the shared catalog.
                 match task {
-                    TaskCategory::Simple => {
-                        vec![
-                            RouteCandidate {
-                                strategy: Some(RoutingStrategy::AutoPremium),
-                                provider: Provider::ManagedCloud,
-                                model: "auto-premium".to_string(),
-                                reason: "auto-premium-dynamic",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::OpenAI,
-                                model: "gpt-5.4".to_string(),
-                                reason: "auto-premium-quality",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "managed-cloud-auto".to_string(),
-                                reason: "auto-premium-cloud",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::OpenAI,
-                                model: "gpt-5.4-pro".to_string(), // Best all-around quality
-                                reason: "auto-premium",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-opus-4-6".to_string(), // Best reasoning/coding
-                                reason: "auto-premium",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Google,
-                                model: "gemini-3.1-pro-preview".to_string(), // Best multimodal
-                                reason: "auto-premium",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::XAI,
-                                model: "grok-4-1-fast-reasoning".to_string(), // $0.20/$0.50 per 1M, 2M context
-                                reason: "auto-premium-xai",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::DeepSeek,
-                                model: "deepseek-chat".to_string(),
-                                reason: "auto-premium-deepseek", // Good backup
-                            },
-                        ]
-                    }
-                    TaskCategory::Complex => {
-                        vec![
-                            RouteCandidate {
-                                strategy: Some(RoutingStrategy::AutoPremium),
-                                provider: Provider::ManagedCloud,
-                                model: "auto-premium".to_string(),
-                                reason: "auto-premium-dynamic",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-opus-4-6".to_string(),
-                                reason: "auto-premium-reasoning",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "managed-cloud-auto".to_string(),
-                                reason: "auto-premium-cloud",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-opus-4-6".to_string(), // Best coding: 80.9% SWE-bench
-                                reason: "auto-premium-coding",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::OpenAI,
-                                model: "o3".to_string(), // Best code generation
-                                reason: "auto-premium-coding",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::OpenAI,
-                                model: "o3".to_string(), // Reasoning specialist
-                                reason: "auto-premium-reasoning",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Google,
-                                model: "gemini-3.1-pro-preview".to_string(),
-                                reason: "auto-premium-complex",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::DeepSeek,
-                                model: "deepseek-chat".to_string(), // Strong code reasoning
-                                reason: "auto-premium-deepseek",
-                            },
-                        ]
-                    }
-                    TaskCategory::Creative => {
-                        vec![
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::ManagedCloud,
-                                model: "managed-cloud-auto".to_string(),
-                                reason: "auto-premium-cloud",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Google,
-                                model: "gemini-3.1-pro-preview".to_string(), // Best multimodal/creative
-                                reason: "auto-premium-creative",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::OpenAI,
-                                model: "gpt-5.4-pro".to_string(), // High creativity
-                                reason: "auto-premium-creative",
-                            },
-                            RouteCandidate {
-                                strategy: None,
-                                provider: Provider::Anthropic,
-                                model: "claude-opus-4-6".to_string(),
-                                reason: "auto-premium-creative",
-                            },
-                        ]
-                    }
+                    TaskCategory::Simple => vec![
+                        RouteCandidate {
+                            strategy: Some(RoutingStrategy::AutoPremium),
+                            provider: Provider::ManagedCloud,
+                            model: "auto-premium".to_string(),
+                            reason: "auto-premium-dynamic",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Anthropic,
+                            model: provider_task_model(Provider::Anthropic, "complex_reasoning"),
+                            reason: "auto-premium-quality",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::OpenAI,
+                            model: provider_task_model(Provider::OpenAI, "complex_reasoning"),
+                            reason: "auto-premium-quality",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Google,
+                            model: provider_task_model(Provider::Google, "complex_reasoning"),
+                            reason: "auto-premium-quality",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::ManagedCloud,
+                            model: provider_task_model(Provider::ManagedCloud, "chat"),
+                            reason: "auto-premium-cloud",
+                        },
+                    ],
+                    TaskCategory::Complex => vec![
+                        RouteCandidate {
+                            strategy: Some(RoutingStrategy::AutoPremium),
+                            provider: Provider::ManagedCloud,
+                            model: "auto-premium".to_string(),
+                            reason: "auto-premium-dynamic",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Anthropic,
+                            model: provider_task_model(Provider::Anthropic, "complex_reasoning"),
+                            reason: "auto-premium-reasoning",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::OpenAI,
+                            model: provider_task_model(Provider::OpenAI, "complex_reasoning"),
+                            reason: "auto-premium-reasoning",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Google,
+                            model: provider_task_model(Provider::Google, "complex_reasoning"),
+                            reason: "auto-premium-complex",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::ManagedCloud,
+                            model: provider_task_model(Provider::ManagedCloud, "long_context"),
+                            reason: "auto-premium-cloud",
+                        },
+                    ],
+                    TaskCategory::Creative => vec![
+                        RouteCandidate {
+                            strategy: Some(RoutingStrategy::AutoPremium),
+                            provider: Provider::ManagedCloud,
+                            model: "auto-premium".to_string(),
+                            reason: "auto-premium-dynamic",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Google,
+                            model: provider_task_model(Provider::Google, "vision"),
+                            reason: "auto-premium-creative",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::Anthropic,
+                            model: provider_task_model(Provider::Anthropic, "chat"),
+                            reason: "auto-premium-creative",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::OpenAI,
+                            model: provider_task_model(Provider::OpenAI, "chat"),
+                            reason: "auto-premium-creative",
+                        },
+                        RouteCandidate {
+                            strategy: None,
+                            provider: Provider::ManagedCloud,
+                            model: provider_task_model(Provider::ManagedCloud, "chat"),
+                            reason: "auto-premium-cloud",
+                        },
+                    ],
                 }
             }
         }
