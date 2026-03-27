@@ -1,4 +1,5 @@
 import 'server-only';
+import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
 
 /**
  * Context Management Module for AGI Workforce Web App
@@ -57,70 +58,16 @@ export interface ContextManagementOptions {
 }
 
 /**
- * Model context window sizes in tokens.
- * These define how large a conversation can grow before compaction is beneficial.
- */
-const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
-  // Anthropic Claude 4.x — 200K standard (1M via beta header)
-  'claude-opus-4-6-20251101': 200_000,
-  'claude-opus-4-5-20251101': 200_000,
-  'claude-sonnet-4-6-20251029': 200_000,
-  'claude-sonnet-4-5-20250929': 200_000,
-  'claude-haiku-4-5-20251001': 200_000,
-  // Internal aliases
-  'claude-opus-4.6': 200_000,
-  'claude-opus-4-6': 200_000,
-  'claude-opus-4.5': 200_000,
-  'claude-opus-4-5': 200_000,
-  'claude-sonnet-4.6': 200_000,
-  'claude-sonnet-4-6': 200_000,
-  'claude-sonnet-4.5': 200_000,
-  'claude-sonnet-4-5': 200_000,
-  'claude-haiku-4.5': 200_000,
-  'claude-haiku-4-5': 200_000,
-  // OpenAI GPT-5
-  'gpt-5.4': 1_000_000,
-  'gpt-5.4-pro': 1_050_000,
-  'gpt-5.4-mini': 400_000,
-  'gpt-5.4-nano': 128_000,
-  'gpt-5-codex': 128_000,
-  o3: 200_000,
-  // Google Gemini
-  'gemini-3-pro-preview': 1_000_000,
-  'gemini-3-flash-preview': 1_000_000,
-  'gemini-3-flash-lite': 1_000_000,
-  // xAI Grok 4
-  'grok-4': 128_000,
-  'grok-4-fast-reasoning': 128_000,
-  'grok-4-fast-non-reasoning': 128_000,
-  // DeepSeek
-  'deepseek-chat': 64_000,
-  'deepseek-r1': 64_000,
-  // Qwen
-  'qwen-max': 32_000,
-  'qwen-flash': 32_000,
-  // Moonshot
-  'kimi-k2.5': 128_000,
-  // Perplexity
-  sonar: 127_000,
-  'sonar-pro': 200_000,
-  'sonar-reasoning': 127_000,
-  'sonar-deep-research': 127_000,
-  // ZhipuAI
-  'glm-4.7': 128_000,
-  'glm-4.6v': 128_000,
-  'glm-4.6v-flash': 128_000,
-};
-
-/**
  * Get the context window size (in tokens) for a given model.
  * Falls back to a conservative 128K default for unknown models.
  */
 export function getModelContextWindow(modelId: string): number {
-  const normalized = modelId.toLowerCase();
-  if (MODEL_CONTEXT_WINDOWS[normalized] !== undefined) {
-    return MODEL_CONTEXT_WINDOWS[normalized]!;
+  const metadata = getModelMetadataById(modelId);
+  if (metadata?.contextWindow) {
+    return metadata.contextWindow;
   }
+
+  const normalized = normalizeModelId(modelId)?.toLowerCase() ?? modelId.toLowerCase();
 
   // Prefix-based pattern matching for dynamic/versioned model IDs
   if (normalized.includes('claude-')) return 200_000;

@@ -7,38 +7,24 @@ import {
   RETRYABLE_HTTP_STATUS_CODES,
 } from './base';
 import { logger } from '@/lib/logger';
-
-/**
- * Models that require max_completion_tokens instead of max_tokens.
- * These are reasoning models (GPT-5 series, o-series) that generate
- * both visible output tokens and internal reasoning tokens.
- *
- * See: https://help.openai.com/en/articles/5072518-controlling-the-length-of-openai-model-responses
- */
-const MODELS_REQUIRING_MAX_COMPLETION_TOKENS = [
-  // GPT-5 series (reasoning models)
-  'gpt-5',
-  'gpt-5-turbo',
-  'gpt-5.4',
-  'gpt-5.4-pro',
-  'gpt-5.4-mini',
-  'gpt-5.4-nano',
-  // O-series (reasoning models)
-  'o1',
-  'o1-mini',
-  'o1-preview',
-  'o3',
-  'o3-mini',
-  'o4-mini',
-];
+import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
 
 /**
  * Check if a model requires max_completion_tokens instead of max_tokens
  */
 function requiresMaxCompletionTokens(model: string): boolean {
-  const modelLower = model.toLowerCase();
-  return MODELS_REQUIRING_MAX_COMPLETION_TOKENS.some(
-    (m) => modelLower === m || modelLower.startsWith(`${m}-`),
+  const metadata = getModelMetadataById(model);
+  if (metadata?.provider === 'openai') {
+    return metadata.capabilities.thinking;
+  }
+
+  const normalized = normalizeModelId(model)?.toLowerCase() ?? model.toLowerCase();
+  return (
+    normalized === 'o1' ||
+    normalized === 'o3' ||
+    normalized.startsWith('o1-') ||
+    normalized.startsWith('o3-') ||
+    normalized.startsWith('o4-')
   );
 }
 
@@ -76,8 +62,8 @@ export class OpenAIProvider extends BaseLLMProvider {
       body['temperature'] = request.temperature;
     }
     if (request.max_tokens !== undefined) {
-      // Use max_completion_tokens for reasoning models (GPT-5 series, o-series)
-      // Use max_tokens for legacy models (GPT-5.4, GPT-5.4-mini, etc.)
+      // Use max_completion_tokens for OpenAI thinking/reasoning models.
+      // Fall back to max_tokens for non-thinking or legacy-compatible models.
       if (requiresMaxCompletionTokens(request.model)) {
         body['max_completion_tokens'] = request.max_tokens;
       } else {
