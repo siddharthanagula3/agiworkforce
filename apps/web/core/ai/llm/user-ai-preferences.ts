@@ -6,6 +6,36 @@
 import { settingsService } from '@features/settings/services/user-preferences';
 import { unifiedLLMService, type LLMProvider } from './unified-language-model';
 import { logger } from '@shared/lib/logger';
+import {
+  getProviderDefaultModel,
+  getTaskModelForProvider,
+  normalizeModelId,
+} from '@agiworkforce/types';
+
+const DEFAULT_OPENAI_MODEL = getProviderDefaultModel('openai') ?? 'gpt-5.4';
+const DEFAULT_DOCUMENT_MODEL = getTaskModelForProvider('anthropic', 'chat') ?? 'claude-sonnet-4.6';
+const DEFAULT_VISUAL_TASK_MODEL =
+  getTaskModelForProvider('google', 'chat') ?? 'gemini-3.1-flash-lite';
+
+function resolveDefaultModelForProvider(provider: LLMProvider): string {
+  switch (provider) {
+    case 'anthropic':
+      return getProviderDefaultModel('anthropic') ?? DEFAULT_DOCUMENT_MODEL;
+    case 'google':
+      return getProviderDefaultModel('google') ?? DEFAULT_VISUAL_TASK_MODEL;
+    case 'perplexity':
+      return getProviderDefaultModel('perplexity') ?? 'sonar';
+    case 'grok':
+      return getProviderDefaultModel('xai') ?? 'grok-4';
+    case 'deepseek':
+      return getProviderDefaultModel('deepseek') ?? 'deepseek-chat';
+    case 'qwen':
+      return getProviderDefaultModel('qwen') ?? 'qwen-plus';
+    case 'openai':
+    default:
+      return DEFAULT_OPENAI_MODEL;
+  }
+}
 
 /**
  * Load user AI preferences and apply them to the unified LLM service
@@ -24,7 +54,7 @@ export async function loadUserAIPreferences(): Promise<{
       // Return defaults if settings can't be loaded
       return {
         provider: 'openai',
-        model: 'gpt-5.4',
+        model: DEFAULT_OPENAI_MODEL,
         temperature: 0.7,
         maxTokens: 4000,
       };
@@ -32,7 +62,8 @@ export async function loadUserAIPreferences(): Promise<{
 
     // Extract AI preferences with fallbacks
     const provider = (data.default_ai_provider || 'openai') as LLMProvider;
-    const model = data.default_ai_model || 'gpt-5.4';
+    const model =
+      normalizeModelId(data.default_ai_model) ?? resolveDefaultModelForProvider(provider);
     const temperature = data.ai_temperature ?? 0.7;
     const maxTokens = data.ai_max_tokens ?? 4000;
 
@@ -56,7 +87,7 @@ export async function loadUserAIPreferences(): Promise<{
     // Return defaults on error
     return {
       provider: 'openai',
-      model: 'gpt-5.4',
+      model: DEFAULT_OPENAI_MODEL,
       temperature: 0.7,
       maxTokens: 4000,
     };
@@ -78,19 +109,19 @@ export function getProviderForTaskType(
       // Claude is better for document generation
       return {
         provider: 'anthropic',
-        model: 'claude-3-5-sonnet-20241022',
+        model: DEFAULT_DOCUMENT_MODEL,
       };
     case 'image':
-      // Google Imagen for image generation
+      // Use the fast Gemini 3.1 vision lane for image-adjacent requests.
       return {
         provider: 'google',
-        model: 'gemini-2.0-flash',
+        model: DEFAULT_VISUAL_TASK_MODEL,
       };
     case 'video':
-      // Google Veo for video generation
+      // Use the fast Gemini 3.1 vision lane for video-adjacent requests.
       return {
         provider: 'google',
-        model: 'gemini-3-flash',
+        model: DEFAULT_VISUAL_TASK_MODEL,
       };
     case 'code':
     case 'chat':
@@ -99,7 +130,7 @@ export function getProviderForTaskType(
       // These will be loaded by loadUserAIPreferences()
       return {
         provider: 'openai',
-        model: 'gpt-5.4',
+        model: DEFAULT_OPENAI_MODEL,
       };
   }
 }

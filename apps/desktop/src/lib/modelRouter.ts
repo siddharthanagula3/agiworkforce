@@ -187,9 +187,10 @@ function buildPreferenceList(modelIds: Array<string | null | undefined>): string
 }
 
 const DEFAULT_CHAT_FALLBACK_MODEL =
-  getTaskModelForProvider('google', 'fast_completion') ??
-  getTaskModelForProvider('openai', 'fast_completion') ??
-  'gpt-5.4-mini';
+  getTaskModelForProvider('openai', 'chat') ??
+  getTaskModelForProvider('anthropic', 'chat') ??
+  getTaskModelForProvider('google', 'chat') ??
+  'gpt-5.4';
 
 // ============================================
 // MINIMUM BENCHMARK THRESHOLDS
@@ -482,23 +483,17 @@ export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
   simple: buildPreferenceList([
     getTaskModelForProvider('openai', 'fast_completion'),
     getTaskModelForProvider('google', 'fast_completion'),
-    getTaskModelForProvider('xai', 'fast_completion'),
-    getTaskModelForProvider('deepseek', 'chat'),
-    getTaskModelForProvider('qwen', 'chat'),
+    getTaskModelForProvider('anthropic', 'fast_completion'),
   ]),
   moderate: buildPreferenceList([
     getTaskModelForProvider('google', 'chat'),
-    getTaskModelForProvider('xai', 'chat'),
-    getTaskModelForProvider('openai', 'chat'),
-    getTaskModelForProvider('moonshot', 'chat'),
-    getTaskModelForProvider('deepseek', 'chat'),
-  ]),
-  complex: buildPreferenceList([
     getTaskModelForProvider('openai', 'chat'),
     getTaskModelForProvider('anthropic', 'chat'),
+  ]),
+  complex: buildPreferenceList([
+    getTaskModelForProvider('openai', 'complex_reasoning'),
     getTaskModelForProvider('anthropic', 'complex_reasoning'),
-    getTaskModelForProvider('google', 'long_context'),
-    getTaskModelForProvider('moonshot', 'long_context'),
+    getTaskModelForProvider('google', 'complex_reasoning'),
   ]),
 };
 
@@ -512,36 +507,26 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
     getTaskModelForProvider('openai', 'code_generation'),
     getTaskModelForProvider('anthropic', 'code_generation'),
     getTaskModelForProvider('google', 'code_generation'),
-    getTaskModelForProvider('xai', 'code_generation'),
-    getTaskModelForProvider('deepseek', 'chat'),
   ]),
   reasoning: buildPreferenceList([
     getTaskModelForProvider('openai', 'complex_reasoning'),
     getTaskModelForProvider('anthropic', 'complex_reasoning'),
     getTaskModelForProvider('google', 'complex_reasoning'),
-    getTaskModelForProvider('xai', 'complex_reasoning'),
-    getTaskModelForProvider('moonshot', 'chat'),
   ]),
   general: buildPreferenceList([
     getTaskModelForProvider('openai', 'chat'),
     getTaskModelForProvider('anthropic', 'chat'),
     getTaskModelForProvider('google', 'chat'),
-    getTaskModelForProvider('deepseek', 'chat'),
-    getTaskModelForProvider('xai', 'chat'),
   ]),
   agentic: buildPreferenceList([
     getTaskModelForProvider('openai', 'chat'),
     getTaskModelForProvider('anthropic', 'chat'),
     getTaskModelForProvider('google', 'chat'),
-    getTaskModelForProvider('xai', 'chat'),
-    getTaskModelForProvider('moonshot', 'long_context'),
   ]),
   multimodal: buildPreferenceList([
     getTaskModelForProvider('openai', 'vision'),
     getTaskModelForProvider('google', 'vision'),
     getTaskModelForProvider('anthropic', 'vision'),
-    getTaskModelForProvider('zhipu', 'vision'),
-    getTaskModelForProvider('moonshot', 'long_context'),
   ]),
 };
 
