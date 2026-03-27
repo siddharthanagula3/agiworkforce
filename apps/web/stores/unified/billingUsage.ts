@@ -71,7 +71,7 @@ export interface BillingUsageState {
 // Rough approximation: 1 token ≈ 0.002 cents (used only for local budget metering)
 const APPROX_CENTS_PER_TOKEN = 0.002;
 
-// Thresholds as fractions of the daily limit
+// Thresholds as fractions of the active usage budget
 const WARNING_THRESHOLD = 0.8;
 const DANGER_THRESHOLD = 0.95;
 
@@ -93,11 +93,17 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
     const newSessionCost = state.sessionCost_cents + cost;
     set({ sessionCost_cents: newSessionCost });
 
-    // Generate budget alerts when daily thresholds are crossed
-    const { dailyBudget_cents, budgetAlerts, costOverview } = get();
-    if (dailyBudget_cents > 0) {
-      const totalUsage = newSessionCost + (costOverview?.daily_cost_cents ?? 0);
-      const ratio = totalUsage / dailyBudget_cents;
+    // Generate budget alerts against the active budget. Daily is legacy-only;
+    // the current product model uses the billing-period budget when daily is unset.
+    const { dailyBudget_cents, monthlyBudget_cents, budgetAlerts, costOverview } = get();
+    const effectiveBudgetCents = dailyBudget_cents > 0 ? dailyBudget_cents : monthlyBudget_cents;
+    if (effectiveBudgetCents > 0) {
+      const totalUsage =
+        newSessionCost +
+        (dailyBudget_cents > 0
+          ? (costOverview?.daily_cost_cents ?? 0)
+          : (costOverview?.monthly_cost_cents ?? 0));
+      const ratio = totalUsage / effectiveBudgetCents;
 
       const hasActiveAlert = (type: BudgetAlert['type']) =>
         budgetAlerts.some((a) => a.type === type && !a.dismissed);
@@ -105,12 +111,13 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
       if (ratio >= 1 && !hasActiveAlert('exceeded')) {
         get()._addAlert({
           type: 'exceeded',
-          message: 'Daily budget limit reached. Further requests may be blocked.',
+          message:
+            'Usage budget exhausted for this billing period. Further requests may be blocked.',
         });
       } else if (ratio >= DANGER_THRESHOLD && ratio < 1 && !hasActiveAlert('danger')) {
         get()._addAlert({
           type: 'danger',
-          message: `You have used ${Math.round(ratio * 100)}% of your daily budget.`,
+          message: `You have used ${Math.round(ratio * 100)}% of your usage budget.`,
         });
       } else if (
         ratio >= WARNING_THRESHOLD &&
@@ -119,7 +126,7 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
       ) {
         get()._addAlert({
           type: 'warning',
-          message: `You have used ${Math.round(ratio * 100)}% of your daily budget.`,
+          message: `You have used ${Math.round(ratio * 100)}% of your usage budget.`,
         });
       }
     }

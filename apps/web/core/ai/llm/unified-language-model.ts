@@ -38,7 +38,7 @@ import {
 } from './providers/deepseek-ai';
 import { qwenProvider, QwenProvider, QwenMessage, QwenConfig } from './providers/qwen-ai';
 import {
-  canUserMakeRequest,
+  canUserMakeUsagePricedRequest,
   estimateTokensForRequest,
   deductTokens,
 } from '@core/billing/token-enforcement-service';
@@ -412,11 +412,16 @@ export class UnifiedLLMService {
         const messageLength = messages.reduce((sum, msg) => sum + msg.content.length, 0);
         const estimatedTokens = estimateTokensForRequest(messageLength);
 
-        const permission = await canUserMakeRequest(actualUserId, estimatedTokens);
+        const permission = await canUserMakeUsagePricedRequest(actualUserId, {
+          provider: targetProvider,
+          model: this.config.model,
+          inputTokens: estimatedTokens,
+          outputTokens: estimatedTokens * 2,
+        });
 
         if (!permission.allowed) {
           throw new UnifiedLLMError(
-            permission.reason || 'Insufficient tokens',
+            permission.reason || 'Insufficient credits',
             'INSUFFICIENT_TOKENS',
             targetProvider,
             false,

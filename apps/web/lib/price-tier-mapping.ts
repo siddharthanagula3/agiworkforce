@@ -11,42 +11,56 @@
  * - It's unclear which prices are actually valid
  */
 
+import {
+  getPlanPriceCents,
+  getPlanUsageBudgetCents,
+  type BillingInterval,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
+
+interface PriceMappingEntry {
+  tier: BillingPlanTier;
+  interval: BillingInterval;
+}
+
 // Build price ID mapping from environment variables (single source of truth)
 // This ensures checkout and webhook use the same price IDs
-function buildPriceIdMapping(): Record<string, string> {
-  const mapping: Record<string, string> = {};
+function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
+  const mapping: Record<string, PriceMappingEntry> = {};
 
   // Hobby tier
   const hobbyMonthly = process.env['STRIPE_PRICE_HOBBY_MONTHLY'];
   const hobbyYearly = process.env['STRIPE_PRICE_HOBBY_YEARLY'];
-  if (hobbyMonthly) mapping[hobbyMonthly.toLowerCase()] = 'hobby';
-  if (hobbyYearly) mapping[hobbyYearly.toLowerCase()] = 'hobby';
+  if (hobbyMonthly) mapping[hobbyMonthly.toLowerCase()] = { tier: 'hobby', interval: 'monthly' };
+  if (hobbyYearly) mapping[hobbyYearly.toLowerCase()] = { tier: 'hobby', interval: 'yearly' };
 
   // Pro tier
   const proMonthly = process.env['STRIPE_PRICE_PRO_MONTHLY'];
   const proYearly = process.env['STRIPE_PRICE_PRO_YEARLY'];
-  if (proMonthly) mapping[proMonthly.toLowerCase()] = 'pro';
-  if (proYearly) mapping[proYearly.toLowerCase()] = 'pro';
+  if (proMonthly) mapping[proMonthly.toLowerCase()] = { tier: 'pro', interval: 'monthly' };
+  if (proYearly) mapping[proYearly.toLowerCase()] = { tier: 'pro', interval: 'yearly' };
 
   // Max tier
   const maxMonthly = process.env['STRIPE_PRICE_MAX_MONTHLY'];
   const maxYearly = process.env['STRIPE_PRICE_MAX_YEARLY'];
-  if (maxMonthly) mapping[maxMonthly.toLowerCase()] = 'max';
-  if (maxYearly) mapping[maxYearly.toLowerCase()] = 'max';
+  if (maxMonthly) mapping[maxMonthly.toLowerCase()] = { tier: 'max', interval: 'monthly' };
+  if (maxYearly) mapping[maxYearly.toLowerCase()] = { tier: 'max', interval: 'yearly' };
 
   // Enterprise tier (if configured)
   const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
   const enterpriseYearly = process.env['STRIPE_PRICE_ENTERPRISE_YEARLY'];
-  if (enterpriseMonthly) mapping[enterpriseMonthly.toLowerCase()] = 'enterprise';
-  if (enterpriseYearly) mapping[enterpriseYearly.toLowerCase()] = 'enterprise';
+  if (enterpriseMonthly)
+    mapping[enterpriseMonthly.toLowerCase()] = { tier: 'enterprise', interval: 'monthly' };
+  if (enterpriseYearly)
+    mapping[enterpriseYearly.toLowerCase()] = { tier: 'enterprise', interval: 'yearly' };
 
   return mapping;
 }
 
 // Lazily initialized mapping (built on first use to ensure env vars are loaded)
-let _priceIdMapping: Record<string, string> | null = null;
+let _priceIdMapping: Record<string, PriceMappingEntry> | null = null;
 
-function getPriceIdMapping(): Record<string, string> {
+function getPriceIdMapping(): Record<string, PriceMappingEntry> {
   if (!_priceIdMapping) {
     _priceIdMapping = buildPriceIdMapping();
   }
@@ -55,17 +69,20 @@ function getPriceIdMapping(): Record<string, string> {
 
 // Allow additional overrides via PRICE_ID_OVERRIDES env var
 // Format: PRICE_ID_OVERRIDES=price_1,hobby:price_2,pro
-function loadOverrides(): Record<string, string> {
+function loadOverrides(): Record<string, PriceMappingEntry> {
   const baseMapping = getPriceIdMapping();
-  const overrides: Record<string, string> = { ...baseMapping };
+  const overrides: Record<string, PriceMappingEntry> = { ...baseMapping };
   const envOverrides = process.env['PRICE_ID_OVERRIDES'];
 
   if (envOverrides) {
     const pairs = envOverrides.split(':');
     for (const pair of pairs) {
-      const [priceId, tier] = pair.trim().split(',');
+      const [priceId, tier, interval] = pair.trim().split(',');
       if (priceId && tier) {
-        overrides[priceId.toLowerCase()] = tier.toLowerCase();
+        overrides[priceId.toLowerCase()] = {
+          tier: tier.toLowerCase() as BillingPlanTier,
+          interval: interval === 'yearly' ? 'yearly' : 'monthly',
+        };
       }
     }
   }
@@ -74,9 +91,9 @@ function loadOverrides(): Record<string, string> {
 }
 
 // Lazily initialized tier mapping with overrides
-let _tierMapping: Record<string, string> | null = null;
+let _tierMapping: Record<string, PriceMappingEntry> | null = null;
 
-export function getTierMapping(): Record<string, string> {
+export function getTierMapping(): Record<string, PriceMappingEntry> {
   if (!_tierMapping) {
     _tierMapping = loadOverrides();
   }
@@ -96,7 +113,7 @@ export function getPlanTierFromPriceId(priceId: string | null | undefined): stri
   }
 
   const normalizedId = priceId.toLowerCase().trim();
-  const tier = getTierMapping()[normalizedId];
+  const tier = getTierMapping()[normalizedId]?.tier;
 
   if (!tier) {
     return null; // Unknown price ID - caller should handle
@@ -140,6 +157,29 @@ export function isValidPlanTier(tier: string | null | undefined): tier is string
   return ['free', 'hobby', 'pro', 'max', 'enterprise'].includes(tier.toLowerCase());
 }
 
+export function getBillingDetailsFromPriceId(priceId: string | null | undefined): {
+  tier: BillingPlanTier;
+  interval: BillingInterval;
+  priceCents: number;
+  usageBudgetCents: number;
+} | null {
+  if (!priceId) {
+    return null;
+  }
+
+  const entry = getTierMapping()[priceId.toLowerCase().trim()];
+  if (!entry) {
+    return null;
+  }
+
+  return {
+    tier: entry.tier,
+    interval: entry.interval,
+    priceCents: getPlanPriceCents(entry.tier, entry.interval),
+    usageBudgetCents: getPlanUsageBudgetCents(entry.tier, entry.interval),
+  };
+}
+
 /**
  * Get all registered price IDs
  */
@@ -170,7 +210,8 @@ export function getMappingStatus(): {
     enterprise: [],
   };
 
-  for (const [priceId, tier] of Object.entries(mapping)) {
+  for (const [priceId, entry] of Object.entries(mapping)) {
+    const tier = entry.tier;
     if (!tiers[tier]) {
       tiers[tier] = [];
     }

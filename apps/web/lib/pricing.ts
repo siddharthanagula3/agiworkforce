@@ -1,6 +1,7 @@
 // apps/web/lib/pricing.ts
 
 import { logger } from './logger';
+import { getPlanPriceUsd } from '@agiworkforce/types';
 
 /**
  * Validate that a Stripe price ID is properly configured
@@ -66,8 +67,8 @@ export const PRICING_CONFIG = {
       id: 'hobby',
       name: 'Hobby',
       price: {
-        monthly: 10,
-        annual: 59.88,
+        monthly: getPlanPriceUsd('hobby', 'monthly'),
+        annual: getPlanPriceUsd('hobby', 'yearly'),
       },
       stripe_price_ids: STRIPE_PRICE_IDS.hobby,
     },
@@ -75,8 +76,8 @@ export const PRICING_CONFIG = {
       id: 'pro',
       name: 'Pro',
       price: {
-        monthly: 29.99,
-        annual: 299.88,
+        monthly: getPlanPriceUsd('pro', 'monthly'),
+        annual: getPlanPriceUsd('pro', 'yearly'),
       },
       stripe_price_ids: STRIPE_PRICE_IDS.pro,
     },
@@ -84,8 +85,8 @@ export const PRICING_CONFIG = {
       id: 'max',
       name: 'Max',
       price: {
-        monthly: 299.99,
-        annual: 2999.88,
+        monthly: getPlanPriceUsd('max', 'monthly'),
+        annual: getPlanPriceUsd('max', 'yearly'),
       },
       stripe_price_ids: STRIPE_PRICE_IDS.max,
     },

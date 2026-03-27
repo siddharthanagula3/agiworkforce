@@ -170,7 +170,7 @@ export function useChatSubmit(options: UseChatSubmitOptions): UseChatSubmitRetur
             onRestoreContent(messageContent);
             if (messageAttachments) onRestoreAttachments(messageAttachments);
             onError(
-              'Insufficient credits to send message. Please upgrade your plan or wait for credits to refresh.',
+              'Insufficient credits to send message. Please upgrade your plan or wait for the next billing reset.',
             );
             setIsSending(false);
             sendAbortControllerRef.current = null;

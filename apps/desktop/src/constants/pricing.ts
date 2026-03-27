@@ -1,3 +1,5 @@
+import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
+
 export const STRIPE_PRICE_IDS = {
   hobby_monthly: 'price_1Sgwx10zEfO6BZMh7thtFU77',
   hobby_yearly: 'price_1Sgwx20zEfO6BZMhbgpxL8TI',
@@ -53,8 +55,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'hobby',
     name: 'Hobby',
     description: 'Perfect for getting started with AI automation',
-    monthlyPrice: 10,
-    yearlyPrice: 59.88,
+    monthlyPrice: getPlanPriceUsd('hobby', 'monthly'),
+    yearlyPrice: getPlanPriceUsd('hobby', 'yearly'),
     stripePriceId: {
       monthly: STRIPE_PRICE_IDS.hobby_monthly,
       yearly: STRIPE_PRICE_IDS.hobby_yearly,
@@ -71,15 +73,15 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: 100,
       storage: 1024,
       teamMembers: 1,
-      tokenCredits: 3.5, // Reduced for profitability
+      tokenCredits: getPlanUsageBudgetCents('hobby', 'monthly'),
     },
   },
   {
     id: 'pro',
     name: 'Pro',
     description: 'Less than $1/day, billed monthly',
-    monthlyPrice: 29.99,
-    yearlyPrice: 299.88,
+    monthlyPrice: getPlanPriceUsd('pro', 'monthly'),
+    yearlyPrice: getPlanPriceUsd('pro', 'yearly'),
     stripePriceId: {
       monthly: STRIPE_PRICE_IDS.pro_monthly,
       yearly: STRIPE_PRICE_IDS.pro_yearly,
@@ -97,7 +99,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: 10000,
       storage: 10240,
       teamMembers: 1,
-      tokenCredits: 12, // Reduced from 25 for profitability
+      tokenCredits: getPlanUsageBudgetCents('pro', 'monthly'),
     },
     popular: true,
   },
@@ -105,8 +107,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'max',
     name: 'Max',
     description: 'Less than $10/day, billed monthly',
-    monthlyPrice: 299.99,
-    yearlyPrice: 2999.88,
+    monthlyPrice: getPlanPriceUsd('max', 'monthly'),
+    yearlyPrice: getPlanPriceUsd('max', 'yearly'),
     stripePriceId: {
       monthly: STRIPE_PRICE_IDS.max_monthly,
       yearly: STRIPE_PRICE_IDS.max_yearly,
@@ -123,7 +125,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: null,
       storage: 51200,
       teamMembers: 1,
-      tokenCredits: 150, // Reduced from 250 for profitability
+      tokenCredits: getPlanUsageBudgetCents('max', 'monthly'),
     },
   },
   {

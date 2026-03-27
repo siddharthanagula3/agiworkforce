@@ -100,6 +100,7 @@ vi.mock('./providers/qwen-ai', () => ({
 
 vi.mock('@core/billing/token-enforcement-service', () => ({
   canUserMakeRequest: vi.fn().mockResolvedValue({ allowed: true }),
+  canUserMakeUsagePricedRequest: vi.fn().mockResolvedValue({ allowed: true }),
   estimateTokensForRequest: vi.fn().mockReturnValue(100),
   deductTokens: vi.fn().mockResolvedValue({ success: true }),
 }));
@@ -139,7 +140,7 @@ const { perplexityProvider, PerplexityProvider } = await import('./providers/per
 const { grokProvider, GrokProvider } = await import('./providers/grok-ai');
 const { deepseekProvider, DeepSeekProvider } = await import('./providers/deepseek-ai');
 const { qwenProvider, QwenProvider } = await import('./providers/qwen-ai');
-const { canUserMakeRequest, deductTokens } =
+const { canUserMakeRequest, canUserMakeUsagePricedRequest, deductTokens } =
   await import('@core/billing/token-enforcement-service');
 const { checkUserInput, logInjectionAttempt } =
   await import('@core/security/prompt-injection-detector');
@@ -154,6 +155,7 @@ describe('UnifiedLLMService', () => {
 
     // Restore default mock implementations after clearAllMocks
     vi.mocked(canUserMakeRequest).mockResolvedValue({ allowed: true });
+    vi.mocked(canUserMakeUsagePricedRequest).mockResolvedValue({ allowed: true });
     vi.mocked(deductTokens).mockResolvedValue({ success: true, newBalance: 1000 });
     vi.mocked(checkUserInput).mockReturnValue({ allowed: true, riskLevel: 'none' });
     vi.mocked(checkApiAbuse).mockResolvedValue({ allowed: true });
@@ -390,7 +392,7 @@ describe('UnifiedLLMService', () => {
 
     it('should enforce token balance check', async () => {
       // Mock twice because we call sendMessage twice (toThrow + toMatchObject)
-      vi.mocked(canUserMakeRequest)
+      vi.mocked(canUserMakeUsagePricedRequest)
         .mockResolvedValueOnce({
           allowed: false,
           reason: 'Insufficient tokens',

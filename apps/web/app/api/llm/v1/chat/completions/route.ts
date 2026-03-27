@@ -157,29 +157,17 @@ function findCheaperFallbackModel(
   return null;
 }
 
-function handleCreditError(deductResult: {
+function handleCreditError(_deductResult: {
   code?: string;
   daily_remaining?: number;
   daily_limit?: number;
   daily_used?: number;
 }): NextResponse {
-  if (deductResult.code === 'DAILY_CREDIT_LIMIT_REACHED') {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Daily credit limit reached. Credits reset at midnight UTC.',
-          type: 'insufficient_quota',
-          code: 'daily_limit_exceeded',
-        },
-      },
-      { status: 429 },
-    );
-  }
-
   return NextResponse.json(
     {
       error: {
-        message: 'Monthly credit limit reached. Please upgrade your plan or add credits.',
+        message:
+          'Usage budget exhausted for this billing period. Upgrade your plan or add credits.',
         type: 'insufficient_quota',
         code: 'monthly_limit_exceeded',
       },
@@ -508,6 +496,7 @@ async function handleChatCompletions(request: NextRequest) {
         subscription.plan_tier,
         subscription.current_period_start,
         subscription.current_period_end,
+        { stripePriceId: subscription.stripe_price_id },
       );
 
       if (accountId) {
@@ -545,14 +534,11 @@ async function handleChatCompletions(request: NextRequest) {
       estimatedCostCents,
       hasCredits,
       balanceRemaining: existingBalance?.credits_remaining_cents,
-      dailyRemaining: existingBalance?.daily_remaining_cents,
     },
     'Credit availability check result',
   );
 
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(user.id);
-
     // Try fallback model before returning an error
     const fallbackModel = findCheaperFallbackModel(
       chatRequest.model,
@@ -579,19 +565,10 @@ async function handleChatCompletions(request: NextRequest) {
         provider = fallbackProvider;
         estimatedCostCents = fallbackCostCents;
       } else {
-        // Determine if daily or monthly limit reached
-        const creditError =
-          balance?.daily_remaining_cents != null && balance.daily_remaining_cents <= 0
-            ? { code: 'DAILY_CREDIT_LIMIT_REACHED' as const }
-            : {};
-        return handleCreditError(creditError);
+        return handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' });
       }
     } else {
-      const creditError =
-        balance?.daily_remaining_cents != null && balance.daily_remaining_cents <= 0
-          ? { code: 'DAILY_CREDIT_LIMIT_REACHED' as const }
-          : {};
-      return handleCreditError(creditError);
+      return handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' });
     }
   }
 
