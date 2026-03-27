@@ -90,7 +90,7 @@ pub fn model_catalog() -> Vec<ModelInfo> {
             output_price_per_1m: 10.0,
             supports_tools: true,
             supports_vision: true,
-            supports_reasoning: false,
+            supports_reasoning: true,
             supports_audio_input: true,
             supports_audio_output: true,
             supports_pdf: false,
@@ -106,7 +106,7 @@ pub fn model_catalog() -> Vec<ModelInfo> {
             output_price_per_1m: 0.60,
             supports_tools: true,
             supports_vision: true,
-            supports_reasoning: false,
+            supports_reasoning: true,
             supports_audio_input: false,
             supports_audio_output: false,
             supports_pdf: false,
@@ -700,6 +700,8 @@ mod tests {
             .collect();
         assert!(reasoning_ids.contains(&"claude-opus-4-6"));
         assert!(reasoning_ids.contains(&"claude-sonnet-4-6"));
+        assert!(reasoning_ids.contains(&"gpt-5.4"));
+        assert!(reasoning_ids.contains(&"gpt-5.4-mini"));
         assert!(reasoning_ids.contains(&"o3-mini"));
         assert!(reasoning_ids.contains(&"gemini-3.1-pro-preview"));
         assert!(reasoning_ids.contains(&"deepseek-reasoner"));
@@ -707,7 +709,7 @@ mod tests {
 
     #[test]
     fn test_non_reasoning_models_not_flagged() {
-        let model = find_model("gpt-5.4").unwrap();
+        let model = find_model("gpt-4.1").unwrap();
         assert!(!model.supports_reasoning);
         let model = find_model("llama3.1").unwrap();
         assert!(!model.supports_reasoning);
@@ -935,6 +937,8 @@ mod tests {
     fn test_supports_reasoning_true() {
         assert!(supports_reasoning("claude-opus-4-6"));
         assert!(supports_reasoning("claude-sonnet-4-6"));
+        assert!(supports_reasoning("gpt-5.4"));
+        assert!(supports_reasoning("gpt-5.4-mini"));
         assert!(supports_reasoning("o3-mini"));
         assert!(supports_reasoning("gemini-3.1-pro-preview"));
         assert!(supports_reasoning("deepseek-reasoner"));
@@ -942,8 +946,6 @@ mod tests {
 
     #[test]
     fn test_supports_reasoning_false() {
-        assert!(!supports_reasoning("gpt-5.4"));
-        assert!(!supports_reasoning("gpt-5.4-mini"));
         assert!(!supports_reasoning("llama3.1"));
         assert!(!supports_reasoning("mistral-large-2512"));
     }
