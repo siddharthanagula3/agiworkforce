@@ -215,12 +215,11 @@ impl ThinkingConfig {
     /// Check if a model supports extended thinking.
     #[must_use]
     pub fn model_supports_thinking(model: &str) -> bool {
-        let model_lower = model.to_lowercase();
+        let model_lower = super::models_config::get_canonicalized_id(model).to_lowercase();
 
-        // GPT-5 family supports reasoning controls, except nano tier.
-        let is_gpt5_reasoning = (model_lower.starts_with("gpt-5")
-            || model_lower.contains("gpt-5.4-codex"))
-            && !model_lower.starts_with("gpt-5.4-nano");
+        // GPT-5.4 and Codex variants support reasoning controls.
+        let is_gpt5_reasoning =
+            model_lower.starts_with("gpt-5") || model_lower.contains("gpt-5.4-codex");
 
         // Claude 4+ models support extended thinking
         // (broader "claude-sonnet-4" already covers "claude-sonnet-4-5", etc.)
@@ -449,7 +448,7 @@ mod tests {
 
         // These should not support thinking
         assert!(!ThinkingConfig::model_supports_thinking("gpt-4"));
-        assert!(!ThinkingConfig::model_supports_thinking("gpt-5.4-nano"));
+        assert!(ThinkingConfig::model_supports_thinking("gpt-5.4-nano"));
         assert!(!ThinkingConfig::model_supports_thinking("gemini-pro"));
     }
 
