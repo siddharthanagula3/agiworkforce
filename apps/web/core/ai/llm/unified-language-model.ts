@@ -410,16 +410,16 @@ export class UnifiedLLMService {
         );
       }
 
-      // CRITICAL: Check token sufficiency BEFORE making API call
+      // CRITICAL: Check the active usage budget BEFORE making the API call.
       if (actualUserId) {
         const messageLength = messages.reduce((sum, msg) => sum + msg.content.length, 0);
-        const estimatedTokens = estimateTokensForRequest(messageLength);
+        const estimatedPromptTokens = estimateTokensForRequest(messageLength);
 
         const permission = await canUserMakeUsagePricedRequest(actualUserId, {
           provider: targetProvider,
           model: this.config.model,
-          inputTokens: estimatedTokens,
-          outputTokens: estimatedTokens * 2,
+          inputTokens: estimatedPromptTokens,
+          outputTokens: estimatedPromptTokens * 2,
         });
 
         if (!permission.allowed) {
@@ -509,7 +509,7 @@ export class UnifiedLLMService {
       // Convert response to unified format
       const unifiedResponse = this.convertResponseToUnified(response, targetProvider);
 
-      // CRITICAL: Deduct tokens AFTER successful API call
+      // CRITICAL: Deduct actual usage credits AFTER a successful API call.
       if (actualUserId && unifiedResponse.usage) {
         const deductionResult = await deductTokens(actualUserId, {
           provider: targetProvider,
