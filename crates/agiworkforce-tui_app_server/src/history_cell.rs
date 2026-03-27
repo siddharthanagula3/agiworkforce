@@ -36,7 +36,6 @@ use crate::version::AGIWORKFORCE_CLI_VERSION;
 use crate::wrapping::RtOptions;
 use crate::wrapping::adaptive_wrap_line;
 use crate::wrapping::adaptive_wrap_lines;
-use base64::Engine;
 use agiworkforce_app_server_protocol::McpServerStatus;
 use agiworkforce_core::config::Config;
 use agiworkforce_core::config::types::McpServerTransportConfig;
@@ -66,6 +65,7 @@ use agiworkforce_protocol::request_user_input::RequestUserInputAnswer;
 use agiworkforce_protocol::request_user_input::RequestUserInputQuestion;
 use agiworkforce_protocol::user_input::TextElement;
 use agiworkforce_utils_cli::format_env_display::format_env_display;
+use base64::Engine;
 use image::DynamicImage;
 use image::ImageReader;
 use ratatui::prelude::*;
@@ -1752,6 +1752,21 @@ pub(crate) fn new_warning_event(message: String) -> PrefixedWrappedHistoryCell {
     PrefixedWrappedHistoryCell::new(message.yellow(), "⚠ ".yellow(), "  ")
 }
 
+#[allow(clippy::disallowed_methods)]
+pub(crate) fn new_model_reroute_event(
+    from_model: impl Into<String>,
+    to_model: impl Into<String>,
+    reason: impl Into<String>,
+) -> PrefixedWrappedHistoryCell {
+    let message = format!(
+        "Model rerouted {} → {} ({})",
+        from_model.into(),
+        to_model.into(),
+        reason.into()
+    );
+    PrefixedWrappedHistoryCell::new(message.yellow(), "⇄ ".yellow(), "  ")
+}
+
 #[derive(Debug)]
 pub(crate) struct DeprecationNoticeCell {
     summary: String,
@@ -1823,7 +1838,9 @@ pub(crate) fn new_mcp_tools_output(
         lines.push("".into());
     }
 
-    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(config.agiworkforce_home.clone())));
+    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(
+        config.agiworkforce_home.clone(),
+    )));
     let effective_servers = mcp_manager.effective_servers(config, /*auth*/ None);
     let mut servers: Vec<_> = effective_servers.iter().collect();
     servers.sort_by(|(a, _), (b, _)| a.cmp(b));
@@ -2012,9 +2029,15 @@ pub(crate) fn new_mcp_tools_output_from_statuses(
         lines.push(header.into());
         let auth_status = status
             .map(|status| match status.auth_status {
-                agiworkforce_app_server_protocol::McpAuthStatus::Unsupported => McpAuthStatus::Unsupported,
-                agiworkforce_app_server_protocol::McpAuthStatus::NotLoggedIn => McpAuthStatus::NotLoggedIn,
-                agiworkforce_app_server_protocol::McpAuthStatus::BearerToken => McpAuthStatus::BearerToken,
+                agiworkforce_app_server_protocol::McpAuthStatus::Unsupported => {
+                    McpAuthStatus::Unsupported
+                }
+                agiworkforce_app_server_protocol::McpAuthStatus::NotLoggedIn => {
+                    McpAuthStatus::NotLoggedIn
+                }
+                agiworkforce_app_server_protocol::McpAuthStatus::BearerToken => {
+                    McpAuthStatus::BearerToken
+                }
                 agiworkforce_app_server_protocol::McpAuthStatus::OAuth => McpAuthStatus::OAuth,
             })
             .unwrap_or(McpAuthStatus::Unsupported);
