@@ -222,8 +222,22 @@ export interface ModelCostRate {
   provider: Provider | string;
 }
 
+export interface ModelQueryOptions {
+  includeDeprecated?: boolean;
+  modelTypes?: ModelType[];
+  requireCapabilities?: Partial<Record<keyof ModelCapabilities, boolean>>;
+}
+
+export type AutoModeModelId = 'auto' | 'auto-economy' | 'auto-balanced' | 'auto-premium';
+
 export const modelsCatalog = modelsCatalogJson as ModelsCatalog;
 export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+const AUTO_MODE_IDS = new Set<AutoModeModelId>([
+  'auto',
+  'auto-economy',
+  'auto-balanced',
+  'auto-premium',
+]);
 
 function resolveCanonicalTarget(target: string): string {
   if (modelsCatalog.models[target]) {
@@ -350,6 +364,136 @@ export function isModelAllowedForTier(modelId: string, tier: TierKey): boolean {
 
 export function listCanonicalModels(): ModelMetadata[] {
   return Object.values(modelsCatalog.models);
+}
+
+function matchesModelQueryOptions(model: ModelMetadata, options: ModelQueryOptions = {}): boolean {
+  const { includeDeprecated = false, modelTypes, requireCapabilities } = options;
+
+  if (!includeDeprecated && model.status === 'deprecated') {
+    return false;
+  }
+
+  if (modelTypes?.length && !modelTypes.includes(model.modelType)) {
+    return false;
+  }
+
+  if (requireCapabilities) {
+    for (const [capability, required] of Object.entries(requireCapabilities)) {
+      if (
+        required !== undefined &&
+        model.capabilities[capability as keyof ModelCapabilities] !== required
+      ) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+export function getModelsForProvider(
+  provider: Provider | string,
+  options: ModelQueryOptions = {},
+): ModelMetadata[] {
+  return listCanonicalModels().filter(
+    (model) => model.provider === provider && matchesModelQueryOptions(model, options),
+  );
+}
+
+export function getModelIdsForProvider(
+  provider: Provider | string,
+  options: ModelQueryOptions = {},
+): string[] {
+  return getModelsForProvider(provider, options).map((model) => model.id);
+}
+
+export function isModelSupportedByProvider(
+  provider: Provider | string,
+  modelId: string | null | undefined,
+  options: ModelQueryOptions = {},
+): boolean {
+  const canonicalModelId = normalizeModelId(modelId);
+  if (!canonicalModelId) {
+    return false;
+  }
+
+  return getModelsForProvider(provider, options).some((model) => model.id === canonicalModelId);
+}
+
+export function detectProviderFromModelId(
+  modelId: string | null | undefined,
+): Provider | string | null {
+  const metadata = getModelMetadataById(modelId);
+  return metadata?.provider ?? null;
+}
+
+function normalizeSubscriptionTierKey(tier: string | null | undefined): TierKey | 'free' {
+  switch ((tier ?? '').toLowerCase()) {
+    case 'pro':
+      return 'pro_additions';
+    case 'max':
+    case 'enterprise':
+      return 'flagship_additions';
+    case 'free':
+      return 'free';
+    case 'hobby':
+    default:
+      return 'economy';
+  }
+}
+
+export function resolveAutoModeModel(
+  autoMode: AutoModeModelId | string | null | undefined,
+  subscriptionTier?: string | null,
+): string | null {
+  const normalizedMode = (autoMode ?? 'auto-balanced').toLowerCase() as AutoModeModelId;
+  const normalizedTier = normalizeSubscriptionTierKey(subscriptionTier);
+
+  if (!AUTO_MODE_IDS.has(normalizedMode)) {
+    return normalizeModelId(normalizedMode);
+  }
+
+  if (
+    normalizedTier === 'free' &&
+    (normalizedMode === 'auto-balanced' || normalizedMode === 'auto-premium')
+  ) {
+    return resolveAutoModeModel('auto-economy', subscriptionTier);
+  }
+
+  if (
+    normalizedTier === 'economy' &&
+    (normalizedMode === 'auto-balanced' || normalizedMode === 'auto-premium')
+  ) {
+    return resolveAutoModeModel('auto-economy', subscriptionTier);
+  }
+
+  if (normalizedTier === 'pro_additions' && normalizedMode === 'auto-premium') {
+    return resolveAutoModeModel('auto-balanced', subscriptionTier);
+  }
+
+  switch (normalizedMode) {
+    case 'auto':
+    case 'auto-balanced':
+      return (
+        getTaskModelForProvider('openai', 'chat') ??
+        getTaskModelForProvider('managed_cloud', 'chat') ??
+        'gpt-5.4'
+      );
+    case 'auto-premium':
+      return (
+        getTaskModelForProvider('anthropic', 'complex_reasoning') ??
+        getTaskModelForProvider('openai', 'complex_reasoning') ??
+        getTaskModelForProvider('anthropic', 'chat') ??
+        'claude-opus-4.6'
+      );
+    case 'auto-economy':
+    default:
+      return (
+        getTaskModelForProvider('openai', 'fast_completion') ??
+        getTaskModelForProvider('managed_cloud', 'fast_completion') ??
+        'gpt-5.4-nano'
+      );
+  }
 }
 
 export function getPickerModelTier(modelId: string | null | undefined): PickerModelTier {

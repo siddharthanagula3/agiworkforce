@@ -7,457 +7,91 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getCorsHeaders } from '@/lib/cors';
+import {
+  getAllowedAutoModesForTier,
+  getAllowedModelsForTier,
+  normalizeSubscriptionTier,
+} from '@/constants/llm';
+import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
 
-/**
- * OpenAI-compatible Models List API
- * Endpoint: GET /v1/models (via api.agiworkforce.com)
- */
-
-// Available models with their metadata
-// Tier assignments must match TIER_ALLOWED_MODELS in desktop/src/constants/llm.ts
-// - hobby: Budget models (< $1/1M output) - gemini-flash, gpt-5.4-nano, claude-haiku, etc.
-// - pro: Mid-tier models ($1-15/1M) - gpt-5.4, claude-sonnet, gemini-pro, etc.
-// - max: Flagship models - claude-opus, gpt-5-pro, o3, etc.
-const MODELS = [
-  // OpenAI Models
-  {
-    id: 'gpt-5.4',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'openai',
-    permission: [],
-    root: 'gpt-5.4',
-    parent: null,
-    tier: 'pro', // Pro tier - mid-range model
-    context_window: 128000,
-    max_output: 16384,
-  },
-  {
-    id: 'gpt-5.4-pro',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'openai',
-    permission: [],
-    root: 'gpt-5.4-pro',
-    parent: null,
-    tier: 'pro',
-    context_window: 256000,
-    max_output: 32768,
-  },
-  {
-    id: 'gpt-5.4-nano',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'openai',
-    permission: [],
-    root: 'gpt-5.4-nano',
-    parent: null,
-    tier: 'hobby',
-    context_window: 128000,
-    max_output: 16384,
-  },
-  {
-    id: 'gpt-5',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'openai',
-    permission: [],
-    root: 'gpt-5',
-    parent: null,
-    tier: 'max',
-    context_window: 256000,
-    max_output: 65536,
-  },
-  {
-    id: 'o3',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'openai',
-    permission: [],
-    root: 'o3',
-    parent: null,
-    tier: 'max',
-    context_window: 200000,
-    max_output: 100000,
-  },
-  {
-    id: 'o3-mini',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'openai',
-    permission: [],
-    root: 'o3-mini',
-    parent: null,
-    tier: 'max',
-    context_window: 200000,
-    max_output: 65536,
-  },
-
-  // Anthropic Models
-  {
-    id: 'claude-opus-4.6',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'anthropic',
-    permission: [],
-    root: 'claude-opus-4.6',
-    parent: null,
-    tier: 'max',
-    context_window: 200000,
-    max_output: 32000,
-  },
-  {
-    id: 'claude-opus-4.5',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'anthropic',
-    permission: [],
-    root: 'claude-opus-4.5',
-    parent: null,
-    tier: 'max',
-    context_window: 200000,
-    max_output: 32000,
-  },
-  {
-    id: 'claude-sonnet-4.6',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'anthropic',
-    permission: [],
-    root: 'claude-sonnet-4.6',
-    parent: null,
-    tier: 'pro',
-    context_window: 200000,
-    max_output: 16000,
-  },
-  {
-    id: 'claude-sonnet-4.5',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'anthropic',
-    permission: [],
-    root: 'claude-sonnet-4.5',
-    parent: null,
-    tier: 'pro', // Pro tier - mid-range model
-    context_window: 200000,
-    max_output: 16000,
-  },
-  {
-    id: 'claude-sonnet-4',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'anthropic',
-    permission: [],
-    root: 'claude-sonnet-4',
-    parent: null,
-    tier: 'pro',
-    context_window: 200000,
-    max_output: 16000,
-  },
-  {
-    id: 'claude-haiku-4.5',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'anthropic',
-    permission: [],
-    root: 'claude-haiku-4.5',
-    parent: null,
-    tier: 'hobby',
-    context_window: 200000,
-    max_output: 8192,
-  },
-
-  // Google Models
-  {
-    id: 'gemini-3-pro-preview',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'google',
-    permission: [],
-    root: 'gemini-3-pro-preview',
-    parent: null,
-    tier: 'pro', // Pro tier - mid-range model
-    context_window: 2000000,
-    max_output: 8192,
-  },
-  {
-    id: 'gemini-3-flash-preview',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'google',
-    permission: [],
-    root: 'gemini-3-flash-preview',
-    parent: null,
-    tier: 'hobby',
-    context_window: 1000000,
-    max_output: 8192,
-  },
-  {
-    id: 'gemini-3.1-pro-preview',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'google',
-    permission: [],
-    root: 'gemini-3.1-pro-preview',
-    parent: null,
-    tier: 'max',
-    context_window: 1000000,
-    max_output: 65536,
-  },
-  {
-    id: 'gemini-3-flash',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'google',
-    permission: [],
-    root: 'gemini-3-flash',
-    parent: null,
-    tier: 'hobby',
-    context_window: 1000000,
-    max_output: 8192,
-  },
-
-  // DeepSeek Models
-  {
-    id: 'deepseek-chat',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'deepseek',
-    permission: [],
-    root: 'deepseek-chat',
-    parent: null,
-    tier: 'hobby',
-    context_window: 64000,
-    max_output: 8192,
-  },
-  {
-    id: 'deepseek-reasoner',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'deepseek',
-    permission: [],
-    root: 'deepseek-reasoner',
-    parent: null,
-    tier: 'hobby',
-    context_window: 64000,
-    max_output: 8192,
-  },
-
-  // xAI/Grok Models
-  {
-    id: 'grok-4',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'xai',
-    permission: [],
-    root: 'grok-4',
-    parent: null,
-    tier: 'max', // Max tier - flagship model
-    context_window: 131072,
-    max_output: 16384,
-  },
-  {
-    id: 'grok-4-fast',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'xai',
-    permission: [],
-    root: 'grok-4-fast',
-    parent: null,
-    tier: 'hobby',
-    context_window: 131072,
-    max_output: 16384,
-  },
-
-  // Qwen Models
-  {
-    id: 'qwen-max',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'alibaba',
-    permission: [],
-    root: 'qwen-max',
-    parent: null,
-    tier: 'pro', // Pro tier - mid-range model (maps to qwen-max)
-    context_window: 32000,
-    max_output: 8192,
-  },
-  {
-    id: 'qwen-turbo',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'alibaba',
-    permission: [],
-    root: 'qwen-turbo',
-    parent: null,
-    tier: 'hobby',
-    context_window: 128000,
-    max_output: 8192,
-  },
-  {
-    id: 'qwen-flash',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'alibaba',
-    permission: [],
-    root: 'qwen-flash',
-    parent: null,
-    tier: 'hobby',
-    context_window: 128000,
-    max_output: 8192,
-  },
-
-  // Moonshot/Kimi Models
-  {
-    id: 'kimi-k2',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'moonshot',
-    permission: [],
-    root: 'kimi-k2',
-    parent: null,
-    tier: 'hobby',
-    context_window: 128000,
-    max_output: 8192,
-  },
-
-  // Perplexity Models
-  {
-    id: 'sonar-pro',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'perplexity',
-    permission: [],
-    root: 'sonar-pro',
-    parent: null,
-    tier: 'pro', // Pro tier - premium search model
-    context_window: 200000,
-    max_output: 8192,
-  },
-  {
-    id: 'sonar',
-    object: 'model',
-    created: 1704067200,
-    owned_by: 'perplexity',
-    permission: [],
-    root: 'sonar',
-    parent: null,
-    tier: 'hobby',
-    context_window: 128000,
-    max_output: 8192,
-  },
-];
-
-// Tier hierarchy
-const TIER_LEVELS: Record<string, number> = {
-  free: 0,
-  hobby: 1,
-  pro: 2,
-  max: 3,
-  enterprise: 4,
+type OpenAiCompatibleModel = {
+  id: string;
+  object: 'model';
+  created: number;
+  owned_by: string;
+  permission: [];
+  root: string;
+  parent: null;
+  tier: 'hobby' | 'pro' | 'max';
+  context_window: number;
+  max_output: number;
 };
 
-// Auto modes available per tier
-const AUTO_MODES_BY_TIER: Record<string, string[]> = {
-  free: ['auto-economy'],
-  hobby: ['auto-economy'],
-  pro: ['auto-economy', 'auto-balanced'],
-  max: ['auto-economy', 'auto-balanced', 'auto-premium'],
-  enterprise: ['auto-economy', 'auto-balanced', 'auto-premium'],
-};
+const VISIBLE_MODEL_TYPES = new Set(['chat', 'code', 'reasoning', 'multimodal', 'search']);
+const CREATED_AT_TIMESTAMP = 1_704_067_200;
 
-function filterModelsByTier(models: typeof MODELS, userTier: string) {
-  const userLevel = TIER_LEVELS[userTier.toLowerCase()] || 0;
+const ECONOMY_MODELS = new Set(getAllowedModelsForTier('hobby'));
+const PRO_MODELS = new Set(getAllowedModelsForTier('pro'));
+const MAX_MODELS = new Set(getAllowedModelsForTier('max'));
 
-  return models.filter((model) => {
-    const modelLevel = TIER_LEVELS[model.tier] || 0;
-    return modelLevel <= userLevel;
-  });
+function getTierForModel(modelId: string): OpenAiCompatibleModel['tier'] | null {
+  if (ECONOMY_MODELS.has(modelId)) {
+    return 'hobby';
+  }
+  if (MAX_MODELS.has(modelId) && !PRO_MODELS.has(modelId)) {
+    return 'max';
+  }
+  if (PRO_MODELS.has(modelId)) {
+    return 'pro';
+  }
+  return null;
 }
 
-function getAllowedAutoModes(userTier: string): string[] {
-  return AUTO_MODES_BY_TIER[userTier.toLowerCase()] || AUTO_MODES_BY_TIER['free'] || [];
+function toModelRecord(model: ModelMetadata): OpenAiCompatibleModel | null {
+  if (model.status === 'deprecated' || !VISIBLE_MODEL_TYPES.has(model.modelType)) {
+    return null;
+  }
+
+  const tier = getTierForModel(model.id);
+  if (!tier) {
+    return null;
+  }
+
+  return {
+    id: model.id,
+    object: 'model',
+    created: CREATED_AT_TIMESTAMP,
+    owned_by: model.provider,
+    permission: [],
+    root: model.id,
+    parent: null,
+    tier,
+    context_window: model.contextWindow,
+    max_output: model.maxOutputTokens ?? 8192,
+  };
 }
 
-async function handleListModels(request: NextRequest) {
-  // Handle CORS preflight
-  if (request.method === 'OPTIONS') {
-    return new NextResponse(null, {
-      status: 204,
-      headers: getCorsHeaders(request),
-    });
-  }
+const MODELS: OpenAiCompatibleModel[] = listCanonicalModels()
+  .map(toModelRecord)
+  .filter((model): model is OpenAiCompatibleModel => Boolean(model));
 
-  // Rate limiting
-  const rateLimitResponse = await withRateLimit(request, 'default');
-  if (rateLimitResponse) return rateLimitResponse;
+function getVisibleModelsForTier(userTier: string): OpenAiCompatibleModel[] {
+  const normalizedTier = normalizeSubscriptionTier(userTier);
+  const allowedModels = new Set(getAllowedModelsForTier(normalizedTier));
+  return MODELS.filter((model) => allowedModels.has(model.id));
+}
 
-  // Authentication
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    // Return only free-tier models for unauthenticated requests
-    const freeTierModels = filterModelsByTier(MODELS, 'free');
-    return NextResponse.json(
-      {
-        object: 'list',
-        data: freeTierModels,
-        x_agi_workforce: {
-          user_tier: 'free',
-          total_available: freeTierModels.length,
-          allowed_auto_modes: getAllowedAutoModes('free'),
-        },
-      },
-      {
-        headers: getCorsHeaders(request),
-      },
-    );
-  }
-
-  const token = authHeader.substring(7);
-
-  // Verify user with Supabase
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-
-  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    // Return only free-tier models for invalid tokens
-    const freeTierModels = filterModelsByTier(MODELS, 'free');
-    return NextResponse.json(
-      {
-        object: 'list',
-        data: freeTierModels,
-        x_agi_workforce: {
-          user_tier: 'free',
-          total_available: freeTierModels.length,
-          allowed_auto_modes: getAllowedAutoModes('free'),
-        },
-      },
-      {
-        headers: getCorsHeaders(request),
-      },
-    );
-  }
-
-  // Get subscription to filter models by tier
-  const subscription = await SubscriptionService.getSubscription(user.id);
-  const userTier = subscription?.plan_tier || 'free';
-
-  const filteredModels = filterModelsByTier(MODELS, userTier);
+async function listModelsForRequest(request: NextRequest, userTier: string) {
+  const visibleModels = getVisibleModelsForTier(userTier);
 
   return NextResponse.json(
     {
       object: 'list',
-      data: filteredModels,
+      data: visibleModels,
       x_agi_workforce: {
-        user_tier: userTier,
-        total_available: filteredModels.length,
-        allowed_auto_modes: getAllowedAutoModes(userTier),
+        user_tier: normalizeSubscriptionTier(userTier),
+        total_available: visibleModels.length,
+        allowed_auto_modes: getAllowedAutoModesForTier(userTier),
       },
     },
     {
@@ -466,7 +100,41 @@ async function handleListModels(request: NextRequest) {
   );
 }
 
+async function handleListModels(request: NextRequest) {
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 204,
+      headers: getCorsHeaders(request),
+    });
+  }
+
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return listModelsForRequest(request, 'free');
+  }
+
+  const token = authHeader.substring(7);
+  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser(token);
+
+  if (authError || !user) {
+    return listModelsForRequest(request, 'free');
+  }
+
+  const subscription = await SubscriptionService.getSubscription(user.id);
+  return listModelsForRequest(request, subscription?.plan_tier || 'free');
+}
+
 export const GET = withErrorHandler(handleListModels);
+
 export function OPTIONS(request: NextRequest) {
   return new NextResponse(null, { status: 204, headers: getCorsHeaders(request) });
 }

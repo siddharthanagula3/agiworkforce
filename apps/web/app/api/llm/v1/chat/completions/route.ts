@@ -17,6 +17,7 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import { requireCsrfToken } from '@/lib/csrf';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, EgressPolicyError } from '@/lib/egress-policy';
+import { resolveAutoModeModel } from '@agiworkforce/types';
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
 const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
@@ -95,30 +96,13 @@ const ChatCompletionRequestSchema = z.object({
   use_prompt_cache: z.boolean().optional(),
 });
 
-// Auto model tier mappings - translate tier-based model selections to actual models
-const AUTO_MODEL_MAPPINGS: Record<string, string> = {
-  'auto-economy': 'gpt-5.4-nano', // Fast, cost-effective ($0.20/$1.25 per 1M)
-  'auto-balanced': 'gpt-5.4', // Good balance of speed and quality ($2.50/$15.00 per 1M)
-  'auto-premium': 'claude-sonnet-4.6', // Best quality ($3/$15 per 1M)
-};
-
 /**
  * Resolve auto model names to actual LLM model names.
  * Handles 'auto-economy', 'auto-balanced', 'auto-premium' mappings.
  * Tier-aware: hobby users get downgraded to economy-tier models for balanced/premium.
  */
 function resolveAutoModel(model: string, subscriptionTier?: string): string {
-  const modelLower = model.toLowerCase();
-  const mapped = AUTO_MODEL_MAPPINGS[modelLower];
-  if (!mapped) return model;
-
-  // Hobby tier can only use economy models — downgrade balanced/premium
-  const tierLower = subscriptionTier?.toLowerCase();
-  if (tierLower === 'hobby' && (modelLower === 'auto-balanced' || modelLower === 'auto-premium')) {
-    return 'gpt-5.4-nano'; // Best economy model for hobby tier
-  }
-
-  return mapped;
+  return resolveAutoModeModel(model, subscriptionTier) ?? model;
 }
 
 /**

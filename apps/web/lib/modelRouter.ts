@@ -4,6 +4,7 @@ import {
   normalizeModelId,
   type ModelMetadata,
 } from '@/constants/llm';
+import { resolveAutoModeModel } from '@agiworkforce/types';
 import type { RoutingTaskType } from '@agiworkforce/types';
 
 export type TaskType = RoutingTaskType;
@@ -20,6 +21,7 @@ type AutoMode = 'auto' | 'auto-economy' | 'auto-balanced' | 'auto-premium';
 type Detection = {
   taskType: TaskType;
   needsSearch: boolean;
+  needsToolSearch: boolean;
   needsComputerUse: boolean;
   needsAgentic: boolean;
   needsVision: boolean;
@@ -55,6 +57,10 @@ function detectRoutingNeeds(message: string, hasImages: boolean): Detection {
 
   const needsComputerUse =
     /\b(browse|browser|click|scroll|navigate|open the website|fill out|submit the form|computer use|desktop automation|web automation)\b/i.test(
+      normalized,
+    );
+  const needsToolSearch =
+    /\b(tool search|search tools|find tools|which tool should|available tools|best tool for|find an mcp tool|search for mcp|discover tools)\b/i.test(
       normalized,
     );
   const needsSearch =
@@ -93,7 +99,7 @@ function detectRoutingNeeds(message: string, hasImages: boolean): Detection {
     taskType = 'reasoning';
   } else if (needsSearch) {
     taskType = 'research';
-  } else if (needsAgentic) {
+  } else if (needsAgentic || needsToolSearch) {
     taskType = 'agentic';
   } else if (needsVision) {
     taskType = 'multimodal';
@@ -102,6 +108,7 @@ function detectRoutingNeeds(message: string, hasImages: boolean): Detection {
   return {
     taskType,
     needsSearch,
+    needsToolSearch,
     needsComputerUse,
     needsAgentic,
     needsVision,
@@ -122,11 +129,56 @@ function allowedQuality(autoMode: AutoMode): number {
   }
 }
 
-function baseCandidates(autoMode: AutoMode): ModelMetadata[] {
+function satisfiesHardRequirements(model: ModelMetadata, detection: Detection): boolean {
+  const caps = model.capabilities;
+
+  if (detection.needsVision && !caps.vision) {
+    return false;
+  }
+
+  if (detection.needsComputerUse && !caps.computerUse) {
+    return false;
+  }
+
+  if (detection.needsSearch && !(caps.search || caps.research)) {
+    return false;
+  }
+
+  if (
+    detection.needsToolSearch &&
+    !(caps.tools && caps.thinking && (caps.search || caps.research))
+  ) {
+    return false;
+  }
+
+  if (detection.needsAgentic && !caps.tools) {
+    return false;
+  }
+
+  return true;
+}
+
+function baseCandidates(autoMode: AutoMode, detection: Detection): ModelMetadata[] {
   const maxQuality = allowedQuality(autoMode);
-  return getAllModels()
+  const allCandidates = getAllModels()
     .filter(isChatCandidate)
     .filter((model) => getQualityOrder(model.qualityTier) <= maxQuality);
+  const hardEligibleCandidates = allCandidates.filter((model) =>
+    satisfiesHardRequirements(model, detection),
+  );
+
+  if (hardEligibleCandidates.length > 0) {
+    return hardEligibleCandidates;
+  }
+
+  const expandedCandidates = getAllModels().filter(isChatCandidate);
+  const expandedHardEligibleCandidates = expandedCandidates.filter((model) =>
+    satisfiesHardRequirements(model, detection),
+  );
+
+  return expandedHardEligibleCandidates.length > 0
+    ? expandedHardEligibleCandidates
+    : expandedCandidates;
 }
 
 function scoreModel(model: ModelMetadata, detection: Detection, autoMode: AutoMode): number {
@@ -144,6 +196,10 @@ function scoreModel(model: ModelMetadata, detection: Detection, autoMode: AutoMo
 
   if (detection.needsSearch) {
     score += caps.search || caps.research ? 90 : -120;
+  }
+
+  if (detection.needsToolSearch) {
+    score += caps.tools && caps.thinking && (caps.search || caps.research) ? 120 : -1000;
   }
 
   if (detection.needsAgentic) {
@@ -217,7 +273,7 @@ function humanizeTask(taskType: TaskType): string {
 
 function selectModel(autoMode: AutoMode, message: string, hasImages: boolean): RoutingResult {
   const detection = detectRoutingNeeds(message, hasImages);
-  const candidates = baseCandidates(autoMode);
+  const candidates = baseCandidates(autoMode, detection);
 
   const ranked = candidates
     .map((model) => ({
@@ -230,7 +286,7 @@ function selectModel(autoMode: AutoMode, message: string, hasImages: boolean): R
 
   if (!winner) {
     return {
-      modelId: autoMode === 'auto-economy' ? 'auto-economy' : 'gpt-5.4',
+      modelId: resolveAutoModeModel(autoMode) ?? 'auto-economy',
       taskType: detection.taskType,
       reason: `No eligible ${humanizeTask(detection.taskType)} model found. Falling back safely.`,
       wasRouted: true,
@@ -239,6 +295,7 @@ function selectModel(autoMode: AutoMode, message: string, hasImages: boolean): R
 
   const reasonParts = [`${humanizeTask(detection.taskType)} task`];
   if (detection.needsSearch) reasonParts.push('fresh web access');
+  if (detection.needsToolSearch) reasonParts.push('tool discovery');
   if (detection.needsComputerUse) reasonParts.push('computer use');
   if (detection.needsVision) reasonParts.push('vision support');
   if (detection.needsAgentic) reasonParts.push('tool orchestration');
