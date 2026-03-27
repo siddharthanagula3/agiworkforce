@@ -36,13 +36,15 @@ mod cloud;
 mod exec_policy;
 mod model_catalog;
 mod plugins;
-mod review;
-mod sandbox;
-mod tool_search;
-#[allow(dead_code)]
-mod routing;
 #[allow(dead_code)]
 mod policy;
+#[allow(dead_code)]
+mod project_scope;
+mod review;
+#[allow(dead_code)]
+mod routing;
+mod sandbox;
+mod tool_search;
 // In-progress modules — compiled and partially wired. Public APIs available for future integration.
 #[allow(dead_code)]
 mod ecosystem;
@@ -685,7 +687,11 @@ async fn main() -> Result<()> {
                                 .trim_start_matches("ws://")
                                 .parse()
                                 // SAFETY: DEFAULT_APP_SERVER_ADDR is a valid const SocketAddr
-                                .unwrap_or_else(|_| DEFAULT_APP_SERVER_ADDR.parse().expect("const DEFAULT_APP_SERVER_ADDR must be a valid SocketAddr")),
+                                .unwrap_or_else(|_| {
+                                    DEFAULT_APP_SERVER_ADDR.parse().expect(
+                                        "const DEFAULT_APP_SERVER_ADDR must be a valid SocketAddr",
+                                    )
+                                }),
                         },
                         ..Default::default()
                     }
@@ -757,8 +763,10 @@ async fn main() -> Result<()> {
             }
             Command::Features => {
                 let f = tool_search::FeatureFlags::standard();
-                println!("Feature Flags:\n  shell_tool: {}\n  code_mode: {}\n  tool_suggest: {}\n  web_search: {}\n  apply_patch: {}",
-                    f.shell_tool, f.code_mode, f.tool_suggest, f.web_search, f.apply_patch_freeform);
+                println!(
+                    "Feature Flags:\n  shell_tool: {}\n  code_mode: {}\n  tool_suggest: {}\n  web_search: {}\n  apply_patch: {}",
+                    f.shell_tool, f.code_mode, f.tool_suggest, f.web_search, f.apply_patch_freeform
+                );
                 Ok(())
             }
             Command::Execpolicy => {
@@ -775,62 +783,60 @@ async fn main() -> Result<()> {
             }
 
             // --- Ecosystem ---
-            Command::Ecosystem { action } => {
-                match action {
-                    EcosystemSubcommand::Scan => {
-                        let detected = ecosystem::scan();
-                        println!("{}", ecosystem::format_table(&detected));
-                        Ok(())
-                    }
-                    EcosystemSubcommand::Import => {
-                        let detected = ecosystem::scan();
-                        let servers = ecosystem::import_mcp_servers(&detected);
-                        if servers.is_empty() {
-                            println!("No MCP server configs found to import.");
-                        } else {
-                            println!("Imported {} MCP server config(s):", servers.len());
-                            for s in &servers {
-                                let transport = if s.url.is_some() { "HTTP/SSE" } else { "stdio" };
-                                println!("  {} ({}) [{}]", s.name, s.source, transport);
-                            }
-                        }
-                        let skills = ecosystem::discover_external_skills(&detected);
-                        if !skills.is_empty() {
-                            println!("\nDiscovered {} external skill file(s).", skills.len());
-                        }
-                        Ok(())
-                    }
-                    EcosystemSubcommand::Show => {
-                        let detected = ecosystem::scan();
-                        let ctx = ecosystem::build_context(&detected);
-                        println!("{}", ecosystem::format_table(&detected));
-                        if !ctx.available_instructions.is_empty() {
-                            println!("\nAvailable instruction files:");
-                            for i in &ctx.available_instructions {
-                                println!(
-                                    "  {} — {} ({} bytes)",
-                                    i.tool,
-                                    i.path.display(),
-                                    i.size_bytes
-                                );
-                            }
-                        }
-                        let servers = ecosystem::import_mcp_servers(&detected);
-                        if !servers.is_empty() {
-                            println!("\nImportable MCP servers:");
-                            for s in &servers {
-                                let cmd_display = s
-                                    .command
-                                    .as_deref()
-                                    .or(s.url.as_deref())
-                                    .unwrap_or("(unknown)");
-                                println!("  {} — {}", s.name, cmd_display);
-                            }
-                        }
-                        Ok(())
-                    }
+            Command::Ecosystem { action } => match action {
+                EcosystemSubcommand::Scan => {
+                    let detected = ecosystem::scan();
+                    println!("{}", ecosystem::format_table(&detected));
+                    Ok(())
                 }
-            }
+                EcosystemSubcommand::Import => {
+                    let detected = ecosystem::scan();
+                    let servers = ecosystem::import_mcp_servers(&detected);
+                    if servers.is_empty() {
+                        println!("No MCP server configs found to import.");
+                    } else {
+                        println!("Imported {} MCP server config(s):", servers.len());
+                        for s in &servers {
+                            let transport = if s.url.is_some() { "HTTP/SSE" } else { "stdio" };
+                            println!("  {} ({}) [{}]", s.name, s.source, transport);
+                        }
+                    }
+                    let skills = ecosystem::discover_external_skills(&detected);
+                    if !skills.is_empty() {
+                        println!("\nDiscovered {} external skill file(s).", skills.len());
+                    }
+                    Ok(())
+                }
+                EcosystemSubcommand::Show => {
+                    let detected = ecosystem::scan();
+                    let ctx = ecosystem::build_context(&detected);
+                    println!("{}", ecosystem::format_table(&detected));
+                    if !ctx.available_instructions.is_empty() {
+                        println!("\nAvailable instruction files:");
+                        for i in &ctx.available_instructions {
+                            println!(
+                                "  {} — {} ({} bytes)",
+                                i.tool,
+                                i.path.display(),
+                                i.size_bytes
+                            );
+                        }
+                    }
+                    let servers = ecosystem::import_mcp_servers(&detected);
+                    if !servers.is_empty() {
+                        println!("\nImportable MCP servers:");
+                        for s in &servers {
+                            let cmd_display = s
+                                .command
+                                .as_deref()
+                                .or(s.url.as_deref())
+                                .unwrap_or("(unknown)");
+                            println!("  {} — {}", s.name, cmd_display);
+                        }
+                    }
+                    Ok(())
+                }
+            },
 
             // --- History ---
             Command::History { limit } => {
@@ -914,7 +920,10 @@ async fn main() -> Result<()> {
                             store.entries.insert(pid.to_string(), entry);
                             store.save()?;
                         } else {
-                            eprintln!("Unknown provider '{}'. Available: agiworkforce, anthropic, openai", pid);
+                            eprintln!(
+                                "Unknown provider '{}'. Available: agiworkforce, anthropic, openai",
+                                pid
+                            );
                         }
                         Ok(())
                     }
@@ -1000,10 +1009,11 @@ async fn main() -> Result<()> {
 
                 // Register current directory as a project
                 let cwd = std::env::current_dir()?;
+                let project_root = project_scope::resolve_project_scope(&cwd);
                 let mut registry = project_registry::ProjectRegistry::load(&home)?;
-                registry.register_project(&cwd, "trusted")?;
+                registry.register_project(&project_root, "trusted")?;
                 registry.save(&home)?;
-                println!("Registered project: {}", cwd.display());
+                println!("Registered project: {}", project_root.display());
                 Ok(())
             }
 
@@ -1202,11 +1212,7 @@ async fn main() -> Result<()> {
     let stdin_content = if is_piped || cli.stdin {
         let mut buf = String::new();
         io::stdin().read_to_string(&mut buf)?;
-        if buf.is_empty() {
-            None
-        } else {
-            Some(buf)
-        }
+        if buf.is_empty() { None } else { Some(buf) }
     } else {
         None
     };

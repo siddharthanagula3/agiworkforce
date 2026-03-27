@@ -6,12 +6,11 @@ use std::sync::Arc;
 
 use crate::diff_render::display_path_for;
 use crate::key_hint;
+use crate::project_scope::resolve_project_scope;
 use crate::text_formatting::truncate_text;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
-use chrono::DateTime;
-use chrono::Utc;
 use agiworkforce_core::Cursor;
 use agiworkforce_core::INTERACTIVE_SESSION_SOURCES;
 use agiworkforce_core::RolloutRecorder;
@@ -22,6 +21,8 @@ use agiworkforce_core::config::Config;
 use agiworkforce_core::find_thread_names_by_ids;
 use agiworkforce_core::path_utils;
 use agiworkforce_protocol::ThreadId;
+use chrono::DateTime;
+use chrono::Utc;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -149,7 +150,9 @@ async fn run_session_picker(
     let filter_cwd = if show_all {
         None
     } else {
-        std::env::current_dir().ok()
+        std::env::current_dir()
+            .ok()
+            .map(|cwd| resolve_project_scope(&cwd))
     };
 
     let config = config.clone();
@@ -349,6 +352,25 @@ impl Row {
         }
         if let Some(thread_name) = self.thread_name.as_ref()
             && thread_name.to_lowercase().contains(query)
+        {
+            return true;
+        }
+        if let Some(branch) = self.git_branch.as_ref()
+            && branch.to_lowercase().contains(query)
+        {
+            return true;
+        }
+        if let Some(cwd) = self.cwd.as_ref() {
+            let cwd_display = display_path_for(cwd, std::path::Path::new("/")).to_lowercase();
+            if cwd_display.contains(query) {
+                return true;
+            }
+        }
+        if self.path.to_string_lossy().to_lowercase().contains(query) {
+            return true;
+        }
+        if let Some(thread_id) = self.thread_id
+            && thread_id.to_string().to_lowercase().contains(query)
         {
             return true;
         }
@@ -654,7 +676,8 @@ impl PickerState {
         let Some(row_cwd) = row.cwd.as_ref() else {
             return false;
         };
-        paths_match(row_cwd, filter_cwd)
+        let row_scope = resolve_project_scope(row_cwd);
+        paths_match(&row_scope, filter_cwd)
     }
 
     fn set_query(&mut self, new_query: String) {
@@ -887,6 +910,12 @@ fn draw_picker(tui: &mut Tui, state: &PickerState) -> std::io::Result<()> {
         let header_line: Line = vec![
             state.action.title().bold().cyan(),
             "  ".into(),
+            if state.show_all {
+                "[ALL]".yellow().bold()
+            } else {
+                "[PROJECT]".green().bold()
+            },
+            "  ".into(),
             "Sort:".dim(),
             " ".into(),
             sort_key_label(state.sort_key).magenta(),
@@ -918,6 +947,8 @@ fn draw_picker(tui: &mut Tui, state: &PickerState) -> std::io::Result<()> {
             key_hint::plain(KeyCode::Tab).into(),
             " to toggle sort ".dim(),
             "    ".dim(),
+            "type to search".dim(),
+            "    ".dim(),
             key_hint::plain(KeyCode::Up).into(),
             "/".dim(),
             key_hint::plain(KeyCode::Down).into(),
@@ -933,9 +964,14 @@ fn search_line(state: &PickerState) -> Line<'_> {
         return Line::from(error.red());
     }
     if state.query.is_empty() {
-        return Line::from("Type to search".dim());
+        let prompt = if state.show_all {
+            "Search titles, prompts, branches, or directories"
+        } else {
+            "Search relevant chats in this project"
+        };
+        return Line::from(prompt.dim());
     }
-    Line::from(format!("Search: {}", state.query))
+    Line::from(format!("Relevant chats: {}", state.query))
 }
 
 fn render_list(
@@ -1085,7 +1121,7 @@ fn render_empty_state_line(state: &PickerState) -> Line<'static> {
             );
             return vec![Span::from(msg).italic().dim()].into();
         }
-        return vec!["No results for your search".italic().dim()].into();
+        return vec!["No relevant chats found for your search".italic().dim()].into();
     }
 
     if state.all_rows.is_empty() && state.pagination.num_scanned_files == 0 {
@@ -1343,8 +1379,8 @@ fn column_visibility(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
     use agiworkforce_protocol::ThreadId;
+    use chrono::Duration;
 
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;
@@ -1367,6 +1403,30 @@ mod tests {
             updated_at: Some(ts.to_string()),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn row_matches_query_searches_branch_cwd_path_and_thread_id() {
+        let thread_id = ThreadId::new();
+        let row = Row {
+            path: PathBuf::from("/tmp/agiworkforce/session-123.jsonl"),
+            preview: "Investigate MCP tool regression".to_string(),
+            thread_id: Some(thread_id),
+            thread_name: Some("CLI visibility audit".to_string()),
+            created_at: None,
+            updated_at: None,
+            cwd: Some(PathBuf::from(
+                "/Users/siddhartha/Desktop/agiworkforce/apps/cli",
+            )),
+            git_branch: Some("feature/cli-visibility".to_string()),
+        };
+
+        assert!(row.matches_query("visibility"));
+        assert!(row.matches_query("feature/cli"));
+        assert!(row.matches_query("apps/cli"));
+        assert!(row.matches_query("session-123"));
+        assert!(row.matches_query(&thread_id.to_string()));
+        assert!(!row.matches_query("totally-missing"));
     }
 
     fn cursor_from_str(repr: &str) -> Cursor {

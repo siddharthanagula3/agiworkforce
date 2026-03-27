@@ -17,7 +17,6 @@ use crate::chatwidget::realtime::RealtimeConversationPhase;
 use crate::history_cell::UserHistoryCell;
 use crate::test_backend::VT100Backend;
 use crate::tui::FrameRequester;
-use assert_matches::assert_matches;
 use agiworkforce_app_server_protocol::AppSummary;
 use agiworkforce_app_server_protocol::MarketplaceInterface;
 use agiworkforce_app_server_protocol::PluginAuthPolicy;
@@ -79,9 +78,9 @@ use agiworkforce_protocol::protocol::AgentMessageEvent;
 use agiworkforce_protocol::protocol::AgentReasoningDeltaEvent;
 use agiworkforce_protocol::protocol::AgentReasoningEvent;
 use agiworkforce_protocol::protocol::AgentStatus;
+use agiworkforce_protocol::protocol::AgiWorkforceErrorInfo;
 use agiworkforce_protocol::protocol::ApplyPatchApprovalRequestEvent;
 use agiworkforce_protocol::protocol::BackgroundEventEvent;
-use agiworkforce_protocol::protocol::AgiWorkforceErrorInfo;
 use agiworkforce_protocol::protocol::CollabAgentSpawnBeginEvent;
 use agiworkforce_protocol::protocol::CollabAgentSpawnEndEvent;
 use agiworkforce_protocol::protocol::CreditsSnapshot;
@@ -140,6 +139,7 @@ use agiworkforce_terminal_detection::TerminalInfo;
 use agiworkforce_terminal_detection::TerminalName;
 use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use agiworkforce_utils_approval_presets::builtin_approval_presets;
+use assert_matches::assert_matches;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -1905,8 +1905,9 @@ async fn helpers_are_available_and_do_not_panic() {
             cfg.model_provider.clone(),
         ),
     );
-    let auth_manager =
-        agiworkforce_core::test_support::auth_manager_from_auth(AgiWorkforceAuth::from_api_key("test"));
+    let auth_manager = agiworkforce_core::test_support::auth_manager_from_auth(
+        AgiWorkforceAuth::from_api_key("test"),
+    );
     let init = ChatWidgetInit {
         config: cfg,
         frame_requester: FrameRequester::test_dummy(),
@@ -1957,9 +1958,9 @@ async fn make_chatwidget_manual(
     let app_event_tx = AppEventSender::new(tx_raw);
     let (op_tx, op_rx) = unbounded_channel::<Op>();
     let mut cfg = test_config().await;
-    let resolved_model = model_override
-        .map(str::to_owned)
-        .unwrap_or_else(|| agiworkforce_core::test_support::get_model_offline(cfg.model.as_deref()));
+    let resolved_model = model_override.map(str::to_owned).unwrap_or_else(|| {
+        agiworkforce_core::test_support::get_model_offline(cfg.model.as_deref())
+    });
     if let Some(model) = model_override {
         cfg.model = Some(model.to_string());
     }
@@ -1976,8 +1977,9 @@ async fn make_chatwidget_manual(
         skills: None,
     });
     bottom.set_collaboration_modes_enabled(true);
-    let auth_manager =
-        agiworkforce_core::test_support::auth_manager_from_auth(AgiWorkforceAuth::from_api_key("test"));
+    let auth_manager = agiworkforce_core::test_support::auth_manager_from_auth(
+        AgiWorkforceAuth::from_api_key("test"),
+    );
     let agiworkforce_home = cfg.agiworkforce_home.clone();
     let models_manager = Arc::new(ModelsManager::new(
         agiworkforce_home,
@@ -2489,7 +2491,10 @@ async fn rate_limit_snapshots_keep_separate_entries_per_limit_id() {
         .get("agi_other")
         .expect("agi_other snapshot should exist");
 
-    assert_eq!(agi_primary.primary.as_ref().map(|w| w.used_percent), Some(20.0));
+    assert_eq!(
+        agi_primary.primary.as_ref().map(|w| w.used_percent),
+        Some(20.0)
+    );
     assert_eq!(
         agi_primary
             .credits
@@ -3525,7 +3530,10 @@ async fn exec_approval_uses_approval_id_when_present() {
         } = app_ev
         {
             assert_eq!(id, "approval-subcommand");
-            assert_matches!(decision, agiworkforce_protocol::protocol::ReviewDecision::Approved);
+            assert_matches!(
+                decision,
+                agiworkforce_protocol::protocol::ReviewDecision::Approved
+            );
             found = true;
             break;
         }
@@ -5555,7 +5563,12 @@ async fn unified_exec_wait_after_final_agent_message_snapshot() {
         }),
     });
 
-    begin_unified_exec_startup(&mut chat, "call-wait", "proc-1", "cargo test -p agiworkforce-core");
+    begin_unified_exec_startup(
+        &mut chat,
+        "call-wait",
+        "proc-1",
+        "cargo test -p agiworkforce-core",
+    );
     terminal_interaction(&mut chat, "call-wait-stdin", "proc-1", "");
 
     complete_assistant_message(&mut chat, "msg-1", "Final response.", None);
@@ -6048,8 +6061,9 @@ async fn collaboration_modes_defaults_to_code_on_startup() {
             cfg.model_provider.clone(),
         ),
     );
-    let auth_manager =
-        agiworkforce_core::test_support::auth_manager_from_auth(AgiWorkforceAuth::from_api_key("test"));
+    let auth_manager = agiworkforce_core::test_support::auth_manager_from_auth(
+        AgiWorkforceAuth::from_api_key("test"),
+    );
     let init = ChatWidgetInit {
         config: cfg,
         frame_requester: FrameRequester::test_dummy(),
@@ -6099,8 +6113,9 @@ async fn experimental_mode_plan_is_ignored_on_startup() {
             cfg.model_provider.clone(),
         ),
     );
-    let auth_manager =
-        agiworkforce_core::test_support::auth_manager_from_auth(AgiWorkforceAuth::from_api_key("test"));
+    let auth_manager = agiworkforce_core::test_support::auth_manager_from_auth(
+        AgiWorkforceAuth::from_api_key("test"),
+    );
     let init = ChatWidgetInit {
         config: cfg,
         frame_requester: FrameRequester::test_dummy(),
@@ -6313,9 +6328,8 @@ async fn slash_copy_reports_when_no_copyable_output_exists() {
     let rendered = lines_to_single_string(&cells[0]);
     assert_snapshot!("slash_copy_no_output_info_message", rendered);
     assert!(
-        rendered.contains(
-            "`/copy` is unavailable before the first output or right after a rollback."
-        ),
+        rendered
+            .contains("`/copy` is unavailable before the first output or right after a rollback."),
         "expected no-output message, got {rendered:?}"
     );
 }
@@ -6386,9 +6400,8 @@ async fn slash_copy_is_unavailable_when_legacy_agent_message_is_not_repeated_on_
     assert_eq!(cells.len(), 1, "expected one info message");
     let rendered = lines_to_single_string(&cells[0]);
     assert!(
-        rendered.contains(
-            "`/copy` is unavailable before the first output or right after a rollback."
-        ),
+        rendered
+            .contains("`/copy` is unavailable before the first output or right after a rollback."),
         "expected unavailable message, got {rendered:?}"
     );
 }
@@ -6415,9 +6428,8 @@ async fn slash_copy_is_unavailable_when_legacy_agent_message_item_is_not_repeate
     assert_eq!(cells.len(), 1, "expected one info message");
     let rendered = lines_to_single_string(&cells[0]);
     assert!(
-        rendered.contains(
-            "`/copy` is unavailable before the first output or right after a rollback."
-        ),
+        rendered
+            .contains("`/copy` is unavailable before the first output or right after a rollback."),
         "expected unavailable message, got {rendered:?}"
     );
 }
@@ -6447,9 +6459,8 @@ async fn slash_copy_does_not_return_stale_output_after_thread_rollback() {
     assert_eq!(cells.len(), 1, "expected one info message");
     let rendered = lines_to_single_string(&cells[0]);
     assert!(
-        rendered.contains(
-            "`/copy` is unavailable before the first output or right after a rollback."
-        ),
+        rendered
+            .contains("`/copy` is unavailable before the first output or right after a rollback."),
         "expected rollback-cleared copy state message, got {rendered:?}"
     );
 }
@@ -8829,6 +8840,51 @@ async fn model_picker_hides_show_in_picker_false_models_from_cache() {
 }
 
 #[tokio::test]
+async fn model_picker_recognizes_canonical_auto_mode_slugs() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(Some("auto-balanced")).await;
+    chat.thread_id = Some(ThreadId::new());
+    let preset = |slug: &str| ModelPreset {
+        id: slug.to_string(),
+        model: slug.to_string(),
+        display_name: slug.to_string(),
+        description: format!("{slug} description"),
+        default_reasoning_effort: ReasoningEffortConfig::Medium,
+        supported_reasoning_efforts: vec![ReasoningEffortPreset {
+            effort: ReasoningEffortConfig::Medium,
+            description: "medium".to_string(),
+        }],
+        supports_personality: false,
+        is_default: false,
+        upgrade: None,
+        show_in_picker: true,
+        availability_nux: None,
+        supported_in_api: true,
+        input_modalities: default_input_modalities(),
+    };
+
+    chat.open_model_popup_with_presets(vec![
+        preset("auto-economy"),
+        preset("auto-balanced"),
+        preset("auto-premium"),
+        preset("claude-opus-4-6"),
+    ]);
+
+    let popup = render_bottom_popup(&chat, 80);
+    assert!(
+        popup.contains("Pick a quick auto mode or browse all models."),
+        "expected canonical auto-mode slugs to stay in the quick auto popup:\n{popup}"
+    );
+    assert!(
+        popup.contains("auto-balanced"),
+        "expected auto-balanced to appear in quick auto popup:\n{popup}"
+    );
+    assert!(
+        popup.contains("All models"),
+        "expected non-auto models to remain accessible from the grouped picker:\n{popup}"
+    );
+}
+
+#[tokio::test]
 async fn server_overloaded_error_does_not_switch_models() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(Some("claude-opus-4-6")).await;
     chat.set_model("claude-opus-4-6");
@@ -11004,7 +11060,10 @@ async fn apply_patch_approval_sends_op_with_call_id() {
         } = app_ev
         {
             assert_eq!(id, "call-999");
-            assert_matches!(decision, agiworkforce_protocol::protocol::ReviewDecision::Approved);
+            assert_matches!(
+                decision,
+                agiworkforce_protocol::protocol::ReviewDecision::Approved
+            );
             found = true;
             break;
         }
@@ -11052,7 +11111,10 @@ async fn apply_patch_full_flow_integration_like() {
     match forwarded {
         Op::PatchApproval { id, decision } => {
             assert_eq!(id, "call-1");
-            assert_matches!(decision, agiworkforce_protocol::protocol::ReviewDecision::Approved);
+            assert_matches!(
+                decision,
+                agiworkforce_protocol::protocol::ReviewDecision::Approved
+            );
         }
         other => panic!("unexpected op forwarded: {other:?}"),
     }
