@@ -55,8 +55,8 @@ use agiworkforce_app_server_protocol::PluginUninstallParams;
 use agiworkforce_app_server_protocol::PluginUninstallResponse;
 use agiworkforce_app_server_protocol::RequestId;
 use agiworkforce_arg0::Arg0DispatchPaths;
-use agiworkforce_core::AuthManager;
 use agiworkforce_core::AgiWorkforceAuth;
+use agiworkforce_core::AuthManager;
 use agiworkforce_core::ForkSnapshot;
 use agiworkforce_core::ThreadManager;
 use agiworkforce_core::config::Config;
@@ -479,7 +479,10 @@ fn emit_system_bwrap_warning(app_event_tx: &AppEventSender) {
     )));
 }
 
-async fn emit_custom_prompt_deprecation_notice(app_event_tx: &AppEventSender, agiworkforce_home: &Path) {
+async fn emit_custom_prompt_deprecation_notice(
+    app_event_tx: &AppEventSender,
+    agiworkforce_home: &Path,
+) {
     let prompts_dir = agiworkforce_home.join("prompts");
     let prompt_count = agiworkforce_core::custom_prompts::discover_prompts_in(&prompts_dir)
         .await
@@ -699,10 +702,9 @@ fn should_show_model_migration_prompt(
 
 fn migration_prompt_hidden(config: &Config, migration_config_key: &str) -> bool {
     match migration_config_key {
-        HIDE_GPT_5_1_AGIWORKFORCE_MAX_MIGRATION_PROMPT_CONFIG => config
-            .notices
-            .hide_migration_prompt
-            .unwrap_or(false),
+        HIDE_GPT_5_1_AGIWORKFORCE_MAX_MIGRATION_PROMPT_CONFIG => {
+            config.notices.hide_migration_prompt.unwrap_or(false)
+        }
         HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG => {
             config.notices.hide_gpt5_1_migration_prompt.unwrap_or(false)
         }
@@ -3071,7 +3073,7 @@ impl App {
                 };
                 self.overlay = Some(Overlay::new_static_with_lines(
                     pager_lines,
-                    "D I F F".to_string(),
+                    "Diff Preview".to_string(),
                 ));
                 tui.frame_requester().schedule_frame();
             }
@@ -3300,8 +3302,9 @@ impl App {
 
                     // If the elevated setup already ran on this machine, don't prompt for
                     // elevation again - just flip the config to use the elevated path.
-                    if agiworkforce_core::windows_sandbox::sandbox_setup_is_complete(agiworkforce_home.as_path())
-                    {
+                    if agiworkforce_core::windows_sandbox::sandbox_setup_is_complete(
+                        agiworkforce_home.as_path(),
+                    ) {
                         tx.send(AppEvent::EnableWindowsSandboxForAgentMode {
                             preset,
                             mode: WindowsSandboxEnableMode::Elevated,
@@ -3386,13 +3389,15 @@ impl App {
 
                     self.chat_widget.show_windows_sandbox_setup_status();
                     tokio::task::spawn_blocking(move || {
-                        if let Err(err) = agiworkforce_core::windows_sandbox::run_legacy_setup_preflight(
-                            &policy,
-                            policy_cwd.as_path(),
-                            command_cwd.as_path(),
-                            &env_map,
-                            agiworkforce_home.as_path(),
-                        ) {
+                        if let Err(err) =
+                            agiworkforce_core::windows_sandbox::run_legacy_setup_preflight(
+                                &policy,
+                                policy_cwd.as_path(),
+                                command_cwd.as_path(),
+                                &env_map,
+                                agiworkforce_home.as_path(),
+                            )
+                        {
                             session_telemetry.counter(
                                 "agiworkforce.windows_sandbox.legacy_setup_preflight_failed",
                                 /*inc*/ 1,
@@ -4112,7 +4117,7 @@ impl App {
                     let diff_summary = DiffSummary::new(changes, cwd);
                     self.overlay = Some(Overlay::new_static_with_renderables(
                         vec![diff_summary.into()],
-                        "P A T C H".to_string(),
+                        "Patch Review".to_string(),
                     ));
                 }
                 ApprovalRequest::Exec { command, .. } => {
@@ -4121,7 +4126,7 @@ impl App {
                     let full_cmd_lines = highlight_bash_to_lines(&full_cmd);
                     self.overlay = Some(Overlay::new_static_with_lines(
                         full_cmd_lines,
-                        "E X E C".to_string(),
+                        "Command Preview".to_string(),
                     ));
                 }
                 ApprovalRequest::Permissions {
@@ -4145,7 +4150,7 @@ impl App {
                     }
                     self.overlay = Some(Overlay::new_static_with_renderables(
                         vec![Box::new(Paragraph::new(lines).wrap(Wrap { trim: false }))],
-                        "P E R M I S S I O N S".to_string(),
+                        "Permission Request".to_string(),
                     ));
                 }
                 ApprovalRequest::McpElicitation {
@@ -4162,7 +4167,7 @@ impl App {
                     .wrap(Wrap { trim: false });
                     self.overlay = Some(Overlay::new_static_with_renderables(
                         vec![Box::new(paragraph)],
-                        "E L I C I T A T I O N".to_string(),
+                        "Tool Prompt".to_string(),
                     ));
                 }
             },
@@ -4474,8 +4479,10 @@ impl App {
 
     fn restore_runtime_theme_from_config(&self) {
         if let Some(name) = self.config.tui_theme.as_deref()
-            && let Some(theme) =
-                crate::render::highlight::resolve_theme_by_name(name, Some(&self.config.agiworkforce_home))
+            && let Some(theme) = crate::render::highlight::resolve_theme_by_name(
+                name,
+                Some(&self.config.agiworkforce_home),
+            )
         {
             crate::render::highlight::set_syntax_theme(theme);
             return;
@@ -4750,7 +4757,6 @@ mod tests {
     use crate::history_cell::UserHistoryCell;
     use crate::history_cell::new_session_info;
     use crate::multi_agents::AgentPickerThreadEntry;
-    use assert_matches::assert_matches;
     use agiworkforce_core::AgiWorkforceAuth;
     use agiworkforce_core::config::ConfigBuilder;
     use agiworkforce_core::config::ConfigOverrides;
@@ -4777,6 +4783,7 @@ mod tests {
     use agiworkforce_protocol::protocol::UserMessageEvent;
     use agiworkforce_protocol::user_input::TextElement;
     use agiworkforce_protocol::user_input::UserInput;
+    use assert_matches::assert_matches;
     use crossterm::event::KeyModifiers;
     use insta::assert_snapshot;
     use pretty_assertions::assert_eq;
@@ -5241,8 +5248,7 @@ mod tests {
                 rollout_path: Some(PathBuf::new()),
             }),
         };
-        app.chat_widget
-            .handle_agi_event(session_configured.clone());
+        app.chat_widget.handle_agi_event(session_configured.clone());
         app.chat_widget.handle_agi_event(Event {
             id: "turn-started".to_string(),
             msg: EventMsg::TurnStarted(TurnStartedEvent {
@@ -5323,8 +5329,7 @@ mod tests {
                 rollout_path: Some(PathBuf::new()),
             }),
         };
-        app.chat_widget
-            .handle_agi_event(session_configured.clone());
+        app.chat_widget.handle_agi_event(session_configured.clone());
         app.chat_widget.handle_agi_event(Event {
             id: "turn-started".to_string(),
             msg: EventMsg::TurnStarted(TurnStartedEvent {
@@ -5404,8 +5409,7 @@ mod tests {
                 rollout_path: Some(PathBuf::new()),
             }),
         };
-        app.chat_widget
-            .handle_agi_event(session_configured.clone());
+        app.chat_widget.handle_agi_event(session_configured.clone());
         app.chat_widget.handle_agi_event(Event {
             id: "turn-started".to_string(),
             msg: EventMsg::TurnStarted(TurnStartedEvent {
@@ -5479,8 +5483,7 @@ mod tests {
                 rollout_path: Some(PathBuf::new()),
             }),
         };
-        app.chat_widget
-            .handle_agi_event(session_configured.clone());
+        app.chat_widget.handle_agi_event(session_configured.clone());
         app.chat_widget.handle_agi_event(Event {
             id: "turn-started".to_string(),
             msg: EventMsg::TurnStarted(TurnStartedEvent {
@@ -5695,8 +5698,7 @@ mod tests {
                 rollout_path: Some(PathBuf::new()),
             }),
         };
-        app.chat_widget
-            .handle_agi_event(session_configured.clone());
+        app.chat_widget.handle_agi_event(session_configured.clone());
         app.chat_widget
             .set_reasoning_effort(Some(ReasoningEffortConfig::High));
         app.chat_widget
@@ -5799,8 +5801,7 @@ mod tests {
                 rollout_path: Some(PathBuf::new()),
             }),
         };
-        app.chat_widget
-            .handle_agi_event(session_configured.clone());
+        app.chat_widget.handle_agi_event(session_configured.clone());
         app.chat_widget
             .set_reasoning_effort(Some(ReasoningEffortConfig::High));
         app.chat_widget
@@ -5876,8 +5877,7 @@ mod tests {
                 rollout_path: Some(PathBuf::new()),
             }),
         };
-        app.chat_widget
-            .handle_agi_event(session_configured.clone());
+        app.chat_widget.handle_agi_event(session_configured.clone());
         app.chat_widget.handle_agi_event(Event {
             id: "turn-started".to_string(),
             msg: EventMsg::TurnStarted(TurnStartedEvent {
@@ -6121,7 +6121,8 @@ mod tests {
         let (mut app, mut app_event_rx, mut op_rx) = make_test_app_with_channels().await;
         let agiworkforce_home = tempdir()?;
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = "approvals_reviewer = \"guardian_subagent\"\napproval_policy = \"on-request\"\nsandbox_mode = \"workspace-write\"\n\n[features]\nguardian_approval = true\n";
         std::fs::write(config_toml_path.as_path(), config_toml)?;
         let user_config = toml::from_str::<TomlValue>(config_toml)?;
@@ -6213,7 +6214,8 @@ mod tests {
         let agiworkforce_home = tempdir()?;
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
         let guardian_approvals = guardian_approvals_mode();
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = "approvals_reviewer = \"user\"\n";
         std::fs::write(config_toml_path.as_path(), config_toml)?;
         let user_config = toml::from_str::<TomlValue>(config_toml)?;
@@ -6280,7 +6282,8 @@ mod tests {
         let (mut app, mut app_event_rx, mut op_rx) = make_test_app_with_channels().await;
         let agiworkforce_home = tempdir()?;
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = "approvals_reviewer = \"user\"\napproval_policy = \"on-request\"\nsandbox_mode = \"workspace-write\"\n\n[features]\nguardian_approval = true\n";
         std::fs::write(config_toml_path.as_path(), config_toml)?;
         let user_config = toml::from_str::<TomlValue>(config_toml)?;
@@ -6341,7 +6344,8 @@ mod tests {
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
         let guardian_approvals = guardian_approvals_mode();
         app.active_profile = Some("guardian".to_string());
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = "profile = \"guardian\"\napprovals_reviewer = \"user\"\n";
         std::fs::write(config_toml_path.as_path(), config_toml)?;
         let user_config = toml::from_str::<TomlValue>(config_toml)?;
@@ -6411,7 +6415,8 @@ mod tests {
         let agiworkforce_home = tempdir()?;
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
         app.active_profile = Some("guardian".to_string());
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = r#"
 profile = "guardian"
 approvals_reviewer = "user"
@@ -6499,7 +6504,8 @@ guardian_approval = true
         let agiworkforce_home = tempdir()?;
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
         app.active_profile = Some("guardian".to_string());
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = "profile = \"guardian\"\napprovals_reviewer = \"guardian_subagent\"\n\n[features]\nguardian_approval = true\n";
         std::fs::write(config_toml_path.as_path(), config_toml)?;
         let user_config = toml::from_str::<TomlValue>(config_toml)?;
@@ -7119,7 +7125,8 @@ guardian_approval = true
     }
 
     fn test_session_telemetry(config: &Config, model: &str) -> SessionTelemetry {
-        let model_info = agiworkforce_core::test_support::construct_model_info_offline(model, config);
+        let model_info =
+            agiworkforce_core::test_support::construct_model_info_offline(model, config);
         SessionTelemetry::new(
             ThreadId::new(),
             model,
