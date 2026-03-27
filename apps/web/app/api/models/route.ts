@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
-import { modelsCatalogJson as modelsData } from '@agiworkforce/types';
+import {
+  listCanonicalModels,
+  modelsCatalogJson as modelsData,
+  type ModelMetadata,
+} from '@agiworkforce/types';
 
 /**
  * Model Catalog API
@@ -54,43 +58,11 @@ export interface ModelEntry {
   released: string | null;
 }
 
-// Raw model shape from models.json
-interface RawModel {
-  id: string;
-  name: string;
-  provider: string;
-  modelType?: string;
-  contextWindow?: number;
-  inputCost?: number;
-  outputCost?: number;
-  capabilities?: {
-    streaming?: boolean;
-    tools?: boolean;
-    vision?: boolean;
-    json?: boolean;
-    thinking?: boolean;
-    computerUse?: boolean;
-    agentic?: boolean;
-    imageGen?: boolean;
-    videoGen?: boolean;
-    search?: boolean;
-    research?: boolean;
-    codeExecution?: boolean;
-  };
-  speed?: string;
-  quality?: string;
-  qualityTier?: string;
-  bestFor?: string[];
-  released?: string;
-  apiModelId?: string;
-  benchmarks?: Record<string, unknown>;
-}
-
 // Full models.json shape (subset we need)
 interface ModelsJson {
   version: number;
   lastUpdated: string;
-  models: Record<string, RawModel>;
+  models: Record<string, ModelMetadata>;
 }
 
 /**
@@ -118,35 +90,33 @@ function toCategory(modelType: string | undefined): ModelEntry['category'] {
 /**
  * Transform a raw models.json entry into the public ModelEntry shape.
  */
-function toModelEntry(raw: RawModel): ModelEntry {
-  const caps = raw.capabilities ?? {};
+function toModelEntry(raw: ModelMetadata): ModelEntry {
+  const caps = raw.capabilities;
 
   return {
     id: raw.id,
     name: raw.name,
     provider: raw.provider,
     category: toCategory(raw.modelType),
-    contextWindow: raw.contextWindow ?? 0,
-    // models.json does not currently carry a separate maxOutputTokens field;
-    // expose null so clients can handle the missing data gracefully.
-    maxOutputTokens: null,
+    contextWindow: raw.contextWindow,
+    maxOutputTokens: raw.maxOutputTokens ?? null,
     pricing: {
-      inputPerMillion: raw.inputCost ?? 0,
-      outputPerMillion: raw.outputCost ?? 0,
+      inputPerMillion: raw.inputCost,
+      outputPerMillion: raw.outputCost,
     },
     capabilities: {
-      vision: caps.vision ?? false,
-      tools: caps.tools ?? false,
-      streaming: caps.streaming ?? false,
-      thinking: caps.thinking ?? false,
-      imageGen: caps.imageGen ?? false,
-      videoGen: caps.videoGen ?? false,
-      codeExecution: caps.codeExecution ?? false,
-      search: caps.search ?? false,
+      vision: caps.vision,
+      tools: caps.tools,
+      streaming: caps.streaming,
+      thinking: caps.thinking,
+      imageGen: caps.imageGen,
+      videoGen: caps.videoGen,
+      codeExecution: caps.codeExecution,
+      search: caps.search,
     },
     speed: raw.speed ?? null,
     quality: raw.quality ?? null,
-    bestFor: raw.bestFor ?? [],
+    bestFor: raw.bestFor,
     released: raw.released ?? null,
   };
 }
@@ -166,9 +136,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const catalog = modelsData as ModelsJson;
-    const rawModels = catalog.models ?? {};
-
-    const models: ModelEntry[] = Object.values(rawModels).map(toModelEntry);
+    const models: ModelEntry[] = listCanonicalModels().map(toModelEntry);
 
     logger.info({ modelCount: models.length }, 'Model catalog served');
 

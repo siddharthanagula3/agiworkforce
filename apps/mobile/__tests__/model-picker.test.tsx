@@ -161,7 +161,7 @@ describe('ModelPickerSheet', () => {
     // Check a few representative models
     expect(getByText('GPT-5.4')).toBeTruthy();
     expect(getByText('Claude 4.6 Opus')).toBeTruthy();
-    expect(getByText('Gemini 3 Pro')).toBeTruthy();
+    expect(getByText('Gemini 3.1 Pro')).toBeTruthy();
   });
 
   it('renders models as a flat list without provider group headers', () => {
