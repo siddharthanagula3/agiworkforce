@@ -59,8 +59,8 @@ use crate::status::format_tokens_compact;
 use crate::status::rate_limit_snapshot_display_for_limit;
 use crate::text_formatting::proper_join;
 use crate::version::AGIWORKFORCE_CLI_VERSION;
-use agiworkforce_app_server_protocol::AppSummary;
 use agiworkforce_app_server_protocol::AgiWorkforceErrorInfo as AppServerAgiWorkforceErrorInfo;
+use agiworkforce_app_server_protocol::AppSummary;
 use agiworkforce_app_server_protocol::CollabAgentState as AppServerCollabAgentState;
 use agiworkforce_app_server_protocol::CollabAgentStatus as AppServerCollabAgentStatus;
 use agiworkforce_app_server_protocol::CollabAgentTool;
@@ -135,11 +135,11 @@ use agiworkforce_protocol::protocol::AgentReasoningRawContentDeltaEvent;
 #[cfg(test)]
 use agiworkforce_protocol::protocol::AgentReasoningRawContentEvent;
 use agiworkforce_protocol::protocol::AgentStatus;
+#[cfg(test)]
+use agiworkforce_protocol::protocol::AgiWorkforceErrorInfo as CoreAgiWorkforceErrorInfo;
 use agiworkforce_protocol::protocol::ApplyPatchApprovalRequestEvent;
 #[cfg(test)]
 use agiworkforce_protocol::protocol::BackgroundEventEvent;
-#[cfg(test)]
-use agiworkforce_protocol::protocol::AgiWorkforceErrorInfo as CoreAgiWorkforceErrorInfo;
 #[cfg(test)]
 use agiworkforce_protocol::protocol::CollabAgentSpawnBeginEvent;
 use agiworkforce_protocol::protocol::CollabAgentStatusEntry;
@@ -172,6 +172,8 @@ use agiworkforce_protocol::protocol::McpStartupStatus;
 use agiworkforce_protocol::protocol::McpStartupUpdateEvent;
 use agiworkforce_protocol::protocol::McpToolCallBeginEvent;
 use agiworkforce_protocol::protocol::McpToolCallEndEvent;
+use agiworkforce_protocol::protocol::ModelRerouteEvent;
+use agiworkforce_protocol::protocol::ModelRerouteReason;
 use agiworkforce_protocol::protocol::Op;
 use agiworkforce_protocol::protocol::PatchApplyBeginEvent;
 use agiworkforce_protocol::protocol::RateLimitSnapshot;
@@ -353,7 +355,6 @@ use crate::streaming::commit_tick::run_commit_tick;
 use crate::streaming::controller::PlanStreamController;
 use crate::streaming::controller::StreamController;
 
-use chrono::Local;
 use agiworkforce_file_search::FileMatch;
 use agiworkforce_protocol::openai_models::InputModality;
 use agiworkforce_protocol::openai_models::ModelPreset;
@@ -363,6 +364,7 @@ use agiworkforce_protocol::protocol::AskForApproval;
 use agiworkforce_protocol::protocol::SandboxPolicy;
 use agiworkforce_utils_approval_presets::ApprovalPreset;
 use agiworkforce_utils_approval_presets::builtin_approval_presets;
+use chrono::Local;
 use strum::IntoEnumIterator;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
@@ -595,9 +597,13 @@ fn core_rate_limit_error_kind(info: &CoreAgiWorkforceErrorInfo) -> Option<RateLi
     }
 }
 
-fn app_server_rate_limit_error_kind(info: &AppServerAgiWorkforceErrorInfo) -> Option<RateLimitErrorKind> {
+fn app_server_rate_limit_error_kind(
+    info: &AppServerAgiWorkforceErrorInfo,
+) -> Option<RateLimitErrorKind> {
     match info {
-        AppServerAgiWorkforceErrorInfo::ServerOverloaded => Some(RateLimitErrorKind::ServerOverloaded),
+        AppServerAgiWorkforceErrorInfo::ServerOverloaded => {
+            Some(RateLimitErrorKind::ServerOverloaded)
+        }
         AppServerAgiWorkforceErrorInfo::UsageLimitExceeded => Some(RateLimitErrorKind::UsageLimit),
         AppServerAgiWorkforceErrorInfo::ResponseTooManyFailedAttempts {
             http_status_code: Some(429),
@@ -1768,7 +1774,10 @@ impl ChatWidget {
     }
 
     // --- Small event handlers ---
-    fn on_session_configured(&mut self, event: agiworkforce_protocol::protocol::SessionConfiguredEvent) {
+    fn on_session_configured(
+        &mut self,
+        event: agiworkforce_protocol::protocol::SessionConfiguredEvent,
+    ) {
         self.bottom_pane
             .set_history_metadata(event.history_log_id, event.history_entry_count);
         self.set_skills(/*skills*/ None);
@@ -1917,7 +1926,10 @@ impl ChatWidget {
         });
     }
 
-    fn on_thread_name_updated(&mut self, event: agiworkforce_protocol::protocol::ThreadNameUpdatedEvent) {
+    fn on_thread_name_updated(
+        &mut self,
+        event: agiworkforce_protocol::protocol::ThreadNameUpdatedEvent,
+    ) {
         if self.thread_id == Some(event.thread_id) {
             self.thread_name = event.thread_name;
             self.request_redraw();
@@ -2316,7 +2328,10 @@ impl ChatWidget {
     }
 
     #[cfg(test)]
-    fn handle_steer_rejected_error(&mut self, agiworkforce_error_info: &CoreAgiWorkforceErrorInfo) -> bool {
+    fn handle_steer_rejected_error(
+        &mut self,
+        agiworkforce_error_info: &CoreAgiWorkforceErrorInfo,
+    ) -> bool {
         matches!(
             agiworkforce_error_info,
             CoreAgiWorkforceErrorInfo::ActiveTurnNotSteerable { .. }
@@ -2603,6 +2618,18 @@ impl ChatWidget {
 
     fn on_warning(&mut self, message: impl Into<String>) {
         self.add_to_history(history_cell::new_warning_event(message.into()));
+        self.request_redraw();
+    }
+
+    fn on_model_reroute(&mut self, event: ModelRerouteEvent) {
+        let reason = match event.reason {
+            ModelRerouteReason::HighRiskCyberActivity => "high-risk safety fallback",
+        };
+        self.add_to_history(history_cell::new_model_reroute_event(
+            event.from_model,
+            event.to_model,
+            reason,
+        ));
         self.request_redraw();
     }
 
@@ -4225,7 +4252,10 @@ impl ChatWidget {
         Self::new_with_op_target(common, AgiWorkforceOpTarget::Direct(agiworkforce_op_tx))
     }
 
-    fn new_with_op_target(common: ChatWidgetInit, agiworkforce_op_target: AgiWorkforceOpTarget) -> Self {
+    fn new_with_op_target(
+        common: ChatWidgetInit,
+        agiworkforce_op_target: AgiWorkforceOpTarget,
+    ) -> Self {
         let ChatWidgetInit {
             config,
             frame_requester,
@@ -5045,7 +5075,8 @@ impl ChatWidget {
                 else {
                     return;
                 };
-                let Some(name) = agiworkforce_core::util::normalize_thread_name(&prepared_args) else {
+                let Some(name) = agiworkforce_core::util::normalize_thread_name(&prepared_args)
+                else {
                     self.add_error_message("Thread name cannot be empty.".to_string());
                     return;
                 };
@@ -5643,14 +5674,14 @@ impl ChatWidget {
                             entries: citation
                                 .entries
                                 .into_iter()
-                                .map(
-                                    |entry| agiworkforce_protocol::memory_citation::MemoryCitationEntry {
+                                .map(|entry| {
+                                    agiworkforce_protocol::memory_citation::MemoryCitationEntry {
                                         path: entry.path,
                                         line_start: entry.line_start,
                                         line_end: entry.line_end,
                                         note: entry.note,
-                                    },
-                                )
+                                    }
+                                })
                                 .collect(),
                             rollout_ids: citation.thread_ids,
                         }
@@ -6070,7 +6101,13 @@ impl ChatWidget {
                     /*force_reload*/ true,
                 ));
             }
-            ServerNotification::ModelRerouted(_) => {}
+            ServerNotification::ModelRerouted(notification) => {
+                self.on_model_reroute(ModelRerouteEvent {
+                    from_model: notification.from_model,
+                    to_model: notification.to_model,
+                    reason: notification.reason.into(),
+                })
+            }
             ServerNotification::DeprecationNotice(notification) => {
                 self.on_deprecation_notice(DeprecationNoticeEvent {
                     summary: notification.summary,
@@ -6509,7 +6546,7 @@ impl ChatWidget {
             }
             EventMsg::Warning(WarningEvent { message }) => self.on_warning(message),
             EventMsg::GuardianAssessment(ev) => self.on_guardian_assessment(ev),
-            EventMsg::ModelReroute(_) => {}
+            EventMsg::ModelReroute(event) => self.on_model_reroute(event),
             EventMsg::Error(ErrorEvent {
                 message,
                 agiworkforce_error_info,
@@ -6688,7 +6725,9 @@ impl ChatWidget {
             }
             EventMsg::ItemCompleted(event) => {
                 let item = event.item;
-                if !from_replay && let agiworkforce_protocol::items::TurnItem::UserMessage(item) = &item {
+                if !from_replay
+                    && let agiworkforce_protocol::items::TurnItem::UserMessage(item) = &item
+                {
                     let EventMsg::UserMessage(event) = item.as_legacy_event() else {
                         unreachable!("user message item should convert to a legacy user message");
                     };
@@ -7039,9 +7078,12 @@ impl ChatWidget {
             )
             .iter()
             .find_map(|layer| match &layer.name {
-                ConfigLayerSource::Project { dot_agiworkforce_folder } => {
-                    dot_agiworkforce_folder.as_path().parent().map(Path::to_path_buf)
-                }
+                ConfigLayerSource::Project {
+                    dot_agiworkforce_folder,
+                } => dot_agiworkforce_folder
+                    .as_path()
+                    .parent()
+                    .map(Path::to_path_buf),
                 _ => None,
             })
     }
@@ -8281,9 +8323,10 @@ impl ChatWidget {
         #[cfg(not(target_os = "windows"))]
         let windows_degraded_sandbox_enabled = false;
 
-        let show_elevate_sandbox_hint = agiworkforce_core::windows_sandbox::ELEVATED_SANDBOX_NUX_ENABLED
-            && windows_degraded_sandbox_enabled
-            && presets.iter().any(|preset| preset.id == "auto");
+        let show_elevate_sandbox_hint =
+            agiworkforce_core::windows_sandbox::ELEVATED_SANDBOX_NUX_ENABLED
+                && windows_degraded_sandbox_enabled
+                && presets.iter().any(|preset| preset.id == "auto");
 
         let guardian_disabled_reason = |enabled: bool| {
             let mut next_features = self.config.features.get().clone();
@@ -9601,7 +9644,9 @@ impl ChatWidget {
         }
     }
 
-    fn plugins_for_mentions(&self) -> Option<&[agiworkforce_core::plugins::PluginCapabilitySummary]> {
+    fn plugins_for_mentions(
+        &self,
+    ) -> Option<&[agiworkforce_core::plugins::PluginCapabilitySummary]> {
         if !self.config.features.enabled(Feature::Plugins) {
             return None;
         }

@@ -104,6 +104,8 @@ export interface UseVoiceTranscriptionReturn extends VoiceTranscriptionState {
   clearTranscript: () => void;
   /** Whether the browser supports MediaRecorder */
   isSupported: boolean;
+  /** Browser builds do not expose local Whisper runtimes; keep API aligned with desktop. */
+  availableLocalWhisper: string[];
 }
 
 /**
@@ -650,6 +652,7 @@ export function useVoiceTranscription(
   return {
     ...state,
     isSupported,
+    availableLocalWhisper: [],
     startRecording,
     stopRecording,
     toggleRecording,
