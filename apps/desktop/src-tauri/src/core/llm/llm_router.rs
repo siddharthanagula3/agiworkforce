@@ -1438,13 +1438,13 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Google,
-                        model: "gemini-3-flash".to_string(),
+                        model: "gemini-3.1-flash-lite".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: "gpt-5.4-nano".to_string(),
+                        model: "gpt-5.4-mini".to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -1478,7 +1478,7 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: "gpt-5.4-nano".to_string(),
+                        model: "gpt-5.4-mini".to_string(),
                         reason: "strategy-cost",
                     },
                 ],
@@ -1487,13 +1487,13 @@ impl LLMRouter {
                 RouteCandidate {
                     strategy: None,
                     provider: Provider::OpenAI,
-                    model: "gpt-5.4-nano".to_string(),
+                    model: "gpt-5.4-mini".to_string(),
                     reason: "strategy-latency",
                 },
                 RouteCandidate {
                     strategy: None,
                     provider: Provider::Google,
-                    model: "gemini-3-flash".to_string(),
+                    model: "gemini-3.1-flash-lite".to_string(),
                     reason: "strategy-latency",
                 },
             ],
@@ -1546,7 +1546,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-flash".to_string(), // Best value: 3,307 Elo/$, $0.375/1M
+                                model: "gemini-3.1-flash-lite".to_string(), // Latest lightweight Gemini 3.1
                                 reason: "auto-economy-best-chat-value",
                             },
                             RouteCandidate {
@@ -1582,7 +1582,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-flash".to_string(), // Best value: 3,307 Elo/$
+                                model: "gemini-3.1-flash-lite".to_string(), // Latest lightweight Gemini 3.1
                                 reason: "auto-economy",
                             },
                             RouteCandidate {
@@ -1616,7 +1616,7 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::Google,
-                                model: "gemini-3-flash".to_string(), // Best value, multimodal: 3,307 Elo/$
+                                model: "gemini-3.1-flash-lite".to_string(), // Latest lightweight Gemini 3.1
                                 reason: "auto-economy",
                             },
                             // Anthropic early fallback — ensures users with only an Anthropic key
@@ -1642,13 +1642,13 @@ impl LLMRouter {
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::ManagedCloud,
-                                model: "gpt-5.4-nano".to_string(), // Managed Cloud fallback
+                                model: "gpt-5.4-mini".to_string(), // Managed Cloud fallback
                                 reason: "auto-economy-fast-cloud",
                             },
                             RouteCandidate {
                                 strategy: None,
                                 provider: Provider::OpenAI,
-                                model: "gpt-5.4-nano".to_string(), // Fast budget: 2,667 Elo/$
+                                model: "gpt-5.4-mini".to_string(), // Latest lightweight GPT-5.4 with tool routing
                                 reason: "auto-economy",
                             },
                             RouteCandidate {

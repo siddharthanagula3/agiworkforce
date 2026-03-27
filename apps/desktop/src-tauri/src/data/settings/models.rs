@@ -298,9 +298,9 @@ impl Default for AppSettings {
     fn default() -> Self {
         let mut model_configs = HashMap::new();
         model_configs.insert(
-            "gpt-5.4-nano".to_string(),
+            "gpt-5.4-mini".to_string(),
             ModelConfig {
-                model_name: "gpt-5.4-nano".to_string(),
+                model_name: "gpt-5.4-mini".to_string(),
                 ..Default::default()
             },
         );
@@ -331,7 +331,7 @@ impl Default for AppSettings {
 
         Self {
             default_provider: "managed_cloud".to_string(),
-            default_model: "gpt-5.4-nano".to_string(),
+            default_model: "gpt-5.4-mini".to_string(),
             model_configs,
             provider_configs,
             ui_preferences: UIPreferences::default(),
