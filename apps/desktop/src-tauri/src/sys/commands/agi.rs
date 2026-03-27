@@ -4,7 +4,7 @@ use crate::core::agi::{
     ExecutionContext, Goal, Priority, ScoredResult,
 };
 // use crate::core::agi::reflection::ReflectionEngine;
-use crate::core::llm::Provider;
+use crate::core::llm::{Provider, TaskType};
 use crate::sys::billing::BillingStateWrapper;
 use crate::sys::commands::llm::LLMState;
 use crate::sys::commands::AppDatabase;
@@ -871,9 +871,15 @@ async fn get_user_tier_from_billing(billing: &BillingStateWrapper) -> String {
 /// Select best model and provider based on user tier
 fn select_best_model_by_tier(tier: &str) -> (&'static str, Provider) {
     match tier.to_lowercase().as_str() {
-        "max" | "enterprise" => ("claude-sonnet-4-5", Provider::Anthropic),
-        "pro" => ("gpt-4o", Provider::OpenAI),
-        _ => ("gpt-4o-mini", Provider::OpenAI), // Default/Free/Hobby
+        "max" | "enterprise" => (
+            Provider::Anthropic.get_model_for_task(TaskType::ComplexReasoning),
+            Provider::Anthropic,
+        ),
+        "pro" => (Provider::OpenAI.default_model(), Provider::OpenAI),
+        _ => (
+            Provider::OpenAI.get_model_for_task(TaskType::FastCompletion),
+            Provider::OpenAI,
+        ),
     }
 }
 
