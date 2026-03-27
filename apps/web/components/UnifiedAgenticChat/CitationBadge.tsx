@@ -3,6 +3,7 @@ import { ExternalLink, FileText } from 'lucide-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/HoverCard';
 import { useUnifiedChatStore } from '@/stores/unified/unifiedChatStore';
 import { cn } from '@/lib/utils';
+import { focusBrowserActivity } from '@/stores/browserActivityStore';
 
 interface CitationBadgeProps {
   index: number;
@@ -17,7 +18,15 @@ export function CitationBadge({ index, className, onClick }: CitationBadgeProps)
 
   const handleClick = () => {
     if (citation) {
-      openSidecar('browser', citation.url);
+      focusBrowserActivity(citation.url, citation.title ?? null, 'Viewing source');
+      openSidecar('browser', citation.url, {
+        url: citation.url,
+        title: citation.title ?? null,
+        lastAction: 'Viewing source',
+        status: 'done',
+        extensionConnected: false,
+        hasError: false,
+      });
       onClick?.();
     }
   };
