@@ -94,7 +94,7 @@ struct Cli {
     #[arg(value_name = "PROMPT")]
     prompt: Option<String>,
 
-    /// Model to use (e.g. claude-opus-4-6, gpt-4o, gemini-3-flash-preview, llama3.1:8b)
+    /// Model to use (e.g. claude-opus-4-6, gpt-5.4, gemini-3.1-flash-lite, llama3.1:8b)
     #[arg(short, long, value_name = "MODEL")]
     model: Option<String>,
 
@@ -1212,7 +1212,11 @@ async fn main() -> Result<()> {
     let stdin_content = if is_piped || cli.stdin {
         let mut buf = String::new();
         io::stdin().read_to_string(&mut buf)?;
-        if buf.is_empty() { None } else { Some(buf) }
+        if buf.is_empty() {
+            None
+        } else {
+            Some(buf)
+        }
     } else {
         None
     };

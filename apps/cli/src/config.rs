@@ -90,11 +90,11 @@ pub struct ProviderConfig {
 }
 
 fn default_model() -> String {
-    "claude-opus-4-6".to_string()
+    crate::model_catalog::default_model().to_string()
 }
 
 fn default_provider() -> String {
-    "anthropic".to_string()
+    crate::model_catalog::default_provider().to_string()
 }
 
 fn default_stream() -> bool {
@@ -476,16 +476,20 @@ impl CliConfig {
                 self.default.provider = value.to_string();
             }
             "max-tokens" => {
-                self.default.max_tokens = value.parse::<u32>()
+                self.default.max_tokens = value
+                    .parse::<u32>()
                     .context("max-tokens must be a positive integer")?;
             }
             "temperature" => {
                 self.default.temperature = Some(
-                    value.parse::<f32>().context("temperature must be a float")?
+                    value
+                        .parse::<f32>()
+                        .context("temperature must be a float")?,
                 );
             }
             "stream" => {
-                self.default.stream = value.parse::<bool>()
+                self.default.stream = value
+                    .parse::<bool>()
                     .context("stream must be true or false")?;
             }
             "fallback-model" => {
@@ -509,7 +513,10 @@ impl CliConfig {
                     Some(value.to_string())
                 };
             }
-            _ => bail!("Unknown config key: '{}'. Valid keys: model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model", key),
+            _ => bail!(
+                "Unknown config key: '{}'. Valid keys: model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model",
+                key
+            ),
         }
         Ok(())
     }

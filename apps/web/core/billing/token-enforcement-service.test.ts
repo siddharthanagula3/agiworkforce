@@ -6,6 +6,17 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+vi.mock('@shared/lib/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+vi.mock('@shared/lib/sentry', () => ({
+  captureError: vi.fn(),
+}));
 import {
   checkTokenSufficiency,
   deductTokens,
@@ -32,6 +43,22 @@ vi.mock('@shared/lib/supabase-client', () => ({
 }));
 
 import { supabase } from '@shared/lib/supabase-client';
+
+function buildCreditAccountQuery(result: { data: unknown; error: unknown }) {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        gt: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue(result),
+            }),
+          }),
+        }),
+      }),
+    }),
+  } as unknown as ReturnType<typeof supabase.from>;
+}
 
 describe('Token Enforcement Service', () => {
   beforeEach(() => {
@@ -127,16 +154,12 @@ describe('Token Enforcement Service', () => {
 
       // Fallback: token_credits table also fails
       const mockFrom = vi.mocked(supabase.from);
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'Database error' },
-            }),
-          }),
+      mockFrom.mockReturnValueOnce(
+        buildCreditAccountQuery({
+          data: null,
+          error: { message: 'Database error' },
         }),
-      } as unknown as ReturnType<typeof supabase.from>);
+      );
 
       const result = await checkTokenSufficiency(mockUserId, 1000);
 
@@ -197,16 +220,16 @@ describe('Token Enforcement Service', () => {
       });
 
       // Fallback: token_credits table with credits_remaining_cents field
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { credits_remaining_cents: 3000 },
-              error: null,
-            }),
-          }),
+      mockFrom.mockReturnValueOnce(
+        buildCreditAccountQuery({
+          data: {
+            credits_remaining_cents: 3000,
+            credits_allocated_cents: 3500,
+            period_end: '2026-04-01T00:00:00.000Z',
+          },
+          error: null,
         }),
-      } as unknown as ReturnType<typeof supabase.from>);
+      );
 
       const balance = await getUserTokenBalance(mockUserId);
 
@@ -220,16 +243,12 @@ describe('Token Enforcement Service', () => {
       });
 
       // token_credits returns no record (data: null, error: null)
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: null,
-            }),
-          }),
+      mockFrom.mockReturnValueOnce(
+        buildCreditAccountQuery({
+          data: null,
+          error: null,
         }),
-      } as unknown as ReturnType<typeof supabase.from>);
+      );
 
       const balance = await getUserTokenBalance(mockUserId);
 
@@ -244,16 +263,12 @@ describe('Token Enforcement Service', () => {
       });
 
       // token_credits returns database error
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'Database error' },
-            }),
-          }),
+      mockFrom.mockReturnValueOnce(
+        buildCreditAccountQuery({
+          data: null,
+          error: { message: 'Database error' },
         }),
-      } as unknown as ReturnType<typeof supabase.from>);
+      );
 
       const balance = await getUserTokenBalance(mockUserId);
 
@@ -267,16 +282,12 @@ describe('Token Enforcement Service', () => {
         error: { message: 'RPC failed', code: '500' } as unknown,
       });
 
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'Database error' },
-            }),
-          }),
+      mockFrom.mockReturnValueOnce(
+        buildCreditAccountQuery({
+          data: null,
+          error: { message: 'Database error' },
         }),
-      } as unknown as ReturnType<typeof supabase.from>);
+      );
 
       const balance = await getUserTokenBalance(mockUserId);
 
@@ -301,7 +312,7 @@ describe('Token Enforcement Service', () => {
     const mockUserId = 'user-123';
     const mockMetadata: UsageMetadata = {
       provider: 'anthropic',
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-6',
       inputTokens: 100,
       outputTokens: 50,
       totalTokens: 150,
@@ -311,14 +322,9 @@ describe('Token Enforcement Service', () => {
     const mockRpc = vi.mocked(supabase.rpc) as unknown as ReturnType<typeof vi.fn>;
 
     it('should successfully deduct tokens via deduct_credits', async () => {
-      // First RPC call: deduct_credits succeeds (no error)
+      // deduct_credits succeeds and returns updated balance
       mockRpc.mockResolvedValueOnce({
-        data: null,
-        error: null,
-      });
-      // Second RPC call: get_credit_balance returns new balance
-      mockRpc.mockResolvedValueOnce({
-        data: 9850,
+        data: [{ success: true, remaining_cents: 9850 }],
         error: null,
       });
 
@@ -331,10 +337,10 @@ describe('Token Enforcement Service', () => {
         expect.objectContaining({
           p_user_id: mockUserId,
           p_amount_cents: expect.any(Number),
-          p_description: 'anthropic/claude-3-5-sonnet-20241022 usage',
+          p_description: 'anthropic/claude-sonnet-4-6 usage',
           p_metadata: expect.objectContaining({
             provider: 'anthropic',
-            model: 'claude-3-5-sonnet-20241022',
+            model: 'claude-sonnet-4-6',
             usage_cost_cents: expect.any(Number),
           }),
         }),
@@ -342,12 +348,6 @@ describe('Token Enforcement Service', () => {
     });
 
     it('should handle deduction failure', async () => {
-      // First RPC: deduct_credits fails
-      mockRpc.mockResolvedValueOnce({
-        data: null,
-        error: { message: 'Insufficient balance', code: 'P0001' },
-      });
-      // Second RPC: deduct_user_tokens (legacy fallback) also fails
       mockRpc.mockResolvedValueOnce({
         data: null,
         error: { message: 'Insufficient balance', code: 'P0001' },
@@ -356,7 +356,7 @@ describe('Token Enforcement Service', () => {
       const result = await deductTokens(mockUserId, mockMetadata);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Token deduction failed');
+      expect(result.error).toContain('Credit deduction failed');
     });
 
     it('should handle unexpected errors', async () => {
@@ -371,138 +371,111 @@ describe('Token Enforcement Service', () => {
 
   describe('checkMonthlyAllowance', () => {
     const mockUserId = 'user-123';
+    const mockRpc = vi.mocked(supabase.rpc) as unknown as ReturnType<typeof vi.fn>;
     const mockFrom = vi.mocked(supabase.from);
 
-    it('should return unlimited for pro users', async () => {
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { plan: 'pro' },
-              error: null,
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
+    it('should return the active billing-period budget when a credit account exists', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: [
+          {
+            credits_allocated_cents: 3500,
+            credits_remaining_cents: 2900,
+            period_end: '2026-04-01T00:00:00.000Z',
+          },
+        ],
+        error: null,
+      });
 
       const result = await checkMonthlyAllowance(mockUserId);
 
       expect(result.allowed).toBe(true);
-      expect(result.limit).toBe(Infinity);
+      expect(result.limit).toBe(3500);
+      expect(result.used).toBe(600);
     });
 
-    it('should check monthly usage for free tier users', async () => {
-      // First call returns user plan
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { plan: 'free' },
-              error: null,
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
-
-      // Second call returns transactions
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              gte: vi.fn().mockResolvedValue({
-                data: [
-                  { tokens: -500000 }, // Negative because it's usage
-                ],
-                error: null,
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
+    it('should deny when the billing-period budget is exhausted', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: [
+          {
+            credits_allocated_cents: 350,
+            credits_remaining_cents: 0,
+            period_end: '2026-04-01T00:00:00.000Z',
+          },
+        ],
+        error: null,
+      });
 
       const result = await checkMonthlyAllowance(mockUserId);
 
       expect(result.allowed).toBe(false);
-      expect(result.limit).toBe(0);
-      expect(result.used).toBe(500000);
+      expect(result.limit).toBe(350);
+      expect(result.used).toBe(350);
     });
 
-    it('should deny when monthly limit is exceeded', async () => {
-      // First call returns user plan
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { plan: 'free' },
-              error: null,
-            }),
-          }),
+    it('should fall back to token_credits when the RPC is unavailable', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'RPC unavailable', code: '500' },
+      });
+      mockFrom.mockReturnValueOnce(
+        buildCreditAccountQuery({
+          data: {
+            credits_allocated_cents: 1050,
+            credits_remaining_cents: 1000,
+            period_end: '2026-04-01T00:00:00.000Z',
+          },
+          error: null,
         }),
-      } as unknown as ReturnType<typeof supabase.from>);
-
-      // Second call returns transactions exceeding limit
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              gte: vi.fn().mockResolvedValue({
-                data: [
-                  { tokens: -1100000 }, // Exceeds 1M limit
-                ],
-                error: null,
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
+      );
 
       const result = await checkMonthlyAllowance(mockUserId);
 
-      expect(result.allowed).toBe(false);
-      expect(result.used).toBeGreaterThanOrEqual(result.limit);
-    });
-
-    it('should handle database errors gracefully', async () => {
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'Database error' },
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
-
-      const result = await checkMonthlyAllowance(mockUserId);
-
-      // On lookup errors we fail open for UX, but free tier still has no cloud-credit budget.
       expect(result.allowed).toBe(true);
+      expect(result.limit).toBe(1050);
+      expect(result.used).toBe(50);
+    });
+
+    it('should fail closed when no active credit account exists', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'RPC unavailable', code: '500' },
+      });
+      mockFrom.mockReturnValueOnce(
+        buildCreditAccountQuery({
+          data: null,
+          error: null,
+        }),
+      );
+
+      const result = await checkMonthlyAllowance(mockUserId);
+
+      expect(result.allowed).toBe(false);
       expect(result.limit).toBe(0);
     });
   });
 
   describe('canUserMakeRequest', () => {
     const mockUserId = 'user-123';
-    const mockFrom = vi.mocked(supabase.from);
     const mockRpc = vi.mocked(supabase.rpc) as unknown as ReturnType<typeof vi.fn>;
 
     it('should allow request when all checks pass', async () => {
-      // Monthly allowance check - pro user
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { plan: 'pro' },
-              error: null,
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
-
-      // Token sufficiency check: get_credit_balance returns scalar
       mockRpc.mockResolvedValueOnce({
-        data: 10000,
+        data: [
+          {
+            credits_allocated_cents: 3500,
+            credits_remaining_cents: 3000,
+            period_end: '2026-04-01T00:00:00.000Z',
+          },
+        ],
+        error: null,
+      });
+      mockRpc.mockResolvedValueOnce({
+        data: [
+          {
+            credits_allocated_cents: 3500,
+            credits_remaining_cents: 3000,
+          },
+        ],
         error: null,
       });
 
@@ -512,55 +485,42 @@ describe('Token Enforcement Service', () => {
       expect(result.reason).toBeUndefined();
     });
 
-    it('should deny when monthly allowance is exceeded', async () => {
-      // First call returns user plan
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { plan: 'free' },
-              error: null,
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
-
-      // Second call returns transactions exceeding limit
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              gte: vi.fn().mockResolvedValue({
-                data: [{ tokens: -1100000 }],
-                error: null,
-              }),
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
+    it('should deny when the billing-period budget is exhausted', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: [
+          {
+            credits_allocated_cents: 350,
+            credits_remaining_cents: 0,
+            period_end: '2026-04-01T00:00:00.000Z',
+          },
+        ],
+        error: null,
+      });
 
       const result = await canUserMakeRequest(mockUserId, 1000);
 
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('Monthly limit');
+      expect(result.reason).toContain('Usage budget exhausted');
     });
 
-    it('should deny when token balance is insufficient', async () => {
-      // Monthly allowance check - pro user (passes)
-      mockFrom.mockReturnValueOnce({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { plan: 'pro' },
-              error: null,
-            }),
-          }),
-        }),
-      } as unknown as ReturnType<typeof supabase.from>);
-
-      // Token sufficiency check - insufficient balance (scalar)
+    it('should deny when credits are below the estimated cost', async () => {
       mockRpc.mockResolvedValueOnce({
-        data: 500,
+        data: [
+          {
+            credits_allocated_cents: 3500,
+            credits_remaining_cents: 500,
+            period_end: '2026-04-01T00:00:00.000Z',
+          },
+        ],
+        error: null,
+      });
+      mockRpc.mockResolvedValueOnce({
+        data: [
+          {
+            credits_allocated_cents: 3500,
+            credits_remaining_cents: 500,
+          },
+        ],
         error: null,
       });
 

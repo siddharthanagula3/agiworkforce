@@ -1,14 +1,16 @@
 /**
- * Token Enforcement Service
+ * Usage Budget Enforcement Service
  *
- * CRITICAL: This service ensures users cannot exceed their token balance.
- * It performs pre-flight checks and post-call deductions.
+ * This layer enforces the shared credit wallet for usage-priced requests.
+ * Public exports keep the old "token" names for compatibility, but the
+ * underlying contract is cents-based credits against the current billing
+ * period budget.
  *
  * Security Features:
- * - Atomic balance checks (prevents race conditions)
- * - Server-side enforcement (client cannot bypass)
- * - Audit trail for all token operations
- * - Subscription allowance tracking
+ * - Atomic balance checks
+ * - Server-side wallet enforcement
+ * - Audit trail through shared credit RPCs
+ * - Billing-period budget tracking
  */
 
 import { supabase } from '@shared/lib/supabase-client';
@@ -51,6 +53,12 @@ interface UsageCostEstimate {
   outputTokens: number;
 }
 
+interface UsageBudgetSnapshot {
+  remaining: number;
+  allocated: number;
+  periodEnd: Date | null;
+}
+
 const FALLBACK_PRICING = {
   inputCostPer1MTokens: 1.0,
   outputCostPer1MTokens: 4.0,
@@ -65,6 +73,7 @@ function normalizeProviderId(provider: string): string {
 function extractCreditsRemainingCents(value: unknown): {
   remaining: number;
   allocated?: number;
+  periodEnd?: Date | null;
 } {
   if (typeof value === 'number') {
     return { remaining: Math.max(value, 0) };
@@ -74,6 +83,7 @@ function extractCreditsRemainingCents(value: unknown): {
     const row = value as {
       credits_remaining_cents?: number;
       credits_allocated_cents?: number;
+      period_end?: string | null;
     };
     return {
       remaining: Math.max(Number(row.credits_remaining_cents ?? 0), 0),
@@ -81,6 +91,7 @@ function extractCreditsRemainingCents(value: unknown): {
         row.credits_allocated_cents !== undefined
           ? Math.max(Number(row.credits_allocated_cents), 0)
           : undefined,
+      periodEnd: row.period_end ? new Date(row.period_end) : null,
     };
   }
 
@@ -111,17 +122,71 @@ export function estimateUsageCostCents({
   return Math.round((inputCost + outputCost) * 100);
 }
 
+async function getUserUsageBudgetSnapshot(userId: string): Promise<UsageBudgetSnapshot | null> {
+  try {
+    const { data: rpcData, error: rpcError } = await db.rpc('get_credit_balance', {
+      p_user_id: userId,
+    });
+
+    if (!rpcError && rpcData !== null && rpcData !== undefined) {
+      const balanceRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      const extracted = extractCreditsRemainingCents(balanceRow);
+      return {
+        remaining: extracted.remaining,
+        allocated: extracted.allocated ?? 0,
+        periodEnd: extracted.periodEnd ?? null,
+      };
+    }
+
+    if (rpcError) {
+      logger.warn('[Usage Budget] get_credit_balance RPC failed, falling back:', rpcError.message);
+    }
+
+    const { data: creditsData, error: creditsError } = await db
+      .from('token_credits')
+      .select('credits_remaining_cents, credits_allocated_cents, period_end')
+      .eq('user_id', userId)
+      .gt('period_end', new Date().toISOString())
+      .order('period_end', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (creditsError) {
+      logger.error('[Usage Budget] Error fetching credit balance:', creditsError.message);
+      return null;
+    }
+
+    if (!creditsData) {
+      logger.warn('[Usage Budget] No active credit account found for user:', userId);
+      return null;
+    }
+
+    const extracted = extractCreditsRemainingCents(creditsData);
+    return {
+      remaining: extracted.remaining,
+      allocated: extracted.allocated ?? 0,
+      periodEnd: extracted.periodEnd ?? null,
+    };
+  } catch (error) {
+    logger.error('[Usage Budget] Error loading balance snapshot:', error);
+    captureError(error as Error, {
+      tags: { feature: 'billing', operation: 'get_usage_budget_snapshot' },
+      extra: { userId },
+    });
+    return null;
+  }
+}
+
 /**
- * Check if user has sufficient tokens for an operation
- * MUST be called BEFORE making any API request
- * Uses user_token_balances table (correct table)
+ * Check if user has sufficient credits for an operation.
+ * MUST be called BEFORE making any usage-priced request.
  */
 export async function checkTokenSufficiency(
   userId: string,
   estimatedCostCents: number,
 ): Promise<TokenCheckResult> {
   try {
-    // Get user's current token balance from correct table
+    // Compatibility name retained; actual unit is credits/cents.
     const currentBalance = await getUserTokenBalance(userId);
 
     if (currentBalance === null) {
@@ -129,7 +194,7 @@ export async function checkTokenSufficiency(
         allowed: false,
         currentBalance: 0,
         estimatedCost: estimatedCostCents,
-        reason: 'Failed to fetch user balance',
+        reason: 'Failed to fetch usage budget balance',
       };
     }
 
@@ -158,20 +223,14 @@ export async function checkTokenSufficiency(
       allowed: false,
       currentBalance: 0,
       estimatedCost: estimatedCostCents,
-      reason: 'System error checking token balance',
+      reason: 'System error checking usage budget balance',
     };
   }
 }
 
 /**
- * Deduct tokens from user balance after an API call.
- * NOTE: Client-side deduction is a legacy pattern. All actual deductions
- * should happen server-side via Netlify Functions using deductCredits()
- * from credit-system.ts. This function is kept for backwards compatibility
- * but the server-side proxies are the source of truth for billing.
- *
- * TODO: Remove client-side deduction once all proxies use deductCredits() server-side.
- * Client should only read balance, never deduct directly.
+ * Deduct usage credits from the active billing-period wallet after an API call.
+ * Public name is retained for compatibility with older imports.
  */
 export async function deductTokens(
   userId: string,
@@ -186,25 +245,31 @@ export async function deductTokens(
       outputTokens: metadata.outputTokens,
     });
 
-    // Try the new credit system RPC first
-    const { error: creditError } = await db.rpc('deduct_credits', {
+    const { data, error: creditError } = await db.rpc('deduct_credits', {
       p_user_id: userId,
       p_amount_cents: usageCostCents,
       p_description: `${provider}/${model} usage`,
-      p_metadata: { provider, model, usage_cost_cents: usageCostCents },
-      p_idempotency_key: `${userId}-${Date.now()}`,
+      p_metadata: {
+        provider,
+        model,
+        usage_cost_cents: usageCostCents,
+        input_tokens: metadata.inputTokens,
+        output_tokens: metadata.outputTokens,
+        total_tokens: metadata.totalTokens,
+        session_id: metadata.sessionId ?? null,
+        feature: metadata.feature ?? 'chat',
+      },
+      p_idempotency_key: `${userId}:${metadata.sessionId ?? 'sessionless'}:${provider}:${model}:${metadata.inputTokens}:${metadata.outputTokens}`,
     });
 
     if (!creditError) {
-      // Fetch new balance
-      const { data: balanceData } = await db.rpc('get_credit_balance', {
-        p_user_id: userId,
-      });
-
-      const balanceRow = Array.isArray(balanceData) ? balanceData[0] : balanceData;
-      const newBalance = extractCreditsRemainingCents(balanceRow).remaining;
+      const deductionRow = Array.isArray(data) ? data[0] : data;
+      const newBalance =
+        typeof deductionRow?.remaining_cents === 'number'
+          ? Math.max(deductionRow.remaining_cents, 0)
+          : ((await getUserTokenBalance(userId)) ?? 0);
       logger.info(
-        `[Token Enforcement] Deducted ${usageCostCents} cents from user ${userId}. New balance: ${newBalance}`,
+        `[Usage Budget] Deducted ${usageCostCents} credits from user ${userId}. New balance: ${newBalance}`,
       );
 
       return {
@@ -213,40 +278,16 @@ export async function deductTokens(
       };
     }
 
-    logger.warn(
-      '[Token Enforcement] deduct_credits RPC failed, trying legacy:',
-      creditError.message,
-    );
-
-    // Fallback: legacy deduct_user_tokens RPC
-    const { data: newBalance, error } = await db.rpc('deduct_user_tokens', {
-      p_user_id: userId,
-      p_tokens: metadata.totalTokens,
-      p_provider: provider,
-      p_model: model,
-    });
-
-    if (error) {
-      logger.error('[Token Enforcement] Error deducting tokens:', error);
-      return {
-        success: false,
-        newBalance: 0,
-        error: `Token deduction failed: ${error.message}`,
-      };
-    }
-
-    logger.info(
-      `[Token Enforcement] Deducted ${metadata.totalTokens} tokens (legacy) from user ${userId}. New balance: ${newBalance}`,
-    );
-
+    logger.error('[Usage Budget] Error deducting credits:', creditError);
     return {
-      success: true,
-      newBalance: newBalance as number,
+      success: false,
+      newBalance: 0,
+      error: `Credit deduction failed: ${creditError.message}`,
     };
   } catch (error) {
-    logger.error('[Token Enforcement] Error:', error);
+    logger.error('[Usage Budget] Error:', error);
     captureError(error as Error, {
-      tags: { feature: 'billing', operation: 'deduct_tokens' },
+      tags: { feature: 'billing', operation: 'deduct_usage_credits' },
       extra: { userId, ...metadata },
     });
     return {
@@ -258,60 +299,12 @@ export async function deductTokens(
 }
 
 /**
- * Get user's current credit balance in cents.
- * Uses get_credit_balance RPC from the shared Supabase (cents-based billing).
- * Falls back to querying token_credits table directly.
- * Fails CLOSED on errors (returns null to trigger denial).
+ * Get user's current active billing-period credit balance in cents.
+ * Public name is retained for compatibility.
  */
 export async function getUserTokenBalance(userId: string): Promise<number | null> {
-  try {
-    // Try get_credit_balance RPC first (shared Supabase billing system)
-    const { data: rpcData, error: rpcError } = await db.rpc('get_credit_balance', {
-      p_user_id: userId,
-    });
-
-    if (!rpcError && rpcData !== null && rpcData !== undefined) {
-      const balanceRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-      const balanceCents = extractCreditsRemainingCents(balanceRow).remaining;
-      logger.info(`[Token Balance] Credit balance (via RPC): ${balanceCents} cents`);
-      return balanceCents;
-    }
-
-    // Fallback: Query token_credits table directly
-    if (rpcError) {
-      logger.warn('[Token Balance] get_credit_balance RPC failed, falling back:', rpcError.message);
-    }
-
-    const { data: creditsData, error: creditsError } = await db
-      .from('token_credits')
-      .select('credits_remaining_cents')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (creditsError) {
-      logger.error('[Token Balance] Error fetching credit balance:', creditsError.message);
-      // SECURITY: Fail closed on database errors
-      return null;
-    }
-
-    if (!creditsData) {
-      logger.warn('[Token Balance] No credit account found for user:', userId);
-      // Return null to trigger denial — user needs to have a credit account
-      return null;
-    }
-
-    const balanceCents = Math.max(creditsData.credits_remaining_cents || 0, 0);
-    logger.info(`[Token Balance] Credit balance: ${balanceCents} cents`);
-    return balanceCents;
-  } catch (error) {
-    logger.error('[Token Enforcement] Error:', error);
-    captureError(error as Error, {
-      tags: { feature: 'billing', operation: 'get_user_token_balance' },
-      extra: { userId },
-    });
-    // SECURITY: Fail closed on unexpected errors
-    return null;
-  }
+  const snapshot = await getUserUsageBudgetSnapshot(userId);
+  return snapshot?.remaining ?? null;
 }
 
 /**
@@ -332,9 +325,8 @@ export function estimateTokensForRequest(
 }
 
 /**
- * Check subscription allowances (free tier limits)
- * Free tier: 1M tokens/month (matches billing dashboard display)
- * Pro tier: Unlimited with balance
+ * Check the current billing-period usage budget.
+ * This is Cursor-style: one included usage budget per active billing period.
  */
 export async function checkMonthlyAllowance(userId: string): Promise<{
   allowed: boolean;
@@ -343,79 +335,30 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
   resetDate: Date;
 }> {
   try {
-    // Calculate reset date (first of next month)
-    const now = new Date();
-    const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-    const { data: user, error } = await db
-      .from('users')
-      .select('plan')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (error || !user) {
-      if (error) {
-        logger.error('[Token Enforcement] Error fetching user:', error);
-      }
-      // Return free tier defaults on error — 0 credits for free tier
+    const snapshot = await getUserUsageBudgetSnapshot(userId);
+    if (!snapshot) {
       return {
-        allowed: true, // Allow request but with free tier limits
+        allowed: false,
         used: 0,
         limit: 0,
-        resetDate,
+        resetDate: new Date(),
       };
     }
 
-    // Pro/Max/Enterprise users: unlimited monthly (only limited by token balance)
-    if (user.plan === 'pro' || user.plan === 'max' || user.plan === 'enterprise') {
-      return {
-        allowed: true,
-        used: 0,
-        limit: Infinity,
-        resetDate,
-      };
-    }
-
-    // Free tier: check monthly usage
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-
-    const { data: transactions, error: txError } = await db
-      .from('token_transactions')
-      .select('tokens')
-      .eq('user_id', userId)
-      .eq('transaction_type', 'usage')
-      .gte('created_at', startOfMonth.toISOString());
-
-    if (txError) {
-      logger.error('[Token Enforcement] Error checking monthly usage:', txError);
-      return {
-        allowed: true, // Allow on error to prevent blocking users
-        used: 0,
-        limit: 0,
-        resetDate,
-      };
-    }
-
-    const used = Math.abs(
-      transactions?.reduce(
-        (sum: number, tx: Record<string, unknown>) => sum + (tx['tokens'] as number),
-        0,
-      ) || 0,
-    );
-    const limit = 0; // Free tier: 0 credits (local LLMs only)
+    const limit = Math.max(snapshot.allocated, 0);
+    const used = Math.max(limit - snapshot.remaining, 0);
+    const resetDate = snapshot.periodEnd ?? new Date();
 
     return {
-      allowed: used < limit,
+      allowed: limit > 0 && used < limit,
       used,
       limit,
-      resetDate: new Date(startOfMonth.getFullYear(), startOfMonth.getMonth() + 1, 1),
+      resetDate,
     };
   } catch (error) {
-    logger.error('[Token Enforcement] Error checking allowance:', error);
+    logger.error('[Usage Budget] Error checking allowance:', error);
     captureError(error as Error, {
-      tags: { feature: 'billing', operation: 'check_monthly_allowance' },
+      tags: { feature: 'billing', operation: 'check_billing_period_allowance' },
       extra: { userId },
     });
     return {
@@ -428,23 +371,21 @@ export async function checkMonthlyAllowance(userId: string): Promise<{
 }
 
 /**
- * Comprehensive pre-flight check
- * Checks BOTH token balance AND monthly allowances
+ * Compatibility helper for older callers. The input value is treated as a
+ * credit estimate in cents against the active billing-period budget.
  */
 export async function canUserMakeRequest(
   userId: string,
   estimatedTokens: number,
 ): Promise<{ allowed: boolean; reason?: string }> {
-  // Check monthly allowance first (free tier only)
   const allowance = await checkMonthlyAllowance(userId);
   if (!allowance.allowed) {
     return {
       allowed: false,
-      reason: `Monthly limit reached. You've used ${allowance.used.toLocaleString()} of your ${allowance.limit.toLocaleString()} monthly allowance. Limit resets ${allowance.resetDate.toLocaleDateString()}. Upgrade to a paid plan for more usage.`,
+      reason: `Usage budget exhausted for this billing period. You've used ${allowance.used.toLocaleString()} of your ${allowance.limit.toLocaleString()} credits. Budget resets ${allowance.resetDate.toLocaleDateString()}. Upgrade your plan or add credits to continue.`,
     };
   }
 
-  // Check token balance
   const sufficiency = await checkTokenSufficiency(userId, estimatedTokens);
   if (!sufficiency.allowed) {
     return {
