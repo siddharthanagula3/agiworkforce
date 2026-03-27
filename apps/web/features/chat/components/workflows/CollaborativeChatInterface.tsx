@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Send, Plus, Minimize2, Maximize2, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
+import { getProviderDefaultModel } from '@agiworkforce/types';
 import {
   CollaborationProtocol,
   createCollaborationContext,
@@ -84,7 +85,7 @@ export const CollaborativeChatInterface: React.FC<CollaborativeChatInterfaceProp
           expertise: emp.expertise || [],
           tools: emp.tools || [],
           systemPrompt: emp.systemPrompt,
-          model: emp.model || 'claude-3-5-sonnet',
+          model: emp.model || getProviderDefaultModel('anthropic') || 'claude-sonnet-4.6',
           temperature: 0.7,
         }));
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canAccessManualModelSelection,
   getCoreManualModelOptions,
+  getManagedCloudProviderIds,
   detectProviderFromModelId,
   getModelCostRates,
   getModelContextLimits,
@@ -9,7 +11,10 @@ import {
   getModelVariantPartner,
   getPickerModelTier,
   getPickerModels,
+  getProviderSurface,
   getProviderProbeModel,
+  getRoutingSlotModel,
+  getTierPolicy,
   listCanonicalModels,
   normalizeModelId,
   resolveAutoModeModel,
@@ -73,10 +78,10 @@ describe('model catalog helpers', () => {
 
   it('detects providers and resolves auto modes from shared routing defaults', () => {
     expect(detectProviderFromModelId('claude-sonnet-4-6')).toBe('anthropic');
-    expect(resolveAutoModeModel('auto-economy', 'hobby')).toBe('gpt-5.4-mini');
-    expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.4');
+    expect(resolveAutoModeModel('auto-economy', 'hobby')).toBe('gemini-3.1-flash-lite');
+    expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.4-mini');
     expect(resolveAutoModeModel('auto-premium', 'max')).toBe('claude-opus-4.6');
-    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gpt-5.4-mini');
+    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gemini-3.1-flash-lite');
   });
 
   it('derives variant partners, provider probes, and economy fallbacks from the catalog', () => {
@@ -93,11 +98,78 @@ describe('model catalog helpers', () => {
 
     const coreOptions = getCoreManualModelOptions();
     expect(coreOptions.find((entry) => entry.id === 'gpt-5.4-pro')?.label).toBe('GPT-5.4 Pro');
+    expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-codex')).toBe(true);
+    expect(coreOptions.some((entry) => entry.id === 'kimi-k2.5-thinking')).toBe(true);
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-nano')).toBe(false);
+    expect(coreOptions.some((entry) => entry.id === 'sonar-pro')).toBe(false);
   });
 
   it('canonicalizes legacy nano aliases onto gpt-5.4-mini', () => {
     expect(normalizeModelId('gpt-5.4-nano')).toBe('gpt-5.4-mini');
     expect(normalizeModelId('gpt-5-nano')).toBe('gpt-5.4-mini');
+  });
+
+  it('classifies provider surfaces and managed cloud provider visibility', () => {
+    expect(getProviderSurface('openai')).toBe('managed_cloud');
+    expect(getProviderSurface('managed_cloud')).toBe('managed_cloud');
+    expect(getProviderSurface('open_router')).toBe('byok');
+    expect(getProviderSurface('nvidia_nim')).toBe('byok');
+    expect(getProviderSurface('ollama')).toBe('local');
+    expect(getProviderSurface('groq')).toBe('hidden');
+
+    expect(getManagedCloudProviderIds()).toEqual([
+      'openai',
+      'anthropic',
+      'google',
+      'xai',
+      'qwen',
+      'moonshot',
+      'deepseek',
+      'perplexity',
+      'zhipu',
+    ]);
+    expect(getManagedCloudProviderIds({ includeSearchProviders: false })).toEqual([
+      'openai',
+      'anthropic',
+      'google',
+      'xai',
+      'qwen',
+      'moonshot',
+      'deepseek',
+      'zhipu',
+    ]);
+  });
+
+  it('defines tier policy and slot routing from one shared source', () => {
+    expect(getRoutingSlotModel('general_fast')).toBe('gemini-3.1-flash-lite');
+    expect(getRoutingSlotModel('general_balanced')).toBe('gpt-5.4-mini');
+    expect(getRoutingSlotModel('coding_fast')).toBe('deepseek-chat');
+    expect(getRoutingSlotModel('coding_premium')).toBe('gpt-5.4-codex');
+    expect(getRoutingSlotModel('search_fast')).toBe('sonar');
+    expect(getRoutingSlotModel('search_premium')).toBe('sonar-deep-research');
+    expect(getRoutingSlotModel('computer_use')).toBe('gpt-5.4-mini');
+
+    expect(canAccessManualModelSelection('free')).toBe(false);
+    expect(canAccessManualModelSelection('pro')).toBe(false);
+    expect(canAccessManualModelSelection('max')).toBe(true);
+    expect(canAccessManualModelSelection('enterprise')).toBe(true);
+
+    expect(getTierPolicy('hobby')).toMatchObject({
+      surfacedUx: 'auto_only',
+      manualModelSelection: false,
+      allowSearch: true,
+      allowMediaGeneration: false,
+    });
+    expect(getTierPolicy('pro')).toMatchObject({
+      surfacedUx: 'auto_only',
+      manualModelSelection: false,
+      allowComputerUse: true,
+      allowBrowserDom: true,
+    });
+    expect(getTierPolicy('max')).toMatchObject({
+      surfacedUx: 'auto_plus_manual',
+      manualModelSelection: true,
+      allowMediaGeneration: true,
+    });
   });
 });

@@ -47,6 +47,11 @@ interface ModelState extends PersistedModelState {
 }
 
 const CHAT_MODEL_TYPES = new Set(['chat', 'code', 'reasoning', 'multimodal']);
+const AUTO_MODE_DESCRIPTIONS: Record<string, string> = {
+  'auto-economy': 'Fastest, most cost-effective',
+  'auto-balanced': 'Best default for most conversations',
+  'auto-premium': 'Maximum quality when needed',
+};
 
 function describeModel(metadata: ModelMetadata): string {
   const bestFor = metadata.bestFor?.slice(0, 2).join(' · ');
@@ -64,11 +69,18 @@ function describeModel(metadata: ModelMetadata): string {
 
 function buildAvailableModels(): AIModel[] {
   const seen = new Set<string>();
-  const orderedIds = Object.values(MODEL_PRESETS).flatMap((entries) =>
-    entries.map((entry) => entry.value),
-  );
+  const autoModeEntries = (MODEL_PRESETS['managed_cloud'] ?? []).map((entry) => ({
+    id: entry.value,
+    name: entry.label,
+    provider: PROVIDER_LABELS['managed_cloud'] ?? 'Managed Cloud',
+    providerKey: 'managed_cloud',
+    description: AUTO_MODE_DESCRIPTIONS[entry.value] ?? 'Best model selected automatically',
+  }));
+  const orderedIds = Object.entries(MODEL_PRESETS)
+    .filter(([provider]) => provider !== 'managed_cloud')
+    .flatMap(([, entries]) => entries.map((entry) => entry.value));
 
-  return orderedIds
+  const manualEntries = orderedIds
     .filter((modelId) => {
       if (seen.has(modelId)) {
         return false;
@@ -88,6 +100,8 @@ function buildAvailableModels(): AIModel[] {
       providerKey: metadata.provider,
       description: describeModel(metadata),
     }));
+
+  return [...autoModeEntries, ...manualEntries];
 }
 
 export const AVAILABLE_MODELS: AIModel[] = buildAvailableModels();
