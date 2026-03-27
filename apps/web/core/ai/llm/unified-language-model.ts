@@ -51,6 +51,7 @@ import {
 } from '@core/security/api-abuse-prevention';
 import { isFeatureEnabled } from '@core/security/gradual-rollout';
 import { logger } from '@shared/lib/logger';
+import { getProviderDefaultModel } from '@agiworkforce/types';
 
 export type LLMProvider =
   | 'anthropic'
@@ -84,6 +85,8 @@ const DEEPSEEK_MODELS: DeepSeekConfig['model'][] =
   DeepSeekProvider.getAvailableModels() as DeepSeekConfig['model'][];
 const QWEN_MODELS: QwenConfig['model'][] =
   QwenProvider.getAvailableModels() as QwenConfig['model'][];
+
+const DEFAULT_OPENAI_MODEL = getProviderDefaultModel('openai') ?? 'gpt-5.4';
 
 const isAnthropicModel = (model: string): model is AnthropicConfig['model'] =>
   ANTHROPIC_MODELS.includes(model as AnthropicConfig['model']);
@@ -260,7 +263,7 @@ export class UnifiedLLMService {
   constructor(config: Partial<UnifiedConfig> = {}) {
     this.config = {
       provider: 'openai',
-      model: 'gpt-5.4',
+      model: DEFAULT_OPENAI_MODEL,
       maxTokens: 4000,
       temperature: 0.7,
       systemPrompt: 'You are a helpful AI assistant.',

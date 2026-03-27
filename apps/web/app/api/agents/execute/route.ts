@@ -14,10 +14,13 @@ import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { getTaskModelForProvider } from '@agiworkforce/types';
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
 }
+
+const DEFAULT_EMPLOYEE_MODEL = getTaskModelForProvider('anthropic', 'chat') ?? 'claude-sonnet-4.6';
 
 // H9: Zod validation schema for execute requests
 const ExecuteRequestSchema = z.object({
@@ -202,7 +205,7 @@ async function handler(request: NextRequest) {
   }
 
   // Use the LLM provider factory to get the appropriate provider
-  const selectedModel = model || 'claude-haiku-4.5';
+  const selectedModel = model || DEFAULT_EMPLOYEE_MODEL;
   const selectedProvider = provider || LLMProviderFactory.getProviderFromModel(selectedModel);
 
   try {
