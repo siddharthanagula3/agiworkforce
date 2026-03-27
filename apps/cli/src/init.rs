@@ -8,7 +8,7 @@ use crate::config::CliConfig;
 /// Safe to call on every startup — only creates what doesn't exist.
 pub fn init_home_dir(home: &Path) -> Result<()> {
     let dirs = [
-        "",                          // ~/.agiworkforce/ itself
+        "", // ~/.agiworkforce/ itself
         "plugins",
         "skills",
         "skills/.system",
@@ -59,8 +59,8 @@ fn write_default_config(home: &Path) -> Result<()> {
 # Optional settings (uncomment to enable):
 # [default]
 # temperature = 0.7
-# fallback_chain = ["gpt-4o", "gemini-2.5-pro"]
-# fast_model = "claude-haiku-4-5"
+# fallback_chain = ["gpt-5.4-mini", "gemini-3.1-pro-preview"]
+# fast_model = "claude-haiku-4-5-20251001"
 # sandbox_mode = "read-only"
 # review_model = "claude-sonnet-4-6"
 # cloud_model = "claude-opus-4-6"
