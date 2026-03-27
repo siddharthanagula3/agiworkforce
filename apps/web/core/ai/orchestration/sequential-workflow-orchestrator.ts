@@ -13,6 +13,7 @@ import { useMissionStore } from '@shared/stores/mission-control-store';
 import type { AIEmployee } from '@core/types/ai-employee';
 import { tokenLogger } from '@core/integrations/token-usage-tracker';
 import { logger } from '@shared/lib/logger';
+import { DEFAULT_ANTHROPIC_COLLABORATION_MODEL } from '@shared/config/supported-models';
 
 // ================================================
 // TYPES
@@ -401,7 +402,8 @@ export class SequentialWorkflowOrchestrator {
               content: m.content,
             })),
           ],
-          model: employee.model === 'inherit' ? 'claude-3-5-sonnet-20241022' : employee.model,
+          model:
+            employee.model === 'inherit' ? DEFAULT_ANTHROPIC_COLLABORATION_MODEL : employee.model,
           temperature: 0.7,
           userId: request.userId,
           sessionId: request.sessionId,
@@ -751,7 +753,8 @@ export class SequentialWorkflowOrchestrator {
             content: m.content,
           })),
         ],
-        model: employee.model === 'inherit' ? 'claude-3-5-sonnet-20241022' : employee.model,
+        model:
+          employee.model === 'inherit' ? DEFAULT_ANTHROPIC_COLLABORATION_MODEL : employee.model,
         temperature: 0.7,
         userId,
         sessionId,

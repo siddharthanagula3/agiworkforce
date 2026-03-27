@@ -34,8 +34,8 @@ describe('MODEL_POOLS', () => {
     const pool = MODEL_POOLS['auto-economy'];
     expect(pool.length).toBeGreaterThan(0);
     // Canonical cheap models known to be in economy tier
-    expect(pool).toContain('deepseek-chat');
-    expect(pool).toContain('qwen-flash');
+    expect(pool).toContain('gpt-5.4-mini');
+    expect(pool).toContain('gemini-3.1-flash-lite');
   });
 
   it('auto-balanced pool is a superset of economy pool (all economy models present)', () => {

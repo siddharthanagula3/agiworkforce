@@ -18,6 +18,7 @@ import { useMissionStore } from '@shared/stores/mission-control-store';
 import type { Task } from '@shared/stores/mission-control-store';
 import type { AIEmployee } from '@core/types/ai-employee';
 import { agentConversationProtocol } from './agent-conversation-protocol';
+import { DEFAULT_ANTHROPIC_COLLABORATION_MODEL } from '@shared/config/supported-models';
 import { supabase } from '@shared/lib/supabase-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { tokenLogger } from '@core/integrations/token-usage-tracker';
@@ -446,7 +447,7 @@ Think step-by-step and create a comprehensive plan. Respond with JSON only.`;
           unifiedLLMService.sendMessage({
             provider: 'anthropic',
             messages: [{ role: 'user', content: plannerPrompt }],
-            model: 'claude-3-5-sonnet-20241022',
+            model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
             temperature: 0.3,
             userId,
             sessionId,
@@ -869,7 +870,8 @@ Please complete this task according to your role and capabilities.`;
           unifiedLLMService.sendMessage({
             provider: 'anthropic',
             messages: secureMessages,
-            model: employee.model === 'inherit' ? 'claude-3-5-sonnet-20241022' : employee.model,
+            model:
+              employee.model === 'inherit' ? DEFAULT_ANTHROPIC_COLLABORATION_MODEL : employee.model,
             temperature: 0.7,
             userId,
             sessionId,
@@ -1247,7 +1249,8 @@ Query: "Help me learn Python" → Answer: "expert-tutor"
           unifiedLLMService.sendMessage({
             provider: 'anthropic',
             messages: secureMessages,
-            model: employee.model === 'inherit' ? 'claude-3-5-sonnet-20241022' : employee.model,
+            model:
+              employee.model === 'inherit' ? DEFAULT_ANTHROPIC_COLLABORATION_MODEL : employee.model,
             temperature: 0.7,
             userId,
             sessionId,

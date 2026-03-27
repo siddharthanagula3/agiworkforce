@@ -10,6 +10,7 @@ import { Task, AgentType } from '../orchestration/reasoning/task-breakdown';
 import { fetchWithTimeout, TimeoutPresets } from '@shared/utils/error-handling';
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
+import { DEFAULT_GOOGLE_FAST_MODEL } from '@shared/config/supported-models';
 
 // ================================================
 // TYPES
@@ -161,7 +162,7 @@ class GeminiService {
             Authorization: `Bearer ${authToken}`,
           },
           body: JSON.stringify({
-            model: 'gemini-2.0-flash',
+            model: DEFAULT_GOOGLE_FAST_MODEL,
             messages: [{ role: 'user', content: prompt }],
             max_tokens: 8192,
             temperature: 0.7,
@@ -187,7 +188,7 @@ class GeminiService {
         content,
         tokensUsed,
         cost,
-        model: 'gemini-2.0-flash',
+        model: DEFAULT_GOOGLE_FAST_MODEL,
         provider: 'google',
       };
     } catch (error) {
