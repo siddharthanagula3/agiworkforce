@@ -2,7 +2,9 @@ use super::*;
 use crate::core::agi::knowledge::KnowledgeEntry;
 use crate::core::agi::process_ontology::ProcessOntology;
 use crate::core::agi::process_reasoning::ProcessReasoning;
-use crate::core::llm::{ChatMessage, LLMRequest, LLMRouter, RouterPreferences, RoutingStrategy};
+use crate::core::llm::{
+    ChatMessage, LLMRequest, LLMRouter, Provider, RouterPreferences, RoutingStrategy, TaskType,
+};
 use anyhow::Result;
 use serde_json::json;
 use std::sync::Arc;
@@ -15,6 +17,10 @@ pub struct AGIPlanner {
     knowledge_base: Arc<KnowledgeBase>,
     process_reasoning: Option<Arc<ProcessReasoning>>,
     process_ontology: Option<Arc<ProcessOntology>>,
+}
+
+fn planning_model() -> &'static str {
+    Provider::Anthropic.get_model_for_task(TaskType::Chat)
 }
 
 #[derive(Debug, Clone)]
@@ -212,7 +218,7 @@ Return ONLY the JSON array."#,
 
         let preferences = RouterPreferences {
             provider: Some(crate::core::llm::Provider::Anthropic),
-            model: Some("claude-sonnet-4-5".to_string()),
+            model: Some(planning_model().to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
@@ -226,7 +232,7 @@ Return ONLY the JSON array."#,
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-4-5".to_string(),
+            model: planning_model().to_string(),
             temperature: None,
             max_tokens: Some(64000),
             stream: false,
@@ -645,7 +651,7 @@ Return ONLY a JSON array of steps with this structure:
 
         let preferences = RouterPreferences {
             provider: Some(crate::core::llm::Provider::Anthropic),
-            model: Some("claude-sonnet-4-5".to_string()),
+            model: Some(planning_model().to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
@@ -659,7 +665,7 @@ Return ONLY a JSON array of steps with this structure:
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-4-5".to_string(),
+            model: planning_model().to_string(),
             temperature: Some(0.8),
             max_tokens: Some(4000),
             stream: false,

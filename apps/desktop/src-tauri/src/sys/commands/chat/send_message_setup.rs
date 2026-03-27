@@ -5,7 +5,7 @@ use crate::core::llm::{
     cost_calculator::CostCalculator,
     llm_router::{RouterContext, RouterPreferences, RoutingStrategy},
     token_counter::TokenCounter,
-    ChatMessage, LLMRequest, Provider, ThinkingParameter,
+    ChatMessage, LLMRequest, Provider, TaskType, ThinkingParameter,
 };
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -83,7 +83,11 @@ pub(super) fn resolve_provider_and_model(
         .model_override
         .clone()
         .or(request.model.clone())
-        .unwrap_or_else(|| "gpt-5.4-mini".to_string());
+        .unwrap_or_else(|| {
+            Provider::OpenAI
+                .get_model_for_task(TaskType::FastCompletion)
+                .to_string()
+        });
 
     (provider_enum, model)
 }
