@@ -260,6 +260,40 @@ export function useChat(
           }
           break;
         }
+        case 'search_results': {
+          if (!assistantMessageIdRef.current) {
+            const id = crypto.randomUUID();
+            assistantMessageIdRef.current = id;
+            addMsg({
+              id,
+              role: 'assistant',
+              content: '',
+              timestamp: new Date().toISOString(),
+              isStreaming: true,
+              webSearchResults: [event.search],
+            });
+          } else {
+            const msgs = store.messagesByConversation[convId];
+            const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
+            if (msg) {
+              const existingSearches = msg.webSearchResults ?? [];
+              const searchIndex = existingSearches.findIndex(
+                (search) => search.id === event.search.id,
+              );
+              const updatedSearches =
+                searchIndex >= 0
+                  ? existingSearches.map((search, index) =>
+                      index === searchIndex ? event.search : search,
+                    )
+                  : [...existingSearches, event.search];
+
+              store.updateMessage(convId, assistantMessageIdRef.current, {
+                webSearchResults: updatedSearches,
+              });
+            }
+          }
+          break;
+        }
         case 'done': {
           // Mark the message as no longer streaming
           if (assistantMessageIdRef.current) {
