@@ -18,6 +18,7 @@ import { useExecutionStore } from '@/stores/unified/executionStore';
 import { formatErrorForChat } from '@/lib/friendlyErrors';
 import { toast } from '@/hooks/useToast';
 import type { Artifact } from '@/types/chat';
+import { emitBrowserActivity } from '@/stores/browserActivityStore';
 import {
   normalizeToolNameForUi,
   toolNameToArtifactType,
@@ -34,6 +35,8 @@ const listen = <T = unknown>(
 ): Promise<() => void> => _listenBase(event, handler as (e: { payload: unknown }) => void);
 
 const TOOL_EXECUTION_SOFT_TIMEOUT_MS = 10_000;
+const BROWSER_TOOL_PATTERN =
+  /(^browser[_:]|mcp__playwright__|playwright|webmcp|computer[_ -]?use|browser automation)/i;
 
 export interface UseTauriEventListenersConfig extends StreamBufferRefs, StreamBufferCallbacks {}
 
@@ -310,6 +313,96 @@ export function useTauriEventListeners(config: UseTauriEventListenersConfig): vo
         for (const entry of entriesToRemove) {
           state.removeActionTrailEntry(entry.id);
         }
+      };
+
+      const isBrowserTool = (toolName: string) => BROWSER_TOOL_PATTERN.test(toolName);
+
+      const parseRecord = (value: unknown): Record<string, unknown> => {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          return value as Record<string, unknown>;
+        }
+        if (typeof value === 'string' && value.trim()) {
+          try {
+            const parsed = JSON.parse(value);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              return parsed as Record<string, unknown>;
+            }
+          } catch {
+            // Keep empty record when the payload is not JSON.
+          }
+        }
+        return {};
+      };
+
+      const extractBrowserUrl = (...values: Array<Record<string, unknown> | undefined>) => {
+        for (const value of values) {
+          if (!value) continue;
+          const candidate = value['url'] ?? value['pageUrl'] ?? value['currentPageUrl'];
+          if (typeof candidate === 'string' && candidate.trim()) {
+            return candidate;
+          }
+          const nestedBrowser = value['browser'];
+          if (nestedBrowser && typeof nestedBrowser === 'object' && !Array.isArray(nestedBrowser)) {
+            const nestedCandidate =
+              (nestedBrowser as Record<string, unknown>)['url'] ??
+              (nestedBrowser as Record<string, unknown>)['currentPageUrl'];
+            if (typeof nestedCandidate === 'string' && nestedCandidate.trim()) {
+              return nestedCandidate;
+            }
+          }
+        }
+        return '';
+      };
+
+      const extractBrowserTitle = (...values: Array<Record<string, unknown> | undefined>) => {
+        for (const value of values) {
+          if (!value) continue;
+          const candidate = value['title'] ?? value['pageTitle'] ?? value['currentPageTitle'];
+          if (typeof candidate === 'string' && candidate.trim()) {
+            return candidate;
+          }
+          const nestedBrowser = value['browser'];
+          if (nestedBrowser && typeof nestedBrowser === 'object' && !Array.isArray(nestedBrowser)) {
+            const nestedCandidate =
+              (nestedBrowser as Record<string, unknown>)['title'] ??
+              (nestedBrowser as Record<string, unknown>)['currentPageTitle'];
+            if (typeof nestedCandidate === 'string' && nestedCandidate.trim()) {
+              return nestedCandidate;
+            }
+          }
+        }
+        return null;
+      };
+
+      const updateBrowserActivity = (detail: {
+        toolName: string;
+        args?: Record<string, unknown>;
+        result?: Record<string, unknown>;
+        status: 'planning' | 'executing' | 'done' | 'error';
+        lastAction?: string | null;
+        success?: boolean;
+      }) => {
+        if (!isBrowserTool(detail.toolName)) {
+          return;
+        }
+
+        const url = extractBrowserUrl(detail.result, detail.args);
+        const title = extractBrowserTitle(detail.result, detail.args);
+        emitBrowserActivity({
+          active: true,
+          url,
+          title,
+          status: detail.status,
+          lastAction:
+            detail.lastAction ??
+            (detail.status === 'done'
+              ? `${detail.toolName} completed`
+              : detail.status === 'error'
+                ? `${detail.toolName} failed`
+                : `Executing ${detail.toolName}`),
+          extensionConnected: true,
+          hasError: detail.success === false || detail.status === 'error',
+        });
       };
 
       const clearToolExecutionTimeout = (toolCallId: string) => {
@@ -1015,6 +1108,7 @@ export function useTauriEventListeners(config: UseTauriEventListenersConfig): vo
         }>('chat:tool-executing', ({ payload }) => {
           markStreamActivity();
           const normalizedToolName = normalizeToolNameForUi(payload.tool_name);
+          const parsedArgs = parseRecord(payload.arguments);
           scheduleToolExecutionTimeout(
             payload.tool_call_id,
             normalizedToolName,
@@ -1028,6 +1122,13 @@ export function useTauriEventListeners(config: UseTauriEventListenersConfig): vo
             type: 'running',
             message: `Executing ${normalizedToolName}...`,
             metadata: { tool_call_id: payload.tool_call_id },
+          });
+
+          updateBrowserActivity({
+            toolName: normalizedToolName,
+            args: parsedArgs,
+            status: normalizedToolName.includes('navigate') ? 'planning' : 'executing',
+            lastAction: `Executing ${normalizedToolName}`,
           });
         }),
       );
@@ -1087,6 +1188,12 @@ export function useTauriEventListeners(config: UseTauriEventListenersConfig): vo
           }
 
           const normalizedData = normalizeInlineToolData(normalizedToolName, parsedData);
+          const parsedArgs =
+            parsedData['args'] &&
+            typeof parsedData['args'] === 'object' &&
+            !Array.isArray(parsedData['args'])
+              ? (parsedData['args'] as Record<string, unknown>)
+              : undefined;
 
           upsertToolArtifact(
             payload.conversation_id,
@@ -1159,6 +1266,17 @@ export function useTauriEventListeners(config: UseTauriEventListenersConfig): vo
                 : `Failed ${normalizedToolName}`,
             });
           }
+
+          updateBrowserActivity({
+            toolName: normalizedToolName,
+            args: parsedArgs,
+            result: normalizedData,
+            status: payload.success ? 'done' : 'error',
+            lastAction: payload.success
+              ? `${normalizedToolName} completed`
+              : payload.result || `${normalizedToolName} failed`,
+            success: payload.success,
+          });
         }),
       );
 
@@ -1202,6 +1320,13 @@ export function useTauriEventListeners(config: UseTauriEventListenersConfig): vo
             message: `Tool cancelled: ${cancelledEvent.reason || 'Cancelled by user'}`,
             metadata: { tool_call_id: cancelledEvent.tool_id },
             fadeAfter: 3000,
+          });
+
+          updateBrowserActivity({
+            toolName: cancelledEvent.tool_id,
+            status: 'error',
+            lastAction: cancelledEvent.reason || 'Browser task cancelled',
+            success: false,
           });
 
           // Update message metadata to reflect cancelled status

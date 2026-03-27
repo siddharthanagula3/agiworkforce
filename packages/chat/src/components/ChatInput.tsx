@@ -7,6 +7,7 @@ import {
   type ChangeEvent,
 } from 'react';
 import { Mic, Plus, Square } from 'lucide-react';
+import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
 import { AttachmentMenu } from './AttachmentMenu';
@@ -56,7 +57,9 @@ export function ChatInput({
       const el = textareaRef.current;
       if (!el) return;
       const current = el.value;
-      el.value = current ? `${current} ${text}` : text;
+      const cleanedText = cleanupVoiceDictation(text);
+      const isCommand = detectVoiceCommand(cleanedText);
+      el.value = isCommand ? cleanedText : current ? `${current} ${cleanedText}` : cleanedText;
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.focus();
     },
