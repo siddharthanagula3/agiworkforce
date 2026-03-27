@@ -95,4 +95,9 @@ describe('model catalog helpers', () => {
     expect(coreOptions.find((entry) => entry.id === 'gpt-5.4-pro')?.label).toBe('GPT-5.4 Pro');
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-nano')).toBe(false);
   });
+
+  it('canonicalizes legacy nano aliases onto gpt-5.4-mini', () => {
+    expect(normalizeModelId('gpt-5.4-nano')).toBe('gpt-5.4-mini');
+    expect(normalizeModelId('gpt-5-nano')).toBe('gpt-5.4-mini');
+  });
 });

@@ -102,10 +102,10 @@ describe('modelStore', () => {
       expect(getState().thinkingEnabledPerModel['claude-haiku-4.5']).toBeUndefined();
     });
 
-    it('guards against gpt-5.4-nano (supportsThinking: false)', () => {
+    it('normalizes legacy nano aliases onto gpt-5.4-mini', () => {
       getState().toggleThinkingForModel('gpt-5.4-nano');
 
-      expect(getState().thinkingEnabledPerModel['gpt-5.4-nano']).toBeUndefined();
+      expect(getState().thinkingEnabledPerModel['gpt-5.4-mini']).toBe(true);
     });
 
     it('blocks toggle for auto modes', () => {
