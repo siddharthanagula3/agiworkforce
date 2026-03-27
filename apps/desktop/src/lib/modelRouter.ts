@@ -53,7 +53,13 @@
  * - GPT-5 Nano: Economy model, not optimized for agentic (use GPT-5.2+ for agentic)
  */
 
-import { MODEL_METADATA, type ModelMetadata } from '../constants/llm';
+import {
+  MODEL_METADATA,
+  getAllowedModelsForTier,
+  getTaskModelForProvider,
+  normalizeModelId,
+  type ModelMetadata,
+} from '../constants/llm';
 import {
   classifyIntent,
   classifyIntentLocally,
@@ -153,63 +159,37 @@ export interface IntelligentRoutingResult {
 // HOBBY TIER (auto-economy) - Budget models, ordered by BENCHMARK
 // Best benchmarks first within cost constraints
 // =========================================================================
-const ECONOMY_MODELS: readonly string[] = [
-  // === TOP BENCHMARK (Best quality in economy tier) ===
-  'gemini-3.1-flash-lite', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
-  'glm-4.7', // 73.8% SWE-bench, 88% MMLU - T✓ Th✓ A✓ (128K ctx) - CODING KING
-  'deepseek-chat', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
-  'glm-4.6v', // 68% SWE-bench, 86% MMLU - V✓ T✓ Th✓ A✓ (128K ctx) - VISION
-
-  // === MID BENCHMARK (Good quality, very cheap) ===
-  'grok-4-fast-reasoning', // 48% SWE-bench, 85% MMLU - T✓ Th✓ A✓ E✓ (2M ctx)
-  'claude-haiku-4.5', // 45% SWE-bench, 85% MMLU - V✓ T✓ A✓ (200K ctx)
-  'glm-4.6v-flash', // 45% SWE-bench, 78% MMLU - V✓ T✓ (128K ctx) - FREE!
-
-  // === LOWER BENCHMARK (Fast/cheap fallbacks) ===
-  'qwen-flash', // 25% SWE-bench, 75% MMLU - T✓ (128K ctx)
-  'gpt-5.4-nano', // 18% SWE-bench, 78% MMLU - V✓ T✓ E✓ (128K ctx)
-
-  // === SEARCH MODELS ===
-  'sonar', // Web search - V✗ T✗ (128K ctx)
-];
-
-// =========================================================================
-// PRO TIER (auto-balanced) - Economy + Pro model additions, ordered by BENCHMARK
-// =========================================================================
-const BALANCED_ADDITIONS: readonly string[] = [
-  // === TOP BENCHMARK (Pro-tier additions) ===
-  'gpt-5.4', // 80.0% SWE-bench, 93.2% MMLU - V✓ T✓ Th✓ C✓ A✓ E✓ (400K ctx)
-  'claude-sonnet-4.6', // 78.5% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx) - CURRENT
-  'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx)
-  'gemini-3.1-pro-preview', // 74.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ A✓ E✓ (2M ctx)
-
-  // === MID-HIGH BENCHMARK ===
-  'qwen-max', // 58% SWE-bench, 88% MMLU - T✓ Th✓ A✓ E✓ (128K ctx)
-
-  // === SEARCH MODELS ===
-  'sonar-pro',
-  'sonar-deep-research',
-];
-
-// =========================================================================
-// MAX/ENTERPRISE TIER (auto-premium) - Balanced + Premium model additions
-// =========================================================================
-const PREMIUM_ADDITIONS: readonly string[] = [
-  // === FLAGSHIP BENCHMARK (Best of the best) ===
-  'claude-opus-4.6', // 80.9% SWE-bench - BEST CODING MODEL
-  'gpt-5.4-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
-
-  // === HIGH BENCHMARK ===
-  'grok-4', // 55.3% SWE-bench - REAL-TIME DATA
-  'kimi-k2.5', // 55% SWE-bench, 99% AIME - V✓ T✓ Th✓ A✓
-  'deepseek-reasoner', // 55% SWE-bench - BUDGET REASONING
-];
+const ECONOMY_MODELS: readonly string[] = getAllowedModelsForTier('hobby');
+const BALANCED_MODELS: readonly string[] = getAllowedModelsForTier('pro');
+const PREMIUM_MODELS: readonly string[] = getAllowedModelsForTier('max');
 
 export const MODEL_POOLS: Record<AutoMode, string[]> = {
   'auto-economy': [...ECONOMY_MODELS],
-  'auto-balanced': [...BALANCED_ADDITIONS, ...ECONOMY_MODELS],
-  'auto-premium': [...PREMIUM_ADDITIONS, ...BALANCED_ADDITIONS, ...ECONOMY_MODELS],
+  'auto-balanced': [...BALANCED_MODELS],
+  'auto-premium': [...PREMIUM_MODELS],
 };
+
+function buildPreferenceList(modelIds: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const models: string[] = [];
+
+  for (const modelId of modelIds) {
+    const canonicalModelId = normalizeModelId(modelId);
+    if (!canonicalModelId || seen.has(canonicalModelId) || !MODEL_METADATA[canonicalModelId]) {
+      continue;
+    }
+
+    seen.add(canonicalModelId);
+    models.push(canonicalModelId);
+  }
+
+  return models;
+}
+
+const DEFAULT_CHAT_FALLBACK_MODEL =
+  getTaskModelForProvider('google', 'fast_completion') ??
+  getTaskModelForProvider('openai', 'fast_completion') ??
+  'gpt-5.4-nano';
 
 // ============================================
 // MINIMUM BENCHMARK THRESHOLDS
@@ -499,30 +479,27 @@ export function estimateComplexity(
  * - Reasoning: GPT-5.2 (100% AIME), GLM-4.7 (95.7% AIME)
  */
 export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
-  // 70% of traffic - BENCHMARK-FIRST among budget models (Jan 2026 update)
-  // Priority: Best benchmark → Second-best → ... → Cost as tiebreaker
-  simple: [
-    'deepseek-chat', // 68.8% SWE-bench, 85% MMLU - BEST benchmark in budget tier
-    'glm-4.6v-flash', // ~65% SWE-bench - FREE with vision + tools
-    'qwen-flash', // ~60% SWE-bench - Ultra-cheap fallback
-    'gpt-5.4-nano', // ~50% SWE-bench - OpenAI budget option
-  ],
-  // 20% of traffic - mid-tier models ordered by benchmark
-  moderate: [
-    'gemini-3.1-flash-lite', // 76.2% SWE-bench, 88.6% MMLU - BEST in mid-tier
-    'glm-4.7', // 73.8% SWE-bench, 88% MMLU - Open-weight champion
-    'kimi-k2.5', // ~65% - Long context reasoning + vision
-    'grok-4-fast-reasoning', // ~60% - Real-time reasoning
-  ],
-  // 10% of traffic - best benchmarks available in economy pool
-  complex: [
-    'gpt-5.4', // 80.0% SWE-bench, 93.2% MMLU - BEST overall benchmark
-    'claude-sonnet-4.6', // 78.5% SWE-bench - Current best Sonnet
-    'claude-sonnet-4.5', // 77.2% SWE-bench - Excellent orchestration fallback
-    'gemini-3.1-pro-preview', // ~75% SWE-bench - 2M context window
-    'claude-haiku-4.5', // ~70% - Best writing quality
-    'glm-4.6v', // 68% SWE-bench - Vision + tools
-  ],
+  simple: buildPreferenceList([
+    getTaskModelForProvider('openai', 'fast_completion'),
+    getTaskModelForProvider('google', 'fast_completion'),
+    getTaskModelForProvider('xai', 'fast_completion'),
+    getTaskModelForProvider('deepseek', 'chat'),
+    getTaskModelForProvider('qwen', 'chat'),
+  ]),
+  moderate: buildPreferenceList([
+    getTaskModelForProvider('google', 'chat'),
+    getTaskModelForProvider('xai', 'chat'),
+    getTaskModelForProvider('openai', 'chat'),
+    getTaskModelForProvider('moonshot', 'chat'),
+    getTaskModelForProvider('deepseek', 'chat'),
+  ]),
+  complex: buildPreferenceList([
+    getTaskModelForProvider('openai', 'chat'),
+    getTaskModelForProvider('anthropic', 'chat'),
+    getTaskModelForProvider('anthropic', 'complex_reasoning'),
+    getTaskModelForProvider('google', 'long_context'),
+    getTaskModelForProvider('moonshot', 'long_context'),
+  ]),
 };
 
 /**
@@ -530,50 +507,42 @@ export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
  * These override complexity preferences when task type is known
  */
 export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
-  // Coding: Claude Opus 4.6 (80.9%), GPT-5.2 (80.0%), GLM-4.7 (73.8%)
-  coding: [
-    'claude-opus-4.6', // 80.9% SWE-bench - PUBLIC #1 for coding
-    'gpt-5.4', // 80.0% SWE-bench - #2, best tool integration
-    'claude-sonnet-4.6', // 78.5% SWE-bench - #3, current best Sonnet
-    'glm-4.7', // 73.8% SWE-bench - #4, best open-weight
-    'claude-sonnet-4.5', // Great coding, more affordable fallback
-    'deepseek-chat', // Budget coding champion
-  ],
-  // Reasoning: GPT-5.2 for math, Claude for complex analysis
-  reasoning: [
-    'gpt-5.4', // 100% AIME 2025 - PUBLIC #1 for math
-    'claude-opus-4.6', // Best for nuanced reasoning
-    'gpt-5.4-pro', // OpenAI flagship reasoning
-    'gemini-3.1-pro-preview', // Deep Think for exam-style
-    'glm-4.7', // 95.7% AIME - strong alternative
-  ],
-  // General: ChatGPT versatile, Claude for writing, DeepSeek for budget
-  general: [
-    'gpt-5.4', // PUBLIC #1 for versatility
-    'claude-sonnet-4.6', // Current best Sonnet - writing/creative
-    'claude-sonnet-4.5', // Fallback Sonnet
-    'deepseek-chat', // Budget champion
-    'gemini-3.1-flash-lite', // Fast, good quality
-    'glm-4.7', // Solid all-rounder
-  ],
-  // Agentic: GPT-5.2 for tool-calling (97% τ²-bench), Claude for orchestration
-  agentic: [
-    'gpt-5.4', // 97% τ²-bench - PUBLIC #1 for tool-calling
-    'claude-opus-4.6', // Best multi-step orchestration
-    'claude-sonnet-4.6', // Current best Sonnet for agentic
-    'claude-sonnet-4.5', // More affordable agentic fallback
-    'gemini-3.1-pro-preview', // Good tool use, 2M context
-    'glm-4.7', // Agentic-capable open model
-  ],
-  // Multimodal: Gemini for best vision, Claude for analysis
-  multimodal: [
-    'gpt-5.4', // Excellent vision + tools
-    'gemini-3.1-pro-preview', // Best multimodal (native video, 2M context)
-    'claude-opus-4.6', // Best visual analysis
-    'claude-sonnet-4.6', // Current best Sonnet vision
-    'claude-sonnet-4.5', // Good vision, more affordable fallback
-    'glm-4.6v', // Vision + native tool calling
-  ],
+  coding: buildPreferenceList([
+    getTaskModelForProvider('anthropic', 'complex_reasoning'),
+    getTaskModelForProvider('openai', 'code_generation'),
+    getTaskModelForProvider('anthropic', 'code_generation'),
+    getTaskModelForProvider('google', 'code_generation'),
+    getTaskModelForProvider('xai', 'code_generation'),
+    getTaskModelForProvider('deepseek', 'chat'),
+  ]),
+  reasoning: buildPreferenceList([
+    getTaskModelForProvider('openai', 'complex_reasoning'),
+    getTaskModelForProvider('anthropic', 'complex_reasoning'),
+    getTaskModelForProvider('google', 'complex_reasoning'),
+    getTaskModelForProvider('xai', 'complex_reasoning'),
+    getTaskModelForProvider('moonshot', 'chat'),
+  ]),
+  general: buildPreferenceList([
+    getTaskModelForProvider('openai', 'chat'),
+    getTaskModelForProvider('anthropic', 'chat'),
+    getTaskModelForProvider('google', 'chat'),
+    getTaskModelForProvider('deepseek', 'chat'),
+    getTaskModelForProvider('xai', 'chat'),
+  ]),
+  agentic: buildPreferenceList([
+    getTaskModelForProvider('openai', 'chat'),
+    getTaskModelForProvider('anthropic', 'chat'),
+    getTaskModelForProvider('google', 'chat'),
+    getTaskModelForProvider('xai', 'chat'),
+    getTaskModelForProvider('moonshot', 'long_context'),
+  ]),
+  multimodal: buildPreferenceList([
+    getTaskModelForProvider('openai', 'vision'),
+    getTaskModelForProvider('google', 'vision'),
+    getTaskModelForProvider('anthropic', 'vision'),
+    getTaskModelForProvider('zhipu', 'vision'),
+    getTaskModelForProvider('moonshot', 'long_context'),
+  ]),
 };
 
 /**
@@ -942,7 +911,7 @@ export function selectModelFromPool(
     }
 
     // Last resort: First model in pool (better than nothing)
-    const firstModelId = pool[0] ?? 'gemini-3.1-flash-lite';
+    const firstModelId = pool[0] ?? DEFAULT_CHAT_FALLBACK_MODEL;
     const fallback = MODEL_METADATA[firstModelId];
     return {
       modelId: firstModelId,
