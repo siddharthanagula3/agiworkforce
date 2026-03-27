@@ -65,7 +65,9 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseClient();
     const { data: subscriptions, error: fetchError } = await supabase
       .from('subscriptions')
-      .select('id, user_id, plan_tier, current_period_start, current_period_end, status')
+      .select(
+        'id, user_id, plan_tier, stripe_price_id, current_period_start, current_period_end, status',
+      )
       .in('status', ['active', 'trialing']);
 
     if (fetchError) {
@@ -99,6 +101,7 @@ export async function GET(request: NextRequest) {
             subscription.plan_tier || 'free',
             periodStart,
             periodEnd,
+            { stripePriceId: subscription.stripe_price_id },
           );
 
           resetCount++;

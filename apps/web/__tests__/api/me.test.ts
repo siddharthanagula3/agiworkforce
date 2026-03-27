@@ -320,6 +320,7 @@ describe('Me API', () => {
           current_period_start: new Date('2024-12-01T00:00:00Z'),
           current_period_end: new Date('2024-12-31T00:00:00Z'),
           stripe_subscription_id: 'sub_test123',
+          stripe_price_id: 'price_hobby_monthly',
         });
 
         const request = new NextRequest('http://localhost/api/me', {

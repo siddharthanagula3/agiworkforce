@@ -5,10 +5,15 @@ import Stripe from 'stripe';
 import { requireEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 import { CreditService } from './credit-service';
-import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
+import {
+  getBillingDetailsFromPriceId,
+  resolvePlanTier,
+  isValidPlanTier,
+} from '@/lib/price-tier-mapping';
 // AUDIT-P3: Use shared Stripe type helpers for safer period access
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { getPlanUsageBudgetCents, getUsageBudgetCentsFromPriceCents } from '@agiworkforce/types';
 
 function getSupabaseClient() {
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
@@ -18,16 +23,6 @@ function getSupabaseClient() {
   });
 }
 
-// Credit allocation in cents per month (dollar amount * 100)
-// Based on desktop pricing.ts tokenCredits values
-const PLAN_CREDITS: Record<string, number> = {
-  free: 0,
-  hobby: 350, // $3.50/month
-  pro: 1200, // $12.00/month (matches desktop pricing.ts tokenCredits: 12)
-  max: 15000, // $150.00/month (matches desktop pricing.ts tokenCredits: 150)
-  enterprise: 100000, // $1000.00/month — generous default; overridden per-contract via Stripe metadata
-};
-
 export interface SubscriptionInfo {
   id: string;
   user_id: string;
@@ -36,6 +31,30 @@ export interface SubscriptionInfo {
   current_period_start: Date;
   current_period_end: Date;
   stripe_subscription_id: string | null;
+  stripe_price_id: string | null;
+}
+
+interface CreditAllocationOptions {
+  stripePriceId?: string | null;
+  overrideCreditsCents?: number | null;
+}
+
+function resolveCreditsAllocationCents(
+  planTier: string,
+  options: CreditAllocationOptions = {},
+): number {
+  if (typeof options.overrideCreditsCents === 'number' && options.overrideCreditsCents >= 0) {
+    return Math.round(options.overrideCreditsCents);
+  }
+
+  if (options.stripePriceId) {
+    const billingDetails = getBillingDetailsFromPriceId(options.stripePriceId);
+    if (billingDetails) {
+      return billingDetails.usageBudgetCents;
+    }
+  }
+
+  return getPlanUsageBudgetCents(planTier, 'monthly');
 }
 
 export class SubscriptionService {
@@ -49,7 +68,7 @@ export class SubscriptionService {
       const { data, error } = await supabase
         .from('subscriptions')
         .select(
-          'id, user_id, plan_tier, status, current_period_start, current_period_end, stripe_subscription_id',
+          'id, user_id, plan_tier, status, current_period_start, current_period_end, stripe_subscription_id, stripe_price_id',
         )
         .eq('user_id', userId)
         .single();
@@ -75,6 +94,7 @@ export class SubscriptionService {
         current_period_start: new Date(data.current_period_start),
         current_period_end: new Date(data.current_period_end),
         stripe_subscription_id: data.stripe_subscription_id,
+        stripe_price_id: data.stripe_price_id,
       };
     } catch (error) {
       logger.error({ error, userId }, 'Error in getSubscription');
@@ -91,8 +111,9 @@ export class SubscriptionService {
     planTier: string,
     periodStart: Date,
     periodEnd: Date,
+    options: CreditAllocationOptions = {},
   ): Promise<string> {
-    const creditsCents = PLAN_CREDITS[planTier.toLowerCase()] || 0;
+    const creditsCents = resolveCreditsAllocationCents(planTier, options);
 
     if (creditsCents === 0) {
       logger.info({ userId, planTier }, 'No credits allocated for plan tier');
@@ -135,8 +156,9 @@ export class SubscriptionService {
     planTier: string,
     periodStart: Date,
     periodEnd: Date,
+    options: CreditAllocationOptions = {},
   ): Promise<string> {
-    const creditsCents = PLAN_CREDITS[planTier.toLowerCase()] || 0;
+    const creditsCents = resolveCreditsAllocationCents(planTier, options);
 
     if (creditsCents === 0) {
       logger.info({ userId, planTier }, 'No credits to reset for plan tier');
@@ -174,7 +196,7 @@ export class SubscriptionService {
    * Get credit allocation for a plan tier
    */
   static getCreditAllocation(planTier: string): number {
-    return PLAN_CREDITS[planTier.toLowerCase()] || 0;
+    return resolveCreditsAllocationCents(planTier);
   }
 
   /**
@@ -364,6 +386,7 @@ export class SubscriptionService {
       }
 
       const stripePriceId = stripeSubscription.items.data[0]?.price.id;
+      const stripeUnitAmountCents = stripeSubscription.items.data[0]?.price.unit_amount ?? null;
 
       if (!stripePriceId) {
         logger.warn(
@@ -381,6 +404,7 @@ export class SubscriptionService {
           status: stripeSubscription.status,
           planTier,
           stripePriceId,
+          stripeUnitAmountCents,
         },
         'Found valid subscription in Stripe',
       );
@@ -483,6 +507,13 @@ export class SubscriptionService {
         planTier,
         new Date(subData.current_period_start),
         new Date(subData.current_period_end),
+        {
+          stripePriceId: stripePriceId ?? undefined,
+          overrideCreditsCents:
+            typeof stripeUnitAmountCents === 'number'
+              ? getUsageBudgetCentsFromPriceCents(stripeUnitAmountCents)
+              : undefined,
+        },
       );
 
       return {
@@ -493,6 +524,7 @@ export class SubscriptionService {
         current_period_start: new Date(data.current_period_start),
         current_period_end: new Date(data.current_period_end),
         stripe_subscription_id: data.stripe_subscription_id,
+        stripe_price_id: data.stripe_price_id,
       };
     } catch (error) {
       // Differentiate between "not found" scenarios and actual errors

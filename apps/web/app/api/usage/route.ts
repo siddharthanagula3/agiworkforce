@@ -83,9 +83,10 @@ async function handler(request: NextRequest) {
       usage_percentage: Math.round(usagePercentage * 100) / 100,
       period_start: periodStart,
       period_end: periodEnd,
-      daily_used_cents: balance?.daily_used_cents ?? 0,
-      daily_limit_cents: balance?.daily_limit_cents ?? 0,
-      daily_remaining_cents: balance?.daily_remaining_cents ?? 0,
+      daily_used_cents: 0,
+      daily_limit_cents: 0,
+      daily_remaining_cents: 0,
+      has_daily_limit: false,
       subscription_status: subscription?.status ?? 'none',
     });
   } catch (error) {

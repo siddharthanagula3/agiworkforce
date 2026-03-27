@@ -78,7 +78,7 @@ describe('AnthropicProvider', () => {
     it('should create provider with default configuration', () => {
       const config = provider.getConfig();
 
-      expect(config.model).toBe('claude-sonnet-4-5-20250929');
+      expect(config.model).toBe('claude-sonnet-4.6');
       expect(config.maxTokens).toBe(4000);
       expect(config.temperature).toBe(0.7);
       expect(config.systemPrompt).toBe('You are a helpful AI assistant.');
@@ -89,7 +89,7 @@ describe('AnthropicProvider', () => {
 
     it('should create provider with custom configuration', () => {
       const customProvider = new AnthropicProvider({
-        model: 'claude-opus-4-5-20251101',
+        model: 'claude-opus-4.6',
         maxTokens: 8000,
         temperature: 0.5,
         systemPrompt: 'Custom prompt',
@@ -99,7 +99,7 @@ describe('AnthropicProvider', () => {
 
       const config = customProvider.getConfig();
 
-      expect(config.model).toBe('claude-opus-4-5-20251101');
+      expect(config.model).toBe('claude-opus-4.6');
       expect(config.maxTokens).toBe(8000);
       expect(config.temperature).toBe(0.5);
       expect(config.systemPrompt).toBe('Custom prompt');
@@ -109,13 +109,13 @@ describe('AnthropicProvider', () => {
 
     it('should update configuration', () => {
       provider.updateConfig({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-haiku-4.5',
         temperature: 0.9,
       });
 
       const config = provider.getConfig();
 
-      expect(config.model).toBe('claude-haiku-4-5-20251001');
+      expect(config.model).toBe('claude-haiku-4.5');
       expect(config.temperature).toBe(0.9);
       expect(config.maxTokens).toBe(4000); // Unchanged
     });
@@ -139,16 +139,16 @@ describe('AnthropicProvider', () => {
     it('should return available models', () => {
       const models = AnthropicProvider.getAvailableModels();
 
-      expect(models).toContain('claude-opus-4-5-20251101');
-      expect(models).toContain('claude-sonnet-4-5-20250929');
-      expect(models).toContain('claude-haiku-4-5-20251001');
+      expect(models).toContain('claude-opus-4.6');
+      expect(models).toContain('claude-sonnet-4.6');
+      expect(models).toContain('claude-haiku-4.5');
       expect(models.length).toBeGreaterThan(0);
     });
 
     it('should return computer use models', () => {
       const models = AnthropicProvider.getComputerUseModels();
 
-      expect(models).toContain('claude-sonnet-4-5-20250929');
+      expect(models).toContain('claude-sonnet-4-6');
       expect(models).toContain('claude-haiku-4-5-20251001');
       expect(models).toContain('claude-opus-4-5-20251101');
     });
@@ -156,6 +156,8 @@ describe('AnthropicProvider', () => {
     it('should return model aliases', () => {
       const aliases = AnthropicProvider.getModelAliases();
 
+      expect(aliases['claude-opus-4-6']).toBe('claude-opus-4-6');
+      expect(aliases['claude-sonnet-4-6']).toBe('claude-sonnet-4-6');
       expect(aliases['claude-opus-4-5']).toBe('claude-opus-4-5-20251101');
       expect(aliases['claude-sonnet-4-5']).toBe('claude-sonnet-4-5-20250929');
       expect(aliases['claude-haiku-4-5']).toBe('claude-haiku-4-5-20251001');
@@ -187,7 +189,7 @@ describe('AnthropicProvider', () => {
       expect(response.usage?.inputTokens).toBe(10);
       expect(response.usage?.outputTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
-      expect(response.model).toBe('claude-sonnet-4-5-20250929');
+      expect(response.model).toBe('claude-sonnet-4.6');
     });
 
     it('should throw NOT_AUTHENTICATED error when not logged in', async () => {
@@ -230,9 +232,9 @@ describe('AnthropicProvider', () => {
       });
 
       expect(toast.error).toHaveBeenCalledWith(
-        'Insufficient Tokens',
+        'Insufficient Credits',
         expect.objectContaining({
-          description: expect.stringContaining('run out of AI tokens'),
+          description: expect.stringContaining('exhausted your AI credits'),
         }),
       );
     });

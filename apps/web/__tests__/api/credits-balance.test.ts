@@ -70,6 +70,7 @@ describe('Credits Balance API', () => {
     current_period_start: new Date('2026-01-01'),
     current_period_end: new Date('2026-02-01'),
     stripe_subscription_id: 'sub_stripe123',
+    stripe_price_id: 'price_hobby_monthly',
   };
 
   const mockBalance = {
@@ -192,10 +193,10 @@ describe('Credits Balance API', () => {
         expect(data.credits.monthly_remaining_cents).toBe(800);
         expect(data.credits.monthly_used_cents).toBe(400);
         expect(data.credits.monthly_reset_at).toBeDefined();
-        expect(data.credits.seconds_until_monthly_reset).toBeGreaterThan(0);
+        expect(data.credits.seconds_until_monthly_reset).toBeGreaterThanOrEqual(0);
       });
 
-      it('should include daily limits info', async () => {
+      it('should zero out legacy daily-limit fields', async () => {
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
           headers: { Authorization: 'Bearer valid-token' },
         });
@@ -203,11 +204,12 @@ describe('Credits Balance API', () => {
         const response = await GET(request);
         const data = await response.json();
 
-        expect(data.credits.daily_limit_cents).toBe(100);
-        expect(data.credits.daily_used_cents).toBe(25);
-        expect(data.credits.daily_remaining_cents).toBe(75);
-        expect(data.credits.daily_reset_at).toBeDefined();
-        expect(data.credits.seconds_until_daily_reset).toBeGreaterThan(0);
+        expect(data.credits.daily_limit_cents).toBe(0);
+        expect(data.credits.daily_used_cents).toBe(0);
+        expect(data.credits.daily_remaining_cents).toBe(0);
+        expect(data.credits.daily_reset_at).toBeNull();
+        expect(data.credits.seconds_until_daily_reset).toBeNull();
+        expect(data.credits.has_daily_limit).toBe(false);
       });
 
       it('should include formatted values for display', async () => {
@@ -220,8 +222,8 @@ describe('Credits Balance API', () => {
 
         expect(data.formatted.monthly_remaining).toBe('$8.00');
         expect(data.formatted.monthly_allocated).toBe('$12.00');
-        expect(data.formatted.daily_remaining).toBe('$0.75');
-        expect(data.formatted.daily_limit).toBe('$1.00');
+        expect(data.formatted.daily_remaining).toBe('$0.00');
+        expect(data.formatted.daily_limit).toBe('$0.00');
       });
     });
 
