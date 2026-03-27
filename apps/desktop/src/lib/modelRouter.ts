@@ -189,7 +189,7 @@ function buildPreferenceList(modelIds: Array<string | null | undefined>): string
 const DEFAULT_CHAT_FALLBACK_MODEL =
   getTaskModelForProvider('google', 'fast_completion') ??
   getTaskModelForProvider('openai', 'fast_completion') ??
-  'gpt-5.4-nano';
+  'gpt-5.4-mini';
 
 // ============================================
 // MINIMUM BENCHMARK THRESHOLDS

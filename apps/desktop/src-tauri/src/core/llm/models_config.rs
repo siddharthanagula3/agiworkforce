@@ -186,10 +186,10 @@ pub fn get_default_model(provider: &Provider) -> &'static str {
         .filter(|model_id| !model_id.is_empty())
         .unwrap_or_else(|| {
             debug_assert!(
-                CONFIG.models.contains_key("gpt-5.4-nano"),
-                "Fallback model 'gpt-5.4-nano' not found in models.json"
+                CONFIG.models.contains_key("gpt-5.4-mini"),
+                "Fallback model 'gpt-5.4-mini' not found in models.json"
             );
-            "gpt-5.4-nano"
+            "gpt-5.4-mini"
         })
 }
 
