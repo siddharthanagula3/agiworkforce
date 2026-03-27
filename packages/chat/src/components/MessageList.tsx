@@ -1,12 +1,14 @@
 import { useRef, useEffect } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { MessageBubble } from './MessageBubble';
+import type { Artifact } from '../lib/types';
 
 interface MessageListProps {
   conversationId: string;
+  onArtifactClick?: (artifact: Artifact) => void;
 }
 
-export function MessageList({ conversationId }: MessageListProps) {
+export function MessageList({ conversationId, onArtifactClick }: MessageListProps) {
   const messages = useChatStore((s) => s.messagesByConversation[conversationId] ?? []);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -21,7 +23,11 @@ export function MessageList({ conversationId }: MessageListProps) {
           key={msg.id}
           className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}`}
         >
-          <MessageBubble message={msg} isLast={idx === messages.length - 1} />
+          <MessageBubble
+            message={msg}
+            isLast={idx === messages.length - 1}
+            onArtifactClick={onArtifactClick}
+          />
         </div>
       ))}
       <div ref={bottomRef} />

@@ -178,7 +178,29 @@ export class TauriRuntime implements ChatRuntime {
         let event: import('@agiworkforce/chat').StreamEvent | null = null;
         if (chunk.type === 'text') event = { type: 'content', content: chunk.content };
         else if (chunk.type === 'thinking') event = { type: 'thinking', content: chunk.content };
-        else if (chunk.type === 'done') event = { type: 'done' };
+        else if (chunk.type === 'tool_call') {
+          event = {
+            type: 'tool_call',
+            toolCall: {
+              id: chunk.data.id,
+              name: chunk.data.name,
+              args: chunk.data.input ?? {},
+            },
+          };
+        } else if (chunk.type === 'tool_result') {
+          event = {
+            type: 'tool_result',
+            toolCallId: chunk.data.id,
+            result: chunk.data.output,
+            error: chunk.data.error,
+            durationMs: chunk.data.durationMs,
+          };
+        } else if (chunk.type === 'artifact') {
+          event = {
+            type: 'artifact',
+            artifact: chunk.data,
+          };
+        } else if (chunk.type === 'done') event = { type: 'done' };
         else if (chunk.type === 'error') event = { type: 'error', error: chunk.content };
         if (event) {
           for (const cb of this._streamCallbacks) {
