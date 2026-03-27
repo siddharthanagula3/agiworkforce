@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-03-20",
+  "lastUpdated": "2026-03-27",
   "providers": {
     "managed_cloud": {
       "label": "Managed Cloud",
@@ -17,7 +17,7 @@
       "aliases": ["managed_cloud", "managedcloud", "cloud"],
       "defaultModel": "deepseek-chat",
       "taskRouting": {
-        "fast_completion": "gpt-5.4-nano",
+        "fast_completion": "gpt-5.4-mini",
         "code_generation": "deepseek-chat",
         "complex_reasoning": "deepseek-reasoner",
         "chat": "deepseek-chat",
@@ -41,7 +41,7 @@
       "aliases": [],
       "defaultModel": "gpt-5.4",
       "taskRouting": {
-        "fast_completion": "gpt-5.4-nano",
+        "fast_completion": "gpt-5.4-mini",
         "code_generation": "gpt-5.4-codex-medium",
         "complex_reasoning": "gpt-5.4-pro",
         "chat": "gpt-5.4",
@@ -723,10 +723,10 @@
       "bestFor": ["Maximum Performance", "Complex Tasks", "Research"],
       "released": "January 2026"
     },
-    "gpt-5.4": {
-      "id": "gpt-5.4",
-      "apiModelId": "gpt-5.4",
-      "name": "GPT-5.3 Codex",
+    "gpt-5.4-codex": {
+      "id": "gpt-5.4-codex",
+      "apiModelId": "gpt-5.4-codex",
+      "name": "GPT-5.4 Codex",
       "provider": "openai",
       "modelType": "code",
       "contextWindow": 200000,
@@ -2904,7 +2904,8 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Simple Tasks", "Classification", "Summarization", "High Volume"],
-      "released": "March 2026"
+      "released": "March 2026",
+      "status": "deprecated"
     },
     "gpt-5.4-mini": {
       "id": "gpt-5.4-mini",
@@ -2987,16 +2988,14 @@
       "qwen-turbo",
       "qwen-coder-flash",
       "grok-4-mini",
-      "gpt-5.4-nano",
+      "gpt-5.4-mini",
       "sonar",
       "codestral-2"
     ],
     "pro_additions": [
       "gpt-5.4",
-      "gpt-5.4-mini",
       "gpt-5.4-codex-low",
       "gpt-5.4-codex-medium",
-      "gpt-5.4",
       "claude-sonnet-4.6",
       "claude-sonnet-4.5",
       "gemini-3.1-pro-preview",
@@ -3063,10 +3062,6 @@
       {
         "value": "gpt-5.4-mini",
         "label": "GPT-5.4 Mini"
-      },
-      {
-        "value": "gpt-5.4-nano",
-        "label": "GPT-5.4 Nano"
       }
     ],
     "anthropic": [

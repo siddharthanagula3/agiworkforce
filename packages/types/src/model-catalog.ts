@@ -491,7 +491,7 @@ export function resolveAutoModeModel(
       return (
         getTaskModelForProvider('openai', 'fast_completion') ??
         getTaskModelForProvider('managed_cloud', 'fast_completion') ??
-        'gpt-5.4-nano'
+        'gpt-5.4-mini'
       );
   }
 }

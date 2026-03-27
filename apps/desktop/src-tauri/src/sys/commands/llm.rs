@@ -17,7 +17,7 @@ use tokio::sync::RwLock;
 
 use crate::core::llm::OLLAMA_DEFAULT_BASE_URL;
 
-const DEFAULT_MODEL: &str = "gpt-5.4-nano";
+const DEFAULT_MODEL: &str = "gpt-5.4-mini";
 
 /// Managed state holding rate limiters for LLM and MCP tool execution.
 ///
