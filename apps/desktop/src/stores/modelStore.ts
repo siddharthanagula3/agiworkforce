@@ -20,6 +20,7 @@ import {
   getAllowedAutoModesForTier,
   getBestAutoModeForTier as getBestAutoModeForSubscriptionTier,
   getModelMetadata,
+  getModelVariantPartner,
   getProviderDefaultModel,
   getTaskModelForProvider,
   isModelAllowedForTier,
@@ -396,22 +397,6 @@ const defaultUsageStats: UsageStats = {
 };
 
 // storageFallback is imported from '../lib/storageFallback'
-
-// ---------------------------------------------------------------------------
-// Model variant map — maps a model to its thinking/reasoning counterpart
-// ---------------------------------------------------------------------------
-
-const MODEL_VARIANT_MAP: Record<string, string> = {
-  'claude-sonnet-4.6': 'claude-opus-4.6',
-  'claude-opus-4.6': 'claude-sonnet-4.6',
-  'gpt-5.4': 'gpt-5.4-pro',
-  'gpt-5.4-pro': 'gpt-5.4',
-  'gpt-5.4-mini': 'gpt-5.4',
-  'gemini-3.1-flash-lite': 'gemini-3.1-pro-preview',
-  'gemini-3.1-pro-preview': 'gemini-3.1-flash-lite',
-  'deepseek-chat': 'deepseek-reasoner',
-  'deepseek-reasoner': 'deepseek-chat',
-};
 
 // Version for storage migration
 const MODEL_STORE_VERSION = 2;
@@ -996,7 +981,7 @@ export const useModelStore = create<ModelState>()(
             return;
           }
           const canonicalSelectedModel = normalizeModelId(selectedModel) ?? selectedModel;
-          const variantId = MODEL_VARIANT_MAP[canonicalSelectedModel];
+          const variantId = getModelVariantPartner(canonicalSelectedModel);
           if (!variantId) {
             toast.info('No thinking/reasoning variant available for this model');
             return;

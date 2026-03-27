@@ -13,6 +13,7 @@ import type { SubscriptionTier } from './planModels';
 import {
   getAllowedModelsForTier as getCatalogAllowedModelsForTier,
   getModelMetadataById,
+  getModelVariantPartner as getCatalogModelVariantPartner,
   getProviderDefaultModel as getCatalogProviderDefaultModel,
   getTaskModelForProvider as getCatalogTaskModelForProvider,
   isModelAllowedForTier as isCatalogModelAllowedForTier,
@@ -198,6 +199,10 @@ export function getAllowedModelsForTier(tier: SubscriptionTier): string[] {
 
 export function getProviderDefaultModel(provider: Provider): string | null {
   return getCatalogProviderDefaultModel(provider);
+}
+
+export function getModelVariantPartner(modelId: string | null | undefined): string | null {
+  return getCatalogModelVariantPartner(modelId);
 }
 
 export function getTaskModelForProvider(
