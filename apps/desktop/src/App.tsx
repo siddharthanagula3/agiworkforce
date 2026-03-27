@@ -541,30 +541,18 @@ const DesktopShell = () => {
           // Cloud API also failed — continue to hardcoded fallback
         }
 
-        // Build fallback models from models.json catalog (single source of truth)
+        // Build fallback models from the shared catalog helpers (single source of truth)
         try {
           const { useChatModelStore } = await import('@agiworkforce/chat');
-          const catalog = await import('./constants/models.json');
-          const providers = catalog.providers as Record<
-            string,
-            { label?: string; defaultModel?: string }
-          >;
-          const models = catalog.models as Record<
-            string,
-            {
-              id: string;
-              name: string;
-              contextWindow?: number;
-              capabilities?: Record<string, boolean>;
-              speed?: string;
-            }
-          >;
+          const { getModelMetadata, getProviderDefaultModel } = await import('./constants/llm');
           const fallbackProviders = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'ollama'];
           const fallbackModels: import('@agiworkforce/chat').ModelInfo[] =
             fallbackProviders.flatMap((p) => {
-              const prov = providers[p];
-              if (!prov?.defaultModel) return [];
-              const m = models[prov.defaultModel];
+              const defaultModelId = getProviderDefaultModel(
+                p as import('./types/provider').Provider,
+              );
+              if (!defaultModelId) return [];
+              const m = getModelMetadata(defaultModelId);
               if (!m) return [];
               return [
                 {
