@@ -20,6 +20,7 @@ import { useVoiceTranscription } from '@/hooks/useVoiceTranscription';
 import { cn } from '@/lib/utils';
 import { useAccountStore } from '@/stores/unified/accountStore';
 import { useModelStore } from '@/stores/unified/modelStore';
+import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import {
   FocusMode,
   useUnifiedChatStore,
@@ -217,8 +218,11 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     language: 'en',
     onResult: useCallback(
       (transcript: string) => {
+        const cleanedTranscript = cleanupVoiceDictation(transcript);
+        const isCommand = detectVoiceCommand(cleanedTranscript);
+
         setContent((prev) => {
-          const next = prev + (prev ? ' ' : '') + transcript;
+          const next = isCommand ? cleanedTranscript : prev + (prev ? ' ' : '') + cleanedTranscript;
           setDraftContent(next);
           return next;
         });

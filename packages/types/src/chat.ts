@@ -11,7 +11,13 @@
  * @packageDocumentation
  */
 
-import type { MessageRole, MessageKind, MessageStatus, ConversationId } from './conversation';
+import type {
+  MessageRole,
+  MessageKind,
+  MessageStatus,
+  ConversationId,
+  ArtifactBase,
+} from './conversation';
 
 // Note: MessageRole, MessageKind, MessageStatus are already exported from
 // conversation.ts via the barrel. No re-export here to avoid duplicates.
@@ -84,6 +90,9 @@ export interface ChatMessage {
 
   /** File attachments associated with this message. */
   attachments?: ChatAttachment[];
+
+  /** Structured artifacts generated inline with the message. */
+  artifacts?: ArtifactBase[];
 
   /** Arbitrary metadata. */
   metadata?: Record<string, unknown>;

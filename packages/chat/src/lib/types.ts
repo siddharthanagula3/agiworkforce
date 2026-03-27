@@ -12,7 +12,11 @@
  * @module types
  */
 
-import type { Provider } from '@agiworkforce/types';
+import type {
+  Provider,
+  ArtifactBase,
+  ArtifactType as SharedArtifactType,
+} from '@agiworkforce/types';
 
 // Re-export Provider so components inside this package can import it from
 // the local barrel rather than reaching into @agiworkforce/types directly.
@@ -36,6 +40,7 @@ export interface ChatMessage {
   webSearchResults?: WebSearchResult[];
   thinkingBlock?: ThinkingBlock;
   attachments?: Attachment[];
+  artifacts?: Artifact[];
   isStreaming?: boolean;
   error?: string;
 }
@@ -102,24 +107,10 @@ export interface Project {
 // Artifact — inline renderable content (code, HTML, React component, etc.)
 // ---------------------------------------------------------------------------
 
-export type ArtifactType =
-  | 'code'
-  | 'html'
-  | 'react'
-  | 'markdown'
-  | 'svg'
-  | 'mermaid'
-  | 'json'
-  | 'document'
-  | 'research'
-  | 'image';
+export type ArtifactType = SharedArtifactType;
 
-export interface Artifact {
-  id: string;
+export interface Artifact extends Omit<ArtifactBase, 'type'> {
   type: ArtifactType;
-  title: string;
-  content: string;
-  language?: string;
 }
 
 // ---------------------------------------------------------------------------
