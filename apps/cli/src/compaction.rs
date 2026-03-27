@@ -30,7 +30,7 @@ pub const CONTEXT_WARN_THRESHOLD: f64 = 0.85;
 pub const RECENT_WINDOW_TOKENS: usize = 50_000;
 
 /// Default context window when the model is not in the catalog.
-const DEFAULT_CONTEXT_LIMIT: usize = 200_000;
+const DEFAULT_CONTEXT_LIMIT: usize = 128_000;
 
 /// Max tokens allowed for instruction file injection.
 const MAX_INSTRUCTION_TOKENS: usize = 10_000;
@@ -43,24 +43,6 @@ const ROOT_MARKERS: &[&str] = &[
     "package.json",
     "go.mod",
     "pyproject.toml",
-];
-
-/// Context window sizes keyed by model ID prefix (longest prefix wins first).
-const MODEL_LIMITS: &[(&str, usize)] = &[
-    ("claude-opus-4", 200_000),
-    ("claude-sonnet-4", 200_000),
-    ("claude-haiku-4", 200_000),
-    ("claude-3-5", 200_000),
-    ("claude-3", 200_000),
-    ("gpt-4o", 128_000),
-    ("o3", 200_000),
-    ("gemini-3", 1_048_576),
-    ("gemini-1.5-pro", 2_000_000),
-    ("gemini-1.5", 1_000_000),
-    ("mistral", 128_000),
-    ("grok-4", 2_000_000),
-    ("grok", 131_072),
-    ("deepseek", 64_000),
 ];
 
 /// Instruction file names to search for, in order of preference.
@@ -156,12 +138,12 @@ fn block_tokens(block: &ContentBlock) -> usize {
 
 /// Look up the context window limit for a model ID (case-insensitive prefix match).
 pub fn context_limit(model: &str) -> usize {
-    let lower = model.to_lowercase();
-    MODEL_LIMITS
-        .iter()
-        .find(|(prefix, _)| lower.starts_with(prefix))
-        .map(|(_, limit)| *limit)
-        .unwrap_or(DEFAULT_CONTEXT_LIMIT)
+    let limit = crate::model_catalog::context_window(model);
+    if limit == 0 {
+        DEFAULT_CONTEXT_LIMIT
+    } else {
+        limit
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -745,9 +727,9 @@ mod tests {
     fn test_context_limit_known_models() {
         assert_eq!(context_limit("claude-opus-4-6"), 200_000);
         assert_eq!(context_limit("claude-sonnet-4-6"), 200_000);
-        assert_eq!(context_limit("gpt-4o"), 128_000);
-        assert_eq!(context_limit("gemini-1.5-pro"), 2_000_000);
-        assert_eq!(context_limit("deepseek-chat"), 64_000);
+        assert_eq!(context_limit("gpt-5.4"), 1_000_000);
+        assert_eq!(context_limit("gemini-3.1-pro-preview"), 2_000_000);
+        assert_eq!(context_limit("deepseek-chat"), 128_000);
     }
 
     #[test]
@@ -757,7 +739,7 @@ mod tests {
 
     #[test]
     fn test_context_limit_case_insensitive() {
-        assert_eq!(context_limit("GPT-4o"), 128_000);
+        assert_eq!(context_limit("GPT-5.4"), 1_000_000);
         assert_eq!(context_limit("CLAUDE-OPUS-4-6"), 200_000);
     }
 

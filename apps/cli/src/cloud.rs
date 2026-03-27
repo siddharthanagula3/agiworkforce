@@ -92,7 +92,7 @@ impl CloudConfig {
         Self {
             base_url: "https://cloud.agiworkforce.com/api/v1".into(),
             byok: ByokConfig::from_env(),
-            default_model: model_catalog::DEFAULT_MODEL.into(),
+            default_model: model_catalog::default_model().into(),
         }
     }
 }

@@ -14,7 +14,7 @@
 
 #![allow(dead_code, unused_imports)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
@@ -29,9 +29,18 @@ const CACHE_TTL: Duration = Duration::from_secs(300); // 5 minutes
 const FETCH_TIMEOUT: Duration = Duration::from_secs(5); // never block startup
 const MODELS_DEV_URL: &str = "https://models.dev/api.json";
 const CACHE_FILE: &str = "cache/models.json";
+const SHARED_MODELS_JSON: &str = include_str!("../../../packages/types/src/models.json");
+const SUPPORTED_SHARED_PROVIDERS: &[&str] = &[
+    "anthropic",
+    "openai",
+    "google",
+    "mistral",
+    "xai",
+    "deepseek",
+];
 
-pub const DEFAULT_MODEL: &str = "claude-opus-4-6";
-pub const DEFAULT_PROVIDER: &str = "anthropic";
+const FALLBACK_DEFAULT_MODEL: &str = "claude-opus-4-6";
+const FALLBACK_DEFAULT_PROVIDER: &str = "anthropic";
 
 /// Fallback defaults for model metadata when upstream data is missing.
 const DEFAULT_CONTEXT_WINDOW: usize = 128_000;
@@ -62,8 +71,132 @@ pub struct Model {
     pub supports_pdf: bool,
     #[serde(default)]
     pub release_date: String,
+    #[serde(default = "default_model_status")]
+    pub status: String,
     #[serde(default)]
     pub cloud_eligible: bool,
+}
+
+fn default_model_status() -> String {
+    "active".to_string()
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedModelsCatalog {
+    providers: HashMap<String, SharedProviderConfig>,
+    models: HashMap<String, SharedModelMetadata>,
+    #[serde(rename = "tierAllowedModels")]
+    tier_allowed_models: SharedTierAllowedModels,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedProviderConfig {
+    #[serde(rename = "defaultModel")]
+    default_model: Option<String>,
+    #[serde(default, rename = "taskRouting")]
+    task_routing: Option<SharedTaskRouting>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedTaskRouting {
+    #[serde(default)]
+    complex_reasoning: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedTierAllowedModels {
+    economy: Vec<String>,
+    pro_additions: Vec<String>,
+    flagship_additions: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedModelMetadata {
+    id: String,
+    #[serde(default, rename = "apiModelId")]
+    api_model_id: Option<String>,
+    name: String,
+    provider: String,
+    #[serde(rename = "modelType")]
+    model_type: String,
+    #[serde(rename = "contextWindow")]
+    context_window: usize,
+    #[serde(default, rename = "maxOutputTokens")]
+    max_output_tokens: Option<usize>,
+    #[serde(rename = "inputCost")]
+    input_cost: f64,
+    #[serde(rename = "outputCost")]
+    output_cost: f64,
+    capabilities: SharedModelCapabilities,
+    #[serde(default)]
+    released: Option<String>,
+    #[serde(default)]
+    deprecated: Option<bool>,
+    #[serde(default)]
+    status: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedModelCapabilities {
+    tools: bool,
+    vision: bool,
+    thinking: bool,
+}
+
+static SHARED_CATALOG: OnceLock<Option<SharedModelsCatalog>> = OnceLock::new();
+static DEFAULT_MODEL_ID: OnceLock<String> = OnceLock::new();
+static DEFAULT_PROVIDER_ID: OnceLock<String> = OnceLock::new();
+
+fn shared_catalog() -> Option<&'static SharedModelsCatalog> {
+    SHARED_CATALOG
+        .get_or_init(|| serde_json::from_str(SHARED_MODELS_JSON).ok())
+        .as_ref()
+}
+
+fn api_model_id_for(catalog: &SharedModelsCatalog, canonical_id: &str) -> Option<String> {
+    catalog.models.get(canonical_id).map(|model| {
+        model
+            .api_model_id
+            .clone()
+            .unwrap_or_else(|| model.id.clone())
+    })
+}
+
+pub fn default_model() -> &'static str {
+    DEFAULT_MODEL_ID
+        .get_or_init(|| {
+            let Some(catalog) = shared_catalog() else {
+                return FALLBACK_DEFAULT_MODEL.to_string();
+            };
+            catalog
+                .providers
+                .get("anthropic")
+                .and_then(|provider| {
+                    provider
+                        .task_routing
+                        .as_ref()
+                        .and_then(|routing| routing.complex_reasoning.as_deref())
+                        .and_then(|canonical_id| api_model_id_for(catalog, canonical_id))
+                        .or_else(|| {
+                            provider
+                                .default_model
+                                .as_deref()
+                                .and_then(|canonical_id| api_model_id_for(catalog, canonical_id))
+                        })
+                })
+                .unwrap_or_else(|| FALLBACK_DEFAULT_MODEL.to_string())
+        })
+        .as_str()
+}
+
+pub fn default_provider() -> &'static str {
+    DEFAULT_PROVIDER_ID
+        .get_or_init(|| {
+            provider_for(default_model())
+                .unwrap_or(FALLBACK_DEFAULT_PROVIDER)
+                .to_string()
+        })
+        .as_str()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,6 +205,70 @@ pub struct Model {
 // Edit this list when models change. This is the offline fallback.
 
 fn bundled_models() -> Vec<Model> {
+    if let Some(shared_models) = shared_bundled_models() {
+        return shared_models;
+    }
+    legacy_bundled_models()
+}
+
+fn shared_bundled_models() -> Option<Vec<Model>> {
+    let catalog = shared_catalog()?;
+    let cloud_eligible_ids = HashSet::<String>::from_iter(
+        catalog
+            .tier_allowed_models
+            .economy
+            .iter()
+            .chain(catalog.tier_allowed_models.pro_additions.iter())
+            .chain(catalog.tier_allowed_models.flagship_additions.iter())
+            .cloned(),
+    );
+
+    let mut models: Vec<Model> = catalog
+        .models
+        .values()
+        .filter(|model| SUPPORTED_SHARED_PROVIDERS.contains(&model.provider.as_str()))
+        .filter(|model| supports_cli_model_type(&model.model_type))
+        .filter(|model| !model.deprecated.unwrap_or(false))
+        .map(|model| {
+            let api_id = model
+                .api_model_id
+                .clone()
+                .unwrap_or_else(|| model.id.clone());
+            Model {
+                id: api_id.clone(),
+                provider: model.provider.clone(),
+                display_name: model.name.clone(),
+                context_window: model.context_window,
+                max_output_tokens: model.max_output_tokens.unwrap_or(DEFAULT_MAX_OUTPUT),
+                input_price_per_1m: model.input_cost,
+                output_price_per_1m: model.output_cost,
+                supports_tools: model.capabilities.tools,
+                supports_vision: model.capabilities.vision,
+                supports_reasoning: model.capabilities.thinking,
+                supports_audio_input: false,
+                supports_audio_output: false,
+                supports_pdf: false,
+                release_date: normalize_release_date(model.released.as_deref()),
+                status: model.status.clone().unwrap_or_else(|| "active".to_string()),
+                cloud_eligible: cloud_eligible_ids.contains(&model.id)
+                    || cloud_eligible_ids.contains(&api_id),
+            }
+        })
+        .collect();
+
+    models.extend(local_ollama_models());
+    models.sort_by(|left, right| {
+        left.provider
+            .cmp(&right.provider)
+            .then(left.display_name.cmp(&right.display_name))
+    });
+
+    let mut seen = HashSet::new();
+    models.retain(|model| seen.insert(model.id.clone()));
+    Some(models)
+}
+
+fn legacy_bundled_models() -> Vec<Model> {
     vec![
         // ── Anthropic ── docs.anthropic.com/en/docs/about-claude/models
         m(
@@ -335,6 +532,73 @@ fn bundled_models() -> Vec<Model> {
     ]
 }
 
+fn local_ollama_models() -> Vec<Model> {
+    vec![
+        m(
+            "llama3.1",
+            "ollama",
+            "Llama 3.1",
+            128_000,
+            8_192,
+            0.0,
+            0.0,
+            false,
+            false,
+            false,
+            "2024-07",
+            false,
+        ),
+        m(
+            "qwen2.5", "ollama", "Qwen 2.5", 32_000, 4_096, 0.0, 0.0, false, false, false,
+            "2024-09", false,
+        ),
+    ]
+}
+
+fn supports_cli_model_type(model_type: &str) -> bool {
+    matches!(
+        model_type,
+        "chat" | "code" | "reasoning" | "multimodal" | "search"
+    )
+}
+
+fn normalize_release_date(released: Option<&str>) -> String {
+    let Some(released) = released.map(str::trim).filter(|value| !value.is_empty()) else {
+        return String::new();
+    };
+    if released.len() >= 7
+        && released.chars().take(4).all(|c| c.is_ascii_digit())
+        && released.as_bytes().get(4) == Some(&b'-')
+    {
+        return released[..7].to_string();
+    }
+    let mut parts = released.split_whitespace();
+    let month = parts.next().unwrap_or_default();
+    let year = parts.next().unwrap_or_default();
+    let month_number = match month.to_ascii_lowercase().as_str() {
+        "january" => Some("01"),
+        "february" => Some("02"),
+        "march" => Some("03"),
+        "april" => Some("04"),
+        "may" => Some("05"),
+        "june" => Some("06"),
+        "july" => Some("07"),
+        "august" => Some("08"),
+        "september" => Some("09"),
+        "october" => Some("10"),
+        "november" => Some("11"),
+        "december" => Some("12"),
+        _ => None,
+    };
+    match (
+        month_number,
+        year.len() == 4 && year.chars().all(|c| c.is_ascii_digit()),
+    ) {
+        (Some(month), true) => format!("{year}-{month}"),
+        _ => released.to_string(),
+    }
+}
+
 /// Shorthand constructor to keep the bundled table compact.
 #[allow(clippy::too_many_arguments)]
 fn m(
@@ -366,6 +630,7 @@ fn m(
         supports_audio_output: false,
         supports_pdf: false,
         release_date: date.into(),
+        status: "active".into(),
         cloud_eligible: cloud,
     }
 }
@@ -537,10 +802,26 @@ async fn fetch_remote() -> Option<Vec<Model>> {
 
         for (model_id, model_val) in models_obj {
             if let Ok(md) = serde_json::from_value::<ModelsDevModel>(model_val.clone()) {
-                let ctx = md.limit.as_ref().and_then(|l| l.context).unwrap_or(DEFAULT_CONTEXT_WINDOW);
-                let out = md.limit.as_ref().and_then(|l| l.output).unwrap_or(DEFAULT_MAX_OUTPUT);
-                let price_in = md.cost.as_ref().and_then(|c| c.input).unwrap_or(DEFAULT_PRICE);
-                let price_out = md.cost.as_ref().and_then(|c| c.output).unwrap_or(DEFAULT_PRICE);
+                let ctx = md
+                    .limit
+                    .as_ref()
+                    .and_then(|l| l.context)
+                    .unwrap_or(DEFAULT_CONTEXT_WINDOW);
+                let out = md
+                    .limit
+                    .as_ref()
+                    .and_then(|l| l.output)
+                    .unwrap_or(DEFAULT_MAX_OUTPUT);
+                let price_in = md
+                    .cost
+                    .as_ref()
+                    .and_then(|c| c.input)
+                    .unwrap_or(DEFAULT_PRICE);
+                let price_out = md
+                    .cost
+                    .as_ref()
+                    .and_then(|c| c.output)
+                    .unwrap_or(DEFAULT_PRICE);
 
                 models.push(Model {
                     id: model_id.clone(),
@@ -557,6 +838,7 @@ async fn fetch_remote() -> Option<Vec<Model>> {
                     supports_audio_output: false,
                     supports_pdf: false,
                     release_date: md.release_date.unwrap_or_default(),
+                    status: "active".into(),
                     cloud_eligible: false, // only bundled models are cloud-eligible
                 });
             }
@@ -615,6 +897,7 @@ impl UserModelOverride {
             supports_audio_output: false,
             supports_pdf: false,
             release_date: String::new(),
+            status: "active".into(),
             cloud_eligible: false,
         }
     }
@@ -848,7 +1131,7 @@ pub fn pricing(model_id: &str) -> (f64, f64) {
 }
 
 /// Convenience: provider for a model.
-pub fn provider_for(model_id: &str) -> Option<&str> {
+pub fn provider_for(model_id: &str) -> Option<&'static str> {
     catalog().provider_for(model_id)
 }
 
@@ -884,7 +1167,7 @@ mod tests {
     #[test]
     fn default_model_exists() {
         let cat = Catalog::bundled();
-        assert!(cat.find(DEFAULT_MODEL).is_some());
+        assert!(cat.find(default_model()).is_some());
     }
 
     #[test]
@@ -915,9 +1198,9 @@ mod tests {
     fn context_window_lookup() {
         let cat = Catalog::bundled();
         assert_eq!(cat.context_window("claude-opus-4-6"), 200_000);
-        assert_eq!(cat.context_window("gpt-5.4"), 1_050_000);
-        assert_eq!(cat.context_window("gemini-3.1-pro-preview"), 1_048_576);
-        assert_eq!(cat.context_window("grok-4.1"), 2_000_000);
+        assert_eq!(cat.context_window("gpt-5.4"), 1_000_000);
+        assert_eq!(cat.context_window("gemini-3.1-pro-preview"), 2_000_000);
+        assert_eq!(cat.context_window("grok-4-0709"), 256_000);
     }
 
     #[test]
