@@ -501,6 +501,7 @@ mod tests {
             get_canonicalized_id("claude-sonnet-4-5"),
             "claude-sonnet-4.5"
         );
+        assert_eq!(get_canonicalized_id("gpt-5.4-nano"), "gpt-5.4-mini");
     }
 
     #[test]
