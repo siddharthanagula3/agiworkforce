@@ -3,6 +3,7 @@ import {
   getModelIdsForProvider as getCatalogModelIdsForProvider,
   getModelsForProvider as getCatalogModelsForProvider,
   getProviderDefaultModel,
+  getTaskModelForProvider,
   normalizeModelId,
   type ModelType,
   type Provider,
@@ -43,10 +44,14 @@ export const SUPPORTED_ANTHROPIC_MODELS = getProviderModelIds('anthropic', CHAT_
 export type AnthropicModel = string;
 export const DEFAULT_ANTHROPIC_MODEL: AnthropicModel =
   getProviderDefaultModel('anthropic') ?? 'claude-sonnet-4.6';
+export const DEFAULT_ANTHROPIC_COLLABORATION_MODEL: AnthropicModel =
+  getTaskModelForProvider('anthropic', 'chat') ?? DEFAULT_ANTHROPIC_MODEL;
 
 export const SUPPORTED_OPENAI_MODELS = getProviderModelIds('openai', CHAT_MODEL_TYPES);
 export type OpenAIModel = string;
 export const DEFAULT_OPENAI_MODEL: OpenAIModel = getProviderDefaultModel('openai') ?? 'gpt-5.4';
+export const DEFAULT_OPENAI_FAST_MODEL: OpenAIModel =
+  getTaskModelForProvider('openai', 'fast_completion') ?? DEFAULT_OPENAI_MODEL;
 export const SUPPORTED_OPENAI_IMAGE_MODELS = getProviderModelIds('openai', IMAGE_MODEL_TYPES);
 export const SUPPORTED_OPENAI_VIDEO_MODELS = getProviderModelIds('openai', VIDEO_MODEL_TYPES);
 export const SUPPORTED_OPENAI_AUDIO_MODELS = getProviderModelIds('openai', AUDIO_MODEL_TYPES);
@@ -55,6 +60,8 @@ export const SUPPORTED_GOOGLE_MODELS = getProviderModelIds('google', CHAT_MODEL_
 export type GoogleModel = string;
 export const DEFAULT_GOOGLE_MODEL: GoogleModel =
   getProviderDefaultModel('google') ?? 'gemini-3.1-pro-preview';
+export const DEFAULT_GOOGLE_FAST_MODEL: GoogleModel =
+  getTaskModelForProvider('google', 'chat') ?? DEFAULT_GOOGLE_MODEL;
 export const SUPPORTED_GOOGLE_IMAGE_MODELS = getProviderModelIds('google', IMAGE_MODEL_TYPES);
 export const SUPPORTED_GOOGLE_VIDEO_MODELS = getProviderModelIds('google', VIDEO_MODEL_TYPES);
 export const SUPPORTED_GOOGLE_AUDIO_MODELS = getProviderModelIds('google', AUDIO_MODEL_TYPES);

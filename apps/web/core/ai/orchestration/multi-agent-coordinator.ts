@@ -14,6 +14,10 @@ import { listPurchasedEmployees } from '@features/workforce/services/employee-da
 import { tokenLogger } from '@core/integrations/token-usage-tracker';
 import { logger } from '@shared/lib/logger';
 import type { AgentAssignment, UpsellRequest, HubMessage } from '@shared/stores/company-hub-store';
+import {
+  DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
+  DEFAULT_OPENAI_FAST_MODEL,
+} from '@shared/config/supported-models';
 
 export interface CompanyHubExecutionOptions {
   userId: string;
@@ -461,7 +465,9 @@ class CompanyHubOrchestrator {
 
         // Simulate token usage
         onTokenUpdate(
-          emp.provider === 'claude' ? 'claude-3-5-sonnet-20241022' : 'gpt-5.4-mini',
+          emp.provider === 'claude'
+            ? DEFAULT_ANTHROPIC_COLLABORATION_MODEL
+            : DEFAULT_OPENAI_FAST_MODEL,
           150,
           0.002,
           emp.provider,

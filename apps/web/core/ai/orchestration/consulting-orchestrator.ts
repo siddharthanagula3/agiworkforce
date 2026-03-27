@@ -19,6 +19,7 @@
 
 import { unifiedLLMService } from '@core/ai/llm/unified-language-model';
 import { employeeMemoryService } from '@core/ai/employees/employee-memory-service';
+import { DEFAULT_ANTHROPIC_COLLABORATION_MODEL } from '@shared/config/supported-models';
 import { useMissionStore } from '@shared/stores/mission-control-store';
 import { tokenLogger } from '@core/integrations/token-usage-tracker';
 import { logger } from '@shared/lib/logger';
@@ -222,7 +223,7 @@ and recovery in your recommendations.`,
       'sports_specific',
     ],
     tools: ['exercise_database', 'fitness_calculator', 'progress_tracker'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are Alex Fit, a professional fitness trainer. When consulting:
 1. Always assess current fitness level and any limitations first
 2. Ask about goals, available equipment, and time commitment
@@ -253,7 +254,7 @@ food practices.`,
       'medical_nutrition',
     ],
     tools: ['nutrition_database', 'calorie_calculator', 'meal_planner'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are Dr. Sarah, a registered dietitian. When consulting:
 1. Assess dietary history, allergies, and medical conditions first
 2. Calculate caloric needs based on goals and activity level
@@ -284,7 +285,7 @@ techniques. You believe that healthy eating should be enjoyable, not a punishmen
       'time_saving_cooking',
     ],
     tools: ['recipe_database', 'cooking_timer', 'substitution_guide'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are Chef Marco, a professional chef. When consulting:
 1. Take the diet plan and create delicious recipes that match the requirements
 2. Consider cooking skill level and available equipment
@@ -317,7 +318,7 @@ while providing practical tools for mental wellness.`,
       'emotional_regulation',
     ],
     tools: ['mood_tracker', 'mindfulness_exercises', 'journal_prompts'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are Dr. Emily, a mental health counselor. When consulting:
 1. Create a safe, empathetic space for discussion
 2. Use active listening and validation techniques
@@ -349,7 +350,7 @@ Your approach balances growth with risk management based on individual circumsta
       'estate_planning',
     ],
     tools: ['budget_calculator', 'investment_analyzer', 'retirement_projector'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are James, a financial advisor. When consulting:
 1. Assess current financial situation, income, expenses, debts, and assets
 2. Understand short-term and long-term financial goals
@@ -385,7 +386,7 @@ that clients often miss.`,
       'retirement_tax_strategies',
     ],
     tools: ['tax_calculator', 'deduction_finder', 'tax_calendar'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are Patricia, a tax specialist. When consulting:
 1. Understand income sources, filing status, and deduction eligibility
 2. Identify commonly missed deductions and credits
@@ -416,7 +417,7 @@ need to hire a lawyer.`,
       'landlord_tenant',
     ],
     tools: ['legal_document_templates', 'law_database', 'deadline_calculator'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are Attorney Michael, a legal consultant. When consulting:
 1. Listen to the situation and identify the legal issues involved
 2. Explain relevant laws and rights in plain language
@@ -448,7 +449,7 @@ Your approach combines practical job search strategies with deeper career purpos
       'leadership_development',
     ],
     tools: ['resume_builder', 'interview_simulator', 'salary_database'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are Diana, a career coach. When consulting:
 1. Understand career history, goals, and values
 2. Identify transferable skills and strengths
@@ -485,7 +486,7 @@ concepts to non-technical stakeholders.`,
       'digital_transformation',
     ],
     tools: ['architecture_diagrams', 'tech_stack_analyzer', 'security_scanner'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are Alex, a technology consultant. When consulting:
 1. Understand business needs and technical requirements
 2. Recommend appropriate technologies and architectures
@@ -518,7 +519,7 @@ and enterprises transform. You bring a data-driven approach to business decision
       'competitive_analysis',
     ],
     tools: ['market_research', 'financial_modeling', 'competitive_intelligence'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are Victoria, a business strategist. When consulting:
 1. Understand the business model, market, and competitive landscape
 2. Analyze strengths, weaknesses, opportunities, and threats
@@ -547,7 +548,7 @@ right approach.`,
       'academic_planning',
     ],
     tools: ['learning_assessment', 'study_planner', 'resource_library'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are Professor Maria, an education consultant. When consulting:
 1. Understand learning goals, style, and challenges
 2. Assess current knowledge and skill gaps
@@ -569,7 +570,7 @@ is to understand the client's needs, assign tasks to the right experts, synthesi
 their advice into a coherent plan, and ensure the client gets comprehensive guidance.`,
     expertise: ['coordination', 'synthesis', 'quality_control', 'client_needs_analysis'],
     tools: ['agent_coordinator', 'quality_checker', 'synthesis_engine'],
-    model: 'claude-3-5-sonnet-20241022',
+    model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     systemPrompt: `You are the Supervisor coordinating a team of expert consultants.
 Your responsibilities:
 1. Analyze the client's query to identify all relevant domains

@@ -1,5 +1,6 @@
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
+import { DEFAULT_ANTHROPIC_COLLABORATION_MODEL } from '@shared/config/supported-models';
 
 // Use type assertion to access tables not in generated schema
 const db = supabase as unknown as {
@@ -320,7 +321,7 @@ class ToolInvocationService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: model || 'claude-3-5-sonnet-20241022',
+        model: model || DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
         max_tokens: maxTokens || 1000,
         ...parameters,
       }),
