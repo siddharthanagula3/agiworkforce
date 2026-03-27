@@ -60,6 +60,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../ui/AlertDialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/Tooltip';
 import { useSimpleModeStore, selectIsSimpleMode } from '@/stores/unified/ui';
 import { SimpleModeToggle } from '../SimpleMode';
 
@@ -689,35 +690,120 @@ export function Sidebar({
   );
 
   if (collapsed) {
+    const collapsedActions = [
+      {
+        key: 'new-chat',
+        label: 'New chat',
+        icon: Plus,
+        onClick: () => void handleNewChat(),
+        isActive: false,
+      },
+      {
+        key: 'search',
+        label: 'Search chats',
+        icon: Search,
+        onClick: () => setShowSearch(true),
+        isActive: showSearch,
+      },
+      ...(!isSimpleMode
+        ? [
+            {
+              key: 'projects',
+              label: 'Projects',
+              icon: Layers,
+              onClick: () => setActiveView('projects'),
+              isActive: activeView === 'projects',
+            },
+          ]
+        : []),
+      ...(onToggleArtifactPanel
+        ? [
+            {
+              key: 'artifacts',
+              label: 'Artifacts',
+              icon: Layers,
+              onClick: onToggleArtifactPanel,
+              isActive: false,
+            },
+          ]
+        : []),
+      ...(onOpenMemory
+        ? [
+            {
+              key: 'memory',
+              label: 'Memory',
+              icon: Brain,
+              onClick: onOpenMemory,
+              isActive: false,
+            },
+          ]
+        : []),
+      ...(onToggleMediaLab
+        ? [
+            {
+              key: 'media-lab',
+              label: canAccessMediaLab ? 'Media Lab' : 'Media Lab · Pro+',
+              icon: Wand2,
+              onClick: onToggleMediaLab,
+              isActive: false,
+            },
+          ]
+        : []),
+    ];
+
     return (
-      <div className="w-16 flex flex-col bg-white dark:bg-surface-elevated border-r border-gray-200 dark:border-border transition-all duration-300 ease-in-out">
-        <div className="p-3 flex flex-col items-center gap-4">
-          <Button
-            onClick={onToggleCollapse}
-            variant="ghost"
-            size="icon"
-            className="text-gray-600 dark:text-gray-400"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            onClick={handleNewChat}
-            variant="ghost"
-            size="icon"
-            className="text-gray-600 dark:text-gray-400"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-          <Button
-            onClick={() => setShowSearch(!showSearch)}
-            variant="ghost"
-            size="icon"
-            className="text-gray-600 dark:text-gray-400"
-          >
-            <Search className="h-4 w-4" />
-          </Button>
+      <TooltipProvider delayDuration={120}>
+        <div className="w-16 flex h-full flex-col bg-white dark:bg-surface-elevated border-r border-gray-200 dark:border-border transition-all duration-300 ease-in-out">
+          <div className="flex flex-1 flex-col items-center gap-2 p-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={onToggleCollapse}
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 rounded-xl text-gray-600 dark:text-gray-400"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Expand sidebar</TooltipContent>
+            </Tooltip>
+
+            <div className="mt-1 flex flex-col items-center gap-2">
+              {collapsedActions.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <Tooltip key={action.key}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={action.onClick}
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          'h-10 w-10 rounded-xl text-gray-600 dark:text-gray-400',
+                          action.isActive &&
+                            'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{action.label}</TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 dark:border-gray-800 p-2">
+            <UserProfile
+              onSettingsClick={onOpenSettings}
+              onFeedbackClick={onOpenFeedback}
+              collapsed={true}
+            />
+          </div>
         </div>
-      </div>
+      </TooltipProvider>
     );
   }
 

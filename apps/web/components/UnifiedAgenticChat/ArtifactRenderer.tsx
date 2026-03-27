@@ -762,8 +762,8 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
         <p className="text-sm font-medium text-rose-400 mb-2">Failed to render diagram</p>
         <pre className="text-xs text-rose-300 whitespace-pre-wrap">{error}</pre>
         <div className="mt-4 pt-4 border-t border-rose-500/20">
-          <p className="text-xs text-zinc-400 mb-1">Source:</p>
-          <pre className="text-xs text-zinc-300 font-mono bg-black/20 p-2 rounded">
+          <p className="mb-1 text-xs text-muted-foreground">Source:</p>
+          <pre className="rounded bg-background/40 p-2 font-mono text-xs text-foreground/80">
             {artifact.content}
           </pre>
         </div>
@@ -782,7 +782,7 @@ function MermaidArtifact({ artifact }: { artifact: Artifact }) {
           className="w-full h-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
         />
       ) : (
-        <div className="text-zinc-500 text-sm animate-pulse">Rendering diagram...</div>
+        <div className="animate-pulse text-sm text-muted-foreground">Rendering diagram...</div>
       )}
     </div>
   );
@@ -1099,7 +1099,7 @@ ${content}
       case 'info':
         return 'text-blue-400';
       default:
-        return 'text-zinc-300';
+        return 'text-foreground/80';
     }
   };
 
@@ -1118,11 +1118,11 @@ ${content}
     <div
       className={cn(
         'flex flex-col',
-        isExpanded && 'fixed inset-4 z-50 bg-zinc-900 rounded-lg shadow-2xl',
+        isExpanded && 'fixed inset-4 z-50 rounded-lg bg-background shadow-2xl',
       )}
     >
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-700/50 bg-zinc-800/50">
+      <div className="flex items-center gap-2 border-b border-border/50 bg-muted/50 px-3 py-2">
         <div className="flex items-center gap-1">
           {isRunning ? (
             <Tooltip>
@@ -1178,8 +1178,8 @@ ${content}
           className={cn(
             'px-2 py-1 text-xs rounded transition-colors',
             showCode
-              ? 'bg-zinc-700 text-zinc-200'
-              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50',
+              ? 'bg-accent/60 text-foreground'
+              : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
           )}
         >
           {showCode ? 'Preview' : 'Code'}
@@ -1233,7 +1233,7 @@ ${content}
           /* Preview view */
           <div className="flex flex-col flex-1 min-h-0">
             {/* Iframe container */}
-            <div className="flex-1 min-h-0 relative bg-zinc-900">
+            <div className="relative flex-1 min-h-0 bg-background">
               {error && (
                 <div className="absolute inset-0 flex items-center justify-center bg-red-900/20 p-4">
                   <div className="text-center">
@@ -1266,13 +1266,13 @@ ${content}
                 />
               )}
               {!isRunning && (
-                <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
+                <div className="absolute inset-0 flex items-center justify-center bg-background">
                   <div className="text-center">
-                    <Square className="h-8 w-8 text-zinc-500 mx-auto mb-2" />
-                    <p className="text-sm text-zinc-400">Execution stopped</p>
+                    <Square className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">Execution stopped</p>
                     <button
                       onClick={handleRun}
-                      className="mt-2 px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-200 transition-colors"
+                      className="mt-2 rounded bg-accent px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-accent/80"
                     >
                       Run again
                     </button>
@@ -1282,13 +1282,13 @@ ${content}
             </div>
 
             {/* Console output */}
-            <div className="border-t border-zinc-700/50">
-              <div className="px-3 py-1.5 text-xs font-medium text-zinc-400 bg-zinc-800/50 border-b border-zinc-700/50 flex items-center justify-between">
+            <div className="border-t border-border/50">
+              <div className="flex items-center justify-between border-b border-border/50 bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground">
                 <span>Console</span>
                 {consoleOutput.length > 0 && (
                   <button
                     onClick={() => setConsoleOutput([])}
-                    className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                    className="text-muted-foreground transition-colors hover:text-foreground"
                   >
                     Clear
                   </button>
@@ -1296,16 +1296,16 @@ ${content}
               </div>
               <div
                 ref={consoleRef}
-                className="h-[100px] overflow-auto bg-zinc-950 font-mono text-xs"
+                className="h-[100px] overflow-auto bg-background/80 font-mono text-xs"
               >
                 {consoleOutput.length === 0 ? (
-                  <div className="p-3 text-zinc-500">No console output</div>
+                  <div className="p-3 text-muted-foreground">No console output</div>
                 ) : (
                   consoleOutput.map((entry, i) => (
                     <div
                       key={`${entry.timestamp}-${i}`}
                       className={cn(
-                        'px-3 py-1 border-b border-zinc-800/50 flex items-start gap-2',
+                        'flex items-start gap-2 border-b border-border/30 px-3 py-1',
                         getConsoleTypeColor(entry.type),
                       )}
                     >
@@ -1327,7 +1327,7 @@ ${content}
 function DocumentArtifact({ artifact }: { artifact: Artifact }) {
   return (
     <div className="p-4 bg-white/5 rounded-lg overflow-auto max-h-[500px]">
-      <pre className="text-sm font-mono text-zinc-300 whitespace-pre-wrap font-sans">
+      <pre className="text-sm font-mono text-foreground/80 whitespace-pre-wrap font-sans">
         {artifact.content}
       </pre>
     </div>

@@ -818,14 +818,6 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         }}
       >
         {/* Focus modes - hidden in simple mode */}
-        {showFocusModeButtons && (
-          <FocusModeButtons
-            focusMode={focusMode}
-            onFocusModeChange={setFocusMode}
-            prefersReducedMotion={prefersReducedMotion}
-          />
-        )}
-
         <div
           className={cn(
             'relative overflow-visible rounded-2xl',
@@ -930,6 +922,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             )}
           </div>
 
+          {showFocusModeButtons && (
+            <div className="border-t border-gray-100/80 px-3 pb-2 pt-2 dark:border-gray-700/50">
+              <FocusModeButtons
+                focusMode={focusMode}
+                onFocusModeChange={setFocusMode}
+                prefersReducedMotion={prefersReducedMotion}
+                compact
+                align="start"
+              />
+            </div>
+          )}
+
           {/* Toolbar row - below textarea */}
           <div className="flex items-center justify-between px-3 pb-2 pt-1">
             {/* Left toolbar + browser activity badge */}
@@ -961,16 +965,18 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
             {/* Right side controls */}
             <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  'text-xs font-medium',
-                  content.length > maxLength * 0.9
-                    ? 'text-orange-500 dark:text-orange-400'
-                    : 'text-gray-400 dark:text-gray-500',
-                )}
-              >
-                {content.length} / {maxLength}
-              </div>
+              {!isEmptyState && (
+                <div
+                  className={cn(
+                    'text-xs font-medium',
+                    content.length > maxLength * 0.9
+                      ? 'text-orange-500 dark:text-orange-400'
+                      : 'text-gray-400 dark:text-gray-500',
+                  )}
+                >
+                  {content.length} / {maxLength}
+                </div>
+              )}
 
               <ModelSelectorButton
                 modelDisplayName={modelDisplayName}
@@ -1008,6 +1014,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           {/* Footer */}
           <InputFooter
             isSimpleMode={isSimpleMode}
+            isEmptyState={isEmptyState}
             hasInlineSuggestion={!!inlineSuggestion}
             showCreditUsage={showCreditUsage}
             creditPercentage={creditPercentage}
