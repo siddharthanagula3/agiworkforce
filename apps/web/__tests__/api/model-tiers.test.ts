@@ -191,12 +191,12 @@ describe('canAccessModel — unknown models', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('canAccessModel — case insensitivity', () => {
   it('handles uppercase model names correctly', () => {
-    expect(canAccessModel('GPT-5.4-NANO', 'hobby')).toBe(true);
+    expect(canAccessModel('GPT-5.4-MINI', 'hobby')).toBe(true);
     expect(canAccessModel('CLAUDE-SONNET-4.6', 'pro')).toBe(true);
   });
 
   it('handles uppercase tier names correctly', () => {
-    expect(canAccessModel('gpt-5.4-nano', 'HOBBY')).toBe(true);
+    expect(canAccessModel('gpt-5.4-mini', 'HOBBY')).toBe(true);
     expect(canAccessModel('claude-sonnet-4.6', 'PRO')).toBe(true);
     expect(canAccessModel('claude-opus-4.6', 'MAX')).toBe(true);
   });
