@@ -57,28 +57,28 @@ const PRESETS: Preset[] = [
     name: 'Fast vs Smart',
     description: 'Speed against depth',
     icon: <Zap className="h-4 w-4" />,
-    modelIds: ['gpt-5.4-mini', 'claude-opus-4-6', 'gemini-2.0-flash'],
+    modelIds: ['gpt-5.4-mini', 'claude-sonnet-4.6', 'gemini-3.1-flash-lite'],
   },
   {
     id: 'open-vs-closed',
     name: 'Open vs Closed',
     description: 'Open-weight vs proprietary',
     icon: <GitCompareArrows className="h-4 w-4" />,
-    modelIds: ['deepseek-chat', 'gpt-5.4', 'mistral-large-latest'],
+    modelIds: ['deepseek-chat', 'gpt-5.4', 'gemini-3.1-pro-preview'],
   },
   {
     id: 'budget-vs-premium',
     name: 'Budget vs Premium',
     description: 'Cost-efficient vs top-tier',
     icon: <DollarSign className="h-4 w-4" />,
-    modelIds: ['gpt-5.4-mini', 'claude-opus-4-6', 'gemini-2.0-flash-lite'],
+    modelIds: ['gpt-5.4-mini', 'claude-opus-4.6', 'gemini-3.1-pro-preview'],
   },
   {
     id: 'reasoning',
     name: 'Reasoning Models',
     description: 'Chain-of-thought specialists',
     icon: <Brain className="h-4 w-4" />,
-    modelIds: ['o3-mini', 'deepseek-reasoner', 'claude-sonnet-4-6'],
+    modelIds: ['gpt-5.4-pro', 'deepseek-reasoner', 'claude-opus-4.6'],
   },
 ];
 
