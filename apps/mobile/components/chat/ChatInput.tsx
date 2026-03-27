@@ -18,6 +18,7 @@ import { getDisplayName } from '@/lib/models';
 import { colors } from '@/lib/theme';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import type { VoiceMeteringEvent } from '@/services/voice';
+import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 
 interface ChatInputProps {
   onSend: (text: string, attachments?: Attachment[]) => void;
@@ -59,6 +60,23 @@ export function ChatInput({
 
   const modelName = getDisplayName(selectedModel);
 
+  const applyTranscript = useCallback((transcript: string) => {
+    const cleanedTranscript = cleanupVoiceDictation(transcript);
+    if (!cleanedTranscript) {
+      return;
+    }
+
+    const isCommand = detectVoiceCommand(cleanedTranscript);
+    setText((prev) => {
+      if (isCommand) {
+        return cleanedTranscript;
+      }
+
+      return prev ? `${prev} ${cleanedTranscript}` : cleanedTranscript;
+    });
+    inputRef.current?.focus();
+  }, []);
+
   // Expose addAttachments to parent via ref so pickers can forward results
   useImperativeHandle(
     attachRef,
@@ -98,17 +116,19 @@ export function ChatInput({
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  const handleTranscription = useCallback((transcribedText: string) => {
-    setIsRecording(false);
-    setRecordingDurationMs(0);
-    setAudioLevel(0);
-    if (durationIntervalRef.current) {
-      clearInterval(durationIntervalRef.current);
-      durationIntervalRef.current = null;
-    }
-    setText((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
-    inputRef.current?.focus();
-  }, []);
+  const handleTranscription = useCallback(
+    (transcribedText: string) => {
+      setIsRecording(false);
+      setRecordingDurationMs(0);
+      setAudioLevel(0);
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+        durationIntervalRef.current = null;
+      }
+      applyTranscript(transcribedText);
+    },
+    [applyTranscript],
+  );
 
   const handleRecordingStart = useCallback(() => {
     setIsRecording(true);
@@ -154,15 +174,14 @@ export function ChatInput({
       const uri = await VoiceService.stopRecording();
       const result = await VoiceService.transcribe(uri);
       if (result.text.trim()) {
-        setText((prev) => (prev ? `${prev} ${result.text.trim()}` : result.text.trim()));
-        inputRef.current?.focus();
+        applyTranscript(result.text.trim());
       }
     } catch {
       // ignore transcription errors from overlay send
     }
     setRecordingDurationMs(0);
     setAudioLevel(0);
-  }, []);
+  }, [applyTranscript]);
 
   const hasContent = text.trim().length > 0 || attachments.length > 0;
 
