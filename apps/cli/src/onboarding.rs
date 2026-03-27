@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+use crate::model_catalog;
 use crate::project_registry::ProjectRegistry;
 use crate::project_scope::resolve_project_scope;
 
@@ -253,104 +254,71 @@ async fn run_api_key_flow() -> Result<()> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct ModelChoice {
-    id: &'static str,
-    label: &'static str,
+    id: String,
+    label: String,
     description: &'static str,
-    provider: &'static str,
+    provider: String,
     has_reasoning: bool,
 }
 
-const ONBOARDING_MODELS: &[ModelChoice] = &[
-    // ── Anthropic ──
-    ModelChoice {
-        id: "claude-opus-4-6",
-        label: "Claude Opus 4.6 (default)",
-        description: "Most capable for complex work",
-        provider: "anthropic",
-        has_reasoning: true,
-    },
-    ModelChoice {
-        id: "claude-sonnet-4-6",
-        label: "Claude Sonnet 4.6",
-        description: "Best for everyday tasks",
-        provider: "anthropic",
-        has_reasoning: true,
-    },
-    ModelChoice {
-        id: "claude-haiku-4-5",
-        label: "Claude Haiku 4.5",
-        description: "Fastest for quick answers",
-        provider: "anthropic",
-        has_reasoning: false,
-    },
-    // ── OpenAI ──
-    ModelChoice {
-        id: "gpt-5.4",
-        label: "GPT-5.4",
-        description: "Latest frontier agentic model",
-        provider: "openai",
-        has_reasoning: true,
-    },
-    ModelChoice {
-        id: "gpt-5.4-mini",
-        label: "GPT-5.4 Mini",
-        description: "Smaller frontier agentic model",
-        provider: "openai",
-        has_reasoning: true,
-    },
-    ModelChoice {
-        id: "gpt-4.1",
-        label: "GPT-4.1",
-        description: "Optimized agentic coding model",
-        provider: "openai",
-        has_reasoning: false,
-    },
-    // ── Google ──
-    ModelChoice {
-        id: "gemini-2.5-pro",
-        label: "Gemini 2.5 Pro",
-        description: "Most capable Gemini model",
-        provider: "google",
-        has_reasoning: true,
-    },
-    ModelChoice {
-        id: "gemini-2.5-flash",
-        label: "Gemini 2.5 Flash",
-        description: "Fast and efficient",
-        provider: "google",
-        has_reasoning: false,
-    },
-    // ── xAI ──
-    ModelChoice {
-        id: "grok-4",
-        label: "Grok 4",
-        description: "xAI's frontier reasoning model",
-        provider: "xai",
-        has_reasoning: true,
-    },
+const ONBOARDING_MODEL_SPECS: &[(&str, &str)] = &[
+    ("claude-opus-4-6", "Most capable for complex work"),
+    ("claude-sonnet-4-6", "Best for everyday tasks"),
+    ("claude-haiku-4-5-20251001", "Fastest for quick answers"),
+    ("gpt-5.4", "Latest frontier agentic model"),
+    ("gpt-5.4-mini", "Smaller frontier agentic model"),
+    ("gpt-5.4-pro", "Highest-effort OpenAI reasoning model"),
+    (
+        "gemini-3.1-pro-preview",
+        "Best Gemini model for long context and research",
+    ),
+    (
+        "gemini-3.1-flash-lite",
+        "Fast Gemini model for everyday work",
+    ),
 ];
 
-fn select_model() -> Result<(&'static str, &'static str, bool)> {
+fn onboarding_models() -> Vec<ModelChoice> {
+    ONBOARDING_MODEL_SPECS
+        .iter()
+        .filter_map(|(id, description)| {
+            model_catalog::find(id).map(|model| ModelChoice {
+                id: model.id.clone(),
+                label: if model.id == model_catalog::default_model() {
+                    format!("{} (default)", model.display_name)
+                } else {
+                    model.display_name.clone()
+                },
+                description,
+                provider: model.provider.clone(),
+                has_reasoning: model.supports_reasoning,
+            })
+        })
+        .collect()
+}
+
+fn select_model() -> Result<(String, String, bool)> {
     eprintln!("\n  {}", amber_bold("Select Model"));
     eprintln!(
         "  {}\n",
         "Access other models by running /model or in your config.toml".dimmed()
     );
+    let onboarding_models = onboarding_models();
 
     // Build display strings grouped by provider
     let mut items: Vec<String> = Vec::new();
     let mut current_provider = "";
 
-    for m in ONBOARDING_MODELS {
+    for m in &onboarding_models {
         if m.provider != current_provider {
-            current_provider = m.provider;
+            current_provider = &m.provider;
             // Provider header embedded in the item text
-            let header = match m.provider {
+            let header = match m.provider.as_str() {
                 "anthropic" => "── Anthropic ──",
                 "openai" => "── OpenAI ──",
                 "google" => "── Google ──",
                 "xai" => "── xAI ──",
-                _ => m.provider,
+                _ => m.provider.as_str(),
             };
             items.push(header.to_string());
         }
@@ -360,9 +328,9 @@ fn select_model() -> Result<(&'static str, &'static str, bool)> {
     // Map display items back to model indices (skip headers)
     let mut index_to_model: Vec<Option<usize>> = Vec::new();
     let mut current_prov = "";
-    for (model_idx, m) in ONBOARDING_MODELS.iter().enumerate() {
+    for (model_idx, m) in onboarding_models.iter().enumerate() {
         if m.provider != current_prov {
-            current_prov = m.provider;
+            current_prov = &m.provider;
             index_to_model.push(None); // header row
         }
         index_to_model.push(Some(model_idx));
@@ -380,8 +348,12 @@ fn select_model() -> Result<(&'static str, &'static str, bool)> {
             .context("Failed to display model menu")?;
 
         if let Some(Some(midx)) = index_to_model.get(selection) {
-            let chosen = &ONBOARDING_MODELS[*midx];
-            return Ok((chosen.id, chosen.provider, chosen.has_reasoning));
+            let chosen = &onboarding_models[*midx];
+            return Ok((
+                chosen.id.clone(),
+                chosen.provider.clone(),
+                chosen.has_reasoning,
+            ));
         }
         // User selected a header row — re-show
     }
@@ -675,12 +647,12 @@ pub async fn run_onboarding() -> Result<bool> {
         Ok((model_id, provider, has_reasoning)) => {
             // Step 5b: Reasoning effort (if model supports it)
             let reasoning = if has_reasoning {
-                select_reasoning_effort(model_id).ok()
+                select_reasoning_effort(&model_id).ok()
             } else {
                 None
             };
 
-            if let Err(e) = update_config_model(model_id, provider, reasoning.as_deref()) {
+            if let Err(e) = update_config_model(&model_id, &provider, reasoning.as_deref()) {
                 eprintln!(
                     "  {} Failed to save model selection: {}",
                     "⚠".yellow().bold(),
@@ -690,7 +662,7 @@ pub async fn run_onboarding() -> Result<bool> {
                 eprintln!(
                     "\n  {} Using {} {}",
                     "✓".green().bold(),
-                    amber_bold(model_id),
+                    amber_bold(&model_id),
                     reasoning
                         .as_ref()
                         .map(|r| format!("with {} reasoning", r))
@@ -701,8 +673,9 @@ pub async fn run_onboarding() -> Result<bool> {
         }
         Err(_) => {
             eprintln!(
-                "\n  {} Using default model (claude-opus-4-6).",
-                "→".dimmed()
+                "\n  {} Using default model ({}).",
+                "→".dimmed(),
+                model_catalog::default_model()
             );
         }
     }

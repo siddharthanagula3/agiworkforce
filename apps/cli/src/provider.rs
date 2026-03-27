@@ -8,13 +8,14 @@
 // selection heuristics, deprecation warnings, and the /models REPL command.
 #![allow(dead_code)]
 
+use crate::model_catalog;
 use serde_json::Value;
 
 /// Static model catalog entry.
 #[derive(Debug, Clone)]
 pub struct ModelInfo {
     pub id: String,
-    pub provider: &'static str,
+    pub provider: String,
     pub context_window: usize,
     pub input_price_per_1m: f64,  // USD per 1M input tokens
     pub output_price_per_1m: f64, // USD per 1M output tokens
@@ -25,293 +26,38 @@ pub struct ModelInfo {
     pub supports_audio_output: bool,
     pub supports_pdf: bool,
     pub max_output_tokens: usize,
-    pub status: &'static str,       // "active", "beta", "deprecated"
-    pub release_date: &'static str, // "2025-03" etc.
+    pub status: String,       // "active", "beta", "deprecated"
+    pub release_date: String, // "2025-03" etc.
 }
 
 /// Built-in model catalog with capabilities and pricing.
 pub fn model_catalog() -> Vec<ModelInfo> {
-    vec![
-        // ── Anthropic ──────────────────────────────────────────────
-        ModelInfo {
-            id: "claude-opus-4-6".into(),
-            provider: "anthropic",
-            context_window: 200_000,
-            input_price_per_1m: 15.0,
-            output_price_per_1m: 75.0,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: true,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: true,
-            max_output_tokens: 32_000,
-            status: "active",
-            release_date: "2025-05",
-        },
-        ModelInfo {
-            id: "claude-sonnet-4-6".into(),
-            provider: "anthropic",
-            context_window: 200_000,
-            input_price_per_1m: 3.0,
-            output_price_per_1m: 15.0,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: true,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: true,
-            max_output_tokens: 16_000,
-            status: "active",
-            release_date: "2025-05",
-        },
-        ModelInfo {
-            id: "claude-haiku-4-5".into(),
-            provider: "anthropic",
-            context_window: 200_000,
-            input_price_per_1m: 0.25,
-            output_price_per_1m: 1.25,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: false,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: true,
-            max_output_tokens: 8_192,
-            status: "active",
-            release_date: "2025-04",
-        },
-        // ── OpenAI ─────────────────────────────────────────────────
-        ModelInfo {
-            id: "gpt-5.4".into(),
-            provider: "openai",
-            context_window: 1_047_576,
-            input_price_per_1m: 2.50,
-            output_price_per_1m: 10.0,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: true,
-            supports_audio_input: true,
-            supports_audio_output: true,
-            supports_pdf: false,
-            max_output_tokens: 16_384,
-            status: "active",
-            release_date: "2026-01",
-        },
-        ModelInfo {
-            id: "gpt-5.4-mini".into(),
-            provider: "openai",
-            context_window: 1_047_576,
-            input_price_per_1m: 0.15,
-            output_price_per_1m: 0.60,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: true,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 16_384,
-            status: "active",
-            release_date: "2026-01",
-        },
-        ModelInfo {
-            id: "gpt-4.1".into(),
-            provider: "openai",
-            context_window: 1_047_576,
-            input_price_per_1m: 2.0,
-            output_price_per_1m: 8.0,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: false,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 32_768,
-            status: "active",
-            release_date: "2025-04",
-        },
-        ModelInfo {
-            id: "o3-mini".into(),
-            provider: "openai",
-            context_window: 200_000,
-            input_price_per_1m: 1.10,
-            output_price_per_1m: 4.40,
-            supports_tools: true,
-            supports_vision: false,
-            supports_reasoning: true,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 100_000,
-            status: "active",
-            release_date: "2025-01",
-        },
-        // ── Google ─────────────────────────────────────────────────
-        ModelInfo {
-            id: "gemini-3.1-pro-preview".into(),
-            provider: "google",
-            context_window: 1_048_576,
-            input_price_per_1m: 1.25,
-            output_price_per_1m: 10.0,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: true,
-            supports_audio_input: true,
-            supports_audio_output: false,
-            supports_pdf: true,
-            max_output_tokens: 65_536,
-            status: "active",
-            release_date: "2026-02",
-        },
-        ModelInfo {
-            id: "gemini-3-flash-preview".into(),
-            provider: "google",
-            context_window: 1_048_576,
-            input_price_per_1m: 0.10,
-            output_price_per_1m: 0.40,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: false,
-            supports_audio_input: true,
-            supports_audio_output: true,
-            supports_pdf: true,
-            max_output_tokens: 8_192,
-            status: "active",
-            release_date: "2026-01",
-        },
-        // ── Mistral ────────────────────────────────────────────────
-        ModelInfo {
-            id: "mistral-large-2512".into(),
-            provider: "mistral",
-            context_window: 256_000,
-            input_price_per_1m: 2.0,
-            output_price_per_1m: 6.0,
-            supports_tools: true,
-            supports_vision: false,
-            supports_reasoning: false,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 8_192,
-            status: "active",
-            release_date: "2025-12",
-        },
-        ModelInfo {
-            id: "codestral-latest".into(),
-            provider: "mistral",
-            context_window: 32_000,
-            input_price_per_1m: 0.3,
-            output_price_per_1m: 0.9,
-            supports_tools: true,
-            supports_vision: false,
-            supports_reasoning: false,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 8_192,
-            status: "active",
-            release_date: "2024-05",
-        },
-        // ── xAI ────────────────────────────────────────────────────
-        ModelInfo {
-            id: "grok-4.1".into(),
-            provider: "xai",
-            context_window: 2_000_000,
-            input_price_per_1m: 2.0,
-            output_price_per_1m: 10.0,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: false,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 8_192,
-            status: "active",
-            release_date: "2026-02",
-        },
-        ModelInfo {
-            id: "grok-4-1-fast-non-reasoning".into(),
-            provider: "xai",
-            context_window: 2_000_000,
-            input_price_per_1m: 0.60,
-            output_price_per_1m: 4.0,
-            supports_tools: true,
-            supports_vision: true,
-            supports_reasoning: false,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 8_192,
-            status: "active",
-            release_date: "2026-02",
-        },
-        // ── DeepSeek ───────────────────────────────────────────────
-        ModelInfo {
-            id: "deepseek-chat".into(),
-            provider: "deepseek",
-            context_window: 64_000,
-            input_price_per_1m: 0.14,
-            output_price_per_1m: 0.28,
-            supports_tools: true,
-            supports_vision: false,
-            supports_reasoning: false,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 8_192,
-            status: "active",
-            release_date: "2025-01",
-        },
-        ModelInfo {
-            id: "deepseek-reasoner".into(),
-            provider: "deepseek",
-            context_window: 64_000,
-            input_price_per_1m: 0.55,
-            output_price_per_1m: 2.19,
-            supports_tools: false,
-            supports_vision: false,
-            supports_reasoning: true,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 8_192,
-            status: "active",
-            release_date: "2025-01",
-        },
-        // ── Ollama (local, free) ───────────────────────────────────
-        ModelInfo {
-            id: "llama3.1".into(),
-            provider: "ollama",
-            context_window: 128_000,
-            input_price_per_1m: 0.0,
-            output_price_per_1m: 0.0,
-            supports_tools: false,
-            supports_vision: false,
-            supports_reasoning: false,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 4_096,
-            status: "active",
-            release_date: "2024-07",
-        },
-        ModelInfo {
-            id: "qwen2.5".into(),
-            provider: "ollama",
-            context_window: 32_000,
-            input_price_per_1m: 0.0,
-            output_price_per_1m: 0.0,
-            supports_tools: false,
-            supports_vision: false,
-            supports_reasoning: false,
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            max_output_tokens: 4_096,
-            status: "active",
-            release_date: "2024-09",
-        },
-    ]
+    model_catalog::catalog()
+        .all()
+        .iter()
+        .map(ModelInfo::from)
+        .collect()
+}
+
+impl From<&model_catalog::Model> for ModelInfo {
+    fn from(model: &model_catalog::Model) -> Self {
+        Self {
+            id: model.id.clone(),
+            provider: model.provider.clone(),
+            context_window: model.context_window,
+            input_price_per_1m: model.input_price_per_1m,
+            output_price_per_1m: model.output_price_per_1m,
+            supports_tools: model.supports_tools,
+            supports_vision: model.supports_vision,
+            supports_reasoning: model.supports_reasoning,
+            supports_audio_input: model.supports_audio_input,
+            supports_audio_output: model.supports_audio_output,
+            supports_pdf: model.supports_pdf,
+            max_output_tokens: model.max_output_tokens,
+            status: model.status.clone(),
+            release_date: model.release_date.clone(),
+        }
+    }
 }
 
 /// Look up a model by ID (case-insensitive, exact match preferred, then prefix match).
@@ -371,7 +117,7 @@ pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
     }
 
     // Fall back to catalog lookup for non-standard names
-    find_model(model_id).map(|m| m.provider)
+    model_catalog::provider_for(model_id)
 }
 
 /// Check whether a model supports tool use (function calling).
@@ -469,17 +215,17 @@ pub fn format_model_list() -> String {
     let mut out = String::new();
     let catalog = model_catalog();
 
-    let mut current_provider = "";
+    let mut current_provider = String::new();
     for model in &catalog {
         if model.provider != current_provider {
             if !out.is_empty() {
                 out.push('\n');
             }
             out.push_str(&format!("{}:\n", model.provider.to_uppercase()));
-            current_provider = model.provider;
+            current_provider = model.provider.clone();
         }
 
-        let status_icon = match model.status {
+        let status_icon = match model.status.as_str() {
             "beta" => "B",
             "deprecated" => "!",
             _ => " ", // "active"
@@ -596,14 +342,18 @@ mod tests {
         let catalog = model_catalog();
         let ids: Vec<&str> = catalog.iter().map(|m| m.id.as_str()).collect();
         assert!(ids.contains(&"claude-opus-4-6"));
-        assert!(ids.contains(&"gpt-4.1"));
+        assert!(ids.contains(&"claude-sonnet-4-6"));
         assert!(ids.contains(&"gpt-5.4"));
         assert!(ids.contains(&"gpt-5.4-mini"));
+        assert!(ids.contains(&"gpt-5.4-pro"));
         assert!(ids.contains(&"gemini-3.1-pro-preview"));
-        assert!(ids.contains(&"gemini-3-flash-preview"));
-        assert!(ids.contains(&"grok-4.1"));
-        assert!(ids.contains(&"grok-4-1-fast-non-reasoning"));
+        assert!(ids.contains(&"gemini-3.1-flash-lite"));
+        assert!(ids.contains(&"grok-4-0709"));
+        assert!(ids.contains(&"grok-4-1-fast-reasoning"));
         assert!(ids.contains(&"mistral-large-2512"));
+        assert!(ids.contains(&"mistral-medium-2508"));
+        assert!(ids.contains(&"deepseek-chat"));
+        assert!(ids.contains(&"deepseek-reasoner"));
         assert!(ids.contains(&"llama3.1"));
         assert!(ids.contains(&"qwen2.5"));
     }
@@ -651,7 +401,7 @@ mod tests {
     fn test_all_models_have_valid_status() {
         for model in model_catalog() {
             assert!(
-                ["active", "beta", "deprecated"].contains(&model.status),
+                ["active", "beta", "deprecated"].contains(&model.status.as_str()),
                 "Model {} has invalid status: {}",
                 model.id,
                 model.status
@@ -702,14 +452,17 @@ mod tests {
         assert!(reasoning_ids.contains(&"claude-sonnet-4-6"));
         assert!(reasoning_ids.contains(&"gpt-5.4"));
         assert!(reasoning_ids.contains(&"gpt-5.4-mini"));
-        assert!(reasoning_ids.contains(&"o3-mini"));
+        assert!(reasoning_ids.contains(&"gpt-5.4-pro"));
         assert!(reasoning_ids.contains(&"gemini-3.1-pro-preview"));
+        assert!(reasoning_ids.contains(&"grok-4-0709"));
         assert!(reasoning_ids.contains(&"deepseek-reasoner"));
     }
 
     #[test]
     fn test_non_reasoning_models_not_flagged() {
-        let model = find_model("gpt-4.1").unwrap();
+        let model = find_model("claude-haiku-4-5-20251001").unwrap();
+        assert!(!model.supports_reasoning);
+        let model = find_model("gemini-3.1-flash-lite").unwrap();
         assert!(!model.supports_reasoning);
         let model = find_model("llama3.1").unwrap();
         assert!(!model.supports_reasoning);
@@ -718,14 +471,13 @@ mod tests {
     #[test]
     fn test_audio_capabilities() {
         let gpt54 = find_model("gpt-5.4").unwrap();
-        assert!(gpt54.supports_audio_input);
-        assert!(gpt54.supports_audio_output);
+        assert!(!gpt54.supports_audio_input);
+        assert!(!gpt54.supports_audio_output);
 
-        let gemini_flash = find_model("gemini-3-flash-preview").unwrap();
-        assert!(gemini_flash.supports_audio_input);
-        assert!(gemini_flash.supports_audio_output);
+        let gemini_flash = find_model("gemini-3.1-flash-lite").unwrap();
+        assert!(!gemini_flash.supports_audio_input);
+        assert!(!gemini_flash.supports_audio_output);
 
-        // Claude does not support audio
         let claude = find_model("claude-opus-4-6").unwrap();
         assert!(!claude.supports_audio_input);
         assert!(!claude.supports_audio_output);
@@ -734,12 +486,11 @@ mod tests {
     #[test]
     fn test_pdf_support() {
         let claude = find_model("claude-opus-4-6").unwrap();
-        assert!(claude.supports_pdf);
+        assert!(!claude.supports_pdf);
 
         let gemini = find_model("gemini-3.1-pro-preview").unwrap();
-        assert!(gemini.supports_pdf);
+        assert!(!gemini.supports_pdf);
 
-        // OpenAI GPT-5.4 does not support native PDF
         let gpt54 = find_model("gpt-5.4").unwrap();
         assert!(!gpt54.supports_pdf);
     }
@@ -767,12 +518,13 @@ mod tests {
     #[test]
     fn test_find_model_new_entries() {
         assert!(find_model("claude-opus-4-6").is_some());
-        assert!(find_model("gpt-4.1").is_some());
+        assert!(find_model("claude-sonnet-4-6").is_some());
         assert!(find_model("gpt-5.4").is_some());
         assert!(find_model("gpt-5.4-mini").is_some());
+        assert!(find_model("gpt-5.4-pro").is_some());
         assert!(find_model("gemini-3.1-pro-preview").is_some());
-        assert!(find_model("gemini-3-flash-preview").is_some());
-        assert!(find_model("grok-4.1").is_some());
+        assert!(find_model("gemini-3.1-flash-lite").is_some());
+        assert!(find_model("grok-4-0709").is_some());
         assert!(find_model("mistral-large-2512").is_some());
         assert!(find_model("llama3.1").is_some());
         assert!(find_model("qwen2.5").is_some());
@@ -814,35 +566,29 @@ mod tests {
     fn test_provider_for_model_prefix_openai() {
         assert_eq!(provider_for_model("gpt-5.4"), Some("openai"));
         assert_eq!(provider_for_model("gpt-5.4-mini"), Some("openai"));
-        assert_eq!(provider_for_model("gpt-4.1"), Some("openai"));
-        assert_eq!(provider_for_model("o3-mini"), Some("openai"));
+        assert_eq!(provider_for_model("gpt-5.4-pro"), Some("openai"));
+        assert_eq!(provider_for_model("o3"), Some("openai"));
         assert_eq!(provider_for_model("o1-preview"), Some("openai"));
     }
 
     #[test]
     fn test_provider_for_model_prefix_google() {
         assert_eq!(provider_for_model("gemini-3.1-pro-preview"), Some("google"));
-        assert_eq!(provider_for_model("gemini-3-flash-preview"), Some("google"));
-        // Unrecognized Gemini IDs still resolve via prefix
+        assert_eq!(provider_for_model("gemini-3.1-flash-lite"), Some("google"));
         assert_eq!(provider_for_model("gemini-future"), Some("google"));
     }
 
     #[test]
     fn test_provider_for_model_prefix_mistral() {
         assert_eq!(provider_for_model("mistral-large-2512"), Some("mistral"));
-        // Legacy name still resolves via prefix
         assert_eq!(provider_for_model("mistral-large-latest"), Some("mistral"));
-        assert_eq!(provider_for_model("codestral-latest"), Some("mistral"));
+        assert_eq!(provider_for_model("mistral-medium-2508"), Some("mistral"));
     }
 
     #[test]
     fn test_provider_for_model_prefix_xai() {
-        assert_eq!(provider_for_model("grok-4.1"), Some("xai"));
-        assert_eq!(
-            provider_for_model("grok-4-1-fast-non-reasoning"),
-            Some("xai")
-        );
-        // Unrecognized Grok IDs still resolve via prefix
+        assert_eq!(provider_for_model("grok-4-0709"), Some("xai"));
+        assert_eq!(provider_for_model("grok-4-1-fast-reasoning"), Some("xai"));
         assert_eq!(provider_for_model("grok-future"), Some("xai"));
     }
 
@@ -862,7 +608,7 @@ mod tests {
     fn test_provider_for_model_case_insensitive() {
         assert_eq!(provider_for_model("CLAUDE-OPUS-4-6"), Some("anthropic"));
         assert_eq!(provider_for_model("GPT-5.4"), Some("openai"));
-        assert_eq!(provider_for_model("Gemini-3-flash-preview"), Some("google"));
+        assert_eq!(provider_for_model("Gemini-3.1-Flash-Lite"), Some("google"));
     }
 
     #[test]
@@ -877,13 +623,12 @@ mod tests {
         assert!(supports_tool_use("claude-opus-4-6"));
         assert!(supports_tool_use("gpt-5.4"));
         assert!(supports_tool_use("gemini-3.1-pro-preview"));
-        assert!(supports_tool_use("grok-4.1"));
-        assert!(supports_tool_use("gpt-4.1"));
+        assert!(supports_tool_use("grok-4-0709"));
+        assert!(supports_tool_use("deepseek-reasoner"));
     }
 
     #[test]
     fn test_supports_tool_use_false() {
-        assert!(!supports_tool_use("deepseek-reasoner"));
         assert!(!supports_tool_use("llama3.1"));
         assert!(!supports_tool_use("qwen2.5"));
     }
@@ -898,14 +643,14 @@ mod tests {
     #[test]
     fn test_default_temperature_reasoning_models() {
         assert_eq!(default_temperature("deepseek-reasoner"), Some(0.0));
-        assert_eq!(default_temperature("o3-mini"), Some(0.0));
+        assert_eq!(default_temperature("o3"), Some(0.0));
         assert_eq!(default_temperature("o1-preview"), Some(0.0));
     }
 
     #[test]
     fn test_default_temperature_gemini() {
         assert_eq!(default_temperature("gemini-3.1-pro-preview"), Some(1.0));
-        assert_eq!(default_temperature("gemini-3-flash-preview"), Some(1.0));
+        assert_eq!(default_temperature("gemini-3.1-flash-lite"), Some(1.0));
     }
 
     #[test]
@@ -939,7 +684,7 @@ mod tests {
         assert!(supports_reasoning("claude-sonnet-4-6"));
         assert!(supports_reasoning("gpt-5.4"));
         assert!(supports_reasoning("gpt-5.4-mini"));
-        assert!(supports_reasoning("o3-mini"));
+        assert!(supports_reasoning("gpt-5.4-pro"));
         assert!(supports_reasoning("gemini-3.1-pro-preview"));
         assert!(supports_reasoning("deepseek-reasoner"));
     }
@@ -947,7 +692,7 @@ mod tests {
     #[test]
     fn test_supports_reasoning_false() {
         assert!(!supports_reasoning("llama3.1"));
-        assert!(!supports_reasoning("mistral-large-2512"));
+        assert!(!supports_reasoning("gemini-3.1-flash-lite"));
     }
 
     #[test]
@@ -962,7 +707,7 @@ mod tests {
         assert!(!is_deprecated("claude-opus-4-6"));
         assert!(!is_deprecated("gpt-5.4"));
         assert!(!is_deprecated("gemini-3.1-pro-preview"));
-        assert!(!is_deprecated("grok-4.1"));
+        assert!(!is_deprecated("grok-4-0709"));
         assert!(!is_deprecated("mistral-large-2512"));
     }
 
@@ -981,12 +726,12 @@ mod tests {
         assert!(detail.contains("(anthropic)"));
         assert!(detail.contains("[active]"));
         assert!(detail.contains("200K tokens"));
-        assert!(detail.contains("32K tokens"));
-        assert!(detail.contains("$15.00 / $75.00"));
+        assert!(detail.contains("4K tokens"));
+        assert!(detail.contains("$5.00 / $25.00"));
         assert!(detail.contains("Tool use:        yes"));
         assert!(detail.contains("Vision:          yes"));
         assert!(detail.contains("Reasoning:       yes"));
-        assert!(detail.contains("PDF:             yes"));
+        assert!(detail.contains("PDF:             no"));
     }
 
     #[test]
@@ -1005,15 +750,13 @@ mod tests {
 
     #[test]
     fn test_format_model_detail_no_tools_with_vision() {
-        // deepseek-reasoner: no tools, no vision
         let model = find_model("deepseek-reasoner").unwrap();
         let detail = format_model_detail(&model);
-        assert!(detail.contains("Tool use:        no"));
+        assert!(detail.contains("Tool use:        yes"));
         assert!(detail.contains("Vision:          no"));
         assert!(detail.contains("Reasoning:       yes"));
-        // should NOT say "free (local)"
         assert!(!detail.contains("free (local)"));
-        assert!(detail.contains("$0.55 / $2.19"));
+        assert!(detail.contains("$0.28 / $0.42"));
     }
 
     // ── format_model_list ──────────────────────────────────────
@@ -1033,10 +776,10 @@ mod tests {
         assert!(list.contains("claude-opus-4-6"));
         assert!(list.contains("gpt-5.4"));
         assert!(list.contains("gpt-5.4-mini"));
-        assert!(list.contains("gpt-4.1"));
+        assert!(list.contains("gpt-5.4-pro"));
         assert!(list.contains("gemini-3.1-pro-preview"));
-        assert!(list.contains("gemini-3-flash-preview"));
-        assert!(list.contains("grok-4.1"));
+        assert!(list.contains("gemini-3.1-flash-lite"));
+        assert!(list.contains("grok-4-0709"));
         assert!(list.contains("mistral-large-2512"));
         assert!(list.contains("llama3.1"));
         assert!(list.contains("qwen2.5"));
