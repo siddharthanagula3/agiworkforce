@@ -803,6 +803,7 @@
       "contextWindow": 200000,
       "inputCost": 5.0,
       "outputCost": 25.0,
+      "variantPartner": "claude-sonnet-4.6",
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -839,6 +840,7 @@
       "contextWindow": 200000,
       "inputCost": 3.0,
       "outputCost": 15.0,
+      "variantPartner": "claude-opus-4.6",
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -953,6 +955,7 @@
       "contextWindow": 2000000,
       "inputCost": 2.0,
       "outputCost": 12.0,
+      "variantPartner": "gemini-3.1-flash-lite",
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -989,6 +992,7 @@
       "contextWindow": 1000000,
       "inputCost": 0.5,
       "outputCost": 3.0,
+      "variantPartner": "gemini-3.1-pro-preview",
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -1350,6 +1354,7 @@
       "contextWindow": 128000,
       "inputCost": 0.28,
       "outputCost": 0.42,
+      "variantPartner": "deepseek-reasoner",
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -2652,6 +2657,7 @@
       "contextWindow": 1000000,
       "inputCost": 2.5,
       "outputCost": 15.0,
+      "variantPartner": "gpt-5.4-pro",
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -2843,6 +2849,7 @@
       "contextWindow": 1050000,
       "inputCost": 30.0,
       "outputCost": 180.0,
+      "variantPartner": "gpt-5.4",
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -2916,6 +2923,7 @@
       "contextWindow": 400000,
       "inputCost": 0.75,
       "outputCost": 4.5,
+      "variantPartner": "gpt-5.4",
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -2945,6 +2953,7 @@
       "contextWindow": 128000,
       "inputCost": 0.28,
       "outputCost": 0.42,
+      "variantPartner": "deepseek-chat",
       "capabilities": {
         "streaming": true,
         "tools": true,

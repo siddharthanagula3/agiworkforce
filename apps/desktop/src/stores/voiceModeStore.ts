@@ -31,6 +31,7 @@ import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
 import { invoke, listen, isTauri, type UnlistenFn } from '../lib/tauri-mock';
+import { getProviderDefaultModel, getTaskModelForProvider } from '../constants/llm';
 import {
   voiceGetCapabilities,
   voiceGetSettings,
@@ -557,6 +558,12 @@ export const useVoiceModeStore = create<VoiceModeState>()(
             // Step 2: Get LLM response
             const { useModelStore } = await import('./modelStore');
             const { selectedModel, selectedProvider } = useModelStore.getState();
+            const fallbackProvider = selectedProvider ?? 'anthropic';
+            const fallbackModel =
+              selectedModel ??
+              getTaskModelForProvider(fallbackProvider, 'fast_completion') ??
+              getProviderDefaultModel(fallbackProvider) ??
+              'claude-haiku-4.5';
 
             // Build conversation context from recent turns
             const { turns } = get();
@@ -579,8 +586,8 @@ export const useVoiceModeStore = create<VoiceModeState>()(
 
             const llmResponse = await invoke<LLMResponse>('llm_send_message', {
               messages: contextMessages,
-              model: selectedModel ?? 'claude-haiku-4.5',
-              provider: selectedProvider ?? 'anthropic',
+              model: fallbackModel,
+              provider: fallbackProvider,
               maxTokens: 300,
               preferCloudCredits: false,
             });
