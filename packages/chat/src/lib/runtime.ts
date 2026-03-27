@@ -1,4 +1,4 @@
-import type { Artifact, ChatMessage, Conversation } from './types';
+import type { Artifact, ChatMessage, Conversation, WebSearchResult } from './types';
 
 /**
  * ChatRuntime abstracts the transport layer between the chat UI and the backend.
@@ -128,6 +128,7 @@ export type StreamEvent =
       durationMs?: number;
     }
   | { type: 'artifact'; artifact: Artifact }
+  | { type: 'search_results'; search: WebSearchResult }
   | { type: 'done' }
   | { type: 'error'; error: string };
 

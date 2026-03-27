@@ -17,6 +17,7 @@ import type {
   SendMessageOptions,
   StreamCallback,
   StreamEvent,
+  WebSearchResult,
 } from '@agiworkforce/chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/chat';
 import {
@@ -56,6 +57,61 @@ function mapMessage(cloud: CloudMessage): ChatMessage {
     content: cloud.content,
     createdAt: cloud.created_at,
     model: cloud.model,
+  };
+}
+
+function mapSearchPayload(payload: unknown): WebSearchResult | null {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const raw = payload as Record<string, unknown>;
+  const content = Array.isArray(raw['content']) ? raw['content'] : [];
+  const resultItems = content
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .filter((item) => item['type'] === 'web_search_result')
+    .map((item) => {
+      const url = typeof item['url'] === 'string' ? item['url'] : '';
+      const title = typeof item['title'] === 'string' ? item['title'] : url || 'Web result';
+      const snippet =
+        typeof item['snippet'] === 'string'
+          ? item['snippet']
+          : typeof item['cited_text'] === 'string'
+            ? item['cited_text']
+            : undefined;
+      let domain: string | undefined;
+      if (url) {
+        try {
+          domain = new URL(url).hostname;
+        } catch {
+          domain = undefined;
+        }
+      }
+
+      return {
+        url,
+        title,
+        snippet,
+        domain,
+      };
+    })
+    .filter((item) => item.url.length > 0);
+
+  const errorEntry = content.find(
+    (item) =>
+      !!item &&
+      typeof item === 'object' &&
+      (item as Record<string, unknown>)['type'] === 'web_search_tool_result_error',
+  ) as Record<string, unknown> | undefined;
+
+  return {
+    id:
+      (typeof raw['tool_use_id'] === 'string' && raw['tool_use_id']) ||
+      `search-${Date.now().toString(36)}`,
+    query: typeof raw['query'] === 'string' ? raw['query'] : 'Web search',
+    results: resultItems,
+    resultCount: resultItems.length,
+    status: errorEntry ? 'failed' : 'completed',
   };
 }
 
@@ -211,6 +267,12 @@ export class WebRuntime implements ChatRuntime {
             typeof artifactPayload.content === 'string'
           ) {
             this.emit({ type: 'artifact', artifact: artifactPayload });
+          }
+
+          const searchPayload = delta?.['x_search_results'];
+          const search = mapSearchPayload(searchPayload);
+          if (search) {
+            this.emit({ type: 'search_results', search });
           }
         },
         options?.webSearch,
