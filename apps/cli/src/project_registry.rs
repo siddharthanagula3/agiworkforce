@@ -27,21 +27,25 @@ impl ProjectRegistry {
     /// Load the project registry from `~/.agiworkforce/projects.json`.
     ///
     /// Returns a default (empty) registry if the file does not exist.
-    pub fn load(home: &Path) -> Result<Self> {
-        let path = Self::registry_path(home);
-        if !path.exists() {
+    pub fn load(config_dir: &Path) -> Result<Self> {
+        let path = Self::registry_path(config_dir);
+        let legacy_path = Self::legacy_registry_path(config_dir);
+        let path = if path.exists() {
+            path
+        } else if legacy_path.exists() {
+            legacy_path
+        } else {
             return Ok(Self::default());
-        }
-        let contents =
-            std::fs::read_to_string(&path).context("Failed to read projects.json")?;
+        };
+        let contents = std::fs::read_to_string(&path).context("Failed to read projects.json")?;
         let registry: ProjectRegistry =
             serde_json::from_str(&contents).context("Failed to parse projects.json")?;
         Ok(registry)
     }
 
     /// Save the project registry to `~/.agiworkforce/projects.json`.
-    pub fn save(&self, home: &Path) -> Result<()> {
-        let path = Self::registry_path(home);
+    pub fn save(&self, config_dir: &Path) -> Result<()> {
+        let path = Self::registry_path(config_dir);
         if let Some(parent) = path.parent() {
             if !parent.exists() {
                 std::fs::create_dir_all(parent)
@@ -60,14 +64,13 @@ impl ProjectRegistry {
     /// already taken by a different path, a numeric suffix is appended.
     /// The `last_seen` timestamp is always updated to now.
     pub fn register_project(&mut self, path: &Path, trust_level: &str) -> Result<()> {
-        let abs_path = path
-            .canonicalize()
-            .unwrap_or_else(|_| path.to_path_buf());
+        let abs_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let path_key = abs_path.to_string_lossy().to_string();
 
-        // If the path is already registered, just update last_seen.
+        // If the path is already registered, update trust and last_seen.
         if let Some(entry) = self.projects.get_mut(&path_key) {
             entry.last_seen = chrono::Utc::now().to_rfc3339();
+            entry.trust_level = trust_level.to_string();
             return Ok(());
         }
 
@@ -98,9 +101,14 @@ impl ProjectRegistry {
 
     // --- Private helpers ---
 
-    /// Path to the registry file: `<home>/.agiworkforce/projects.json`.
-    fn registry_path(home: &Path) -> PathBuf {
-        home.join(".agiworkforce").join("projects.json")
+    /// Path to the registry file: `<config_dir>/projects.json`.
+    fn registry_path(config_dir: &Path) -> PathBuf {
+        config_dir.join("projects.json")
+    }
+
+    /// Legacy path used by the old buggy implementation.
+    fn legacy_registry_path(config_dir: &Path) -> PathBuf {
+        config_dir.join(".agiworkforce").join("projects.json")
     }
 
     /// Generate a unique ID for a project. If the base ID is already taken by
@@ -142,17 +150,45 @@ mod tests {
     #[test]
     fn test_save_and_load_roundtrip() {
         let dir = tempfile::tempdir().unwrap();
-        let home = dir.path();
-        fs::create_dir_all(home.join(".agiworkforce")).unwrap();
+        let config_dir = dir.path().join(".agiworkforce");
+        fs::create_dir_all(&config_dir).unwrap();
 
         let mut registry = ProjectRegistry::default();
         registry
             .register_project(Path::new("/tmp/my-project"), "trusted")
             .unwrap();
-        registry.save(home).unwrap();
+        registry.save(&config_dir).unwrap();
 
-        let loaded = ProjectRegistry::load(home).unwrap();
+        let loaded = ProjectRegistry::load(&config_dir).unwrap();
         assert_eq!(loaded.projects.len(), 1);
+    }
+
+    #[test]
+    fn test_load_reads_legacy_nested_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_dir = dir.path().join(".agiworkforce");
+        let legacy_dir = config_dir.join(".agiworkforce");
+        fs::create_dir_all(&legacy_dir).unwrap();
+        let legacy_path = legacy_dir.join("projects.json");
+        fs::write(
+            legacy_path,
+            r#"{
+  "/tmp/project": {
+    "id": "project",
+    "last_seen": "2026-03-26T00:00:00Z",
+    "trust_level": "trusted"
+  }
+}"#,
+        )
+        .unwrap();
+
+        let loaded = ProjectRegistry::load(&config_dir).unwrap();
+
+        assert_eq!(loaded.projects.len(), 1);
+        assert_eq!(
+            loaded.projects.get("/tmp/project").unwrap().trust_level,
+            "trusted"
+        );
     }
 
     #[test]
@@ -161,26 +197,14 @@ mod tests {
         registry
             .register_project(Path::new("/tmp/test-proj"), "trusted")
             .unwrap();
-        let first_seen = registry
-            .projects
-            .values()
-            .next()
-            .unwrap()
-            .last_seen
-            .clone();
+        let first_seen = registry.projects.values().next().unwrap().last_seen.clone();
 
         // Re-register the same path
         std::thread::sleep(std::time::Duration::from_millis(10));
         registry
             .register_project(Path::new("/tmp/test-proj"), "trusted")
             .unwrap();
-        let second_seen = registry
-            .projects
-            .values()
-            .next()
-            .unwrap()
-            .last_seen
-            .clone();
+        let second_seen = registry.projects.values().next().unwrap().last_seen.clone();
 
         // last_seen should be updated (or at least not earlier)
         assert!(second_seen >= first_seen);
@@ -217,5 +241,24 @@ mod tests {
         let entry = registry.get_project(&key);
         assert!(entry.is_some());
         assert_eq!(entry.unwrap().trust_level, "trusted");
+    }
+
+    #[test]
+    fn test_reregister_updates_trust_level() {
+        let mut registry = ProjectRegistry::default();
+        registry
+            .register_project(Path::new("/tmp/trust-me"), "untrusted")
+            .unwrap();
+
+        registry
+            .register_project(Path::new("/tmp/trust-me"), "trusted")
+            .unwrap();
+
+        let key = Path::new("/tmp/trust-me")
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from("/tmp/trust-me"))
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(registry.get_project(&key).unwrap().trust_level, "trusted");
     }
 }
