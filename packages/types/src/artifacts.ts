@@ -9,6 +9,8 @@
  * @packageDocumentation
  */
 
+import type { ArtifactType } from './conversation';
+
 // ============================================================================
 // Artifact Types
 // ============================================================================
@@ -19,17 +21,7 @@
  * Superset of the desktop `ArtifactType` — includes the core types that
  * all surfaces must support plus extended types that surfaces may ignore.
  */
-export type SharedArtifactType =
-  | 'code'
-  | 'document'
-  | 'image'
-  | 'data'
-  | 'chart'
-  | 'diagram'
-  | 'table'
-  | 'html'
-  | 'mermaid'
-  | 'spreadsheet';
+export type SharedArtifactType = ArtifactType | 'data';
 
 /**
  * Cross-surface artifact contract.

@@ -4,7 +4,7 @@ import {
   normalizeModelId,
   type ModelMetadata,
 } from '@/constants/llm';
-import type { RoutingTaskType } from '@shared/stores/model-store';
+import type { RoutingTaskType } from '@agiworkforce/types';
 
 export type TaskType = RoutingTaskType;
 

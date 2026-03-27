@@ -113,6 +113,63 @@ export function normalizeTranscription(text: string): string {
   return `${capitalized}.`;
 }
 
+/**
+ * Voice command prefixes that indicate the transcript should edit existing text
+ * instead of being appended as fresh dictation.
+ */
+export const VOICE_COMMAND_PREFIXES = [
+  'make this more formal',
+  'make this more casual',
+  'make this shorter',
+  'make this longer',
+  'make it more formal',
+  'make it more casual',
+  'make it shorter',
+  'make it longer',
+  'fix the grammar',
+  'fix the spelling',
+  'fix the punctuation',
+  'translate to',
+  'summarize this',
+  'summarize the',
+  'rewrite this',
+  'rewrite the',
+  'edit this',
+  'edit the',
+  'change the tone',
+  'change the style',
+  'make this',
+  'make it',
+  'fix this',
+  'fix the',
+  'more formal',
+  'more casual',
+  'shorter',
+  'longer',
+] as const;
+
+const FILLER_WORD_PATTERN =
+  /\b(you know|sort of|kind of|basically|literally|actually|um+|uh+|er+|like)\b,?\s*/gi;
+
+/**
+ * Returns true when the transcript is a voice command aimed at editing
+ * existing text in the composer rather than adding fresh dictation.
+ */
+export function detectVoiceCommand(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  return VOICE_COMMAND_PREFIXES.some((prefix) => lower.startsWith(prefix));
+}
+
+/**
+ * Lightweight cross-surface cleanup for dictation transcripts.
+ *
+ * This intentionally avoids opinionated punctuation insertion so it stays safe
+ * for command-mode phrases and partial dictation.
+ */
+export function cleanupVoiceDictation(text: string): string {
+  return text.replace(FILLER_WORD_PATTERN, ' ').replace(/\s+/g, ' ').trim();
+}
+
 /** Convert decibel metering value to a normalized 0-1 amplitude */
 export function meteringToAmplitude(db: number): number {
   // Typical range: -160 dB (silence) to 0 dB (max)

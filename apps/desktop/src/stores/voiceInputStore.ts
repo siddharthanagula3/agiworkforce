@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
+import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { invoke } from '../lib/tauri-mock';
 import { voiceTranscribeBlob } from '../api/voice';
 import { storageFallback } from '../lib/storageFallback';
@@ -7,66 +8,7 @@ import { storageFallback } from '../lib/storageFallback';
 type VoiceMode = 'idle' | 'listening' | 'transcribing' | 'processing' | 'preview';
 
 export type PostProcessingMode = 'ai' | 'basic' | 'none';
-
-/**
- * Filler words and phrases removed in 'basic' fallback mode.
- * Ordered longest-first so multi-word phrases match before single words.
- */
-const FILLER_WORD_PATTERN =
-  /\b(you know|sort of|kind of|basically|literally|actually|um+|uh+|er+|like)\b,?\s*/gi;
-
-/**
- * Command prefixes that trigger Command Mode.
- * When the transcript starts with one of these phrases, it should EDIT
- * the current composer text rather than being appended.
- */
-const COMMAND_PREFIXES = [
-  'make this more formal',
-  'make this more casual',
-  'make this shorter',
-  'make this longer',
-  'make it more formal',
-  'make it more casual',
-  'make it shorter',
-  'make it longer',
-  'fix the grammar',
-  'fix the spelling',
-  'fix the punctuation',
-  'translate to',
-  'summarize this',
-  'summarize the',
-  'rewrite this',
-  'rewrite the',
-  'edit this',
-  'edit the',
-  'change the tone',
-  'change the style',
-  'make this',
-  'make it',
-  'fix this',
-  'fix the',
-  'more formal',
-  'more casual',
-  'shorter',
-  'longer',
-] as const;
-
-/**
- * Returns true when the transcript is a voice command aimed at editing
- * existing text in the composer (not new dictation to append).
- */
-export function detectVoiceCommand(text: string): boolean {
-  const lower = text.toLowerCase().trim();
-  return COMMAND_PREFIXES.some((prefix) => lower.startsWith(prefix));
-}
-
-/**
- * Basic (non-AI) filler-word removal + whitespace normalisation.
- * Used as the fallback when AI cleanup is off or the LLM call fails.
- */
-function basicCleanup(raw: string): string {
-  return raw.replace(FILLER_WORD_PATTERN, ' ').replace(/\s+/g, ' ').trim();
-}
+export { detectVoiceCommand };
 
 interface LLMResponse {
   content: string;
@@ -294,7 +236,7 @@ export const useVoiceInputStore = create<VoiceInputState>()(
 
           // 'basic' mode: regex-only cleanup, skip LLM
           if (postProcessingMode === 'basic') {
-            return { text: basicCleanup(raw), isCommand };
+            return { text: cleanupVoiceDictation(raw), isCommand };
           }
 
           // 'ai' mode: run transcript through the current LLM
@@ -333,13 +275,13 @@ Output ONLY the cleaned text. No explanations, no quotes, no markdown. If the in
             const cleaned = response?.content?.trim() ?? '';
 
             if (!cleaned) {
-              return { text: basicCleanup(raw), isCommand };
+              return { text: cleanupVoiceDictation(raw), isCommand };
             }
 
             return { text: cleaned, isCommand };
           } catch {
             // Graceful fallback: basic regex cleanup so the user still gets something
-            return { text: basicCleanup(raw), isCommand };
+            return { text: cleanupVoiceDictation(raw), isCommand };
           }
         },
 

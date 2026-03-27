@@ -11,6 +11,7 @@ export { useModelStore as useChatModelStore } from './stores/modelStore';
 export { useUIStore as useChatUIStore } from './stores/uiStore';
 export { useProjectStore as useChatProjectStore } from './stores/projectStore';
 export { useSettingsStore as useChatSettingsStore } from './stores/settingsStore';
+export { useArtifactStore as useChatArtifactStore } from './stores/artifactStore';
 
 // Hooks
 export { useChat } from './hooks/useChat';

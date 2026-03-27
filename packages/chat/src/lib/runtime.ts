@@ -1,4 +1,4 @@
-import type { ChatMessage, Conversation } from './types';
+import type { Artifact, ChatMessage, Conversation } from './types';
 
 /**
  * ChatRuntime abstracts the transport layer between the chat UI and the backend.
@@ -87,6 +87,7 @@ export type StreamChunk =
   | { type: 'thinking'; content: string }
   | { type: 'tool_call'; data: ToolCallData }
   | { type: 'tool_result'; data: ToolResultData }
+  | { type: 'artifact'; data: Artifact }
   | { type: 'done' }
   | { type: 'error'; content: string };
 
@@ -119,7 +120,14 @@ export type StreamEvent =
   | { type: 'content'; content: string }
   | { type: 'thinking'; content: string }
   | { type: 'tool_call'; toolCall: { id: string; name: string; args: Record<string, unknown> } }
-  | { type: 'tool_result'; toolCallId: string; result: string }
+  | {
+      type: 'tool_result';
+      toolCallId: string;
+      result?: string;
+      error?: string;
+      durationMs?: number;
+    }
+  | { type: 'artifact'; artifact: Artifact }
   | { type: 'done' }
   | { type: 'error'; error: string };
 
