@@ -36,7 +36,6 @@ use crate::version::AGIWORKFORCE_CLI_VERSION;
 use crate::wrapping::RtOptions;
 use crate::wrapping::adaptive_wrap_line;
 use crate::wrapping::adaptive_wrap_lines;
-use base64::Engine;
 use agiworkforce_core::config::Config;
 use agiworkforce_core::config::types::McpServerTransportConfig;
 use agiworkforce_core::mcp::McpManager;
@@ -61,6 +60,7 @@ use agiworkforce_protocol::request_user_input::RequestUserInputAnswer;
 use agiworkforce_protocol::request_user_input::RequestUserInputQuestion;
 use agiworkforce_protocol::user_input::TextElement;
 use agiworkforce_utils_cli::format_env_display::format_env_display;
+use base64::Engine;
 use image::DynamicImage;
 use image::ImageReader;
 use ratatui::prelude::*;
@@ -193,6 +193,54 @@ impl dyn HistoryCell {
 
     pub(crate) fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+fn provenance_badge(label: &str, color: Color) -> Span<'static> {
+    Span::styled(
+        format!("[{label}]"),
+        Style::default().fg(color).add_modifier(Modifier::BOLD),
+    )
+}
+
+fn mcp_provenance_badge(invocation: &McpInvocation) -> Span<'static> {
+    let server = invocation.server.to_ascii_lowercase();
+    let tool = invocation.tool.to_ascii_lowercase();
+
+    if server.contains("filesystem")
+        || matches!(
+            tool.as_str(),
+            "list_directory"
+                | "read_text_file"
+                | "read_multiple_files"
+                | "directory_tree"
+                | "search_files"
+                | "list_allowed_directories"
+                | "get_file_info"
+        )
+    {
+        provenance_badge("FILESYSTEM", Color::Green)
+    } else if server.contains("browser")
+        || server.contains("playwright")
+        || tool.starts_with("browser_")
+        || tool.contains("computer")
+    {
+        provenance_badge("BROWSER", Color::Yellow)
+    } else if server.contains("memory")
+        || matches!(tool.as_str(), "search_nodes" | "read_graph" | "open_nodes")
+    {
+        provenance_badge("MEMORY", Color::Magenta)
+    } else {
+        provenance_badge("MCP", Color::Cyan)
+    }
+}
+
+fn web_action_badge(action: Option<&WebSearchAction>) -> Option<Span<'static>> {
+    match action {
+        Some(WebSearchAction::Search { .. }) => Some(provenance_badge("SEARCH", Color::Blue)),
+        Some(WebSearchAction::OpenPage { .. }) => Some(provenance_badge("OPEN", Color::Blue)),
+        Some(WebSearchAction::FindInPage { .. }) => Some(provenance_badge("FIND", Color::Blue)),
+        Some(WebSearchAction::Other) | None => None,
     }
 }
 
@@ -513,7 +561,9 @@ impl HistoryCell for UpdateAvailableHistoryCell {
         } else {
             line![
                 "See ",
-                "https://github.com/agiworkforce/agiworkforce".cyan().underlined(),
+                "https://github.com/agiworkforce/agiworkforce"
+                    .cyan()
+                    .underlined(),
                 " for installation options."
             ]
         };
@@ -598,9 +648,19 @@ impl HistoryCell for UnifiedExecInteractionCell {
         let waited_only = self.stdin.is_empty();
 
         let mut header_spans = if waited_only {
-            vec!["• Waited for background terminal".bold()]
+            vec![
+                "• ".dim(),
+                provenance_badge("SHELL", Color::Yellow),
+                " ".into(),
+                "Waited for background terminal".bold(),
+            ]
         } else {
-            vec!["↳ ".dim(), "Interacted with background terminal".bold()]
+            vec![
+                "↳ ".dim(),
+                provenance_badge("SHELL", Color::Yellow),
+                " ".into(),
+                "Interacted with background terminal".bold(),
+            ]
         };
         if let Some(command) = &self.command_display
             && !command.is_empty()
@@ -668,7 +728,14 @@ impl HistoryCell for UnifiedExecProcessesCell {
         let wrap_width = width as usize;
         let max_processes = 16usize;
         let mut out: Vec<Line<'static>> = Vec::new();
-        out.push(vec!["Background terminals".bold()].into());
+        out.push(
+            vec![
+                provenance_badge("SHELL", Color::Yellow),
+                " ".into(),
+                "Background terminals".bold(),
+            ]
+            .into(),
+        );
         out.push("".into());
 
         if self.processes.is_empty() {
@@ -1166,8 +1233,28 @@ pub(crate) fn new_session_info(
             ]),
             Line::from(vec![
                 "  ".into(),
+                "/resume".into(),
+                " - reopen relevant chats in this project".dim(),
+            ]),
+            Line::from(vec![
+                "  ".into(),
                 "/model".into(),
                 " - choose what model and reasoning effort to use".dim(),
+            ]),
+            Line::from(vec![
+                "  ".into(),
+                "/mcp".into(),
+                " - inspect connected MCP tools and resources".dim(),
+            ]),
+            Line::from(vec![
+                "  ".into(),
+                "/realtime".into(),
+                " - talk to AGI Workforce with realtime voice".dim(),
+            ]),
+            Line::from(vec![
+                "  ".into(),
+                "/settings".into(),
+                " - choose your realtime microphone and speaker".dim(),
             ]),
             Line::from(vec![
                 "  ".into(),
@@ -1451,6 +1538,34 @@ impl McpToolCallCell {
         self.result = Some(Err("interrupted".to_string()));
     }
 
+    fn describe_resource_uri(uri: &str) -> String {
+        let lower = uri.to_ascii_lowercase();
+
+        if lower.ends_with(".md") {
+            return format!("markdown file: {uri}");
+        }
+        if lower.ends_with(".html") || lower.ends_with(".htm") {
+            return format!("html artifact: {uri}");
+        }
+        if lower.ends_with(".js")
+            || lower.ends_with(".ts")
+            || lower.ends_with(".jsx")
+            || lower.ends_with(".tsx")
+            || lower.ends_with(".rs")
+            || lower.ends_with(".py")
+        {
+            return format!("code file: {uri}");
+        }
+        if lower.ends_with(".docx") || lower.ends_with(".pdf") || lower.ends_with(".txt") {
+            return format!("document: {uri}");
+        }
+        if lower.contains("/artifacts/") {
+            return format!("artifact: {uri}");
+        }
+
+        format!("link: {uri}")
+    }
+
     fn render_content_block(block: &serde_json::Value, width: usize) -> String {
         let content = match serde_json::from_value::<rmcp::model::Content>(block.clone()) {
             Ok(content) => content,
@@ -1474,9 +1589,9 @@ impl McpToolCallCell {
                     rmcp::model::ResourceContents::TextResourceContents { uri, .. } => uri,
                     rmcp::model::ResourceContents::BlobResourceContents { uri, .. } => uri,
                 };
-                format!("embedded resource: {uri}")
+                format!("embedded {}", Self::describe_resource_uri(&uri))
             }
-            rmcp::model::RawContent::ResourceLink(link) => format!("link: {}", link.uri),
+            rmcp::model::RawContent::ResourceLink(link) => Self::describe_resource_uri(&link.uri),
         }
     }
 }
@@ -1495,9 +1610,17 @@ impl HistoryCell for McpToolCallCell {
         } else {
             "Calling"
         };
+        let provenance = mcp_provenance_badge(&self.invocation);
 
         let invocation_line = line_to_static(&format_mcp_invocation(self.invocation.clone()));
-        let mut compact_spans = vec![bullet.clone(), " ".into(), header_text.bold(), " ".into()];
+        let mut compact_spans = vec![
+            bullet.clone(),
+            " ".into(),
+            provenance,
+            " ".into(),
+            header_text.bold(),
+            " ".into(),
+        ];
         let mut compact_header = Line::from(compact_spans.clone());
         let reserved = compact_header.width();
 
@@ -1523,10 +1646,12 @@ impl HistoryCell for McpToolCallCell {
         // Reserve four columns for the tree prefix ("  └ "/"    ") and ensure the wrapper still has at least one cell to work with.
         let detail_wrap_width = (width as usize).saturating_sub(4).max(1);
 
+        let mut detail_badge: Option<Span<'static>> = None;
         if let Some(result) = &self.result {
             match result {
                 Ok(agiworkforce_protocol::mcp::CallToolResult { content, .. }) => {
                     if !content.is_empty() {
+                        detail_badge = Some(provenance_badge("RESULT", Color::Green));
                         for block in content {
                             let text = Self::render_content_block(block, detail_wrap_width);
                             for segment in text.split('\n') {
@@ -1543,6 +1668,7 @@ impl HistoryCell for McpToolCallCell {
                     }
                 }
                 Err(err) => {
+                    detail_badge = Some(provenance_badge("ERROR", Color::Red));
                     let err_text = format_and_truncate_tool_result(
                         &format!("Error: {err}"),
                         TOOL_CALL_MAX_LINES,
@@ -1566,7 +1692,12 @@ impl HistoryCell for McpToolCallCell {
             } else {
                 "    ".into()
             };
-            lines.extend(prefix_lines(detail_lines, initial_prefix, "    ".into()));
+            if let Some(detail_badge) = detail_badge {
+                lines.push(Line::from(vec![initial_prefix, detail_badge]));
+                lines.extend(prefix_lines(detail_lines, "    ".into(), "    ".into()));
+            } else {
+                lines.extend(prefix_lines(detail_lines, initial_prefix, "    ".into()));
+            }
         }
 
         lines
@@ -1646,11 +1777,17 @@ impl HistoryCell for WebSearchCell {
         };
         let header = web_search_header(self.completed);
         let detail = web_search_detail(self.action.as_ref(), &self.query);
-        let text: Text<'static> = if detail.is_empty() {
-            Line::from(vec![header.bold()]).into()
-        } else {
-            Line::from(vec![header.bold(), " ".into(), detail.into()]).into()
-        };
+        let mut spans = vec![provenance_badge("WEB", Color::Blue), " ".into()];
+        if let Some(action_badge) = web_action_badge(self.action.as_ref()) {
+            spans.push(action_badge);
+            spans.push(" ".into());
+        }
+        spans.push(header.bold());
+        if !detail.is_empty() {
+            spans.push(" ".into());
+            spans.push(detail.into());
+        }
+        let text: Text<'static> = Line::from(spans).into();
         PrefixedWrappedHistoryCell::new(text, vec![bullet, " ".into()], "  ").display_lines(width)
     }
 }
@@ -1786,8 +1923,7 @@ pub(crate) fn empty_mcp_output() -> PlainHistoryCell {
         "  • No MCP servers configured.".italic().into(),
         Line::from(vec![
             "    See the ".into(),
-            "\u{1b}]8;;https://agiworkforce.com/docs/mcp\u{7}MCP docs\u{1b}]8;;\u{7}"
-                .underlined(),
+            "\u{1b}]8;;https://agiworkforce.com/docs/mcp\u{7}MCP docs\u{1b}]8;;\u{7}".underlined(),
             " to configure them.".into(),
         ])
         .style(Style::default().add_modifier(Modifier::DIM)),
@@ -1816,7 +1952,9 @@ pub(crate) fn new_mcp_tools_output(
         lines.push("".into());
     }
 
-    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(config.agiworkforce_home.clone())));
+    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(
+        config.agiworkforce_home.clone(),
+    )));
     let effective_servers = mcp_manager.effective_servers(config, /*auth*/ None);
     let mut servers: Vec<_> = effective_servers.iter().collect();
     servers.sort_by(|(a, _), (b, _)| a.cmp(b));
@@ -2004,7 +2142,13 @@ impl HistoryCell for RequestUserInputResultCell {
             .count();
         let unanswered = total.saturating_sub(answered);
 
-        let mut header = vec!["•".dim(), " ".into(), "Questions".bold()];
+        let mut header = vec![
+            "•".dim(),
+            " ".into(),
+            provenance_badge("INPUT", Color::LightGreen),
+            " ".into(),
+            "Questions".bold(),
+        ];
         header.push(format!(" {answered}/{total} answered").dim());
         if self.interrupted {
             header.push(" (interrupted)".cyan());
@@ -2163,7 +2307,15 @@ pub(crate) struct ProposedPlanStreamCell {
 impl HistoryCell for ProposedPlanCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut lines: Vec<Line<'static>> = Vec::new();
-        lines.push(vec!["• ".dim(), "Proposed Plan".bold()].into());
+        lines.push(
+            vec![
+                "• ".dim(),
+                provenance_badge("PLAN", Color::Cyan),
+                " ".into(),
+                "Proposed Plan".bold(),
+            ]
+            .into(),
+        );
         lines.push(Line::from(" "));
 
         let mut plan_lines: Vec<Line<'static>> = vec![Line::from(" ")];
@@ -2232,7 +2384,15 @@ impl HistoryCell for PlanUpdateCell {
         };
 
         let mut lines: Vec<Line<'static>> = vec![];
-        lines.push(vec!["• ".dim(), "Updated Plan".bold()].into());
+        lines.push(
+            vec![
+                "• ".dim(),
+                provenance_badge("PLAN", Color::Cyan),
+                " ".into(),
+                "Updated Plan".bold(),
+            ]
+            .into(),
+        );
 
         let mut indented_lines = vec![];
         let note = self
@@ -2300,7 +2460,13 @@ pub(crate) fn new_view_image_tool_call(path: PathBuf, cwd: &Path) -> PlainHistor
     let display_path = display_path_for(&path, cwd);
 
     let lines: Vec<Line<'static>> = vec![
-        vec!["• ".dim(), "Viewed Image".bold()].into(),
+        vec![
+            "• ".dim(),
+            provenance_badge("IMAGE", Color::Magenta),
+            " ".into(),
+            "Viewed Image".bold(),
+        ]
+        .into(),
         vec!["  └ ".dim(), display_path.dim()].into(),
     ];
 
@@ -2315,7 +2481,13 @@ pub(crate) fn new_image_generation_call(
     let detail = revised_prompt.unwrap_or_else(|| call_id.clone());
 
     let mut lines: Vec<Line<'static>> = vec![
-        vec!["• ".dim(), "Generated Image:".bold()].into(),
+        vec![
+            "• ".dim(),
+            provenance_badge("IMAGE", Color::Magenta),
+            " ".into(),
+            "Generated Image".bold(),
+        ]
+        .into(),
         vec!["  └ ".dim(), detail.dim()].into(),
     ];
     if let Some(saved_path) = saved_path {
@@ -2636,7 +2808,7 @@ mod tests {
         assert_eq!(
             render_lines(&cell.display_lines(80)),
             vec![
-                "• Generated Image:".to_string(),
+                "• [IMAGE] Generated Image".to_string(),
                 "  └ A tiny blue square".to_string(),
                 format!("  └ Saved to: {saved_path}"),
             ],
@@ -3151,8 +3323,8 @@ mod tests {
         assert_eq!(
             rendered,
             vec![
-                "• Searched example search query with several generic words to".to_string(),
-                "  exercise wrapping".to_string(),
+                "• [WEB] [SEARCH] Searched example search query with several".to_string(),
+                "  generic words to exercise wrapping".to_string(),
             ]
         );
     }
@@ -3170,7 +3342,10 @@ mod tests {
         );
         let rendered = render_lines(&cell.display_lines(64));
 
-        assert_eq!(rendered, vec!["• Searched short query".to_string()]);
+        assert_eq!(
+            rendered,
+            vec!["• [WEB] [SEARCH] Searched short query".to_string()]
+        );
     }
 
     #[test]

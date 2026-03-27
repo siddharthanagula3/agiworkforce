@@ -1,8 +1,8 @@
-// First-run onboarding wizard for AGI Workforce CLI
-// First-run onboarding wizard
-
 use anyhow::{Context, Result};
 use colored::Colorize;
+
+use crate::project_registry::ProjectRegistry;
+use crate::project_scope::resolve_project_scope;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Amber/gold brand color (warm palette)
@@ -80,10 +80,7 @@ fn print_welcome_banner() {
         amber_bold("Welcome to AGI Workforce"),
         format!("v{}", env!("CARGO_PKG_VERSION")).dimmed(),
     );
-    eprintln!(
-        "  {}\n",
-        "Multi-model AI agent in your terminal.".dimmed()
-    );
+    eprintln!("  {}\n", "Multi-model AI agent in your terminal.".dimmed());
     eprintln!(
         "  {}\n",
         "Sign in with your preferred AI provider to get started,\n  or connect an API key for usage-based billing."
@@ -94,6 +91,95 @@ fn print_welcome_banner() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth provider selection
 // ─────────────────────────────────────────────────────────────────────────────
+
+fn maybe_trust_current_directory() -> Result<bool> {
+    let cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(_) => return Ok(true),
+    };
+    let target = resolve_project_scope(&cwd);
+    let agiworkforce_home = crate::config::CliConfig::config_dir()?;
+    let registry = ProjectRegistry::load(&agiworkforce_home).unwrap_or_default();
+    let target_key = target.to_string_lossy().to_string();
+
+    let trust_already_decided = registry
+        .projects
+        .get(&target_key)
+        .is_some_and(|entry| entry.trust_level == "trusted");
+    if trust_already_decided {
+        return Ok(true);
+    }
+
+    eprintln!("\n  {}", amber_bold("Trust This Directory"));
+    eprintln!(
+        "  {}\n",
+        "Working with untrusted code comes with higher prompt-injection risk.".dimmed()
+    );
+    eprintln!(
+        "  {} {}",
+        "•".yellow(),
+        format!("Current directory: {}", cwd.display()).dimmed()
+    );
+    if target != cwd {
+        eprintln!(
+            "  {} {}",
+            "•".yellow(),
+            format!("Trust will apply to repository root: {}", target.display()).dimmed()
+        );
+    }
+    eprintln!();
+
+    let choices = &["Yes, continue", "No, quit"];
+    let selection = dialoguer::Select::new()
+        .with_prompt("  Do you trust the contents of this directory?")
+        .items(choices)
+        .default(0)
+        .interact()
+        .context("Failed to display trust prompt")?;
+
+    if selection != 0 {
+        let mut registry = registry;
+        if let Err(err) = registry
+            .register_project(&target, "untrusted")
+            .and_then(|()| registry.save(&agiworkforce_home))
+        {
+            eprintln!(
+                "  {} Failed to record trust decision: {}",
+                "⚠".yellow().bold(),
+                err
+            );
+        }
+        eprintln!(
+            "\n  {}",
+            "Setup canceled. Re-run onboarding when you trust this directory.".dimmed()
+        );
+        return Ok(false);
+    }
+
+    let mut registry = registry;
+    if let Err(err) = registry
+        .register_project(&target, "trusted")
+        .and_then(|()| registry.save(&agiworkforce_home))
+    {
+        eprintln!(
+            "\n  {} Failed to save trust decision: {}",
+            "⚠".yellow().bold(),
+            err
+        );
+        eprintln!(
+            "  {}",
+            "Continuing anyway. You can set trust later in config.toml.".dimmed()
+        );
+    } else {
+        eprintln!(
+            "\n  {} Trusted {}",
+            "✓".green().bold(),
+            amber_bold(&target.display().to_string())
+        );
+    }
+
+    Ok(true)
+}
 
 fn select_auth_provider() -> Result<AuthChoice> {
     let choices = &[
@@ -360,9 +446,7 @@ fn update_config_model(model_id: &str, provider: &str, reasoning: Option<&str>) 
                     && !trimmed.contains("cloud_model")
                 {
                     format!("model = \"{}\"", model_id)
-                } else if trimmed.starts_with("provider =")
-                    || trimmed.starts_with("# provider =")
-                {
+                } else if trimmed.starts_with("provider =") || trimmed.starts_with("# provider =") {
                     format!("provider = \"{}\"", provider)
                 } else if trimmed.starts_with("reasoning_effort =")
                     || trimmed.starts_with("# reasoning_effort =")
@@ -413,10 +497,7 @@ fn print_safety_notes() {
     eprintln!("\n  {}", amber_bold("Before you start:"));
     eprintln!("  {}", "─".repeat(50).dimmed());
     eprintln!();
-    eprintln!(
-        "  {}  AGI Workforce can make mistakes.",
-        "•".yellow()
-    );
+    eprintln!("  {}  AGI Workforce can make mistakes.", "•".yellow());
     eprintln!(
         "      {}",
         "Review the code it writes and commands it runs.".dimmed()
@@ -526,17 +607,33 @@ pub async fn run_onboarding() -> Result<bool> {
     // Step 1: Welcome banner
     print_welcome_banner();
 
-    // Step 2: Auth selection
+    // Step 2: Trust current directory
+    match maybe_trust_current_directory() {
+        Ok(true) => {}
+        Ok(false) => return Ok(false),
+        Err(_) => {
+            eprintln!(
+                "\n  {}",
+                "Setup interrupted. Run again to continue.".dimmed()
+            );
+            return Ok(false);
+        }
+    }
+
+    // Step 3: Auth selection
     let auth_choice = match select_auth_provider() {
         Ok(choice) => choice,
         Err(_) => {
             // Ctrl+C or error — don't write marker, re-run next time
-            eprintln!("\n  {}", "Setup interrupted. Run again to continue.".dimmed());
+            eprintln!(
+                "\n  {}",
+                "Setup interrupted. Run again to continue.".dimmed()
+            );
             return Ok(false);
         }
     };
 
-    // Step 3: Execute auth flow
+    // Step 4: Execute auth flow
     let auth_choice = match auth_choice {
         AuthChoice::OtherProviders => match select_other_provider() {
             Ok(choice) => choice,
@@ -548,11 +645,7 @@ pub async fn run_onboarding() -> Result<bool> {
     match auth_choice {
         AuthChoice::Provider(provider) => {
             if let Err(e) = crate::auth::interactive_login_for_provider(Some(provider)).await {
-                eprintln!(
-                    "\n  {} Authentication failed: {}",
-                    "⚠".yellow().bold(),
-                    e
-                );
+                eprintln!("\n  {} Authentication failed: {}", "⚠".yellow().bold(), e);
                 eprintln!(
                     "  {}",
                     "You can try again later with /login or `agiworkforce login`.".dimmed()
@@ -561,11 +654,7 @@ pub async fn run_onboarding() -> Result<bool> {
         }
         AuthChoice::ApiKey => {
             if let Err(e) = run_api_key_flow().await {
-                eprintln!(
-                    "\n  {} API key setup failed: {}",
-                    "⚠".yellow().bold(),
-                    e
-                );
+                eprintln!("\n  {} API key setup failed: {}", "⚠".yellow().bold(), e);
                 eprintln!(
                     "  {}",
                     "You can try again later with /login or `agiworkforce login`.".dimmed()
@@ -573,10 +662,7 @@ pub async fn run_onboarding() -> Result<bool> {
             }
         }
         AuthChoice::OtherProviders | AuthChoice::Skip => {
-            eprintln!(
-                "\n  {} Skipped authentication.",
-                "→".dimmed()
-            );
+            eprintln!("\n  {} Skipped authentication.", "→".dimmed());
             eprintln!(
                 "  {}",
                 "Use /login or `agiworkforce login` to authenticate later.".dimmed()
@@ -584,19 +670,17 @@ pub async fn run_onboarding() -> Result<bool> {
         }
     }
 
-    // Step 4: Model selection
+    // Step 5: Model selection
     match select_model() {
         Ok((model_id, provider, has_reasoning)) => {
-            // Step 4b: Reasoning effort (if model supports it)
+            // Step 5b: Reasoning effort (if model supports it)
             let reasoning = if has_reasoning {
                 select_reasoning_effort(model_id).ok()
             } else {
                 None
             };
 
-            if let Err(e) =
-                update_config_model(model_id, provider, reasoning.as_deref())
-            {
+            if let Err(e) = update_config_model(model_id, provider, reasoning.as_deref()) {
                 eprintln!(
                     "  {} Failed to save model selection: {}",
                     "⚠".yellow().bold(),
@@ -623,13 +707,16 @@ pub async fn run_onboarding() -> Result<bool> {
         }
     }
 
-    // Step 5: Safety notes + approval mode
+    // Step 6: Safety notes + approval mode
     print_safety_notes();
 
     let approval_mode = match select_approval_mode() {
         Ok(mode) => mode,
         Err(_) => {
-            eprintln!("\n  {}", "Setup interrupted. Run again to continue.".dimmed());
+            eprintln!(
+                "\n  {}",
+                "Setup interrupted. Run again to continue.".dimmed()
+            );
             return Ok(false);
         }
     };
@@ -642,15 +729,12 @@ pub async fn run_onboarding() -> Result<bool> {
         );
     }
 
-    // Step 6: Wait for Enter
+    // Step 7: Wait for Enter
     wait_for_enter();
 
-    // Step 7: Mark setup complete
+    // Step 8: Mark setup complete
     if let Err(e) = mark_setup_complete() {
-        eprintln!(
-            "  Warning: could not write setup marker: {}",
-            e
-        );
+        eprintln!("  Warning: could not write setup marker: {}", e);
     }
 
     eprintln!();

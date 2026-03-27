@@ -108,9 +108,9 @@ use agiworkforce_protocol::protocol::AgentReasoningDeltaEvent;
 use agiworkforce_protocol::protocol::AgentReasoningEvent;
 use agiworkforce_protocol::protocol::AgentReasoningRawContentDeltaEvent;
 use agiworkforce_protocol::protocol::AgentReasoningRawContentEvent;
+use agiworkforce_protocol::protocol::AgiWorkforceErrorInfo;
 use agiworkforce_protocol::protocol::ApplyPatchApprovalRequestEvent;
 use agiworkforce_protocol::protocol::BackgroundEventEvent;
-use agiworkforce_protocol::protocol::AgiWorkforceErrorInfo;
 use agiworkforce_protocol::protocol::CollabAgentSpawnBeginEvent;
 use agiworkforce_protocol::protocol::CreditsSnapshot;
 use agiworkforce_protocol::protocol::DeprecationNoticeEvent;
@@ -320,9 +320,8 @@ use crate::streaming::commit_tick::run_commit_tick;
 use crate::streaming::controller::PlanStreamController;
 use crate::streaming::controller::StreamController;
 
-use chrono::Local;
-use agiworkforce_core::AuthManager;
 use agiworkforce_core::AgiWorkforceAuth;
+use agiworkforce_core::AuthManager;
 use agiworkforce_core::ThreadManager;
 use agiworkforce_file_search::FileMatch;
 use agiworkforce_protocol::openai_models::InputModality;
@@ -334,6 +333,7 @@ use agiworkforce_protocol::protocol::AskForApproval;
 use agiworkforce_protocol::protocol::SandboxPolicy;
 use agiworkforce_utils_approval_presets::ApprovalPreset;
 use agiworkforce_utils_approval_presets::builtin_approval_presets;
+use chrono::Local;
 use strum::IntoEnumIterator;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
@@ -1406,7 +1406,10 @@ impl ChatWidget {
     }
 
     // --- Small event handlers ---
-    fn on_session_configured(&mut self, event: agiworkforce_protocol::protocol::SessionConfiguredEvent) {
+    fn on_session_configured(
+        &mut self,
+        event: agiworkforce_protocol::protocol::SessionConfiguredEvent,
+    ) {
         self.bottom_pane
             .set_history_metadata(event.history_log_id, event.history_entry_count);
         self.set_skills(/*skills*/ None);
@@ -1537,7 +1540,10 @@ impl ChatWidget {
         });
     }
 
-    fn on_thread_name_updated(&mut self, event: agiworkforce_protocol::protocol::ThreadNameUpdatedEvent) {
+    fn on_thread_name_updated(
+        &mut self,
+        event: agiworkforce_protocol::protocol::ThreadNameUpdatedEvent,
+    ) {
         if self.thread_id == Some(event.thread_id) {
             self.thread_name = event.thread_name;
             self.refresh_terminal_title();
@@ -4553,7 +4559,8 @@ impl ChatWidget {
                 if !self.bottom_pane.is_task_running() {
                     self.bottom_pane.set_task_running(/*running*/ true);
                 }
-                self.app_event_tx.send(AppEvent::AgiWorkforceOp(Op::Compact));
+                self.app_event_tx
+                    .send(AppEvent::AgiWorkforceOp(Op::Compact));
             }
             SlashCommand::Review => {
                 self.open_review_popup();
@@ -4899,7 +4906,8 @@ impl ChatWidget {
                 else {
                     return;
                 };
-                let Some(name) = agiworkforce_core::util::normalize_thread_name(&prepared_args) else {
+                let Some(name) = agiworkforce_core::util::normalize_thread_name(&prepared_args)
+                else {
                     self.add_error_message("Thread name cannot be empty.".to_string());
                     return;
                 };
@@ -5496,8 +5504,7 @@ impl ChatWidget {
                     .as_ref()
                     .is_some_and(|info| self.handle_steer_rejected_error(info))
                 {
-                } else if let Some(kind) = agi_error_info.as_ref().and_then(rate_limit_error_kind)
-                {
+                } else if let Some(kind) = agi_error_info.as_ref().and_then(rate_limit_error_kind) {
                     match kind {
                         RateLimitErrorKind::ServerOverloaded => {
                             self.on_server_overloaded_error(message)
@@ -5660,7 +5667,9 @@ impl ChatWidget {
             }
             EventMsg::ItemCompleted(event) => {
                 let item = event.item;
-                if !from_replay && let agiworkforce_protocol::items::TurnItem::UserMessage(item) = &item {
+                if !from_replay
+                    && let agiworkforce_protocol::items::TurnItem::UserMessage(item) = &item
+                {
                     let EventMsg::UserMessage(event) = item.as_legacy_event() else {
                         unreachable!("user message item should convert to a legacy user message");
                     };
@@ -6094,8 +6103,7 @@ impl ChatWidget {
                         return;
                     }
                 };
-            let should_schedule_force_refetch =
-                !force_refetch && !accessible_result.agi_apps_ready;
+            let should_schedule_force_refetch = !force_refetch && !accessible_result.agi_apps_ready;
             let accessible_connectors = accessible_result.connectors;
 
             app_event_tx.send(AppEvent::ConnectorsLoaded {
@@ -6363,7 +6371,9 @@ impl ChatWidget {
 
         let mut header = ColumnRenderable::new();
         header.push(Line::from("Select Personality".bold()));
-        header.push(Line::from("Choose a communication style for AGI Workforce.".dim()));
+        header.push(Line::from(
+            "Choose a communication style for AGI Workforce.".dim(),
+        ));
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             header: Box::new(header),
@@ -6652,15 +6662,31 @@ impl ChatWidget {
         });
     }
 
+    fn auto_model_family(model: &str) -> Option<&'static str> {
+        match model {
+            "auto-fast" | "auto-economy" | "agiworkforce-auto-fast" | "codex-auto-fast" => {
+                Some("fast")
+            }
+            "auto-balanced" | "agiworkforce-auto-balanced" | "codex-auto-balanced" => {
+                Some("balanced")
+            }
+            "auto-thorough"
+            | "auto-premium"
+            | "agiworkforce-auto-thorough"
+            | "codex-auto-thorough" => Some("thorough"),
+            _ => None,
+        }
+    }
+
     fn is_auto_model(model: &str) -> bool {
-        model.starts_with("agiworkforce-auto-")
+        Self::auto_model_family(model).is_some()
     }
 
     fn auto_model_order(model: &str) -> usize {
-        match model {
-            "agiworkforce-auto-fast" => 0,
-            "agiworkforce-auto-balanced" => 1,
-            "agiworkforce-auto-thorough" => 2,
+        match Self::auto_model_family(model) {
+            Some("fast") => 0,
+            Some("balanced") => 1,
+            Some("thorough") => 2,
             _ => 3,
         }
     }
@@ -7101,9 +7127,10 @@ impl ChatWidget {
         #[cfg(not(target_os = "windows"))]
         let windows_degraded_sandbox_enabled = false;
 
-        let show_elevate_sandbox_hint = agiworkforce_core::windows_sandbox::ELEVATED_SANDBOX_NUX_ENABLED
-            && windows_degraded_sandbox_enabled
-            && presets.iter().any(|preset| preset.id == "auto");
+        let show_elevate_sandbox_hint =
+            agiworkforce_core::windows_sandbox::ELEVATED_SANDBOX_NUX_ENABLED
+                && windows_degraded_sandbox_enabled
+                && presets.iter().any(|preset| preset.id == "auto");
 
         let guardian_disabled_reason = |enabled: bool| {
             let mut next_features = self.config.features.get().clone();
@@ -7751,9 +7778,7 @@ impl ChatWidget {
         lines.push(line![
             "You can still use AGI Workforce in a non-admin sandbox. It carries greater risk if prompt injected."
         ]);
-        lines.push(line![
-            "Learn more <https://agiworkforce.com/docs/windows>"
-        ]);
+        lines.push(line!["Learn more <https://agiworkforce.com/docs/windows>"]);
 
         let mut header = ColumnRenderable::new();
         header.push(*Box::new(Paragraph::new(lines).wrap(Wrap { trim: false })));
@@ -8393,7 +8418,9 @@ impl ChatWidget {
         }
     }
 
-    fn plugins_for_mentions(&self) -> Option<&[agiworkforce_core::plugins::PluginCapabilitySummary]> {
+    fn plugins_for_mentions(
+        &self,
+    ) -> Option<&[agiworkforce_core::plugins::PluginCapabilitySummary]> {
         if !self.config.features.enabled(Feature::Plugins) {
             return None;
         }
