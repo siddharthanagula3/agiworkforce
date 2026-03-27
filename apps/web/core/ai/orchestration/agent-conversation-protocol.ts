@@ -8,6 +8,7 @@ import { unifiedLLMService } from '../llm/unified-language-model';
 import type { AIEmployee } from '@core/types/ai-employee';
 import { useMissionStore } from '@shared/stores/mission-control-store';
 import { logger } from '@shared/lib/logger';
+import { DEFAULT_ANTHROPIC_COLLABORATION_MODEL } from '@shared/config/supported-models';
 // SECURITY: Import prompt injection defense
 import {
   sanitizeEmployeeInput,
@@ -592,7 +593,7 @@ Synthesize a clear, comprehensive final answer. Focus on directly answering the 
       name: 'Supervisor',
       description: 'Orchestrates multi-agent conversations',
       systemPrompt: `You are the Supervisor AI that coordinates multiple AI employees to solve user queries efficiently.`,
-      model: 'claude-3-5-sonnet-20241022',
+      model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
       tools: [],
     };
   }

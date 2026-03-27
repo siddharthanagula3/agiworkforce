@@ -35,6 +35,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
 import { AVAILABLE_MODELS } from '@/shared/stores/model-store';
 import type { AIModel } from '@/shared/stores/model-store';
+import { getProviderDefaultModel, normalizeModelId } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,6 +56,8 @@ export interface CommandOption {
 }
 
 type ActiveSubMenu = 'model' | null;
+
+const DEFAULT_COMMAND_PALETTE_MODEL = getProviderDefaultModel('anthropic') ?? 'claude-sonnet-4.6';
 
 // ---------------------------------------------------------------------------
 // Hook: build the full command list
@@ -227,28 +230,29 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
   // Model state — sourced from shared model store via a lightweight selector
   const [currentModelId, setCurrentModelId] = useState(() => {
-    if (typeof window === 'undefined') return 'claude-sonnet-4-6';
+    if (typeof window === 'undefined') return DEFAULT_COMMAND_PALETTE_MODEL;
     try {
       const raw = localStorage.getItem('agi-model-store');
       if (raw) {
         const parsed = JSON.parse(raw) as { state?: { selectedModelId?: string } };
-        return parsed?.state?.selectedModelId ?? 'claude-sonnet-4-6';
+        return normalizeModelId(parsed?.state?.selectedModelId) ?? DEFAULT_COMMAND_PALETTE_MODEL;
       }
     } catch {
       // ignore
     }
-    return 'claude-sonnet-4-6';
+    return DEFAULT_COMMAND_PALETTE_MODEL;
   });
 
   const handleModelSwitch = useCallback((modelId: string) => {
-    setCurrentModelId(modelId);
+    const nextModelId = normalizeModelId(modelId) ?? modelId;
+    setCurrentModelId(nextModelId);
     // Persist to shared model store via localStorage directly
     try {
       const raw = localStorage.getItem('agi-model-store');
       const existing = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
       const updated = {
         ...existing,
-        state: { ...(existing['state'] as Record<string, unknown>), selectedModelId: modelId },
+        state: { ...(existing['state'] as Record<string, unknown>), selectedModelId: nextModelId },
       };
       localStorage.setItem('agi-model-store', JSON.stringify(updated));
     } catch {

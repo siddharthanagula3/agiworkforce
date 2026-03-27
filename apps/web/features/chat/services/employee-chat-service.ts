@@ -18,6 +18,7 @@ import {
 import { ExpertiseTaxonomy } from '@core/ai/orchestration/intelligent-agent-router';
 import type { AIEmployee } from '@core/types/ai-employee';
 import { useMissionStore } from '@shared/stores/mission-control-store';
+import { DEFAULT_ANTHROPIC_COLLABORATION_MODEL } from '@shared/config/supported-models';
 
 // Employee expertise mapping - maps employee names to their expertise areas
 const EmployeeExpertiseMap: Record<string, string[]> = {
@@ -382,7 +383,7 @@ export class EmployeeChatService {
         metadata: {
           model:
             selection.employee.model === 'inherit'
-              ? 'claude-3-5-sonnet-20241022'
+              ? DEFAULT_ANTHROPIC_COLLABORATION_MODEL
               : selection.employee.model,
           isMultiAgent: false,
         },
@@ -506,7 +507,7 @@ export class EmployeeChatService {
         thinkingSteps,
         collaborationMessages,
         metadata: {
-          model: 'claude-3-5-sonnet-20241022', // Collaboration uses Claude
+          model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
           tokensUsed: collaboration.metadata.totalTokens,
           isMultiAgent: true,
           employeesInvolved: collaboration.employeesInvolved.map((e) => e.name),
@@ -612,7 +613,8 @@ export class EmployeeChatService {
         selectionReason: 'Direct employee chat (sub-agent mode)',
         thinkingSteps,
         metadata: {
-          model: employee.model === 'inherit' ? 'claude-3-5-sonnet-20241022' : employee.model,
+          model:
+            employee.model === 'inherit' ? DEFAULT_ANTHROPIC_COLLABORATION_MODEL : employee.model,
           tokensUsed: contextStats.totalTokens,
           isMultiAgent: false,
         },
@@ -704,7 +706,7 @@ export class EmployeeChatService {
         thinkingSteps,
         collaborationMessages,
         metadata: {
-          model: 'claude-3-5-sonnet-20241022',
+          model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
           tokensUsed: totalTokens,
           isMultiAgent: true,
           employeesInvolved,
@@ -849,7 +851,7 @@ export class EmployeeChatService {
         thinkingSteps,
         collaborationMessages,
         metadata: {
-          model: 'claude-3-5-sonnet-20241022',
+          model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
           tokensUsed: consultationResult.metadata.totalTokens,
           isMultiAgent: consultationResult.contributions.length > 1,
           employeesInvolved: consultationResult.metadata.agentsUsed,

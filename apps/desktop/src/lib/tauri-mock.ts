@@ -60,7 +60,7 @@ async function handleCloudWebCommand<T>(
       const model =
         typeof req?.['modelOverride'] === 'string' && req['modelOverride'].length > 0
           ? req['modelOverride']
-          : 'claude-sonnet-4-6';
+          : 'claude-sonnet-4.6';
 
       void startCloudChatStream({
         conversationId,

@@ -5,6 +5,7 @@
  */
 
 import type { LLMProvider } from '@core/ai/llm/unified-language-model';
+import { getModelMetadataById, getTaskModelForProvider, type Provider } from '@agiworkforce/types';
 
 export type TaskCategory =
   | 'coding'
@@ -41,302 +42,119 @@ export interface ModelInfo {
   costPer1KTokens: number;
 }
 
-// Available models with their strengths (Updated: Jan 3rd 2026)
-const AVAILABLE_MODELS: ModelInfo[] = [
-  // ==================== ANTHROPIC MODELS (Claude 4.5 Series) ====================
+type ModelBlueprint = {
+  modelId: string | null;
+  strengths: TaskCategory[];
+  description: string;
+};
+
+const CORE_MODEL_BLUEPRINTS: readonly ModelBlueprint[] = [
   {
-    provider: 'anthropic',
-    model: 'claude-opus-4-5-20251101',
-    displayName: 'Claude 4.5 Opus',
-    description: 'Most capable model for complex reasoning, coding, and extended thinking',
+    modelId: getTaskModelForProvider('anthropic', 'complex_reasoning'),
     strengths: ['coding', 'reasoning', 'data-analysis', 'research', 'agentic', 'computer-use'],
-    costPer1KTokens: 0.015,
+    description: 'Flagship Claude model for complex reasoning, coding, and high-agency workflows.',
   },
   {
-    provider: 'anthropic',
-    model: 'claude-sonnet-4-5-20250929',
-    displayName: 'Claude 4.5 Sonnet',
-    description: 'Best balance of intelligence, speed, and computer use capabilities',
-    strengths: ['coding', 'agentic', 'computer-use', 'general', 'vision'],
-    costPer1KTokens: 0.003,
+    modelId: getTaskModelForProvider('anthropic', 'chat'),
+    strengths: ['coding', 'agentic', 'computer-use', 'general', 'vision', 'research'],
+    description: 'Balanced Claude model for chat, coding, research, and computer use.',
   },
   {
-    provider: 'anthropic',
-    model: 'claude-haiku-4-5-20251001',
-    displayName: 'Claude 4.5 Haiku',
-    description: 'Fast and efficient with computer use support',
+    modelId: getTaskModelForProvider('anthropic', 'fast_completion'),
     strengths: ['general', 'agentic', 'computer-use'],
-    costPer1KTokens: 0.00025,
+    description: 'Fast Claude model for quick interactive work and tool-driven flows.',
   },
   {
-    provider: 'anthropic',
-    model: 'claude-sonnet-4-20250514',
-    displayName: 'Claude Sonnet 4',
-    description: 'Excellent for coding and analysis',
-    strengths: ['coding', 'data-analysis', 'research'],
-    costPer1KTokens: 0.003,
+    modelId: getTaskModelForProvider('openai', 'complex_reasoning'),
+    strengths: [
+      'reasoning',
+      'coding',
+      'research',
+      'vision',
+      'agentic',
+      'computer-use',
+      'image-generation',
+    ],
+    description:
+      'Flagship GPT-5.4 reasoning model for difficult reasoning and high-complexity tasks.',
   },
+  {
+    modelId: getTaskModelForProvider('openai', 'chat'),
+    strengths: [
+      'general',
+      'research',
+      'creative',
+      'vision',
+      'agentic',
+      'computer-use',
+      'image-generation',
+    ],
+    description: 'Primary GPT-5.4 all-rounder for chat, multimodal work, and tool use.',
+  },
+  {
+    modelId: getTaskModelForProvider('openai', 'fast_completion'),
+    strengths: ['general', 'agentic', 'computer-use'],
+    description: 'Fast GPT-5.4 mini model for cost-sensitive interactive tasks.',
+  },
+  {
+    modelId: getTaskModelForProvider('google', 'complex_reasoning'),
+    strengths: ['reasoning', 'coding', 'research', 'vision', 'multilingual', 'video-generation'],
+    description: 'Flagship Gemini 3.1 model for large-context reasoning and multimodal analysis.',
+  },
+  {
+    modelId: getTaskModelForProvider('google', 'chat'),
+    strengths: ['general', 'research', 'vision', 'multilingual', 'video-generation'],
+    description: 'Primary Gemini 3.1 fast model for chat, vision, and broad multilingual tasks.',
+  },
+  {
+    modelId: getTaskModelForProvider('google', 'fast_completion'),
+    strengths: ['general', 'creative', 'vision', 'multilingual'],
+    description: 'Fast Gemini 3.1 lite model for lightweight multimodal work.',
+  },
+] as const;
 
-  // ==================== OPENAI MODELS (GPT-5 & o3 Series) ====================
-  {
-    provider: 'openai',
-    model: 'gpt-5.4',
-    displayName: 'GPT-5.2',
-    description: 'Most advanced reasoning and multimodal capabilities',
-    strengths: ['reasoning', 'coding', 'research', 'vision', 'agentic'],
-    costPer1KTokens: 0.02,
-  },
-  {
-    provider: 'openai',
-    model: 'gpt-5.1',
-    displayName: 'GPT-5.1',
-    description: 'Excellent for complex tasks with strong reasoning',
-    strengths: ['reasoning', 'coding', 'general', 'vision'],
-    costPer1KTokens: 0.015,
-  },
-  {
-    provider: 'openai',
-    model: 'gpt-4.1',
-    displayName: 'GPT-4.1',
-    description: 'Latest GPT-4 series with improved performance',
-    strengths: ['general', 'coding', 'creative'],
-    costPer1KTokens: 0.01,
-  },
-  {
-    provider: 'openai',
-    model: 'gpt-5.4',
-    displayName: 'GPT-5.4',
-    description: 'Best for general tasks and multimodal',
-    strengths: ['general', 'research', 'creative', 'vision'],
-    costPer1KTokens: 0.0025,
-  },
-  {
-    provider: 'openai',
-    model: 'gpt-5.4-mini',
-    displayName: 'GPT-5.4 Mini',
-    description: 'Fast and cost-effective for most tasks',
-    strengths: ['general'],
-    costPer1KTokens: 0.00015,
-  },
-  {
-    provider: 'openai',
-    model: 'o3',
-    displayName: 'OpenAI o3',
-    description: 'Most advanced reasoning model for complex problems',
-    strengths: ['reasoning', 'coding', 'data-analysis', 'research'],
-    costPer1KTokens: 0.02,
-  },
-  {
-    provider: 'openai',
-    model: 'o3-mini',
-    displayName: 'OpenAI o3-mini',
-    description: 'Fast reasoning for coding and analysis tasks',
-    strengths: ['coding', 'reasoning'],
-    costPer1KTokens: 0.004,
-  },
+const DEFAULT_ROUTER_MODEL =
+  getTaskModelForProvider('anthropic', 'chat') ??
+  getTaskModelForProvider('openai', 'chat') ??
+  'claude-sonnet-4.6';
 
-  // ==================== GOOGLE MODELS (Gemini 3 Series) ====================
-  {
-    provider: 'google',
-    model: 'gemini-3-pro-preview',
-    displayName: 'Gemini 3 Pro',
-    description: 'Most capable Gemini with thinking mode for complex reasoning',
-    strengths: ['reasoning', 'coding', 'research', 'vision'],
-    costPer1KTokens: 0.005,
-  },
-  {
-    provider: 'google',
-    model: 'gemini-3-flash-preview',
-    displayName: 'Gemini 3 Flash',
-    description: 'Fast Gemini 3 with thinking mode support',
-    strengths: ['general', 'coding', 'reasoning'],
-    costPer1KTokens: 0.001,
-  },
-  {
-    provider: 'google',
-    model: 'gemini-3.1-pro-preview',
-    displayName: 'Gemini 3.1 Pro',
-    description: 'Excellent for complex tasks and large context',
-    strengths: ['coding', 'research', 'general'],
-    costPer1KTokens: 0.00125,
-  },
-  {
-    provider: 'google',
-    model: 'gemini-3-flash',
-    displayName: 'Gemini 3 Flash',
-    description: 'Fast and efficient multimodal model',
-    strengths: ['general', 'vision'],
-    costPer1KTokens: 0.0005,
-  },
-  {
-    provider: 'google',
-    model: 'gemini-2.0-flash',
-    displayName: 'Gemini 2.0 Flash',
-    description: 'Reliable multimodal model',
-    strengths: ['general', 'creative'],
-    costPer1KTokens: 0.0001,
-  },
+function toRouterProvider(provider: Provider | string): LLMProvider | null {
+  switch (provider) {
+    case 'anthropic':
+    case 'openai':
+    case 'google':
+      return provider;
+    case 'xai':
+      return 'grok';
+    default:
+      return null;
+  }
+}
 
-  // ==================== PERPLEXITY MODELS (Sonar Series) ====================
-  {
-    provider: 'perplexity',
-    model: 'sonar-deep-research',
-    displayName: 'Sonar Deep Research',
-    description: 'Multi-step research with autonomous web browsing',
-    strengths: ['research', 'data-analysis', 'agentic'],
-    costPer1KTokens: 0.005,
-  },
-  {
-    provider: 'perplexity',
-    model: 'sonar-reasoning-pro',
-    displayName: 'Sonar Reasoning Pro',
-    description: 'Advanced reasoning with real-time web access',
-    strengths: ['research', 'reasoning', 'data-analysis'],
-    costPer1KTokens: 0.003,
-  },
-  {
-    provider: 'perplexity',
-    model: 'sonar-reasoning',
-    displayName: 'Sonar Reasoning',
-    description: 'Deep reasoning with web access',
-    strengths: ['research', 'reasoning'],
-    costPer1KTokens: 0.002,
-  },
-  {
-    provider: 'perplexity',
-    model: 'sonar-pro',
-    displayName: 'Sonar Pro',
-    description: 'Best for real-time research with citations',
-    strengths: ['research'],
-    costPer1KTokens: 0.001,
-  },
-  {
-    provider: 'perplexity',
-    model: 'sonar',
-    displayName: 'Sonar',
-    description: 'Fast web search and research',
-    strengths: ['research'],
-    costPer1KTokens: 0.0005,
-  },
+function buildModelInfo({ modelId, strengths, description }: ModelBlueprint): ModelInfo | null {
+  const metadata = getModelMetadataById(modelId);
+  if (!metadata) {
+    return null;
+  }
 
-  // ==================== XAI GROK MODELS (Grok-4 Series) ====================
-  {
-    provider: 'grok',
-    model: 'grok-4',
-    displayName: 'Grok 4',
-    description: 'Most capable Grok with real-time X/Twitter access',
-    strengths: ['research', 'agentic', 'general', 'creative'],
-    costPer1KTokens: 0.01,
-  },
-  {
-    provider: 'grok',
-    model: 'grok-4-1-fast-reasoning',
-    displayName: 'Grok 4.1 Fast Reasoning',
-    description: 'Fast reasoning with Agent Tools API support',
-    strengths: ['reasoning', 'agentic', 'coding'],
-    costPer1KTokens: 0.005,
-  },
-  {
-    provider: 'grok',
-    model: 'grok-4-1-fast-non-reasoning',
-    displayName: 'Grok 4.1 Fast',
-    description: 'Fast responses for general tasks',
-    strengths: ['general', 'agentic'],
-    costPer1KTokens: 0.002,
-  },
-  {
-    provider: 'grok',
-    model: 'grok-3',
-    displayName: 'Grok 3',
-    description: 'Reliable Grok for social media analysis',
-    strengths: ['research', 'creative'],
-    costPer1KTokens: 0.003,
-  },
-  {
-    provider: 'grok',
-    model: 'grok-2-vision-1212',
-    displayName: 'Grok 2 Vision',
-    description: 'Vision-capable Grok for image analysis',
-    strengths: ['vision', 'general'],
-    costPer1KTokens: 0.002,
-  },
+  const provider = toRouterProvider(metadata.provider);
+  if (!provider) {
+    return null;
+  }
 
-  // ==================== DEEPSEEK MODELS ====================
-  {
-    provider: 'deepseek',
-    model: 'deepseek-reasoner',
-    displayName: 'DeepSeek Reasoner',
-    description: 'Advanced reasoning with chain-of-thought (R1 architecture)',
-    strengths: ['reasoning', 'coding', 'data-analysis'],
-    costPer1KTokens: 0.002,
-  },
-  {
-    provider: 'deepseek',
-    model: 'deepseek-chat',
-    displayName: 'DeepSeek Chat',
-    description: 'Excellent coding and general chat (V3.2)',
-    strengths: ['coding', 'general', 'agentic'],
-    costPer1KTokens: 0.0014,
-  },
+  return {
+    provider,
+    model: metadata.id,
+    displayName: metadata.name,
+    description,
+    strengths: [...new Set(strengths)],
+    costPer1KTokens: (metadata.inputCost + metadata.outputCost) / 1000,
+  };
+}
 
-  // ==================== QWEN MODELS (Alibaba) ====================
-  {
-    provider: 'qwen',
-    model: 'qwen3-max',
-    displayName: 'Qwen3 Max',
-    description: 'Most capable Qwen with thinking mode',
-    strengths: ['reasoning', 'coding', 'multilingual'],
-    costPer1KTokens: 0.004,
-  },
-  {
-    provider: 'qwen',
-    model: 'qwq-plus',
-    displayName: 'QwQ Plus',
-    description: 'Advanced reasoning model',
-    strengths: ['reasoning', 'coding', 'data-analysis'],
-    costPer1KTokens: 0.003,
-  },
-  {
-    provider: 'qwen',
-    model: 'qwen3-coder-plus',
-    displayName: 'Qwen3 Coder Plus',
-    description: 'Specialized for code generation and analysis',
-    strengths: ['coding', 'agentic'],
-    costPer1KTokens: 0.002,
-  },
-  {
-    provider: 'qwen',
-    model: 'qwen3-coder-flash',
-    displayName: 'Qwen3 Coder Flash',
-    description: 'Fast code generation',
-    strengths: ['coding'],
-    costPer1KTokens: 0.001,
-  },
-  {
-    provider: 'qwen',
-    model: 'qwen-plus',
-    displayName: 'Qwen Plus',
-    description: 'Excellent balance for general tasks',
-    strengths: ['general', 'multilingual', 'coding'],
-    costPer1KTokens: 0.002,
-  },
-  {
-    provider: 'qwen',
-    model: 'qwen-flash',
-    displayName: 'Qwen Flash',
-    description: 'Fast and efficient for quick responses',
-    strengths: ['general', 'multilingual'],
-    costPer1KTokens: 0.0005,
-  },
-  {
-    provider: 'qwen',
-    model: 'qwen3-vl-plus',
-    displayName: 'Qwen3 VL Plus',
-    description: 'Vision-language model for image understanding',
-    strengths: ['vision', 'multilingual'],
-    costPer1KTokens: 0.002,
-  },
-];
+const AVAILABLE_MODELS: ModelInfo[] = CORE_MODEL_BLUEPRINTS.map(buildModelInfo).filter(
+  (model): model is ModelInfo => Boolean(model),
+);
 
 export class ModelRouter {
   /**
@@ -466,14 +284,14 @@ export class ModelRouter {
     });
 
     if (suitableModels.length === 0) {
-      // Fallback to Claude 4.5 Sonnet as general purpose
+      // Fallback to the current balanced general-purpose core model.
       const fallback =
-        AVAILABLE_MODELS.find((m) => m.model === 'claude-sonnet-4-5-20250929') ||
+        AVAILABLE_MODELS.find((m) => m.model === DEFAULT_ROUTER_MODEL) ||
         AVAILABLE_MODELS.find((m) => m.model === 'gpt-5.4') ||
         AVAILABLE_MODELS[0];
       return {
         provider: fallback?.provider ?? 'anthropic',
-        model: fallback?.model ?? 'claude-sonnet-4-5-20250929',
+        model: fallback?.model ?? DEFAULT_ROUTER_MODEL,
         reason: `No specialized model found for "${category}". Using general-purpose model.`,
         confidence: 0.5,
         alternatives: [],
@@ -489,7 +307,7 @@ export class ModelRouter {
 
     return {
       provider: primary?.provider ?? 'anthropic',
-      model: primary?.model ?? 'claude-sonnet-4-5-20250929',
+      model: primary?.model ?? DEFAULT_ROUTER_MODEL,
       reason: this.getRecommendationReason(category, primary!),
       confidence: 0.85,
       alternatives,
@@ -540,12 +358,10 @@ export class ModelRouter {
   }
 
   /**
-   * Get default model (Claude 4.5 Sonnet for balanced performance)
+   * Get default model (current balanced core model)
    */
   getDefaultModel(): ModelInfo {
-    return (
-      AVAILABLE_MODELS.find((m) => m.model === 'claude-sonnet-4-5-20250929') || AVAILABLE_MODELS[0]!
-    );
+    return AVAILABLE_MODELS.find((m) => m.model === DEFAULT_ROUTER_MODEL) || AVAILABLE_MODELS[0]!;
   }
 
   /**
@@ -574,14 +390,14 @@ export class ModelRouter {
    * Get image generation capable providers
    */
   getImageGenerationProviders(): LLMProvider[] {
-    return ['openai', 'google', 'grok', 'qwen'];
+    return ['openai', 'google'];
   }
 
   /**
    * Get video generation capable providers
    */
   getVideoGenerationProviders(): LLMProvider[] {
-    return ['openai', 'google', 'qwen'];
+    return ['openai', 'google'];
   }
 
   /**
