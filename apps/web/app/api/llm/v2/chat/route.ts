@@ -209,6 +209,7 @@ async function handleViaV1Fallback(
         subscription.plan_tier,
         subscription.current_period_start,
         subscription.current_period_end,
+        { stripePriceId: subscription.stripe_price_id },
       );
     } catch (allocError) {
       logger.error(
@@ -845,6 +846,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
         subscription.plan_tier,
         subscription.current_period_start,
         subscription.current_period_end,
+        { stripePriceId: subscription.stripe_price_id },
       );
     } catch (allocError) {
       logger.error(

@@ -255,9 +255,9 @@ describe('OpenAIProvider', () => {
       });
 
       expect(toast.error).toHaveBeenCalledWith(
-        'Insufficient Tokens',
+        'Insufficient Credits',
         expect.objectContaining({
-          description: expect.stringContaining('run out of AI tokens'),
+          description: expect.stringContaining('exhausted your AI credits'),
         }),
       );
     });

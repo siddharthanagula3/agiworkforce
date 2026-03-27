@@ -13,6 +13,7 @@
 
 import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
+import { getModelMetadataById, getProviderConfig, normalizeModelId } from '@agiworkforce/types';
 
 // RPC/tables not yet in generated Database type
 
@@ -43,6 +44,73 @@ export interface UsageMetadata {
   feature?: string;
 }
 
+interface UsageCostEstimate {
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+const FALLBACK_PRICING = {
+  inputCostPer1MTokens: 1.0,
+  outputCostPer1MTokens: 4.0,
+};
+
+function normalizeProviderId(provider: string): string {
+  const normalized = provider.trim().toLowerCase();
+  if (normalized === 'grok') return 'xai';
+  return normalized;
+}
+
+function extractCreditsRemainingCents(value: unknown): {
+  remaining: number;
+  allocated?: number;
+} {
+  if (typeof value === 'number') {
+    return { remaining: Math.max(value, 0) };
+  }
+
+  if (value && typeof value === 'object') {
+    const row = value as {
+      credits_remaining_cents?: number;
+      credits_allocated_cents?: number;
+    };
+    return {
+      remaining: Math.max(Number(row.credits_remaining_cents ?? 0), 0),
+      allocated:
+        row.credits_allocated_cents !== undefined
+          ? Math.max(Number(row.credits_allocated_cents), 0)
+          : undefined,
+    };
+  }
+
+  return { remaining: 0 };
+}
+
+export function estimateUsageCostCents({
+  provider,
+  model,
+  inputTokens,
+  outputTokens,
+}: UsageCostEstimate): number {
+  const normalizedModel = normalizeModelId(model);
+  const canonicalProvider = normalizeProviderId(provider);
+  const metadata = getModelMetadataById(normalizedModel);
+  const providerConfig = getProviderConfig(canonicalProvider);
+  const inputCostPer1MTokens =
+    metadata?.inputCost ??
+    providerConfig?.defaultPricing?.inputPerMillion ??
+    FALLBACK_PRICING.inputCostPer1MTokens;
+  const outputCostPer1MTokens =
+    metadata?.outputCost ??
+    providerConfig?.defaultPricing?.outputPerMillion ??
+    FALLBACK_PRICING.outputCostPer1MTokens;
+
+  const inputCost = (Math.max(0, inputTokens) / 1_000_000) * inputCostPer1MTokens;
+  const outputCost = (Math.max(0, outputTokens) / 1_000_000) * outputCostPer1MTokens;
+  return Math.round((inputCost + outputCost) * 100);
+}
+
 /**
  * Check if user has sufficient tokens for an operation
  * MUST be called BEFORE making any API request
@@ -50,7 +118,7 @@ export interface UsageMetadata {
  */
 export async function checkTokenSufficiency(
   userId: string,
-  estimatedTokens: number,
+  estimatedCostCents: number,
 ): Promise<TokenCheckResult> {
   try {
     // Get user's current token balance from correct table
@@ -60,36 +128,36 @@ export async function checkTokenSufficiency(
       return {
         allowed: false,
         currentBalance: 0,
-        estimatedCost: estimatedTokens,
+        estimatedCost: estimatedCostCents,
         reason: 'Failed to fetch user balance',
       };
     }
 
     // Check if user has sufficient balance
-    if (currentBalance < estimatedTokens) {
+    if (currentBalance < estimatedCostCents) {
       return {
         allowed: false,
         currentBalance,
-        estimatedCost: estimatedTokens,
-        reason: `Insufficient tokens. You need ${estimatedTokens.toLocaleString()} tokens, but only have ${currentBalance.toLocaleString()} remaining.`,
+        estimatedCost: estimatedCostCents,
+        reason: `Insufficient credits. You need ${estimatedCostCents.toLocaleString()} credits, but only have ${currentBalance.toLocaleString()} remaining.`,
       };
     }
 
     return {
       allowed: true,
       currentBalance,
-      estimatedCost: estimatedTokens,
+      estimatedCost: estimatedCostCents,
     };
   } catch (error) {
     logger.error('[Token Enforcement] Error checking sufficiency:', error);
     captureError(error as Error, {
       tags: { feature: 'billing', operation: 'check_token_sufficiency' },
-      extra: { userId, estimatedTokens },
+      extra: { userId, estimatedCostCents },
     });
     return {
       allowed: false,
       currentBalance: 0,
-      estimatedCost: estimatedTokens,
+      estimatedCost: estimatedCostCents,
       reason: 'System error checking token balance',
     };
   }
@@ -110,14 +178,20 @@ export async function deductTokens(
   metadata: UsageMetadata,
 ): Promise<TokenDeductionResult> {
   try {
-    const { provider, model, totalTokens } = metadata;
+    const { provider, model } = metadata;
+    const usageCostCents = estimateUsageCostCents({
+      provider,
+      model,
+      inputTokens: metadata.inputTokens,
+      outputTokens: metadata.outputTokens,
+    });
 
     // Try the new credit system RPC first
     const { error: creditError } = await db.rpc('deduct_credits', {
       p_user_id: userId,
-      p_amount_cents: totalTokens, // In the new system, this represents cents
+      p_amount_cents: usageCostCents,
       p_description: `${provider}/${model} usage`,
-      p_metadata: { provider, model },
+      p_metadata: { provider, model, usage_cost_cents: usageCostCents },
       p_idempotency_key: `${userId}-${Date.now()}`,
     });
 
@@ -127,9 +201,10 @@ export async function deductTokens(
         p_user_id: userId,
       });
 
-      const newBalance = balanceData !== null ? Number(balanceData) : 0;
+      const balanceRow = Array.isArray(balanceData) ? balanceData[0] : balanceData;
+      const newBalance = extractCreditsRemainingCents(balanceRow).remaining;
       logger.info(
-        `[Token Enforcement] Deducted ${totalTokens} cents from user ${userId}. New balance: ${newBalance}`,
+        `[Token Enforcement] Deducted ${usageCostCents} cents from user ${userId}. New balance: ${newBalance}`,
       );
 
       return {
@@ -146,7 +221,7 @@ export async function deductTokens(
     // Fallback: legacy deduct_user_tokens RPC
     const { data: newBalance, error } = await db.rpc('deduct_user_tokens', {
       p_user_id: userId,
-      p_tokens: totalTokens,
+      p_tokens: metadata.totalTokens,
       p_provider: provider,
       p_model: model,
     });
@@ -161,7 +236,7 @@ export async function deductTokens(
     }
 
     logger.info(
-      `[Token Enforcement] Deducted ${totalTokens} tokens (legacy) from user ${userId}. New balance: ${newBalance}`,
+      `[Token Enforcement] Deducted ${metadata.totalTokens} tokens (legacy) from user ${userId}. New balance: ${newBalance}`,
     );
 
     return {
@@ -196,7 +271,8 @@ export async function getUserTokenBalance(userId: string): Promise<number | null
     });
 
     if (!rpcError && rpcData !== null && rpcData !== undefined) {
-      const balanceCents = Math.max(Number(rpcData), 0);
+      const balanceRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      const balanceCents = extractCreditsRemainingCents(balanceRow).remaining;
       logger.info(`[Token Balance] Credit balance (via RPC): ${balanceCents} cents`);
       return balanceCents;
     }
@@ -364,7 +440,7 @@ export async function canUserMakeRequest(
   if (!allowance.allowed) {
     return {
       allowed: false,
-      reason: `Monthly limit reached. You've used ${allowance.used.toLocaleString()} of your ${allowance.limit.toLocaleString()} token monthly allowance. Limit resets ${allowance.resetDate.toLocaleDateString()}. Upgrade to Pro for unlimited usage.`,
+      reason: `Monthly limit reached. You've used ${allowance.used.toLocaleString()} of your ${allowance.limit.toLocaleString()} monthly allowance. Limit resets ${allowance.resetDate.toLocaleDateString()}. Upgrade to a paid plan for more usage.`,
     };
   }
 
@@ -375,9 +451,29 @@ export async function canUserMakeRequest(
       allowed: false,
       reason:
         sufficiency.reason ||
-        `Insufficient tokens. You need ${estimatedTokens.toLocaleString()} tokens, but only have ${sufficiency.currentBalance.toLocaleString()} remaining.`,
+        `Insufficient credits. You need ${estimatedTokens.toLocaleString()} credits, but only have ${sufficiency.currentBalance.toLocaleString()} remaining.`,
     };
   }
 
   return { allowed: true };
+}
+
+export async function canUserMakeUsagePricedRequest(
+  userId: string,
+  estimate: UsageCostEstimate,
+): Promise<{ allowed: boolean; reason?: string; estimatedCostCents?: number }> {
+  const estimatedCostCents = estimateUsageCostCents(estimate);
+  const sufficiency = await checkTokenSufficiency(userId, estimatedCostCents);
+
+  if (!sufficiency.allowed) {
+    return {
+      allowed: false,
+      estimatedCostCents,
+      reason:
+        sufficiency.reason ||
+        `Insufficient credits. You need ${estimatedCostCents.toLocaleString()} credits, but only have ${sufficiency.currentBalance.toLocaleString()} remaining.`,
+    };
+  }
+
+  return { allowed: true, estimatedCostCents };
 }
