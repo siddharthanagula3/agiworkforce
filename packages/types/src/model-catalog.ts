@@ -105,6 +105,8 @@ export interface ModelMetadata {
   quality: ModelQuality;
   qualityTier: ModelQualityTier;
   bestFor: string[];
+  /** Optional preferred adjacent model for quality/speed cycling. */
+  variantPartner?: string;
   /** Release date string (e.g., "2026-03"). */
   released?: string;
   deprecated?: boolean;
@@ -220,6 +222,13 @@ export interface ModelCostRate {
   input: number;
   output: number;
   provider: Provider | string;
+}
+
+export interface RuntimeFallbackModel {
+  model: string;
+  provider: Provider | string;
+  inputCost: number;
+  outputCost: number;
 }
 
 export interface ModelQueryOptions {
@@ -366,6 +375,10 @@ export function listCanonicalModels(): ModelMetadata[] {
   return Object.values(modelsCatalog.models);
 }
 
+export function getModels(options: ModelQueryOptions = {}): ModelMetadata[] {
+  return listCanonicalModels().filter((model) => matchesModelQueryOptions(model, options));
+}
+
 function matchesModelQueryOptions(model: ModelMetadata, options: ModelQueryOptions = {}): boolean {
   const { includeDeprecated = false, modelTypes, requireCapabilities } = options;
 
@@ -395,9 +408,7 @@ export function getModelsForProvider(
   provider: Provider | string,
   options: ModelQueryOptions = {},
 ): ModelMetadata[] {
-  return listCanonicalModels().filter(
-    (model) => model.provider === provider && matchesModelQueryOptions(model, options),
-  );
+  return getModels(options).filter((model) => model.provider === provider);
 }
 
 export function getModelIdsForProvider(
@@ -425,6 +436,43 @@ export function detectProviderFromModelId(
 ): Provider | string | null {
   const metadata = getModelMetadataById(modelId);
   return metadata?.provider ?? null;
+}
+
+export function getModelVariantPartner(modelId: string | null | undefined): string | null {
+  const metadata = getModelMetadataById(modelId);
+  return normalizeModelId(metadata?.variantPartner);
+}
+
+export function getProviderProbeModel(provider: Provider | string): string | null {
+  return getTaskModelForProvider(provider, 'fast_completion') ?? getProviderDefaultModel(provider);
+}
+
+export function getEconomyFallbackModels(): RuntimeFallbackModel[] {
+  return getAllowedModelsForTier('economy')
+    .map((modelId) => getModelMetadataById(modelId))
+    .filter((model): model is ModelMetadata => {
+      if (!model) {
+        return false;
+      }
+
+      return (
+        model.status !== 'deprecated' &&
+        ['chat', 'code', 'reasoning', 'multimodal'].includes(model.modelType) &&
+        model.capabilities.tools
+      );
+    })
+    .sort(
+      (left, right) =>
+        left.inputCost + left.outputCost - (right.inputCost + right.outputCost) ||
+        right.contextWindow - left.contextWindow ||
+        left.name.localeCompare(right.name),
+    )
+    .map((model) => ({
+      model: model.id,
+      provider: model.provider,
+      inputCost: model.inputCost,
+      outputCost: model.outputCost,
+    }));
 }
 
 function normalizeSubscriptionTierKey(tier: string | null | undefined): TierKey | 'free' {

@@ -10,19 +10,19 @@ import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { getProviderProbeModel, normalizeModelId, type Provider } from '@agiworkforce/types';
 
 /**
- * Maps provider names from the settings UI to internal provider IDs
- * and a lightweight probe model for each.
+ * Maps provider names from the settings UI to internal provider IDs.
  */
-const PROVIDER_PROBE: Record<string, { provider: string; model: string }> = {
-  OpenAI: { provider: 'openai', model: 'gpt-5.4-mini' },
-  Anthropic: { provider: 'anthropic', model: 'claude-haiku-4-5' },
-  Google: { provider: 'google', model: 'gemini-3.1-flash-lite' },
-  Perplexity: { provider: 'perplexity', model: 'sonar' },
-  Grok: { provider: 'xai', model: 'grok-4' },
-  DeepSeek: { provider: 'deepseek', model: 'deepseek-chat' },
-  Qwen: { provider: 'qwen', model: 'qwen-flash' },
+const SETTINGS_PROVIDER_MAP: Record<string, Provider> = {
+  OpenAI: 'openai',
+  Anthropic: 'anthropic',
+  Google: 'google',
+  Perplexity: 'perplexity',
+  Grok: 'xai',
+  DeepSeek: 'deepseek',
+  Qwen: 'qwen',
 };
 
 async function handleTestProvider(request: NextRequest) {
@@ -61,14 +61,18 @@ async function handleTestProvider(request: NextRequest) {
     throw createError.badRequest('provider is required');
   }
 
-  const probe = PROVIDER_PROBE[providerKey];
-  if (!probe) {
+  const provider = SETTINGS_PROVIDER_MAP[providerKey];
+  if (!provider) {
     throw createError.badRequest(`Unknown provider: ${providerKey}`);
+  }
+  const probeModel = normalizeModelId(getProviderProbeModel(provider));
+  if (!probeModel) {
+    throw createError.badRequest(`No probe model configured for provider: ${providerKey}`);
   }
 
   // Send a minimal test completion to verify the provider is reachable
   try {
-    const llmProvider = LLMProviderFactory.createProvider(probe.provider);
+    const llmProvider = LLMProviderFactory.createProvider(provider);
 
     if (!llmProvider) {
       return NextResponse.json(
@@ -82,7 +86,7 @@ async function handleTestProvider(request: NextRequest) {
     }
 
     await llmProvider.sendRequest({
-      model: probe.model,
+      model: probeModel,
       messages: [{ role: 'user', content: 'Reply with the single word: OK' }],
       max_tokens: 10,
       temperature: 0,
@@ -90,20 +94,20 @@ async function handleTestProvider(request: NextRequest) {
     });
 
     logger.info(
-      { provider: providerKey, model: probe.model, userId: user.id },
+      { provider: providerKey, model: probeModel, userId: user.id },
       'Provider test succeeded',
     );
 
     return NextResponse.json({
       success: true,
       provider: providerKey,
-      model: probe.model,
+      model: probeModel,
       message: 'Provider is reachable and responding correctly',
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn(
-      { provider: providerKey, model: probe.model, userId: user.id, error: message },
+      { provider: providerKey, model: probeModel, userId: user.id, error: message },
       'Provider test failed',
     );
 

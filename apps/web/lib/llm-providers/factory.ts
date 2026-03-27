@@ -13,66 +13,11 @@ import { PerplexityProvider } from './perplexity';
 import { ZhipuProvider } from './zhipu';
 import { logger } from '@/lib/logger';
 import { shouldEnablePromptCache } from '@/lib/prompt-cache-helper';
-
-/**
- * Maps internal model IDs to actual provider API model IDs.
- * Internal IDs are user-friendly names used in the frontend.
- * API IDs are the exact strings required by each provider's API.
- */
-const MODEL_ID_TO_API_ID: Record<string, string> = {
-  // Google Gemini 3 models (per docs/llm-provider-reference.md)
-  // NOTE: No "Ultra" tier exists in Gemini 3 API - only Pro and Flash
-  'gemini-3-pro-preview': 'gemini-3-pro-preview', // Gemini 3 Pro
-  'gemini-3-flash-preview': 'gemini-3-flash-preview', // Gemini 3 Flash
-  // Anthropic Claude 4.5 models (per docs/llm-provider-reference.md)
-  // Anthropic requires date suffixes in model IDs
-  'claude-opus-4.6': 'claude-opus-4-6-20251101', // Claude Opus 4.6
-  'claude-opus-4.5': 'claude-opus-4-5-20251101', // Claude Opus 4.5
-  'claude-opus-4-6': 'claude-opus-4-6-20251101', // Claude Opus 4.6 (hyphen alias)
-  'claude-opus-4-5': 'claude-opus-4-5-20251101', // Claude Opus 4.5 (hyphen alias)
-  'claude-sonnet-4.6': 'claude-sonnet-4-6-20251029', // Claude Sonnet 4.6
-  'claude-sonnet-4-6': 'claude-sonnet-4-6-20251029', // Claude Sonnet 4.6 (hyphen alias)
-  'claude-sonnet-4.5': 'claude-sonnet-4-5-20250929', // Claude Sonnet 4.5
-  'claude-sonnet-4-5': 'claude-sonnet-4-5-20250929', // Claude Sonnet 4.5 (hyphen alias)
-  'claude-haiku-4.5': 'claude-haiku-4-5-20251001', // Claude Haiku 4.5
-  'claude-haiku-4-5': 'claude-haiku-4-5-20251001', // Claude Haiku 4.5 (hyphen alias)
-  // OpenAI GPT-5 models (per docs/llm-provider-reference.md)
-  'gpt-5.4': 'gpt-5.4', // GPT-5.4 flagship
-  'gpt-5.4-codex': 'gpt-5.4-codex', // GPT-5.4 Codex canonical
-  'gpt-5.4-codex-low': 'gpt-5.4-codex', // GPT-5.4 Codex (Low)
-  'gpt-5.4-codex-medium': 'gpt-5.4-codex', // GPT-5.4 Codex (Medium)
-  'gpt-5.4-codex-high': 'gpt-5.4-codex', // GPT-5.4 Codex (High)
-  'gpt-5.4-codex-xhigh': 'gpt-5.4-codex', // GPT-5.4 Codex (XHigh)
-  'gpt-5-codex': 'gpt-5.4-codex', // Legacy redirect → gpt-5.4-codex
-  'gpt-5.4-pro': 'gpt-5.4-pro', // GPT-5.4 Pro flagship
-  'gpt-5-pro': 'gpt-5.4-pro', // Legacy redirect → gpt-5.4-pro
-  'gpt-5.4-mini': 'gpt-5.4-mini', // GPT-5.4 Mini
-  'gpt-5.4-nano': 'gpt-5.4-nano', // GPT-5.4 Nano
-  o3: 'o3-2025-04-16', // o3 reasoning model
-  // xAI Grok 4 models (per docs/llm-provider-reference.md)
-  'grok-4': 'grok-4', // Grok 4 flagship
-  'grok-4-fast-reasoning': 'grok-4-fast-reasoning', // Grok Fast Reasoning
-  'grok-4-fast-non-reasoning': 'grok-4-fast-non-reasoning', // Grok Fast Non-Reasoning
-  // DeepSeek models
-  'deepseek-chat': 'deepseek-chat', // DeepSeek Chat (V3)
-  'deepseek-r1': 'deepseek-reasoner', // DeepSeek R1 reasoning model
-  // Qwen models (via MuleRouter) - per https://www.mulerouter.ai/collections/qwen
-  // MuleRouter model IDs: qwen-max, qwen-flash
-  'qwen-max': 'qwen-max', // Qwen Max (flagship model)
-  'qwen-flash': 'qwen-flash', // Qwen Flash (economy model)
-  // Moonshot/Kimi models - per docs/llm-provider-reference.md
-  // NOTE: K2.5 is a single model - thinking mode controlled via API parameter
-  'kimi-k2.5': 'kimi-k2.5', // Kimi K2.5 (thinking mode via API parameter)
-  // Perplexity models
-  sonar: 'sonar',
-  'sonar-pro': 'sonar-pro',
-  'sonar-reasoning': 'sonar-reasoning',
-  'sonar-deep-research': 'sonar-deep-research',
-  // ZhipuAI GLM models - per docs/llm-provider-reference.md
-  'glm-4.7': 'glm-4.7', // GLM-4.7 flagship
-  'glm-4.6v': 'glm-4.6v', // GLM-4.6V vision model
-  'glm-4.6v-flash': 'glm-4.6v-flash', // GLM-4.6V Flash
-};
+import {
+  detectProviderFromModelId,
+  getModelMetadataById,
+  normalizeModelId,
+} from '@agiworkforce/types';
 
 // Diagnostic: Log which API keys are configured on first access
 let diagnosticsLogged = false;
@@ -227,6 +172,11 @@ export class LLMProviderFactory {
    * Route request to appropriate provider based on model name
    */
   static getProviderFromModel(model: string): string {
+    const catalogProvider = detectProviderFromModelId(model);
+    if (catalogProvider) {
+      return catalogProvider;
+    }
+
     const modelLower = model.toLowerCase();
 
     if (modelLower.includes('gpt-')) {
@@ -266,11 +216,13 @@ export class LLMProviderFactory {
    * Returns the original model ID if no mapping exists.
    */
   static mapModelIdToApiId(modelId: string): string {
-    const modelLower = modelId.toLowerCase();
-    const mappedId = MODEL_ID_TO_API_ID[modelLower];
-    if (mappedId) {
-      logger.debug({ internalId: modelId, apiId: mappedId }, 'Mapped model ID to API ID');
-      return mappedId;
+    const metadata = getModelMetadataById(modelId);
+    const normalizedModelId = normalizeModelId(modelId);
+    const apiModelId = metadata?.apiModelId ?? normalizedModelId;
+
+    if (apiModelId) {
+      logger.debug({ internalId: modelId, apiId: apiModelId }, 'Mapped model ID to API ID');
+      return apiModelId;
     }
     // No mapping found - return original (it might already be an API ID)
     return modelId;

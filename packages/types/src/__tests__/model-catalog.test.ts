@@ -3,9 +3,12 @@ import {
   detectProviderFromModelId,
   getModelCostRates,
   getModelContextLimits,
+  getEconomyFallbackModels,
   getModelIdsForProvider,
+  getModelVariantPartner,
   getPickerModelTier,
   getPickerModels,
+  getProviderProbeModel,
   listCanonicalModels,
   normalizeModelId,
   resolveAutoModeModel,
@@ -73,5 +76,18 @@ describe('model catalog helpers', () => {
     expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.4');
     expect(resolveAutoModeModel('auto-premium', 'max')).toBe('claude-opus-4.6');
     expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gpt-5.4-mini');
+  });
+
+  it('derives variant partners, provider probes, and economy fallbacks from the catalog', () => {
+    expect(getModelVariantPartner('gpt-5.4-mini')).toBe('gpt-5.4');
+    expect(getModelVariantPartner('claude-sonnet-4-6')).toBe('claude-opus-4.6');
+    expect(getProviderProbeModel('openai')).toBe('gpt-5.4-mini');
+    expect(getProviderProbeModel('anthropic')).toBe('claude-haiku-4.5');
+
+    const fallbackIds = getEconomyFallbackModels().map((entry) => entry.model);
+    expect(fallbackIds.indexOf('qwen-turbo')).toBeGreaterThanOrEqual(0);
+    expect(fallbackIds.indexOf('qwen-turbo')).toBeLessThan(fallbackIds.indexOf('gpt-5.4-mini'));
+    expect(fallbackIds).toContain('gpt-5.4-mini');
+    expect(fallbackIds).not.toContain('gpt-5.4-nano');
   });
 });

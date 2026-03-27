@@ -17,7 +17,11 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import { requireCsrfToken } from '@/lib/csrf';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, EgressPolicyError } from '@/lib/egress-policy';
-import { resolveAutoModeModel } from '@agiworkforce/types';
+import {
+  getEconomyFallbackModels,
+  normalizeModelId,
+  resolveAutoModeModel,
+} from '@agiworkforce/types';
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
 const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
@@ -133,16 +137,13 @@ function findCheaperFallbackModel(
     maxTokens,
   );
 
-  const fallbackModels = [
-    { model: 'deepseek-chat', provider: 'deepseek' },
-    { model: 'qwen-flash', provider: 'qwen' },
-    { model: 'gpt-5.4-mini', provider: 'openai' },
-    { model: 'gemini-3.1-flash-lite', provider: 'google' },
-    { model: 'claude-haiku-4.5', provider: 'anthropic' },
-  ];
+  const canonicalCurrentModel = normalizeModelId(currentModel) ?? currentModel.toLowerCase();
+  const fallbackModels = getEconomyFallbackModels();
 
   for (const fallback of fallbackModels) {
-    if (fallback.model === currentModel.toLowerCase()) continue;
+    if (fallback.model === canonicalCurrentModel || fallback.model === currentModel.toLowerCase()) {
+      continue;
+    }
 
     const fallbackCost = LLMCostCalculator.estimateCost(
       fallback.provider,
