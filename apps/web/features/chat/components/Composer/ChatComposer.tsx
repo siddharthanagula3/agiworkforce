@@ -29,6 +29,7 @@ import {
   ArrowUp,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import type { ChatMode, Tool } from '../../types';
 import type { AIEmployeeBasic } from '@shared/types';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
@@ -541,9 +542,17 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
 
             {/* Voice input button */}
             <VoiceInputButton
-              onTranscript={(transcript) =>
-                setMessage((prev) => (prev ? prev + ' ' + transcript : transcript))
-              }
+              onTranscript={(transcript) => {
+                const cleanedTranscript = cleanupVoiceDictation(transcript);
+                const isCommand = detectVoiceCommand(cleanedTranscript);
+                setMessage((prev) =>
+                  isCommand
+                    ? cleanedTranscript
+                    : prev
+                      ? `${prev} ${cleanedTranscript}`
+                      : cleanedTranscript,
+                );
+              }}
               disabled={isLoading}
             />
 

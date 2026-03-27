@@ -52,7 +52,6 @@
     "paths": {
       "@types/*": ["packages/types/src/*"],
       "@utils/*": ["packages/utils/src/*"],
-      "@agiworkforce/utils": ["packages/utils/src/index.ts"],
       "@desktop/*": ["apps/desktop/src/*"]
     }
   },
