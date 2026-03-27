@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { listCanonicalModels, normalizeModelId, type ModelType } from '@agiworkforce/types';
 
 /**
  * Chat validation schemas
@@ -6,79 +7,32 @@ import { z } from 'zod';
  * AUDIT-008-002, AUDIT-008-003, AUDIT-008-004: Input validation for chat endpoints
  */
 
-// Supported model identifiers - auto routes to best available
-// NOTE: Keep in sync with apps/web/lib/llm-providers/factory.ts MODEL_ID_TO_API_ID
-export const SUPPORTED_MODELS = [
-  'auto',
-  // Anthropic Claude 4.6/4.5 models
-  'claude-opus-4.6',
-  'claude-sonnet-4.6',
-  'claude-opus-4.5',
-  'claude-sonnet-4.5',
-  'claude-haiku-4.5',
-  // Claude 4.x models
-  'claude-opus-4',
-  'claude-sonnet-4',
-  // OpenAI GPT-5 models
-  'gpt-5.4',
-  'gpt-5.4-pro',
-  'gpt-5.4-mini',
-  'gpt-5.4-nano',
-  'o3',
-  // OpenAI GPT-4 models
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gpt-4-turbo',
-  'gpt-4',
-  'gpt-3.5-turbo',
-  // Google Gemini 3 models
-  'gemini-3-ultra',
-  'gemini-3-pro-preview',
-  'gemini-3-flash-preview',
-  // Legacy Google models
-  'gemini-1.5-pro',
-  'gemini-1.5-flash',
-  'gemini-pro',
-  // xAI Grok models
-  'grok-4',
-  'grok-4-fast-reasoning',
-  'grok-4-fast',
-  'grok-4-mini',
-  // Qwen models
-  'qwen-max',
-  'qwen-coder-plus',
-  'qwen-coder-flash',
-  'qwen-turbo',
-  'qwen-flash',
-  // Moonshot/Kimi models
-  'kimi-k2.5',
-  'kimi-k2.5-thinking',
-  'kimi-k2.5-turbo',
-  // DeepSeek models
-  'deepseek-chat',
-  'deepseek-r1',
-  'deepseek-chat',
-  'deepseek-reasoner',
-  // Perplexity models
-  'sonar',
-  'sonar-pro',
-  'sonar-reasoning',
-  'sonar-deep-research',
-  // ZhipuAI GLM models
-  'glm-4.7',
-  'glm-4.6v',
-  'glm-4.6v-flash',
-] as const;
+const CHAT_MODEL_TYPES = new Set<ModelType>(['chat', 'code', 'reasoning', 'multimodal', 'search']);
 
-// Type for supported models
-export type SupportedModel = (typeof SUPPORTED_MODELS)[number];
+export const SUPPORTED_MODELS: readonly string[] = [
+  'auto',
+  'auto-economy',
+  'auto-balanced',
+  'auto-premium',
+  ...listCanonicalModels()
+    .filter((model) => model.status !== 'deprecated')
+    .filter((model) => CHAT_MODEL_TYPES.has(model.modelType))
+    .map((model) => model.id),
+];
+
+export type SupportedModel = string;
+
+function isSupportedModel(val: string): val is SupportedModel {
+  const canonicalModelId = normalizeModelId(val) ?? val;
+  return SUPPORTED_MODELS.includes(canonicalModelId);
+}
 
 // AUDIT-008-002: Validation schema for conversation updates
 export const UpdateConversationSchema = z.object({
   title: z.string().max(500, 'Title must be 500 characters or less').optional(),
   model: z
     .string()
-    .refine((val): val is SupportedModel => SUPPORTED_MODELS.includes(val as SupportedModel), {
+    .refine(isSupportedModel, {
       message: 'Invalid model specified',
     })
     .optional(),
@@ -95,7 +49,7 @@ export const CreateConversationSchema = z.object({
     .default('New conversation'),
   model: z
     .string()
-    .refine((val): val is SupportedModel => SUPPORTED_MODELS.includes(val as SupportedModel), {
+    .refine(isSupportedModel, {
       message: 'Invalid model specified',
     })
     .optional()
@@ -118,7 +72,7 @@ export const CreateMessageSchema = z.object({
     .refine((val) => val.trim().length > 0, 'Message content cannot be only whitespace'),
   model: z
     .string()
-    .refine((val): val is SupportedModel => SUPPORTED_MODELS.includes(val as SupportedModel), {
+    .refine(isSupportedModel, {
       message: 'Invalid model specified',
     })
     .optional()

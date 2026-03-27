@@ -9,6 +9,12 @@ import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
 import { supabase } from '@shared/lib/supabase-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import {
+  getPickerModels,
+  getModelMetadataById,
+  getProviderDefaultModel,
+  providerLabels,
+} from '@agiworkforce/types';
 
 export interface Message {
   id: string;
@@ -234,133 +240,60 @@ export interface ChatActions {
 
 export interface ChatStore extends ChatState, ChatActions {}
 
-const DEFAULT_MODELS: ChatModel[] = [
-  // OpenAI
-  {
-    id: 'gpt-5.4',
-    name: 'GPT-5.4',
-    provider: 'OpenAI',
-    description: 'Most capable GPT model for complex tasks',
-    maxTokens: 128000,
-    costPer1KTokens: 0.005,
-    features: ['text', 'code', 'analysis', 'vision'],
-    tier: 'pro',
-    enabled: true,
-  },
-  {
-    id: 'gpt-5.4-mini',
-    name: 'GPT-5.4 Mini',
-    provider: 'OpenAI',
-    description: 'Fast and efficient for most tasks',
-    maxTokens: 128000,
-    costPer1KTokens: 0.00015,
-    features: ['text', 'code'],
-    tier: 'free',
-    enabled: true,
-  },
-  {
-    id: 'o1',
-    name: 'o1',
-    provider: 'OpenAI',
-    description: 'Advanced reasoning model for complex problems',
-    maxTokens: 200000,
-    costPer1KTokens: 0.015,
-    features: ['text', 'code', 'analysis', 'reasoning'],
-    tier: 'premium',
-    enabled: true,
-  },
-  {
-    id: 'o3-mini',
-    name: 'o3 Mini',
-    provider: 'OpenAI',
-    description: 'Fast reasoning model for STEM tasks',
-    maxTokens: 200000,
-    costPer1KTokens: 0.0011,
-    features: ['text', 'code', 'reasoning'],
-    tier: 'pro',
-    enabled: true,
-  },
-  // Anthropic
-  {
-    id: 'claude-opus-4-5',
-    name: 'Claude Opus 4.5',
-    provider: 'Anthropic',
-    description: 'Most intelligent Claude model',
-    maxTokens: 200000,
-    costPer1KTokens: 0.015,
-    features: ['text', 'code', 'analysis', 'long-context', 'vision'],
-    tier: 'premium',
-    enabled: true,
-  },
-  {
-    id: 'claude-sonnet-4-5',
-    name: 'Claude Sonnet 4.5',
-    provider: 'Anthropic',
-    description: 'Balanced intelligence and speed',
-    maxTokens: 200000,
-    costPer1KTokens: 0.003,
-    features: ['text', 'code', 'analysis', 'long-context', 'vision'],
-    tier: 'pro',
-    enabled: true,
-  },
-  {
-    id: 'claude-haiku-4-5',
-    name: 'Claude Haiku 4.5',
-    provider: 'Anthropic',
-    description: 'Fastest Claude model for everyday tasks',
-    maxTokens: 200000,
-    costPer1KTokens: 0.00025,
-    features: ['text', 'code'],
-    tier: 'free',
-    enabled: true,
-  },
-  // Google
-  {
-    id: 'gemini-3.1-pro-preview',
-    name: 'Gemini 3.1 Pro',
-    provider: 'Google',
-    description: 'Most advanced Gemini model with long context',
-    maxTokens: 1000000,
-    costPer1KTokens: 0.00125,
-    features: ['text', 'code', 'analysis', 'long-context', 'vision'],
-    tier: 'pro',
-    enabled: true,
-  },
-  {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
-    provider: 'Google',
-    description: 'Fast multimodal model with 1M context',
-    maxTokens: 1000000,
-    costPer1KTokens: 0.0001,
-    features: ['text', 'code', 'vision'],
-    tier: 'free',
-    enabled: true,
-  },
-  // DeepSeek
-  {
-    id: 'deepseek-reasoner',
-    name: 'DeepSeek R1',
-    provider: 'DeepSeek',
-    description: 'Reasoning model rivaling top competitors',
-    maxTokens: 64000,
-    costPer1KTokens: 0.00055,
-    features: ['text', 'code', 'reasoning'],
-    tier: 'pro',
-    enabled: true,
-  },
-  {
-    id: 'deepseek-chat',
-    name: 'DeepSeek V3',
-    provider: 'DeepSeek',
-    description: 'Cost-effective general chat model',
-    maxTokens: 64000,
-    costPer1KTokens: 0.00027,
-    features: ['text', 'code'],
-    tier: 'free',
-    enabled: true,
-  },
-];
+function toChatModelTier(tier: 'economy' | 'balanced' | 'premium'): ChatModel['tier'] {
+  if (tier === 'premium') {
+    return 'premium';
+  }
+  if (tier === 'balanced') {
+    return 'pro';
+  }
+  return 'free';
+}
+
+function buildChatModelFeatures(modelId: string): string[] {
+  const metadata = getModelMetadataById(modelId);
+  if (!metadata) {
+    return ['text'];
+  }
+
+  const features = new Set<string>(['text']);
+  if (metadata.capabilities.tools) features.add('tools');
+  if (metadata.capabilities.vision) features.add('vision');
+  if (metadata.capabilities.thinking) features.add('reasoning');
+  if (metadata.capabilities.search || metadata.capabilities.research) features.add('research');
+  if (metadata.capabilities.codeExecution || metadata.modelType === 'code') features.add('code');
+  if (metadata.contextWindow >= 200_000) features.add('long-context');
+  return [...features];
+}
+
+function buildChatModelDescription(modelId: string): string {
+  const metadata = getModelMetadataById(modelId);
+  if (!metadata) {
+    return 'General-purpose assistant model';
+  }
+
+  const bestFor = metadata.bestFor.slice(0, 2).join(' · ');
+  return bestFor || metadata.name;
+}
+
+const DEFAULT_MODELS: ChatModel[] = getPickerModels({ includeSearchModels: true }).map((model) => {
+  const metadata = getModelMetadataById(model.id);
+
+  return {
+    id: model.id,
+    name: model.name,
+    provider: providerLabels[model.provider] ?? String(model.provider),
+    description: buildChatModelDescription(model.id),
+    maxTokens: metadata?.contextWindow ?? model.contextWindow,
+    costPer1KTokens: metadata ? metadata.inputCost / 1000 : 0,
+    features: buildChatModelFeatures(model.id),
+    tier: toChatModelTier(model.tier),
+    enabled: metadata?.status !== 'deprecated',
+  };
+});
+
+const DEFAULT_SELECTED_MODEL =
+  getProviderDefaultModel('openai') ?? DEFAULT_MODELS[0]?.id ?? 'gpt-5.4';
 
 const DEFAULT_SETTINGS: Conversation['settings'] = {
   temperature: 0.7,
@@ -378,7 +311,7 @@ const INITIAL_STATE: ChatState = {
   error: null,
   activeStreamId: null,
   availableModels: DEFAULT_MODELS,
-  selectedModel: 'gpt-5.4-mini',
+  selectedModel: DEFAULT_SELECTED_MODEL,
   defaultSettings: DEFAULT_SETTINGS,
   searchQuery: '',
   filterTags: [],

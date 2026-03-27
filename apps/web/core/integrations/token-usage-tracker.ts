@@ -3,6 +3,7 @@
  * Tracks LLM token usage across all providers with granular billing
  */
 
+import { getModelMetadataById, listCanonicalModels, normalizeModelId } from '@agiworkforce/types';
 import { UsageTracker } from '@features/billing/services/usage-monitor';
 import type { LLMProvider } from '@core/ai/llm/unified-language-model';
 
@@ -42,67 +43,63 @@ export interface SessionTokenSummary {
   lastUpdate: Date;
 }
 
-/**
- * Token pricing per million tokens (as of 2025)
- */
-const TOKEN_PRICING: Record<string, { input: number; output: number; provider: LLMProvider }> = {
-  // OpenAI - Latest Models (Jan 2026)
-  'gpt-5.4': { input: 2.5, output: 10.0, provider: 'openai' },
-  'gpt-5.4-mini': { input: 0.15, output: 0.6, provider: 'openai' },
-  o1: { input: 15.0, output: 60.0, provider: 'openai' },
-  'o1-mini': { input: 3.0, output: 12.0, provider: 'openai' },
-
-  // Anthropic - Latest Models (Jan 2026)
-  'claude-sonnet-4-20250514': {
-    input: 3.0,
-    output: 15.0,
-    provider: 'anthropic',
-  },
-  'claude-3-5-sonnet-20241022': {
-    input: 3.0,
-    output: 15.0,
-    provider: 'anthropic',
-  },
-  'claude-3-5-haiku-20241022': {
-    input: 0.25,
-    output: 1.25,
-    provider: 'anthropic',
-  },
-
-  // Google - Latest Models (Jan 2026)
-  'gemini-2.0-flash': { input: 0.1, output: 0.4, provider: 'google' },
-  'gemini-1.5-pro': { input: 1.25, output: 10.0, provider: 'google' },
-  'gemini-1.5-flash': { input: 0.075, output: 0.3, provider: 'google' },
-
-  // Perplexity - Latest Models (Jan 2026)
-  'sonar-pro': {
-    input: 3.0,
-    output: 15.0,
-    provider: 'perplexity',
-  },
-  sonar: {
-    input: 1.0,
-    output: 1.0,
-    provider: 'perplexity',
-  },
-  'sonar-reasoning': {
-    input: 5.0,
-    output: 20.0,
-    provider: 'perplexity',
-  },
-
-  // Grok - Latest Models (Jan 2026)
-  'grok-2': {
-    input: 2.0,
-    output: 10.0,
-    provider: 'grok',
-  },
-  'grok-2-mini': {
-    input: 0.3,
-    output: 1.0,
-    provider: 'grok',
-  },
+const FALLBACK_PRICING = {
+  input: 1.0,
+  output: 1.0,
+  provider: 'openai' as LLMProvider,
 };
+
+function toUsageProvider(provider: string | null | undefined): LLMProvider {
+  switch ((provider ?? '').toLowerCase()) {
+    case 'anthropic':
+    case 'openai':
+    case 'google':
+    case 'perplexity':
+    case 'deepseek':
+    case 'qwen':
+      return provider as LLMProvider;
+    case 'xai':
+    case 'grok':
+      return 'grok';
+    default:
+      return 'openai';
+  }
+}
+
+function getPricingForModel(model: string): {
+  input: number;
+  output: number;
+  provider: LLMProvider;
+} {
+  const canonicalModelId = normalizeModelId(model) ?? model;
+  const metadata = getModelMetadataById(canonicalModelId);
+
+  if (!metadata) {
+    return FALLBACK_PRICING;
+  }
+
+  return {
+    input: metadata.inputCost,
+    output: metadata.outputCost,
+    provider: toUsageProvider(metadata.provider),
+  };
+}
+
+function getModelPricingOrNull(
+  model: string,
+): { input: number; output: number; provider: LLMProvider } | null {
+  const canonicalModelId = normalizeModelId(model) ?? model;
+  const metadata = getModelMetadataById(canonicalModelId);
+  if (!metadata) {
+    return null;
+  }
+
+  return {
+    input: metadata.inputCost,
+    output: metadata.outputCost,
+    provider: toUsageProvider(metadata.provider),
+  };
+}
 
 /**
  * Custom async mutex for serializing token-counting updates per session.
@@ -207,11 +204,7 @@ export class TokenLoggerService {
 
     // Use lock to ensure atomic read-modify-write operations
     await lock.withLock(async () => {
-      const pricing = TOKEN_PRICING[model] || {
-        input: 1.0,
-        output: 1.0,
-        provider: 'openai',
-      };
+      const pricing = getPricingForModel(model);
       const provider = pricing.provider;
 
       // Calculate cost - use actual values if provided, otherwise estimate
@@ -287,7 +280,7 @@ export class TokenLoggerService {
    * Calculate cost for a specific model
    */
   calculateCost(model: string, inputTokens: number, outputTokens: number): number {
-    const pricing = TOKEN_PRICING[model] || { input: 1.0, output: 1.0 };
+    const pricing = getPricingForModel(model);
 
     const inputCost = (inputTokens / 1_000_000) * pricing.input;
     const outputCost = (outputTokens / 1_000_000) * pricing.output;
@@ -399,7 +392,7 @@ export class TokenLoggerService {
    * Get supported models
    */
   static getSupportedModels(): string[] {
-    return Object.keys(TOKEN_PRICING);
+    return listCanonicalModels().map((model) => model.id);
   }
 
   /**
@@ -408,7 +401,7 @@ export class TokenLoggerService {
   static getModelPricing(
     model: string,
   ): { input: number; output: number; provider: LLMProvider } | null {
-    return TOKEN_PRICING[model] || null;
+    return getModelPricingOrNull(model);
   }
 }
 
