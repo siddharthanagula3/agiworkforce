@@ -60,6 +60,7 @@ import {
   DEFAULT_ANTHROPIC_MODEL,
   type AnthropicModel,
 } from '@shared/config/supported-models';
+import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
 
 export interface AnthropicConfig {
   model: AnthropicModel;
@@ -640,7 +641,7 @@ export class AnthropicProvider {
   }
 
   /**
-   * Get available models (Jan 2026 - Claude 4.5 series)
+   * Get available models from the shared catalog.
    * Uses shared config from @shared/config/supported-models.ts
    */
   static getAvailableModels(): string[] {
@@ -651,27 +652,24 @@ export class AnthropicProvider {
    * Get models with computer use capability
    */
   static getComputerUseModels(): string[] {
-    return [
-      'claude-sonnet-4-6',
-      'claude-sonnet-4-5-20250929',
-      'claude-haiku-4-5-20251001',
-      'claude-opus-4-5-20251101',
-    ];
+    return SUPPORTED_ANTHROPIC_MODELS.filter(
+      (modelId) => getModelMetadataById(modelId)?.capabilities.computerUse,
+    );
   }
 
   /**
    * Get model aliases for convenience
    */
   static getModelAliases(): Record<string, string> {
-    return {
-      // Claude 4.6 (latest)
-      'claude-sonnet-4-6': 'claude-sonnet-4-6',
-      'claude-opus-4-6': 'claude-opus-4-6',
-      // Claude 4.5
-      'claude-opus-4-5': 'claude-opus-4-5-20251101',
-      'claude-sonnet-4-5': 'claude-sonnet-4-5-20250929',
-      'claude-haiku-4-5': 'claude-haiku-4-5-20251001',
-    };
+    const aliases = [
+      'claude-sonnet-4-6',
+      'claude-opus-4-6',
+      'claude-opus-4-5',
+      'claude-sonnet-4-5',
+      'claude-haiku-4-5',
+    ];
+
+    return Object.fromEntries(aliases.map((alias) => [alias, normalizeModelId(alias) ?? alias]));
   }
 }
 

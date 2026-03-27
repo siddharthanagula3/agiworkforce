@@ -13,6 +13,7 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+import { DEFAULT_GOOGLE_FAST_MODEL } from '@shared/config/supported-models';
 
 export interface ImagenGenerationRequest {
   prompt: string;
@@ -316,7 +317,7 @@ export class GoogleImagenService {
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
-          model: 'gemini-2.0-flash',
+          model: DEFAULT_GOOGLE_FAST_MODEL,
           messages: [
             {
               role: 'user',
