@@ -11,11 +11,15 @@
 import type { Provider } from '../types/provider';
 import type { SubscriptionTier } from './planModels';
 import {
+  canAccessManualModelSelection as canAccessCatalogManualModelSelection,
   getAllowedModelsForTier as getCatalogAllowedModelsForTier,
+  getManagedCloudProviderIds as getCatalogManagedCloudProviderIds,
+  getManualOverrideModels as getCatalogManualOverrideModels,
   getModelMetadataById,
   getModelVariantPartner as getCatalogModelVariantPartner,
   getProviderDefaultModel as getCatalogProviderDefaultModel,
   getTaskModelForProvider as getCatalogTaskModelForProvider,
+  getTierPolicy as getCatalogTierPolicy,
   isModelAllowedForTier as isCatalogModelAllowedForTier,
   modelIdAliases,
   modelsById,
@@ -221,18 +225,7 @@ export function getTaskModelForProvider(
 export function normalizeSubscriptionTier(
   tier: SubscriptionTier | string | null | undefined,
 ): SubscriptionTier {
-  switch ((tier ?? '').toLowerCase()) {
-    case 'hobby':
-      return 'hobby';
-    case 'pro':
-      return 'pro';
-    case 'max':
-      return 'max';
-    case 'enterprise':
-      return 'enterprise';
-    default:
-      return 'free';
-  }
+  return getCatalogTierPolicy(tier).tier as SubscriptionTier;
 }
 
 export function getAllowedAutoModesForTier(
@@ -252,4 +245,28 @@ export function getAllowedAutoModesForTier(
 export function getBestAutoModeForTier(tier: SubscriptionTier | string | null | undefined): string {
   const allowedAutoModes = getAllowedAutoModesForTier(tier);
   return allowedAutoModes[allowedAutoModes.length - 1] ?? 'auto-economy';
+}
+
+export function canAccessManualModelSelection(
+  tier: SubscriptionTier | string | null | undefined,
+): boolean {
+  return canAccessCatalogManualModelSelection(tier);
+}
+
+export function getManagedCloudProviderIds(
+  options: {
+    includeSearchProviders?: boolean;
+  } = {},
+): Provider[] {
+  return getCatalogManagedCloudProviderIds(options) as Provider[];
+}
+
+export function getManualOverrideModels(
+  options: { includeSearch?: boolean } = {},
+): ModelMetadata[] {
+  return getCatalogManualOverrideModels(options) as ModelMetadata[];
+}
+
+export function getTierPolicy(tier: SubscriptionTier | string | null | undefined) {
+  return getCatalogTierPolicy(tier);
 }

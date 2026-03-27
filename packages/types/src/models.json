@@ -17,12 +17,12 @@
       "aliases": ["managed_cloud", "managedcloud", "cloud"],
       "defaultModel": "deepseek-chat",
       "taskRouting": {
-        "fast_completion": "gpt-5.4-mini",
+        "fast_completion": "gemini-3.1-flash-lite",
         "code_generation": "deepseek-chat",
-        "complex_reasoning": "deepseek-reasoner",
-        "chat": "deepseek-chat",
-        "vision": "gemini-3.1-flash-lite",
-        "long_context": "deepseek-chat"
+        "complex_reasoning": "claude-sonnet-4.6",
+        "chat": "gpt-5.4-mini",
+        "vision": "gemini-3.1-pro-preview",
+        "long_context": "gemini-3.1-pro-preview"
       },
       "canonicalization": {}
     },
@@ -2986,48 +2986,24 @@
   },
   "tierAllowedModels": {
     "economy": [
-      "gemini-3.1-flash-lite",
-      "glm-4.7",
-      "deepseek-chat",
-      "glm-4.6v",
-      "glm-4.6v-flash",
-      "grok-4-1-fast-reasoning",
-      "grok-4-fast-reasoning",
-      "claude-haiku-4.5",
-      "grok-4-fast-non-reasoning",
-      "qwen-flash",
-      "qwen-turbo",
-      "qwen-coder-flash",
-      "grok-4-mini",
       "gpt-5.4-mini",
+      "gemini-3.1-flash-lite",
+      "claude-haiku-4.5",
+      "deepseek-chat",
       "sonar",
-      "codestral-2"
+      "qwen-turbo"
     ],
     "pro_additions": [
       "gpt-5.4",
-      "gpt-5.4-codex-low",
-      "gpt-5.4-codex-medium",
       "claude-sonnet-4.6",
-      "claude-sonnet-4.5",
       "gemini-3.1-pro-preview",
       "qwen-max",
-      "kimi-k2.5",
-      "sonar-pro",
-      "sonar-reasoning",
-      "sonar-deep-research",
-      "mistral-large-3",
-      "mistral-medium-3"
-    ],
-    "flagship_additions": [
-      "claude-opus-4.6",
-      "gpt-5.4-pro",
-      "o3",
-      "grok-4",
-      "deepseek-r1",
+      "deepseek-reasoner",
       "kimi-k2.5-thinking",
-      "gpt-5.4-codex-xhigh",
-      "gpt-5.4-codex-high"
-    ]
+      "glm-4.7",
+      "sonar-deep-research"
+    ],
+    "flagship_additions": ["claude-opus-4.6", "gpt-5.4-pro", "o3", "grok-4", "gpt-5.4-codex"]
   },
   "modelPresets": {
     "managed_cloud": [
@@ -3055,24 +3031,12 @@
         "label": "GPT-5.4"
       },
       {
-        "value": "gpt-5.4-codex-low",
-        "label": "GPT-5.4 Codex (Low)"
-      },
-      {
-        "value": "gpt-5.4-codex-medium",
-        "label": "GPT-5.4 Codex (Medium)"
-      },
-      {
-        "value": "gpt-5.4-codex-high",
-        "label": "GPT-5.4 Codex (High)"
-      },
-      {
-        "value": "gpt-5.4-codex-xhigh",
-        "label": "GPT-5.4 Codex (XHigh)"
-      },
-      {
         "value": "gpt-5.4-mini",
         "label": "GPT-5.4 Mini"
+      },
+      {
+        "value": "gpt-5.4-codex",
+        "label": "GPT-5.4 Codex"
       }
     ],
     "anthropic": [
@@ -3083,10 +3047,6 @@
       {
         "value": "claude-sonnet-4.6",
         "label": "Claude 4.6 Sonnet"
-      },
-      {
-        "value": "claude-sonnet-4.5",
-        "label": "Claude 4.5 Sonnet"
       },
       {
         "value": "claude-haiku-4.5",
@@ -3101,32 +3061,12 @@
       {
         "value": "gemini-3.1-flash-lite",
         "label": "Gemini 3.1 Flash Lite"
-      },
-      {
-        "value": "gemini-3.1-flash-image",
-        "label": "Gemini 3.1 Flash Image"
       }
     ],
     "xai": [
       {
-        "value": "grok-4-1-fast-reasoning",
-        "label": "Grok 4.1 Fast Reasoning"
-      },
-      {
         "value": "grok-4",
         "label": "Grok 4"
-      },
-      {
-        "value": "grok-4-fast-reasoning",
-        "label": "Grok 4 Fast Reasoning"
-      },
-      {
-        "value": "grok-4-fast-non-reasoning",
-        "label": "Grok 4 Fast (Non-Reasoning)"
-      },
-      {
-        "value": "grok-4-mini",
-        "label": "Grok 4 Mini"
       }
     ],
     "deepseek": [
@@ -3135,120 +3075,32 @@
         "label": "DeepSeek Chat (V3)"
       },
       {
-        "value": "deepseek-r1",
-        "label": "DeepSeek R1"
+        "value": "deepseek-reasoner",
+        "label": "DeepSeek Reasoner (V3.2)"
       }
     ],
     "qwen": [
       {
         "value": "qwen-max",
         "label": "Qwen Max"
-      },
-      {
-        "value": "qwen-turbo",
-        "label": "Qwen Turbo"
-      },
-      {
-        "value": "qwen-flash",
-        "label": "Qwen Flash"
-      },
-      {
-        "value": "qwen-coder-flash",
-        "label": "Qwen Coder Flash"
       }
     ],
     "moonshot": [
-      {
-        "value": "kimi-k2.5",
-        "label": "Kimi K2.5"
-      },
       {
         "value": "kimi-k2.5-thinking",
         "label": "Kimi K2.5 Thinking"
       }
     ],
-    "perplexity": [
-      {
-        "value": "sonar",
-        "label": "Sonar"
-      },
-      {
-        "value": "sonar-reasoning",
-        "label": "Sonar Reasoning"
-      },
-      {
-        "value": "sonar-pro",
-        "label": "Sonar Pro"
-      },
-      {
-        "value": "sonar-deep-research",
-        "label": "Sonar Deep Research"
-      }
-    ],
+    "perplexity": [],
     "zhipu": [
       {
         "value": "glm-4.7",
         "label": "GLM-4.7"
-      },
-      {
-        "value": "glm-4.6v",
-        "label": "GLM-4.6V (Vision)"
-      },
-      {
-        "value": "glm-4.6v-flash",
-        "label": "GLM-4.6V Flash"
       }
     ],
-    "mistral": [
-      {
-        "value": "mistral-large-3",
-        "label": "Mistral Large 3"
-      },
-      {
-        "value": "mistral-medium-3",
-        "label": "Mistral Medium 3"
-      },
-      {
-        "value": "codestral-2",
-        "label": "Codestral 2"
-      }
-    ],
-    "nvidia_nim": [
-      {
-        "value": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
-        "label": "Llama Nemotron Ultra 253B"
-      },
-      {
-        "value": "nvidia/llama-3.3-nemotron-super-49b-v1",
-        "label": "Llama Nemotron Super 49B"
-      },
-      {
-        "value": "nvidia/llama-3.1-nemotron-nano-8b-v1",
-        "label": "Llama Nemotron Nano 8B"
-      },
-      {
-        "value": "nvidia/llama-3.3-70b-instruct",
-        "label": "Llama 3.3 70B Instruct"
-      }
-    ],
-    "open_router": [
-      {
-        "value": "meta-llama/llama-3.3-70b-instruct:free",
-        "label": "Llama 3.3 70B (Free)"
-      },
-      {
-        "value": "qwen/qwen3-coder:free",
-        "label": "Qwen3 Coder (Free)"
-      },
-      {
-        "value": "nvidia/nemotron-3-super-120b-a12b:free",
-        "label": "Nemotron 3 Super 120B (Free)"
-      },
-      {
-        "value": "mistralai/mistral-small-3.1-24b-instruct:free",
-        "label": "Mistral Small 3.1 (Free)"
-      }
-    ]
+    "mistral": [],
+    "nvidia_nim": [],
+    "open_router": []
   },
   "providersInOrder": [
     "managed_cloud",
@@ -3257,23 +3109,12 @@
     "google",
     "xai",
     "deepseek",
-    "groq",
-    "together",
-    "fireworks",
-    "cerebras",
-    "deepinfra",
-    "nvidia_nim",
-    "open_router",
-    "cohere",
-    "ai21",
-    "sambanova",
-    "azure",
-    "bedrock",
-    "mistral",
     "qwen",
-    "ollama",
     "moonshot",
     "perplexity",
-    "zhipu"
+    "zhipu",
+    "open_router",
+    "nvidia_nim",
+    "ollama"
   ]
 }

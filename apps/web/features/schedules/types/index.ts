@@ -2,6 +2,8 @@
 // Shared types for the schedules feature
 // ---------------------------------------------------------------------------
 
+import { getCoreManualModelOptions } from '@agiworkforce/types';
+
 export interface Schedule {
   id: string;
   name: string;
@@ -97,15 +99,24 @@ export const TIMEZONES = [
   { value: 'UTC', label: 'UTC' },
 ];
 
+const SCHEDULE_MODEL_IDS = new Set([
+  'claude-opus-4.6',
+  'claude-sonnet-4.6',
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gemini-3.1-pro-preview',
+  'gemini-3.1-flash-lite',
+]);
+
 export const AVAILABLE_MODELS = [
   { value: 'auto-balanced', label: 'Auto (Balanced)' },
-  { value: 'auto-fast', label: 'Auto (Fast)' },
-  { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-  { value: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
-  { value: 'gpt-5.4', label: 'GPT-5.4' },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-  { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+  { value: 'auto-economy', label: 'Auto (Economy)' },
+  ...getCoreManualModelOptions()
+    .filter((model) => SCHEDULE_MODEL_IDS.has(model.id))
+    .map((model) => ({
+      value: model.id,
+      label: model.label,
+    })),
 ];
 
 export const DAYS_OF_WEEK = [
