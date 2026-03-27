@@ -9,6 +9,7 @@ import {
   Folder,
   File,
   FileText,
+  ShieldCheck,
   ChevronRight,
   ChevronDown,
   FolderOpen,
@@ -25,6 +26,7 @@ export interface DirectoryEntry {
 
 export interface DirectoryListData {
   entries?: DirectoryEntry[];
+  directories?: string[];
   path?: string;
   count?: number;
   returned?: number;
@@ -38,10 +40,31 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
   const [expanded, setExpanded] = useState(true);
 
   const data = result?.data as DirectoryListData | undefined;
+  const allowedDirectories = useMemo(() => data?.directories || [], [data?.directories]);
+  const isAllowedDirectoryList =
+    allowedDirectories.length > 0 && (data?.source || '').includes('allowed_directories');
 
   // Hooks must be called unconditionally - call them before any conditional returns
   // Get entries - wrap in useMemo to keep stable references.
-  const entries: DirectoryEntry[] = useMemo(() => data?.entries || [], [data]);
+  const entries: DirectoryEntry[] = useMemo(() => {
+    if (data?.entries?.length) {
+      return data.entries;
+    }
+
+    if (!allowedDirectories.length) {
+      return [];
+    }
+
+    return allowedDirectories.map((path) => {
+      const normalized = path.replace(/\\/g, '/');
+      const name = normalized.split('/').pop() || path;
+      return {
+        name,
+        path,
+        type: 'directory' as const,
+      };
+    });
+  }, [allowedDirectories, data?.entries]);
 
   // Separate directories and files - useMemo always called at top level
   const { directories, files }: { directories: DirectoryEntry[]; files: DirectoryEntry[] } =
@@ -136,11 +159,15 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
             <Folder className="h-4 w-4 shrink-0 text-amber-400" />
           )}
           <span className="text-xs font-medium text-muted-foreground truncate">
-            {path || 'Directory listing'}
+            {isAllowedDirectoryList ? 'Project sources' : path || 'Directory listing'}
           </span>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+            <ShieldCheck className="h-3 w-3" />
+            Filesystem
+          </span>
           <span className="text-xs text-muted-foreground">
             {directories.length} dirs, {files.length} files
           </span>
@@ -159,11 +186,18 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
           {directories.map((dir) => (
             <div
               key={dir.path}
-              className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-overlay/50 text-sm"
+              className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-surface-overlay/50 text-sm"
             >
               <Folder className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-              <span className="text-amber-300 truncate font-mono text-xs">{dir.name}</span>
-              <span className="text-xs text-muted-foreground ml-auto shrink-0">dir</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-mono text-xs text-amber-300">{dir.name}</div>
+                {isAllowedDirectoryList && (
+                  <div className="truncate text-[11px] text-muted-foreground">{dir.path}</div>
+                )}
+              </div>
+              <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                {isAllowedDirectoryList ? 'source' : 'dir'}
+              </span>
             </div>
           ))}
 
