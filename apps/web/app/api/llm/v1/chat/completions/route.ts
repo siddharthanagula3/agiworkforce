@@ -656,8 +656,8 @@ async function handleChatCompletions(request: NextRequest) {
       const userId = user.id;
       const modelUsed = chatRequest.model;
       const providerUsed = provider;
-      // Use the user-requested model name for responses, not the internal API model
-      // e.g., user requests "gpt-5.4-nano" -> internally uses "gpt-5.4-mini" -> return "gpt-5.4-nano"
+      // Use the user-requested model name for responses, not the internal canonical API model.
+      // This preserves compatibility when older aliases are normalized internally.
       const responseModelName = usedFallback ? chatRequest.model : requestedModel;
 
       let inputTokens = 0;
@@ -1292,8 +1292,8 @@ async function handleChatCompletions(request: NextRequest) {
   // Return OpenAI-compatible response
   const responseId = `chatcmpl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  // Return the user-requested model name, not the internal API model name
-  // e.g., user requests "gpt-5.4-nano" -> internally uses "gpt-5.4-mini" -> return "gpt-5.4-nano"
+  // Return the user-requested model name, not the internal canonical API model name.
+  // This preserves compatibility when older aliases are normalized internally.
   const responseModel = usedFallback ? chatRequest.model : requestedModel;
 
   return NextResponse.json(

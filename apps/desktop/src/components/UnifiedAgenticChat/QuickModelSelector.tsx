@@ -276,19 +276,19 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       name: 'Auto (Economy)',
       description: 'Fastest, most cost-effective',
       icon: DollarSign,
-      models: 'Gemini Flash, GPT-5 Nano, DeepSeek',
+      models: 'Gemini Flash Lite, GPT-5.4 Mini, DeepSeek',
     },
     [AUTO_BALANCED_ID]: {
       name: 'Auto (Balanced)',
       description: 'Quality/cost sweet spot',
       icon: Zap,
-      models: 'Claude Sonnet, Gemini Pro, GPT-5.2',
+      models: 'Claude Sonnet 4.6, Gemini 3.1 Pro, GPT-5.4',
     },
     [AUTO_PREMIUM_ID]: {
       name: 'Auto (Premium)',
       description: 'Maximum performance',
       icon: Crown,
-      models: 'Claude Opus, GPT-5 Pro',
+      models: 'Claude Opus 4.6, GPT-5.4 Pro',
     },
   };
 
