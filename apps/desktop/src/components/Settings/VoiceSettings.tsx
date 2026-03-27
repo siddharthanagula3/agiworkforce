@@ -368,7 +368,7 @@ export function VoiceSettings() {
               <Sparkles size={14} className="text-muted-foreground mt-0.5 flex-shrink-0" />
               <p className="text-xs text-muted-foreground leading-snug">
                 AI cleanup uses the model currently selected in the model picker. Switching to a
-                faster model (e.g. Claude Haiku or GPT-5 Nano) reduces the added latency.
+                faster model (e.g. Gemini Flash Lite or GPT-5.4 Mini) reduces the added latency.
               </p>
             </div>
           )}

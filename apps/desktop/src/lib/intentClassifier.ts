@@ -15,9 +15,9 @@
  * This ensures the classifier understands modern terminology, tools, and user expectations.
  *
  * Recommended classifier models (in order of preference):
- * 1. gemini-3.1-flash-lite - $0.10/$0.40, extremely fast, Dec 2025 cutoff, 1M context
- * 2. grok-4-fast-reasoning - $0.10/$0.40, fast with reasoning, Jan 2026 cutoff
- * 3. gpt-5.4-nano - $0.05/$0.40, cheapest, Nov 2025 cutoff
+ * 1. gemini-3.1-flash-lite - extremely fast, recent, strong structured output
+ * 2. gpt-5.4-mini - reliable tool-aware OpenAI classifier
+ * 3. claude-sonnet-4.6 - high-accuracy fallback for ambiguous tasks
  *
  * Intent Types:
  * - Chat: Regular conversation, Q&A, explanations
@@ -99,7 +99,7 @@ export const CLASSIFIER_REQUIREMENTS: ClassifierModelSpec = {
  * Model categories for classifier selection (provider-agnostic)
  * The actual model is selected at runtime based on available providers
  */
-export type ClassifierCategory = 'flash' | 'mini' | 'nano' | 'reasoning';
+export type ClassifierCategory = 'flash' | 'mini' | 'reasoning';
 
 /**
  * Get classifier category description
@@ -124,13 +124,6 @@ export function getClassifierCategorySpec(category: ClassifierCategory): {
         targetLatencyMs: 200,
         targetCostPer1M: 0.2,
         useCase: 'Balanced speed and accuracy for most use cases',
-      };
-    case 'nano':
-      return {
-        description: 'Smallest, cheapest model available',
-        targetLatencyMs: 250,
-        targetCostPer1M: 0.1,
-        useCase: 'High-volume classification with cost constraints',
       };
     case 'reasoning':
       return {
@@ -158,7 +151,7 @@ export function selectClassifierCategory(options: {
     return 'flash';
   }
   if (options.preferCost) {
-    return 'nano';
+    return 'mini';
   }
   return 'mini'; // Default balanced option
 }
@@ -781,7 +774,7 @@ function validateIntentType(type: string): IntentType {
  * Classify user intent
  *
  * For Hobby tier: Uses fast keyword-based classification
- * For Pro+ tiers: Uses GPT-5 Nano for intelligent classification
+ * For Pro+ tiers: Uses a fast current model for intelligent classification
  *
  * @param message - User's message
  * @param options - Classification options

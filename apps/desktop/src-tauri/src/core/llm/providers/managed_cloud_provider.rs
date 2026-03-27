@@ -302,14 +302,6 @@ impl ManagedCloudProvider {
             }
         }
 
-        // GPT-5 nano doesn't support custom temperature (only default value of 1.0)
-        // Remove temperature parameter for gpt-5.4-nano to avoid API errors
-        if canonical_model == "gpt-5.4-nano" {
-            transformed
-                .as_object_mut()
-                .and_then(|obj| obj.remove("temperature"));
-        }
-
         // Map desktop Codex quality variants to OpenAI reasoning effort.
         // This keeps "gpt-5.4-codex-low|medium|high|xhigh" behavior after
         // alias normalization to the canonical API model.

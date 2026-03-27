@@ -50,7 +50,7 @@
  * - Grok 4: NO vision (requires separate grok-2-vision model)
  * - Qwen 3: NO vision (requires separate qwen-vl model)
  * - Claude models: NO code execution sandbox (use MCP tools instead)
- * - GPT-5 Nano: Economy model, not optimized for agentic (use GPT-5.2+ for agentic)
+ * - GPT-5.4 Mini is the lowest OpenAI tier we actively route in-app
  */
 
 import {
@@ -1008,7 +1008,7 @@ export function routeMessage(
   // The returned IntentType is mapped to a TaskType via intentToTaskType().
   //
   // For Pro+ tiers, use routeMessageAsync() which accepts an llmClassify callback
-  // for higher-accuracy classification via a fast model (e.g. Gemini Flash / GPT-5 Nano).
+  // for higher-accuracy classification via a fast current model (e.g. Gemini Flash Lite / GPT-5.4 Mini).
   let inferredTaskType: TaskType = autoMode === 'auto-premium' ? 'reasoning' : 'general';
 
   const intentResult = classifyIntentLocally(message, {
@@ -1132,7 +1132,7 @@ export function getModelForRequest(
  * Async version of routeMessage that uses LLM classification for Pro+ tiers.
  * When local classification has low confidence and an llmClassify callback is
  * provided, it sends the ambiguous message to a fast/cheap model (e.g. Gemini
- * Flash, GPT-5 Nano) for more accurate task type classification.
+ * Flash Lite, GPT-5.4 Mini) for more accurate task type classification.
  *
  * Economy tier always uses local-only classification (no extra LLM call cost).
  */

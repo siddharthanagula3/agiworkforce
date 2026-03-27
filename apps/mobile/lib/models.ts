@@ -1,6 +1,7 @@
 import {
   getPickerModels,
   PROVIDERS_IN_ORDER as PROVIDER_ORDER,
+  normalizeModelId,
   providerLabels,
   type PickerModelTier,
   type Provider,
@@ -104,7 +105,7 @@ const providerMap = new Map<string, ProviderDef>(
 const autoModeMap = new Map<string, AutoModeDef>(AUTO_MODES.map((mode) => [mode.id, mode]));
 
 export function getModelById(id: string): ModelDef | undefined {
-  return modelMap.get(id);
+  return modelMap.get(normalizeModelId(id) ?? id);
 }
 
 export function getModelsByProvider(providerId: string): ModelDef[] {
