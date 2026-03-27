@@ -3,6 +3,7 @@ import { ChevronDown, ExternalLink, Globe } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useUnifiedChatStore } from '@/stores/unified/unifiedChatStore';
+import { focusBrowserActivity } from '@/stores/browserActivityStore';
 
 interface SourcesFooterProps {
   /** The message content to extract citation numbers from */
@@ -65,7 +66,16 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
     if (onSourceClick) {
       onSourceClick(url);
     } else {
-      openSidecar('browser', url);
+      const source = citations.find((citation) => citation.url === url);
+      focusBrowserActivity(url, source?.title ?? null, 'Viewing source');
+      openSidecar('browser', url, {
+        url,
+        title: source?.title ?? null,
+        lastAction: 'Viewing source',
+        status: 'done',
+        extensionConnected: false,
+        hasError: false,
+      });
     }
   };
 
