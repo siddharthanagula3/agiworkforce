@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn test_provider_default_model_spot_checks() {
         assert_eq!(Provider::OpenAI.default_model(), "gpt-5.4");
-        assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-4-6");
+        assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-4.6");
         assert_eq!(Provider::Google.default_model(), "gemini-3.1-pro-preview");
         assert_eq!(Provider::DeepSeek.default_model(), "deepseek-chat");
         assert_eq!(Provider::Ollama.default_model(), "llama4-maverick");
@@ -300,8 +300,7 @@ mod tests {
     #[test]
     fn test_get_model_for_task_openai_complex_reasoning() {
         let model = Provider::OpenAI.get_model_for_task(TaskType::ComplexReasoning);
-        // OpenAI o3 is the reasoning specialist
-        assert_eq!(model, "o3");
+        assert_eq!(model, "gpt-5.4-pro");
     }
 
     #[test]
@@ -497,7 +496,7 @@ mod tests {
 
     #[test]
     fn test_routing_logic_low_cost() {
-        // CostPriority::Low with hobby plan → DeepSeek
+        // CostPriority::Low with hobby plan → OpenAI economy default
         let router = LLMRouter::new();
         let context = legacy_context(
             vec!["chat".to_string()],
@@ -507,8 +506,8 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
-        assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-chat");
+        assert_eq!(suggestion.provider, Provider::OpenAI);
+        assert_eq!(suggestion.model, "gpt-5.4-mini");
     }
 
     // ------------------------------------------------------------------
@@ -781,8 +780,8 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
-    fn test_routing_hobby_simple_chat_routes_to_deepseek() {
-        // Budget plans with no special intent default to DeepSeek
+    fn test_routing_hobby_simple_chat_routes_to_core_budget_model() {
+        // Budget plans with no special intent default to the current core low-cost stack.
         let router = LLMRouter::new();
         let context = legacy_context(
             vec!["chat".to_string()],
@@ -792,8 +791,8 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
-        assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-chat");
+        assert_eq!(suggestion.provider, Provider::OpenAI);
+        assert_eq!(suggestion.model, "gpt-5.4-mini");
     }
 
     #[test]
@@ -807,7 +806,7 @@ mod tests {
             "free",
         );
         let suggestion = router.suggest_for_context(&context);
-        assert_eq!(suggestion.provider, Provider::DeepSeek);
+        assert_eq!(suggestion.provider, Provider::OpenAI);
     }
 
     #[test]
@@ -837,11 +836,11 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4-6");
+        assert_eq!(suggestion.model, "claude-sonnet-4.6");
     }
 
     #[test]
-    fn test_routing_code_intent_hobby_uses_deepseek() {
+    fn test_routing_code_intent_hobby_uses_openai_mini() {
         let router = LLMRouter::new();
         let context = legacy_context(
             vec!["code".to_string()],
@@ -851,7 +850,7 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
-        assert_eq!(suggestion.provider, Provider::DeepSeek);
+        assert_eq!(suggestion.provider, Provider::OpenAI);
     }
 
     #[test]
@@ -928,8 +927,8 @@ mod tests {
             let suggestion = router.suggest_for_context(&context);
             assert_eq!(
                 suggestion.provider,
-                Provider::DeepSeek,
-                "Code intent '{}' + hobby should route to DeepSeek",
+                Provider::OpenAI,
+                "Code intent '{}' + hobby should route to the OpenAI economy model",
                 intent
             );
         }
@@ -954,8 +953,8 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
-        assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-chat");
+        assert_eq!(suggestion.provider, Provider::OpenAI);
+        assert_eq!(suggestion.model, "gpt-5.4-mini");
     }
 
     #[test]
@@ -969,8 +968,8 @@ mod tests {
             "hobby",
         );
         let suggestion = router.suggest_for_context(&context);
-        assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-chat");
+        assert_eq!(suggestion.provider, Provider::OpenAI);
+        assert_eq!(suggestion.model, "gpt-5.4");
     }
 
     #[test]
@@ -986,7 +985,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
         // hobby + writing/research -> Google (Gemini Pro, Complex task)
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-pro-preview");
+        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
     }
 
     // --- Intelligent routing: selected_model -> provider inference ---
@@ -1002,7 +1001,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4-5");
+        assert_eq!(suggestion.model, "claude-sonnet-4.5");
     }
 
     #[test]
@@ -1025,7 +1024,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash-preview");
+        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
     }
 
     #[test]
@@ -1058,7 +1057,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::XAI);
-        assert_eq!(suggestion.model, "grok-4-fast-reasoning");
+        assert_eq!(suggestion.model, "grok-4-1-fast-reasoning");
     }
 
     // --- Intelligent routing: intent_type-based (no selected_model) ---
@@ -1068,8 +1067,8 @@ mod tests {
         let router = router_with_all_providers();
         let context = intelligent_context("hobby", Some("coding"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
-        assert_eq!(suggestion.provider, Provider::DeepSeek);
-        assert_eq!(suggestion.model, "deepseek-chat");
+        assert_eq!(suggestion.provider, Provider::OpenAI);
+        assert_eq!(suggestion.model, "gpt-5.4-mini");
     }
 
     #[test]
@@ -1078,7 +1077,7 @@ mod tests {
         let context = intelligent_context("pro", Some("coding"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4-6");
+        assert_eq!(suggestion.model, "claude-sonnet-4.6");
     }
 
     #[test]
@@ -1104,8 +1103,8 @@ mod tests {
         let router = router_with_all_providers();
         let context = intelligent_context("hobby", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
-        assert_eq!(suggestion.provider, Provider::XAI);
-        assert_eq!(suggestion.model, "grok-4-1-fast-reasoning");
+        assert_eq!(suggestion.provider, Provider::Google);
+        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
     }
 
     #[test]
@@ -1114,7 +1113,7 @@ mod tests {
         let context = intelligent_context("pro", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "o3");
+        assert_eq!(suggestion.model, "gpt-5.4-pro");
     }
 
     #[test]
@@ -1123,7 +1122,7 @@ mod tests {
         let context = intelligent_context("hobby", Some("agentic"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash");
+        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
     }
 
     #[test]
@@ -1132,7 +1131,7 @@ mod tests {
         let context = intelligent_context("pro", Some("agentic"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4-6");
+        assert_eq!(suggestion.model, "claude-sonnet-4.6");
     }
 
     #[test]
@@ -1150,7 +1149,7 @@ mod tests {
         let context = intelligent_context("hobby", Some("chat"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3-flash");
+        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
     }
 
     #[test]
@@ -1159,7 +1158,7 @@ mod tests {
         let context = intelligent_context("pro", Some("chat"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-pro-preview");
+        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
     }
 
     // --- Large-context and edge cases ---
@@ -1177,7 +1176,7 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
         // hobby + writing -> Google (Complex task), large context doesn't change hobby routing
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-pro-preview");
+        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
     }
 
     #[test]
