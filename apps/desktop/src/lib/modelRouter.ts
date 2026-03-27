@@ -155,7 +155,7 @@ export interface IntelligentRoutingResult {
 // =========================================================================
 const ECONOMY_MODELS: readonly string[] = [
   // === TOP BENCHMARK (Best quality in economy tier) ===
-  'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
+  'gemini-3.1-flash-lite', // 76.2% SWE-bench, 88.6% MMLU - V✓ T✓ A✓ E✓ (1M ctx)
   'glm-4.7', // 73.8% SWE-bench, 88% MMLU - T✓ Th✓ A✓ (128K ctx) - CODING KING
   'deepseek-chat', // 68.8% SWE-bench, 85% MMLU - T✓ Th✓ A✓ (128K ctx)
   'glm-4.6v', // 68% SWE-bench, 86% MMLU - V✓ T✓ Th✓ A✓ (128K ctx) - VISION
@@ -181,7 +181,7 @@ const BALANCED_ADDITIONS: readonly string[] = [
   'gpt-5.4', // 80.0% SWE-bench, 93.2% MMLU - V✓ T✓ Th✓ C✓ A✓ E✓ (400K ctx)
   'claude-sonnet-4.6', // 78.5% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx) - CURRENT
   'claude-sonnet-4.5', // 77.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ C✓ A✓ (200K ctx)
-  'gemini-3-pro-preview', // 74.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ A✓ E✓ (2M ctx)
+  'gemini-3.1-pro-preview', // 74.2% SWE-bench, 89.5% MMLU - V✓ T✓ Th✓ A✓ E✓ (2M ctx)
 
   // === MID-HIGH BENCHMARK ===
   'qwen-max', // 58% SWE-bench, 88% MMLU - T✓ Th✓ A✓ E✓ (128K ctx)
@@ -198,7 +198,6 @@ const PREMIUM_ADDITIONS: readonly string[] = [
   // === FLAGSHIP BENCHMARK (Best of the best) ===
   'claude-opus-4.6', // 80.9% SWE-bench - BEST CODING MODEL
   'gpt-5.4-pro', // 75.4% SWE-bench, 94.8% MMLU - FLAGSHIP REASONING
-  'o3', // 65% SWE-bench - REASONING SPECIALIST
 
   // === HIGH BENCHMARK ===
   'grok-4', // 55.3% SWE-bench - REAL-TIME DATA
@@ -510,7 +509,7 @@ export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
   ],
   // 20% of traffic - mid-tier models ordered by benchmark
   moderate: [
-    'gemini-3-flash-preview', // 76.2% SWE-bench, 88.6% MMLU - BEST in mid-tier
+    'gemini-3.1-flash-lite', // 76.2% SWE-bench, 88.6% MMLU - BEST in mid-tier
     'glm-4.7', // 73.8% SWE-bench, 88% MMLU - Open-weight champion
     'kimi-k2.5', // ~65% - Long context reasoning + vision
     'grok-4-fast-reasoning', // ~60% - Real-time reasoning
@@ -520,7 +519,7 @@ export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
     'gpt-5.4', // 80.0% SWE-bench, 93.2% MMLU - BEST overall benchmark
     'claude-sonnet-4.6', // 78.5% SWE-bench - Current best Sonnet
     'claude-sonnet-4.5', // 77.2% SWE-bench - Excellent orchestration fallback
-    'gemini-3-pro-preview', // ~75% SWE-bench - 2M context window
+    'gemini-3.1-pro-preview', // ~75% SWE-bench - 2M context window
     'claude-haiku-4.5', // ~70% - Best writing quality
     'glm-4.6v', // 68% SWE-bench - Vision + tools
   ],
@@ -544,8 +543,8 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
   reasoning: [
     'gpt-5.4', // 100% AIME 2025 - PUBLIC #1 for math
     'claude-opus-4.6', // Best for nuanced reasoning
-    'o3', // OpenAI reasoning specialist
-    'gemini-3-pro-preview', // Deep Think for exam-style
+    'gpt-5.4-pro', // OpenAI flagship reasoning
+    'gemini-3.1-pro-preview', // Deep Think for exam-style
     'glm-4.7', // 95.7% AIME - strong alternative
   ],
   // General: ChatGPT versatile, Claude for writing, DeepSeek for budget
@@ -554,7 +553,7 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
     'claude-sonnet-4.6', // Current best Sonnet - writing/creative
     'claude-sonnet-4.5', // Fallback Sonnet
     'deepseek-chat', // Budget champion
-    'gemini-3-flash-preview', // Fast, good quality
+    'gemini-3.1-flash-lite', // Fast, good quality
     'glm-4.7', // Solid all-rounder
   ],
   // Agentic: GPT-5.2 for tool-calling (97% τ²-bench), Claude for orchestration
@@ -563,13 +562,13 @@ export const TASK_MODEL_PREFERENCES: Record<TaskType, string[]> = {
     'claude-opus-4.6', // Best multi-step orchestration
     'claude-sonnet-4.6', // Current best Sonnet for agentic
     'claude-sonnet-4.5', // More affordable agentic fallback
-    'gemini-3-pro-preview', // Good tool use, 2M context
+    'gemini-3.1-pro-preview', // Good tool use, 2M context
     'glm-4.7', // Agentic-capable open model
   ],
   // Multimodal: Gemini for best vision, Claude for analysis
   multimodal: [
     'gpt-5.4', // Excellent vision + tools
-    'gemini-3-pro-preview', // Best multimodal (native video, 2M context)
+    'gemini-3.1-pro-preview', // Best multimodal (native video, 2M context)
     'claude-opus-4.6', // Best visual analysis
     'claude-sonnet-4.6', // Current best Sonnet vision
     'claude-sonnet-4.5', // Good vision, more affordable fallback
@@ -943,7 +942,7 @@ export function selectModelFromPool(
     }
 
     // Last resort: First model in pool (better than nothing)
-    const firstModelId = pool[0] ?? 'gemini-3-flash-preview';
+    const firstModelId = pool[0] ?? 'gemini-3.1-flash-lite';
     const fallback = MODEL_METADATA[firstModelId];
     return {
       modelId: firstModelId,

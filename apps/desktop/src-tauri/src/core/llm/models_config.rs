@@ -19,10 +19,10 @@ use super::Provider;
 
 /// The raw JSON string, embedded at compile time.
 /// Path is relative to this .rs file:
-///   src-tauri/src/core/llm/models_config.rs  ->  ../../../../src/constants/models.json
+///   src-tauri/src/core/llm/models_config.rs  ->  ../../../../../packages/types/src/models.json
 const MODELS_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../src/constants/models.json"
+    "/../../../packages/types/src/models.json"
 ));
 
 /// Global singleton for the loaded models config.
@@ -183,6 +183,7 @@ pub fn get_default_model(provider: &Provider) -> &'static str {
         .providers
         .get(provider.as_string())
         .and_then(|p| p.default_model.as_deref())
+        .filter(|model_id| !model_id.is_empty())
         .unwrap_or_else(|| {
             debug_assert!(
                 CONFIG.models.contains_key("gpt-5.4-nano"),
@@ -201,6 +202,7 @@ pub fn get_task_model(provider: &Provider, task: &str) -> &'static str {
         .get(provider_str)
         .and_then(|p| p.task_routing.as_ref())
         .and_then(|tr| tr.get_model(task))
+        .filter(|model_id| !model_id.is_empty())
         .unwrap_or_else(|| get_default_model(provider))
 }
 
@@ -212,7 +214,8 @@ pub fn get_task_model(provider: &Provider, task: &str) -> &'static str {
 /// (e.g. skip cost tracking, surface an error) instead of silently
 /// using an inaccurate placeholder.
 pub fn get_pricing(provider: &Provider, model_id: &str) -> Option<PricingEntry> {
-    if let Some(model) = CONFIG.models.get(model_id) {
+    let canonical_model_id = get_canonicalized_id(model_id);
+    if let Some(model) = CONFIG.models.get(&canonical_model_id) {
         return Some(PricingEntry {
             input_per_million: model.input_cost,
             output_per_million: model.output_cost,
@@ -264,12 +267,13 @@ pub fn get_token_multiplier(provider: &Provider) -> f64 {
 /// directly in the HTTP request body.  Falls back to the input unchanged when no entry or
 /// no `apiModelId` is found.
 pub fn get_api_model_id(model_id: &str) -> String {
-    if let Some(entry) = CONFIG.models.get(model_id) {
+    let canonical_model_id = get_canonicalized_id(model_id);
+    if let Some(entry) = CONFIG.models.get(&canonical_model_id) {
         if let Some(api_id) = &entry.api_model_id {
             return api_id.clone();
         }
     }
-    model_id.to_string()
+    canonical_model_id
 }
 
 /// Canonicalize a model ID using the provider's canonicalization map.
@@ -281,13 +285,30 @@ pub fn get_canonicalized_id(model_id: &str) -> String {
             return canonical.clone();
         }
     }
+
+    if CONFIG.models.contains_key(model_id) {
+        return model_id.to_string();
+    }
+
+    for (catalog_model_id, entry) in &CONFIG.models {
+        if entry.api_model_id.as_deref() == Some(model_id) {
+            return catalog_model_id.clone();
+        }
+    }
+
     model_id.to_string()
 }
 
 /// Infer the Rust `Provider` enum from a model ID string using prefix matching.
 /// Returns `None` if no prefix matches (caller should default to ManagedCloud).
 pub fn get_provider_for_model(model_id: &str) -> Option<Provider> {
-    let model_lower = model_id.to_lowercase();
+    let canonical_model_id = get_canonicalized_id(model_id);
+
+    if let Some(entry) = CONFIG.models.get(&canonical_model_id) {
+        return Provider::from_string(&entry.provider);
+    }
+
+    let model_lower = canonical_model_id.to_lowercase();
     for (provider_id, cfg) in &CONFIG.providers {
         for prefix in &cfg.model_prefixes {
             if model_lower.starts_with(prefix) {
@@ -325,7 +346,7 @@ pub fn get_sse_delimiter(provider: &Provider) -> &'static [u8] {
 /// Uses version-aware detection: any GPT major version >= 5 (and 4.1+) uses the Responses API.
 /// This future-proofs for gpt-5-turbo, gpt-6, gpt-7, etc. without code changes.
 pub fn model_uses_responses_api(model_id: &str) -> bool {
-    let id = model_id.to_lowercase();
+    let id = get_canonicalized_id(model_id).to_lowercase();
 
     // O-series reasoning models and codex always use Responses API
     if id.starts_with("o3")
@@ -365,9 +386,10 @@ pub fn model_uses_responses_api(model_id: &str) -> bool {
 
 /// Whether a model supports Gemini-style thinking_config.
 pub fn model_supports_gemini_thinking(model_id: &str) -> bool {
-    model_id.contains("gemini-3-pro")
-        || model_id.contains("gemini-3.1-pro")
-        || model_id.contains("gemini-2.5-pro")
+    let canonical_model_id = get_canonicalized_id(model_id);
+    canonical_model_id.contains("gemini-3-pro")
+        || canonical_model_id.contains("gemini-3.1-pro")
+        || canonical_model_id.contains("gemini-2.5-pro")
 }
 
 /// Return all model entries from the catalog.
@@ -465,6 +487,23 @@ mod tests {
     }
 
     #[test]
+    fn get_canonicalized_id_resolves_provider_aliases_and_api_ids() {
+        assert_eq!(
+            get_canonicalized_id("claude-sonnet-4-6"),
+            "claude-sonnet-4.6"
+        );
+        assert_eq!(get_canonicalized_id("claude-opus-4-6"), "claude-opus-4.6");
+        assert_eq!(
+            get_canonicalized_id("gemini-3-pro-preview"),
+            "gemini-3.1-pro-preview"
+        );
+        assert_eq!(
+            get_canonicalized_id("claude-sonnet-4-5"),
+            "claude-sonnet-4.5"
+        );
+    }
+
+    #[test]
     fn get_provider_for_model_returns_some_for_known_prefix() {
         // gpt- prefix maps to OpenAI
         let provider = get_provider_for_model("gpt-5.4");
@@ -499,7 +538,7 @@ mod tests {
         assert!(!model_uses_responses_api("gpt-4o"));
         assert!(!model_uses_responses_api("gpt-4-turbo"));
         assert!(!model_uses_responses_api("gpt-3.5-turbo"));
-        assert!(!model_uses_responses_api("claude-opus-4-6"));
+        assert!(!model_uses_responses_api("claude-opus-4.6"));
         assert!(!model_uses_responses_api("gemini-2.5-pro"));
     }
 
@@ -507,7 +546,7 @@ mod tests {
     fn model_supports_gemini_thinking_for_pro_models() {
         assert!(model_supports_gemini_thinking("gemini-3.1-pro-preview"));
         assert!(!model_supports_gemini_thinking("gemini-3-flash"));
-        assert!(!model_supports_gemini_thinking("claude-opus-4-6"));
+        assert!(!model_supports_gemini_thinking("claude-opus-4.6"));
     }
 
     #[test]
@@ -523,12 +562,12 @@ mod tests {
 
     #[test]
     fn get_pricing_returns_some_for_known_model() {
-        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4-6");
-        assert!(pricing.is_some(), "claude-opus-4-6 must have pricing");
+        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4.6");
+        assert!(pricing.is_some(), "claude-opus-4.6 must have pricing");
         let p = pricing.unwrap();
         assert!(
             p.input_per_million > 0.0 || p.output_per_million > 0.0,
-            "claude-opus-4-6 pricing must be non-zero"
+            "claude-opus-4.6 pricing must be non-zero"
         );
     }
 
@@ -554,7 +593,7 @@ mod tests {
         // models get provider-level default pricing. The None path is a safety
         // net for future changes when providers might be added to the enum
         // before models.json is updated.
-        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4-6");
+        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4.6");
         assert!(pricing.is_some(), "known model must have pricing");
 
         // Verify provider fallback works for all providers

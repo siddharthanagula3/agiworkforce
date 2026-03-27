@@ -28,10 +28,20 @@ export interface InputToolbarProps {
   isRecording: boolean;
   /** Whether currently transcribing */
   isTranscribing: boolean;
+  /** Whether Whisper upload mode is selected */
+  preferWhisperCloud?: boolean;
+  /** Available local Whisper runtimes */
+  availableLocalWhisper?: string[];
+  /** Whether the mode selector is open */
+  showTranscriptionModeSelector?: boolean;
   /** Callback to open file picker */
   onAttachClick: () => void;
   /** Callback to toggle recording */
   onToggleRecording: () => void;
+  /** Callback to toggle transcription mode selector */
+  onModeSelectorChange?: (open: boolean) => void;
+  /** Callback to change Whisper preference */
+  onPreferWhisperCloudChange?: (prefer: boolean) => void;
   /** Callback when screenshot is captured */
   onScreenCapture?: (result: CaptureResult) => void;
   /** Current conversation ID for screenshot association */
@@ -54,8 +64,13 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
   isVoiceSupported,
   isRecording,
   isTranscribing,
+  preferWhisperCloud = false,
+  availableLocalWhisper = [],
+  showTranscriptionModeSelector = false,
   onAttachClick,
   onToggleRecording,
+  onModeSelectorChange,
+  onPreferWhisperCloudChange,
   onScreenCapture,
   conversationId,
   researchOpen = false,
@@ -157,6 +172,12 @@ export const InputToolbar: React.FC<InputToolbarProps> = ({
         isSupported={isVoiceSupported}
         isRecording={isRecording}
         isTranscribing={isTranscribing}
+        isSimpleMode={isSimpleMode}
+        preferWhisperCloud={preferWhisperCloud}
+        availableLocalWhisper={availableLocalWhisper}
+        showModeSelector={showTranscriptionModeSelector}
+        onModeSelectorChange={onModeSelectorChange}
+        onPreferWhisperCloudChange={onPreferWhisperCloudChange}
         onToggleRecording={onToggleRecording}
       />
     </div>
