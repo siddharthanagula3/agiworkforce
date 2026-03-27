@@ -22,7 +22,7 @@ describe('model catalog helpers', () => {
   });
 
   it('maps allowed models into picker-friendly tiers', () => {
-    expect(getPickerModelTier('gpt-5.4-nano')).toBe('economy');
+    expect(getPickerModelTier('gpt-5.4-mini')).toBe('economy');
     expect(getPickerModelTier('gpt-5.4')).toBe('balanced');
     expect(getPickerModelTier('claude-opus-4.6')).toBe('premium');
   });
@@ -45,10 +45,12 @@ describe('model catalog helpers', () => {
 
   it('builds context limit and cost maps from canonical ids', () => {
     const aliasId = normalizeModelId('claude-sonnet-4-6');
+    const codexId = normalizeModelId('gpt-5.4-codex-medium');
     const contextLimits = getModelContextLimits(['gpt-5.4', 'claude-sonnet-4-6']);
     const costRates = getModelCostRates(['gpt-5.4', 'claude-sonnet-4-6']);
 
     expect(aliasId).toBe('claude-sonnet-4.6');
+    expect(codexId).toBe('gpt-5.4-codex');
     expect(contextLimits['gpt-5.4']).toBeGreaterThan(0);
     expect(contextLimits['claude-sonnet-4.6']).toBeGreaterThan(0);
     expect(costRates['gpt-5.4']).toMatchObject({ provider: 'openai' });
@@ -67,9 +69,9 @@ describe('model catalog helpers', () => {
 
   it('detects providers and resolves auto modes from shared routing defaults', () => {
     expect(detectProviderFromModelId('claude-sonnet-4-6')).toBe('anthropic');
-    expect(resolveAutoModeModel('auto-economy', 'hobby')).toBe('gpt-5.4-nano');
+    expect(resolveAutoModeModel('auto-economy', 'hobby')).toBe('gpt-5.4-mini');
     expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.4');
     expect(resolveAutoModeModel('auto-premium', 'max')).toBe('claude-opus-4.6');
-    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gpt-5.4-nano');
+    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gpt-5.4-mini');
   });
 });

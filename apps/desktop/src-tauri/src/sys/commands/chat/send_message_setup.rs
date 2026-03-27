@@ -83,7 +83,7 @@ pub(super) fn resolve_provider_and_model(
         .model_override
         .clone()
         .or(request.model.clone())
-        .unwrap_or_else(|| "gpt-5.4-nano".to_string());
+        .unwrap_or_else(|| "gpt-5.4-mini".to_string());
 
     (provider_enum, model)
 }

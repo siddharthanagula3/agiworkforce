@@ -311,11 +311,11 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should detect OpenAI provider from gpt model', async () => {
-      // gpt-5.4-nano is in ECONOMY_MODELS
+      // gpt-5.4-mini is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('openai');
       mockSendRequest.mockResolvedValue({
         content: 'Response from GPT',
-        model: 'gpt-5.4-nano',
+        model: 'gpt-5.4-mini',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -328,17 +328,17 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'gpt-5.4-nano',
+          model: 'gpt-5.4-mini',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gpt-5.4-nano');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('gpt-5.4-mini');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'openai',
-        expect.objectContaining({ model: 'gpt-5.4-nano' }),
+        expect.objectContaining({ model: 'gpt-5.4-mini' }),
       );
     });
 
@@ -375,11 +375,11 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should detect xAI provider from grok model', async () => {
-      // grok-4.1-fast-non-reasoning is in ECONOMY_MODELS
+      // grok-4-fast-non-reasoning is in ECONOMY_MODELS
       mockGetProviderFromModel.mockReturnValue('xai');
       mockSendRequest.mockResolvedValue({
         content: 'Response from Grok',
-        model: 'grok-4.1-fast-non-reasoning',
+        model: 'grok-4-fast-non-reasoning',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -392,17 +392,17 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'grok-4.1-fast-non-reasoning',
+          model: 'grok-4-fast-non-reasoning',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4.1-fast-non-reasoning');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4-fast-non-reasoning');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'xai',
-        expect.objectContaining({ model: 'grok-4.1-fast-non-reasoning' }),
+        expect.objectContaining({ model: 'grok-4-fast-non-reasoning' }),
       );
     });
 
