@@ -10,7 +10,18 @@
 
 import type { Provider } from '../types/provider';
 import type { SubscriptionTier } from './planModels';
-import { modelsCatalogJson as modelsJson } from '@agiworkforce/types';
+import {
+  getAllowedModelsForTier as getCatalogAllowedModelsForTier,
+  getModelMetadataById,
+  getProviderDefaultModel as getCatalogProviderDefaultModel,
+  getTaskModelForProvider as getCatalogTaskModelForProvider,
+  isModelAllowedForTier as isCatalogModelAllowedForTier,
+  modelIdAliases,
+  modelsById,
+  modelsCatalogJson as modelsJson,
+  normalizeModelId as normalizeCatalogModelId,
+  providerLabels,
+} from '@agiworkforce/types';
 
 // ---- Types (unchanged from original) ----
 
@@ -32,6 +43,7 @@ export interface ModelCapabilities {
 export interface ModelMetadata {
   id: string;
   apiModelId?: string;
+  maxOutputTokens?: number;
   name: string;
   provider: Provider;
   modelType:
@@ -75,14 +87,23 @@ export interface ModelMetadata {
 
 const config = modelsJson;
 
-export const MODEL_METADATA: Record<string, ModelMetadata> = config.models as unknown as Record<
+export const MODEL_ID_ALIASES: Record<string, string> = modelIdAliases;
+
+export function normalizeModelId(modelId: string | null | undefined): string | null {
+  return normalizeCatalogModelId(modelId);
+}
+
+export const MODEL_METADATA: Record<string, ModelMetadata> = modelsById as Record<
   string,
   ModelMetadata
 >;
 
-export const PROVIDER_LABELS: Record<Provider, string> = Object.fromEntries(
-  Object.entries(config.providers).map(([id, p]) => [id, p.label]),
-) as Record<Provider, string>;
+const CANONICAL_MODEL_METADATA: Record<string, ModelMetadata> = config.models as Record<
+  string,
+  ModelMetadata
+>;
+
+export const PROVIDER_LABELS: Record<Provider, string> = providerLabels as Record<Provider, string>;
 
 export const MODEL_PRESETS: Record<
   Provider,
@@ -94,31 +115,31 @@ export const THINKING_MODEL_VARIANTS: Record<string, string> = {};
 export const PROVIDERS_IN_ORDER: Provider[] = config.providersInOrder as Provider[];
 
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = Object.fromEntries(
-  Object.entries(config.models).map(([id, m]) => [id, m.contextWindow]),
+  Object.entries(MODEL_METADATA).map(([id, m]) => [id, m.contextWindow]),
 );
 
 // ---- Tier logic (reads arrays from JSON) ----
 
-const ECONOMY_MODELS = config.tierAllowedModels.economy;
-const PRO_ADDITIONS = config.tierAllowedModels.pro_additions;
-const FLAGSHIP_ADDITIONS = config.tierAllowedModels.flagship_additions;
+const ECONOMY_MODELS = getCatalogAllowedModelsForTier('economy');
+const PRO_ADDITIONS = getCatalogAllowedModelsForTier('pro_additions');
+const FLAGSHIP_ADDITIONS = getCatalogAllowedModelsForTier('flagship_additions');
 
 export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
   free: [...ECONOMY_MODELS],
   hobby: [...ECONOMY_MODELS],
-  pro: [...PRO_ADDITIONS, ...ECONOMY_MODELS],
-  max: [...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS],
-  enterprise: [...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS],
+  pro: Array.from(new Set([...PRO_ADDITIONS, ...ECONOMY_MODELS])),
+  max: Array.from(new Set([...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS])),
+  enterprise: Array.from(new Set([...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS])),
 };
 
 // ---- Helper functions (unchanged signatures) ----
 
 export function getModelMetadata(modelId: string): ModelMetadata | null {
-  return MODEL_METADATA[modelId] ?? null;
+  return (getModelMetadataById(modelId) as ModelMetadata | null) ?? null;
 }
 
 export function getAllModels(): ModelMetadata[] {
-  return Object.values(MODEL_METADATA);
+  return Object.values(CANONICAL_MODEL_METADATA);
 }
 
 export function getProviderModels(provider: Provider): ModelMetadata[] {
@@ -126,7 +147,8 @@ export function getProviderModels(provider: Provider): ModelMetadata[] {
 }
 
 export function getModelContextWindow(modelId: string): number {
-  return MODEL_CONTEXT_WINDOWS[modelId] ?? 128_000;
+  const canonicalModelId = normalizeModelId(modelId);
+  return (canonicalModelId ? MODEL_CONTEXT_WINDOWS[canonicalModelId] : undefined) ?? 128_000;
 }
 
 export function formatCost(inputCost?: number, outputCost?: number): string {
@@ -142,12 +164,53 @@ export function formatCost(inputCost?: number, outputCost?: number): string {
 }
 
 export function isModelAllowedForTier(modelId: string, tier: SubscriptionTier): boolean {
-  const allowedModels = TIER_ALLOWED_MODELS[tier];
-  return allowedModels?.includes(modelId) ?? false;
+  const tierKey =
+    tier === 'free'
+      ? 'economy'
+      : tier === 'hobby'
+        ? 'economy'
+        : tier === 'pro'
+          ? 'pro_additions'
+          : 'flagship_additions';
+
+  if (tier === 'free' || tier === 'hobby') {
+    return isCatalogModelAllowedForTier(modelId, 'economy');
+  }
+  if (tier === 'pro') {
+    return (
+      isCatalogModelAllowedForTier(modelId, 'economy') ||
+      isCatalogModelAllowedForTier(modelId, 'pro_additions')
+    );
+  }
+  if (tier === 'max' || tier === 'enterprise') {
+    return (
+      isCatalogModelAllowedForTier(modelId, 'economy') ||
+      isCatalogModelAllowedForTier(modelId, 'pro_additions') ||
+      isCatalogModelAllowedForTier(modelId, 'flagship_additions')
+    );
+  }
+  return isCatalogModelAllowedForTier(modelId, tierKey);
 }
 
 export function getAllowedModelsForTier(tier: SubscriptionTier): string[] {
   return TIER_ALLOWED_MODELS[tier] ?? TIER_ALLOWED_MODELS.free;
+}
+
+export function getProviderDefaultModel(provider: Provider): string | null {
+  return getCatalogProviderDefaultModel(provider);
+}
+
+export function getTaskModelForProvider(
+  provider: Provider,
+  task:
+    | 'fast_completion'
+    | 'code_generation'
+    | 'complex_reasoning'
+    | 'chat'
+    | 'vision'
+    | 'long_context',
+): string | null {
+  return getCatalogTaskModelForProvider(provider, task);
 }
 
 export function normalizeSubscriptionTier(
