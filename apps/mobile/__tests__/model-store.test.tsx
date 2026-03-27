@@ -201,7 +201,7 @@ describe('modelStore', () => {
       const ids = [
         'gpt-5.4',
         'claude-opus-4.6',
-        'gemini-3-pro-preview',
+        'gemini-3.1-pro-preview',
         'grok-4',
         'deepseek-chat',
         'sonar',

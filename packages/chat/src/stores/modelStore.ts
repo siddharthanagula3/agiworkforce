@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ModelInfo } from '../lib/types';
+import {
+  getModelMetadataById,
+  getProviderDefaultModel,
+  getTaskModelForProvider,
+  type Provider,
+} from '@agiworkforce/types';
 
 interface ModelState {
   models: ModelInfo[];
@@ -18,10 +24,41 @@ interface ModelState {
 
 const DEFAULT_MODEL_ID = 'auto-economy';
 
-/** Hobby-tier cloud models — auto-routing + specific agentic models.
- *  Desktop overrides via setModels() with the full catalog. */
-export const CLOUD_FALLBACK_MODELS: ModelInfo[] = [
-  // Auto-routing tiers (backend maps to best model for plan)
+function toModelTier(provider: Provider | string, modelId: string): ModelInfo['tier'] {
+  if (modelId === getTaskModelForProvider(provider, 'fast_completion')) {
+    return 'fast';
+  }
+
+  if (modelId === getProviderDefaultModel(provider)) {
+    return 'standard';
+  }
+
+  return 'flagship';
+}
+
+function buildFallbackModel(provider: Provider, modelId: string | null): ModelInfo | null {
+  const metadata = getModelMetadataById(modelId);
+  if (!metadata) {
+    return null;
+  }
+
+  return {
+    id: metadata.id,
+    name: metadata.name,
+    provider: metadata.provider,
+    tier: toModelTier(provider, metadata.id),
+    supportsThinking: metadata.capabilities.thinking,
+    supportsVision: metadata.capabilities.vision,
+    supportsTools: metadata.capabilities.tools,
+    contextWindow: metadata.contextWindow,
+    isLocal: false,
+    isByok: false,
+  };
+}
+
+const CORE_CLOUD_PROVIDERS: Provider[] = ['anthropic', 'openai', 'google', 'deepseek'];
+
+const AUTO_MODE_FALLBACKS: ModelInfo[] = [
   {
     id: 'auto-economy',
     name: 'Auto Economy',
@@ -46,55 +83,31 @@ export const CLOUD_FALLBACK_MODELS: ModelInfo[] = [
     isLocal: false,
     isByok: false,
   },
-  // Specific agentic models — hobby-tier accessible (economy set)
   {
-    id: 'claude-haiku-4-5-20251001',
-    name: 'Claude Haiku 4.5',
-    provider: 'anthropic',
-    tier: 'fast',
+    id: 'auto-premium',
+    name: 'Auto Premium',
+    provider: 'managed_cloud',
+    tier: 'flagship',
     supportsThinking: true,
     supportsVision: true,
     supportsTools: true,
-    contextWindow: 200000,
+    contextWindow: 400000,
     isLocal: false,
     isByok: false,
   },
-  {
-    id: 'gpt-5.4-nano',
-    name: 'GPT-5.4 Nano',
-    provider: 'openai',
-    tier: 'fast',
-    supportsThinking: false,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 128000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'gemini-3.1-flash-lite',
-    name: 'Gemini 3.1 Flash Lite',
-    provider: 'google',
-    tier: 'fast',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 1000000,
-    isLocal: false,
-    isByok: false,
-  },
-  {
-    id: 'deepseek-chat',
-    name: 'DeepSeek V3',
-    provider: 'deepseek',
-    tier: 'standard',
-    supportsThinking: false,
-    supportsVision: false,
-    supportsTools: true,
-    contextWindow: 128000,
-    isLocal: false,
-    isByok: false,
-  },
+];
+
+/** Hobby-tier cloud models — auto-routing + specific agentic models.
+ * Desktop and web can override these via setModels() with the full catalog. */
+export const CLOUD_FALLBACK_MODELS: ModelInfo[] = [
+  ...AUTO_MODE_FALLBACKS,
+  ...CORE_CLOUD_PROVIDERS.flatMap((provider) => {
+    const model = buildFallbackModel(
+      provider,
+      getTaskModelForProvider(provider, 'fast_completion'),
+    );
+    return model ? [model] : [];
+  }),
 ];
 
 export const useModelStore = create<ModelState>()(

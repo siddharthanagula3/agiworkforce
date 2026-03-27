@@ -1,0 +1,54 @@
+import { describe, expect, it } from 'vitest';
+import {
+  getModelCostRates,
+  getModelContextLimits,
+  getPickerModelTier,
+  getPickerModels,
+  listCanonicalModels,
+  normalizeModelId,
+} from '../model-catalog';
+
+describe('model catalog helpers', () => {
+  it('lists canonical models without alias duplication', () => {
+    const models = listCanonicalModels();
+    const ids = new Set(models.map((model) => model.id));
+
+    expect(models.length).toBe(ids.size);
+    expect(ids.has('gpt-5.4')).toBe(true);
+    expect(ids.has('claude-sonnet-4.6')).toBe(true);
+  });
+
+  it('maps allowed models into picker-friendly tiers', () => {
+    expect(getPickerModelTier('gpt-5.4-nano')).toBe('economy');
+    expect(getPickerModelTier('gpt-5.4')).toBe('balanced');
+    expect(getPickerModelTier('claude-opus-4.6')).toBe('premium');
+  });
+
+  it('returns normalized picker models for chat surfaces', () => {
+    const models = getPickerModels({
+      allowedProviders: ['openai', 'anthropic', 'google'],
+    });
+
+    expect(models.find((model) => model.id === 'gpt-5.4')).toMatchObject({
+      provider: 'openai',
+      tier: 'balanced',
+    });
+    expect(models.find((model) => model.id === 'claude-opus-4.6')).toMatchObject({
+      provider: 'anthropic',
+      tier: 'premium',
+    });
+    expect(models.every((model) => model.contextWindow > 0)).toBe(true);
+  });
+
+  it('builds context limit and cost maps from canonical ids', () => {
+    const aliasId = normalizeModelId('claude-sonnet-4-6');
+    const contextLimits = getModelContextLimits(['gpt-5.4', 'claude-sonnet-4-6']);
+    const costRates = getModelCostRates(['gpt-5.4', 'claude-sonnet-4-6']);
+
+    expect(aliasId).toBe('claude-sonnet-4.6');
+    expect(contextLimits['gpt-5.4']).toBeGreaterThan(0);
+    expect(contextLimits['claude-sonnet-4.6']).toBeGreaterThan(0);
+    expect(costRates['gpt-5.4']).toMatchObject({ provider: 'openai' });
+    expect(costRates['claude-sonnet-4.6']).toMatchObject({ provider: 'anthropic' });
+  });
+});
