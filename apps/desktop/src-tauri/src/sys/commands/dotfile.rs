@@ -108,8 +108,7 @@ pub async fn write_shared_config(key: String, value: serde_json::Value) -> Resul
 
     let output =
         toml::to_string_pretty(&table).map_err(|e| format!("Failed to serialize config: {}", e))?;
-    std::fs::write(&config_path, output)
-        .map_err(|e| format!("Failed to write config: {}", e))?;
+    std::fs::write(&config_path, output).map_err(|e| format!("Failed to write config: {}", e))?;
 
     Ok(())
 }
@@ -178,10 +177,7 @@ pub async fn dotfile_list_mcp_servers() -> Result<serde_json::Value, String> {
 ///
 /// Creates the file with a `{ "mcpServers": {} }` skeleton when missing.
 #[tauri::command]
-pub async fn dotfile_add_mcp_server(
-    name: String,
-    config: serde_json::Value,
-) -> Result<(), String> {
+pub async fn dotfile_add_mcp_server(name: String, config: serde_json::Value) -> Result<(), String> {
     let path = mcp_json_path()?;
 
     // Ensure the directory exists.
@@ -329,8 +325,7 @@ pub async fn dotfile_read_memories() -> Result<String, String> {
     if !path.exists() {
         return Ok(String::new());
     }
-    std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read raw_memories.md: {}", e))
+    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read raw_memories.md: {}", e))
 }
 
 // ---------------------------------------------------------------------------

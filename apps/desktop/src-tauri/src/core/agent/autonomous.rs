@@ -323,7 +323,10 @@ impl AutonomousAgent {
             // Enforce iteration limit (same as run_autonomous_loop)
             iteration += 1;
             if iteration > max_iterations {
-                return Err(anyhow!("run_goal exceeded max iterations ({})", max_iterations));
+                return Err(anyhow!(
+                    "run_goal exceeded max iterations ({})",
+                    max_iterations
+                ));
             }
 
             // Enforce cumulative cost cap (same as run_autonomous_loop)

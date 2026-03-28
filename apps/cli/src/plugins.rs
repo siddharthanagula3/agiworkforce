@@ -148,11 +148,14 @@ impl PluginsManager {
         let mut out = HashMap::new();
         for p in &self.plugins {
             for (name, cfg) in &p.mcp_servers {
-                out.insert(name.clone(), crate::mcp::McpServerConfig {
-                    command: cfg.command.clone(),
-                    args: cfg.args.clone(),
-                    env: cfg.env.clone(),
-                });
+                out.insert(
+                    name.clone(),
+                    crate::mcp::McpServerConfig {
+                        command: cfg.command.clone(),
+                        args: cfg.args.clone(),
+                        env: cfg.env.clone(),
+                    },
+                );
             }
         }
         out

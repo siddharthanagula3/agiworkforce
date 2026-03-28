@@ -636,10 +636,7 @@ fn resample(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
 /// Encode PCM samples to a WAV file in a temporary location.
 fn encode_wav(recording: &AudioRecording) -> Result<PathBuf> {
     let tmp_dir = std::env::temp_dir();
-    let wav_path = tmp_dir.join(format!(
-        "agiworkforce_voice_{}.wav",
-        uuid::Uuid::new_v4()
-    ));
+    let wav_path = tmp_dir.join(format!("agiworkforce_voice_{}.wav", uuid::Uuid::new_v4()));
 
     let spec = hound::WavSpec {
         channels: 1,
@@ -687,7 +684,11 @@ async fn transcribe(
 
     // Clean up temp WAV file
     if let Err(e) = std::fs::remove_file(&wav_path) {
-        eprintln!("[voice] Failed to clean up temp file {}: {}", wav_path.display(), e);
+        eprintln!(
+            "[voice] Failed to clean up temp file {}: {}",
+            wav_path.display(),
+            e
+        );
     }
 
     result
@@ -781,7 +782,11 @@ async fn transcribe_local(
         let text =
             std::fs::read_to_string(&txt_path).context("Failed to read whisper output file")?;
         if let Err(e) = std::fs::remove_file(&txt_path) {
-            eprintln!("[voice] Failed to clean up temp file {}: {}", txt_path.display(), e);
+            eprintln!(
+                "[voice] Failed to clean up temp file {}: {}",
+                txt_path.display(),
+                e
+            );
         }
         Ok(text.trim().to_string())
     } else {

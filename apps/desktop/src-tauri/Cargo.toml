@@ -25,12 +25,12 @@ await_holding_lock = "allow"
 [dependencies]
 agiworkforce-sandbox-policy = { path = "../../../crates/sandbox-policy" }
 
-tauri = { version = "2.9.3", features = ["tray-icon"] }
-tauri-plugin-shell = { version = "2.3.3", optional = true }
-tauri-plugin-process = "2.2.0"
-tauri-plugin-fs = "2.4.4"
+tauri = { version = "2.10.3", features = ["tray-icon"] }
+tauri-plugin-shell = { version = "2.3.5", optional = true }
+tauri-plugin-process = "2.3.1"
+tauri-plugin-fs = "2.4.5"
 tauri-plugin-dialog = "2.6.0"
-tauri-plugin-updater = { version = "2.3.0", optional = true }
+tauri-plugin-updater = { version = "2.10.0", optional = true }
 tauri-plugin-notification = "2.3.3"
 tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-window-state = "2.4.1"
@@ -63,7 +63,7 @@ thiserror = "2.0"
 
 # Note: bundled-sqlcipher requires libclang at build time on some platforms.
 # Install via: brew install llvm (macOS) or apt install libclang-dev (Linux).
-rusqlite = { version = "0.39", features = ["bundled-sqlcipher", "backup", "blob", "chrono"] }
+rusqlite = { version = "0.32.1", features = ["bundled-sqlcipher", "backup", "blob", "chrono"] }
 # tokio-rusqlite removed — replaced by data/async_sqlite.rs wrapper to resolve libsqlite3-sys conflict
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
 postgres-types = { version = "0.2", features = ["derive", "with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
@@ -203,7 +203,7 @@ mailparse = "0.15"
 
 git2 = { version = "0.20", features = ["vendored-openssl"] }
 async-stripe = { version = "0.31", features = ["runtime-tokio-hyper"] }
-tauri-plugin-deep-link = "2.4.6"
+tauri-plugin-deep-link = "2.4.7"
 
 
 [target.'cfg(windows)'.dependencies]
@@ -265,13 +265,13 @@ remote-databases = ["dep:tokio-postgres", "dep:postgres-types", "dep:deadpool-po
 
 
 [build-dependencies]
-tauri-build = { version = "2.5.2", features = [] }
+tauri-build = { version = "2.5.6", features = [] }
 
 [dev-dependencies]
 tempfile = "3.10"
 mockall = "0.12"
 serial_test = "3.0"
-tauri = { version = "2.9.3", features = ["test"] }
+tauri = { version = "2.10.3", features = ["test"] }
 criterion = "0.5"
 proptest = "1.4"
 

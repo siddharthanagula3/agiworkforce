@@ -65,7 +65,9 @@ struct RateLimiter {
 impl RateLimiter {
     fn new(max_per_minute: usize) -> Self {
         Self {
-            requests: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::VecDeque::new())),
+            requests: std::sync::Arc::new(tokio::sync::Mutex::new(
+                std::collections::VecDeque::new(),
+            )),
             max_per_minute,
         }
     }
