@@ -21,6 +21,7 @@ import {
 import type { Provider } from '../types/provider';
 import type { CustomModelConfig } from '../types/customModel';
 import type { SubscriptionTier } from '../constants/planModels';
+import { useUnifiedAuthStore } from './auth';
 
 // ============================================================================
 // Types
@@ -318,7 +319,6 @@ async function initializePlanSubscription(): Promise<void> {
   hasInitializedPlanSubscription = true;
 
   try {
-    const { useUnifiedAuthStore } = await import('./auth');
     if (!useUnifiedAuthStore?.subscribe) {
       return;
     }

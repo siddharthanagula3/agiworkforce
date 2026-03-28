@@ -4,6 +4,7 @@ import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { invoke } from '../lib/tauri-mock';
 import { voiceTranscribeBlob } from '../api/voice';
 import { storageFallback } from '../lib/storageFallback';
+import { useModelStore } from './modelStore';
 
 type VoiceMode = 'idle' | 'listening' | 'transcribing' | 'processing' | 'preview';
 
@@ -241,8 +242,6 @@ export const useVoiceInputStore = create<VoiceInputState>()(
 
           // 'ai' mode: run transcript through the current LLM
           try {
-            // Dynamically import to avoid circular dep at module init time
-            const { useModelStore } = await import('./modelStore');
             const { selectedModel, selectedProvider } = useModelStore.getState();
 
             const systemContent = isCommand

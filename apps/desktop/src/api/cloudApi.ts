@@ -5,7 +5,7 @@
  * Handles conversation CRUD and LLM message sending via SSE streaming.
  */
 
-import { isTauri } from '../lib/tauri-mock';
+import { isTauri } from '../lib/runtimeEnvironment';
 import { supabaseAuth } from '../services/supabaseAuth';
 import { API_BASE_URL } from './config';
 
