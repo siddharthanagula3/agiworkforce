@@ -1,12 +1,16 @@
-// AUDIT-ENV-064 fix: Unified Tauri runtime detection
-// Checks for both __TAURI_INTERNALS__ and __TAURI__ to handle different Tauri versions
-export const isTauri =
-  typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+import { invoke as tauriInvoke } from '@tauri-apps/api/core';
+import {
+  createCloudConversation,
+  deleteCloudConversation,
+  getCloudConversation,
+  getCloudModels,
+  getCloudUsage,
+  listCloudConversations,
+  updateCloudConversationTitle,
+} from '../api/cloudApi';
+import { isCloudWeb, isTauri, isTestEnvironment } from './runtimeEnvironment';
 
-const isTestEnvironment =
-  typeof process !== 'undefined' && (process.env['NODE_ENV'] === 'test' || process.env['VITEST']);
-
-export const isCloudWeb = !isTauri && !isTestEnvironment;
+export { isCloudWeb, isTauri } from './runtimeEnvironment';
 
 const CLOUD_WEB_FALLTHROUGH = Symbol('CLOUD_WEB_FALLTHROUGH');
 
@@ -17,12 +21,10 @@ async function handleCloudWebCommand<T>(
   switch (command) {
     // Chat CRUD — delegate to cloudApi
     case 'chat_get_conversations': {
-      const { listCloudConversations } = await import('../api/cloudApi');
       return (await listCloudConversations()) as T;
     }
 
     case 'chat_create_conversation': {
-      const { createCloudConversation } = await import('../api/cloudApi');
       const req = args?.['request'] as Record<string, unknown> | undefined;
       return (await createCloudConversation(
         (req?.['title'] as string) ?? 'New Conversation',
@@ -31,7 +33,6 @@ async function handleCloudWebCommand<T>(
     }
 
     case 'chat_get_messages': {
-      const { getCloudConversation } = await import('../api/cloudApi');
       const id = (args?.['conversationId'] ?? args?.['id']) as string;
       if (!id) return [] as T;
       const result = await getCloudConversation(id);
@@ -39,7 +40,6 @@ async function handleCloudWebCommand<T>(
     }
 
     case 'chat_delete_conversation': {
-      const { deleteCloudConversation } = await import('../api/cloudApi');
       const id = (args?.['conversationId'] ?? args?.['id']) as string;
       if (id) await deleteCloudConversation(id);
       return undefined as T;
@@ -76,12 +76,10 @@ async function handleCloudWebCommand<T>(
     }
 
     case 'cloud_get_conversations': {
-      const { listCloudConversations } = await import('../api/cloudApi');
       return (await listCloudConversations()) as T;
     }
 
     case 'cloud_create_conversation': {
-      const { createCloudConversation } = await import('../api/cloudApi');
       const req = args?.['request'] as Record<string, unknown> | undefined;
       return (await createCloudConversation(
         (req?.['title'] as string) ?? 'New Conversation',
@@ -90,7 +88,6 @@ async function handleCloudWebCommand<T>(
     }
 
     case 'cloud_get_messages': {
-      const { getCloudConversation } = await import('../api/cloudApi');
       const id = args?.['conversationId'] as string | undefined;
       if (!id) return [] as T;
       const result = await getCloudConversation(id);
@@ -98,14 +95,12 @@ async function handleCloudWebCommand<T>(
     }
 
     case 'cloud_delete_conversation': {
-      const { deleteCloudConversation } = await import('../api/cloudApi');
       const id = args?.['conversationId'] as string | undefined;
       if (id) await deleteCloudConversation(id);
       return undefined as T;
     }
 
     case 'cloud_update_conversation_title': {
-      const { updateCloudConversationTitle } = await import('../api/cloudApi');
       const id = args?.['conversationId'] as string | undefined;
       const title = args?.['title'] as string | undefined;
       if (id && title) {
@@ -116,7 +111,6 @@ async function handleCloudWebCommand<T>(
 
     // LLM model listing — delegate to cloudApi
     case 'llm_get_available_models': {
-      const { getCloudModels } = await import('../api/cloudApi');
       try {
         const models = await getCloudModels();
         return models as T;
@@ -127,7 +121,6 @@ async function handleCloudWebCommand<T>(
 
     case 'llm_get_usage_stats': {
       try {
-        const { getCloudUsage } = await import('../api/cloudApi');
         const usage = await getCloudUsage();
         return {
           totalTokens: usage.token_count ?? 0,
@@ -155,7 +148,6 @@ async function handleCloudWebCommand<T>(
 
 export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri) {
-    const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
     return tauriInvoke<T>(command, args);
   }
 

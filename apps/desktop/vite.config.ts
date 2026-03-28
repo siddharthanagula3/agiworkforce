@@ -158,61 +158,94 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
            * - Core dependencies are bundled together to minimize HTTP requests
            * - Average initial bundle size reduced by ~40% compared to no splitting
            */
-          manualChunks: {
+          manualChunks: (id) => {
+            if (
+              id.includes('/apps/desktop/src/runtime/') ||
+              id.includes('/apps/desktop/src/lib/tauri-mock.ts') ||
+              id.includes('/apps/desktop/src/lib/cloudChatStream.ts') ||
+              id.includes('/apps/desktop/src/api/') ||
+              id.includes('/packages/runtime/src/')
+            ) {
+              return 'desktop-core';
+            }
+
+            if (id.includes('/apps/desktop/src/stores/')) {
+              return 'desktop-core';
+            }
+
+            if (!id.includes('node_modules')) {
+              return undefined;
+            }
+
             // Core React ecosystem - loaded immediately
-            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('/react-router-dom/')
+            ) {
+              return 'react-vendor';
+            }
 
             // Radix UI components - core UI primitives
-            'ui-vendor': [
-              '@radix-ui/react-alert-dialog',
-              '@radix-ui/react-dialog',
-              '@radix-ui/react-dropdown-menu',
-              '@radix-ui/react-popover',
-              '@radix-ui/react-select',
-              '@radix-ui/react-tabs',
-              '@radix-ui/react-toast',
-              '@radix-ui/react-tooltip',
-            ],
+            if (id.includes('/@radix-ui/')) {
+              return 'ui-vendor';
+            }
 
             // Terminal is desktop-only
-            ...(isWebBuild
-              ? {}
-              : {
-                  'terminal-vendor': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-webgl'],
-                }),
+            if (!isWebBuild && id.includes('/@xterm/')) {
+              return 'terminal-vendor';
+            }
 
             // Markdown rendering and syntax highlighting
-            'markdown-vendor': [
-              'react-markdown',
-              'remark-gfm',
-              'rehype-highlight',
-              'katex',
-              'rehype-katex',
-              'remark-math',
-              'highlight.js',
-              'react-syntax-highlighter',
-            ],
+            if (
+              id.includes('/react-markdown/') ||
+              id.includes('/remark-gfm/') ||
+              id.includes('/rehype-highlight/') ||
+              id.includes('/katex/') ||
+              id.includes('/rehype-katex/') ||
+              id.includes('/remark-math/') ||
+              id.includes('/highlight.js/') ||
+              id.includes('/react-syntax-highlighter/')
+            ) {
+              return 'markdown-vendor';
+            }
 
             // Charting library - only loaded on analytics/dashboard views
-            'charts-vendor': ['recharts'],
+            if (id.includes('/recharts/')) {
+              return 'charts-vendor';
+            }
 
             // Diagram library - only loaded when diagrams are rendered
-            'diagram-vendor': ['mermaid'],
+            if (id.includes('/mermaid/')) {
+              return 'diagram-vendor';
+            }
 
             // Code editing - loaded on-demand for code workspaces
-            'monaco-vendor': ['monaco-editor'],
+            if (id.includes('/monaco-editor/')) {
+              return 'monaco-vendor';
+            }
 
             // Virtualization for large lists
-            'virtualization-vendor': ['react-window', 'react-virtualized-auto-sizer'],
+            if (id.includes('/react-window/') || id.includes('/react-virtualized-auto-sizer/')) {
+              return 'virtualization-vendor';
+            }
 
             // Utility libraries
-            'utility-vendor': ['framer-motion', 'date-fns', 'clsx', 'fuse.js'],
-
-            // State management
-            zustand: ['zustand', 'immer'],
+            if (
+              id.includes('/framer-motion/') ||
+              id.includes('/date-fns/') ||
+              id.includes('/clsx/') ||
+              id.includes('/fuse.js/')
+            ) {
+              return 'utility-vendor';
+            }
 
             // PDF handling - loaded on-demand for document features
-            'pdf-vendor': ['pdfjs-dist'],
+            if (id.includes('/pdfjs-dist/')) {
+              return 'pdf-vendor';
+            }
+
+            return undefined;
           },
 
           // Asset file naming for better caching
@@ -243,6 +276,10 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         '@types': path.resolve(__dirname, './src/types'),
         '@assets': path.resolve(__dirname, './src/assets'),
         '@lib': path.resolve(__dirname, './src/lib'),
+        '@agiworkforce/runtime': path.resolve(
+          __dirname,
+          '../../packages/runtime/src/desktop-index.ts',
+        ),
         '@agiworkforce/utils': path.resolve(__dirname, '../../packages/utils/src/index.ts'),
         ...webTauriAliases,
       },
