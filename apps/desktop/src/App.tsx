@@ -2,11 +2,9 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useTranslation } from 'react-i18next';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
-import { VoiceInputOverlay } from './components/Voice/VoiceInputOverlay';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
 
-import { ChatInterface } from '@agiworkforce/chat';
 import { useChatStore as useDesktopChatStore } from './stores/chat/chatStore';
 import { TauriRuntime } from './runtime/TauriRuntime';
 import { WebRuntime } from './runtime/WebRuntime';
@@ -14,10 +12,8 @@ import { WebRuntime } from './runtime/WebRuntime';
 // Expose desktop chat store globally so packages/chat useChat hook can access it
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).__AGI_DESKTOP_CHAT_STORE__ = useDesktopChatStore;
-import { CommandPalette, type CommandOption } from './components/UnifiedAgenticChat/CommandPalette';
-import { SearchModal } from './components/UnifiedAgenticChat/SearchModal';
+import type { CommandOption } from './components/UnifiedAgenticChat/CommandPalette';
 import { useSearchModal } from './hooks/useSearchModal';
-import { QuickQuery } from './components/QuickQuery';
 import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
 import {
@@ -28,10 +24,7 @@ import {
   uuidToDbId,
 } from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
-import {
-  TimeoutWarningDialog,
-  type TimeoutWarningData,
-} from './components/Execution/TimeoutWarningDialog';
+import type { TimeoutWarningData } from './components/Execution/TimeoutWarningDialog';
 
 import {
   AlertTriangle,
@@ -45,18 +38,25 @@ import {
   Sun,
 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorHandling';
-import ErrorToastContainer from './components/Errors/ErrorToast';
 import { TooltipProvider } from './components/ui/Tooltip';
+import { getModelMetadata, getProviderDefaultModel } from './constants/llm';
 import { errorReportingService } from './services/errorReporting';
-import { initializeWebAuth } from './services/supabaseAuth';
-import { useAuthStore, useAccountStore } from './stores/auth';
+import { initializeWebAuth, supabaseAuth } from './services/supabaseAuth';
+import {
+  useAuthStore,
+  useAccountStore,
+  useBillingStore,
+  waitForAuthReady,
+  waitForHydration,
+} from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
+import { initializeModelStoreFromSettings, useModelStore } from './stores/modelStore';
 import useErrorStore, { useSimpleModeStore, selectOnboardingCompleted } from './stores/ui';
 import { useAppModeStore } from './stores/appModeStore';
-import { ModeSelectionDialog } from './components/ModeSelectionDialog';
 import { useSettingsDialogStore } from './stores/settingsDialogStore';
-import { useSettingsStore } from './stores/settingsStore';
-import { OnboardingWelcome } from './components/Onboarding';
+import { useSettingsStore, waitForSettingsHydration } from './stores/settingsStore';
+import { useVoiceInputStore } from './stores/voiceInputStore';
+import { applyTheme, getThemeById } from './themes/index';
 
 const VisualizationLayer = lazy(() =>
   import('./components/Overlay/VisualizationLayer').then((m) => ({
@@ -68,6 +68,41 @@ const FloatingChat = lazy(() =>
     default: m.FloatingChat,
   })),
 );
+const ChatInterface = lazy(() =>
+  import('@agiworkforce/chat').then((m) => ({
+    default: m.ChatInterface,
+  })),
+);
+const SearchModal = lazy(() =>
+  import('./components/UnifiedAgenticChat/SearchModal').then((m) => ({
+    default: m.SearchModal,
+  })),
+);
+const CommandPalette = lazy(() =>
+  import('./components/UnifiedAgenticChat/CommandPalette').then((m) => ({
+    default: m.CommandPalette,
+  })),
+);
+const QuickQuery = lazy(() =>
+  import('./components/QuickQuery').then((m) => ({
+    default: m.QuickQuery,
+  })),
+);
+const ModeSelectionDialog = lazy(() =>
+  import('./components/ModeSelectionDialog').then((m) => ({
+    default: m.ModeSelectionDialog,
+  })),
+);
+const VoiceInputOverlay = lazy(() =>
+  import('./components/Voice/VoiceInputOverlay').then((m) => ({
+    default: m.VoiceInputOverlay,
+  })),
+);
+const OnboardingWelcome = lazy(() =>
+  import('./components/Onboarding').then((m) => ({
+    default: m.OnboardingWelcome,
+  })),
+);
 const AuthPage = lazy(() =>
   import('./components/Auth/AuthPage').then((m) => ({
     default: m.AuthPage,
@@ -76,16 +111,42 @@ const AuthPage = lazy(() =>
 const SettingsPanel = lazy(() =>
   import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 );
+const UpdateChecker = lazy(() =>
+  import('./components/Updates').then((m) => ({
+    default: m.UpdateChecker,
+  })),
+);
+const AutomationPermissionsModal = lazy(() =>
+  import('./components/Settings/AutomationPermissionsModal').then((m) => ({
+    default: m.AutomationPermissionsModal,
+  })),
+);
+const TimeoutWarningDialog = lazy(() =>
+  import('./components/Execution/TimeoutWarningDialog').then((m) => ({
+    default: m.TimeoutWarningDialog,
+  })),
+);
+const StatusBanner = lazy(() =>
+  import('./components/StatusBanner').then((m) => ({
+    default: m.StatusBanner,
+  })),
+);
+const OfflineIndicator = lazy(() =>
+  import('./components/OfflineIndicator').then((m) => ({
+    default: m.OfflineIndicator,
+  })),
+);
+const ErrorToastContainer = lazy(() =>
+  import('./components/Errors/ErrorToast').then((m) => ({
+    default: m.default,
+  })),
+);
 // Retained for reference — UnifiedAgenticChat is replaced by ChatInterface from @agiworkforce/chat.
 // const UnifiedAgenticChat = lazy(() =>
 //   import('./components/UnifiedAgenticChat').then((m) => ({
 //     default: m.UnifiedAgenticChat,
 //   })),
 // );
-import { UpdateChecker } from './components/Updates';
-import { AutomationPermissionsModal } from './components/Settings/AutomationPermissionsModal';
-import { StatusBanner } from './components/StatusBanner';
-import { OfflineIndicator } from './components/OfflineIndicator';
 import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
@@ -114,6 +175,7 @@ const DesktopShell = () => {
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
   const [subscriptionFetchFailed, setSubscriptionFetchFailed] = useState(false);
+  const isSearchModalOpen = useSearchModal((state) => state.isOpen);
   const { theme, setTheme } = useThemeContext();
 
   // Onboarding state - show welcome flow on first launch
@@ -311,8 +373,6 @@ const DesktopShell = () => {
     void (async () => {
       try {
         // Wait for settings store hydration from localStorage before loading from backend
-        const { useSettingsStore, waitForSettingsHydration } =
-          await import('./stores/settingsStore');
         await runStartupStep('Settings hydration', () => waitForSettingsHydration());
         if (disposed) return;
 
@@ -354,14 +414,12 @@ const DesktopShell = () => {
           const settings = useSettingsStore.getState();
           const themeId = settings.windowPreferences?.selectedTheme;
           if (themeId) {
-            const { getThemeById, applyTheme } = await import('./themes/index');
             const theme = getThemeById(themeId);
             if (theme) applyTheme(theme);
           }
         });
 
         if (disposed) return;
-        const { initializeModelStoreFromSettings } = await import('./stores/modelStore');
         await runStartupStep('Model initialization', () => initializeModelStoreFromSettings(), {
           notify: true,
         });
@@ -390,9 +448,6 @@ const DesktopShell = () => {
           await runStartupStep(
             'Managed cloud credential sync',
             async () => {
-              const { supabaseAuth } = await import('./services/supabaseAuth');
-              const { waitForAuthReady } = await import('./stores/auth');
-
               // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
               await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
               if (disposed) return;
@@ -544,7 +599,6 @@ const DesktopShell = () => {
         // Build fallback models from the shared catalog helpers (single source of truth)
         try {
           const { useChatModelStore } = await import('@agiworkforce/chat');
-          const { getModelMetadata, getProviderDefaultModel } = await import('./constants/llm');
           const fallbackProviders = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'ollama'];
           const fallbackModels: import('@agiworkforce/chat').ModelInfo[] =
             fallbackProviders.flatMap((p) => {
@@ -586,7 +640,6 @@ const DesktopShell = () => {
   useEffect(() => {
     async function syncProfile() {
       try {
-        const { useAuthStore, useBillingStore } = await import('./stores/auth');
         const { useChatSettingsStore } = await import('@agiworkforce/chat');
 
         const syncFromAuth = () => {
@@ -671,9 +724,7 @@ const DesktopShell = () => {
       } else if (detail.type === 'keyboard-shortcuts') {
         useSettingsDialogStore.getState().openShortcuts();
       } else if (detail.type === 'logout') {
-        void import('./services/supabaseAuth').then(({ supabaseAuth }) => {
-          supabaseAuth.signOut();
-        });
+        supabaseAuth.signOut();
       }
     };
     window.addEventListener('chat:action', handleChatAction);
@@ -786,7 +837,6 @@ const DesktopShell = () => {
       await routeToChatSurface(draft);
       setQuickQueryOpen(false);
 
-      const { useVoiceInputStore } = await import('./stores/voiceInputStore');
       const voiceInputState = useVoiceInputStore.getState();
 
       if (voiceInputState.mode === 'listening') {
@@ -855,12 +905,8 @@ const DesktopShell = () => {
       // Ensure there's an active conversation, then add the user message
       ensureActiveConversation();
 
-      // Import dynamically to avoid circular dependency
       void (async () => {
         try {
-          const { useModelStore } = await import('./stores/modelStore');
-          const { useChatStore } = await import('./stores/chat/chatStore');
-
           const { selectedModel, selectedProvider, selectModel } = useModelStore.getState();
           if (model && (selectedModel !== model || selectedProvider !== 'managed_cloud')) {
             await selectModel(model, 'managed_cloud');
@@ -878,7 +924,7 @@ const DesktopShell = () => {
             return;
           }
 
-          useChatStore.getState().addPendingMessage({
+          useDesktopChatStore.getState().addPendingMessage({
             id: crypto.randomUUID(),
             content: query,
             timestamp: new Date().toISOString(),
@@ -1082,14 +1128,28 @@ const DesktopShell = () => {
             </a>
           </div>
         )}
-        {isTauri && <VoiceInputOverlay />}
-        {isTauri && showOnboarding && !onboardingCompleted && (
-          <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
+        {isTauri && (
+          <Suspense fallback={null}>
+            <VoiceInputOverlay />
+          </Suspense>
         )}
-        {isTauri && !hasSelectedMode && <ModeSelectionDialog open={!hasSelectedMode} />}
+        {isTauri && showOnboarding && !onboardingCompleted && (
+          <Suspense fallback={null}>
+            <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
+          </Suspense>
+        )}
+        {isTauri && !hasSelectedMode && (
+          <Suspense fallback={null}>
+            <ModeSelectionDialog open={!hasSelectedMode} />
+          </Suspense>
+        )}
         <div className="flex flex-col gap-1">
-          <StatusBanner />
-          <OfflineIndicator position="top" />
+          <Suspense fallback={null}>
+            <StatusBanner />
+          </Suspense>
+          <Suspense fallback={null}>
+            <OfflineIndicator position="top" />
+          </Suspense>
           {subscriptionFetchFailed && (
             <div className="bg-amber-500/15 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-sm text-amber-300">
               <div className="flex items-center gap-2">
@@ -1167,12 +1227,16 @@ const DesktopShell = () => {
             </ErrorBoundary>
           </div>
         </main>
-        <SearchModal />
-        <CommandPalette
-          isOpen={commandPaletteOpen}
-          onClose={() => setCommandPaletteOpen(false)}
-          commands={commandOptions}
-        />
+        <Suspense fallback={null}>{isSearchModalOpen ? <SearchModal /> : null}</Suspense>
+        <Suspense fallback={null}>
+          {commandPaletteOpen ? (
+            <CommandPalette
+              isOpen={commandPaletteOpen}
+              onClose={() => setCommandPaletteOpen(false)}
+              commands={commandOptions}
+            />
+          ) : null}
+        </Suspense>
         <Suspense fallback={null}>
           <SettingsPanel
             open={settingsPanelOpen}
@@ -1180,29 +1244,45 @@ const DesktopShell = () => {
             initialTab={settingsInitialTab}
           />
         </Suspense>
-        {isTauri && <UpdateChecker onUpdateNow={openSettings} />}
-        {isTauri && <AutomationPermissionsModal />}
-        <ErrorToastContainer position="top-right" />
-        <TimeoutWarningDialog
-          warning={timeoutWarning}
-          onDismiss={handleDismissTimeoutWarning}
-          isOpen={isTimeoutWarningOpen}
-        />
-        <QuickQuery
-          open={quickQueryOpen}
-          onClose={() => setQuickQueryOpen(false)}
-          onSubmit={handleQuickQuerySubmit}
-          onOpenConversation={handleQuickQueryOpenConversation}
-          onStartNewChat={() => {
-            void handleQuickQueryStartNewChat();
-          }}
-          onRequestVoice={(draft) => {
-            void handleVoiceInputRequest(draft);
-          }}
-          onRequestCapture={(captureResult, draft) => {
-            void handleCaptureRequest(captureResult, draft);
-          }}
-        />
+        {isTauri && (
+          <Suspense fallback={null}>
+            <UpdateChecker onUpdateNow={openSettings} />
+          </Suspense>
+        )}
+        {isTauri && (
+          <Suspense fallback={null}>
+            <AutomationPermissionsModal />
+          </Suspense>
+        )}
+        <Suspense fallback={null}>
+          <ErrorToastContainer position="top-right" />
+        </Suspense>
+        <Suspense fallback={null}>
+          <TimeoutWarningDialog
+            warning={timeoutWarning}
+            onDismiss={handleDismissTimeoutWarning}
+            isOpen={isTimeoutWarningOpen}
+          />
+        </Suspense>
+        <Suspense fallback={null}>
+          {quickQueryOpen ? (
+            <QuickQuery
+              open={quickQueryOpen}
+              onClose={() => setQuickQueryOpen(false)}
+              onSubmit={handleQuickQuerySubmit}
+              onOpenConversation={handleQuickQueryOpenConversation}
+              onStartNewChat={() => {
+                void handleQuickQueryStartNewChat();
+              }}
+              onRequestVoice={(draft) => {
+                void handleVoiceInputRequest(draft);
+              }}
+              onRequestCapture={(captureResult, draft) => {
+                void handleCaptureRequest(captureResult, draft);
+              }}
+            />
+          ) : null}
+        </Suspense>
       </div>
     </Suspense>
   );
@@ -1227,8 +1307,6 @@ const App = () => {
     let cancelled = false;
     void (async () => {
       try {
-        const { useAccountStore, waitForHydration } = await import('./stores/auth');
-        const { supabaseAuth } = await import('./services/supabaseAuth');
         if (cancelled) return;
 
         // Wait for store hydration from localStorage before syncing

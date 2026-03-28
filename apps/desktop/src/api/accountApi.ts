@@ -1,3 +1,4 @@
+import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import {
   CreditBalanceResponse,
   DeductCreditsResponse,
@@ -34,13 +35,11 @@ const withTimeout = <T>(
   ]);
 };
 
-// Dynamic import of invoke to handle web development mode
 const getInvoke = async () => {
   if (!isTauri) {
     throw new Error('Tauri is not available in web development mode');
   }
-  const { invoke } = await import('@tauri-apps/api/core');
-  return invoke;
+  return tauriInvoke;
 };
 
 export const accountApi = {
