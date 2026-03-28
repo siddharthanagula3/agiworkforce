@@ -1,8 +1,8 @@
+use crate::data::async_sqlite::AsyncConnection as Connection;
 use rusqlite::{params, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use crate::data::async_sqlite::AsyncConnection as Connection;
 use tracing::debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

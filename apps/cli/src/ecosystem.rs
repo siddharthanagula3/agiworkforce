@@ -156,10 +156,7 @@ fn tool_registry() -> Vec<ToolDefinition> {
             name: "VS Code",
             source_id: "vscode",
             #[cfg(target_os = "macos")]
-            home_relative_paths: vec![
-                ".vscode",
-                "Library/Application Support/Code",
-            ],
+            home_relative_paths: vec![".vscode", "Library/Application Support/Code"],
             #[cfg(not(target_os = "macos"))]
             home_relative_paths: vec![".vscode"],
             mcp_relative: None,
@@ -262,7 +259,11 @@ fn detect_tool(home: &Path, def: &ToolDefinition) -> Option<DetectedTool> {
     let tool_path = def.home_relative_paths.iter().find_map(|rel| {
         let p = home.join(rel);
         if def.is_file_check {
-            if p.is_file() { Some(p) } else { None }
+            if p.is_file() {
+                Some(p)
+            } else {
+                None
+            }
         } else if p.is_dir() {
             Some(p)
         } else {
@@ -272,7 +273,11 @@ fn detect_tool(home: &Path, def: &ToolDefinition) -> Option<DetectedTool> {
 
     let mcp_config_path = def.mcp_relative.and_then(|rel| {
         let p = tool_path.join(rel);
-        if p.is_file() { Some(p) } else { None }
+        if p.is_file() {
+            Some(p)
+        } else {
+            None
+        }
     });
 
     let instructions_path = def.instructions_relative.and_then(|rel| {
@@ -393,10 +398,7 @@ fn source_id_for(name: &str) -> String {
 
 /// Parse MCP server configs from a file, dispatching by format.
 fn parse_mcp_config(source: &str, contents: &str, path: &Path) -> Vec<ImportedMcpServer> {
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
     match ext {
         "toml" => parse_toml_mcp(source, contents),
@@ -501,10 +503,7 @@ fn json_server_entry(
         })
         .unwrap_or_default();
 
-    let url = config
-        .get("url")
-        .and_then(|v| v.as_str())
-        .map(String::from);
+    let url = config.get("url").and_then(|v| v.as_str()).map(String::from);
 
     // Must have at least a command or URL
     if command.is_none() && url.is_none() {
@@ -559,10 +558,7 @@ fn parse_toml_mcp(source: &str, contents: &str) -> Vec<ImportedMcpServer> {
                 })
                 .unwrap_or_default();
 
-            let url = config
-                .get("url")
-                .and_then(|v| v.as_str())
-                .map(String::from);
+            let url = config.get("url").and_then(|v| v.as_str()).map(String::from);
 
             if command.is_none() && url.is_none() {
                 continue;
@@ -672,9 +668,7 @@ pub fn build_context(detected: &[DetectedTool]) -> EcosystemContext {
 
     for tool in detected {
         if let Some(ref ipath) = tool.instructions_path {
-            let size = std::fs::metadata(ipath)
-                .map(|m| m.len())
-                .unwrap_or(0);
+            let size = std::fs::metadata(ipath).map(|m| m.len()).unwrap_or(0);
             instructions.push(InstructionRef {
                 tool: tool.name.clone(),
                 path: ipath.clone(),
@@ -731,7 +725,9 @@ pub fn format_ecosystem_prompt(ctx: &EcosystemContext) -> String {
         ));
     }
 
-    out.push_str("\nTo read instructions from another tool, use the file path directly.\n</ecosystem>");
+    out.push_str(
+        "\nTo read instructions from another tool, use the file path directly.\n</ecosystem>",
+    );
     out
 }
 
@@ -771,10 +767,7 @@ pub fn format_table(detected: &[DetectedTool]) -> String {
         ));
     }
 
-    out.push_str(&format!(
-        "\n{} tools detected.",
-        detected.len()
-    ));
+    out.push_str(&format!("\n{} tools detected.", detected.len()));
 
     out
 }
@@ -809,7 +802,10 @@ mod tests {
         assert_eq!(servers[0].original_name, "stripe");
         assert_eq!(servers[0].command, Some("npx".to_string()));
         assert_eq!(servers[0].args, vec!["-y", "@stripe/mcp"]);
-        assert_eq!(servers[0].env.get("STRIPE_KEY"), Some(&"sk_test".to_string()));
+        assert_eq!(
+            servers[0].env.get("STRIPE_KEY"),
+            Some(&"sk_test".to_string())
+        );
     }
 
     #[test]

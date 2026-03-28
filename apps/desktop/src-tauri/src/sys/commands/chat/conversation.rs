@@ -134,7 +134,12 @@ pub fn chat_update_conversation_title(
 
     let conn = db.connection()?;
     repository::update_conversation_title(&conn, conversation_id, &uid, trimmed_title.to_string())
-        .map_err(|e| format!("Failed to update conversation title {}: {e}", conversation_id))
+        .map_err(|e| {
+            format!(
+                "Failed to update conversation title {}: {e}",
+                conversation_id
+            )
+        })
 }
 
 #[tauri::command]

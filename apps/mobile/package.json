@@ -12,7 +12,7 @@
     "build:prod": "eas build --profile production",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --cache --cache-strategy content --cache-location .cache/eslint",
-    "test": "jest || echo 'Mobile tests skipped (jest-expo@52 UIManager mock issue — tracked in deps)'",
+    "test": "jest",
     "test:local": "jest"
   },
   "dependencies": {

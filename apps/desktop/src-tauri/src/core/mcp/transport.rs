@@ -440,20 +440,30 @@ impl StdioTransport {
         //   - Electron/Node.js sandbox escapes (ELECTRON_RUN_AS_NODE)
         const BLOCKED_ENV_VARS: &[&str] = &[
             // Shared library injection (Linux / macOS)
-            "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT",
-            "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH",
+            "LD_PRELOAD",
+            "LD_LIBRARY_PATH",
+            "LD_AUDIT",
+            "DYLD_INSERT_LIBRARIES",
+            "DYLD_LIBRARY_PATH",
+            "DYLD_FRAMEWORK_PATH",
             // Node.js / Electron
-            "NODE_OPTIONS", "NODE_EXTRA_CA_CERTS",
+            "NODE_OPTIONS",
+            "NODE_EXTRA_CA_CERTS",
             "NODE_DEBUG",
             "ELECTRON_RUN_AS_NODE",
             // Python
-            "PYTHONSTARTUP", "PYTHONPATH",
+            "PYTHONSTARTUP",
+            "PYTHONPATH",
             // Ruby / Perl
-            "RUBYOPT", "PERL5OPT",
+            "RUBYOPT",
+            "PERL5OPT",
             // JVM code injection
-            "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS",
+            "JAVA_TOOL_OPTIONS",
+            "_JAVA_OPTIONS",
             // Shell startup injection
-            "BASH_ENV", "ENV", "ZDOTDIR",
+            "BASH_ENV",
+            "ENV",
+            "ZDOTDIR",
             // Info disclosure in debug builds
             "RUST_LOG",
         ];
@@ -968,9 +978,8 @@ struct SseEvent {
 /// This mirrors the logic in `direct_api_provider.rs::validate_provider_base_url()`
 /// but returns `McpError` and permits loopback (local MCP servers are expected).
 fn validate_mcp_server_url(url: &str) -> McpResult<()> {
-    let parsed = url::Url::parse(url).map_err(|e| {
-        McpError::InvalidConfig(format!("Invalid MCP server URL: {e}"))
-    })?;
+    let parsed = url::Url::parse(url)
+        .map_err(|e| McpError::InvalidConfig(format!("Invalid MCP server URL: {e}")))?;
 
     // Determine if the host is a loopback address.
     let is_loopback = match parsed.host() {

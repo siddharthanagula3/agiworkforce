@@ -133,7 +133,9 @@ pub(crate) fn spawn_agent_from_existing(
 }
 
 /// Spawn an op-forwarding loop for an existing thread without subscribing to events.
-pub(crate) fn spawn_op_forwarder(thread: std::sync::Arc<AgiWorkforceThread>) -> UnboundedSender<Op> {
+pub(crate) fn spawn_op_forwarder(
+    thread: std::sync::Arc<AgiWorkforceThread>,
+) -> UnboundedSender<Op> {
     let (agi_op_tx, mut agi_op_rx) = unbounded_channel::<Op>();
 
     tokio::spawn(async move {

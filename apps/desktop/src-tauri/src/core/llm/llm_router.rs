@@ -456,9 +456,8 @@ impl LLMRouter {
         } else if context.cost_priority == CostPriority::Low || is_budget_plan {
             provider = Provider::OpenAI;
             task_category = TaskCategory::Simple;
-            reason =
-                "Cost priority is low - routing to GPT-5.4 Mini for efficient low-cost loops."
-                    .to_string();
+            reason = "Cost priority is low - routing to GPT-5.4 Mini for efficient low-cost loops."
+                .to_string();
         }
 
         if context.token_estimate > 12_000 && provider == Provider::OpenAI && !is_budget_plan {

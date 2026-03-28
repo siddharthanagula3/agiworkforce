@@ -383,7 +383,9 @@ impl CodebaseCache {
             .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
 
         let total_entries: usize =
-            db.query_row("SELECT COUNT(*) FROM codebase_cache", [], |row| row.get::<_, i64>(0).map(|v| v as usize))?;
+            db.query_row("SELECT COUNT(*) FROM codebase_cache", [], |row| {
+                row.get::<_, i64>(0).map(|v| v as usize)
+            })?;
 
         let mut entries_by_type = HashMap::new();
         let mut stmt =
