@@ -188,8 +188,7 @@ impl Marketplace {
     /// (one of `"user"`, `"project"`, `"local"`).
     pub async fn install(&self, source: &str, home: &Path, scope: &str) -> Result<()> {
         let plugins_dir = home.join("plugins");
-        std::fs::create_dir_all(&plugins_dir)
-            .context("failed to create plugins directory")?;
+        std::fs::create_dir_all(&plugins_dir).context("failed to create plugins directory")?;
 
         let name = derive_plugin_name(source);
 
@@ -228,12 +227,7 @@ impl Marketplace {
     }
 
     /// Clone a git repository into the plugin cache and copy to plugins root.
-    fn install_from_git(
-        &self,
-        url: &str,
-        name: &str,
-        plugins_dir: &Path,
-    ) -> Result<PathBuf> {
+    fn install_from_git(&self, url: &str, name: &str, plugins_dir: &Path) -> Result<PathBuf> {
         let cache_dir = plugins_dir.join(CACHE_DIR);
         std::fs::create_dir_all(&cache_dir)?;
 
@@ -241,8 +235,7 @@ impl Marketplace {
 
         // Clean up any stale cache entry
         if cache_target.exists() {
-            std::fs::remove_dir_all(&cache_target)
-                .context("failed to remove stale cache entry")?;
+            std::fs::remove_dir_all(&cache_target).context("failed to remove stale cache entry")?;
         }
 
         // Shallow clone
@@ -271,12 +264,7 @@ impl Marketplace {
     }
 
     /// Copy a local directory into the plugins root.
-    fn install_from_path(
-        &self,
-        source: &str,
-        name: &str,
-        plugins_dir: &Path,
-    ) -> Result<PathBuf> {
+    fn install_from_path(&self, source: &str, name: &str, plugins_dir: &Path) -> Result<PathBuf> {
         let src = Path::new(source);
         if !src.exists() {
             bail!("source path does not exist: {}", source);
@@ -317,8 +305,10 @@ impl Marketplace {
         let entry = &registry.plugins[name];
         let install_path = PathBuf::from(&entry.install_path);
         if install_path.exists() {
-            std::fs::remove_dir_all(&install_path)
-                .context(format!("failed to remove plugin directory: {}", install_path.display()))?;
+            std::fs::remove_dir_all(&install_path).context(format!(
+                "failed to remove plugin directory: {}",
+                install_path.display()
+            ))?;
         }
 
         // Remove cache entry if it exists
@@ -430,7 +420,10 @@ pub fn format_installed(registry: &InstalledPlugins) -> String {
             name, entry.version, entry.scope, entry.install_path,
         ));
     }
-    out.push_str(&format!("\n{} plugin(s) installed.", registry.plugins.len()));
+    out.push_str(&format!(
+        "\n{} plugin(s) installed.",
+        registry.plugins.len()
+    ));
     out
 }
 
@@ -468,16 +461,10 @@ pub fn format_search_results(plugins: &[MarketplacePlugin]) -> String {
 /// Derive a plugin name from a source string (path or URL).
 fn derive_plugin_name(source: &str) -> String {
     // Strip trailing slashes and .git suffix
-    let cleaned = source
-        .trim_end_matches('/')
-        .trim_end_matches(".git");
+    let cleaned = source.trim_end_matches('/').trim_end_matches(".git");
 
     // Take the last path component
-    cleaned
-        .rsplit('/')
-        .next()
-        .unwrap_or("plugin")
-        .to_string()
+    cleaned.rsplit('/').next().unwrap_or("plugin").to_string()
 }
 
 /// Check if a source string looks like a git URL.
@@ -538,7 +525,10 @@ mod tests {
 
     #[test]
     fn test_derive_plugin_name_local_path() {
-        assert_eq!(derive_plugin_name("/home/user/plugins/cool-tool"), "cool-tool");
+        assert_eq!(
+            derive_plugin_name("/home/user/plugins/cool-tool"),
+            "cool-tool"
+        );
     }
 
     #[test]

@@ -404,7 +404,8 @@ mod tests {
 
     #[test]
     fn test_resource_aggregation_multiple_steps() {
-        let steps = [TestPlanStep {
+        let steps = [
+            TestPlanStep {
                 id: "1".to_string(),
                 tool_id: "tool1".to_string(),
                 description: "Step 1".to_string(),
@@ -439,7 +440,8 @@ mod tests {
                     network_mb: 1.5,
                 },
                 dependencies: vec![],
-            }];
+            },
+        ];
 
         let total_cpu: f64 = steps
             .iter()

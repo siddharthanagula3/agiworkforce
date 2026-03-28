@@ -132,8 +132,8 @@ impl MemoryPipeline {
             &provider,
             model,
             &messages,
-            2048, // Short output for summaries
-            None, // No tools needed
+            2048,             // Short output for summaries
+            None,             // No tools needed
             Box::new(|_| {}), // Discard streaming chunks
         )
         .await?;
@@ -164,12 +164,7 @@ impl MemoryPipeline {
 
         let mut entries: Vec<_> = fs::read_dir(&summaries_dir)?
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.path()
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    == Some("md")
-            })
+            .filter(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("md"))
             .collect();
 
         // Sort by modification time (newest last)
@@ -290,12 +285,7 @@ impl MemoryPipeline {
             .map(|entries| {
                 entries
                     .filter_map(|e| e.ok())
-                    .any(|e| {
-                        e.path()
-                            .extension()
-                            .and_then(|ext| ext.to_str())
-                            == Some("md")
-                    })
+                    .any(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("md"))
             })
             .unwrap_or(false);
 

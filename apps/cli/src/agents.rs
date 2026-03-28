@@ -393,8 +393,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
 
     #[test]
     fn test_parse_agent_frontmatter_snake_case_variants() {
-        let content =
-            "---\nname: coder\ndisallowed_tools: [web_search]\nmax_turns: 10\npermission_mode: accept-edits\n---\n\nBody.";
+        let content = "---\nname: coder\ndisallowed_tools: [web_search]\nmax_turns: 10\npermission_mode: accept-edits\n---\n\nBody.";
         let fm = parse_agent_frontmatter(content).expect("parse should succeed");
         assert_eq!(fm.name, "coder");
         assert_eq!(

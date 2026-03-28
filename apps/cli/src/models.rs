@@ -195,9 +195,11 @@ fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Option<String>
         Provider::Ollama => Ok(None), // no key needed
         Provider::OllamaCloud => {
             // Ollama Cloud requires OLLAMA_API_KEY. Fall back to env var if not in config.
-            let key = config
-                .resolve_api_key(name)
-                .or_else(|| std::env::var("OLLAMA_API_KEY").ok().filter(|k| !k.is_empty()));
+            let key = config.resolve_api_key(name).or_else(|| {
+                std::env::var("OLLAMA_API_KEY")
+                    .ok()
+                    .filter(|k| !k.is_empty())
+            });
             if key.is_none() {
                 return Err(CliError::auth(
                     name,
@@ -271,7 +273,10 @@ async fn try_subscription_auth(
             if !url.starts_with("https://") {
                 // Redact URL to avoid leaking embedded credentials in logs
                 let scheme = url.split("://").next().unwrap_or("unknown");
-                eprintln!("[auth] Rejecting non-HTTPS subscription URL for {} (scheme: {})", sub_name, scheme);
+                eprintln!(
+                    "[auth] Rejecting non-HTTPS subscription URL for {} (scheme: {})",
+                    sub_name, scheme
+                );
                 continue;
             }
             let account_id = auth_store.entries.get(sub_name).and_then(|e| match e {

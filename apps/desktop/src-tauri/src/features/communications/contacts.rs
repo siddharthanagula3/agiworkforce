@@ -1,6 +1,6 @@
+use crate::data::async_sqlite::AsyncConnection as Connection;
 use rusqlite::{params, Result as SqliteResult};
 use tokio::fs;
-use crate::data::async_sqlite::AsyncConnection as Connection;
 use tracing::{debug, info, warn};
 
 use crate::sys::error::{Error, Result};

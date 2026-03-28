@@ -548,7 +548,9 @@ pub async fn messaging_connect_signal(
 ) -> Result<PlatformStatus, String> {
     // Validate all user-supplied paths before constructing the client.
     // This prevents command injection via signal_cli_path and path traversal via config_path.
-    config.validate().map_err(|e| format!("Invalid Signal config: {}", e))?;
+    config
+        .validate()
+        .map_err(|e| format!("Invalid Signal config: {}", e))?;
 
     let mut client = SignalClient::new(config);
 

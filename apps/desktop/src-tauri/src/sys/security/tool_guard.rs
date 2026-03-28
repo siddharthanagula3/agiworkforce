@@ -1587,9 +1587,9 @@ impl ToolExecutionGuard {
             // existence check but before the actual write operation (TOCTOU).
             if let Some(parent) = path_buf.parent() {
                 if parent.exists() {
-                    let canonical_parent = parent.canonicalize().map_err(|_| {
-                        SecurityError::PathTraversal(path.to_string())
-                    })?;
+                    let canonical_parent = parent
+                        .canonicalize()
+                        .map_err(|_| SecurityError::PathTraversal(path.to_string()))?;
                     let canonical_parent_str = canonical_parent.to_string_lossy();
 
                     // Check canonical parent doesn't contain traversal

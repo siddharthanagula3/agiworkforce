@@ -92,8 +92,7 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#6366f1",
-          "androidMode": "default",
-          "projectId": "00000000-0000-0000-0000-agiworkforce"
+          "androidMode": "default"
         }
       ],
       [

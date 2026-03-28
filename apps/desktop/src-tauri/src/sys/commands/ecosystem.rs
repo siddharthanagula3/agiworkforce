@@ -201,7 +201,11 @@ fn scan_ecosystem() -> Vec<DetectedTool> {
         let tool_path = def.home_relative_paths.iter().find_map(|rel| {
             let p = home.join(rel);
             if def.is_file_check {
-                if p.is_file() { Some(p) } else { None }
+                if p.is_file() {
+                    Some(p)
+                } else {
+                    None
+                }
             } else if p.is_dir() {
                 Some(p)
             } else {
@@ -216,7 +220,11 @@ fn scan_ecosystem() -> Vec<DetectedTool> {
 
         let mcp_config_path = def.mcp_relative.and_then(|rel| {
             let p = tool_path.join(rel);
-            if p.is_file() { Some(p) } else { None }
+            if p.is_file() {
+                Some(p)
+            } else {
+                None
+            }
         });
 
         let instructions_path = def.instructions_relative.and_then(|rel| {
@@ -307,20 +315,14 @@ pub async fn import_ecosystem_mcp_servers() -> Result<Vec<ImportedMcpServer>, St
         if let Some(ref mcp_path) = tool.mcp_config_path {
             let source = source_id(&tool.name);
             if let Ok(contents) = std::fs::read_to_string(mcp_path) {
-                let ext = mcp_path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("");
+                let ext = mcp_path.extension().and_then(|e| e.to_str()).unwrap_or("");
                 match ext {
                     "toml" => {
                         if let Ok(parsed) = contents.parse::<toml::Value>() {
-                            if let Some(tbl) =
-                                parsed.get("mcp_servers").and_then(|v| v.as_table())
+                            if let Some(tbl) = parsed.get("mcp_servers").and_then(|v| v.as_table())
                             {
                                 for (name, config) in tbl {
-                                    if let Some(srv) =
-                                        toml_server_entry(&source, name, config)
-                                    {
+                                    if let Some(srv) = toml_server_entry(&source, name, config) {
                                         servers.push(srv);
                                     }
                                 }
@@ -328,16 +330,11 @@ pub async fn import_ecosystem_mcp_servers() -> Result<Vec<ImportedMcpServer>, St
                         }
                     }
                     _ => {
-                        if let Ok(parsed) =
-                            serde_json::from_str::<serde_json::Value>(&contents)
-                        {
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&contents) {
                             for key in &["mcpServers", "context_servers"] {
-                                if let Some(obj) =
-                                    parsed.get(*key).and_then(|v| v.as_object())
-                                {
+                                if let Some(obj) = parsed.get(*key).and_then(|v| v.as_object()) {
                                     for (name, config) in obj {
-                                        if let Some(srv) =
-                                            json_server_entry(&source, name, config)
+                                        if let Some(srv) = json_server_entry(&source, name, config)
                                         {
                                             servers.push(srv);
                                         }
@@ -373,7 +370,10 @@ fn json_server_entry(
     name: &str,
     config: &serde_json::Value,
 ) -> Option<ImportedMcpServer> {
-    let command = config.get("command").and_then(|v| v.as_str()).map(String::from);
+    let command = config
+        .get("command")
+        .and_then(|v| v.as_str())
+        .map(String::from);
     let url = config.get("url").and_then(|v| v.as_str()).map(String::from);
 
     if command.is_none() && url.is_none() {
@@ -383,7 +383,11 @@ fn json_server_entry(
     let args: Vec<String> = config
         .get("args")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let env: HashMap<String, String> = config
@@ -407,12 +411,11 @@ fn json_server_entry(
     })
 }
 
-fn toml_server_entry(
-    source: &str,
-    name: &str,
-    config: &toml::Value,
-) -> Option<ImportedMcpServer> {
-    let command = config.get("command").and_then(|v| v.as_str()).map(String::from);
+fn toml_server_entry(source: &str, name: &str, config: &toml::Value) -> Option<ImportedMcpServer> {
+    let command = config
+        .get("command")
+        .and_then(|v| v.as_str())
+        .map(String::from);
     let url = config.get("url").and_then(|v| v.as_str()).map(String::from);
 
     if command.is_none() && url.is_none() {
@@ -422,7 +425,11 @@ fn toml_server_entry(
     let args: Vec<String> = config
         .get("args")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let env: HashMap<String, String> = config
