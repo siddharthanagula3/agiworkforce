@@ -29,7 +29,6 @@ import { StripeService, type CustomerInfo, type SubscriptionInfo } from '../serv
 import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
 import { isSubscriptionActive, isInGracePeriod } from '../utils/featureGates';
 import { type PlanTier, asPlanTier, PLAN_DISPLAY_NAMES } from '../lib/supabase';
-import { cleanupAllStoresOnLogout, clearPersistedUserData } from './logoutCleanup';
 
 // =============================================================================
 // Helpers
@@ -405,6 +404,12 @@ function resetRetryCount(): void {
 let syncInProgress = false;
 let pendingSyncPromise: Promise<void> | null = null;
 
+async function runLogoutCleanup(): Promise<void> {
+  const { cleanupAllStoresOnLogout, clearPersistedUserData } = await import('./logoutCleanup');
+  cleanupAllStoresOnLogout();
+  clearPersistedUserData();
+}
+
 // =============================================================================
 // Default State
 // =============================================================================
@@ -611,14 +616,12 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
             await supabaseAuth.signOut();
 
             // Clean up all stores after successful sign out
-            cleanupAllStoresOnLogout();
-            clearPersistedUserData();
+            await runLogoutCleanup();
           } catch (error) {
             console.error('[UnifiedAuth] Sign out error:', error);
             // Still attempt cleanup even if sign out fails
             try {
-              cleanupAllStoresOnLogout();
-              clearPersistedUserData();
+              await runLogoutCleanup();
             } catch (cleanupError) {
               console.error('[UnifiedAuth] Store cleanup error:', cleanupError);
             }
