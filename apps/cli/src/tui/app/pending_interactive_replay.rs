@@ -638,19 +638,21 @@ mod tests {
         let request_id = agiworkforce_protocol::mcp::RequestId::String("request-1".to_string());
         store.push_event(Event {
             id: "ev-1".to_string(),
-            msg: EventMsg::ElicitationRequest(agiworkforce_protocol::approvals::ElicitationRequestEvent {
-                turn_id: Some("turn-1".to_string()),
-                server_name: "server-1".to_string(),
-                id: request_id.clone(),
-                request: agiworkforce_protocol::approvals::ElicitationRequest::Form {
-                    meta: None,
-                    message: "Please confirm".to_string(),
-                    requested_schema: serde_json::json!({
-                        "type": "object",
-                        "properties": {}
-                    }),
+            msg: EventMsg::ElicitationRequest(
+                agiworkforce_protocol::approvals::ElicitationRequestEvent {
+                    turn_id: Some("turn-1".to_string()),
+                    server_name: "server-1".to_string(),
+                    id: request_id.clone(),
+                    request: agiworkforce_protocol::approvals::ElicitationRequest::Form {
+                        meta: None,
+                        message: "Please confirm".to_string(),
+                        requested_schema: serde_json::json!({
+                            "type": "object",
+                            "properties": {}
+                        }),
+                    },
                 },
-            }),
+            ),
         });
 
         store.note_outbound_op(&Op::ResolveElicitation {

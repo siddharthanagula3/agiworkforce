@@ -165,30 +165,28 @@ pub async fn run_repl(
                                 output::print_error(&format!("Voice mode error: {:#}", e));
                             }
                         }
-                        SlashResult::Ecosystem(subcmd) => {
-                            match subcmd.as_str() {
-                                "scan" => {
-                                    let detected = crate::ecosystem::scan();
-                                    eprintln!("{}", crate::ecosystem::format_table(&detected));
-                                }
-                                "import" => {
-                                    let detected = crate::ecosystem::scan();
-                                    let servers = crate::ecosystem::import_mcp_servers(&detected);
-                                    if servers.is_empty() {
-                                        eprintln!("No MCP server configs found to import.");
-                                    } else {
-                                        eprintln!("Imported {} MCP server config(s):", servers.len());
-                                        for s in &servers {
-                                            eprintln!("  {} ({})", s.name, s.source);
-                                        }
+                        SlashResult::Ecosystem(subcmd) => match subcmd.as_str() {
+                            "scan" => {
+                                let detected = crate::ecosystem::scan();
+                                eprintln!("{}", crate::ecosystem::format_table(&detected));
+                            }
+                            "import" => {
+                                let detected = crate::ecosystem::scan();
+                                let servers = crate::ecosystem::import_mcp_servers(&detected);
+                                if servers.is_empty() {
+                                    eprintln!("No MCP server configs found to import.");
+                                } else {
+                                    eprintln!("Imported {} MCP server config(s):", servers.len());
+                                    for s in &servers {
+                                        eprintln!("  {} ({})", s.name, s.source);
                                     }
                                 }
-                                _ => {
-                                    let detected = crate::ecosystem::scan();
-                                    eprintln!("{}", crate::ecosystem::format_table(&detected));
-                                }
                             }
-                        }
+                            _ => {
+                                let detected = crate::ecosystem::scan();
+                                eprintln!("{}", crate::ecosystem::format_table(&detected));
+                            }
+                        },
                         SlashResult::Marketplace(subcmd) => {
                             let home = crate::config::CliConfig::config_dir();
                             match (subcmd.as_str(), home) {
@@ -197,60 +195,74 @@ pub async fn run_repl(
                                     let mp = crate::marketplace::Marketplace::new();
                                     match mp.search(query).await {
                                         Ok(results) => {
-                                            eprintln!("{}", crate::marketplace::format_search_results(&results));
+                                            eprintln!(
+                                                "{}",
+                                                crate::marketplace::format_search_results(&results)
+                                            );
                                         }
                                         Err(e) => {
-                                            output::print_error(&format!("Marketplace search failed: {}", e));
+                                            output::print_error(&format!(
+                                                "Marketplace search failed: {}",
+                                                e
+                                            ));
                                         }
                                     }
                                 }
                                 ("list", Ok(home)) => {
-                                    let registry = crate::marketplace::Marketplace::list_installed(&home);
-                                    eprintln!("{}", crate::marketplace::format_installed(&registry));
+                                    let registry =
+                                        crate::marketplace::Marketplace::list_installed(&home);
+                                    eprintln!(
+                                        "{}",
+                                        crate::marketplace::format_installed(&registry)
+                                    );
                                 }
                                 (_, Err(e)) => {
                                     output::print_error(&format!("Config dir error: {}", e));
                                 }
                                 _ => {
-                                    output::print_info("Usage: /marketplace search <query> | /marketplace list");
+                                    output::print_info(
+                                        "Usage: /marketplace search <query> | /marketplace list",
+                                    );
                                 }
                             }
                         }
-                        SlashResult::Sync(subcmd) => {
-                            match crate::config::CliConfig::config_dir() {
-                                Ok(home) => {
-                                    match subcmd.as_str() {
-                                        "status" => match crate::sync::ConfigSync::status(&home) {
-                                            Ok(changes) => {
-                                                if changes.is_empty() {
-                                                    eprintln!("No synced files found.");
-                                                } else {
-                                                    for (path, change) in &changes {
-                                                        eprintln!("  {:<35} {}", path, change);
-                                                    }
-                                                }
+                        SlashResult::Sync(subcmd) => match crate::config::CliConfig::config_dir() {
+                            Ok(home) => match subcmd.as_str() {
+                                "status" => match crate::sync::ConfigSync::status(&home) {
+                                    Ok(changes) => {
+                                        if changes.is_empty() {
+                                            eprintln!("No synced files found.");
+                                        } else {
+                                            for (path, change) in &changes {
+                                                eprintln!("  {:<35} {}", path, change);
                                             }
-                                            Err(e) => output::print_error(&format!("Sync status failed: {}", e)),
-                                        },
-                                        "export" => match crate::sync::ConfigSync::export(&home) {
-                                            Ok(bundle) => {
-                                                if let Ok(json) = serde_json::to_string_pretty(&bundle) {
-                                                    println!("{}", json);
-                                                }
-                                            }
-                                            Err(e) => output::print_error(&format!("Sync export failed: {}", e)),
-                                        },
-                                        _ => {
-                                            output::print_info("Usage: /sync status | /sync export");
                                         }
                                     }
+                                    Err(e) => {
+                                        output::print_error(&format!("Sync status failed: {}", e))
+                                    }
+                                },
+                                "export" => match crate::sync::ConfigSync::export(&home) {
+                                    Ok(bundle) => {
+                                        if let Ok(json) = serde_json::to_string_pretty(&bundle) {
+                                            println!("{}", json);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        output::print_error(&format!("Sync export failed: {}", e))
+                                    }
+                                },
+                                _ => {
+                                    output::print_info("Usage: /sync status | /sync export");
                                 }
-                                Err(e) => output::print_error(&format!("Config dir error: {}", e)),
-                            }
-                        }
+                            },
+                            Err(e) => output::print_error(&format!("Config dir error: {}", e)),
+                        },
                         SlashResult::Onboarding => {
                             match crate::onboarding::run_onboarding().await {
-                                Ok(true) => output::print_info("Onboarding complete. Restart to apply changes."),
+                                Ok(true) => output::print_info(
+                                    "Onboarding complete. Restart to apply changes.",
+                                ),
                                 Ok(false) => output::print_info("Onboarding skipped."),
                                 Err(e) => output::print_error(&format!("Onboarding error: {}", e)),
                             }
@@ -314,13 +326,7 @@ pub async fn run_repl(
                             }
                         }
                         SlashResult::Batch(glob_pat, prompt) => {
-                            handle_batch_command(
-                                &glob_pat,
-                                &prompt,
-                                &mut session,
-                                config,
-                            )
-                            .await;
+                            handle_batch_command(&glob_pat, &prompt, &mut session, config).await;
                         }
                         SlashResult::Handled => {}
                     }
@@ -581,7 +587,9 @@ fn handle_slash_command(
         "/plan" => {
             session.plan_mode = !session.plan_mode;
             if session.plan_mode {
-                output::print_info("Plan mode ON — only read-only tools (read_file, search_files, list_directory, web_search, web_fetch).");
+                output::print_info(
+                    "Plan mode ON — only read-only tools (read_file, search_files, list_directory, web_search, web_fetch).",
+                );
             } else {
                 output::print_info("Plan mode OFF — all tools available.");
             }
@@ -686,32 +694,30 @@ fn handle_slash_command(
         "/onboarding" => {
             return SlashResult::Onboarding;
         }
-        "/auth" => {
-            match crate::auth::auth_status() {
-                Ok(statuses) => {
-                    if statuses.is_empty() {
-                        eprintln!("No authentication configured. Use /login to authenticate.");
-                    } else {
-                        eprintln!("{}", "Auth Status:".cyan().bold());
-                        for s in &statuses {
-                            eprintln!(
-                                "  {:<18} {:<10} {}{}",
-                                s.provider,
-                                s.auth_type,
-                                s.status,
-                                s.expires_in
-                                    .as_ref()
-                                    .map(|e| format!(" (expires: {})", e))
-                                    .unwrap_or_default(),
-                            );
-                        }
+        "/auth" => match crate::auth::auth_status() {
+            Ok(statuses) => {
+                if statuses.is_empty() {
+                    eprintln!("No authentication configured. Use /login to authenticate.");
+                } else {
+                    eprintln!("{}", "Auth Status:".cyan().bold());
+                    for s in &statuses {
+                        eprintln!(
+                            "  {:<18} {:<10} {}{}",
+                            s.provider,
+                            s.auth_type,
+                            s.status,
+                            s.expires_in
+                                .as_ref()
+                                .map(|e| format!(" (expires: {})", e))
+                                .unwrap_or_default(),
+                        );
                     }
                 }
-                Err(e) => {
-                    output::print_error(&format!("Failed to read auth status: {}", e));
-                }
             }
-        }
+            Err(e) => {
+                output::print_error(&format!("Failed to read auth status: {}", e));
+            }
+        },
         "/help" | "/h" | "/?" => {
             print_help();
         }
@@ -943,10 +949,7 @@ fn print_help() {
         "  {}     Search/list marketplace plugins",
         "/marketplace".bold()
     );
-    eprintln!(
-        "  {}  Search marketplace",
-        "/market search <q>".bold()
-    );
+    eprintln!("  {}  Search marketplace", "/market search <q>".bold());
     eprintln!(
         "  {}             Check sync status of dotfiles",
         "/sync".bold()

@@ -25,9 +25,7 @@ fn validate_cli_path(path: &str) -> Result<String> {
     // Reject empty or whitespace-only input
     let trimmed = path.trim();
     if trimmed.is_empty() {
-        return Err(Error::Config(
-            "CLI path must not be empty".to_string(),
-        ));
+        return Err(Error::Config("CLI path must not be empty".to_string()));
     }
 
     // Validate against allowlist
@@ -39,12 +37,8 @@ fn validate_cli_path(path: &str) -> Result<String> {
     }
 
     // Resolve the binary to its full path via PATH lookup
-    let resolved = which::which(trimmed).map_err(|e| {
-        Error::Config(format!(
-            "Could not find '{}' in PATH: {}",
-            trimmed, e
-        ))
-    })?;
+    let resolved = which::which(trimmed)
+        .map_err(|e| Error::Config(format!("Could not find '{}' in PATH: {}", trimmed, e)))?;
 
     Ok(resolved.to_string_lossy().into_owned())
 }
@@ -165,10 +159,7 @@ impl SignalClient {
     /// Check if signal-cli is available
     pub async fn check_availability(&self) -> Result<bool> {
         let cli_path = self.get_cli_path()?;
-        let output = Command::new(&cli_path)
-            .arg("--version")
-            .output()
-            .await;
+        let output = Command::new(&cli_path).arg("--version").output().await;
 
         Ok(output.is_ok())
     }

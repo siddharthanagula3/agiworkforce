@@ -26,6 +26,7 @@ import { modelCatalogRouter } from './routes/models';
 import { cloudChatRouter } from './routes/cloudChat';
 import { llmRouter } from './routes/llm';
 import { usageRouter } from './routes/usage';
+import { deviceAuthRouter } from './routes/deviceAuth';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import {
   validateContentType,
@@ -94,6 +95,8 @@ app.use(validateSecurityHeaders);
 app.use(validateCsrf);
 
 app.use('/api/auth', authRouter);
+app.use('/auth/device', deviceAuthRouter);
+app.use('/api/auth/device', deviceAuthRouter);
 app.use('/api/desktop', desktopRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/mobile', mobileRouter);

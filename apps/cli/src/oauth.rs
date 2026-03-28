@@ -2,8 +2,8 @@
 // Supports: Anthropic (Claude Max), OpenAI (ChatGPT Plus/Pro), GitHub Copilot
 
 use anyhow::{Context, Result};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use sha2::{Digest, Sha256};
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider OAuth Configurations
@@ -53,7 +53,8 @@ pub const AGIWORKFORCE_OAUTH: OAuthProvider = OAuthProvider {
     scopes: "",
 };
 
-pub const ALL_PROVIDERS: &[&OAuthProvider] = &[&AGIWORKFORCE_OAUTH, &ANTHROPIC_OAUTH, &OPENAI_OAUTH];
+pub const ALL_PROVIDERS: &[&OAuthProvider] =
+    &[&AGIWORKFORCE_OAUTH, &ANTHROPIC_OAUTH, &OPENAI_OAUTH];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PKCE (Proof Key for Code Exchange)
@@ -68,7 +69,10 @@ pub fn generate_pkce() -> PkceCodes {
     let verifier = generate_random_string(43);
     let hash = Sha256::digest(verifier.as_bytes());
     let challenge = URL_SAFE_NO_PAD.encode(hash);
-    PkceCodes { verifier, challenge }
+    PkceCodes {
+        verifier,
+        challenge,
+    }
 }
 
 fn generate_random_string(len: usize) -> String {
@@ -194,10 +198,7 @@ pub async fn exchange_code(
 
 /// Refresh an expired access token.
 #[allow(dead_code)]
-pub async fn refresh_token(
-    provider: &OAuthProvider,
-    refresh_token: &str,
-) -> Result<TokenResponse> {
+pub async fn refresh_token(provider: &OAuthProvider, refresh_token: &str) -> Result<TokenResponse> {
     let client = reqwest::Client::new();
 
     let body = serde_json::json!({
@@ -269,7 +270,11 @@ pub async fn oauth_login(provider: &OAuthProvider) -> Result<crate::auth::AuthEn
         .map(|s| chrono::Utc::now().timestamp_millis() + (s as i64 * 1000))
         .unwrap_or(0);
 
-    eprintln!("  {} Authenticated with {}!", "✓".green().bold(), provider.name);
+    eprintln!(
+        "  {} Authenticated with {}!",
+        "✓".green().bold(),
+        provider.name
+    );
 
     Ok(crate::auth::AuthEntry::OAuth {
         refresh: tokens.refresh_token.unwrap_or_default(),
@@ -299,8 +304,12 @@ struct DeviceCodeResponse {
     expires_in: u64,
 }
 
-fn default_interval() -> u64 { 5 }
-fn default_expires() -> u64 { 900 }
+fn default_interval() -> u64 {
+    5
+}
+fn default_expires() -> u64 {
+    900
+}
 
 #[derive(serde::Deserialize)]
 #[allow(dead_code)]
@@ -321,15 +330,15 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
     let client = reqwest::Client::new();
 
     // Step 1: Request device code
-    eprintln!(
-        "\n  {} Connecting to AGI Workforce...\n",
-        "→".cyan().bold(),
-    );
+    eprintln!("\n  {} Connecting to AGI Workforce...\n", "→".cyan().bold(),);
 
     let resp = client
         .post(format!("{api_base}/auth/device/code"))
         .header("Content-Type", "application/json")
-        .header("User-Agent", format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")))
+        .header(
+            "User-Agent",
+            format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")),
+        )
         .json(&serde_json::json!({ "client_id": "cli" }))
         .send()
         .await
@@ -341,10 +350,13 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         anyhow::bail!("Device code request failed ({}): {}", status, body);
     }
 
-    let device: DeviceCodeResponse = resp.json().await
+    let device: DeviceCodeResponse = resp
+        .json()
+        .await
         .context("Failed to parse device code response")?;
 
-    let verification_url = device.verification_uri
+    let verification_url = device
+        .verification_uri
         .unwrap_or_else(|| "https://agiworkforce.com/auth/device".to_string());
 
     // Step 2: Show instructions
@@ -373,7 +385,10 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         let poll_resp = client
             .post(format!("{api_base}/auth/device/token"))
             .header("Content-Type", "application/json")
-            .header("User-Agent", format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")))
+            .header(
+                "User-Agent",
+                format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")),
+            )
             .json(&serde_json::json!({ "device_code": device.device_code }))
             .send()
             .await;
@@ -388,7 +403,11 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         if status == reqwest::StatusCode::FORBIDDEN {
             // Authorization pending — keep polling
             if attempt % 6 == 0 {
-                eprintln!("  {} Still waiting... ({}s elapsed)", "⏳".dimmed(), attempt * device.interval);
+                eprintln!(
+                    "  {} Still waiting... ({}s elapsed)",
+                    "⏳".dimmed(),
+                    attempt * device.interval
+                );
             }
             continue;
         }
@@ -398,14 +417,20 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         }
 
         if status.is_success() {
-            let tokens: DeviceTokenResponse = poll_resp.json().await
+            let tokens: DeviceTokenResponse = poll_resp
+                .json()
+                .await
                 .context("Failed to parse token response")?;
 
-            let expires = tokens.expires_in
+            let expires = tokens
+                .expires_in
                 .map(|s| chrono::Utc::now().timestamp_millis() + (s as i64 * 1000))
                 .unwrap_or(0);
 
-            eprintln!("\n  {} Authenticated with AGI Workforce!", "✓".green().bold());
+            eprintln!(
+                "\n  {} Authenticated with AGI Workforce!",
+                "✓".green().bold()
+            );
 
             return Ok(crate::auth::AuthEntry::OAuth {
                 refresh: tokens.refresh_token.unwrap_or_default(),
@@ -416,5 +441,8 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         }
     }
 
-    anyhow::bail!("Authorization timed out after {}s. Please try again.", device.expires_in)
+    anyhow::bail!(
+        "Authorization timed out after {}s. Please try again.",
+        device.expires_in
+    )
 }

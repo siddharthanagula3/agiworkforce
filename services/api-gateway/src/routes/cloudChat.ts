@@ -88,6 +88,8 @@ async function verifyConversationOwnership(conversationId: string, userId: strin
 // =============================================================================
 
 type Provider = 'anthropic' | 'openai' | 'google';
+const GOOGLE_GENERATIVE_LANGUAGE_API_BASE =
+  'https://generativelanguage.googleapis.com/v1beta/models';
 
 function resolveProvider(model: string): Provider {
   if (model.startsWith('claude-')) return 'anthropic';
@@ -100,6 +102,24 @@ function resolveProvider(model: string): Provider {
     return 'openai';
   if (model.startsWith('gemini-')) return 'google';
   return 'anthropic'; // default
+}
+
+export function buildGoogleStreamRequest(
+  model: string,
+  body: Record<string, unknown>,
+  apiKey: string,
+) {
+  return {
+    url: `${GOOGLE_GENERATIVE_LANGUAGE_API_BASE}/${model}:streamGenerateContent?alt=sse`,
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify(body),
+    } satisfies RequestInit,
+  };
 }
 
 async function callUpstreamLLM(
@@ -174,14 +194,8 @@ async function callUpstreamLLM(
         body['systemInstruction'] = { parts: [{ text: systemInstruction.content }] };
       }
 
-      return fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        },
-      );
+      const request = buildGoogleStreamRequest(model, body, apiKey);
+      return fetch(request.url, request.init);
     }
   }
 }

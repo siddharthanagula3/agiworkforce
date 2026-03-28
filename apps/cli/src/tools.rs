@@ -41,13 +41,14 @@ fn validate_file_path(path_str: &str) -> std::result::Result<PathBuf, String> {
     };
 
     // Canonicalize cwd as the safe root
-    let cwd = std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let cwd_canonical = cwd.canonicalize().unwrap_or(cwd);
 
     // For existing paths, canonicalize and check
     if absolute.exists() {
-        let canonical = absolute.canonicalize().map_err(|e| format!("Cannot resolve path: {}", e))?;
+        let canonical = absolute
+            .canonicalize()
+            .map_err(|e| format!("Cannot resolve path: {}", e))?;
         if !canonical.starts_with(&cwd_canonical) {
             return Err(format!(
                 "Path escapes project directory: {} (resolved to {})",
@@ -156,8 +157,16 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     // Safe/read-only tools can be auto-approved with --yes.
     let is_safe_tool = matches!(
         call.name.as_str(),
-        "read_file" | "search_files" | "list_directory" | "web_search" | "web_fetch"
-        | "glob" | "todo_read" | "ask_user" | "tool_search" | "grep_files"
+        "read_file"
+            | "search_files"
+            | "list_directory"
+            | "web_search"
+            | "web_fetch"
+            | "glob"
+            | "todo_read"
+            | "ask_user"
+            | "tool_search"
+            | "grep_files"
     );
     let require_confirm = opts.require_confirmation && !(opts.auto_approve_safe && is_safe_tool);
 
@@ -960,17 +969,34 @@ async fn execute_web_search(args: &HashMap<String, String>) -> Result<ToolResult
 
     // Brave Search API (https://api.search.brave.com/app/keys for free tier).
     // Also supports SERPAPI_API_KEY with SerpAPI, or TAVILY_API_KEY with Tavily.
-    let (url, header_name, header_value) =
-        if !std::env::var("BRAVE_SEARCH_API_KEY").unwrap_or_default().is_empty() {
-            let key = std::env::var("BRAVE_SEARCH_API_KEY").unwrap_or_default();
-            ("https://api.search.brave.com/res/v1/web/search".to_string(), "X-Subscription-Token".to_string(), key)
-        } else if !std::env::var("TAVILY_API_KEY").unwrap_or_default().is_empty() {
-            let key = std::env::var("TAVILY_API_KEY").unwrap_or_default();
-            ("https://api.tavily.com/search".to_string(), "Authorization".to_string(), format!("Bearer {}", key))
-        } else {
-            // Fallback: use SEARCH_API_KEY with Brave Search as default
-            ("https://api.search.brave.com/res/v1/web/search".to_string(), "X-Subscription-Token".to_string(), api_key)
-        };
+    let (url, header_name, header_value) = if !std::env::var("BRAVE_SEARCH_API_KEY")
+        .unwrap_or_default()
+        .is_empty()
+    {
+        let key = std::env::var("BRAVE_SEARCH_API_KEY").unwrap_or_default();
+        (
+            "https://api.search.brave.com/res/v1/web/search".to_string(),
+            "X-Subscription-Token".to_string(),
+            key,
+        )
+    } else if !std::env::var("TAVILY_API_KEY")
+        .unwrap_or_default()
+        .is_empty()
+    {
+        let key = std::env::var("TAVILY_API_KEY").unwrap_or_default();
+        (
+            "https://api.tavily.com/search".to_string(),
+            "Authorization".to_string(),
+            format!("Bearer {}", key),
+        )
+    } else {
+        // Fallback: use SEARCH_API_KEY with Brave Search as default
+        (
+            "https://api.search.brave.com/res/v1/web/search".to_string(),
+            "X-Subscription-Token".to_string(),
+            api_key,
+        )
+    };
 
     let client = reqwest::Client::new();
     let resp = client
@@ -1898,7 +1924,7 @@ async fn execute_apply_patch(
                 tool_name: "apply_patch".into(),
                 success: false,
                 output: "Missing: patch".into(),
-            })
+            });
         }
     };
     if require_confirm {
@@ -1950,7 +1976,7 @@ async fn execute_grep_files(args: &HashMap<String, String>, quiet: bool) -> Resu
                 tool_name: "grep_files".into(),
                 success: false,
                 output: "Missing: pattern".into(),
-            })
+            });
         }
     };
     let path = args.get("path").map(|s| s.as_str()).unwrap_or(".");
@@ -2022,7 +2048,7 @@ async fn execute_tool_search(args: &HashMap<String, String>) -> Result<ToolResul
                 tool_name: "tool_search".into(),
                 success: false,
                 output: "Missing: query".into(),
-            })
+            });
         }
     };
     let max: usize = args
@@ -2074,7 +2100,7 @@ async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolResult> {
                 tool_name: "glob".into(),
                 success: false,
                 output: "Missing required argument: pattern".into(),
-            })
+            });
         }
     };
     let path = args.get("path").map(|s| s.as_str()).unwrap_or(".");
@@ -2123,20 +2149,23 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
                 tool_name: "batch".into(),
                 success: false,
                 output: "Missing required argument: tool_calls (JSON array)".into(),
-            })
+            });
         }
     };
 
-    let parsed: Vec<serde_json::Value> = serde_json::from_str(calls_json).map_err(|e| {
-        anyhow::anyhow!("Invalid tool_calls JSON: {}", e)
-    })?;
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(calls_json)
+        .map_err(|e| anyhow::anyhow!("Invalid tool_calls JSON: {}", e))?;
 
     const MAX_BATCH: usize = 25;
     if parsed.len() > MAX_BATCH {
         return Ok(ToolResult {
             tool_name: "batch".into(),
             success: false,
-            output: format!("Batch limited to {} tool calls, got {}", MAX_BATCH, parsed.len()),
+            output: format!(
+                "Batch limited to {} tool calls, got {}",
+                MAX_BATCH,
+                parsed.len()
+            ),
         });
     }
 
@@ -2160,10 +2189,7 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
             })
             .unwrap_or_default();
 
-        let tool_call = ToolCall {
-            name,
-            args,
-        };
+        let tool_call = ToolCall { name, args };
         results.push(execute_tool_with_opts(&tool_call, opts).await);
     }
 
@@ -2219,7 +2245,7 @@ async fn execute_multiedit(
                 tool_name: "multiedit".into(),
                 success: false,
                 output: "Missing required argument: path".into(),
-            })
+            });
         }
     };
     let edits_json = match args.get("edits") {
@@ -2228,23 +2254,36 @@ async fn execute_multiedit(
             return Ok(ToolResult {
                 tool_name: "multiedit".into(),
                 success: false,
-                output: "Missing required argument: edits (JSON array of {old_string, new_string})".into(),
-            })
+                output: "Missing required argument: edits (JSON array of {old_string, new_string})"
+                    .into(),
+            });
         }
     };
 
     let edits: Vec<serde_json::Value> = serde_json::from_str(edits_json)
         .map_err(|e| anyhow::anyhow!("Invalid edits JSON: {}", e))?;
 
-    print_tool_status("multiedit", &format!("MultiEdit({}, {} edits)", path, edits.len()));
+    print_tool_status(
+        "multiedit",
+        &format!("MultiEdit({}, {} edits)", path, edits.len()),
+    );
 
     let mut applied = 0usize;
     let mut errors = Vec::new();
 
     for (i, edit) in edits.iter().enumerate() {
-        let old_s = edit.get("old_string").and_then(|v| v.as_str()).unwrap_or("");
-        let new_s = edit.get("new_string").and_then(|v| v.as_str()).unwrap_or("");
-        let replace_all = edit.get("replace_all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let old_s = edit
+            .get("old_string")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let new_s = edit
+            .get("new_string")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let replace_all = edit
+            .get("replace_all")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         let mut edit_args = HashMap::new();
         edit_args.insert("path".to_string(), path.clone());
@@ -2291,7 +2330,7 @@ static TODO_STORE: std::sync::LazyLock<tokio::sync::Mutex<Vec<TodoItem>>> =
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct TodoItem {
     content: String,
-    status: String,  // pending, in_progress, completed
+    status: String,   // pending, in_progress, completed
     priority: String, // high, medium, low
 }
 
@@ -2334,7 +2373,7 @@ async fn execute_todo_write(args: &HashMap<String, String>) -> Result<ToolResult
                 tool_name: "todo_write".into(),
                 success: false,
                 output: "Missing: todos (JSON array of {content, status, priority})".into(),
-            })
+            });
         }
     };
     let new_todos: Vec<TodoItem> = serde_json::from_str(todos_json)
@@ -2361,7 +2400,7 @@ async fn execute_ask_user(args: &HashMap<String, String>) -> Result<ToolResult> 
                 tool_name: "ask_user".into(),
                 success: false,
                 output: "Missing required argument: question".into(),
-            })
+            });
         }
     };
 
@@ -2462,7 +2501,7 @@ async fn execute_read_many_files(args: &HashMap<String, String>) -> Result<ToolR
                 tool_name: "read_many_files".into(),
                 success: false,
                 output: "Missing required argument: paths (JSON array of file paths)".into(),
-            })
+            });
         }
     };
 
@@ -2515,7 +2554,12 @@ async fn execute_read_many_files(args: &HashMap<String, String>) -> Result<ToolR
         success: success_count > 0,
         output: truncate_output_with_save(
             "read_many_files",
-            format!("Read {}/{} files:\n\n{}", success_count, paths.len(), output_parts.join("\n\n")),
+            format!(
+                "Read {}/{} files:\n\n{}",
+                success_count,
+                paths.len(),
+                output_parts.join("\n\n")
+            ),
         ),
     })
 }

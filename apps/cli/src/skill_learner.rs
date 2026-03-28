@@ -127,8 +127,7 @@ impl SkillLearner {
     /// Save a learned skill to `~/.agiworkforce/skills/learned/`.
     pub fn save_skill(home: &Path, skill: &LearnedSkill) -> Result<()> {
         let learned_dir = home.join("skills").join("learned");
-        fs::create_dir_all(&learned_dir)
-            .context("Failed to create learned skills directory")?;
+        fs::create_dir_all(&learned_dir).context("Failed to create learned skills directory")?;
 
         // Enforce max learned skills
         prune_excess_skills(&learned_dir)?;
@@ -275,11 +274,7 @@ fn generate_skill_name(sig: &ToolSignature) -> String {
     let base = parts.join("-");
 
     // Normalize: replace underscores, limit length
-    let normalized = base
-        .replace('_', "-")
-        .chars()
-        .take(40)
-        .collect::<String>();
+    let normalized = base.replace('_', "-").chars().take(40).collect::<String>();
 
     format!("auto-{}", normalized)
 }
@@ -291,10 +286,7 @@ fn generate_description(sig: &ToolSignature) -> String {
     }
 
     let tool_list = sig.join(", ");
-    format!(
-        "Automatically detected pattern using: {}",
-        tool_list
-    )
+    format!("Automatically detected pattern using: {}", tool_list)
 }
 
 /// Generate the pattern body as markdown.
@@ -410,12 +402,7 @@ fn prune_excess_skills(learned_dir: &Path) -> Result<()> {
 
     let mut entries: Vec<_> = fs::read_dir(learned_dir)?
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .and_then(|ext| ext.to_str())
-                == Some("md")
-        })
+        .filter(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("md"))
         .collect();
 
     if entries.len() <= MAX_LEARNED_SKILLS {
@@ -460,10 +447,7 @@ mod tests {
 
     #[test]
     fn test_build_tool_signature_deduplicates() {
-        let calls = vec![
-            ("read_file".to_string(), 3),
-            ("read_file".to_string(), 2),
-        ];
+        let calls = vec![("read_file".to_string(), 3), ("read_file".to_string(), 2)];
         let sig = build_tool_signature(&calls);
         assert_eq!(sig, vec!["read_file"]);
     }
@@ -628,10 +612,7 @@ mod tests {
     #[test]
     fn test_generate_pattern_markdown() {
         let sig = vec!["read_file".to_string(), "run_command".to_string()];
-        let calls = vec![
-            ("read_file".to_string(), 3),
-            ("run_command".to_string(), 2),
-        ];
+        let calls = vec![("read_file".to_string(), 3), ("run_command".to_string(), 2)];
         let md = generate_pattern_markdown(&sig, &calls);
         assert!(md.contains("Auto-detected"));
         assert!(md.contains("Detected Workflow"));

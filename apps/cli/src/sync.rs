@@ -118,8 +118,7 @@ impl ConfigSync {
         if !path.exists() {
             return Ok(None);
         }
-        let contents =
-            fs::read_to_string(&path).context("failed to read sync_manifest.json")?;
+        let contents = fs::read_to_string(&path).context("failed to read sync_manifest.json")?;
         let manifest: SyncManifest =
             serde_json::from_str(&contents).context("failed to parse sync_manifest.json")?;
         Ok(Some(manifest))
@@ -165,15 +164,13 @@ impl ConfigSync {
             if !abs_path.exists() {
                 continue;
             }
-            let data = fs::read(&abs_path)
-                .with_context(|| format!("failed to read {}", rel_path))?;
-            let meta = fs::metadata(&abs_path)
-                .with_context(|| format!("failed to stat {}", rel_path))?;
+            let data =
+                fs::read(&abs_path).with_context(|| format!("failed to read {}", rel_path))?;
+            let meta =
+                fs::metadata(&abs_path).with_context(|| format!("failed to stat {}", rel_path))?;
             let modified_at = meta
                 .modified()
-                .map(|t| {
-                    chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339()
-                })
+                .map(|t| chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339())
                 .unwrap_or_else(|_| now.clone());
 
             files.insert(
@@ -207,10 +204,7 @@ impl ConfigSync {
             let content = fs::read_to_string(&abs_path)
                 .with_context(|| format!("failed to read {} for export", rel_path))?;
             let sha256 = Self::sha256_hex(content.as_bytes());
-            files.insert(
-                rel_path.to_string(),
-                SyncedFile { content, sha256 },
-            );
+            files.insert(rel_path.to_string(), SyncedFile { content, sha256 });
         }
 
         // Update manifest after export
@@ -250,9 +244,7 @@ impl ConfigSync {
             // symlink-resolved prefix — avoids false positives when the target file
             // doesn't exist yet (canonicalize would fail on a non-existent path).
             let abs_path = canonical_home.join(rel_path);
-            let canonical_abs = abs_path
-                .canonicalize()
-                .unwrap_or_else(|_| abs_path.clone());
+            let canonical_abs = abs_path.canonicalize().unwrap_or_else(|_| abs_path.clone());
             if !canonical_abs.starts_with(&canonical_home) {
                 anyhow::bail!(
                     "Sync bundle contains path traversal: '{}' resolves outside home directory",
@@ -385,8 +377,8 @@ impl ConfigSync {
     /// Section-level TOML merge: add new top-level keys and sub-table keys from
     /// the remote side without clobbering existing local values.
     fn merge_toml(local_bytes: &[u8], remote_content: &str) -> Result<String> {
-        let local_str = std::str::from_utf8(local_bytes)
-            .context("local config.toml is not valid UTF-8")?;
+        let local_str =
+            std::str::from_utf8(local_bytes).context("local config.toml is not valid UTF-8")?;
         let mut local_table: toml::Table =
             toml::from_str(local_str).context("failed to parse local config.toml")?;
         let remote_table: toml::Table =
@@ -421,24 +413,19 @@ impl ConfigSync {
     /// Merge MCP server entries: add new servers from remote, don't remove or
     /// overwrite existing local servers.
     fn merge_mcp_json(local_bytes: &[u8], remote_content: &str) -> Result<String> {
-        let local_str = std::str::from_utf8(local_bytes)
-            .context("local mcp.json is not valid UTF-8")?;
+        let local_str =
+            std::str::from_utf8(local_bytes).context("local mcp.json is not valid UTF-8")?;
         let mut local_json: serde_json::Value =
             serde_json::from_str(local_str).context("failed to parse local mcp.json")?;
         let remote_json: serde_json::Value =
             serde_json::from_str(remote_content).context("failed to parse remote mcp.json")?;
 
         // Merge mcpServers objects
-        if let (
-            Some(local_servers),
-            Some(remote_servers),
-        ) = (
+        if let (Some(local_servers), Some(remote_servers)) = (
             local_json
                 .get_mut("mcpServers")
                 .and_then(|v| v.as_object_mut()),
-            remote_json
-                .get("mcpServers")
-                .and_then(|v| v.as_object()),
+            remote_json.get("mcpServers").and_then(|v| v.as_object()),
         ) {
             for (name, config) in remote_servers {
                 if !local_servers.contains_key(name) {
@@ -447,8 +434,7 @@ impl ConfigSync {
             }
         }
 
-        serde_json::to_string_pretty(&local_json)
-            .context("failed to serialize merged mcp.json")
+        serde_json::to_string_pretty(&local_json).context("failed to serialize merged mcp.json")
     }
 }
 
@@ -549,7 +535,10 @@ mod tests {
                 let mut f = HashMap::new();
                 let content = "# Modified remotely".to_string();
                 let sha256 = ConfigSync::sha256_hex(content.as_bytes());
-                f.insert("INSTRUCTIONS.md".to_string(), SyncedFile { content, sha256 });
+                f.insert(
+                    "INSTRUCTIONS.md".to_string(),
+                    SyncedFile { content, sha256 },
+                );
                 f
             },
         };

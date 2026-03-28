@@ -301,7 +301,8 @@ pub fn search_session_messages(
             if text_lower.contains(&query_lower) {
                 if let Some(pos) = text_lower.find(&query_lower) {
                     // Use char-safe boundaries to avoid panics on multi-byte UTF-8
-                    let indices_up_to_pos: Vec<usize> = text.char_indices()
+                    let indices_up_to_pos: Vec<usize> = text
+                        .char_indices()
                         .map(|(i, _)| i)
                         .take_while(|&i| i <= pos)
                         .collect();
@@ -310,12 +311,22 @@ pub fn search_session_messages(
                     } else {
                         0
                     };
-                    let end = text.char_indices()
+                    let end = text
+                        .char_indices()
                         .map(|(i, _)| i)
                         .find(|&i| i >= pos + query.len())
-                        .and_then(|i| text.char_indices().map(|(j, _)| j).find(|&j| j >= i).and_then(|base| {
-                            text[base..].char_indices().nth(60).map(|(off, _)| base + off).or(Some(text.len()))
-                        }))
+                        .and_then(|i| {
+                            text.char_indices()
+                                .map(|(j, _)| j)
+                                .find(|&j| j >= i)
+                                .and_then(|base| {
+                                    text[base..]
+                                        .char_indices()
+                                        .nth(60)
+                                        .map(|(off, _)| base + off)
+                                        .or(Some(text.len()))
+                                })
+                        })
                         .unwrap_or(text.len());
                     let snippet = text[start..end].replace('\n', " ");
                     let prefix = if start > 0 { "..." } else { "" };
@@ -533,8 +544,15 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &std::path::Path)
         ) {
             Ok(v) => v,
             Err(_err) => {
-                let redacted_id = if session_id.len() > 8 { &session_id[..8] } else { session_id };
-                eprintln!("[sessions] skipping session {}... due to query error", redacted_id);
+                let redacted_id = if session_id.len() > 8 {
+                    &session_id[..8]
+                } else {
+                    session_id
+                };
+                eprintln!(
+                    "[sessions] skipping session {}... due to query error",
+                    redacted_id
+                );
                 continue;
             }
         };

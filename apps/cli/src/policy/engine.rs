@@ -135,7 +135,10 @@ impl PolicyEngine {
                         }
                     }
                     Err(e) => {
-                        eprintln!("[policy] invalid regex pattern '{}': {e}, skipping rule", pattern);
+                        eprintln!(
+                            "[policy] invalid regex pattern '{}': {e}, skipping rule",
+                            pattern
+                        );
                         continue;
                     }
                 }
@@ -251,10 +254,7 @@ mod tests {
             priority: 500,
             reason: Some("Never write .env files".into()),
         }]);
-        assert_eq!(
-            engine.evaluate("write_file", ".env"),
-            PolicyDecision::Deny
-        );
+        assert_eq!(engine.evaluate("write_file", ".env"), PolicyDecision::Deny);
         assert_eq!(
             engine.evaluate("write_file", "src/main.rs"),
             PolicyDecision::Ask
