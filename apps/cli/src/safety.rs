@@ -138,8 +138,8 @@ const DANGEROUS_PREFIXES: &[&str] = &[
 const DANGEROUS_PIPE_SOURCES: &[&str] = &["curl", "wget", "nc", "ncat", "socat"];
 /// Shell commands that are dangerous when receiving piped input.
 const DANGEROUS_PIPE_SINKS: &[&str] = &[
-    "sh", "bash", "zsh", "dash", "fish", "csh", "tcsh", "ksh",
-    "python", "python3", "perl", "ruby", "node", "eval", "source",
+    "sh", "bash", "zsh", "dash", "fish", "csh", "tcsh", "ksh", "python", "python3", "perl", "ruby",
+    "node", "eval", "source",
 ];
 
 // ---------------------------------------------------------------------------

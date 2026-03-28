@@ -311,7 +311,8 @@ fn format_tool_args(input: &serde_json::Value) -> String {
                 // Truncate long values
                 let truncated = if val.len() > 60 {
                     // Find a char-safe boundary at or before byte 57 to avoid UTF-8 panics
-                    let safe_end = val.char_indices()
+                    let safe_end = val
+                        .char_indices()
                         .take_while(|(i, _)| *i < 57)
                         .last()
                         .map(|(i, c)| i + c.len_utf8())

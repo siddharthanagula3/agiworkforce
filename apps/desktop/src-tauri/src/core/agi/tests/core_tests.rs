@@ -174,7 +174,8 @@ mod tests {
 
     #[test]
     fn test_multiple_goals_priority_sorting() {
-        let mut goals = [Goal {
+        let mut goals = [
+            Goal {
                 id: "1".to_string(),
                 description: "Low priority".to_string(),
                 priority: Priority::Low,
@@ -197,7 +198,8 @@ mod tests {
                 deadline: None,
                 constraints: vec![],
                 success_criteria: vec![],
-            }];
+            },
+        ];
 
         goals.sort_by(|a, b| b.priority.cmp(&a.priority));
 

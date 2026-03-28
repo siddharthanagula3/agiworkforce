@@ -65,7 +65,9 @@ impl SandboxManager {
     pub fn disabled() -> Self {
         eprintln!(
             "{}",
-            colored::Colorize::yellow("warning: running without OS-level sandboxing — system commands will have unrestricted access")
+            colored::Colorize::yellow(
+                "warning: running without OS-level sandboxing — system commands will have unrestricted access"
+            )
         );
         Self {
             sandbox_type: SandboxType::None,
@@ -111,7 +113,11 @@ pub async fn execute_sandboxed(
                 ws = ws
             );
             let mut scmd = tokio::process::Command::new("sandbox-exec");
-            scmd.arg("-p").arg(&profile).arg("sh").arg("-c").arg(command);
+            scmd.arg("-p")
+                .arg(&profile)
+                .arg("sh")
+                .arg("-c")
+                .arg(command);
             if let Some(dir) = cwd {
                 scmd.current_dir(dir);
             }
@@ -124,14 +130,24 @@ pub async fn execute_sandboxed(
             let mut bcmd = tokio::process::Command::new("bwrap");
             bcmd.args([
                 "--die-with-parent",
-                "--unshare-pid",   // isolate process namespace
-                "--unshare-uts",   // isolate hostname
-                "--ro-bind", "/", "/",
-                "--bind", &ws, &ws,
-                "--tmpfs", "/tmp",
-                "--dev", "/dev",
-                "--proc", "/proc",
-                "--", "sh", "-c", command,
+                "--unshare-pid", // isolate process namespace
+                "--unshare-uts", // isolate hostname
+                "--ro-bind",
+                "/",
+                "/",
+                "--bind",
+                &ws,
+                &ws,
+                "--tmpfs",
+                "/tmp",
+                "--dev",
+                "/dev",
+                "--proc",
+                "/proc",
+                "--",
+                "sh",
+                "-c",
+                command,
             ]);
             if let Some(dir) = cwd {
                 bcmd.current_dir(dir);

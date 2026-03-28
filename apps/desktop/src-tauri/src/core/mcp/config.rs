@@ -1520,10 +1520,12 @@ mod tests {
     #[test]
     fn test_config_decryption_error_display() {
         // Ensure all variants produce non-empty, distinct messages
-        let errors = [ConfigDecryptionError::CipherInit,
+        let errors = [
+            ConfigDecryptionError::CipherInit,
             ConfigDecryptionError::CiphertextTooShort { len: 3 },
             ConfigDecryptionError::DecryptionFailed,
-            ConfigDecryptionError::ValidationFailed("test reason".to_string())];
+            ConfigDecryptionError::ValidationFailed("test reason".to_string()),
+        ];
         let messages: Vec<String> = errors.iter().map(|e| e.to_string()).collect();
         for msg in &messages {
             assert!(!msg.is_empty(), "error display should not be empty");

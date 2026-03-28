@@ -337,7 +337,9 @@ fn parse_rule_file(path: &Path) -> Option<Rule> {
     let after_first = trimmed[3..].trim_start_matches('\n');
     let end_pos = after_first.find("\n---")?;
     let frontmatter_str = &after_first[..end_pos];
-    let body = after_first[end_pos + 4..].trim_start_matches('\n').to_string();
+    let body = after_first[end_pos + 4..]
+        .trim_start_matches('\n')
+        .to_string();
 
     if body.trim().is_empty() {
         return None;

@@ -18,7 +18,6 @@ use crate::history_cell::UserHistoryCell;
 use crate::model_catalog::ModelCatalog;
 use crate::test_backend::VT100Backend;
 use crate::tui::FrameRequester;
-use assert_matches::assert_matches;
 use agiworkforce_app_server_protocol::AppSummary;
 use agiworkforce_app_server_protocol::CollabAgentState as AppServerCollabAgentState;
 use agiworkforce_app_server_protocol::CollabAgentStatus as AppServerCollabAgentStatus;
@@ -102,9 +101,9 @@ use agiworkforce_protocol::protocol::AgentMessageEvent;
 use agiworkforce_protocol::protocol::AgentReasoningDeltaEvent;
 use agiworkforce_protocol::protocol::AgentReasoningEvent;
 use agiworkforce_protocol::protocol::AgentStatus;
+use agiworkforce_protocol::protocol::AgiWorkforceErrorInfo;
 use agiworkforce_protocol::protocol::ApplyPatchApprovalRequestEvent;
 use agiworkforce_protocol::protocol::BackgroundEventEvent;
-use agiworkforce_protocol::protocol::AgiWorkforceErrorInfo;
 use agiworkforce_protocol::protocol::CollabAgentSpawnBeginEvent;
 use agiworkforce_protocol::protocol::CollabAgentSpawnEndEvent;
 use agiworkforce_protocol::protocol::CreditsSnapshot;
@@ -163,6 +162,7 @@ use agiworkforce_terminal_detection::TerminalInfo;
 use agiworkforce_terminal_detection::TerminalName;
 use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use agiworkforce_utils_approval_presets::builtin_approval_presets;
+use assert_matches::assert_matches;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -1986,9 +1986,9 @@ async fn make_chatwidget_manual(
     let app_event_tx = AppEventSender::new(tx_raw);
     let (op_tx, op_rx) = unbounded_channel::<Op>();
     let mut cfg = test_config().await;
-    let resolved_model = model_override
-        .map(str::to_owned)
-        .unwrap_or_else(|| agiworkforce_core::test_support::get_model_offline(cfg.model.as_deref()));
+    let resolved_model = model_override.map(str::to_owned).unwrap_or_else(|| {
+        agiworkforce_core::test_support::get_model_offline(cfg.model.as_deref())
+    });
     if let Some(model) = model_override {
         cfg.model = Some(model.to_string());
     }
@@ -3534,7 +3534,10 @@ async fn exec_approval_uses_approval_id_when_present() {
         } = app_ev
         {
             assert_eq!(id, "approval-subcommand");
-            assert_matches!(decision, agiworkforce_protocol::protocol::ReviewDecision::Approved);
+            assert_matches!(
+                decision,
+                agiworkforce_protocol::protocol::ReviewDecision::Approved
+            );
             found = true;
             break;
         }
@@ -11668,7 +11671,10 @@ async fn apply_patch_approval_sends_op_with_call_id() {
         } = app_ev
         {
             assert_eq!(id, "call-999");
-            assert_matches!(decision, agiworkforce_protocol::protocol::ReviewDecision::Approved);
+            assert_matches!(
+                decision,
+                agiworkforce_protocol::protocol::ReviewDecision::Approved
+            );
             found = true;
             break;
         }
@@ -11716,7 +11722,10 @@ async fn apply_patch_full_flow_integration_like() {
     match forwarded {
         Op::PatchApproval { id, decision } => {
             assert_eq!(id, "call-1");
-            assert_matches!(decision, agiworkforce_protocol::protocol::ReviewDecision::Approved);
+            assert_matches!(
+                decision,
+                agiworkforce_protocol::protocol::ReviewDecision::Approved
+            );
         }
         other => panic!("unexpected op forwarded: {other:?}"),
     }

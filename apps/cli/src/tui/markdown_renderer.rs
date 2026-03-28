@@ -1,28 +1,27 @@
 // Markdown → ratatui rendering with syntax highlighting
 // Markdown rendering with syntax highlighting
 
-use pulldown_cmark::{Event, Parser, Tag, TagEnd, CodeBlockKind};
+use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::sync::OnceLock;
-use syntect::highlighting::{ThemeSet, Theme};
-use syntect::parsing::SyntaxSet;
 use syntect::easy::HighlightLines;
+use syntect::highlighting::{Theme, ThemeSet};
+use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
 static THEME: OnceLock<Theme> = OnceLock::new();
 
 fn syntax_set() -> &'static SyntaxSet {
-    SYNTAX_SET.get_or_init(|| {
-        two_face::syntax::extra_newlines()
-    })
+    SYNTAX_SET.get_or_init(|| two_face::syntax::extra_newlines())
 }
 
 fn theme() -> &'static Theme {
     THEME.get_or_init(|| {
         let ts = ThemeSet::load_defaults();
-        ts.themes.get("base16-ocean.dark")
+        ts.themes
+            .get("base16-ocean.dark")
             .cloned()
             .unwrap_or_else(|| ts.themes.values().next().unwrap().clone())
     })
@@ -59,7 +58,11 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                     CodeBlockKind::Indented => String::new(),
                 };
                 // Code block header
-                let lang_display = if code_lang.is_empty() { "code" } else { &code_lang };
+                let lang_display = if code_lang.is_empty() {
+                    "code"
+                } else {
+                    &code_lang
+                };
                 lines.push(Line::from(Span::styled(
                     format!("    ┌─ {lang_display} ─"),
                     Style::default().fg(Color::DarkGray),
@@ -83,21 +86,38 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
             Event::End(TagEnd::Heading(_)) => {
                 // Style the heading
                 let style = match heading_level {
-                    1 => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-                    2 => Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                    _ => Style::default().fg(Color::White).add_modifier(Modifier::ITALIC),
+                    1 => Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                    2 => Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                    _ => Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::ITALIC),
                 };
                 let prefix = "#".repeat(heading_level as usize);
-                let heading_text: String = current_spans.iter().map(|s| s.content.to_string()).collect();
+                let heading_text: String = current_spans
+                    .iter()
+                    .map(|s| s.content.to_string())
+                    .collect();
                 current_spans.clear();
                 current_spans.push(Span::styled(format!("    {prefix} {heading_text}"), style));
                 flush_line(&mut lines, &mut current_spans);
                 in_heading = false;
             }
-            Event::Start(Tag::Strong) => { in_bold = true; }
-            Event::End(TagEnd::Strong) => { in_bold = false; }
-            Event::Start(Tag::Emphasis) => { in_italic = true; }
-            Event::End(TagEnd::Emphasis) => { in_italic = false; }
+            Event::Start(Tag::Strong) => {
+                in_bold = true;
+            }
+            Event::End(TagEnd::Strong) => {
+                in_bold = false;
+            }
+            Event::Start(Tag::Emphasis) => {
+                in_italic = true;
+            }
+            Event::End(TagEnd::Emphasis) => {
+                in_italic = false;
+            }
             Event::Code(code) => {
                 current_spans.push(Span::styled(
                     code.to_string(),
@@ -107,7 +127,9 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
             Event::Start(Tag::Link { .. }) => {
                 in_link = true;
             }
-            Event::End(TagEnd::Link) => { in_link = false; }
+            Event::End(TagEnd::Link) => {
+                in_link = false;
+            }
             Event::Start(Tag::List(start)) => {
                 flush_line(&mut lines, &mut current_spans);
                 in_list = true;
@@ -157,9 +179,13 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                     } else if in_italic {
                         Style::default().add_modifier(Modifier::ITALIC)
                     } else if in_link {
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::UNDERLINED)
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::UNDERLINED)
                     } else if in_blockquote {
-                        Style::default().fg(Color::Green).add_modifier(Modifier::ITALIC)
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::ITALIC)
                     } else {
                         Style::default().fg(Color::White)
                     };
@@ -173,7 +199,10 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                     };
 
                     if !prefix.is_empty() {
-                        current_spans.push(Span::styled(prefix.to_string(), Style::default().fg(Color::DarkGray)));
+                        current_spans.push(Span::styled(
+                            prefix.to_string(),
+                            Style::default().fg(Color::DarkGray),
+                        ));
                     }
                     current_spans.push(Span::styled(text.to_string(), style));
                 }
@@ -232,13 +261,22 @@ fn highlight_code(code: &str, lang: &str) -> Vec<Line<'static>> {
                 for (style, text) in ranges {
                     let fg = Color::Rgb(style.foreground.r, style.foreground.g, style.foreground.b);
                     let mut ratatui_style = Style::default().fg(fg);
-                    if style.font_style.contains(syntect::highlighting::FontStyle::BOLD) {
+                    if style
+                        .font_style
+                        .contains(syntect::highlighting::FontStyle::BOLD)
+                    {
                         ratatui_style = ratatui_style.add_modifier(Modifier::BOLD);
                     }
-                    if style.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
+                    if style
+                        .font_style
+                        .contains(syntect::highlighting::FontStyle::ITALIC)
+                    {
                         ratatui_style = ratatui_style.add_modifier(Modifier::ITALIC);
                     }
-                    spans.push(Span::styled(text.trim_end_matches('\n').to_string(), ratatui_style));
+                    spans.push(Span::styled(
+                        text.trim_end_matches('\n').to_string(),
+                        ratatui_style,
+                    ));
                 }
 
                 result.push(Line::from(spans));
@@ -247,7 +285,10 @@ fn highlight_code(code: &str, lang: &str) -> Vec<Line<'static>> {
                 // Fallback: plain text
                 result.push(Line::from(vec![
                     Span::styled("    │ ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(line_text.trim_end().to_string(), Style::default().fg(Color::White)),
+                    Span::styled(
+                        line_text.trim_end().to_string(),
+                        Style::default().fg(Color::White),
+                    ),
                 ]));
             }
         }
