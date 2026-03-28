@@ -1,4 +1,5 @@
 // Updated: 2026-01-07 - Non-blocking auth with cold start handling
+import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import {
   AuthError,
   type AuthResponse,
@@ -189,13 +190,11 @@ const getAuthRedirectUrl = (path: string = ''): string => {
   return `${window.location.origin}${path}`;
 };
 
-// Dynamic import of invoke to handle web development mode
 const getInvoke = async () => {
   if (!isTauri) {
     return null; // Return null in web mode, caller should check
   }
-  const { invoke } = await import('@tauri-apps/api/core');
-  return invoke;
+  return tauriInvoke;
 };
 
 export type SubscriptionFetchStatus = 'idle' | 'fetching' | 'succeeded' | 'failed';

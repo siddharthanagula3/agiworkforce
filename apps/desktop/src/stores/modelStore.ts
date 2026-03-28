@@ -35,9 +35,10 @@ import { getModelForRequest, getModelForRequestAsync, isManualSelection } from '
 import type { Provider } from '../types/provider';
 import type { SubscriptionTier } from '../constants/planModels';
 import { useAccountStore } from './auth';
-import { useSettingsStore } from './settingsStore';
+import { useAppModeStore, type AppMode, type PlanTier } from './appModeStore';
+import { useSettingsStore, waitForSettingsHydration } from './settingsStore';
+import { useUIStore } from './ui';
 import { storageFallback } from '../lib/storageFallback';
-import type { AppMode, PlanTier } from './appModeStore';
 
 // ---------------------------------------------------------------------------
 // Managed cloud models — available in cloud mode without user API keys.
@@ -483,10 +484,9 @@ export const useModelStore = create<ModelState>()(
             }
 
             if (provider !== 'ollama' && modelId !== 'auto') {
-              const { useUnifiedAuthStore } = await import('./auth');
               const currentPlan = (() => {
                 try {
-                  return useUnifiedAuthStore.getState()?.plan ?? 'hobby';
+                  return useAccountStore.getState()?.plan ?? 'hobby';
                 } catch {
                   return 'hobby' as const;
                 }
@@ -1190,14 +1190,12 @@ export const initializeModelStoreFromSettings = async () => {
 
   try {
     // STR-009 fix: Wait for settings to hydrate before reading from store
-    const { waitForSettingsHydration } = await import('./settingsStore');
     await waitForSettingsHydration();
 
     const settingsStore = useSettingsStore.getState();
-    const { useUnifiedAuthStore } = await import('./auth');
     const currentPlan = (() => {
       try {
-        return useUnifiedAuthStore.getState()?.plan ?? 'hobby';
+        return useAccountStore.getState()?.plan ?? 'hobby';
       } catch {
         return 'hobby' as const;
       }
@@ -1275,9 +1273,9 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
   const normalizedTier = normalizeSubscriptionTier(planTier) as SubscriptionTier;
   const allowed = getAllowedAutoModesForTier(normalizedTier);
 
-  // Check if user is in Simple Mode (dynamic import to avoid circular deps)
-  import('./ui')
-    .then(async ({ useUIStore }) => {
+  // Check if user is in Simple Mode before enforcing tier restrictions.
+  Promise.resolve()
+    .then(async () => {
       const isSimpleMode = useUIStore.getState().mode === 'simple';
       const selectedMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
       const isAutoSelection = selectedModel === 'auto' || selectedModel?.startsWith('auto');
@@ -1317,32 +1315,21 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
 };
 
 // [C3 fix] Module-level unsubscribe reference prevents listener accumulation on HMR reload
-let _unsubscribePlanChanges: (() => void) | null = null;
+let _unsubscribePlanChanges: () => void = () => {};
 
 // Subscribe to auth store plan changes to enforce tier restrictions
 // This runs when the user's plan tier is loaded/changed
 if (typeof window !== 'undefined') {
-  // Dynamic import to avoid circular dependencies
-  import('./auth')
-    .then(({ useUnifiedAuthStore }) => {
-      // Guard against undefined in test environments where auth store may not be properly initialized
-      if (useUnifiedAuthStore?.subscribe) {
-        // [C3 fix] Clean up previous subscription before creating a new one (HMR safety)
-        _unsubscribePlanChanges?.();
-        _unsubscribePlanChanges = useUnifiedAuthStore.subscribe(
-          (state) => state.plan,
-          (plan) => {
-            const normalizedPlan = plan ?? 'free';
-            enforceModelTierRestriction(normalizedPlan);
-          },
-        );
-        const initialPlan = useUnifiedAuthStore.getState().plan ?? 'free';
-        enforceModelTierRestriction(initialPlan);
-      }
-    })
-    .catch((err) => {
-      console.warn('[ModelStore] Failed to load auth for plan subscription:', err);
-    });
+  _unsubscribePlanChanges?.();
+  _unsubscribePlanChanges = useAccountStore.subscribe(
+    (state) => state.plan,
+    (plan) => {
+      const normalizedPlan = plan ?? 'free';
+      enforceModelTierRestriction(normalizedPlan);
+    },
+  );
+  const initialPlan = useAccountStore.getState().plan ?? 'free';
+  enforceModelTierRestriction(initialPlan);
 }
 
 // ---------------------------------------------------------------------------
@@ -1352,26 +1339,42 @@ if (typeof window !== 'undefined') {
 // Module-level ref prevents subscription accumulation on HMR reload.
 // ---------------------------------------------------------------------------
 
-let _unsubscribeAppMode: (() => void) | null = null;
+let _unsubscribeAppMode: () => void = () => {};
 
 if (typeof window !== 'undefined') {
-  import('./appModeStore')
-    .then(({ useAppModeStore }) => {
-      _unsubscribeAppMode?.();
-      // Initial load
-      const { mode, planTier } = useAppModeStore.getState();
-      useModelStore.getState().loadModelsForMode(mode, planTier);
+  _unsubscribeAppMode?.();
+  // Initial load
+  const { mode, planTier } = useAppModeStore.getState();
+  useModelStore.getState().loadModelsForMode(mode, planTier);
 
-      // Subscribe to both mode and planTier changes
-      _unsubscribeAppMode = useAppModeStore.subscribe(
-        (state) => ({ mode: state.mode, planTier: state.planTier }),
-        ({ mode: newMode, planTier: newTier }) => {
-          useModelStore.getState().loadModelsForMode(newMode, newTier);
-        },
-        { equalityFn: (a, b) => a.mode === b.mode && a.planTier === b.planTier },
-      );
-    })
-    .catch((err) => {
-      console.warn('[ModelStore] Failed to subscribe to app mode changes:', err);
-    });
+  // Subscribe to both mode and planTier changes
+  _unsubscribeAppMode = useAppModeStore.subscribe(
+    (state) => ({ mode: state.mode, planTier: state.planTier }),
+    ({ mode: newMode, planTier: newTier }) => {
+      useModelStore.getState().loadModelsForMode(newMode, newTier);
+    },
+    { equalityFn: (a, b) => a.mode === b.mode && a.planTier === b.planTier },
+  );
+}
+
+let _unsubscribeUiMode: () => void = () => {};
+
+if (typeof window !== 'undefined') {
+  _unsubscribeUiMode?.();
+  _unsubscribeUiMode = useUIStore.subscribe(
+    (state) => state.mode,
+    (mode, prevMode) => {
+      if (mode !== 'simple' || mode === prevMode) {
+        return;
+      }
+
+      const currentPlan = useAccountStore.getState().account.plan ?? 'hobby';
+      const targetAutoMode = getBestAutoModeForSubscriptionTier(currentPlan);
+      const modelStore = useModelStore.getState();
+
+      if (modelStore.selectedModel !== targetAutoMode) {
+        void modelStore.selectModel(targetAutoMode, 'managed_cloud');
+      }
+    },
+  );
 }
