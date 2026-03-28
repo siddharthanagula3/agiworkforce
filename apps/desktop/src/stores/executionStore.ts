@@ -4,6 +4,7 @@ import { immer } from 'zustand/middleware/immer';
 import { ResearchTask } from '../types/chat';
 import type { ReflectionInsight, FailurePattern, Correction, SubGoal } from '../api/reflection';
 import type { ActionType } from './browserStore';
+import { useBrowserStore } from './browserStore';
 
 export type StepStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
 
@@ -707,7 +708,6 @@ export async function initializeExecutionListeners() {
 
       // WRK-003: Sync with browserStore to keep inline panels in sync with workspace
       try {
-        const { useBrowserStore } = await import('./browserStore');
         const browserStore = useBrowserStore.getState();
 
         // Add action to browserStore in its expected format

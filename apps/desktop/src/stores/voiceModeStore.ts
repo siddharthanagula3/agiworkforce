@@ -32,6 +32,7 @@ import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
 import { invoke, listen, isTauri, type UnlistenFn } from '../lib/tauri-mock';
 import { getProviderDefaultModel, getTaskModelForProvider } from '../constants/llm';
+import { useModelStore } from './modelStore';
 import {
   voiceGetCapabilities,
   voiceGetSettings,
@@ -556,7 +557,6 @@ export const useVoiceModeStore = create<VoiceModeState>()(
             onSend?.(userText);
 
             // Step 2: Get LLM response
-            const { useModelStore } = await import('./modelStore');
             const { selectedModel, selectedProvider } = useModelStore.getState();
             const fallbackProvider = selectedProvider ?? 'anthropic';
             const fallbackModel =

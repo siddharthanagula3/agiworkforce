@@ -9,8 +9,11 @@
  */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
+import { toast } from 'sonner';
 import { storageFallback } from '../lib/storageFallback';
 import { isTauri } from '../lib/tauri-mock';
+import { useAuthStore } from './auth';
+import { isChatStoreStreaming } from './chat/chatStoreRef';
 
 export type AppMode = 'local' | 'cloud';
 export type PlanTier = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
@@ -44,42 +47,26 @@ export const useAppModeStore = create<AppModeState>()(
         setMode: (mode: AppMode) => {
           // Web mode is always cloud — cannot switch to local
           if (!isTauri && mode === 'local') {
-            import('sonner').then(({ toast }) => {
-              toast.info('Local mode requires the desktop app');
-            });
+            toast.info('Local mode requires the desktop app');
             return;
           }
           // Block mode switching while chat is actively streaming to avoid mid-stream state
-          // inconsistencies. Use dynamic imports to avoid circular dependencies.
-          import('./chat/chatStore')
-            .then(({ useChatStore }) => {
-              const isStreaming = useChatStore.getState().isStreaming;
-              if (isStreaming) {
-                import('sonner').then(({ toast }) => {
-                  toast.error('Finish the current response before switching modes');
-                });
-                return;
-              }
-              // Cloud mode requires authentication
-              if (mode === 'cloud') {
-                import('./auth').then(({ useAuthStore }) => {
-                  const isAuthenticated = useAuthStore.getState().isAuthenticated;
-                  if (!isAuthenticated) {
-                    import('sonner').then(({ toast }) => {
-                      toast.error('Sign in to use Cloud mode');
-                    });
-                    return;
-                  }
-                  set({ mode }, undefined, 'appMode/setMode');
-                });
-                return;
-              }
-              set({ mode }, undefined, 'appMode/setMode');
-            })
-            .catch(() => {
-              // chatStore not available — allow mode switch
-              set({ mode }, undefined, 'appMode/setMode');
-            });
+          // inconsistencies.
+          if (isChatStoreStreaming()) {
+            toast.error('Finish the current response before switching modes');
+            return;
+          }
+          // Cloud mode requires authentication
+          if (mode === 'cloud') {
+            const isAuthenticated = useAuthStore.getState().isAuthenticated;
+            if (!isAuthenticated) {
+              toast.error('Sign in to use Cloud mode');
+              return;
+            }
+            set({ mode }, undefined, 'appMode/setMode');
+            return;
+          }
+          set({ mode }, undefined, 'appMode/setMode');
         },
 
         setPlanTier: (tier: PlanTier) => {
@@ -133,26 +120,3 @@ export const selectIsCloud = (state: AppModeState): boolean => state.mode === 'c
 export const selectIsLocal = (state: AppModeState): boolean => state.mode === 'local';
 export const selectPlanTier = (state: AppModeState): PlanTier => state.planTier;
 export const selectHasOnboarded = (state: AppModeState): boolean => state.hasOnboarded;
-
-// Reload conversations when mode changes
-useAppModeStore.subscribe(
-  (state) => state.mode,
-  (mode, prevMode) => {
-    if (mode !== prevMode) {
-      import('./chat/chatStore').then(({ useChatStore }) => {
-        import('./auth').then(({ useAuthStore }) => {
-          const user = useAuthStore.getState().user;
-          if (user?.id) {
-            useChatStore.setState({
-              conversations: [],
-              messages: [],
-              activeConversationId: null,
-              messagesByConversation: {},
-            });
-            useChatStore.getState().loadConversations(user.id);
-          }
-        });
-      });
-    }
-  },
-);

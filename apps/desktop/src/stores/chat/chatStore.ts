@@ -17,6 +17,9 @@ import { invoke } from '../../lib/tauri-mock';
 import { getModelContextWindow } from '../../constants/llm';
 import { safeGetJSON, safeSetJSON, storageFallback } from '../../utils/localStorage';
 import { useAppModeStore } from '../appModeStore';
+import { useUnifiedAuthStore } from '../auth';
+import { useModelStore } from '../modelStore';
+import { registerChatStoreStateReader } from './chatStoreRef';
 import {
   getCloudConversations,
   createCloudConversation,
@@ -1008,16 +1011,13 @@ export const useChatStore = create<ChatState>()(
             // Persist deletion to the backend if a database record exists for this conversation
             const dbId = uuidToDbId(id);
             if (dbId !== undefined) {
-              // Resolve userId lazily to avoid circular imports at module load time
-              import('../auth')
-                .then(({ useUnifiedAuthStore }) => {
-                  const userId = useUnifiedAuthStore.getState().user?.id ?? '';
-                  if (!userId) return;
-                  return invoke('chat_delete_conversation', { id: dbId, userId });
-                })
-                .catch((error) => {
-                  console.error('[ChatStore] Failed to delete conversation from backend:', error);
-                });
+              const userId = useUnifiedAuthStore.getState().user?.id ?? '';
+              if (!userId) {
+                return;
+              }
+              void invoke('chat_delete_conversation', { id: dbId, userId }).catch((error) => {
+                console.error('[ChatStore] Failed to delete conversation from backend:', error);
+              });
             }
           },
 
@@ -2567,6 +2567,8 @@ export const useChatStore = create<ChatState>()(
   ),
 );
 
+registerChatStoreStateReader(useChatStore);
+
 // Selectors for optimal re-render performance
 export const selectConversations = (state: ChatState) => state.conversations;
 export const selectActiveConversationId = (state: ChatState) => state.activeConversationId;
@@ -2644,8 +2646,7 @@ export async function initializeChatStoreModelStoreSubscription(): Promise<void>
 
   subscriptionState.pending = (async () => {
     try {
-      const modelStoreModule = await import('../modelStore');
-      const modelStore = modelStoreModule?.useModelStore as
+      const modelStore = useModelStore as
         | {
             getState?: () => { selectedModel: string | null };
             subscribe?: (
@@ -2701,6 +2702,26 @@ export function teardownChatStoreModelStoreSubscription(): void {
   subscriptionState.pending = null;
 }
 
+let _unsubscribeAppModeReload: () => void = () => {};
+
 if (typeof window !== 'undefined' && !IS_TEST_ENVIRONMENT) {
+  _unsubscribeAppModeReload();
+  _unsubscribeAppModeReload = useAppModeStore.subscribe(
+    (state) => state.mode,
+    (mode, prevMode) => {
+      if (mode !== prevMode) {
+        const user = useUnifiedAuthStore.getState().user;
+        if (user?.id) {
+          useChatStore.setState({
+            conversations: [],
+            messages: [],
+            activeConversationId: null,
+            messagesByConversation: {},
+          });
+          void useChatStore.getState().loadConversations(user.id);
+        }
+      }
+    },
+  );
   void initializeChatStoreModelStoreSubscription();
 }
