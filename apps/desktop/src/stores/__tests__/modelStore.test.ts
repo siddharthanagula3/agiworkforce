@@ -25,8 +25,10 @@ vi.mock('../auth', () => ({
   },
   useAccountStore: {
     getState: () => ({
+      plan: 'max',
       account: { plan: 'max' },
     }),
+    subscribe: vi.fn(() => () => {}),
   },
 }));
 
@@ -50,6 +52,7 @@ vi.mock('../ui', () => ({
     getState: () => ({
       mode: 'advanced',
     }),
+    subscribe: vi.fn(() => () => {}),
   },
 }));
 
@@ -80,19 +83,19 @@ describe('modelStore', () => {
 
   describe('toggleFavorite', () => {
     it('adds a model to favorites', () => {
-      useModelStore.getState().toggleFavorite('claude-sonnet-4-6');
+      useModelStore.getState().toggleFavorite('claude-sonnet-4.6');
 
       const state = useModelStore.getState();
-      expect(state.favorites).toContain('claude-sonnet-4-6');
+      expect(state.favorites).toContain('claude-sonnet-4.6');
     });
 
     it('removes a model from favorites when already present', () => {
-      useModelStore.setState({ favorites: ['claude-sonnet-4-6', 'gpt-5.4'] });
+      useModelStore.setState({ favorites: ['claude-sonnet-4.6', 'gpt-5.4'] });
 
-      useModelStore.getState().toggleFavorite('claude-sonnet-4-6');
+      useModelStore.getState().toggleFavorite('claude-sonnet-4.6');
 
       const state = useModelStore.getState();
-      expect(state.favorites).not.toContain('claude-sonnet-4-6');
+      expect(state.favorites).not.toContain('claude-sonnet-4.6');
       expect(state.favorites).toContain('gpt-5.4');
     });
   });
