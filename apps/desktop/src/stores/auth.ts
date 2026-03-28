@@ -23,6 +23,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
+import { accountApi } from '../api/accountApi';
 import { supabaseAuth } from '../services/supabaseAuth';
 import { StripeService, type CustomerInfo, type SubscriptionInfo } from '../services/stripe';
 import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
@@ -950,7 +951,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               let credits: CreditBalance | null = null;
               if (authState.session) {
                 try {
-                  const { accountApi } = await import('../api/accountApi');
                   const profile = await accountApi.fetchUserProfile(authState.session.access_token);
                   // Normalize credit field names (API returns credits_allocated_cents but we expect allocated_cents)
                   const apiCredits = profile.credits;

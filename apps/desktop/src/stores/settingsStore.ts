@@ -28,6 +28,8 @@ import type { Provider } from '../types/provider';
 import type { CustomModelConfig } from '../types/customModel';
 import type { SubscriptionTier } from '../constants/planModels';
 export type { Provider };
+import { applyTheme, clearAppliedTheme, getThemeById } from '../themes/index';
+import { useUnifiedAuthStore } from './auth';
 import type { AgentMode } from './chatPreferencesStore';
 export type { AgentMode };
 
@@ -886,14 +888,10 @@ export const useSettingsStore = create<SettingsState>()(
           );
           // Apply theme immediately so the entire app updates
           if (themeId) {
-            import('../themes/index').then(({ getThemeById, applyTheme }) => {
-              const theme = getThemeById(themeId);
-              if (theme) applyTheme(theme);
-            });
+            const theme = getThemeById(themeId);
+            if (theme) applyTheme(theme);
           } else {
-            import('../themes/index').then(({ clearAppliedTheme }) => {
-              clearAppliedTheme();
-            });
+            clearAppliedTheme();
           }
         },
 
@@ -1803,21 +1801,13 @@ export const enforceTaskRoutingTierRestriction = (planTier: string | null): void
 };
 
 if (typeof window !== 'undefined') {
-  import('./auth')
-    .then(({ useUnifiedAuthStore }) => {
-      if (useUnifiedAuthStore?.subscribe) {
-        useUnifiedAuthStore.subscribe(
-          (state) => state.plan,
-          (plan) => {
-            enforceTaskRoutingTierRestriction(plan ?? 'free');
-          },
-        );
-        enforceTaskRoutingTierRestriction(useUnifiedAuthStore.getState().plan ?? 'free');
-      }
-    })
-    .catch((err) => {
-      console.warn('[settingsStore] Failed to load auth for plan subscription:', err);
-    });
+  useUnifiedAuthStore.subscribe(
+    (state) => state.plan,
+    (plan) => {
+      enforceTaskRoutingTierRestriction(plan ?? 'free');
+    },
+  );
+  enforceTaskRoutingTierRestriction(useUnifiedAuthStore.getState().plan ?? 'free');
 }
 
 /**

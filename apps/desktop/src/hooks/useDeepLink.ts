@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { isTauri } from '../lib/tauri-mock';
+import { supabaseAuth } from '../services/supabaseAuth';
 
 const ALLOWED_DEEP_LINK_SCHEME = 'agiworkforce:';
 const ALLOWED_MCP_OAUTH_PROVIDERS = new Set([
@@ -177,7 +178,6 @@ function handleDeepLink(url: string) {
     if (code) {
       (async () => {
         try {
-          const { supabaseAuth } = await import('../services/supabaseAuth');
           await supabaseAuth.exchangeCodeForSession(code);
         } catch (error) {
           console.error('[DeepLink] Auth callback exchange failed:', error);
