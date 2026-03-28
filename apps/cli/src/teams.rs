@@ -143,7 +143,13 @@ impl WorktreeManager {
         if merge {
             // Merge the teammate's branch into current branch
             let output = tokio::process::Command::new("git")
-                .args(["merge", "--no-ff", &branch_name, "-m", &format!("Merge teammate {} work", teammate_name)])
+                .args([
+                    "merge",
+                    "--no-ff",
+                    &branch_name,
+                    "-m",
+                    &format!("Merge teammate {} work", teammate_name),
+                ])
                 .output()
                 .await?;
 
@@ -155,7 +161,12 @@ impl WorktreeManager {
 
         // Remove worktree
         let _ = tokio::process::Command::new("git")
-            .args(["worktree", "remove", &worktree_dir.to_string_lossy(), "--force"])
+            .args([
+                "worktree",
+                "remove",
+                &worktree_dir.to_string_lossy(),
+                "--force",
+            ])
             .output()
             .await;
 

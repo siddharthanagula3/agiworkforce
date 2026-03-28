@@ -2,7 +2,7 @@
 members = [
   "apps/desktop/src-tauri",
   "apps/cli",
-  "crates/sandbox-policy",
+  "crates/*",
 ]
 resolver = "2"
 

@@ -312,7 +312,13 @@ impl DailyLimitTracker {
              FROM continuous_execution_daily_stats
              WHERE date = ?1",
             params![today],
-            |row| Ok((row.get::<_, i64>(0)? as u64, row.get::<_, i64>(1)? as u64, row.get(2)?)),
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)? as u64,
+                    row.get::<_, i64>(1)? as u64,
+                    row.get(2)?,
+                ))
+            },
         );
 
         if let Ok((tokens, requests, cost)) = result {

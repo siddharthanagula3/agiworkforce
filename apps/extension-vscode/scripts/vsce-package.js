@@ -9,20 +9,28 @@
  * Usage: node scripts/vsce-package.js [package|ls] [--no-dependencies]
  */
 
-const Module = require('module');
-const origLoad = Module._load;
+function loadVsceWithCompat() {
+  const Module = require('module');
+  const origLoad = Module._load;
 
-Module._load = function (request, parent, isMain) {
-  const result = origLoad.call(this, request, parent, isMain);
-  if (request === 'minimatch' && result && !result.default) {
-    result.default = result.minimatch || result;
+  Module._load = function (request, parent, isMain) {
+    const result = origLoad.call(this, request, parent, isMain);
+    if (request === 'minimatch' && result && !result.default) {
+      result.default = result.minimatch || result;
+    }
+    return result;
+  };
+
+  try {
+    return require('@vscode/vsce');
+  } finally {
+    Module._load = origLoad;
   }
-  return result;
-};
+}
 
-const { createVSIX, listFiles } = require('@vscode/vsce');
+const { createVSIX, listFiles } = loadVsceWithCompat();
 
-const args = process.argv.slice(2);
+const args = process.argv.slice(2).filter((arg) => arg !== '--');
 const command = args[0] || 'package';
 const noDeps = args.includes('--no-dependencies');
 

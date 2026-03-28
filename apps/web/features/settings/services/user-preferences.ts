@@ -43,32 +43,26 @@ const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 // Updated: Jan 30th 2026 - Added encryption for TOTP secrets at rest
 
 /**
- * Get encryption key from environment or generate a deterministic one
- * In production, TOTP_ENCRYPTION_KEY should be set in environment variables
+ * New TOTP secrets must only be encrypted with a dedicated secret.
+ * We intentionally fail closed instead of deriving from public configuration.
+ *
+ * Legacy deterministic key derivation is retained only as a migration read path
+ * so already-stored secrets can still be decrypted and rotated safely.
  */
-async function getTOTPEncryptionKey(): Promise<CryptoKey> {
-  // Try to get key from environment (for server-side rendering/Netlify functions)
-  const envKey =
-    typeof process !== 'undefined'
-      ? process.env['TOTP_ENCRYPTION_KEY'] || process.env['VITE_TOTP_ENCRYPTION_KEY']
-      : undefined;
+const TOTP_ENCRYPTION_UNAVAILABLE_MESSAGE =
+  'TOTP secret encryption is not configured. Set TOTP_ENCRYPTION_KEY before enabling 2FA setup.';
 
-  let keyMaterial: Uint8Array;
+function getConfiguredTOTPKeyMaterial(): Uint8Array | null {
+  const envKey = typeof process !== 'undefined' ? process.env['TOTP_ENCRYPTION_KEY'] : undefined;
 
-  if (envKey && envKey.length >= 32) {
-    // Use environment key
-    const encoder = new TextEncoder();
-    keyMaterial = encoder.encode(envKey.slice(0, 32));
-  } else {
-    // Fallback: derive key from Supabase URL (deterministic but not ideal)
-    // This ensures the same key is used across sessions
-    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'] || 'default-key-material';
-    const encoder = new TextEncoder();
-    const baseKey = encoder.encode(supabaseUrl + '-totp-encryption-v1');
-    const hash = await crypto.subtle.digest('SHA-256', baseKey);
-    keyMaterial = new Uint8Array(hash);
+  if (!envKey || envKey.length < 32) {
+    return null;
   }
 
+  return new TextEncoder().encode(envKey.slice(0, 32));
+}
+
+async function importTOTPEncryptionKey(keyMaterial: Uint8Array): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     'raw',
     keyMaterial as unknown as ArrayBuffer,
@@ -76,6 +70,28 @@ async function getTOTPEncryptionKey(): Promise<CryptoKey> {
     false,
     ['encrypt', 'decrypt'],
   );
+}
+
+async function getLegacyTOTPEncryptionKey(): Promise<CryptoKey | null> {
+  const supabaseUrl =
+    typeof process !== 'undefined' ? process.env['NEXT_PUBLIC_SUPABASE_URL'] : undefined;
+  if (!supabaseUrl) {
+    return null;
+  }
+
+  const encoder = new TextEncoder();
+  const baseKey = encoder.encode(supabaseUrl + '-totp-encryption-v1');
+  const hash = await crypto.subtle.digest('SHA-256', baseKey);
+  return importTOTPEncryptionKey(new Uint8Array(hash));
+}
+
+async function getTOTPEncryptionKey(): Promise<CryptoKey> {
+  const keyMaterial = getConfiguredTOTPKeyMaterial();
+  if (!keyMaterial) {
+    throw new Error(TOTP_ENCRYPTION_UNAVAILABLE_MESSAGE);
+  }
+
+  return importTOTPEncryptionKey(keyMaterial);
 }
 
 /**
@@ -113,8 +129,6 @@ async function decryptTOTPSecret(encryptedSecret: string): Promise<string> {
     return encryptedSecret;
   }
 
-  const key = await getTOTPEncryptionKey();
-
   // Decode base64
   const combined = Uint8Array.from(atob(encryptedSecret), (c) => c.charCodeAt(0));
 
@@ -122,10 +136,32 @@ async function decryptTOTPSecret(encryptedSecret: string): Promise<string> {
   const iv = combined.slice(0, 12);
   const encryptedData = combined.slice(12);
 
-  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encryptedData);
+  const configuredKey = getConfiguredTOTPKeyMaterial();
+  const candidateKeys: CryptoKey[] = [];
 
-  const decoder = new TextDecoder();
-  return decoder.decode(decrypted);
+  if (configuredKey) {
+    candidateKeys.push(await importTOTPEncryptionKey(configuredKey));
+  }
+
+  const legacyKey = await getLegacyTOTPEncryptionKey();
+  if (legacyKey) {
+    candidateKeys.push(legacyKey);
+  }
+
+  if (candidateKeys.length === 0) {
+    throw new Error(TOTP_ENCRYPTION_UNAVAILABLE_MESSAGE);
+  }
+
+  for (const key of candidateKeys) {
+    try {
+      const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encryptedData);
+      return new TextDecoder().decode(decrypted);
+    } catch {
+      // Try the next candidate key so legacy secrets remain recoverable.
+    }
+  }
+
+  throw new Error('Unable to decrypt stored TOTP secret with the configured key material.');
 }
 
 // =============================================================================

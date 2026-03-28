@@ -638,7 +638,10 @@ impl AgentSession {
 
     /// Return MCP tool metadata (if any MCP servers are connected).
     pub fn mcp_info(&self) -> Option<&[mcp::McpTool]> {
-        self.mcp_manager.as_ref().map(|m| m.tools()).filter(|t| !t.is_empty())
+        self.mcp_manager
+            .as_ref()
+            .map(|m| m.tools())
+            .filter(|t| !t.is_empty())
     }
 
     /// Get the hooks configuration (for firing hooks from the REPL).
@@ -972,7 +975,10 @@ impl AgentSession {
                 }
 
                 // SAFETY: We just set subagent_manager above if it was None.
-                let mgr = self.subagent_manager.as_ref().expect("subagent_manager was just initialized above");
+                let mgr = self
+                    .subagent_manager
+                    .as_ref()
+                    .expect("subagent_manager was just initialized above");
                 let id_result = mgr.spawn(&description, &prompt).await;
                 task_spawn_results.push((
                     tc.id.clone(),
@@ -1258,10 +1264,7 @@ Files modified:
                 counts.into_iter().collect()
             };
             if !tool_counts.is_empty() {
-                let session_id = self
-                    .session_name
-                    .as_deref()
-                    .unwrap_or("anonymous");
+                let session_id = self.session_name.as_deref().unwrap_or("anonymous");
                 if let Some(skill) = crate::skill_learner::SkillLearner::analyze_session(
                     &home,
                     session_id,
@@ -1287,8 +1290,11 @@ Files modified:
                 let config_clone = config.clone();
                 // Spawn consolidation as a non-blocking background task
                 tokio::spawn(async move {
-                    if let Err(e) =
-                        crate::memory_pipeline::MemoryPipeline::consolidate(&home_clone, &config_clone).await
+                    if let Err(e) = crate::memory_pipeline::MemoryPipeline::consolidate(
+                        &home_clone,
+                        &config_clone,
+                    )
+                    .await
                     {
                         eprintln!("[memory_pipeline] consolidation error: {}", e);
                     }

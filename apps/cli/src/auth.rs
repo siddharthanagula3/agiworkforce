@@ -290,7 +290,10 @@ fn auth_status_from_store(
                     // (OAuth tokens rarely live longer; this catches clock skew or tampering)
                     let max_reasonable = now_ms + (2 * 365 * 24 * 3600 * 1000);
                     if *expires > max_reasonable {
-                        ("unknown".to_string(), Some("expiry too far in future".to_string()))
+                        (
+                            "unknown".to_string(),
+                            Some("expiry too far in future".to_string()),
+                        )
                     } else {
                         let remaining = *expires - now_ms;
                         if remaining <= 0 {

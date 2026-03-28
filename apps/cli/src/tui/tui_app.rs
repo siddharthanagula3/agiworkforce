@@ -19,7 +19,6 @@ use crate::agent::AgentSession;
 use crate::config::CliConfig;
 use crate::context::SystemContext;
 
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -101,51 +100,195 @@ struct SlashCommandDef {
 
 const SLASH_COMMANDS: &[SlashCommandDef] = &[
     // ── Most used (top of popup) ──
-    SlashCommandDef { name: "/model", description: "Switch model (e.g. /model gpt-4o)", aliases: &["/m"] },
-    SlashCommandDef { name: "/plan", description: "Toggle plan mode", aliases: &[] },
-    SlashCommandDef { name: "/fast", description: "Toggle fast mode (2x speed)", aliases: &[] },
-    SlashCommandDef { name: "/compact", description: "Compact context to free space", aliases: &[] },
-    SlashCommandDef { name: "/clear", description: "Clear conversation and context", aliases: &[] },
+    SlashCommandDef {
+        name: "/model",
+        description: "Switch model (e.g. /model gpt-4o)",
+        aliases: &["/m"],
+    },
+    SlashCommandDef {
+        name: "/plan",
+        description: "Toggle plan mode",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/fast",
+        description: "Toggle fast mode (2x speed)",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/compact",
+        description: "Compact context to free space",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/clear",
+        description: "Clear conversation and context",
+        aliases: &[],
+    },
     // ── Code & review ──
-    SlashCommandDef { name: "/review", description: "Review current code changes", aliases: &[] },
-    SlashCommandDef { name: "/diff", description: "Show git diff (incl. untracked)", aliases: &[] },
-    SlashCommandDef { name: "/copy", description: "Copy last response to clipboard", aliases: &[] },
-    SlashCommandDef { name: "/init", description: "Create CLAUDE.md for this project", aliases: &[] },
+    SlashCommandDef {
+        name: "/review",
+        description: "Review current code changes",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/diff",
+        description: "Show git diff (incl. untracked)",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/copy",
+        description: "Copy last response to clipboard",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/init",
+        description: "Create CLAUDE.md for this project",
+        aliases: &[],
+    },
     // ── Session management ──
-    SlashCommandDef { name: "/new", description: "Start a new conversation", aliases: &[] },
-    SlashCommandDef { name: "/resume", description: "Resume a saved session", aliases: &["/sessions"] },
-    SlashCommandDef { name: "/fork", description: "Fork current conversation", aliases: &["/branch"] },
-    SlashCommandDef { name: "/rename", description: "Rename current session", aliases: &[] },
-    SlashCommandDef { name: "/save", description: "Save session checkpoint", aliases: &[] },
-    SlashCommandDef { name: "/history", description: "List saved conversations", aliases: &[] },
-    SlashCommandDef { name: "/export", description: "Export conversation to file", aliases: &[] },
-    SlashCommandDef { name: "/rewind", description: "Undo last code changes", aliases: &[] },
+    SlashCommandDef {
+        name: "/new",
+        description: "Start a new conversation",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/resume",
+        description: "Resume a saved session",
+        aliases: &["/sessions"],
+    },
+    SlashCommandDef {
+        name: "/fork",
+        description: "Fork current conversation",
+        aliases: &["/branch"],
+    },
+    SlashCommandDef {
+        name: "/rename",
+        description: "Rename current session",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/save",
+        description: "Save session checkpoint",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/history",
+        description: "List saved conversations",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/export",
+        description: "Export conversation to file",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/rewind",
+        description: "Undo last code changes",
+        aliases: &[],
+    },
     // ── Tools & plugins ──
-    SlashCommandDef { name: "/mcp", description: "List MCP servers and tools", aliases: &[] },
-    SlashCommandDef { name: "/skills", description: "Browse available skills", aliases: &[] },
-    SlashCommandDef { name: "/permissions", description: "Manage tool permissions", aliases: &["/perms", "/approvals"] },
-    SlashCommandDef { name: "/hooks", description: "Manage hooks configuration", aliases: &[] },
-    SlashCommandDef { name: "/plugins", description: "Manage plugins", aliases: &[] },
+    SlashCommandDef {
+        name: "/mcp",
+        description: "List MCP servers and tools",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/skills",
+        description: "Browse available skills",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/permissions",
+        description: "Manage tool permissions",
+        aliases: &["/perms", "/approvals"],
+    },
+    SlashCommandDef {
+        name: "/hooks",
+        description: "Manage hooks configuration",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/plugins",
+        description: "Manage plugins",
+        aliases: &[],
+    },
     // ── Information ──
-    SlashCommandDef { name: "/status", description: "Show session info (model, tokens, mode)", aliases: &[] },
-    SlashCommandDef { name: "/cost", description: "Show session cost summary", aliases: &[] },
-    SlashCommandDef { name: "/context", description: "Show context window usage", aliases: &["/ctx"] },
-    SlashCommandDef { name: "/config", description: "Show current configuration", aliases: &[] },
-    SlashCommandDef { name: "/models", description: "List all available models", aliases: &["/providers"] },
+    SlashCommandDef {
+        name: "/status",
+        description: "Show session info (model, tokens, mode)",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/cost",
+        description: "Show session cost summary",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/context",
+        description: "Show context window usage",
+        aliases: &["/ctx"],
+    },
+    SlashCommandDef {
+        name: "/config",
+        description: "Show current configuration",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/models",
+        description: "List all available models",
+        aliases: &["/providers"],
+    },
     // ── Memory ──
-    SlashCommandDef { name: "/memory", description: "Show/manage auto-memory", aliases: &["/mem"] },
-    SlashCommandDef { name: "/btw", description: "Ask a side question without interrupting", aliases: &[] },
+    SlashCommandDef {
+        name: "/memory",
+        description: "Show/manage auto-memory",
+        aliases: &["/mem"],
+    },
+    SlashCommandDef {
+        name: "/btw",
+        description: "Ask a side question without interrupting",
+        aliases: &[],
+    },
     // ── Voice ──
-    SlashCommandDef { name: "/voice", description: "Toggle voice input (Whisper)", aliases: &["/v"] },
+    SlashCommandDef {
+        name: "/voice",
+        description: "Toggle voice input (Whisper)",
+        aliases: &["/v"],
+    },
     // ── Theme ──
-    SlashCommandDef { name: "/theme", description: "Change syntax highlighting theme", aliases: &[] },
+    SlashCommandDef {
+        name: "/theme",
+        description: "Change syntax highlighting theme",
+        aliases: &[],
+    },
     // ── Auth ──
-    SlashCommandDef { name: "/login", description: "Login to a provider", aliases: &[] },
-    SlashCommandDef { name: "/logout", description: "Logout from providers", aliases: &[] },
+    SlashCommandDef {
+        name: "/login",
+        description: "Login to a provider",
+        aliases: &[],
+    },
+    SlashCommandDef {
+        name: "/logout",
+        description: "Logout from providers",
+        aliases: &[],
+    },
     // ── System ──
-    SlashCommandDef { name: "/feedback", description: "Send feedback / report bug", aliases: &["/bug"] },
-    SlashCommandDef { name: "/help", description: "Show all commands and keybindings", aliases: &["/h", "/?"] },
-    SlashCommandDef { name: "/exit", description: "Exit AGI Workforce", aliases: &["/quit", "/q"] },
+    SlashCommandDef {
+        name: "/feedback",
+        description: "Send feedback / report bug",
+        aliases: &["/bug"],
+    },
+    SlashCommandDef {
+        name: "/help",
+        description: "Show all commands and keybindings",
+        aliases: &["/h", "/?"],
+    },
+    SlashCommandDef {
+        name: "/exit",
+        description: "Exit AGI Workforce",
+        aliases: &["/quit", "/q"],
+    },
 ];
 
 // ---------------------------------------------------------------------------
@@ -192,7 +335,9 @@ impl TuiApp {
             .ok()
             .and_then(|o| {
                 if o.status.success() {
-                    String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
+                    String::from_utf8(o.stdout)
+                        .ok()
+                        .map(|s| s.trim().to_string())
                 } else {
                     None
                 }
@@ -248,7 +393,10 @@ impl TuiApp {
             .filter(|cmd| {
                 cmd.name.to_lowercase().contains(&filter)
                     || cmd.description.to_lowercase().contains(&filter)
-                    || cmd.aliases.iter().any(|a| a.to_lowercase().contains(&filter))
+                    || cmd
+                        .aliases
+                        .iter()
+                        .any(|a| a.to_lowercase().contains(&filter))
             })
             .collect()
     }
@@ -295,10 +443,10 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // header
-                Constraint::Min(5),     // chat area
-                Constraint::Length(3),  // input
-                Constraint::Length(1),  // status bar
+                Constraint::Length(3), // header
+                Constraint::Min(5),    // chat area
+                Constraint::Length(3), // input
+                Constraint::Length(1), // status bar
             ])
             .split(area);
 
@@ -326,14 +474,21 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     let mut spans = vec![
         Span::styled(
             " AGI Workforce ",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             format!(" v{} ", env!("CARGO_PKG_VERSION")),
             Style::default().fg(Color::DarkGray),
         ),
         Span::raw(" │ "),
-        Span::styled(&app.model_name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            &app.model_name,
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" │ "),
         Span::styled(provider_display, Style::default().fg(Color::Green)),
     ];
@@ -349,7 +504,11 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     spans.push(Span::raw(" │ "));
     spans.push(Span::styled(
         format!("{}% ctx", app.context_percent()),
-        Style::default().fg(if app.context_percent() > 80 { Color::Red } else { Color::DarkGray }),
+        Style::default().fg(if app.context_percent() > 80 {
+            Color::Red
+        } else {
+            Color::DarkGray
+        }),
     ));
 
     let header_text = Line::from(spans);
@@ -364,7 +523,10 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::DarkGray))
-        .title_bottom(Line::from(Span::styled(tokens_text, Style::default().fg(Color::DarkGray))));
+        .title_bottom(Line::from(Span::styled(
+            tokens_text,
+            Style::default().fg(Color::DarkGray),
+        )));
 
     let header = Paragraph::new(header_text).block(block);
     frame.render_widget(header, area);
@@ -377,7 +539,9 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "  Welcome to AGI Workforce TUI",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         )));
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
@@ -399,9 +563,24 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
             }
 
             let (prefix, prefix_style) = match msg.role {
-                ChatRole::User => ("  > ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                ChatRole::Assistant => ("  ✦ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                ChatRole::System => ("  ℹ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                ChatRole::User => (
+                    "  > ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                ChatRole::Assistant => (
+                    "  ✦ ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                ChatRole::System => (
+                    "  ℹ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 ChatRole::Tool => ("  ▸ ", Style::default().fg(Color::Magenta)),
             };
 
@@ -444,7 +623,9 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
             ),
             Span::styled(
                 format!("Thinking... {elapsed_str}"),
-                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::ITALIC),
             ),
         ]));
 
@@ -545,7 +726,12 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     };
 
     let input_line = Line::from(vec![
-        Span::styled(prompt_char, Style::default().fg(app.mode.color()).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            prompt_char,
+            Style::default()
+                .fg(app.mode.color())
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(display_text.to_string(), style),
     ]);
 
@@ -671,7 +857,9 @@ fn render_model_picker(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp
             let style = if i == app.model_picker_selected {
                 Style::default().fg(Color::Black).bg(Color::Cyan)
             } else if is_current {
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -796,17 +984,27 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         }
 
         KeyCode::Left => {
-            if app.cursor > 0 { app.cursor -= 1; }
+            if app.cursor > 0 {
+                app.cursor -= 1;
+            }
             InputAction::None
         }
 
         KeyCode::Right => {
-            if app.cursor < app.input.len() { app.cursor += 1; }
+            if app.cursor < app.input.len() {
+                app.cursor += 1;
+            }
             InputAction::None
         }
 
-        KeyCode::Home => { app.cursor = 0; InputAction::None }
-        KeyCode::End => { app.cursor = app.input.len(); InputAction::None }
+        KeyCode::Home => {
+            app.cursor = 0;
+            InputAction::None
+        }
+        KeyCode::End => {
+            app.cursor = app.input.len();
+            InputAction::None
+        }
 
         KeyCode::Up => InputAction::ScrollUp,
         KeyCode::Down => InputAction::ScrollDown,
@@ -929,8 +1127,11 @@ fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                     role: ChatRole::System,
                     text: format!(
                         "Switched to {} ({}) — {}K context, ${:.2}/${:.2} per 1M tokens",
-                        model_id, provider, model.context_window / 1000,
-                        model.input_price_per_1m, model.output_price_per_1m,
+                        model_id,
+                        provider,
+                        model.context_window / 1000,
+                        model.input_price_per_1m,
+                        model.output_price_per_1m,
                     ),
                 });
             }
@@ -1012,8 +1213,8 @@ fn apply_mode(app: &mut TuiApp, mode: InteractionMode) {
     app.mode = mode;
     app.session.plan_mode = mode == InteractionMode::Plan;
     app.session.skip_permissions = mode == InteractionMode::BypassPermissions;
-    app.session.auto_approve_safe = mode == InteractionMode::AcceptEdits
-        || mode == InteractionMode::BypassPermissions;
+    app.session.auto_approve_safe =
+        mode == InteractionMode::AcceptEdits || mode == InteractionMode::BypassPermissions;
     // Debug mode: quiet=false so tool output is shown verbosely
     // All other modes: quiet inherits from startup setting
     if mode == InteractionMode::Debug {
@@ -1024,9 +1225,15 @@ fn apply_mode(app: &mut TuiApp, mode: InteractionMode) {
 fn mode_description(mode: InteractionMode) -> &'static str {
     match mode {
         InteractionMode::Chat => "Normal conversation mode",
-        InteractionMode::Plan => "Plan mode — read-only tools only, no file edits. Model will plan before acting.",
-        InteractionMode::AcceptEdits => "Auto-accept — file edits approved automatically, commands still prompt",
-        InteractionMode::BypassPermissions => "⚠ BYPASS — all tool prompts skipped. Use with caution!",
+        InteractionMode::Plan => {
+            "Plan mode — read-only tools only, no file edits. Model will plan before acting."
+        }
+        InteractionMode::AcceptEdits => {
+            "Auto-accept — file edits approved automatically, commands still prompt"
+        }
+        InteractionMode::BypassPermissions => {
+            "⚠ BYPASS — all tool prompts skipped. Use with caution!"
+        }
         InteractionMode::Debug => "Debug — verbose output enabled",
     }
 }
@@ -1555,10 +1762,13 @@ async fn run_event_loop(
                     InputAction::CycleMode => {
                         let new_mode = app.mode.next();
                         apply_mode(app, new_mode);
-                        let mut msg = format!("{} — {}", app.mode.label(), mode_description(app.mode));
+                        let mut msg =
+                            format!("{} — {}", app.mode.label(), mode_description(app.mode));
                         if new_mode == InteractionMode::BypassPermissions {
                             msg.push_str("\n\n  ⚠ WARNING: All tool confirmations are bypassed!");
-                            msg.push_str("\n  This means commands will execute without asking you first.");
+                            msg.push_str(
+                                "\n  This means commands will execute without asking you first.",
+                            );
                             msg.push_str("\n  Press Shift+Tab again to move to Debug mode, or twice more to return to Chat.");
                         }
                         app.chat_messages.push(ChatMessage {
@@ -1573,7 +1783,11 @@ async fn run_event_loop(
                             apply_mode(app, new_mode);
                             app.chat_messages.push(ChatMessage {
                                 role: ChatRole::System,
-                                text: format!("{} — {}", app.mode.label(), mode_description(app.mode)),
+                                text: format!(
+                                    "{} — {}",
+                                    app.mode.label(),
+                                    mode_description(app.mode)
+                                ),
                             });
                             // Still send the message to the LLM for context
                         }
@@ -1593,7 +1807,8 @@ async fn run_event_loop(
                             SlashResult::RunLogin => {
                                 // Leave TUI, run interactive login, re-enter TUI
                                 restore_terminal(terminal)?;
-                                let result = crate::auth::interactive_login_for_provider(None).await;
+                                let result =
+                                    crate::auth::interactive_login_for_provider(None).await;
                                 *terminal = setup_terminal()?;
                                 match result {
                                     Ok(()) => {

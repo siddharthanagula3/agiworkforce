@@ -27,10 +27,7 @@ impl HistoryEntry {
 
     fn append_inner(home: &Path, entry: &HistoryEntry) -> Result<()> {
         let path = home.join("history.jsonl");
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)?;
+        let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
         let json = serde_json::to_string(entry)?;
         writeln!(file, "{}", json)?;
         Ok(())

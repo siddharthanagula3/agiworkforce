@@ -224,8 +224,29 @@ export function useMessageSender(config: UseMessageSenderConfig): {
 
     // Only perform routing if user selected an auto mode
     const routingResult = isExplicitModelSelection
-      ? { modelId: currentModel, reason: `User selected: ${currentModel}`, wasRouted: false }
+      ? {
+          modelId: currentModel,
+          taskType: 'general' as const,
+          reason: `User selected: ${currentModel}`,
+          wasRouted: false,
+        }
       : getModelForRequest(currentModel, content, hasImages);
+
+    const routedModelMetadata = routingResult.wasRouted
+      ? getModelMetadata(routingResult.modelId)
+      : null;
+
+    useModelStore.getState().setLastRoutingDecision(
+      routingResult.wasRouted
+        ? {
+            routedModelId: routingResult.modelId,
+            taskType: routingResult.taskType,
+            reason: routingResult.reason,
+            wasRouted: true,
+            timestamp: Date.now(),
+          }
+        : null,
+    );
 
     // Risk detection runs in ALL modes - dangerous patterns should always be flagged
     // The undo-based safety philosophy handles reversibility AFTER actions, but we still
@@ -306,7 +327,9 @@ export function useMessageSender(config: UseMessageSenderConfig): {
     // If routing occurred, use the routed model. Otherwise use the original selection.
     const enrichedOptions: SendOptions = {
       ...options,
-      providerOverride: options.providerOverride ?? providerForMessage ?? llmConfig.defaultProvider,
+      providerOverride: routingResult.wasRouted
+        ? (routedModelMetadata?.provider ?? providerForMessage ?? llmConfig.defaultProvider)
+        : (options.providerOverride ?? providerForMessage ?? llmConfig.defaultProvider),
       // Use routed model if routing occurred, otherwise use the explicit model override
       modelOverride: routingResult.wasRouted
         ? routingResult.modelId
