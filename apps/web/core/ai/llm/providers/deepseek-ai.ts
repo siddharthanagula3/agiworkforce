@@ -363,7 +363,7 @@ export class DeepSeekProvider {
     return {
       chat: ['deepseek-chat'],
       reasoning: ['deepseek-reasoner'],
-      coding: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
+      coding: ['deepseek-chat', 'deepseek-reasoner'],
       tools: ['deepseek-chat', 'deepseek-reasoner'],
     };
   }

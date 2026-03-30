@@ -375,11 +375,15 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should detect xAI provider from grok model', async () => {
-      // grok-4-fast-non-reasoning is in ECONOMY_MODELS
+      mockGetSubscription.mockResolvedValueOnce({
+        id: 'sub_123',
+        status: 'active',
+        plan_tier: 'max',
+      });
       mockGetProviderFromModel.mockReturnValue('xai');
       mockSendRequest.mockResolvedValue({
         content: 'Response from Grok',
-        model: 'grok-4-fast-non-reasoning',
+        model: 'grok-4',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -392,17 +396,17 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'grok-4-fast-non-reasoning',
+          model: 'grok-4',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4-fast-non-reasoning');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'xai',
-        expect.objectContaining({ model: 'grok-4-fast-non-reasoning' }),
+        expect.objectContaining({ model: 'grok-4' }),
       );
     });
 
