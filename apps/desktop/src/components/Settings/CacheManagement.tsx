@@ -31,24 +31,33 @@ export const CacheManagement: React.FC = () => {
 
   // Load cache statistics on component mount
   useEffect(() => {
-    loadStats();
+    void loadStats();
   }, []);
 
-  const loadStats = async () => {
+  const loadStats = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       setError(null);
-      const [statsData, analyticsData] = await Promise.all([
-        CacheService.getStats(),
-        CacheService.getAnalytics(),
-      ]);
+      const statsData = await CacheService.getStats();
       setStats(statsData);
-      setAnalytics(analyticsData);
+
+      void (async () => {
+        try {
+          const analyticsData = await CacheService.getAnalytics();
+          setAnalytics(analyticsData);
+        } catch (analyticsError) {
+          console.error('Error loading cache analytics:', analyticsError);
+        }
+      })();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load cache stats');
       console.error('Error loading cache stats:', err);
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -59,7 +68,7 @@ export const CacheManagement: React.FC = () => {
       toast.success('Cache cleared', {
         description: 'All cache entries have been removed.',
       });
-      await loadStats();
+      void loadStats(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to clear cache';
       setError(message);
@@ -76,9 +85,15 @@ export const CacheManagement: React.FC = () => {
     try {
       setLoading(true);
       await CacheService.clearByType(type);
-      await loadStats();
+      toast.success('Cache cleared', {
+        description: `The ${type} cache has been removed.`,
+      });
+      void loadStats(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to clear ${type} cache`);
+      toast.error('Clear failed', {
+        description: err instanceof Error ? err.message : `Failed to clear ${type} cache`,
+      });
       console.error(`Error clearing ${type} cache:`, err);
     } finally {
       setLoading(false);
@@ -92,7 +107,7 @@ export const CacheManagement: React.FC = () => {
       toast.success('Provider cache cleared', {
         description: `Cache for ${provider} has been removed.`,
       });
-      await loadStats();
+      void loadStats(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : `Failed to clear cache for ${provider}`;
       toast.error('Clear failed', {
@@ -111,7 +126,7 @@ export const CacheManagement: React.FC = () => {
       toast.success('Cache pruned', {
         description: `Successfully removed ${pruned} expired cache entries`,
       });
-      await loadStats();
+      void loadStats(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to prune expired cache');
       toast.error('Prune failed', {
@@ -159,7 +174,7 @@ export const CacheManagement: React.FC = () => {
         <p>Failed to load cache statistics. Please try again.</p>
         <button
           type="button"
-          onClick={loadStats}
+          onClick={() => void loadStats()}
           className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
           Retry
@@ -296,7 +311,7 @@ export const CacheManagement: React.FC = () => {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={loadStats}
+            onClick={() => void loadStats()}
             disabled={loading}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
           >
@@ -341,7 +356,10 @@ export const CacheManagement: React.FC = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => void handleClearByType('llm')}
+              onClick={() => {
+                setClearLLMDialogOpen(false);
+                void handleClearByType('llm');
+              }}
               className="bg-destructive hover:bg-destructive/90"
             >
               Clear LLM Cache
@@ -367,7 +385,10 @@ export const CacheManagement: React.FC = () => {
             <AlertDialogAction
               onClick={() => {
                 if (clearProviderDialog !== null) {
-                  void handleClearByProvider(clearProviderDialog);
+                  const provider = clearProviderDialog;
+                  setClearProviderDialog(null);
+                  void handleClearByProvider(provider);
+                  return;
                 }
                 setClearProviderDialog(null);
               }}
@@ -380,7 +401,12 @@ export const CacheManagement: React.FC = () => {
       </AlertDialog>
 
       {/* Confirmation dialog for clearing all cache */}
-      <AlertDialog open={clearAllDialogOpen} onOpenChange={setClearAllDialogOpen}>
+      <AlertDialog
+        open={clearAllDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) setClearAllDialogOpen(false);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Clear all cache?</AlertDialogTitle>
@@ -392,7 +418,10 @@ export const CacheManagement: React.FC = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => void handleClearAll()}
+              onClick={() => {
+                setClearAllDialogOpen(false);
+                void handleClearAll();
+              }}
               className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-600"
             >
               Clear All Cache

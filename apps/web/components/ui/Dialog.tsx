@@ -38,12 +38,21 @@ interface DialogContentProps extends React.ComponentPropsWithoutRef<
   typeof DialogPrimitive.Content
 > {
   ref?: React.Ref<React.ElementRef<typeof DialogPrimitive.Content>>;
+  closeLabel?: string;
+  overlayProps?: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>;
 }
 
-function DialogContent({ className, children, ref, ...props }: DialogContentProps) {
+function DialogContent({
+  className,
+  children,
+  ref,
+  closeLabel = 'Close dialog',
+  overlayProps,
+  ...props
+}: DialogContentProps) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay {...overlayProps} />
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
@@ -53,9 +62,12 @@ function DialogContent({ className, children, ref, ...props }: DialogContentProp
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:pointer-events-none">
+        <DialogPrimitive.Close
+          aria-label={closeLabel}
+          className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:pointer-events-none"
+        >
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{closeLabel}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>

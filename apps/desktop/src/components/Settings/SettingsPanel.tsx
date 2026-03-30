@@ -634,7 +634,7 @@ function AppModeSection() {
     <div>
       <h3 className="text-lg font-semibold mb-1">Mode</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Choose between fully local (offline, free) or cloud-connected (Pro features).
+        Choose between fully local (offline) or cloud-connected.
       </p>
 
       {/* Toggle buttons */}
@@ -666,7 +666,6 @@ function AppModeSection() {
         >
           <Cloud className="h-4 w-4 shrink-0" />
           <span>Cloud</span>
-          <span className="text-xs opacity-70">(Pro)</span>
         </button>
       </div>
 

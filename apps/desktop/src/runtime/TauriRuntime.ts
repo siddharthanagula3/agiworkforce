@@ -26,6 +26,9 @@ import type {
 import type { Conversation, ChatMessage } from '@agiworkforce/chat';
 import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
+import { useUnifiedAuthStore } from '../stores/auth';
+import { useAppModeStore } from '../stores/appModeStore';
+import { useChatStore as useDesktopChatStore, uuidToDbId } from '../stores/chat/chatStore';
 
 // ---------------------------------------------------------------------------
 // Raw Tauri event payload shapes (snake_case from Rust serde serialisation)
@@ -161,6 +164,41 @@ export class TauriRuntime implements ChatRuntime {
   // chunks to all registered onStream callbacks.
   // ---------------------------------------------------------------------------
 
+  private getCurrentUserId(): string {
+    return useUnifiedAuthStore.getState().user?.id ?? '';
+  }
+
+  private async ensureBackendConversation(
+    frontendConversationId: string,
+    content: string,
+  ): Promise<number> {
+    const existingId = uuidToDbId(frontendConversationId);
+    if (typeof existingId === 'number' && existingId > 0) {
+      return existingId;
+    }
+
+    const userId = this.getCurrentUserId();
+    if (!userId) {
+      throw new Error('Please sign in to send messages.');
+    }
+
+    const raw = await invoke<RawConversation>('chat_create_conversation', {
+      request: {
+        title: content.trim().slice(0, 50) || 'New Conversation',
+        userId,
+        projectId: null,
+      },
+    });
+
+    const dbId = Number(raw.id);
+    if (!Number.isFinite(dbId) || dbId <= 0) {
+      throw new Error('Failed to create a backend conversation.');
+    }
+
+    useDesktopChatStore.getState().linkConversationId(frontendConversationId, dbId);
+    return dbId;
+  }
+
   async sendMessage(
     conversationId: string,
     content: string,
@@ -232,27 +270,25 @@ export class TauriRuntime implements ChatRuntime {
 
   private async *_streamMessage(params: SendMessageParams): AsyncIterable<StreamChunk> {
     const { conversationId, content, model, attachments, signal } = params;
+    const frontendMessageId = crypto.randomUUID();
+    const userId = this.getCurrentUserId();
 
-    // Mark this conversation as not stopped before we start
-    this._stopFlags.set(conversationId, false);
+    if (!userId) {
+      yield { type: 'error', content: 'Please sign in to send messages.' };
+      return;
+    }
 
-    // Kick off the Rust-side stream. The response is a lightweight ack
-    // (status: 'streaming_via_cloud' or a message id); the real data
-    // arrives via Tauri events.
+    let backendConversationId: number;
     try {
-      await invoke('chat_send_message', {
-        request: {
-          content,
-          modelOverride: model,
-          conversationId,
-          attachments: attachments ?? [],
-        },
-      });
+      backendConversationId = await this.ensureBackendConversation(conversationId, content);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       yield { type: 'error', content: message };
       return;
     }
+
+    // Mark this conversation as not stopped before we start
+    this._stopFlags.set(conversationId, false);
 
     // Yield chunks by listening to Tauri events. We use a promise queue so
     // the async generator can pause waiting for the next event without
@@ -300,14 +336,22 @@ export class TauriRuntime implements ChatRuntime {
     // chat:stream-chunk — incremental text delta
     await registerListener<StreamChunkPayload>('chat:stream-chunk', (payload) => {
       const convId = String(payload.conversation_id);
-      if (convId !== conversationId && payload.conversation_id !== conversationId) return;
+      if (
+        convId !== String(backendConversationId) &&
+        payload.conversation_id !== backendConversationId
+      )
+        return;
       push({ type: 'text', content: payload.delta });
     });
 
     // chat:stream-end — stream finished normally
     await registerListener<StreamEndPayload>('chat:stream-end', (payload) => {
       const convId = String(payload.conversation_id);
-      if (convId !== conversationId && payload.conversation_id !== conversationId) return;
+      if (
+        convId !== String(backendConversationId) &&
+        payload.conversation_id !== backendConversationId
+      )
+        return;
       push({ type: 'done' });
       push(null);
     });
@@ -315,7 +359,11 @@ export class TauriRuntime implements ChatRuntime {
     // chat:stream-error — stream finished with error
     await registerListener<StreamErrorPayload>('chat:stream-error', (payload) => {
       const convId = String(payload.conversation_id);
-      if (convId !== conversationId && payload.conversation_id !== conversationId) return;
+      if (
+        convId !== String(backendConversationId) &&
+        payload.conversation_id !== backendConversationId
+      )
+        return;
       push({ type: 'error', content: payload.error });
       push(null);
     });
@@ -364,6 +412,27 @@ export class TauriRuntime implements ChatRuntime {
       });
     }
 
+    // Kick off the Rust-side stream after listeners are ready.
+    try {
+      await invoke('chat_send_message', {
+        request: {
+          content,
+          userId,
+          modelOverride: model,
+          conversationId: backendConversationId,
+          attachments: attachments ?? [],
+          stream: true,
+          frontendMessageId,
+          preferCloudCredits: useAppModeStore.getState().mode === 'cloud',
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      cleanup();
+      yield { type: 'error', content: message };
+      return;
+    }
+
     try {
       while (true) {
         // Check stop flag on each iteration
@@ -384,16 +453,19 @@ export class TauriRuntime implements ChatRuntime {
 
   stopGeneration(conversationId: string): void {
     this._stopFlags.set(conversationId, true);
+    const backendConversationId = uuidToDbId(conversationId);
     // Fire-and-forget: signal the Rust backend to halt the stream
-    void invoke('chat_stop_generation', { conversationId }).catch(() => {
+    void invoke('chat_stop_generation', { conversationId: backendConversationId }).catch(() => {
       // Ignore errors — the stop flag already prevents further yields
     });
   }
 
   async createConversation(title?: string, projectId?: string): Promise<Conversation> {
+    const userId = this.getCurrentUserId();
     const raw = await invoke<RawConversation>('chat_create_conversation', {
       request: {
         title: title ?? 'New Conversation',
+        userId,
         projectId: projectId ?? null,
       },
     });
@@ -401,32 +473,40 @@ export class TauriRuntime implements ChatRuntime {
   }
 
   async loadConversations(): Promise<Conversation[]> {
-    const raw = await invoke<RawConversation[]>('chat_get_conversations');
+    const raw = await invoke<RawConversation[]>('chat_get_conversations', {
+      userId: this.getCurrentUserId(),
+    });
     return Array.isArray(raw) ? raw.map(mapConversation) : [];
   }
 
   async loadMessages(conversationId: string): Promise<ChatMessage[]> {
-    const raw = await invoke<RawMessage[]>('chat_get_messages', { conversationId });
+    const raw = await invoke<RawMessage[]>('chat_get_messages', {
+      conversationId: uuidToDbId(conversationId),
+      userId: this.getCurrentUserId(),
+    });
     return Array.isArray(raw) ? raw.map(mapMessage) : [];
   }
 
   async deleteConversation(id: string): Promise<void> {
-    await invoke('chat_delete_conversation', { conversationId: id });
+    await invoke('chat_delete_conversation', {
+      id: uuidToDbId(id),
+      userId: this.getCurrentUserId(),
+    });
   }
 
   async archiveConversation(id: string, userId?: string, archived?: boolean): Promise<void> {
     await invoke('chat_archive_conversation', {
-      conversationId: id,
-      userId: userId ?? '',
+      conversationId: uuidToDbId(id),
+      userId: userId ?? this.getCurrentUserId(),
       archived: archived ?? true,
     });
   }
 
   async renameConversation(id: string, title: string, userId?: string): Promise<void> {
     await invoke('chat_update_conversation_title', {
-      conversationId: id,
+      conversationId: uuidToDbId(id),
       title,
-      userId: userId ?? '',
+      userId: userId ?? this.getCurrentUserId(),
     });
   }
 

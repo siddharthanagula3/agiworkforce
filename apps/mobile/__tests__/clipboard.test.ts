@@ -50,9 +50,15 @@ const { copyToClipboard } = require('../lib/clipboard') as typeof import('../lib
 
 describe('copyToClipboard', () => {
   const TEXT = 'hello clipboard';
+  let consoleWarnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
 
   afterEach(() => {
     jest.clearAllMocks();
+    consoleWarnSpy.mockRestore();
   });
 
   // -------------------------------------------------------------------------

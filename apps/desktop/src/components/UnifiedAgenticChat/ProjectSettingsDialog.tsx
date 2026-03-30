@@ -42,7 +42,6 @@ import {
   Upload,
   Brain,
   Database,
-  Cpu,
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -57,8 +56,6 @@ import { useChatStore, type ConversationSummary } from '../../stores/chat/chatSt
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { MemoryManager } from '../Memory/MemoryManager';
-import { getAllModels } from '../../constants/llm';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 
 // Supported knowledge base file extensions
 const SUPPORTED_KB_EXTENSIONS = [
@@ -136,8 +133,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [conversationIds, setConversationIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
-  const [autoSaveMemories, setAutoSaveMemories] = useState(true);
-  const [preferredModel, setPreferredModel] = useState<string>('');
   const [knowledgeBaseFiles, setKnowledgeBaseFiles] = useState<KnowledgeBaseFile[]>([]);
   const [isUploadingKb, setIsUploadingKb] = useState(false);
   const kbDropZoneRef = useRef<HTMLDivElement>(null);
@@ -150,8 +145,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
 
   // Reset form when dialog opens/closes or project identity changes (projectId only to avoid loop from new object refs)
   const projectId = project?.id ?? null;
-  // BUG-PS-01: load project settings (including autoSaveMemories) from store on open
-  const getProjectSettings = useProjectStore((state) => state.getProjectSettings);
   useEffect(() => {
     if (open) {
       if (mode === 'edit' && project != null) {
@@ -162,11 +155,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setIcon(project.icon || DEFAULT_ICON);
         setFiles(project.files);
         setConversationIds(project.conversationIds);
-        setPreferredModel(project.preferredModel ?? '');
         setKnowledgeBaseFiles(project.knowledgeBaseFiles ?? []);
-        // BUG-PS-01: load persisted autoSaveMemories from project settings
-        const settings = getProjectSettings(project.id);
-        setAutoSaveMemories(settings.autoSaveMemories ?? false);
       } else {
         // Reset for create mode
         setName('');
@@ -176,17 +165,12 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setIcon(DEFAULT_ICON);
         setFiles([]);
         setConversationIds([]);
-        setPreferredModel('');
         setKnowledgeBaseFiles([]);
-        setAutoSaveMemories(false);
       }
       setActiveTab('general');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, projectId]);
-
-  // BUG-PS-01: also grab updateProjectSettings so autoSaveMemories can be persisted
-  const updateProjectSettings = useProjectStore((state) => state.updateProjectSettings);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -196,7 +180,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
     setIsSaving(true);
     try {
       if (mode === 'create') {
-        const newProject = await createProject({
+        await createProject({
           name: name.trim(),
           description: description.trim(),
           customInstructions: customInstructions.trim(),
@@ -205,11 +189,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           files,
           conversationIds,
           isArchived: false,
-          preferredModel: preferredModel || undefined,
           knowledgeBaseFiles,
         });
-        // BUG-PS-01: persist autoSaveMemories for newly created project
-        await updateProjectSettings(newProject.id, { autoSaveMemories });
       } else if (project) {
         await updateProject(project.id, {
           name: name.trim(),
@@ -219,11 +200,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           icon,
           files,
           conversationIds,
-          preferredModel: preferredModel || undefined,
           knowledgeBaseFiles,
         });
-        // BUG-PS-01: persist autoSaveMemories for edited project
-        await updateProjectSettings(project.id, { autoSaveMemories });
       }
       onOpenChange(false);
     } catch (error) {
@@ -485,34 +463,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                   })}
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <Label className="text-foreground flex items-center gap-2">
-                  <Cpu className="w-4 h-4" />
-                  Preferred Model
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  When set, this model will be auto-selected when entering a conversation in this
-                  project. Leave blank to use the global default.
-                </p>
-                <Select value={preferredModel} onValueChange={setPreferredModel}>
-                  <SelectTrigger className="bg-muted border-border text-foreground">
-                    <SelectValue placeholder="Use global default" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border max-h-60">
-                    <SelectItem value="" className="text-foreground">
-                      Use global default
-                    </SelectItem>
-                    {getAllModels()
-                      .filter((m) => m.id !== 'auto' && !m.id.startsWith('auto:'))
-                      .map((m) => (
-                        <SelectItem key={m.id} value={m.id} className="text-foreground">
-                          {m.name ?? m.id}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </TabsContent>
 
             {/* Instructions Tab */}
@@ -676,34 +626,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             {/* Memory Tab */}
             <TabsContent value="memory" className="space-y-4">
               <div className="space-y-4">
-                {/* Auto-save Toggle */}
-                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border">
-                  <div className="flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-blue-400" />
-                    <div className="flex flex-col">
-                      <Label className="text-foreground font-medium">Auto-save Memories</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Automatically save architectural decisions and important context
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAutoSaveMemories(!autoSaveMemories)}
-                    className={cn(
-                      'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                      autoSaveMemories ? 'bg-blue-600' : 'bg-accent',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-                        autoSaveMemories ? 'translate-x-6' : 'translate-x-1',
-                      )}
-                    />
-                  </button>
-                </div>
-
                 {/* Memory Manager */}
                 <div className="border border-border rounded-lg overflow-hidden">
                   <MemoryManager

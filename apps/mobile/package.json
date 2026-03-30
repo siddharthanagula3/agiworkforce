@@ -12,8 +12,8 @@
     "build:prod": "eas build --profile production",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --cache --cache-strategy content --cache-location .cache/eslint",
-    "test": "jest",
-    "test:local": "jest"
+    "test": "jest --runInBand --detectOpenHandles --openHandlesTimeout=5000",
+    "test:local": "jest --runInBand --detectOpenHandles --openHandlesTimeout=5000"
   },
   "dependencies": {
     "@agiworkforce/types": "workspace:*",

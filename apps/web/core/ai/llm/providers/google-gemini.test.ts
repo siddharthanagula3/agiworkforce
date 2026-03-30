@@ -4,6 +4,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  DEFAULT_GOOGLE_MODEL,
+  SUPPORTED_GOOGLE_AUDIO_MODELS,
+  SUPPORTED_GOOGLE_IMAGE_MODELS,
+  SUPPORTED_GOOGLE_MODELS,
+  SUPPORTED_GOOGLE_VIDEO_MODELS,
+} from '@shared/config/supported-models';
 import { GoogleProvider, GoogleError, GoogleMessage } from './google-gemini';
 
 // Mock external dependencies
@@ -65,7 +72,7 @@ describe('GoogleProvider', () => {
     it('should create provider with default configuration', () => {
       const config = provider.getConfig();
 
-      expect(config.model).toBe('gemini-3.1-pro-preview');
+      expect(config.model).toBe(DEFAULT_GOOGLE_MODEL);
       expect(config.maxTokens).toBe(4096);
       expect(config.temperature).toBe(0.7);
       expect(config.systemPrompt).toBe('You are a helpful AI assistant.');
@@ -121,30 +128,25 @@ describe('GoogleProvider', () => {
     it('should return available models', () => {
       const models = GoogleProvider.getAvailableModels();
 
-      expect(models).toContain('gemini-2.0-flash');
-      expect(models).toContain('gemini-3.1-pro-preview');
-      expect(models).toContain('gemini-3-pro-preview');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_GOOGLE_MODELS]);
     });
 
     it('should return image models', () => {
       const models = GoogleProvider.getImageModels();
 
-      expect(models).toContain('imagen-4.0-generate-001');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_GOOGLE_IMAGE_MODELS]);
     });
 
     it('should return video models', () => {
       const models = GoogleProvider.getVideoModels();
 
-      expect(models).toContain('veo-3.1-generate-preview');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_GOOGLE_VIDEO_MODELS]);
     });
 
     it('should return audio models', () => {
       const models = GoogleProvider.getAudioModels();
 
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_GOOGLE_AUDIO_MODELS]);
     });
   });
 
@@ -172,7 +174,7 @@ describe('GoogleProvider', () => {
       expect(response.usage?.promptTokens).toBe(10);
       expect(response.usage?.completionTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
-      expect(response.model).toBe('gemini-3.1-pro-preview');
+      expect(response.model).toBe(DEFAULT_GOOGLE_MODEL);
     });
 
     it('should handle response with candidates format', async () => {
