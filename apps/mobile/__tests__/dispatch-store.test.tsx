@@ -14,17 +14,11 @@
 // Mocks — declared before imports
 // ---------------------------------------------------------------------------
 
-const mockMmkvStorage: Record<string, string> = {};
-
 jest.mock('../lib/mmkv', () => ({
   mmkvStorage: {
-    getItem: jest.fn((key: string) => mockMmkvStorage[key] ?? null),
-    setItem: jest.fn((key: string, value: string) => {
-      mockMmkvStorage[key] = value;
-    }),
-    removeItem: jest.fn((key: string) => {
-      delete mockMmkvStorage[key];
-    }),
+    getItem: jest.fn().mockReturnValue(null),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
   },
 }));
 
@@ -43,6 +37,8 @@ jest.mock('../stores/connectionStore', () => ({
 // ---------------------------------------------------------------------------
 
 import { useDispatchStore, type DispatchMessage } from '../stores/dispatchStore';
+
+let consoleWarnSpy: jest.SpyInstance;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -72,10 +68,13 @@ function makeMessage(overrides: Partial<DispatchMessage> = {}): DispatchMessage 
 
 describe('dispatchStore', () => {
   beforeEach(() => {
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     resetStore();
     jest.clearAllMocks();
-    // Clear mock MMKV
-    Object.keys(mockMmkvStorage).forEach((k) => delete mockMmkvStorage[k]);
+  });
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore();
   });
 
   // ---- addMessage ----

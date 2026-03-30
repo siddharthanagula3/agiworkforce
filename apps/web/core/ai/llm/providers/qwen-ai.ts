@@ -361,10 +361,10 @@ export class QwenProvider {
    */
   static getModelsByCapability(): Record<string, string[]> {
     return {
-      chat: ['qwen3-max', 'qwen-plus', 'qwen-flash'],
-      coding: ['qwen3-coder-plus', 'qwen3-coder-flash'],
-      vision: ['qwen3-vl-plus'],
-      reasoning: ['qwq-plus', 'qwen3-max'],
+      chat: ['qwen-max', 'qwen-flash', 'qwen-turbo'],
+      coding: ['qwen-coder-plus', 'qwen-coder-flash'],
+      vision: [],
+      reasoning: ['qwen-max'],
     };
   }
 

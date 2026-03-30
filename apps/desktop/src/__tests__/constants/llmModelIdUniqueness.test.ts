@@ -7,14 +7,19 @@
  * This test pins the constraint so any future duplicate is caught immediately.
  */
 import { describe, it, expect } from 'vitest';
-import { MODEL_METADATA } from '../../constants/llm';
+import { modelsCatalogJson } from '@agiworkforce/types';
+import { MODEL_ID_ALIASES, MODEL_METADATA, normalizeModelId } from '../../constants/llm';
 
 describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
-  it('all models with an apiModelId have unique values across the catalog', () => {
+  const canonicalCatalogEntries = Object.entries(
+    modelsCatalogJson.models as Record<string, { id: string; apiModelId?: string }>,
+  ).filter(([modelId, metadata]) => metadata.id === modelId);
+
+  it('all canonical models with an apiModelId have unique values across the catalog', () => {
     const seen = new Map<string, string>(); // apiModelId → model id
     const duplicates: Array<{ apiModelId: string; first: string; duplicate: string }> = [];
 
-    for (const [modelId, metadata] of Object.entries(MODEL_METADATA)) {
+    for (const [modelId, metadata] of canonicalCatalogEntries) {
       if (!metadata.apiModelId) continue; // auto-mode entries have no apiModelId
 
       if (seen.has(metadata.apiModelId)) {
@@ -37,10 +42,17 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
     }
   });
 
-  it('all model metadata entries have a non-empty id field', () => {
-    for (const [key, metadata] of Object.entries(MODEL_METADATA)) {
+  it('all canonical model metadata entries have a non-empty id field', () => {
+    for (const [modelId, metadata] of canonicalCatalogEntries) {
       expect(metadata.id).toBeTruthy();
-      expect(metadata.id).toBe(key);
+      expect(metadata.id).toBe(modelId);
+    }
+  });
+
+  it('all model aliases resolve to canonical metadata entries', () => {
+    for (const [alias, canonicalId] of Object.entries(MODEL_ID_ALIASES)) {
+      expect(normalizeModelId(alias)).toBe(canonicalId);
+      expect(MODEL_METADATA[alias]?.id).toBe(canonicalId);
     }
   });
 
@@ -92,7 +104,7 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
   it('no model apiModelId contains phantom model names from the audit', () => {
     const phantomNames = ['gemini-3-deep-think', 'qwen-coder'];
 
-    for (const [modelId, metadata] of Object.entries(MODEL_METADATA)) {
+    for (const [modelId, metadata] of canonicalCatalogEntries) {
       if (!metadata.apiModelId) continue;
 
       for (const phantom of phantomNames) {

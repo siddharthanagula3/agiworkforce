@@ -619,7 +619,7 @@ pub async fn shortcuts_reset(
     shortcuts.clear();
 
     let defaults = ShortcutsState::with_defaults();
-    let default_shortcuts = defaults.shortcuts.blocking_lock();
+    let default_shortcuts = defaults.shortcuts.lock().await;
 
     for (id, shortcut) in default_shortcuts.iter() {
         shortcuts.insert(id.clone(), shortcut.clone());
@@ -660,7 +660,7 @@ pub async fn shortcuts_check_key(
 #[tauri::command]
 pub async fn shortcuts_get_defaults() -> Result<Vec<Shortcut>, String> {
     let defaults = ShortcutsState::with_defaults();
-    let shortcuts = defaults.shortcuts.blocking_lock();
+    let shortcuts = defaults.shortcuts.lock().await;
     Ok(shortcuts.values().cloned().collect())
 }
 
