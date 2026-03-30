@@ -50,8 +50,6 @@ export interface Project {
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
-  /** Preferred model ID for conversations in this project */
-  preferredModel?: string;
   /** Knowledge base files with extracted content for context injection */
   knowledgeBaseFiles?: KnowledgeBaseFile[];
 }
@@ -61,7 +59,6 @@ export interface ProjectSettings {
   defaultProvider?: string;
   contextWindowSize?: number;
   autoArchiveAfterDays?: number;
-  autoSaveMemories?: boolean;
 }
 
 /** Mirrors the Rust ProjectContext struct (camelCase via serde rename_all) */

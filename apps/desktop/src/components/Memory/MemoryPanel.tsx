@@ -18,6 +18,7 @@ import { Brain, Download, Pause, Play, Upload, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { save, open as openFilePicker } from '@tauri-apps/plugin-dialog';
 import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
+import { useShallow } from 'zustand/react/shallow';
 
 import { Switch } from '@/components/ui/Switch';
 import { Label } from '@/components/ui/Label';
@@ -28,6 +29,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip
 import { cn } from '@/lib/utils';
 import { isTauri } from '@/lib/tauri-mock';
 import { exportToJson, importFromJsonString } from '@/api/memory';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { MemoryManager } from './MemoryManager';
 
 // ---------------------------------------------------------------------------
@@ -83,6 +85,12 @@ export interface MemoryPanelProps {
 export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelProps) {
   const [settings, setSettings] = useState<MemoryPanelSettings>(readMemoryPanelSettings);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const { autoSaveMemories, setAutoSaveMemories } = useSettingsStore(
+    useShallow((state) => ({
+      autoSaveMemories: state.chatPreferences.autoSaveMemories ?? false,
+      setAutoSaveMemories: state.setAutoSaveMemories,
+    })),
+  );
 
   // Re-read from localStorage when the panel mounts (another tab may have
   // changed the settings while this component was unmounted)
@@ -336,6 +344,25 @@ export const MemoryPanel = memo(function MemoryPanel({ className }: MemoryPanelP
             </p>
           </div>
         )}
+
+        <div className="flex items-center justify-between gap-4 p-3 bg-muted/50 rounded-lg border border-border">
+          <div className="flex items-start gap-3">
+            <Brain className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
+            <div>
+              <Label htmlFor="memory-auto-save" className="font-medium cursor-pointer">
+                Auto-save memories
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Automatically save detected decisions and important assistant context
+              </p>
+            </div>
+          </div>
+          <Switch
+            id="memory-auto-save"
+            checked={autoSaveMemories}
+            onCheckedChange={(val) => void setAutoSaveMemories(val)}
+          />
+        </div>
       </div>
 
       <Separator />

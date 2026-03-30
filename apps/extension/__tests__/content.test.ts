@@ -152,6 +152,8 @@ function dispatchMessage(msg: Record<string, unknown>): Promise<unknown> {
 beforeEach(() => {
   clearBody();
   vi.clearAllMocks();
+  window.scrollTo = vi.fn();
+  window.scrollBy = vi.fn();
   chromeMock.runtime.sendMessage.mockResolvedValue({ success: true });
   chromeMock.runtime.lastError = undefined;
 });

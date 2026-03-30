@@ -46,7 +46,7 @@ describe('KeyboardShortcutsDialog', () => {
 
     it('shows the "Keyboard Shortcuts" heading', () => {
       render(<KeyboardShortcutsDialog {...baseProps} />);
-      expect(screen.getByText('Keyboard Shortcuts')).toBeInTheDocument();
+      expect(document.getElementById('shortcuts-title')).toHaveTextContent('Keyboard Shortcuts');
     });
   });
 
@@ -55,7 +55,7 @@ describe('KeyboardShortcutsDialog', () => {
   describe('shortcut groups', () => {
     it('renders a Navigation group', () => {
       render(<KeyboardShortcutsDialog {...baseProps} />);
-      expect(screen.getByText(/navigation/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /navigation/i })).toBeInTheDocument();
     });
 
     it('renders a Chat group', () => {
@@ -65,7 +65,7 @@ describe('KeyboardShortcutsDialog', () => {
 
     it('renders an Appearance group', () => {
       render(<KeyboardShortcutsDialog {...baseProps} />);
-      expect(screen.getByText(/appearance/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /appearance/i })).toBeInTheDocument();
     });
   });
 
@@ -98,8 +98,8 @@ describe('KeyboardShortcutsDialog', () => {
     });
 
     it('displays kbd elements for each shortcut key', () => {
-      const { container } = render(<KeyboardShortcutsDialog {...baseProps} />);
-      const kbds = container.querySelectorAll('kbd');
+      render(<KeyboardShortcutsDialog {...baseProps} />);
+      const kbds = document.body.querySelectorAll('kbd');
       // There should be multiple kbd elements (at least one per shortcut key)
       expect(kbds.length).toBeGreaterThan(5);
     });
@@ -221,7 +221,7 @@ describe('KeyboardShortcutsDialog', () => {
 
     it('title element has correct id', () => {
       render(<KeyboardShortcutsDialog {...baseProps} />);
-      const title = screen.getByText('Keyboard Shortcuts');
+      const title = document.getElementById('shortcuts-title');
       expect(title).toHaveAttribute('id', 'shortcuts-title');
     });
   });

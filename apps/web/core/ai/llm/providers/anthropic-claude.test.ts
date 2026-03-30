@@ -148,19 +148,20 @@ describe('AnthropicProvider', () => {
     it('should return computer use models', () => {
       const models = AnthropicProvider.getComputerUseModels();
 
-      expect(models).toContain('claude-sonnet-4-6');
-      expect(models).toContain('claude-haiku-4-5-20251001');
-      expect(models).toContain('claude-opus-4-5-20251101');
+      expect(models).toContain('claude-opus-4.6');
+      expect(models).toContain('claude-sonnet-4.6');
+      expect(models).toContain('claude-sonnet-4.5');
+      expect(models).not.toContain('claude-haiku-4.5');
     });
 
     it('should return model aliases', () => {
       const aliases = AnthropicProvider.getModelAliases();
 
-      expect(aliases['claude-opus-4-6']).toBe('claude-opus-4-6');
-      expect(aliases['claude-sonnet-4-6']).toBe('claude-sonnet-4-6');
-      expect(aliases['claude-opus-4-5']).toBe('claude-opus-4-5-20251101');
-      expect(aliases['claude-sonnet-4-5']).toBe('claude-sonnet-4-5-20250929');
-      expect(aliases['claude-haiku-4-5']).toBe('claude-haiku-4-5-20251001');
+      expect(aliases['claude-opus-4-6']).toBe('claude-opus-4.6');
+      expect(aliases['claude-sonnet-4-6']).toBe('claude-sonnet-4.6');
+      expect(aliases['claude-opus-4-5']).toBe('claude-opus-4-5');
+      expect(aliases['claude-sonnet-4-5']).toBe('claude-sonnet-4.5');
+      expect(aliases['claude-haiku-4-5']).toBe('claude-haiku-4.5');
     });
   });
 

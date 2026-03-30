@@ -1767,8 +1767,10 @@ async fn run_nonstreaming_chat(
 
                 let stats = compute_or_skip_stats(&runtime.db, conversation.id, flags.incognito)?;
 
-                if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
-                    warn!("[Chat] Failed to auto-save decision (non-fatal): {}", error);
+                if prepared.auto_save_memories {
+                    if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
+                        warn!("[Chat] Failed to auto-save decision (non-fatal): {}", error);
+                    }
                 }
 
                 return Ok(ChatSendMessageResponse {
