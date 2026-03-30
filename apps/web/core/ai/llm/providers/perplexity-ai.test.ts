@@ -4,6 +4,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  DEFAULT_PERPLEXITY_MODEL,
+  SUPPORTED_PERPLEXITY_MODELS,
+} from '@shared/config/supported-models';
 import { PerplexityProvider, PerplexityError, PerplexityMessage } from './perplexity-ai';
 
 // Mock external dependencies
@@ -57,7 +61,7 @@ describe('PerplexityProvider', () => {
     it('should create provider with default configuration', () => {
       const config = provider.getConfig();
 
-      expect(config.model).toBe('sonar');
+      expect(config.model).toBe(DEFAULT_PERPLEXITY_MODEL);
       expect(config.maxTokens).toBe(4000);
       expect(config.temperature).toBe(0.7);
       expect(config.systemPrompt).toBe(
@@ -121,11 +125,7 @@ describe('PerplexityProvider', () => {
     it('should return available models', () => {
       const models = PerplexityProvider.getAvailableModels();
 
-      expect(models).toContain('sonar');
-      expect(models).toContain('sonar-pro');
-      expect(models).toContain('sonar-reasoning');
-      expect(models).toContain('sonar-deep-research');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_PERPLEXITY_MODELS]);
     });
 
     it('should return models by capability', () => {
@@ -170,7 +170,7 @@ describe('PerplexityProvider', () => {
       expect(response.usage?.promptTokens).toBe(10);
       expect(response.usage?.completionTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
-      expect(response.model).toBe('sonar');
+      expect(response.model).toBe(DEFAULT_PERPLEXITY_MODEL);
       expect(response.metadata?.['citations']).toEqual(['https://example.com/news']);
     });
 
@@ -415,7 +415,7 @@ describe('PerplexityProvider', () => {
       );
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(requestBody.model).toBe('sonar');
+      expect(requestBody.model).toBe(DEFAULT_PERPLEXITY_MODEL);
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
     });

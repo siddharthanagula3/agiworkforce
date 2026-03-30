@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { DEFAULT_DEEPSEEK_MODEL, SUPPORTED_DEEPSEEK_MODELS } from '@shared/config/supported-models';
 import { DeepSeekProvider, DeepSeekError, DeepSeekMessage } from './deepseek-ai';
 
 // Mock external dependencies
@@ -57,7 +58,7 @@ describe('DeepSeekProvider', () => {
     it('should create provider with default configuration', () => {
       const config = provider.getConfig();
 
-      expect(config.model).toBe('deepseek-chat');
+      expect(config.model).toBe(DEFAULT_DEEPSEEK_MODEL);
       expect(config.maxTokens).toBe(4000);
       expect(config.temperature).toBe(0.7);
       expect(config.systemPrompt).toBe('You are a helpful AI assistant.');
@@ -81,13 +82,13 @@ describe('DeepSeekProvider', () => {
 
     it('should update configuration', () => {
       provider.updateConfig({
-        model: 'deepseek-coder',
+        model: 'deepseek-reasoner',
         temperature: 0.9,
       });
 
       const config = provider.getConfig();
 
-      expect(config.model).toBe('deepseek-coder');
+      expect(config.model).toBe('deepseek-reasoner');
       expect(config.temperature).toBe(0.9);
       expect(config.maxTokens).toBe(4000); // Unchanged
     });
@@ -111,10 +112,7 @@ describe('DeepSeekProvider', () => {
     it('should return available models', () => {
       const models = DeepSeekProvider.getAvailableModels();
 
-      expect(models).toContain('deepseek-chat');
-      expect(models).toContain('deepseek-reasoner');
-      expect(models).toContain('deepseek-coder');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_DEEPSEEK_MODELS]);
     });
 
     it('should return models by capability', () => {
@@ -122,7 +120,7 @@ describe('DeepSeekProvider', () => {
 
       expect(capabilities['chat']).toContain('deepseek-chat');
       expect(capabilities['reasoning']).toContain('deepseek-reasoner');
-      expect(capabilities['coding']).toContain('deepseek-coder');
+      expect(capabilities['coding']).toContain('deepseek-chat');
       expect(capabilities['tools']).toContain('deepseek-chat');
     });
   });
@@ -159,7 +157,7 @@ describe('DeepSeekProvider', () => {
       expect(response.usage?.promptTokens).toBe(10);
       expect(response.usage?.completionTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
-      expect(response.model).toBe('deepseek-chat');
+      expect(response.model).toBe(DEFAULT_DEEPSEEK_MODEL);
     });
 
     it('should handle response with reasoning_content (deepseek-reasoner)', async () => {

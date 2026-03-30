@@ -71,6 +71,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
   const [searchQuery, setSearchQuery] = useState('');
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const titleId = 'shortcuts-title';
 
   useEffect(() => {
     if (!isOpen) {
@@ -83,6 +84,22 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
       searchInputRef.current?.focus();
     });
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleWindowKeyDown);
+    return () => window.removeEventListener('keydown', handleWindowKeyDown);
+  }, [isOpen, onClose]);
 
   const filteredGroups = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -116,15 +133,19 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl p-0">
+      <DialogContent
+        aria-labelledby={titleId}
+        className="max-w-2xl p-0"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        overlayProps={{ 'data-testid': 'dialog-backdrop', onClick: onClose }}
+      >
         <DialogHeader className="border-b border-border/60 px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 text-xl">
+          <DialogTitle className="sr-only">Keyboard Shortcuts</DialogTitle>
+          <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight" id={titleId}>
             <Keyboard className="h-5 w-5 text-primary" />
-            Keyboard shortcuts
-          </DialogTitle>
-          <DialogDescription>
-            Browse the main chat, navigation, and model shortcuts.
-          </DialogDescription>
+            Keyboard Shortcuts
+          </h2>
+          <DialogDescription>Browse chat, model, and appearance shortcuts.</DialogDescription>
         </DialogHeader>
 
         <div className="border-b border-border/60 px-5 py-3">

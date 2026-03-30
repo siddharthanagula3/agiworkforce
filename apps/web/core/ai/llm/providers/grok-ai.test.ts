@@ -4,6 +4,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  DEFAULT_GROK_MODEL,
+  SUPPORTED_GROK_IMAGE_MODELS,
+  SUPPORTED_GROK_MODELS,
+  SUPPORTED_GROK_VISION_MODELS,
+} from '@shared/config/supported-models';
 import { GrokProvider, GrokError, GrokMessage } from './grok-ai';
 
 // Mock external dependencies
@@ -57,7 +63,7 @@ describe('GrokProvider', () => {
     it('should create provider with default configuration', () => {
       const config = provider.getConfig();
 
-      expect(config.model).toBe('grok-4');
+      expect(config.model).toBe(DEFAULT_GROK_MODEL);
       expect(config.maxTokens).toBe(4000);
       expect(config.temperature).toBe(0.7);
       expect(config.systemPrompt).toBe(
@@ -87,14 +93,14 @@ describe('GrokProvider', () => {
 
     it('should update configuration', () => {
       provider.updateConfig({
-        model: 'grok-3',
+        model: 'grok-4-fast',
         temperature: 0.9,
         includeRealTimeData: false,
       });
 
       const config = provider.getConfig();
 
-      expect(config.model).toBe('grok-3');
+      expect(config.model).toBe('grok-4-fast');
       expect(config.temperature).toBe(0.9);
       expect(config.includeRealTimeData).toBe(false);
       expect(config.maxTokens).toBe(4000); // Unchanged
@@ -119,30 +125,26 @@ describe('GrokProvider', () => {
     it('should return available models', () => {
       const models = GrokProvider.getAvailableModels();
 
-      expect(models).toContain('grok-4');
-      expect(models).toContain('grok-4-1-fast-reasoning');
-      expect(models).toContain('grok-3');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_GROK_MODELS]);
     });
 
     it('should return vision models', () => {
       const models = GrokProvider.getVisionModels();
 
-      expect(models).toContain('grok-2-vision-1212');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_GROK_VISION_MODELS]);
     });
 
     it('should return image models', () => {
       const models = GrokProvider.getImageModels();
 
-      expect(models).toContain('grok-2-image-1212');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_GROK_IMAGE_MODELS]);
     });
 
     it('should return agent models', () => {
       const models = GrokProvider.getAgentModels();
 
       expect(models).toContain('grok-4-1-fast-reasoning');
+      expect(models).toContain('grok-4-fast-non-reasoning');
       expect(models).toContain('grok-4');
       expect(models.length).toBeGreaterThan(0);
     });
@@ -179,7 +181,7 @@ describe('GrokProvider', () => {
       expect(response.usage?.promptTokens).toBe(10);
       expect(response.usage?.completionTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
-      expect(response.model).toBe('grok-4');
+      expect(response.model).toBe(DEFAULT_GROK_MODEL);
       expect(response.metadata?.sources).toHaveLength(1);
     });
 

@@ -32,6 +32,7 @@ pub(super) struct PreparedSendMessage {
     pub tool_registry: Option<Arc<crate::core::agi::tools::ToolRegistry>>,
     pub flags: SendMessageFlags,
     pub cloud_sync_enabled: bool,
+    pub auto_save_memories: bool,
 }
 
 pub(super) fn log_chat_request(request: &ChatSendMessageRequest, correlation_id: &str) {
@@ -134,6 +135,7 @@ pub(super) async fn prepare_send_message(
     preferences: RouterPreferences,
     flags: SendMessageFlags,
     cloud_sync_enabled: bool,
+    auto_save_memories: bool,
 ) -> Result<PreparedSendMessage, String> {
     if flags.incognito {
         debug!("[Chat] Incognito mode active: skipping all persistence");
@@ -329,6 +331,7 @@ pub(super) async fn prepare_send_message(
         tool_registry,
         flags,
         cloud_sync_enabled,
+        auto_save_memories,
     })
 }
 

@@ -90,7 +90,7 @@ describe('Single Conversation API', () => {
       id: 'msg-2',
       role: 'assistant',
       content: 'Hi there!',
-      model: 'gpt-4',
+      model: 'gpt-5.4',
       provider: 'openai',
       input_tokens: 10,
       output_tokens: 5,
@@ -331,7 +331,7 @@ describe('Single Conversation API', () => {
               is: vi.fn().mockReturnValue({
                 select: vi.fn().mockReturnValue({
                   single: vi.fn().mockResolvedValue({
-                    data: { ...mockConversation, model: 'gpt-4' },
+                    data: { ...mockConversation, model: 'gpt-5.4' },
                     error: null,
                   }),
                 }),
@@ -348,12 +348,12 @@ describe('Single Conversation API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ model: 'gpt-4' }),
+          body: JSON.stringify({ model: 'gpt-5.4' }),
         });
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(200);
-        expect(updateFn).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-4' }));
+        expect(updateFn).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-5.4' }));
       });
 
       it('should return 404 if conversation not found', async () => {

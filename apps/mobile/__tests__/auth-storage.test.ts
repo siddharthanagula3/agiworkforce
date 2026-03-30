@@ -102,6 +102,8 @@ import { secureStorage } from '../lib/secureStorage';
 import { useAuthStore } from '../stores/authStore';
 import { act } from '@testing-library/react-native';
 
+let consoleErrorSpy: jest.SpyInstance;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -147,7 +149,12 @@ function makeSession(overrides: Partial<Record<string, unknown>> = {}): Record<s
 
 describe('secureStorage adapter', () => {
   beforeEach(() => {
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   // ---- getItem ----

@@ -78,7 +78,7 @@ describe('Chat Conversations API', () => {
     {
       id: 'conv-2',
       title: 'Test Conversation 2',
-      model: 'gpt-4',
+      model: 'gpt-5.4',
       created_at: '2026-01-24T00:00:00Z',
       updated_at: '2026-01-24T00:00:00Z',
     },
@@ -332,7 +332,7 @@ describe('Chat Conversations API', () => {
         const insertFn = vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
             single: vi.fn().mockResolvedValue({
-              data: { id: 'new-conv', title: 'New conversation', model: 'gpt-4' },
+              data: { id: 'new-conv', title: 'New conversation', model: 'gpt-5.4' },
               error: null,
             }),
           }),
@@ -346,12 +346,12 @@ describe('Chat Conversations API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ model: 'gpt-4' }),
+          body: JSON.stringify({ model: 'gpt-5.4' }),
         });
         const response = await POST(request);
 
         expect(response.status).toBe(201);
-        expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-4' }));
+        expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-5.4' }));
       });
 
       it('should associate conversation with authenticated user', async () => {
