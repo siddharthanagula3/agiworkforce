@@ -33,6 +33,14 @@ pub async fn chat_send_message(
             .map(|prefs| prefs.chat_storage_mode.as_str() == "cloud")
             .unwrap_or(false)
     };
+    let auto_save_memories = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|prefs| prefs.auto_save_memories)
+            .unwrap_or(false)
+    };
 
     reset_stop_flag();
     request.validate().map_err(|error| error.to_string())?;
@@ -93,6 +101,7 @@ pub async fn chat_send_message(
         preferences,
         flags,
         cloud_sync_enabled,
+        auto_save_memories,
     )
     .await?;
 

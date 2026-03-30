@@ -122,6 +122,8 @@ export interface ChatPreferences {
   autoApproveTools: boolean;
   /** Enable automatic skill injection based on message intent */
   autoInjectSkills?: boolean;
+  /** Automatically save detected assistant decisions as memories */
+  autoSaveMemories?: boolean;
   /** Agent execution mode — controls which tools are allowed and whether approval dialogs appear */
   agentMode: AgentMode;
   /**
@@ -250,6 +252,7 @@ interface SettingsState {
   setCompactMode: (enabled: boolean) => void;
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
   setAutoInjectSkills: (enabled: boolean) => void;
+  setAutoSaveMemories: (enabled: boolean) => Promise<void>;
   setAgentMode: (mode: AgentMode) => Promise<void>;
   setChatStorageMode: (mode: 'local' | 'cloud') => void;
 
@@ -356,6 +359,7 @@ const defaultSettings: Pick<
     compactMode: true, // Show simple status messages like ChatGPT/Claude/Gemini
     autoApproveTools: false, // Off by default - show confirmation dialogs
     autoInjectSkills: true, // Auto-inject relevant skills based on message intent
+    autoSaveMemories: false, // Off by default - avoid implicit memory growth
     agentMode: 'build' as AgentMode, // Default to Build mode
     chatStorageMode: 'local' as const, // Local-only by default (privacy-preserving)
   },
@@ -1001,6 +1005,21 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setAutoInjectSkills',
           );
+        },
+
+        setAutoSaveMemories: async (enabled: boolean) => {
+          set(
+            (state) => ({
+              chatPreferences: { ...state.chatPreferences, autoSaveMemories: enabled },
+            }),
+            undefined,
+            'settings/setAutoSaveMemories',
+          );
+          try {
+            await get().saveSettings();
+          } catch (error) {
+            console.error('Failed to persist auto-save memories setting:', error);
+          }
         },
 
         setAutoApproveTools: async (enabled: boolean) => {

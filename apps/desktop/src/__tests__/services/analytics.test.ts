@@ -18,6 +18,7 @@ describe('AnalyticsService', () => {
 
     global.URL.createObjectURL = vi.fn(() => 'mock-url');
     global.URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
     service = new AnalyticsService();
   });

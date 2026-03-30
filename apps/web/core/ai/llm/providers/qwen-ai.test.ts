@@ -4,6 +4,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  DEFAULT_QWEN_MODEL,
+  SUPPORTED_QWEN_IMAGE_MODELS,
+  SUPPORTED_QWEN_MODELS,
+  SUPPORTED_QWEN_VIDEO_MODELS,
+} from '@shared/config/supported-models';
 import { QwenProvider, QwenError, QwenMessage } from './qwen-ai';
 
 // Mock external dependencies
@@ -57,7 +63,7 @@ describe('QwenProvider', () => {
     it('should create provider with default configuration', () => {
       const config = provider.getConfig();
 
-      expect(config.model).toBe('qwen-plus');
+      expect(config.model).toBe(DEFAULT_QWEN_MODEL);
       expect(config.maxTokens).toBe(4000);
       expect(config.temperature).toBe(0.7);
       expect(config.systemPrompt).toBe('You are a helpful AI assistant.');
@@ -66,7 +72,7 @@ describe('QwenProvider', () => {
 
     it('should create provider with custom configuration', () => {
       const customProvider = new QwenProvider({
-        model: 'qwen3-max',
+        model: 'qwen-max',
         maxTokens: 8000,
         temperature: 0.5,
         systemPrompt: 'Custom prompt',
@@ -75,7 +81,7 @@ describe('QwenProvider', () => {
 
       const config = customProvider.getConfig();
 
-      expect(config.model).toBe('qwen3-max');
+      expect(config.model).toBe('qwen-max');
       expect(config.maxTokens).toBe(8000);
       expect(config.temperature).toBe(0.5);
       expect(config.systemPrompt).toBe('Custom prompt');
@@ -84,13 +90,13 @@ describe('QwenProvider', () => {
 
     it('should update configuration', () => {
       provider.updateConfig({
-        model: 'qwen3-coder-plus',
+        model: 'qwen-coder-plus',
         temperature: 0.9,
       });
 
       const config = provider.getConfig();
 
-      expect(config.model).toBe('qwen3-coder-plus');
+      expect(config.model).toBe('qwen-coder-plus');
       expect(config.temperature).toBe(0.9);
       expect(config.maxTokens).toBe(4000); // Unchanged
     });
@@ -114,33 +120,28 @@ describe('QwenProvider', () => {
     it('should return available models', () => {
       const models = QwenProvider.getAvailableModels();
 
-      expect(models).toContain('qwen-plus');
-      expect(models).toContain('qwen3-max');
-      expect(models).toContain('qwen3-coder-plus');
-      expect(models).toContain('qwq-plus');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_QWEN_MODELS]);
     });
 
     it('should return models by capability', () => {
       const capabilities = QwenProvider.getModelsByCapability();
 
-      expect(capabilities['chat']).toContain('qwen3-max');
-      expect(capabilities['coding']).toContain('qwen3-coder-plus');
-      expect(capabilities['vision']).toContain('qwen3-vl-plus');
-      expect(capabilities['reasoning']).toContain('qwq-plus');
+      expect(capabilities['chat']).toContain('qwen-max');
+      expect(capabilities['coding']).toContain('qwen-coder-plus');
+      expect(capabilities['vision']).toEqual([]);
+      expect(capabilities['reasoning']).toContain('qwen-max');
     });
 
     it('should return image models', () => {
       const models = QwenProvider.getImageModels();
 
-      expect(models).toContain('qwen-image-max');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_QWEN_IMAGE_MODELS]);
     });
 
     it('should return video models', () => {
       const models = QwenProvider.getVideoModels();
 
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_QWEN_VIDEO_MODELS]);
     });
   });
 
@@ -174,7 +175,7 @@ describe('QwenProvider', () => {
       expect(response.usage?.promptTokens).toBe(10);
       expect(response.usage?.completionTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
-      expect(response.model).toBe('qwen-plus');
+      expect(response.model).toBe(DEFAULT_QWEN_MODEL);
     });
 
     it('should handle response with content field directly', async () => {
@@ -321,7 +322,7 @@ describe('QwenProvider', () => {
       );
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(requestBody.model).toBe('qwen-plus');
+      expect(requestBody.model).toBe(DEFAULT_QWEN_MODEL);
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
       expect(requestBody.stream).toBe(false);

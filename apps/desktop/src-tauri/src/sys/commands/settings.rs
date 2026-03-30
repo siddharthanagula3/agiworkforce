@@ -61,6 +61,8 @@ pub struct ChatPreferences {
     pub auto_approve_tools: bool,
     #[serde(default = "default_auto_inject_skills")]
     pub auto_inject_skills: bool,
+    #[serde(default)]
+    pub auto_save_memories: bool,
     /// Where chat history is persisted.
     /// `"local"` — SQLite only, never synced to cloud (default).
     /// `"cloud"` — SQLite + best-effort Supabase sync on every save.
@@ -275,6 +277,7 @@ impl SettingsState {
                     compact_mode: true,
                     auto_approve_tools: false,
                     auto_inject_skills: true,
+                    auto_save_memories: false,
                     chat_storage_mode: default_chat_storage_mode(),
                 }),
                 execution_preferences: Some(ExecutionPreferences {

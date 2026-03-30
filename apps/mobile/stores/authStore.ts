@@ -141,9 +141,11 @@ export const useAuthStore = create<AuthState>()(
       },
 
       refreshSession: async () => {
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
         try {
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Session refresh timeout')), 10000),
+          const timeoutPromise = new Promise<never>(
+            (_, reject) =>
+              (timeoutId = setTimeout(() => reject(new Error('Session refresh timeout')), 10000)),
           );
           const { data, error } = await Promise.race([
             supabase.auth.refreshSession(),
@@ -156,6 +158,10 @@ export const useAuthStore = create<AuthState>()(
           set({ session: data.session, user: data.session.user });
         } catch {
           set({ session: null, user: null });
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
         }
       },
 

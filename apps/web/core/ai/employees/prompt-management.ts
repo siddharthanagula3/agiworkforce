@@ -582,7 +582,8 @@ export class SystemPromptsService {
             ) => Record<string, () => Promise<string>>;
           }
         ).glob('/.agi/employees/*.md', {
-          as: 'raw',
+          query: '?raw',
+          import: 'default',
           eager: false,
         });
 

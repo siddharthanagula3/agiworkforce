@@ -120,11 +120,12 @@ describe('modelStore', () => {
   });
 
   describe('tier restrictions', () => {
-    it('should mark GPT-5.4 Codex Low as unavailable on hobby and available on pro', async () => {
+    it('should mark GPT-5.4 Codex Low as unavailable on hobby and pro, and available on max', async () => {
       const { isModelAllowedForTier } = await import('../constants/llm');
 
       expect(isModelAllowedForTier('gpt-5.4-codex-low', 'hobby')).toBe(false);
-      expect(isModelAllowedForTier('gpt-5.4-codex-low', 'pro')).toBe(true);
+      expect(isModelAllowedForTier('gpt-5.4-codex-low', 'pro')).toBe(false);
+      expect(isModelAllowedForTier('gpt-5.4-codex-low', 'max')).toBe(true);
     });
 
     it('should resolve the best allowed auto mode when no model is selected', async () => {
@@ -184,11 +185,11 @@ describe('modelStore', () => {
 
       store.toggleFavorite('gpt-5.4');
       store.toggleFavorite('claude-opus-4.6');
-      store.toggleFavorite('gemini-3-pro-preview');
+      store.toggleFavorite('gemini-3.1-pro-preview');
 
       const state = useModelStore.getState();
       expect(state.favorites).toHaveLength(3);
-      expect(state.favorites).toEqual(['gpt-5.4', 'claude-opus-4.6', 'gemini-3-pro-preview']);
+      expect(state.favorites).toEqual(['gpt-5.4', 'claude-opus-4.6', 'gemini-3.1-pro-preview']);
     });
   });
 

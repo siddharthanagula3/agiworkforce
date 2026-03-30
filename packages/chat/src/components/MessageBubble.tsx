@@ -414,10 +414,10 @@ export function MessageBubble({ message, isLast, onRetry, onArtifactClick }: Mes
 
   if (isUser) {
     return (
-      <div className="message-enter flex flex-col items-end gap-1">
+      <div className="message-enter flex max-w-[80%] min-w-0 flex-col items-end gap-1">
         <div
           className={cn(
-            'max-w-[80%] rounded-2xl bg-[var(--chat-user-bubble-bg)] px-4 py-3',
+            'w-fit max-w-full rounded-2xl bg-[var(--chat-user-bubble-bg)] px-4 py-3',
             'text-[15px] leading-relaxed text-[var(--chat-text-primary)]',
             'whitespace-pre-wrap break-words',
           )}

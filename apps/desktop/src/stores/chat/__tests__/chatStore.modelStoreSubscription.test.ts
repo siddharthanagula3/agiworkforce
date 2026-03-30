@@ -24,7 +24,7 @@ describe('chatStore modelStore subscription', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    vi.unmock('../../modelStore');
+    vi.doUnmock('../../modelStore');
     resetChatStoreModelSubscriptionState();
   });
 

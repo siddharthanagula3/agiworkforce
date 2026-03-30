@@ -555,7 +555,7 @@ export class GrokProvider {
    * Get models optimized for tool calling
    */
   static getAgentModels(): string[] {
-    return ['grok-4-1-fast-reasoning', 'grok-4-1-fast-non-reasoning', 'grok-4'];
+    return ['grok-4-1-fast-reasoning', 'grok-4-fast-non-reasoning', 'grok-4'];
   }
 }
 

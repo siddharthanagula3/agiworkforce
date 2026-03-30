@@ -5,6 +5,12 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
+  DEFAULT_GOOGLE_FAST_MODEL,
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_PERPLEXITY_MODEL,
+} from '@shared/config/supported-models';
+import {
   sendAIMessage,
   isProviderConfigured,
   getConfiguredProviders,
@@ -60,7 +66,7 @@ describe('Chat Completion Handler', () => {
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenCalledWith({
         provider: 'openai',
         messages: [{ role: 'user', content: 'Hello, how are you?' }],
-        model: 'gpt-5.4',
+        model: DEFAULT_OPENAI_MODEL,
         temperature: undefined,
         maxTokens: undefined,
         stream: false,
@@ -70,16 +76,16 @@ describe('Chat Completion Handler', () => {
     it('should send message to Anthropic provider with custom model', async () => {
       mockUnifiedLLMService.sendMessage.mockResolvedValueOnce({
         content: 'Response from Claude',
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-haiku-4.5',
       });
 
-      const result = await sendAIMessage('anthropic', mockMessages, 'claude-3-5-sonnet-20241022');
+      const result = await sendAIMessage('anthropic', mockMessages, 'claude-haiku-4.5');
 
       expect(result).toBe('Response from Claude');
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           provider: 'anthropic',
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-haiku-4.5',
         }),
       );
     });
@@ -87,7 +93,7 @@ describe('Chat Completion Handler', () => {
     it('should send message to Google provider', async () => {
       mockUnifiedLLMService.sendMessage.mockResolvedValueOnce({
         content: 'Response from Gemini',
-        model: 'gemini-2.0-flash',
+        model: DEFAULT_GOOGLE_FAST_MODEL,
       });
 
       const result = await sendAIMessage('google', mockMessages);
@@ -96,7 +102,7 @@ describe('Chat Completion Handler', () => {
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           provider: 'google',
-          model: 'gemini-2.0-flash',
+          model: DEFAULT_GOOGLE_FAST_MODEL,
         }),
       );
     });
@@ -104,7 +110,7 @@ describe('Chat Completion Handler', () => {
     it('should send message to Perplexity provider', async () => {
       mockUnifiedLLMService.sendMessage.mockResolvedValueOnce({
         content: 'Response from Perplexity',
-        model: 'sonar-pro',
+        model: DEFAULT_PERPLEXITY_MODEL,
       });
 
       const result = await sendAIMessage('perplexity', mockMessages);
@@ -113,7 +119,7 @@ describe('Chat Completion Handler', () => {
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           provider: 'perplexity',
-          model: 'sonar-pro',
+          model: DEFAULT_PERPLEXITY_MODEL,
         }),
       );
     });
@@ -210,25 +216,25 @@ describe('Chat Completion Handler', () => {
       // Test OpenAI default
       await sendAIMessage('openai', mockMessages);
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenLastCalledWith(
-        expect.objectContaining({ model: 'gpt-5.4' }),
+        expect.objectContaining({ model: DEFAULT_OPENAI_MODEL }),
       );
 
       // Test Anthropic default
       await sendAIMessage('anthropic', mockMessages);
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenLastCalledWith(
-        expect.objectContaining({ model: 'claude-3-5-sonnet-20241022' }),
+        expect.objectContaining({ model: DEFAULT_ANTHROPIC_COLLABORATION_MODEL }),
       );
 
       // Test Google default
       await sendAIMessage('google', mockMessages);
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenLastCalledWith(
-        expect.objectContaining({ model: 'gemini-2.0-flash' }),
+        expect.objectContaining({ model: DEFAULT_GOOGLE_FAST_MODEL }),
       );
 
       // Test Perplexity default
       await sendAIMessage('perplexity', mockMessages);
       expect(mockUnifiedLLMService.sendMessage).toHaveBeenLastCalledWith(
-        expect.objectContaining({ model: 'sonar-pro' }),
+        expect.objectContaining({ model: DEFAULT_PERPLEXITY_MODEL }),
       );
     });
   });

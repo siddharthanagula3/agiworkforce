@@ -4,7 +4,27 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { getModelMetadataById } from '@agiworkforce/types';
 import { tokenLogger, logTokenUsage } from './token-usage-tracker';
+
+const OPENAI_MODEL = 'gpt-5.4';
+const ANTHROPIC_MODEL = 'claude-sonnet-4.6';
+const GOOGLE_MODEL = 'gemini-3.1-flash-lite';
+const PERPLEXITY_MODEL = 'sonar-pro';
+const GROK_MODEL = 'grok-4';
+const CLAUDE_HAIKU_MODEL = 'claude-haiku-4.5';
+
+function expectedCostForModel(model: string, inputTokens: number, outputTokens: number): number {
+  const metadata = getModelMetadataById(model);
+  if (!metadata) {
+    return (inputTokens / 1_000_000) * 1 + (outputTokens / 1_000_000) * 1;
+  }
+
+  return (
+    (inputTokens / 1_000_000) * metadata.inputCost +
+    (outputTokens / 1_000_000) * metadata.outputCost
+  );
+}
 
 // Mock the UsageTracker class - define inside factory to avoid hoisting issues
 vi.mock('@features/billing/services/usage-monitor', () => {
@@ -75,7 +95,7 @@ describe('Token Usage Tracker', () => {
 
     it('should track by model correctly', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-5.4',
+        OPENAI_MODEL,
         100,
         'user-123',
         'session-1',
@@ -85,7 +105,7 @@ describe('Token Usage Tracker', () => {
         60,
       );
       await tokenLogger.logTokenUsage(
-        'claude-3-5-sonnet-20241022',
+        ANTHROPIC_MODEL,
         200,
         'user-123',
         'session-1',
@@ -97,10 +117,10 @@ describe('Token Usage Tracker', () => {
 
       const summary = tokenLogger.getSessionSummary('session-1');
 
-      expect(summary?.byModel['gpt-5.4']).toBeDefined();
-      expect(summary?.byModel['gpt-5.4']?.totalTokens).toBe(100);
-      expect(summary?.byModel['claude-3-5-sonnet-20241022']).toBeDefined();
-      expect(summary?.byModel['claude-3-5-sonnet-20241022']?.totalTokens).toBe(200);
+      expect(summary?.byModel[OPENAI_MODEL]).toBeDefined();
+      expect(summary?.byModel[OPENAI_MODEL]?.totalTokens).toBe(100);
+      expect(summary?.byModel[ANTHROPIC_MODEL]).toBeDefined();
+      expect(summary?.byModel[ANTHROPIC_MODEL]?.totalTokens).toBe(200);
     });
 
     it('should calculate cost correctly', async () => {
@@ -171,24 +191,21 @@ describe('Token Usage Tracker', () => {
 
   describe('calculateCost', () => {
     it('should calculate GPT-5.4 cost correctly', () => {
-      const cost = tokenLogger.calculateCost('gpt-5.4', 1000000, 1000000);
+      const cost = tokenLogger.calculateCost(OPENAI_MODEL, 1000000, 1000000);
 
-      // Input: $2.5/1M, Output: $10/1M
-      expect(cost).toBe(12.5);
+      expect(cost).toBe(expectedCostForModel(OPENAI_MODEL, 1000000, 1000000));
     });
 
     it('should calculate Claude cost correctly', () => {
-      const cost = tokenLogger.calculateCost('claude-3-5-sonnet-20241022', 1000000, 1000000);
+      const cost = tokenLogger.calculateCost(ANTHROPIC_MODEL, 1000000, 1000000);
 
-      // Input: $3/1M, Output: $15/1M
-      expect(cost).toBe(18);
+      expect(cost).toBe(expectedCostForModel(ANTHROPIC_MODEL, 1000000, 1000000));
     });
 
     it('should calculate Gemini cost correctly', () => {
-      const cost = tokenLogger.calculateCost('gemini-2.0-flash', 1000000, 1000000);
+      const cost = tokenLogger.calculateCost(GOOGLE_MODEL, 1000000, 1000000);
 
-      // Input: $0.1/1M, Output: $0.4/1M
-      expect(cost).toBe(0.5);
+      expect(cost).toBe(expectedCostForModel(GOOGLE_MODEL, 1000000, 1000000));
     });
 
     it('should use default pricing for unknown models', () => {
@@ -242,8 +259,8 @@ describe('Token Usage Tracker', () => {
     });
 
     it('should return all logs for session', async () => {
-      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1');
-      await tokenLogger.logTokenUsage('claude-3-5-sonnet-20241022', 200, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage(OPENAI_MODEL, 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage(ANTHROPIC_MODEL, 200, 'user-123', 'session-1');
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
@@ -333,17 +350,18 @@ describe('Token Usage Tracker', () => {
       const TokenLoggerClass = tokenLogger.constructor as unknown as TokenLoggerServiceStatic;
       const models = TokenLoggerClass.getSupportedModels();
 
-      expect(models).toContain('gpt-5.4');
-      expect(models).toContain('claude-3-5-sonnet-20241022');
-      expect(models).toContain('gemini-2.0-flash');
+      expect(models).toContain(OPENAI_MODEL);
+      expect(models).toContain(ANTHROPIC_MODEL);
+      expect(models).toContain(GOOGLE_MODEL);
     });
 
     it('should return model pricing', () => {
       const TokenLoggerClass = tokenLogger.constructor as unknown as TokenLoggerServiceStatic;
-      const pricing = TokenLoggerClass.getModelPricing('gpt-5.4');
+      const pricing = TokenLoggerClass.getModelPricing(OPENAI_MODEL);
+      const metadata = getModelMetadataById(OPENAI_MODEL)!;
 
-      expect(pricing?.input).toBe(2.5);
-      expect(pricing?.output).toBe(10.0);
+      expect(pricing?.input).toBe(metadata.inputCost);
+      expect(pricing?.output).toBe(metadata.outputCost);
       expect(pricing?.provider).toBe('openai');
     });
 
@@ -367,17 +385,17 @@ describe('Token Usage Tracker', () => {
 
   describe('provider detection', () => {
     it('should detect OpenAI provider', async () => {
-      await tokenLogger.logTokenUsage('gpt-5.4', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage(OPENAI_MODEL, 100, 'user-123', 'session-1');
 
       const logs = tokenLogger.getSessionLogs('session-1');
       const summary = tokenLogger.getSessionSummary('session-1');
 
       expect(logs?.[0]?.provider).toBe('openai');
-      expect(summary?.byModel['gpt-5.4']?.provider).toBe('openai');
+      expect(summary?.byModel[OPENAI_MODEL]?.provider).toBe('openai');
     });
 
     it('should detect Anthropic provider', async () => {
-      await tokenLogger.logTokenUsage('claude-3-5-sonnet-20241022', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage(ANTHROPIC_MODEL, 100, 'user-123', 'session-1');
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
@@ -385,7 +403,7 @@ describe('Token Usage Tracker', () => {
     });
 
     it('should detect Google provider', async () => {
-      await tokenLogger.logTokenUsage('gemini-2.0-flash', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage(GOOGLE_MODEL, 100, 'user-123', 'session-1');
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
@@ -393,7 +411,7 @@ describe('Token Usage Tracker', () => {
     });
 
     it('should detect Perplexity provider', async () => {
-      await tokenLogger.logTokenUsage('sonar-pro', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage(PERPLEXITY_MODEL, 100, 'user-123', 'session-1');
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
@@ -401,7 +419,7 @@ describe('Token Usage Tracker', () => {
     });
 
     it('should detect Grok provider', async () => {
-      await tokenLogger.logTokenUsage('grok-2', 100, 'user-123', 'session-1');
+      await tokenLogger.logTokenUsage(GROK_MODEL, 100, 'user-123', 'session-1');
 
       const logs = tokenLogger.getSessionLogs('session-1');
 
@@ -412,7 +430,7 @@ describe('Token Usage Tracker', () => {
   describe('pricing accuracy', () => {
     it('should use correct GPT-5.4 pricing', async () => {
       await tokenLogger.logTokenUsage(
-        'gpt-5.4',
+        OPENAI_MODEL,
         1000000,
         'user-123',
         'session-1',
@@ -424,10 +442,7 @@ describe('Token Usage Tracker', () => {
 
       const summary = tokenLogger.getSessionSummary('session-1');
 
-      // Input: 0.5M * $2.5/1M = $1.25
-      // Output: 0.5M * $10/1M = $5.00
-      // Total: $6.25
-      expect(summary?.totalCost).toBeCloseTo(6.25, 2);
+      expect(summary?.totalCost).toBeCloseTo(expectedCostForModel(OPENAI_MODEL, 500000, 500000), 2);
     });
 
     it('should use correct GPT-5.4-mini pricing', async () => {
@@ -444,15 +459,15 @@ describe('Token Usage Tracker', () => {
 
       const summary = tokenLogger.getSessionSummary('session-1');
 
-      // Input: 0.5M * $0.15/1M = $0.075
-      // Output: 0.5M * $0.6/1M = $0.30
-      // Total: $0.375
-      expect(summary?.totalCost).toBeCloseTo(0.375, 3);
+      expect(summary?.totalCost).toBeCloseTo(
+        expectedCostForModel('gpt-5.4-mini', 500000, 500000),
+        3,
+      );
     });
 
     it('should use correct Claude Haiku pricing', async () => {
       await tokenLogger.logTokenUsage(
-        'claude-3-5-haiku-20241022',
+        CLAUDE_HAIKU_MODEL,
         1000000,
         'user-123',
         'session-1',
@@ -464,10 +479,10 @@ describe('Token Usage Tracker', () => {
 
       const summary = tokenLogger.getSessionSummary('session-1');
 
-      // Input: 0.5M * $0.25/1M = $0.125
-      // Output: 0.5M * $1.25/1M = $0.625
-      // Total: $0.75
-      expect(summary?.totalCost).toBeCloseTo(0.75, 2);
+      expect(summary?.totalCost).toBeCloseTo(
+        expectedCostForModel(CLAUDE_HAIKU_MODEL, 500000, 500000),
+        2,
+      );
     });
   });
 

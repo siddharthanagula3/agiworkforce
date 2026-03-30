@@ -8,6 +8,7 @@ import {
   DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
   DEFAULT_GOOGLE_FAST_MODEL,
   DEFAULT_OPENAI_MODEL,
+  DEFAULT_PERPLEXITY_MODEL,
 } from '@shared/config/supported-models';
 
 export interface AIMessage {
@@ -79,7 +80,7 @@ function getDefaultModel(provider: AIProvider): string {
     openai: DEFAULT_OPENAI_MODEL,
     anthropic: DEFAULT_ANTHROPIC_COLLABORATION_MODEL,
     google: DEFAULT_GOOGLE_FAST_MODEL,
-    perplexity: 'sonar-pro',
+    perplexity: DEFAULT_PERPLEXITY_MODEL,
   };
 
   return defaultModels[provider];
