@@ -22,6 +22,10 @@ import {
   buildTerminalToolTimelineUpdate,
   resolveToolTimelineLabel,
 } from '../../lib/toolTimelineRuntime';
+import {
+  buildToolCallMessageUpdate,
+  buildToolResultStateMessageUpdate,
+} from '../../lib/streamLifecycle';
 import { useAgentStore } from './agentStore';
 import { useChatStore } from './chatStore';
 import type { ApprovalTimeoutPolicy } from '../settingsStore';
@@ -1231,9 +1235,137 @@ function resolveToolLabel(payload: ToolEventPayload): {
   });
 }
 
+function updateAgentCurrentStep(displayName: string, success: boolean): void {
+  const currentAgent = useAgentStore.getState().agentStatus;
+  if (!currentAgent || currentAgent.status !== 'running') {
+    return;
+  }
+
+  useAgentStore.getState().setAgentStatus({
+    ...currentAgent,
+    currentStep: success ? `Completed ${displayName}` : `Failed ${displayName}`,
+  });
+}
+
+/**
+ * Canonical desktop handler for tool lifecycle events.
+ *
+ * This owns the Tauri `tool:event` interpretation path and keeps the
+ * tool stream store, chat timeline/message metadata, and agent trail/status
+ * in sync from one place.
+ */
+export function applyCanonicalToolEvent(payload: ToolEventPayload): void {
+  const toolId = payload.id;
+  const messageId = payload.message_id;
+  const { displayName, displayArgs } = resolveToolLabel(payload);
+
+  if (payload.type === 'started') {
+    useToolStore.getState().updateToolStream(toolId, {
+      tool_id: toolId,
+      tool_name: displayName,
+      status: 'running',
+      progress: 0,
+      startedAt: new Date(),
+      parameters: {
+        displayName,
+        displayArgs,
+        rawToolName: payload.tool_name,
+      },
+    });
+
+    useChatStore.getState().addToolTimelineEntry(
+      messageId,
+      buildRunningToolTimelineEntry({
+        id: toolId,
+        rawName: payload.tool_name ?? displayName,
+        displayName,
+        displayArgs,
+        existing: getExistingToolTimelineEntry(messageId, toolId) ?? null,
+        parallelGroup: payload.parallel_group,
+      }),
+    );
+
+    useChatStore.getState().updateMessage(
+      messageId,
+      buildToolCallMessageUpdate({
+        toolName: displayName,
+        toolCallId: toolId,
+      }),
+    );
+
+    useAgentStore.getState().addActionTrailEntry({
+      type: 'running',
+      message: displayArgs ? `${displayName}: ${displayArgs}` : displayName,
+      metadata: {
+        messageId,
+        toolEventId: toolId,
+        toolName: payload.tool_name,
+        iteration: payload.iteration,
+      },
+    });
+
+    return;
+  }
+
+  if (payload.type === 'progress') {
+    useToolStore.getState().updateToolStream(toolId, {
+      ...(payload.stdout_chunk !== undefined
+        ? { outputChunks: [payload.stdout_chunk], outputBuffer: payload.stdout_chunk }
+        : {}),
+      ...(payload.progress_pct !== undefined ? { progress: payload.progress_pct } : {}),
+    });
+
+    return;
+  }
+
+  const success = payload.success !== false;
+  const status = success ? 'completed' : 'error';
+
+  useToolStore.getState().updateToolStream(toolId, {
+    status,
+    completedAt: new Date(),
+    duration_ms: payload.duration_ms,
+    ...(payload.result_preview !== undefined ? { result: payload.result_preview } : {}),
+    ...(payload.error !== undefined ? { error: payload.error } : {}),
+  });
+
+  setTimeout(() => {
+    useToolStore.getState().removeToolStream(toolId);
+  }, 5000);
+
+  useChatStore.getState().updateToolTimelineEntry(
+    messageId,
+    toolId,
+    buildTerminalToolTimelineUpdate({
+      success,
+      error: payload.error,
+      durationMs: payload.duration_ms,
+      resultPreview: payload.result_preview,
+    }),
+  );
+
+  useChatStore.getState().updateMessage(messageId, buildToolResultStateMessageUpdate({ success }));
+
+  useAgentStore.getState().addActionTrailEntry({
+    type: status === 'error' ? 'error' : 'completed',
+    message:
+      status === 'error'
+        ? `${displayName} failed${payload.error ? `: ${payload.error}` : ''}`
+        : `${displayName} completed${payload.duration_ms !== undefined ? ` (${payload.duration_ms}ms)` : ''}`,
+    fadeAfter: 3000,
+    metadata: {
+      messageId,
+      toolEventId: toolId,
+      duration_ms: payload.duration_ms,
+    },
+  });
+
+  updateAgentCurrentStep(displayName, success);
+}
+
 /**
  * Initializes the Tauri event listeners for tool events and agentic loop lifecycle.
- * - `tool:event` — updates toolStore streams, chatStore timeline, and agentStore action trail
+ * - `tool:event` — updates toolStore streams, chatStore timeline/message metadata, and agentStore state
  * - `agentic:loop-started` — sets agenticLoopStatus to active
  * - `agentic:loop-status` — updates current iteration count
  * - `agentic:loop-ended` — clears agenticLoopStatus
@@ -1249,102 +1381,7 @@ export async function initializeToolEventListener(): Promise<void> {
   try {
     // --- tool:event ---
     await listen<ToolEventPayload>('tool:event', (event) => {
-      const payload = event.payload;
-      const toolId = payload.id;
-      const messageId = payload.message_id;
-      const { displayName, displayArgs } = resolveToolLabel(payload);
-
-      if (payload.type === 'started') {
-        // Update tool stream in toolStore — use decoded display name, not raw MCP b64 name
-        useToolStore.getState().updateToolStream(toolId, {
-          tool_id: toolId,
-          tool_name: displayName,
-          status: 'running',
-          progress: 0,
-          startedAt: new Date(),
-          parameters: {
-            displayName,
-            displayArgs,
-            rawToolName: payload.tool_name,
-          },
-        });
-
-        // Add entry to chat timeline
-        useChatStore.getState().addToolTimelineEntry(
-          messageId,
-          buildRunningToolTimelineEntry({
-            id: toolId,
-            rawName: payload.tool_name ?? displayName,
-            displayName,
-            displayArgs,
-            existing: getExistingToolTimelineEntry(messageId, toolId) ?? null,
-            parallelGroup: payload.parallel_group,
-          }),
-        );
-
-        // Push to agent action trail
-        useAgentStore.getState().addActionTrailEntry({
-          type: 'running',
-          message: displayArgs ? `${displayName}: ${displayArgs}` : displayName,
-          metadata: {
-            messageId,
-            toolEventId: toolId,
-            toolName: payload.tool_name,
-            iteration: payload.iteration,
-          },
-        });
-      } else if (payload.type === 'progress') {
-        // Update tool stream with stdout chunk and progress
-        useToolStore.getState().updateToolStream(toolId, {
-          ...(payload.stdout_chunk !== undefined
-            ? { outputChunks: [payload.stdout_chunk], outputBuffer: payload.stdout_chunk }
-            : {}),
-          ...(payload.progress_pct !== undefined ? { progress: payload.progress_pct } : {}),
-        });
-      } else if (payload.type === 'completed') {
-        const status = payload.success === false ? 'error' : 'completed';
-
-        // Update tool stream
-        useToolStore.getState().updateToolStream(toolId, {
-          status,
-          completedAt: new Date(),
-          duration_ms: payload.duration_ms,
-          ...(payload.result_preview !== undefined ? { result: payload.result_preview } : {}),
-          ...(payload.error !== undefined ? { error: payload.error } : {}),
-        });
-
-        // Schedule removal of the tool stream after 5 seconds
-        setTimeout(() => {
-          useToolStore.getState().removeToolStream(toolId);
-        }, 5000);
-
-        // Update chat timeline entry
-        useChatStore.getState().updateToolTimelineEntry(
-          messageId,
-          toolId,
-          buildTerminalToolTimelineUpdate({
-            success: status !== 'error',
-            error: payload.error,
-            durationMs: payload.duration_ms,
-            resultPreview: payload.result_preview,
-          }),
-        );
-
-        // Push completion to agent action trail
-        useAgentStore.getState().addActionTrailEntry({
-          type: status === 'error' ? 'error' : 'completed',
-          message:
-            status === 'error'
-              ? `${displayName} failed${payload.error ? `: ${payload.error}` : ''}`
-              : `${displayName} completed${payload.duration_ms !== undefined ? ` (${payload.duration_ms}ms)` : ''}`,
-          fadeAfter: 3000,
-          metadata: {
-            messageId,
-            toolEventId: toolId,
-            duration_ms: payload.duration_ms,
-          },
-        });
-      }
+      applyCanonicalToolEvent(event.payload);
     });
 
     // --- agentic:loop-started ---

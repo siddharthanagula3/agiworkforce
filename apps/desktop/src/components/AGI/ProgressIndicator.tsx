@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
-import { listen } from '../../lib/tauri-mock';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Brain,
   Clock,
@@ -13,6 +12,11 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import {
+  useAgentTaskStore,
+  type AgentTask,
+  type AgentTaskLiveStep,
+} from '../../stores/agentTaskStore';
 import { Button } from '../ui/Button';
 
 interface StepData {
@@ -44,214 +48,241 @@ export interface ProgressIndicatorProps {
   autoHideDelay?: number;
 }
 
+function hasLiveState(
+  liveSteps: AgentTaskLiveStep[] | undefined,
+  liveProgress: { step: number; total: number } | undefined,
+): boolean {
+  return Boolean((liveSteps && liveSteps.length > 0) || liveProgress);
+}
+
+function shouldShowGoal(
+  task: AgentTask,
+  liveSteps: AgentTaskLiveStep[] | undefined,
+  liveProgress: { step: number; total: number } | undefined,
+): boolean {
+  if (task.status === 'pending' || task.status === 'running' || task.status === 'paused') {
+    return true;
+  }
+
+  return hasLiveState(liveSteps, liveProgress);
+}
+
+function mapGoalStatus(task: AgentTask): GoalData['status'] {
+  switch (task.status) {
+    case 'pending':
+      return 'planning';
+    case 'running':
+    case 'paused':
+    case 'recovering':
+      return 'executing';
+    case 'completed':
+      return 'completed';
+    default:
+      return 'failed';
+  }
+}
+
+function mapStepStatus(step: AgentTaskLiveStep['status']): StepData['status'] {
+  switch (step) {
+    case 'running':
+      return 'in-progress';
+    case 'done':
+      return 'completed';
+    case 'failed':
+      return 'failed';
+    default:
+      return 'pending';
+  }
+}
+
+function buildGoalSteps(
+  liveSteps: AgentTaskLiveStep[] | undefined,
+  liveProgress: { step: number; total: number } | undefined,
+): StepData[] {
+  const sortedLiveSteps = [...(liveSteps ?? [])].sort((left, right) => left.index - right.index);
+  const liveStepByIndex = new Map(sortedLiveSteps.map((step) => [step.index, step]));
+  const totalSteps = Math.max(liveProgress?.total ?? 0, sortedLiveSteps.length);
+
+  if (totalSteps === 0) {
+    return [];
+  }
+
+  return Array.from({ length: totalSteps }, (_, index) => {
+    const liveStep = liveStepByIndex.get(index);
+    if (!liveStep) {
+      return {
+        id: `step_${index}`,
+        index,
+        description: 'Loading...',
+        status: 'pending',
+      };
+    }
+
+    return {
+      id: liveStep.id,
+      index,
+      description: liveStep.description,
+      status: mapStepStatus(liveStep.status),
+      startTime: liveStep.startedAt?.getTime(),
+      endTime: liveStep.completedAt?.getTime(),
+      executionTimeMs: liveStep.executionTimeMs,
+      error: liveStep.error,
+    };
+  });
+}
+
+function buildGoalData(
+  task: AgentTask,
+  liveSteps: AgentTaskLiveStep[] | undefined,
+  liveProgress: { step: number; total: number } | undefined,
+): GoalData {
+  const steps = buildGoalSteps(liveSteps, liveProgress);
+  const totalSteps = Math.max(liveProgress?.total ?? 0, steps.length);
+  const completedSteps =
+    task.status === 'completed'
+      ? totalSteps || task.iterations || 0
+      : (liveProgress?.step ?? task.iterations ?? 0);
+  const progressPercent =
+    task.status === 'completed'
+      ? 100
+      : totalSteps > 0
+        ? Math.min(100, Math.round((completedSteps / totalSteps) * 100))
+        : 0;
+
+  return {
+    goalId: task.id,
+    description: task.goal,
+    totalSteps,
+    completedSteps,
+    progressPercent,
+    status: mapGoalStatus(task),
+    steps,
+    startTime: new Date(task.createdAt).getTime(),
+  };
+}
+
+function sortGoals(left: GoalData, right: GoalData): number {
+  const order: Record<GoalData['status'], number> = {
+    executing: 0,
+    planning: 1,
+    failed: 2,
+    completed: 3,
+  };
+  if (order[left.status] !== order[right.status]) {
+    return order[left.status] - order[right.status];
+  }
+  return right.startTime - left.startTime;
+}
+
 export function ProgressIndicator({
   className,
   compact = false,
   autoHide = true,
   autoHideDelay = 3000,
 }: ProgressIndicatorProps) {
-  const [activeGoals, setActiveGoals] = useState<Map<string, GoalData>>(new Map());
+  const tasks = useAgentTaskStore((state) => state.tasks);
+  const liveStepsByTask = useAgentTaskStore((state) => state.liveStepsByTask);
+  const liveProgressByTask = useAgentTaskStore((state) => state.liveProgressByTask);
+
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
   const [hiddenGoals, setHiddenGoals] = useState<Set<string>>(new Set());
+  const autoHideTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const allGoals = useMemo(() => {
+    return tasks
+      .filter((task) => shouldShowGoal(task, liveStepsByTask[task.id], liveProgressByTask[task.id]))
+      .map((task) => buildGoalData(task, liveStepsByTask[task.id], liveProgressByTask[task.id]))
+      .sort(sortGoals);
+  }, [tasks, liveStepsByTask, liveProgressByTask]);
 
   useEffect(() => {
-    let isMounted = true;
-    const unlisteners: Array<() => void> = [];
+    if (allGoals.length === 0) {
+      return;
+    }
 
-    // Helper to safely add listeners
-    const addListener = <T,>(eventName: string, handler: (payload: T) => void) => {
-      listen<T>(eventName, ({ payload }) => {
-        if (isMounted) {
-          handler(payload);
+    setExpandedGoals((previous) => {
+      let changed = false;
+      const next = new Set(previous);
+      for (const goal of allGoals) {
+        if (!next.has(goal.goalId)) {
+          next.add(goal.goalId);
+          changed = true;
         }
-      })
-        .then((unlisten) => {
-          if (isMounted) {
-            unlisteners.push(unlisten);
-          } else {
-            unlisten();
-          }
-        })
-        .catch(console.error);
-    };
-
-    addListener<{ goal_id: string; description: string }>('agi:goal:submitted', (payload) => {
-      setActiveGoals((prev) => {
-        const newMap = new Map(prev);
-        newMap.set(payload.goal_id, {
-          goalId: payload.goal_id,
-          description: payload.description,
-          totalSteps: 0,
-          completedSteps: 0,
-          progressPercent: 0,
-          status: 'planning',
-          steps: [],
-          startTime: Date.now(),
-        });
-        return newMap;
-      });
-
-      setExpandedGoals((prev) => new Set([...prev, payload.goal_id]));
+      }
+      return changed ? next : previous;
     });
+  }, [allGoals]);
 
-    addListener<{ goal_id: string; total_steps: number; estimated_duration_ms: number }>(
-      'agi:goal:plan_created',
-      (payload) => {
-        setActiveGoals((prev) => {
-          const newMap = new Map(prev);
-          const goal = newMap.get(payload.goal_id);
-          if (goal) {
-            newMap.set(payload.goal_id, {
-              ...goal,
-              totalSteps: payload.total_steps,
-              status: 'executing',
-              steps: Array.from({ length: payload.total_steps }, (_, i) => ({
-                id: `step_${i}`,
-                index: i,
-                description: 'Loading...',
-                status: 'pending',
-              })),
-            });
-          }
-          return newMap;
-        });
-      },
-    );
+  useEffect(() => {
+    const timers = autoHideTimersRef.current;
 
-    addListener<{
-      goal_id: string;
-      step_id: string;
-      step_index: number;
-      total_steps: number;
-      description: string;
-    }>('agi:goal:step_started', (payload) => {
-      setActiveGoals((prev) => {
-        const newMap = new Map(prev);
-        const goal = newMap.get(payload.goal_id);
-        if (goal && goal.steps[payload.step_index]) {
-          const newSteps = [...goal.steps];
-          newSteps[payload.step_index] = {
-            id: payload.step_id,
-            index: payload.step_index,
-            description: payload.description,
-            status: 'in-progress',
-            startTime: Date.now(),
-          };
-          newMap.set(payload.goal_id, { ...goal, steps: newSteps });
+    for (const [goalId, timeoutId] of timers.entries()) {
+      const goal = allGoals.find((entry) => entry.goalId === goalId);
+      if (!goal || goal.status !== 'completed' || hiddenGoals.has(goalId) || !autoHide) {
+        clearTimeout(timeoutId);
+        timers.delete(goalId);
+      }
+    }
+
+    if (autoHide) {
+      for (const goal of allGoals) {
+        if (
+          goal.status !== 'completed' ||
+          hiddenGoals.has(goal.goalId) ||
+          timers.has(goal.goalId)
+        ) {
+          continue;
         }
-        return newMap;
-      });
-    });
 
-    addListener<{
-      goal_id: string;
-      step_id: string;
-      step_index: number;
-      total_steps: number;
-      success: boolean;
-      execution_time_ms: number;
-      error?: string;
-    }>('agi:goal:step_completed', (payload) => {
-      setActiveGoals((prev) => {
-        const newMap = new Map(prev);
-        const goal = newMap.get(payload.goal_id);
-        if (goal && goal.steps[payload.step_index]) {
-          const existingStep = goal.steps[payload.step_index];
-          if (existingStep) {
-            const newSteps = [...goal.steps];
-            newSteps[payload.step_index] = {
-              id: existingStep.id,
-              index: existingStep.index,
-              description: existingStep.description,
-              status: payload.success ? 'completed' : 'failed',
-              startTime: existingStep.startTime,
-              endTime: Date.now(),
-              executionTimeMs: payload.execution_time_ms,
-              error: payload.error,
-            };
-            newMap.set(payload.goal_id, { ...goal, steps: newSteps });
-          }
-        }
-        return newMap;
-      });
-    });
+        const timeoutId = setTimeout(() => {
+          setHiddenGoals((previous) => new Set([...previous, goal.goalId]));
+          autoHideTimersRef.current.delete(goal.goalId);
+        }, autoHideDelay);
+        timers.set(goal.goalId, timeoutId);
+      }
+    }
+  }, [allGoals, hiddenGoals, autoHide, autoHideDelay]);
 
-    addListener<{
-      goal_id: string;
-      completed_steps: number;
-      total_steps: number;
-      progress_percent: number;
-    }>('agi:goal:progress', (payload) => {
-      setActiveGoals((prev) => {
-        const newMap = new Map(prev);
-        const goal = newMap.get(payload.goal_id);
-        if (goal) {
-          newMap.set(payload.goal_id, {
-            ...goal,
-            completedSteps: payload.completed_steps,
-            progressPercent: payload.progress_percent,
-          });
-        }
-        return newMap;
-      });
-    });
-
-    addListener<{ goal_id: string; total_steps: number; completed_steps: number }>(
-      'agi:goal:achieved',
-      (payload) => {
-        setActiveGoals((prev) => {
-          const newMap = new Map(prev);
-          const goal = newMap.get(payload.goal_id);
-          if (goal) {
-            newMap.set(payload.goal_id, {
-              ...goal,
-              status: 'completed',
-              completedSteps: payload.completed_steps,
-              progressPercent: 100,
-            });
-          }
-          return newMap;
-        });
-
-        if (autoHide) {
-          setTimeout(() => {
-            setHiddenGoals((prev) => new Set([...prev, payload.goal_id]));
-          }, autoHideDelay);
-        }
-      },
-    );
-
+  useEffect(() => {
+    const timers = autoHideTimersRef.current;
     return () => {
-      isMounted = false;
-      unlisteners.forEach((unlisten) => unlisten());
+      for (const timeoutId of timers.values()) {
+        clearTimeout(timeoutId);
+      }
+      timers.clear();
     };
-  }, [autoHide, autoHideDelay]);
+  }, []);
 
   const visibleGoals = useMemo(() => {
-    return Array.from(activeGoals.values()).filter((goal) => !hiddenGoals.has(goal.goalId));
-  }, [activeGoals, hiddenGoals]);
+    return allGoals.filter((goal) => !hiddenGoals.has(goal.goalId));
+  }, [allGoals, hiddenGoals]);
 
   const toggleGoalExpansion = (goalId: string) => {
-    setExpandedGoals((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(goalId)) {
-        newSet.delete(goalId);
+    setExpandedGoals((previous) => {
+      const next = new Set(previous);
+      if (next.has(goalId)) {
+        next.delete(goalId);
       } else {
-        newSet.add(goalId);
+        next.add(goalId);
       }
-      return newSet;
+      return next;
     });
   };
 
   const dismissGoal = (goalId: string) => {
-    setHiddenGoals((prev) => new Set([...prev, goalId]));
+    const existingTimeout = autoHideTimersRef.current.get(goalId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      autoHideTimersRef.current.delete(goalId);
+    }
+    setHiddenGoals((previous) => new Set([...previous, goalId]));
   };
 
   if (visibleGoals.length === 0) {
     return null;
   }
 
-  if (compact && visibleGoals.length > 0) {
+  if (compact) {
     const activeGoal = visibleGoals[0];
     if (!activeGoal) {
       return null;
@@ -295,7 +326,6 @@ export function ProgressIndicator({
               statusConfig.borderColor,
             )}
           >
-            {/* Goal Header */}
             <div className="flex items-center gap-3 p-4">
               <div
                 className={cn(
@@ -315,7 +345,7 @@ export function ProgressIndicator({
                     <span className="text-xs text-muted-foreground">{goal.progressPercent}%</span>
                   )}
                 </div>
-                <p className="mt-0.5 text-sm text-muted-foreground line-clamp-1">
+                <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">
                   {goal.description}
                 </p>
               </div>
@@ -341,7 +371,6 @@ export function ProgressIndicator({
               </div>
             </div>
 
-            {/* Progress Bar */}
             {goal.status === 'executing' && (
               <div className="px-4 pb-3">
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -353,7 +382,6 @@ export function ProgressIndicator({
               </div>
             )}
 
-            {/* Steps List */}
             {isExpanded && goal.steps.length > 0 && (
               <div className="border-t border-border px-4 py-3">
                 <div className="space-y-2">
@@ -364,12 +392,10 @@ export function ProgressIndicator({
 
                     return (
                       <div key={step.id} className="relative flex gap-3">
-                        {/* Connector Line */}
                         {!isLastStep && (
                           <div className="absolute left-3 top-6 h-full w-0.5 bg-border" />
                         )}
 
-                        {/* Step Icon */}
                         <div className="relative shrink-0">
                           <div
                             className={cn(
@@ -383,7 +409,6 @@ export function ProgressIndicator({
                           </div>
                         </div>
 
-                        {/* Step Content */}
                         <div className="min-w-0 flex-1 pb-2">
                           <div className="flex items-start justify-between gap-2">
                             <p className={cn('text-sm', stepConfig.textColor)}>
