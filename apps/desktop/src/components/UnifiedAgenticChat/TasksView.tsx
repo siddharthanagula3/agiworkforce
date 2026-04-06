@@ -19,42 +19,14 @@ import {
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { listen, invoke } from '../../lib/tauri-mock';
+import { invoke } from '../../lib/tauri-mock';
 import { useAgentTaskStore, type AgentTask } from '../../stores/agentTaskStore';
 import { cn } from '../../lib/utils';
 import { ScrollArea } from '../ui/ScrollArea';
 import { TaskCreationDialog } from './TaskCreationDialog';
 import { SubtaskTimeline, type SubtaskStep } from './SubtaskTimeline';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-
 type FilterTab = 'active' | 'completed' | 'failed' | 'scheduled';
-
-interface LoopStatusPayload {
-  step: number;
-  total: number;
-  description: string;
-  status: string;
-  taskId?: string;
-  goal_id?: string;
-}
-
-interface LoopStartedPayload {
-  taskId?: string;
-  goal_id?: string;
-}
-
-interface LoopEndedPayload {
-  taskId?: string;
-  goal_id?: string;
-  success?: boolean;
-}
-
-// Per-task live step tracking (in-memory, not persisted)
-type LiveStepsMap = Record<string, SubtaskStep[]>;
-type LiveProgressMap = Record<string, { step: number; total: number }>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Status config
@@ -431,11 +403,11 @@ export function TasksView() {
   const [activeTab, setActiveTab] = useState<FilterTab>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [liveStepsMap, setLiveStepsMap] = useState<LiveStepsMap>({});
-  const [liveProgressMap, setLiveProgressMap] = useState<LiveProgressMap>({});
 
   const tasks = useAgentTaskStore((s) => s.tasks);
   const loading = useAgentTaskStore((s) => s.loading);
+  const liveStepsByTask = useAgentTaskStore((s) => s.liveStepsByTask);
+  const liveProgressByTask = useAgentTaskStore((s) => s.liveProgressByTask);
   const fetchTasks = useAgentTaskStore((s) => s.fetchTasks);
   const getTaskStatus = useAgentTaskStore((s) => s.getTaskStatus);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -467,109 +439,6 @@ export function TasksView() {
       }
     };
   }, [tasks, getTaskStatus]);
-
-  // Tauri real-time event listeners
-  useEffect(() => {
-    const unlisteners: Array<() => void> = [];
-
-    const setup = async () => {
-      // Task started
-      const u1 = await listen<LoopStartedPayload>('agentic:loop-started', ({ payload }) => {
-        const id = payload.taskId ?? payload.goal_id;
-        if (!id) return;
-        useAgentTaskStore.setState((state) => ({
-          tasks: state.tasks.map((t) => (t.id === id ? { ...t, status: 'running' as const } : t)),
-        }));
-      });
-      unlisteners.push(u1);
-
-      // Step update
-      const u2 = await listen<LoopStatusPayload>('agentic:loop-status', ({ payload }) => {
-        const id = payload.taskId ?? payload.goal_id;
-        if (!id) return;
-
-        const stepId = `${id}_step_${payload.step}`;
-        const stepStatus: SubtaskStep['status'] =
-          payload.status === 'done'
-            ? 'done'
-            : payload.status === 'failed'
-              ? 'failed'
-              : payload.status === 'running'
-                ? 'running'
-                : 'pending';
-
-        const newStep: SubtaskStep = {
-          id: stepId,
-          description: payload.description,
-          status: stepStatus,
-          startedAt: new Date(),
-          completedAt: stepStatus === 'done' || stepStatus === 'failed' ? new Date() : undefined,
-        };
-
-        setLiveStepsMap((prev) => {
-          const existing = prev[id] ?? [];
-          const idx = existing.findIndex((s) => s.id === stepId);
-          const updated =
-            idx >= 0
-              ? existing.map((s, i) => (i === idx ? { ...s, ...newStep } : s))
-              : [...existing, newStep];
-          return { ...prev, [id]: updated };
-        });
-
-        setLiveProgressMap((prev) => ({
-          ...prev,
-          [id]: { step: payload.step, total: payload.total },
-        }));
-      });
-      unlisteners.push(u2);
-
-      // Task ended
-      const u3 = await listen<LoopEndedPayload>('agentic:loop-ended', ({ payload }) => {
-        const id = payload.taskId ?? payload.goal_id;
-        if (!id) return;
-        const success = payload.success !== false;
-
-        useAgentTaskStore.setState((state) => ({
-          tasks: state.tasks.map((t) =>
-            t.id === id
-              ? {
-                  ...t,
-                  status: success ? ('completed' as const) : ('failed' as const),
-                  completedAt: new Date().toISOString(),
-                }
-              : t,
-          ),
-        }));
-
-        // Mark any still-running step as done
-        setLiveStepsMap((prev) => {
-          const steps = prev[id];
-          if (!steps) return prev;
-          return {
-            ...prev,
-            [id]: steps.map((s) =>
-              s.status === 'running'
-                ? { ...s, status: 'done' as const, completedAt: new Date() }
-                : s,
-            ),
-          };
-        });
-      });
-      unlisteners.push(u3);
-
-      // message-consumed — no-op, kept for completeness
-      const u4 = await listen('agentic:message-consumed', () => {});
-      unlisteners.push(u4);
-    };
-
-    void setup();
-
-    return () => {
-      for (const unlisten of unlisteners) {
-        unlisten();
-      }
-    };
-  }, []);
 
   // Tab definitions
   const tabs: ReadonlyArray<{ id: FilterTab; label: string; icon: React.ElementType }> = [
@@ -686,8 +555,10 @@ export function TasksView() {
               <EmptyState tab={activeTab} onNew={() => setDialogOpen(true)} />
             ) : (
               filtered.map((task) => {
-                const steps = liveStepsMap[task.id] ?? [];
-                const progress = liveProgressMap[task.id] ?? { step: 0, total: 0 };
+                const steps = [...(liveStepsByTask[task.id] ?? [])].sort(
+                  (left, right) => left.index - right.index,
+                ) as SubtaskStep[];
+                const progress = liveProgressByTask[task.id] ?? { step: 0, total: 0 };
                 return (
                   <TaskCard
                     key={task.id}

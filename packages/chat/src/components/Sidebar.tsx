@@ -10,6 +10,8 @@ import {
   Plug,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useHostBridge } from '../lib/hostBridge';
+import { syncPackageStoreFromHost } from '../hooks/useHostBridgeSync';
 import { useSidebar } from '../hooks/useSidebar';
 import { useChatStore } from '../stores/chatStore';
 import { useUIStore } from '../stores/uiStore';
@@ -34,6 +36,7 @@ interface NavItem {
 
 export function Sidebar() {
   const { collapsed, width, toggleSidebar } = useSidebar();
+  const hostBridge = useHostBridge();
 
   const addConversation = useChatStore((s) => s.addConversation);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -45,6 +48,13 @@ export function Sidebar() {
   const toggleSearchModal = useUIStore((s) => s.toggleSearchModal);
 
   const handleNewChat = useCallback(() => {
+    if (hostBridge?.createConversation) {
+      hostBridge.createConversation('New Chat');
+      syncPackageStoreFromHost(hostBridge);
+      setActiveView('chat');
+      return;
+    }
+
     const now = new Date().toISOString();
     const conv: Conversation = {
       id: generateId(),
@@ -58,7 +68,7 @@ export function Sidebar() {
     addConversation(conv);
     setActiveConversation(conv.id);
     setActiveView('chat');
-  }, [addConversation, setActiveConversation, setActiveView]);
+  }, [addConversation, hostBridge, setActiveConversation, setActiveView]);
 
   const navItems: NavItem[] = [
     {

@@ -2,6 +2,7 @@
 export * from './lib/tokens';
 export * from './lib/types';
 export * from './lib/runtime';
+export * from './lib/hostBridge';
 export * from './lib/utils';
 export * from './lib/greetings';
 
