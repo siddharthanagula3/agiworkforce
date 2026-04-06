@@ -33,7 +33,7 @@
     "dompurify": "^3.3.3"
   },
   "devDependencies": {
-    "@types/chrome": "^0.1.38",
+    "@types/chrome": "^0.1.39",
     "jsdom": "^27.4.0",
     "terser": "^5.46.1",
     "typescript": "5.9.3",
