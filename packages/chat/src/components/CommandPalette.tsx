@@ -2,6 +2,8 @@ import { useEffect, useCallback } from 'react';
 import { Command } from 'cmdk';
 import { Plus, Settings, Search, Moon, MessageSquare, FolderOpen, Zap, Plug } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useHostBridge } from '../lib/hostBridge';
+import { syncPackageStoreFromHost } from '../hooks/useHostBridgeSync';
 import { useUIStore } from '../stores/uiStore';
 import { useChatStore } from '../stores/chatStore';
 import { generateId } from '../lib/utils';
@@ -30,12 +32,21 @@ export function CommandPalette() {
 
   const addConversation = useChatStore((s) => s.addConversation);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  const hostBridge = useHostBridge();
 
   const close = useCallback(() => {
     if (commandPaletteOpen) toggleCommandPalette();
   }, [commandPaletteOpen, toggleCommandPalette]);
 
   const handleNewChat = useCallback(() => {
+    if (hostBridge?.createConversation) {
+      hostBridge.createConversation('New Chat');
+      syncPackageStoreFromHost(hostBridge);
+      setActiveView('chat');
+      close();
+      return;
+    }
+
     const now = new Date().toISOString();
     const conv: Conversation = {
       id: generateId(),
@@ -50,7 +61,7 @@ export function CommandPalette() {
     setActiveConversation(conv.id);
     setActiveView('chat');
     close();
-  }, [addConversation, setActiveConversation, setActiveView, close]);
+  }, [addConversation, close, hostBridge, setActiveConversation, setActiveView]);
 
   const handleSettings = useCallback(() => {
     openSettings();

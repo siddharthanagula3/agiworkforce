@@ -989,18 +989,15 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }>('chat:tool-calls', ({ payload }) => {
           markStreamActivity();
 
-          // CHT-009 fix: Update message metadata so MessageBubble renders the ToolCallCard
-          // Find the target message
           const state = useUnifiedChatStore.getState();
-          // Resolve deterministically: stream session map first, then explicit payload.message_id.
-
           const targetMessageId = resolveStreamTargetMessageId(
             payload.conversation_id,
             payload.message_id,
           );
 
-          // If we found a target message, update its metadata
-          if (targetMessageId) {
+          // Desktop/Tauri uses the canonical `tool:event` listener for message metadata.
+          // Cloud/web keeps this fallback because `tool:event` is not emitted there.
+          if (!isTauri && targetMessageId) {
             const firstTool = payload.tool_calls[0];
             if (firstTool) {
               const normalizedFirstToolName = normalizeToolNameForUi(firstTool.name);
@@ -1014,7 +1011,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             }
           }
 
-          // Add to action trail to show which tools are being called
           for (const tc of payload.tool_calls) {
             const normalizedToolName = normalizeToolNameForUi(tc.name);
 
@@ -1035,11 +1031,13 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
               payload.message_id,
             );
 
-            useUnifiedChatStore.getState().addActionTrailEntry({
-              type: 'running',
-              message: `Calling ${normalizedToolName}...`,
-              metadata: { tool_call_id: tc.id, arguments: tc.arguments },
-            });
+            if (!isTauri) {
+              useUnifiedChatStore.getState().addActionTrailEntry({
+                type: 'running',
+                message: `Calling ${normalizedToolName}...`,
+                metadata: { tool_call_id: tc.id, arguments: tc.arguments },
+              });
+            }
 
             // Guard against dropped/missed `chat:tool-executing` events.
             // We start a timeout here as a fallback so every running tool resolves.
@@ -1149,8 +1147,8 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             payload.message_id,
           );
 
-          // AUDIT-UI-034: Update message metadata status when tool result arrives
-          // This ensures the tool card transitions from "running" to "completed/failed"
+          // Tauri owns message metadata via `tool:event`.
+          // Cloud/web keeps this fallback so the tool card still reaches a terminal state.
           const targetMessageId = resolveStreamTargetMessageId(
             payload.conversation_id,
             payload.message_id,
@@ -1173,12 +1171,14 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
                 error: payload.success ? null : payload.result,
               }),
             );
-            useUnifiedChatStore
-              .getState()
-              .updateMessage(
-                targetMessageId,
-                buildToolResultStateMessageUpdate({ success: payload.success }),
-              );
+            if (!isTauri) {
+              useUnifiedChatStore
+                .getState()
+                .updateMessage(
+                  targetMessageId,
+                  buildToolResultStateMessageUpdate({ success: payload.success }),
+                );
+            }
           }
 
           // Action trail update for completion is handled by tool:event Completed
@@ -1190,16 +1190,17 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             normalizedToolName,
           );
 
-          // Keep agent status coherent during multi-step runs:
-          // a single tool result should update step text, not mark the whole run complete.
-          const currentAgent = useUnifiedChatStore.getState().agentStatus;
-          if (currentAgent && currentAgent.status === 'running') {
-            useUnifiedChatStore.getState().setAgentStatus({
-              ...currentAgent,
-              currentStep: payload.success
-                ? `Completed ${normalizedToolName}`
-                : `Failed ${normalizedToolName}`,
-            });
+          if (!isTauri) {
+            // Cloud/web fallback: Tauri owns this via the canonical `tool:event` path.
+            const currentAgent = useUnifiedChatStore.getState().agentStatus;
+            if (currentAgent && currentAgent.status === 'running') {
+              useUnifiedChatStore.getState().setAgentStatus({
+                ...currentAgent,
+                currentStep: payload.success
+                  ? `Completed ${normalizedToolName}`
+                  : `Failed ${normalizedToolName}`,
+              });
+            }
           }
         }),
       );
