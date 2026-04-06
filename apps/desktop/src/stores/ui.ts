@@ -729,6 +729,8 @@ export const useUIStore = create<UIState>()(
                   lowered.includes('file')
                 ) {
                   target = 'files';
+                } else if (lowered.includes('approval')) {
+                  target = 'approvals';
                 } else if (lowered.includes('browser')) {
                   target = 'browser';
                 } else if (

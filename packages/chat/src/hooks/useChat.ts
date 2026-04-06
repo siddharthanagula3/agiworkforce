@@ -1,54 +1,41 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
+import type { ChatHostBridge } from '../lib/hostBridge';
 import type { ChatRuntime } from '../lib/runtime';
 import type { ChatMessage } from '../lib/types';
+import { syncPackageStoreFromHost } from './useHostBridgeSync';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 
-export function useChat(
-  runtime: ChatRuntime | null,
-  externalAddMessage?: (msg: { role: string; content: string; id?: string }) => void,
-) {
-  const externalAddMessageRef = useRef(externalAddMessage);
-  externalAddMessageRef.current = externalAddMessage;
+interface UseChatOptions {
+  hostBridge?: ChatHostBridge | null;
+  externalAddMessage?: (msg: { role: string; content: string; id?: string }) => void;
+}
 
-  /** Add message to desktop store (persistence) AND package store (rendering). */
+export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
+  const externalAddMessageRef = useRef(options?.externalAddMessage);
+  externalAddMessageRef.current = options?.externalAddMessage;
+  const hostBridgeRef = useRef(options?.hostBridge ?? null);
+  hostBridgeRef.current = options?.hostBridge ?? null;
+
+  /** Add message to the host bridge when provided, then to the package store for rendering. */
   const addMsg = useCallback((msg: Partial<ChatMessage> & { role: string; content: string }) => {
     const msgId = msg.id ?? crypto.randomUUID();
     const timestamp = new Date().toISOString();
+    const hostBridge = hostBridgeRef.current;
 
-    // Write to desktop store (for persistence to chat-storage)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const desktopStore = (window as any).__AGI_DESKTOP_CHAT_STORE__;
-    if (desktopStore) {
-      desktopStore.getState().addMessage({ role: msg.role, content: msg.content, id: msgId });
+    if (hostBridge?.addMessage) {
+      hostBridge.addMessage({ role: msg.role, content: msg.content, id: msgId });
     } else if (externalAddMessageRef.current) {
       externalAddMessageRef.current({ role: msg.role, content: msg.content, id: msgId });
     }
 
-    // ALSO write to package store (for ChatInterface rendering)
     const pkgStore = useChatStore.getState();
     let convId = pkgStore.activeConversationId;
 
-    // Sync conversation from desktop store if needed
-    if (!convId && desktopStore) {
-      const dsState = desktopStore.getState();
-      convId = dsState.activeConversationId as string | null;
-      if (convId) {
-        // Create the conversation in the package store too
-        const dsConv = dsState.conversations?.find?.((c: { id: string }) => c.id === convId);
-        if (dsConv) {
-          pkgStore.addConversation({
-            id: convId,
-            title: dsConv.title ?? 'New Chat',
-            createdAt: String(dsConv.createdAt ?? timestamp),
-            updatedAt: String(dsConv.updatedAt ?? timestamp),
-            archived: false,
-            pinned: false,
-          });
-        }
-        pkgStore.setActiveConversation(convId);
-      }
+    if (!convId && hostBridge) {
+      syncPackageStoreFromHost(hostBridge);
+      convId = useChatStore.getState().activeConversationId;
     }
 
     if (convId) {

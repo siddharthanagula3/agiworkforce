@@ -1,4 +1,6 @@
 import { useChatStore } from '../stores/chatStore';
+import { useHostBridge } from '../lib/hostBridge';
+import { syncPackageStoreFromHost } from '../hooks/useHostBridgeSync';
 import type { Conversation } from '../lib/types';
 import { cn } from '../lib/utils';
 import { Tooltip } from './ui/Tooltip';
@@ -12,6 +14,7 @@ export interface ConversationItemProps {
 export function ConversationItem({ conversation, collapsed = false }: ConversationItemProps) {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  const hostBridge = useHostBridge();
 
   const isActive = activeConversationId === conversation.id;
   const initial = (conversation.title.trim()[0] ?? 'C').toUpperCase();
@@ -19,7 +22,14 @@ export function ConversationItem({ conversation, collapsed = false }: Conversati
   const button = (
     <button
       type="button"
-      onClick={() => setActiveConversation(conversation.id)}
+      onClick={() => {
+        if (hostBridge?.selectConversation) {
+          hostBridge.selectConversation(conversation.id);
+          syncPackageStoreFromHost(hostBridge);
+        } else {
+          setActiveConversation(conversation.id);
+        }
+      }}
       className={cn(
         'flex w-full items-center rounded-[var(--chat-radius-md)] transition-colors',
         collapsed ? 'h-8 justify-center px-0' : 'h-8 gap-2 px-2',

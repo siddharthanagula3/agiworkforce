@@ -9,90 +9,14 @@
  * - Cancel specific tasks
  * - Get task status
  * - Auto-polling for updates when tasks are active
- * - Real-time event listening for task updates
+ * - Read from the canonical background-task store
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { invoke, listen, isTauri } from '../lib/tauri-mock';
-import type { UnlistenFn } from '../lib/tauri-mock';
-import { useAgentStore } from '../stores/chat/agentStore';
-import type { BackgroundTask, BackgroundTaskStatus } from '../stores/chat/agentStore';
+import { invoke, isTauri } from '../lib/tauri-mock';
+import { useAgentStore, normalizeBackgroundTask } from '../stores/chat/agentStore';
+import type { BackgroundTask, BackgroundTaskSnapshotPayload } from '../stores/chat/agentStore';
 import { toast } from 'sonner';
-
-/**
- * Backend task response structure (snake_case from Rust)
- */
-interface BackendTaskResponse {
-  id: string;
-  name: string;
-  description?: string;
-  status: string;
-  progress: number;
-  priority?: string;
-  created_at?: number | string;
-  started_at?: number | string;
-  completed_at?: number | string;
-  error?: string;
-}
-
-/**
- * Task progress event payload from backend
- */
-interface TaskProgressEvent {
-  task: BackendTaskResponse;
-}
-
-/**
- * Normalize backend task response to frontend BackgroundTask type
- */
-function normalizeTask(task: BackendTaskResponse): BackgroundTask {
-  const normalizeStatus = (status: string): BackgroundTaskStatus => {
-    const normalized = status.toLowerCase();
-    if (
-      normalized === 'queued' ||
-      normalized === 'running' ||
-      normalized === 'paused' ||
-      normalized === 'completed' ||
-      normalized === 'failed' ||
-      normalized === 'cancelled'
-    ) {
-      return normalized as BackgroundTaskStatus;
-    }
-    return 'queued';
-  };
-
-  const normalizePriority = (priority?: string): 'low' | 'normal' | 'high' => {
-    if (!priority) return 'normal';
-    const normalized = priority.toLowerCase();
-    if (normalized === 'low' || normalized === 'normal' || normalized === 'high') {
-      return normalized;
-    }
-    return 'normal';
-  };
-
-  const normalizeTimestamp = (value?: number | string): Date | undefined => {
-    if (value === undefined || value === null) return undefined;
-    if (typeof value === 'number') {
-      // Unix timestamp in seconds or milliseconds
-      const ms = value > 1_000_000_000_000 ? value : value * 1000;
-      return new Date(ms);
-    }
-    return new Date(value);
-  };
-
-  return {
-    id: task.id,
-    name: task.name,
-    description: task.description,
-    status: normalizeStatus(task.status),
-    progress: Math.min(100, Math.max(0, task.progress)),
-    priority: normalizePriority(task.priority),
-    createdAt: normalizeTimestamp(task.created_at) ?? new Date(),
-    startedAt: normalizeTimestamp(task.started_at),
-    completedAt: normalizeTimestamp(task.completed_at),
-    error: task.error,
-  };
-}
 
 export interface UseBackgroundTasksOptions {
   /**
@@ -183,7 +107,6 @@ export function useBackgroundTasks(
 
   const isMountedRef = useRef(true);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const unlistenFnsRef = useRef<UnlistenFn[]>([]);
 
   /**
    * Fetch all background tasks from the backend
@@ -197,7 +120,7 @@ export function useBackgroundTasks(
     setError(null);
 
     try {
-      const response = await invoke<BackendTaskResponse[]>('background_task_list', {
+      const response = await invoke<BackgroundTaskSnapshotPayload[]>('background_task_list', {
         request: { status: null, priority: null, limit: null },
       });
 
@@ -208,7 +131,7 @@ export function useBackgroundTasks(
         // Get current tasks from store without causing dependency loop
         const currentTasks = useAgentStore.getState().backgroundTasks;
         for (const task of response) {
-          const normalized = normalizeTask(task);
+          const normalized = normalizeBackgroundTask(task);
           // Check if task exists, then update or add
           const existingTask = currentTasks.find((t) => t.id === normalized.id);
           if (existingTask) {
@@ -387,13 +310,16 @@ export function useBackgroundTasks(
     }
 
     try {
-      const response = await invoke<BackendTaskResponse | null>('background_task_status', {
-        taskId,
-      });
+      const response = await invoke<BackgroundTaskSnapshotPayload | null>(
+        'background_task_status',
+        {
+          taskId,
+        },
+      );
 
       if (!response) return null;
 
-      return normalizeTask(response);
+      return normalizeBackgroundTask(response);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error('[useBackgroundTasks] Failed to get task status:', errorMessage);
@@ -401,60 +327,13 @@ export function useBackgroundTasks(
     }
   }, []);
 
-  // Setup event listeners for real-time updates
+  // Refresh from backend on mount; the canonical store listener handles live task events.
   useEffect(() => {
     isMountedRef.current = true;
-    unlistenFnsRef.current = [];
-
-    if (!isTauri) return;
-
-    const setupListeners = async () => {
-      try {
-        // Listen for task progress events
-        const unlistenProgress = await listen<TaskProgressEvent>('task:progress', (event) => {
-          if (!isMountedRef.current) return;
-          const normalized = normalizeTask(event.payload.task);
-          updateBackgroundTask(normalized.id, normalized);
-        });
-        unlistenFnsRef.current.push(unlistenProgress);
-
-        // Listen for task completion events
-        const unlistenCompleted = await listen<TaskProgressEvent>('task:completed', (event) => {
-          if (!isMountedRef.current) return;
-          const normalized = normalizeTask(event.payload.task);
-          updateBackgroundTask(normalized.id, {
-            ...normalized,
-            status: 'completed',
-            completedAt: new Date(),
-          });
-        });
-        unlistenFnsRef.current.push(unlistenCompleted);
-
-        // Listen for task failure events
-        const unlistenFailed = await listen<TaskProgressEvent>('task:failed', (event) => {
-          if (!isMountedRef.current) return;
-          const normalized = normalizeTask(event.payload.task);
-          updateBackgroundTask(normalized.id, {
-            ...normalized,
-            status: 'failed',
-            completedAt: new Date(),
-          });
-        });
-        unlistenFnsRef.current.push(unlistenFailed);
-      } catch (err) {
-        console.error('[useBackgroundTasks] Failed to setup listeners:', err);
-      }
-    };
-
-    setupListeners();
-
-    // Initial fetch
-    refreshTasks();
+    void refreshTasks();
 
     return () => {
       isMountedRef.current = false;
-      unlistenFnsRef.current.forEach((unlisten) => unlisten());
-      unlistenFnsRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

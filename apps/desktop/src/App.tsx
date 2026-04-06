@@ -1,23 +1,32 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { ChatHostBridge } from '@agiworkforce/chat';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
+import { initializeAgentTaskEventListeners } from './stores/agentTaskStore';
+import {
+  cleanupAgentWorkflowEventListeners,
+  initializeAgentWorkflowEventListeners,
+} from './stores/chat/agentWorkflowEvents';
+import {
+  cleanupExecutionListeners,
+  initializeExecutionGoalSubscription,
+  initializeExecutionListeners,
+} from './stores/executionStore';
 
 import { useChatStore as useDesktopChatStore } from './stores/chat/chatStore';
 import { TauriRuntime } from './runtime/TauriRuntime';
 import { WebRuntime } from './runtime/WebRuntime';
-
-// Expose desktop chat store globally so packages/chat useChat hook can access it
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).__AGI_DESKTOP_CHAT_STORE__ = useDesktopChatStore;
 import type { CommandOption } from './components/UnifiedAgenticChat/CommandPalette';
 import { useSearchModal } from './hooks/useSearchModal';
 import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
 import {
+  cleanupBackgroundTaskEventListeners,
   dbIdToUuid,
+  initializeBackgroundTaskEventListeners,
   initializeAgentStatusListener,
   initializeToolEventListener,
   useUnifiedChatStore,
@@ -348,10 +357,25 @@ const DesktopShell = () => {
       initializeSyncManager();
     });
     registerCleanup(() => cleanupSyncManager());
+    registerCleanup(() => cleanupBackgroundTaskEventListeners());
+    registerCleanup(() => cleanupExecutionListeners());
+    registerCleanup(() => cleanupAgentWorkflowEventListeners());
+
+    void runStartupStep('Execution goal subscription', async () => {
+      initializeExecutionGoalSubscription();
+    });
 
     if (isTauri) {
       void runStartupStep('Agent status listener', () => initializeAgentStatusListener());
+      void runStartupStep('Background task event listener', () =>
+        initializeBackgroundTaskEventListeners(),
+      );
       void runStartupStep('Tool event listener', () => initializeToolEventListener());
+      void runStartupStep('Agent task event listener', () => initializeAgentTaskEventListeners());
+      void runStartupStep('Agent workflow event listener', () =>
+        initializeAgentWorkflowEventListeners(),
+      );
+      void runStartupStep('Execution event listener', () => initializeExecutionListeners());
     }
 
     // Wire up mcpb:install_progress Tauri event into the MCPB store (Tauri-only)
@@ -1010,6 +1034,51 @@ const DesktopShell = () => {
   }, []);
 
   const tauriRuntime = useMemo(() => (isTauri ? new TauriRuntime() : new WebRuntime()), []);
+  const chatHostBridge = useMemo<ChatHostBridge>(
+    () => ({
+      getSnapshot: () => {
+        const state = useDesktopChatStore.getState();
+        return {
+          activeConversationId: state.activeConversationId,
+          conversations: state.conversations.map((conversation) => ({
+            id: conversation.id,
+            title: conversation.title,
+            createdAt: conversation.updatedAt,
+            updatedAt: conversation.updatedAt,
+            pinned: conversation.pinned,
+            archived: conversation.archived,
+            lastMessage: conversation.lastMessage,
+          })),
+        };
+      },
+      subscribe: (listener) => {
+        const unsubscribeActiveConversation = useDesktopChatStore.subscribe(
+          (state) => state.activeConversationId,
+          () => listener(),
+        );
+        const unsubscribeConversations = useDesktopChatStore.subscribe(
+          (state) => state.conversations,
+          () => listener(),
+        );
+
+        return () => {
+          unsubscribeActiveConversation();
+          unsubscribeConversations();
+        };
+      },
+      addMessage: (message) =>
+        useDesktopChatStore.getState().addMessage({
+          ...message,
+          role: message.role as 'user' | 'assistant' | 'system',
+        }),
+      createConversation: (title) => useDesktopChatStore.getState().createConversation(title),
+      selectConversation: (id) => {
+        if (!id) return;
+        useDesktopChatStore.getState().selectConversation(id);
+      },
+    }),
+    [],
+  );
 
   const commandOptions = useMemo(() => {
     const buildOption = (definition: {
@@ -1200,12 +1269,7 @@ const DesktopShell = () => {
                 className="h-full w-full"
                 manageTheme={false}
                 enableShortcuts={true}
-                onAddMessage={(msg) =>
-                  useDesktopChatStore.getState().addMessage({
-                    ...msg,
-                    role: msg.role as 'user' | 'assistant' | 'system',
-                  })
-                }
+                hostBridge={chatHostBridge}
                 onModelSelectorClick={() => openSettingsDialog('models-keys')}
                 onVoiceClick={() => {
                   // Toggle voice input overlay

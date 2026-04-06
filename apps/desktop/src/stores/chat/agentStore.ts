@@ -12,7 +12,7 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { invoke, isTauri, listen } from '../../lib/tauri-mock';
+import { invoke, isTauri, listen, type UnlistenFn } from '../../lib/tauri-mock';
 
 export interface AgentStatus {
   id: string;
@@ -52,6 +52,36 @@ export interface BackgroundTask {
   completedAt?: Date;
   error?: string;
 }
+
+export interface BackgroundTaskResultPayload {
+  success?: boolean;
+  output?: string | null;
+  error?: string | null;
+}
+
+export interface BackgroundTaskSnapshotPayload {
+  id: string;
+  name: string;
+  description?: string | null;
+  status: string;
+  progress: number;
+  priority?: string | null;
+  created_at?: number | string | Date;
+  started_at?: number | string | Date | null;
+  completed_at?: number | string | Date | null;
+  error?: string | null;
+  result?: BackgroundTaskResultPayload | null;
+}
+
+export interface BackgroundTaskProgressPayload {
+  task_id: string;
+  progress: number;
+}
+
+export type BackgroundTaskEventPayload =
+  | BackgroundTaskProgressPayload
+  | BackgroundTaskSnapshotPayload
+  | { task: BackgroundTaskSnapshotPayload };
 
 /** Number of milliseconds in 24 hours — used for stale background task eviction. */
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1_000;
@@ -503,6 +533,8 @@ export type AgentStatusPayload = Partial<AgentStatus> & {
 };
 
 let agentStatusListenerInitialized = false;
+let backgroundTaskEventListenersInitialized = false;
+const backgroundTaskUnlistenFunctions: UnlistenFn[] = [];
 
 export async function initializeAgentStatusListener() {
   if (agentStatusListenerInitialized || !isTauri) {
@@ -523,6 +555,52 @@ export async function initializeAgentStatusListener() {
   }
 }
 
+export function cleanupBackgroundTaskEventListeners(): void {
+  for (const unlisten of backgroundTaskUnlistenFunctions) {
+    try {
+      unlisten();
+    } catch (error) {
+      console.error('[AgentStore] Failed to cleanup background task listener:', error);
+    }
+  }
+
+  backgroundTaskUnlistenFunctions.length = 0;
+  backgroundTaskEventListenersInitialized = false;
+}
+
+export async function initializeBackgroundTaskEventListeners(): Promise<void> {
+  if (backgroundTaskEventListenersInitialized || !isTauri) {
+    return;
+  }
+
+  backgroundTaskEventListenersInitialized = true;
+
+  try {
+    await bootstrapBackgroundTasks();
+
+    backgroundTaskUnlistenFunctions.push(
+      await listen<BackgroundTaskEventPayload>('task:progress', ({ payload }) => {
+        applyBackgroundTaskEvent(payload, 'task:progress');
+      }),
+    );
+
+    backgroundTaskUnlistenFunctions.push(
+      await listen<BackgroundTaskEventPayload>('task:completed', ({ payload }) => {
+        applyBackgroundTaskEvent(payload, 'task:completed');
+      }),
+    );
+
+    backgroundTaskUnlistenFunctions.push(
+      await listen<BackgroundTaskEventPayload>('task:failed', ({ payload }) => {
+        applyBackgroundTaskEvent(payload, 'task:failed');
+      }),
+    );
+  } catch (error) {
+    cleanupBackgroundTaskEventListeners();
+    console.error('[AgentStore] Failed to initialize background task listeners:', error);
+  }
+}
+
 async function bootstrapAgentStatuses() {
   try {
     const agents = await invoke<AgentStatusPayload[]>('refresh_agent_status');
@@ -531,6 +609,20 @@ async function bootstrapAgentStatuses() {
     applyAgentStatusSnapshot([]);
     console.debug(
       '[AgentStore] Agent status bootstrap returned empty (orchestrator not yet initialized)',
+    );
+  }
+}
+
+async function bootstrapBackgroundTasks() {
+  try {
+    const tasks = await invoke<BackgroundTaskSnapshotPayload[]>('background_task_list', {
+      request: { status: null, priority: null, limit: null },
+    });
+    applyBackgroundTaskSnapshot(Array.isArray(tasks) ? tasks : []);
+  } catch {
+    applyBackgroundTaskSnapshot([]);
+    console.debug(
+      '[AgentStore] Background task bootstrap returned empty (task manager not yet initialized)',
     );
   }
 }
@@ -561,6 +653,25 @@ export function applyAgentStatusSnapshot(payloads: AgentStatusPayload[]) {
     },
     undefined,
     'agent/applyStatusSnapshot',
+  );
+}
+
+export function applyBackgroundTaskSnapshot(payloads: BackgroundTaskSnapshotPayload[]) {
+  useAgentStore.setState(
+    (state) => {
+      if (!payloads || payloads.length === 0) {
+        state.backgroundTasks = [];
+        return;
+      }
+
+      const normalized = payloads
+        .filter((task) => task.id && task.name)
+        .map((task) => normalizeBackgroundTask(task));
+
+      state.backgroundTasks = evictStaleBackgroundTasks(normalized).slice(-BACKGROUND_TASKS_LIMIT);
+    },
+    undefined,
+    'agent/applyBackgroundTaskSnapshot',
   );
 }
 
@@ -652,6 +763,148 @@ function normalizeProgress(value: unknown, fallback = 0): number {
   }
 
   return Math.min(100, Math.max(0, raw));
+}
+
+function normalizeBackgroundTaskStatus(
+  value: unknown,
+  fallback: BackgroundTaskStatus = 'queued',
+): BackgroundTaskStatus {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.toLowerCase();
+  if (
+    normalized === 'queued' ||
+    normalized === 'running' ||
+    normalized === 'paused' ||
+    normalized === 'completed' ||
+    normalized === 'failed' ||
+    normalized === 'cancelled'
+  ) {
+    return normalized as BackgroundTaskStatus;
+  }
+
+  return fallback;
+}
+
+function normalizeBackgroundTaskPriority(
+  value: unknown,
+  fallback: BackgroundTaskPriority = 'normal',
+): BackgroundTaskPriority {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.toLowerCase();
+  if (normalized === 'low' || normalized === 'normal' || normalized === 'high') {
+    return normalized;
+  }
+
+  return fallback;
+}
+
+function normalizeTaskTimestamp(value: unknown, fallback?: Date): Date | undefined {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    const milliseconds = value > 1_000_000_000_000 ? value : value * 1000;
+    return new Date(milliseconds);
+  }
+
+  const directDate = new Date(String(value));
+  if (!Number.isNaN(directDate.getTime())) {
+    return directDate;
+  }
+
+  return fallback;
+}
+
+function extractBackgroundTaskSnapshot(
+  payload: BackgroundTaskEventPayload,
+): BackgroundTaskSnapshotPayload | null {
+  if ('task' in payload && payload.task && typeof payload.task === 'object') {
+    return payload.task;
+  }
+
+  if ('id' in payload && 'name' in payload && 'status' in payload && 'progress' in payload) {
+    return payload;
+  }
+
+  return null;
+}
+
+export function normalizeBackgroundTask(payload: BackgroundTaskSnapshotPayload): BackgroundTask {
+  const resultError =
+    payload.result && typeof payload.result === 'object' ? payload.result.error : undefined;
+
+  return {
+    id: payload.id,
+    name: payload.name,
+    description: payload.description ?? undefined,
+    status: normalizeBackgroundTaskStatus(payload.status),
+    progress: normalizeProgress(payload.progress, 0),
+    priority: normalizeBackgroundTaskPriority(payload.priority),
+    createdAt: normalizeTaskTimestamp(payload.created_at, new Date()) ?? new Date(),
+    startedAt: normalizeTaskTimestamp(payload.started_at),
+    completedAt: normalizeTaskTimestamp(payload.completed_at),
+    error: payload.error ?? resultError ?? undefined,
+  };
+}
+
+export function applyBackgroundTaskEvent(
+  payload: BackgroundTaskEventPayload,
+  eventType: 'task:progress' | 'task:completed' | 'task:failed',
+): void {
+  if (
+    'task_id' in payload &&
+    typeof payload.task_id === 'string' &&
+    eventType === 'task:progress'
+  ) {
+    useAgentStore
+      .getState()
+      .updateTaskProgress(payload.task_id, normalizeProgress(payload.progress, 0));
+    return;
+  }
+
+  const snapshot = extractBackgroundTaskSnapshot(payload);
+  if (!snapshot) {
+    return;
+  }
+
+  const normalized = normalizeBackgroundTask(snapshot);
+  const terminalStatus =
+    eventType === 'task:completed'
+      ? 'completed'
+      : eventType === 'task:failed'
+        ? 'failed'
+        : normalized.status;
+
+  const nextTask: BackgroundTask = {
+    ...normalized,
+    status: terminalStatus,
+    completedAt:
+      terminalStatus === 'completed' || terminalStatus === 'failed'
+        ? (normalized.completedAt ?? new Date())
+        : normalized.completedAt,
+  };
+
+  const existingTask = useAgentStore
+    .getState()
+    .backgroundTasks.find((task) => task.id === nextTask.id);
+
+  if (existingTask) {
+    useAgentStore.getState().updateBackgroundTask(nextTask.id, nextTask);
+    return;
+  }
+
+  useAgentStore.getState().addBackgroundTask(nextTask);
 }
 
 function normalizeTimestamp(value: unknown, fallback?: Date): Date | undefined {
