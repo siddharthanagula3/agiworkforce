@@ -18,6 +18,8 @@ import { useCodeStore } from './codeStore';
 import { useConnectorsStore } from './connectorsStore';
 import { useDatabaseStore } from './databaseStore';
 import { useExecutionStore, cleanupExecutionListeners } from './executionStore';
+import { cleanupAgentWorkflowEventListeners } from './chat/agentWorkflowEvents';
+import { cleanupBackgroundTaskEventListeners } from './chat/agentStore';
 import { useMcpStore } from './mcpStore';
 import { useModelStore } from './modelStore';
 // Orchestration store archived - visual workflow builder removed
@@ -87,6 +89,8 @@ export function cleanupAllStoresOnLogout(): void {
     databaseStore.resetOnLogout();
 
     // AUDIT-006-028: Execution store - cleanup event listeners and reset
+    cleanupBackgroundTaskEventListeners();
+    cleanupAgentWorkflowEventListeners();
     cleanupExecutionListeners();
     const executionStore = useExecutionStore.getState();
     executionStore.reset();

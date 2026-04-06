@@ -2,9 +2,16 @@ import { listen, isTauri } from '../lib/tauri-mock';
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { ResearchTask } from '../types/chat';
-import type { ReflectionInsight, FailurePattern, Correction, SubGoal } from '../api/reflection';
+import type {
+  ReflectionInsight,
+  FailurePattern,
+  Correction,
+  SubGoal,
+  FailedStep,
+} from '../api/reflection';
 import type { ActionType } from './browserStore';
 import { useBrowserStore } from './browserStore';
+import { useAgentTaskStore, type AgentTask, type AgentTaskLiveStep } from './agentTaskStore';
 
 export type StepStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
 
@@ -93,6 +100,42 @@ export interface ReflectionState {
   confidence: number;
 }
 
+export type IterationStatus =
+  | 'idle'
+  | 'planning'
+  | 'executing'
+  | 'reflecting'
+  | 'completed'
+  | 'failed'
+  | 'paused';
+
+export interface IterationHistoryRecord {
+  iteration: number;
+  stepsSucceeded: number;
+  stepsFailed: number;
+  consecutiveFailures: number;
+  timestamp: number;
+}
+
+export interface PlanCritiqueState {
+  iteration: number;
+  qualityScore: number;
+  likelyToSucceed: boolean;
+  risksCount: number;
+  suggestions: string[];
+}
+
+export interface IterationProgressState {
+  goalId: string | null;
+  status: IterationStatus;
+  currentIteration: number;
+  hasPriorReflection: boolean;
+  consecutiveFailures: number;
+  history: IterationHistoryRecord[];
+  planCritique: PlanCritiqueState | null;
+  startTime: number | null;
+}
+
 export interface ExecutionState {
   activeGoal: ActiveGoal | null;
   steps: ExecutionStep[];
@@ -117,6 +160,7 @@ export interface ExecutionState {
 
   /** Reflection engine state */
   reflection: ReflectionState;
+  iterationProgress: IterationProgressState;
 
   setActiveGoal: (goal: ActiveGoal | null) => void;
   addStep: (step: ExecutionStep) => void;
@@ -173,6 +217,17 @@ const initialReflectionState: ReflectionState = {
   confidence: 1.0,
 };
 
+const initialIterationProgressState: IterationProgressState = {
+  goalId: null,
+  status: 'idle',
+  currentIteration: 0,
+  hasPriorReflection: false,
+  consecutiveFailures: 0,
+  history: [],
+  planCritique: null,
+  startTime: null,
+};
+
 const initialState = {
   activeGoal: null,
   steps: [],
@@ -195,10 +250,12 @@ const initialState = {
     reflection: { visible: true, size: 50 },
   },
   reflection: initialReflectionState,
+  iterationProgress: initialIterationProgressState,
 };
 
 // Stream timeout management
 let streamTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+let goalCleanupTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
 const STREAM_TIMEOUT_MS = 60000; // 60 seconds timeout for stuck streams
 
 function startStreamTimeout() {
@@ -213,6 +270,13 @@ function clearStreamTimeout() {
   if (streamTimeoutHandle) {
     clearTimeout(streamTimeoutHandle);
     streamTimeoutHandle = null;
+  }
+}
+
+function clearGoalCleanupTimeout() {
+  if (goalCleanupTimeoutHandle) {
+    clearTimeout(goalCleanupTimeoutHandle);
+    goalCleanupTimeoutHandle = null;
   }
 }
 
@@ -471,15 +535,498 @@ export const useExecutionStore = create<ExecutionState>()(
 
     reset: () => {
       clearStreamTimeout();
+      clearGoalCleanupTimeout();
       set(initialState);
     },
   })),
 );
 
+export interface ExecutionGoalSnapshot {
+  tasks: AgentTask[];
+  liveStepsByTask: Record<string, AgentTaskLiveStep[]>;
+  liveProgressByTask: Record<string, { step: number; total: number }>;
+}
+
+export interface IterationStartPayload {
+  goal_id: string;
+  iteration: number;
+  has_prior_reflection?: boolean;
+}
+
+export interface IterationCompletePayload {
+  goal_id: string;
+  iteration: number;
+  steps_succeeded: number;
+  steps_failed: number;
+  consecutive_failures: number;
+}
+
+export interface PlanCritiquePayload {
+  goal_id: string;
+  iteration: number;
+  quality_score: number;
+  likely_to_succeed: boolean;
+  risks_count: number;
+  suggestions: string[];
+}
+
+export interface PlanRevisedPayload {
+  goal_id: string;
+  iteration: number;
+  corrections_applied: number;
+}
+
+export interface GoalUnachievablePayload {
+  goal_id: string;
+  iterations: number;
+  consecutive_failures: number;
+  final_insight: ReflectionInsight;
+}
+
+function mapGoalStatusToIterationStatus(status: ActiveGoal['status']): IterationStatus {
+  switch (status) {
+    case 'planning':
+      return 'planning';
+    case 'executing':
+      return 'executing';
+    case 'completed':
+      return 'completed';
+    case 'failed':
+      return 'failed';
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' ? value : fallback;
+}
+
+function asBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function normalizeFailedStep(raw: unknown): FailedStep {
+  const value = asRecord(raw);
+  return {
+    stepId: String(value['stepId'] ?? value['step_id'] ?? ''),
+    toolId: String(value['toolId'] ?? value['tool_id'] ?? ''),
+    description: String(value['description'] ?? ''),
+    error: typeof value['error'] === 'string' ? value['error'] : undefined,
+    failureCategory: String(
+      value['failureCategory'] ?? value['failure_category'] ?? 'Unknown',
+    ) as FailedStep['failureCategory'],
+    recoverable: asBoolean(value['recoverable']),
+  };
+}
+
+export function normalizeFailurePattern(raw: unknown): FailurePattern {
+  const value = asRecord(raw);
+  return {
+    patternId: String(value['patternId'] ?? value['pattern_id'] ?? ''),
+    category: String(value['category'] ?? 'Unknown') as FailurePattern['category'],
+    description: String(value['description'] ?? ''),
+    affectedSteps: asStringArray(value['affectedSteps'] ?? value['affected_steps']),
+    rootCause:
+      typeof value['rootCause'] === 'string'
+        ? value['rootCause']
+        : typeof value['root_cause'] === 'string'
+          ? value['root_cause']
+          : undefined,
+    frequency: asNumber(value['frequency']),
+  };
+}
+
+export function normalizeCorrection(raw: unknown): Correction {
+  const value = asRecord(raw);
+  return {
+    forStepId: String(value['forStepId'] ?? value['for_step_id'] ?? ''),
+    correctionType: String(
+      value['correctionType'] ?? value['correction_type'] ?? 'Retry',
+    ) as Correction['correctionType'],
+    description: String(value['description'] ?? ''),
+    alternativeTool:
+      typeof value['alternativeTool'] === 'string'
+        ? value['alternativeTool']
+        : typeof value['alternative_tool'] === 'string'
+          ? value['alternative_tool']
+          : undefined,
+    modifiedParameters:
+      typeof value['modifiedParameters'] === 'object' && value['modifiedParameters'] !== null
+        ? (value['modifiedParameters'] as Record<string, unknown>)
+        : typeof value['modified_parameters'] === 'object' && value['modified_parameters'] !== null
+          ? (value['modified_parameters'] as Record<string, unknown>)
+          : undefined,
+    priority: asNumber(value['priority']),
+  };
+}
+
+export function normalizeSubGoal(raw: unknown): SubGoal {
+  const value = asRecord(raw);
+  return {
+    id: String(value['id'] ?? ''),
+    parentGoalId: String(value['parentGoalId'] ?? value['parent_goal_id'] ?? ''),
+    fromStepId: String(value['fromStepId'] ?? value['from_step_id'] ?? ''),
+    description: String(value['description'] ?? ''),
+    successCriteria: asStringArray(value['successCriteria'] ?? value['success_criteria']),
+    suggestedTools: asStringArray(value['suggestedTools'] ?? value['suggested_tools']),
+    priority: asNumber(value['priority']),
+  };
+}
+
+export function normalizeReflectionInsight(raw: unknown): ReflectionInsight {
+  const value = asRecord(raw);
+  const assessment = asRecord(value['assessment']);
+
+  return {
+    id: String(value['id'] ?? ''),
+    goalId: String(value['goalId'] ?? value['goal_id'] ?? ''),
+    assessment: {
+      successRate: asNumber(assessment['successRate'] ?? assessment['success_rate']),
+      successfulSteps: asStringArray(
+        assessment['successfulSteps'] ?? assessment['successful_steps'],
+      ),
+      failedSteps: Array.isArray(assessment['failedSteps'] ?? assessment['failed_steps'])
+        ? (assessment['failedSteps'] ?? assessment['failed_steps']).map((step) =>
+            normalizeFailedStep(step),
+          )
+        : [],
+      goalAchievable: asBoolean(
+        assessment['goalAchievable'] ?? assessment['goal_achievable'],
+        true,
+      ),
+      progressEstimate: asNumber(assessment['progressEstimate'] ?? assessment['progress_estimate']),
+      resourceEfficiency: asNumber(
+        assessment['resourceEfficiency'] ?? assessment['resource_efficiency'],
+      ),
+      timeEfficiency: asNumber(assessment['timeEfficiency'] ?? assessment['time_efficiency']),
+    },
+    failurePatterns: Array.isArray(value['failurePatterns'] ?? value['failure_patterns'])
+      ? (value['failurePatterns'] ?? value['failure_patterns']).map((pattern) =>
+          normalizeFailurePattern(pattern),
+        )
+      : [],
+    corrections: Array.isArray(value['corrections'])
+      ? value['corrections'].map((correction) => normalizeCorrection(correction))
+      : [],
+    subGoals: Array.isArray(value['subGoals'] ?? value['sub_goals'])
+      ? (value['subGoals'] ?? value['sub_goals']).map((subGoal) => normalizeSubGoal(subGoal))
+      : [],
+    recommendations: asStringArray(value['recommendations']),
+    confidence: asNumber(value['confidence'], 1),
+    timestamp: asNumber(value['timestamp']),
+  };
+}
+
+function hasTaskLiveState(
+  liveSteps: AgentTaskLiveStep[] | undefined,
+  liveProgress: { step: number; total: number } | undefined,
+): boolean {
+  return Boolean((liveSteps && liveSteps.length > 0) || liveProgress);
+}
+
+function isActiveExecutionTask(task: AgentTask): boolean {
+  return (
+    task.status === 'pending' ||
+    task.status === 'running' ||
+    task.status === 'paused' ||
+    task.status === 'recovering'
+  );
+}
+
+function isTerminalExecutionTask(task: AgentTask): boolean {
+  return (
+    task.status === 'completed' ||
+    task.status === 'failed' ||
+    task.status === 'cancelled' ||
+    task.status === 'expired'
+  );
+}
+
+function sortTasksByRecency(left: AgentTask, right: AgentTask): number {
+  const leftTime = new Date(left.completedAt ?? left.createdAt).getTime();
+  const rightTime = new Date(right.completedAt ?? right.createdAt).getTime();
+  return rightTime - leftTime;
+}
+
+function selectPrimaryExecutionTask(
+  snapshot: ExecutionGoalSnapshot,
+  currentGoalId: string | null,
+): AgentTask | null {
+  const { tasks, liveStepsByTask, liveProgressByTask } = snapshot;
+
+  if (currentGoalId) {
+    const currentTask = tasks.find((task) => task.id === currentGoalId);
+    if (
+      currentTask &&
+      (isActiveExecutionTask(currentTask) ||
+        hasTaskLiveState(liveStepsByTask[currentTask.id], liveProgressByTask[currentTask.id]))
+    ) {
+      return currentTask;
+    }
+  }
+
+  const activeTask = tasks.filter(isActiveExecutionTask).sort(sortTasksByRecency)[0];
+  if (activeTask) {
+    return activeTask;
+  }
+
+  return (
+    tasks
+      .filter(
+        (task) =>
+          isTerminalExecutionTask(task) &&
+          hasTaskLiveState(liveStepsByTask[task.id], liveProgressByTask[task.id]),
+      )
+      .sort(sortTasksByRecency)[0] ?? null
+  );
+}
+
+function mapTaskStatusToExecutionStatus(task: AgentTask): ActiveGoal['status'] {
+  switch (task.status) {
+    case 'pending':
+      return 'planning';
+    case 'running':
+    case 'paused':
+    case 'recovering':
+      return 'executing';
+    case 'completed':
+      return 'completed';
+    default:
+      return 'failed';
+  }
+}
+
+function mapLiveStepStatus(status: AgentTaskLiveStep['status']): StepStatus {
+  switch (status) {
+    case 'running':
+      return 'in-progress';
+    case 'done':
+      return 'completed';
+    case 'failed':
+      return 'failed';
+    default:
+      return 'pending';
+  }
+}
+
+function buildExecutionGoal(task: AgentTask, snapshot: ExecutionGoalSnapshot): ActiveGoal {
+  const liveSteps = snapshot.liveStepsByTask[task.id] ?? [];
+  const liveProgress = snapshot.liveProgressByTask[task.id];
+  const totalSteps = Math.max(liveProgress?.total ?? 0, liveSteps.length);
+  const completedSteps =
+    task.status === 'completed'
+      ? totalSteps || task.iterations || 0
+      : (liveProgress?.step ?? task.iterations ?? 0);
+  const progressPercent =
+    task.status === 'completed'
+      ? 100
+      : totalSteps > 0
+        ? Math.min(100, Math.round((completedSteps / totalSteps) * 100))
+        : 0;
+
+  return {
+    id: task.id,
+    description: task.goal,
+    status: mapTaskStatusToExecutionStatus(task),
+    startTime: new Date(task.createdAt).getTime(),
+    endTime: task.completedAt ? new Date(task.completedAt).getTime() : undefined,
+    totalSteps,
+    completedSteps,
+    progressPercent,
+  };
+}
+
+function buildExecutionSteps(
+  taskId: string,
+  snapshot: ExecutionGoalSnapshot,
+  existingSteps: ExecutionStep[],
+): ExecutionStep[] {
+  const existingById = new Map(existingSteps.map((step) => [step.id, step]));
+  const liveSteps = [...(snapshot.liveStepsByTask[taskId] ?? [])].sort(
+    (left, right) => left.index - right.index,
+  );
+
+  return liveSteps.map((step) => {
+    const existing = existingById.get(step.id);
+    return {
+      id: step.id,
+      goalId: taskId,
+      index: step.index,
+      description: step.description,
+      status: mapLiveStepStatus(step.status),
+      startTime: step.startedAt?.getTime(),
+      endTime: step.completedAt?.getTime(),
+      executionTimeMs: step.executionTimeMs,
+      error: step.error,
+      llmReasoning: existing?.llmReasoning,
+    };
+  });
+}
+
+export function syncExecutionGoalFromAgentTasks(snapshot: ExecutionGoalSnapshot): void {
+  const currentState = useExecutionStore.getState();
+  const previousGoal = currentState.activeGoal;
+  const primaryTask = selectPrimaryExecutionTask(snapshot, previousGoal?.id ?? null);
+
+  if (!primaryTask) {
+    clearGoalCleanupTimeout();
+    useExecutionStore.setState({
+      activeGoal: null,
+      steps: [],
+      iterationProgress: initialIterationProgressState,
+    });
+    return;
+  }
+
+  const nextGoal = buildExecutionGoal(primaryTask, snapshot);
+  const nextSteps = buildExecutionSteps(primaryTask.id, snapshot, currentState.steps);
+  const nextIterationProgress =
+    currentState.iterationProgress.goalId === nextGoal.id
+      ? {
+          ...currentState.iterationProgress,
+          status:
+            nextGoal.status === 'completed' || nextGoal.status === 'failed'
+              ? mapGoalStatusToIterationStatus(nextGoal.status)
+              : currentState.iterationProgress.status === 'idle'
+                ? mapGoalStatusToIterationStatus(nextGoal.status)
+                : currentState.iterationProgress.status,
+          startTime: currentState.iterationProgress.startTime ?? nextGoal.startTime,
+        }
+      : {
+          ...initialIterationProgressState,
+          goalId: nextGoal.id,
+          status: mapGoalStatusToIterationStatus(nextGoal.status),
+          startTime: nextGoal.startTime,
+        };
+
+  useExecutionStore.setState({
+    activeGoal: nextGoal,
+    steps: nextSteps,
+    iterationProgress: nextIterationProgress,
+  });
+
+  const wasTerminal = previousGoal?.status === 'completed' || previousGoal?.status === 'failed';
+  const isTerminal = nextGoal.status === 'completed' || nextGoal.status === 'failed';
+
+  if (isTerminal && (!previousGoal || previousGoal.id !== nextGoal.id || !wasTerminal)) {
+    clearGoalCleanupTimeout();
+    goalCleanupTimeoutHandle = setTimeout(() => {
+      useExecutionStore.getState().cleanupGoalContexts();
+      goalCleanupTimeoutHandle = null;
+    }, 5000);
+  } else if (!isTerminal) {
+    clearGoalCleanupTimeout();
+  }
+}
+
+export function applyIterationProgressStart(payload: IterationStartPayload): void {
+  useExecutionStore.setState((state) => ({
+    iterationProgress: {
+      ...(state.iterationProgress.goalId === payload.goal_id
+        ? state.iterationProgress
+        : initialIterationProgressState),
+      goalId: payload.goal_id,
+      status: 'executing',
+      currentIteration: payload.iteration,
+      hasPriorReflection: payload.has_prior_reflection === true,
+      startTime:
+        state.iterationProgress.goalId === payload.goal_id && state.iterationProgress.startTime
+          ? state.iterationProgress.startTime
+          : Date.now(),
+    },
+  }));
+}
+
+export function applyIterationProgressComplete(payload: IterationCompletePayload): void {
+  useExecutionStore.setState((state) => ({
+    iterationProgress: {
+      ...(state.iterationProgress.goalId === payload.goal_id
+        ? state.iterationProgress
+        : initialIterationProgressState),
+      goalId: payload.goal_id,
+      status: 'reflecting',
+      currentIteration: payload.iteration,
+      consecutiveFailures: payload.consecutive_failures,
+      history: [
+        ...state.iterationProgress.history.filter((entry) => entry.iteration !== payload.iteration),
+        {
+          iteration: payload.iteration,
+          stepsSucceeded: payload.steps_succeeded,
+          stepsFailed: payload.steps_failed,
+          consecutiveFailures: payload.consecutive_failures,
+          timestamp: Date.now(),
+        },
+      ].sort((left, right) => left.iteration - right.iteration),
+      startTime: state.iterationProgress.startTime ?? Date.now(),
+    },
+  }));
+}
+
+export function applyIterationPlanCritique(payload: PlanCritiquePayload): void {
+  useExecutionStore.setState((state) => ({
+    iterationProgress: {
+      ...(state.iterationProgress.goalId === payload.goal_id
+        ? state.iterationProgress
+        : initialIterationProgressState),
+      goalId: payload.goal_id,
+      status: 'planning',
+      currentIteration: payload.iteration,
+      planCritique: {
+        iteration: payload.iteration,
+        qualityScore: payload.quality_score,
+        likelyToSucceed: payload.likely_to_succeed,
+        risksCount: payload.risks_count,
+        suggestions: payload.suggestions,
+      },
+      startTime: state.iterationProgress.startTime ?? Date.now(),
+    },
+  }));
+}
+
+export function applyIterationPlanRevised(payload: PlanRevisedPayload): void {
+  useExecutionStore.setState((state) => ({
+    iterationProgress: {
+      ...(state.iterationProgress.goalId === payload.goal_id
+        ? state.iterationProgress
+        : initialIterationProgressState),
+      goalId: payload.goal_id,
+      status: 'executing',
+      currentIteration: payload.iteration,
+      startTime: state.iterationProgress.startTime ?? Date.now(),
+    },
+  }));
+}
+
+export function applyIterationGoalUnachievable(payload: GoalUnachievablePayload): void {
+  useExecutionStore.setState((state) => ({
+    iterationProgress: {
+      ...(state.iterationProgress.goalId === payload.goal_id
+        ? state.iterationProgress
+        : initialIterationProgressState),
+      goalId: payload.goal_id,
+      status: 'failed',
+      currentIteration: payload.iterations,
+      consecutiveFailures: payload.consecutive_failures,
+      startTime: state.iterationProgress.startTime ?? Date.now(),
+    },
+  }));
+}
+
 let listenersInitialized = false;
 // AUDIT-006-028 fix: Store unlisten functions for cleanup
 type UnlistenFn = () => void;
 const unlistenFunctions: UnlistenFn[] = [];
+let executionGoalSubscriptionInitialized = false;
+let executionGoalUnsubscribe: (() => void) | null = null;
 
 /**
  * AUDIT-006-028 fix: Cleanup function to remove all event listeners
@@ -495,7 +1042,33 @@ export function cleanupExecutionListeners(): void {
   }
   unlistenFunctions.length = 0;
   listenersInitialized = false;
+  executionGoalUnsubscribe?.();
+  executionGoalUnsubscribe = null;
+  executionGoalSubscriptionInitialized = false;
+  clearGoalCleanupTimeout();
   console.debug('[ExecutionStore] Event listeners cleaned up');
+}
+
+export function initializeExecutionGoalSubscription(): void {
+  if (executionGoalSubscriptionInitialized) {
+    return;
+  }
+
+  executionGoalSubscriptionInitialized = true;
+
+  executionGoalUnsubscribe = useAgentTaskStore.subscribe((state) => {
+    syncExecutionGoalFromAgentTasks({
+      tasks: state.tasks,
+      liveStepsByTask: state.liveStepsByTask,
+      liveProgressByTask: state.liveProgressByTask,
+    });
+  });
+
+  syncExecutionGoalFromAgentTasks({
+    tasks: useAgentTaskStore.getState().tasks,
+    liveStepsByTask: useAgentTaskStore.getState().liveStepsByTask,
+    liveProgressByTask: useAgentTaskStore.getState().liveProgressByTask,
+  });
 }
 
 export async function initializeExecutionListeners() {
@@ -511,142 +1084,6 @@ export async function initializeExecutionListeners() {
   }
 
   try {
-    const unlisten1 = await listen<{ goal_id: string; description: string }>(
-      'agi:goal:submitted',
-      ({ payload }) => {
-        useExecutionStore.getState().setActiveGoal({
-          id: payload.goal_id,
-          description: payload.description,
-          status: 'planning',
-          startTime: Date.now(),
-          totalSteps: 0,
-          completedSteps: 0,
-          progressPercent: 0,
-        });
-        useExecutionStore.getState().setPanelVisible(true);
-      },
-    );
-    unlistenFunctions.push(unlisten1);
-
-    const unlisten2 = await listen<{
-      goal_id: string;
-      total_steps: number;
-      estimated_duration_ms: number;
-    }>('agi:goal:plan_created', ({ payload }) => {
-      const state = useExecutionStore.getState();
-      const goal = state.activeGoal;
-      if (goal && goal.id === payload.goal_id) {
-        state.setActiveGoal({
-          ...goal,
-          status: 'executing',
-          totalSteps: payload.total_steps,
-        });
-      }
-    });
-    unlistenFunctions.push(unlisten2);
-
-    const unlisten3 = await listen<{
-      goal_id: string;
-      step_id: string;
-      step_index: number;
-      total_steps: number;
-      description: string;
-    }>('agi:goal:step_started', ({ payload }) => {
-      const state = useExecutionStore.getState();
-      state.addStep({
-        id: payload.step_id,
-        goalId: payload.goal_id,
-        index: payload.step_index,
-        description: payload.description,
-        status: 'in-progress',
-        startTime: Date.now(),
-      });
-    });
-    unlistenFunctions.push(unlisten3);
-
-    const unlisten4 = await listen<{
-      goal_id: string;
-      step_id: string;
-      step_index: number;
-      total_steps: number;
-      success: boolean;
-      execution_time_ms: number;
-      error?: string;
-    }>('agi:goal:step_completed', ({ payload }) => {
-      const state = useExecutionStore.getState();
-      state.updateStep(payload.step_id, {
-        status: payload.success ? 'completed' : 'failed',
-        endTime: Date.now(),
-        executionTimeMs: payload.execution_time_ms,
-        error: payload.error,
-      });
-    });
-    unlistenFunctions.push(unlisten4);
-
-    const unlisten5 = await listen<{
-      goal_id: string;
-      completed_steps: number;
-      total_steps: number;
-      progress_percent: number;
-    }>('agi:goal:progress', ({ payload }) => {
-      const state = useExecutionStore.getState();
-      const goal = state.activeGoal;
-      if (goal && goal.id === payload.goal_id) {
-        state.setActiveGoal({
-          ...goal,
-          completedSteps: payload.completed_steps,
-          totalSteps: payload.total_steps,
-          progressPercent: payload.progress_percent,
-        });
-      }
-    });
-    unlistenFunctions.push(unlisten5);
-
-    const unlisten6 = await listen<{
-      goal_id: string;
-      total_steps: number;
-      completed_steps: number;
-    }>('agi:goal:achieved', ({ payload }) => {
-      const state = useExecutionStore.getState();
-      const goal = state.activeGoal;
-      if (goal && goal.id === payload.goal_id) {
-        state.setActiveGoal({
-          ...goal,
-          status: 'completed',
-          endTime: Date.now(),
-          completedSteps: payload.completed_steps,
-          progressPercent: 100,
-        });
-
-        // Cleanup execution contexts after a delay to allow UI to show completion
-        setTimeout(() => {
-          useExecutionStore.getState().cleanupGoalContexts();
-        }, 5000); // 5 second delay before cleanup
-      }
-    });
-    unlistenFunctions.push(unlisten6);
-
-    const unlisten7 = await listen<{ goal_id: string; error: string }>(
-      'agi:goal:error',
-      ({ payload }) => {
-        const state = useExecutionStore.getState();
-        const goal = state.activeGoal;
-        if (goal && goal.id === payload.goal_id) {
-          state.setActiveGoal({
-            ...goal,
-            status: 'failed',
-            endTime: Date.now(),
-          });
-
-          // Cleanup execution contexts after a delay to allow UI to show error
-          setTimeout(() => {
-            useExecutionStore.getState().cleanupGoalContexts();
-          }, 5000); // 5 second delay before cleanup
-        }
-      },
-    );
-    unlistenFunctions.push(unlisten7);
-
     const unlisten8 = await listen<{ step_id: string; chunk: string }>(
       'agi:llm_chunk',
       ({ payload }) => {
@@ -773,7 +1210,7 @@ export async function initializeExecutionListeners() {
       insight: ReflectionInsight;
     }>('agi:reflection:completed', ({ payload }) => {
       const state = useExecutionStore.getState();
-      state.setReflectionInsight(payload.insight);
+      state.setReflectionInsight(normalizeReflectionInsight(payload.insight));
       state.setIteration(payload.iteration);
       state.setReflecting(false);
 
@@ -792,7 +1229,7 @@ export async function initializeExecutionListeners() {
     }>('agi:reflection:failure_patterns', ({ payload }) => {
       const state = useExecutionStore.getState();
       payload.patterns.forEach((pattern) => {
-        state.addFailurePattern(pattern);
+        state.addFailurePattern(normalizeFailurePattern(pattern));
       });
     });
     unlistenFunctions.push(unlisten14);
@@ -803,7 +1240,9 @@ export async function initializeExecutionListeners() {
       iteration: number;
       corrections: Correction[];
     }>('agi:reflection:corrections', ({ payload }) => {
-      useExecutionStore.getState().setCorrections(payload.corrections);
+      useExecutionStore
+        .getState()
+        .setCorrections(payload.corrections.map((correction) => normalizeCorrection(correction)));
     });
     unlistenFunctions.push(unlisten15);
 
@@ -822,55 +1261,68 @@ export async function initializeExecutionListeners() {
       goal_id: string;
       sub_goals: SubGoal[];
     }>('agi:reflection:sub_goals', ({ payload }) => {
-      useExecutionStore.getState().setSubGoals(payload.sub_goals);
+      useExecutionStore
+        .getState()
+        .setSubGoals(payload.sub_goals.map((subGoal) => normalizeSubGoal(subGoal)));
     });
     unlistenFunctions.push(unlisten17);
 
     // Plan revised event (after corrections applied)
-    const unlisten18 = await listen<{
-      goal_id: string;
-      iteration: number;
-      corrections_applied: number;
-      new_steps_count: number;
-    }>('agi:reflection:plan_revised', ({ payload }) => {
-      console.debug(
-        `[ExecutionStore] Plan revised: ${payload.corrections_applied} corrections applied, ${payload.new_steps_count} new steps`,
-      );
-    });
+    const unlisten18 = await listen<PlanRevisedPayload>(
+      'agi:reflection:plan_revised',
+      ({ payload }) => {
+        applyIterationPlanRevised(payload);
+        console.debug(
+          `[ExecutionStore] Plan revised: ${payload.corrections_applied} corrections applied`,
+        );
+      },
+    );
     unlistenFunctions.push(unlisten18);
 
     // Goal iteration start - set reflecting state
-    const unlisten19 = await listen<{
-      goal_id: string;
-      iteration: number;
-    }>('agi:goal:iteration_start', ({ payload }) => {
-      const state = useExecutionStore.getState();
-      state.setIteration(payload.iteration);
-      // Will be set to reflecting once actual reflection begins
-    });
+    const unlisten19 = await listen<IterationStartPayload>(
+      'agi:goal:iteration_start',
+      ({ payload }) => {
+        applyIterationProgressStart(payload);
+        const state = useExecutionStore.getState();
+        state.setIteration(payload.iteration);
+        // Will be set to reflecting once actual reflection begins
+      },
+    );
     unlistenFunctions.push(unlisten19);
 
     // Goal unachievable event
-    const unlisten20 = await listen<{
-      goal_id: string;
-      iterations: number;
-      consecutive_failures: number;
-      final_insight: ReflectionInsight;
-    }>('agi:goal:unachievable', ({ payload }) => {
-      const state = useExecutionStore.getState();
-      state.setReflectionInsight(payload.final_insight);
-      // Switch to reflection tab to show the final analysis
-      state.setActiveTab('reflection');
-    });
+    const unlisten20 = await listen<GoalUnachievablePayload>(
+      'agi:goal:unachievable',
+      ({ payload }) => {
+        applyIterationGoalUnachievable(payload);
+        const state = useExecutionStore.getState();
+        state.setReflectionInsight(normalizeReflectionInsight(payload.final_insight));
+        // Switch to reflection tab to show the final analysis
+        state.setActiveTab('reflection');
+      },
+    );
     unlistenFunctions.push(unlisten20);
+
+    const unlisten21 = await listen<IterationCompletePayload>(
+      'agi:goal:iteration_complete',
+      ({ payload }) => {
+        applyIterationProgressComplete(payload);
+      },
+    );
+    unlistenFunctions.push(unlisten21);
+
+    const unlisten22 = await listen<PlanCritiquePayload>(
+      'agi:reflection:plan_critique',
+      ({ payload }) => {
+        applyIterationPlanCritique(payload);
+      },
+    );
+    unlistenFunctions.push(unlisten22);
   } catch (error) {
     console.error('[ExecutionStore] Failed to initialize event listeners:', error);
     listenersInitialized = false;
   }
-}
-
-if (typeof window !== 'undefined') {
-  void initializeExecutionListeners();
 }
 
 export const selectActiveGoal = (state: ExecutionState) => state.activeGoal;
@@ -883,6 +1335,7 @@ export const selectActiveTab = (state: ExecutionState) => state.activeTab;
 export const selectCurrentScreenshot = (state: ExecutionState) => state.currentScreenshot;
 export const selectCurrentBrowserUrl = (state: ExecutionState) => state.currentBrowserUrl;
 export const selectIsStreaming = (state: ExecutionState) => state.isStreaming;
+export const selectIterationProgress = (state: ExecutionState) => state.iterationProgress;
 
 export const selectPendingFileChanges = (state: ExecutionState) =>
   state.fileChanges.filter((c) => c.accepted === null);

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { listen } from '../lib/tauri-mock';
+import { useChatStore } from '../stores/chat/chatStore';
 import { useExecutionSidecarStore } from '../stores/executionSidecarStore';
 
 /**
@@ -13,74 +13,55 @@ export function useExecutionSidecarAutoOpen(): void {
   const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
-    const unlisteners: Array<() => void> = [];
+    const handleLoopActiveChange = (isActive: boolean) => {
+      if (isActive) {
+        if (collapseTimerRef.current) {
+          clearTimeout(collapseTimerRef.current);
+          collapseTimerRef.current = null;
+        }
 
-    const setup = async () => {
-      // Listen for agentic loop start
-      const unlistenStart = await listen<{ conversation_id: number; max_iterations: number }>(
-        'agentic:loop-started',
-        () => {
-          if (!isMounted) return;
-
-          // Clear any pending collapse timer
-          if (collapseTimerRef.current) {
-            clearTimeout(collapseTimerRef.current);
-            collapseTimerRef.current = null;
-          }
-
-          const state = useExecutionSidecarStore.getState();
-          // Only auto-open if user hasn't manually closed this session
-          if (!state.userClosedThisSession) {
-            state.open();
-          }
-        },
-      );
-
-      if (isMounted) {
-        unlisteners.push(unlistenStart);
-      } else {
-        unlistenStart(); // Already unmounted, clean up immediately
+        const state = useExecutionSidecarStore.getState();
+        if (!state.userClosedThisSession) {
+          state.open();
+        }
+        return;
       }
 
-      // Listen for agentic loop end
-      const unlistenEnd = await listen<{ conversation_id: number; iterations_used: number }>(
-        'agentic:loop-ended',
-        () => {
-          if (!isMounted) return;
-
-          // Collapse after 3 second delay (not close, so user can still see results)
-          collapseTimerRef.current = setTimeout(() => {
-            if (!isMounted) return;
-            const state = useExecutionSidecarStore.getState();
-            if (state.isOpen && !state.isCollapsed) {
-              state.collapse();
-            }
-            collapseTimerRef.current = null;
-          }, 3000);
-        },
-      );
-
-      if (isMounted) {
-        unlisteners.push(unlistenEnd);
-      } else {
-        unlistenEnd(); // Already unmounted, clean up immediately
-      }
+      collapseTimerRef.current = setTimeout(() => {
+        const state = useExecutionSidecarStore.getState();
+        if (state.isOpen && !state.isCollapsed) {
+          state.collapse();
+        }
+        collapseTimerRef.current = null;
+      }, 3000);
     };
 
-    setup();
+    const getIsLoopActive = () => useChatStore.getState().agenticLoopStatus?.active ?? false;
+    let previousIsActive = getIsLoopActive();
+
+    if (previousIsActive) {
+      handleLoopActiveChange(true);
+    }
+
+    const unsubscribe = useChatStore.subscribe(
+      (state) => state.agenticLoopStatus?.active ?? false,
+      (isActive) => {
+        if (isActive === previousIsActive) {
+          return;
+        }
+
+        previousIsActive = isActive;
+        handleLoopActiveChange(isActive);
+      },
+    );
 
     return () => {
-      isMounted = false;
-
-      // Cleanup timer
       const collapseTimer = collapseTimerRef.current;
       if (collapseTimer) {
         clearTimeout(collapseTimer);
+        collapseTimerRef.current = null;
       }
-
-      // Cleanup any listeners that have already resolved
-      unlisteners.forEach((fn) => fn());
+      unsubscribe();
     };
   }, []);
 }

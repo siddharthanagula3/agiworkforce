@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Search, X } from 'lucide-react';
+import { HostBridgeContext, type ChatHostBridge, useHostBridge } from '../lib/hostBridge';
 import type { ChatRuntime } from '../lib/runtime';
 import type { Artifact, ChatMessage } from '../lib/types';
 import type { ChipType } from './QuickChips';
@@ -27,6 +28,7 @@ import { useChat } from '../hooks/useChat';
 import { useTheme } from '../hooks/useTheme';
 import { useKeyboard } from '../hooks/useKeyboard';
 import { useArtifact } from '../hooks/useArtifact';
+import { syncPackageStoreFromHost, useHostBridgeSync } from '../hooks/useHostBridgeSync';
 import { SettingsModal } from './SettingsModal';
 import { ArtifactPanel } from './ArtifactPanel';
 import { cn } from '../lib/utils';
@@ -102,6 +104,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const conversations = useChatStore((s) => s.conversations);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  const hostBridge = useHostBridge();
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
@@ -194,7 +197,12 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
               key={conv.id}
               type="button"
               onClick={() => {
-                setActiveConversation(conv.id);
+                if (hostBridge?.selectConversation) {
+                  hostBridge.selectConversation(conv.id);
+                  syncPackageStoreFromHost(hostBridge);
+                } else {
+                  setActiveConversation(conv.id);
+                }
                 onClose();
               }}
               className={cn(
@@ -237,7 +245,9 @@ export interface ChatInterfaceProps {
   onVoiceClick?: () => void;
   /** Called when the user navigates to a sidebar view (customize, projects, skills, connectors) */
   onNavigateView?: (view: string) => void;
-  /** External addMessage function (from the host app's chat store). */
+  /** Explicit host-owned bridge for conversation selection and persistence. */
+  hostBridge?: ChatHostBridge | null;
+  /** Legacy fallback for mirroring messages into a host store. */
   onAddMessage?: (msg: { role: string; content: string; id?: string }) => void;
 }
 
@@ -250,6 +260,7 @@ export function ChatInterface({
   onModelSelectorClick: onModelSelectorClickProp,
   onVoiceClick: onVoiceClickProp,
   onNavigateView,
+  hostBridge = null,
   onAddMessage,
 }: ChatInterfaceProps) {
   // Side-effect hooks — theme management is opt-in; shortcuts are opt-out
@@ -270,7 +281,11 @@ export function ChatInterface({
   }
 
   // Chat logic
-  const { sendMessage, stopGeneration } = useChat(runtime, onAddMessage);
+  useHostBridgeSync(hostBridge);
+  const { sendMessage, stopGeneration } = useChat(runtime, {
+    hostBridge,
+    externalAddMessage: onAddMessage,
+  });
 
   // Artifact panel state (single source — must not be called in child components separately)
   const {
@@ -452,42 +467,44 @@ export function ChatInterface({
 
   return (
     <RuntimeContext.Provider value={runtime}>
-      <div
-        className={cn(
-          'flex h-full w-full overflow-hidden',
-          'bg-[var(--chat-bg)] text-[var(--chat-fg)]',
-          className,
-        )}
-      >
-        {/* Left: collapsible sidebar */}
-        <Sidebar />
+      <HostBridgeContext.Provider value={hostBridge}>
+        <div
+          className={cn(
+            'flex h-full w-full overflow-hidden',
+            'bg-[var(--chat-bg)] text-[var(--chat-fg)]',
+            className,
+          )}
+        >
+          {/* Left: collapsible sidebar */}
+          <Sidebar />
 
-        {/* Center: main content — wrapped in ErrorBoundary to catch render errors */}
-        <main className="flex flex-1 min-w-0 flex-col overflow-hidden">
-          <ChatErrorBoundary>{renderMainContent()}</ChatErrorBoundary>
-        </main>
+          {/* Center: main content — wrapped in ErrorBoundary to catch render errors */}
+          <main className="flex flex-1 min-w-0 flex-col overflow-hidden">
+            <ChatErrorBoundary>{renderMainContent()}</ChatErrorBoundary>
+          </main>
 
-        {/* Right: artifact panel — only mounted when open (Phase 3) */}
-        {artifactOpen && (
-          <div
-            className="shrink-0 border-l border-[var(--chat-border)] bg-[var(--chat-surface-base)]"
-            style={{ width: artifactPanelWidth }}
-          >
-            <ArtifactPanel
-              artifact={activeArtifact}
-              viewMode={artifactViewMode}
-              onViewModeChange={setArtifactViewMode}
-              onClose={closeArtifact}
-            />
-          </div>
-        )}
-      </div>
+          {/* Right: artifact panel — only mounted when open (Phase 3) */}
+          {artifactOpen && (
+            <div
+              className="shrink-0 border-l border-[var(--chat-border)] bg-[var(--chat-surface-base)]"
+              style={{ width: artifactPanelWidth }}
+            >
+              <ArtifactPanel
+                artifact={activeArtifact}
+                viewMode={artifactViewMode}
+                onViewModeChange={setArtifactViewMode}
+                onClose={closeArtifact}
+              />
+            </div>
+          )}
+        </div>
 
-      {/* Search overlay — triggered by sidebar Search button or Cmd+F */}
-      <SearchOverlay open={searchModalOpen} onClose={toggleSearchModal} />
+        {/* Search overlay — triggered by sidebar Search button or Cmd+F */}
+        <SearchOverlay open={searchModalOpen} onClose={toggleSearchModal} />
 
-      {/* Settings modal — shared across desktop & web */}
-      <SettingsModal />
+        {/* Settings modal — shared across desktop & web */}
+        <SettingsModal />
+      </HostBridgeContext.Provider>
     </RuntimeContext.Provider>
   );
 }
