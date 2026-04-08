@@ -8,7 +8,8 @@
  */
 
 import React from 'react';
-import { Code, Pen, Search, Globe, Sparkles, type LucideIcon } from 'lucide-react';
+import { Code, Pen, Search, Globe, Sparkles } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface PillDefinition {

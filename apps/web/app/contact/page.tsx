@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Bot, Mail, MapPin, MessageSquare, Send, Linkedin, Instagram } from 'lucide-react';
+import { Bot, Mail, MapPin, MessageSquare, Send, Share2, Camera } from 'lucide-react';
 import { Header } from '../../components/layout/Header';
 
 export default function ContactPage() {
@@ -107,7 +107,7 @@ export default function ContactPage() {
                       rel="noopener noreferrer"
                       className="p-3 rounded-lg border border-zinc-800 bg-black/50 hover:border-[#c8892a]/50 hover:text-[#c8892a] transition-colors"
                     >
-                      <Linkedin className="h-5 w-5" />
+                      <Share2 className="h-5 w-5" />
                     </a>
                     <a
                       href="https://www.instagram.com/agiworkforce"
@@ -115,7 +115,7 @@ export default function ContactPage() {
                       rel="noopener noreferrer"
                       className="p-3 rounded-lg border border-zinc-800 bg-black/50 hover:border-[#c8892a]/50 hover:text-[#c8892a] transition-colors"
                     >
-                      <Instagram className="h-5 w-5" />
+                      <Camera className="h-5 w-5" />
                     </a>
                   </div>
                 </div>

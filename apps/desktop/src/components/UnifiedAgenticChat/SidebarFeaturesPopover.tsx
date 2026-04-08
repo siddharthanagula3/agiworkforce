@@ -32,8 +32,8 @@ import {
   Wand2,
   Workflow,
   Zap,
-  type LucideIcon,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { isTauri } from '../../lib/tauri-mock';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/Popover';
