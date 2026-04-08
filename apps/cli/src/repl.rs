@@ -13,6 +13,8 @@ use crate::memory::{self, MemoryManager, MemoryTier};
 use crate::output;
 use crate::sessions;
 
+type ManagedSessionResume = (crate::runtime::session::ManagedSession, std::path::PathBuf);
+
 /// Run the interactive REPL loop.
 ///
 /// If `resume_messages` is provided, those messages are pre-loaded into the
@@ -24,6 +26,7 @@ pub async fn run_repl(
     sys_context: &SystemContext,
     custom_system_prompt: Option<&str>,
     resume_messages: Option<Vec<crate::models::Message>>,
+    resume_managed_session: Option<ManagedSessionResume>,
     max_turns: Option<usize>,
     skip_permissions: bool,
     fallback_model: Option<String>,
@@ -52,10 +55,21 @@ pub async fn run_repl(
         );
     }
 
-    // Pre-load messages from a resumed session (--session flag)
-    if let Some(messages) = resume_messages {
-        for msg in messages {
-            session.messages.push(msg);
+    match (resume_messages, resume_managed_session) {
+        (Some(messages), Some((managed_session, path))) => {
+            load_messages_into_session(&mut session, messages);
+            session.adopt_managed_session(managed_session, path);
+        }
+        (Some(messages), None) => {
+            load_messages_into_session(&mut session, messages);
+            session.enable_managed_session()?;
+        }
+        (None, Some((managed_session, path))) => {
+            load_messages_into_session(&mut session, managed_session.messages.clone());
+            session.adopt_managed_session(managed_session, path);
+        }
+        (None, None) => {
+            session.enable_managed_session()?;
         }
     }
 
@@ -999,10 +1013,30 @@ fn print_help() {
 // Conversation commands
 // ---------------------------------------------------------------------------
 
-pub fn handle_save(session: &AgentSession) {
-    if session.turn_count == 0 {
+pub fn handle_save(session: &mut AgentSession) {
+    if !session
+        .messages
+        .iter()
+        .any(|message| message.role != "system")
+    {
         output::print_warn("Nothing to save — no messages in session yet.");
         return;
+    }
+
+    if session.managed_session_id().is_none() {
+        if let Err(error) = session.enable_managed_session() {
+            output::print_error(&format!("Failed to initialize managed session: {error:#}"));
+            return;
+        }
+    }
+
+    if let Err(error) = session.persist_managed_session() {
+        output::print_error(&format!("Failed to persist managed session: {error:#}"));
+        return;
+    }
+
+    if let Some(session_id) = session.managed_session_id() {
+        output::print_info(&format!("Managed session saved: {}", session_id));
     }
 
     // Save to JSON (legacy format)
@@ -1067,29 +1101,82 @@ pub fn handle_load(arg: &str, session: &mut AgentSession) {
         return;
     }
 
-    match conversations::load_conversation(arg) {
-        Ok(conv) => {
-            let msg_count = conv.messages.len();
-            let model = conv.model.clone();
-            conversations::restore_into_session(session, &conv);
-            output::print_info(&format!(
-                "Loaded conversation {} ({} messages, model: {})",
-                arg, msg_count, model
-            ));
-        }
-        Err(e) => {
-            output::print_error(&format!("Failed to load: {:#}", e));
-        }
+    match crate::runtime::session_control::resolve_managed_session_reference(arg) {
+        Ok(resolved) => match crate::runtime::session_control::load_managed_session(arg) {
+            Ok(managed_session) => {
+                let session_id = managed_session.session_id.clone();
+                let message_count = managed_session.messages.len();
+                load_messages_into_session(session, managed_session.messages.clone());
+                session.adopt_managed_session(managed_session, resolved.path);
+                output::print_info(&format!(
+                    "Loaded managed session {} ({} messages)",
+                    session_id, message_count
+                ));
+            }
+            Err(error) => {
+                output::print_error(&format!("Failed to load managed session: {error:#}"));
+            }
+        },
+        Err(_) => match conversations::load_conversation(arg) {
+            Ok(conv) => {
+                let msg_count = conv.messages.len();
+                let model = conv.model.clone();
+                conversations::restore_into_session(session, &conv);
+                if let Err(error) = session.enable_managed_session() {
+                    output::print_warn(&format!(
+                        "Loaded legacy conversation, but managed session setup failed: {error:#}"
+                    ));
+                }
+                output::print_info(&format!(
+                    "Loaded conversation {} ({} messages, model: {})",
+                    arg, msg_count, model
+                ));
+            }
+            Err(e) => {
+                output::print_error(&format!("Failed to load: {:#}", e));
+            }
+        },
     }
 }
 
 pub fn handle_history() {
+    let mut showed_any = false;
+
+    match crate::runtime::session_control::list_managed_sessions() {
+        Ok(summaries) if !summaries.is_empty() => {
+            eprintln!("{}", "Managed Sessions:".cyan().bold());
+            for (index, summary) in summaries.iter().take(20).enumerate() {
+                eprintln!(
+                    "  {} {} {} ({})",
+                    format!("{:>2}.", index + 1).dimmed(),
+                    summary.session_id.bold(),
+                    summary
+                        .updated_at
+                        .format("%Y-%m-%d %H:%M")
+                        .to_string()
+                        .dimmed(),
+                    format!("{} msgs", summary.message_count).dimmed(),
+                );
+            }
+            if summaries.len() > 20 {
+                eprintln!(
+                    "  {}",
+                    format!("... and {} more", summaries.len() - 20).dimmed()
+                );
+            }
+            showed_any = true;
+        }
+        Ok(_) => {}
+        Err(error) => output::print_error(&format!("Failed to list managed sessions: {error:#}")),
+    }
+
     // Show SQLite sessions first
     let has_sqlite = match sessions::open_db() {
         Ok(conn) => match sessions::list_sessions(&conn, 20) {
             Ok(list) if !list.is_empty() => {
                 eprintln!("{}", "Sessions (SQLite):".cyan().bold());
                 eprintln!("{}", sessions::format_session_list(&list));
+                showed_any = true;
                 true
             }
             Ok(_) => false,
@@ -1126,7 +1213,7 @@ pub fn handle_history() {
             }
         }
         Ok(_) => {
-            if !has_sqlite {
+            if !has_sqlite && !showed_any {
                 output::print_info("No saved conversations yet. Use /save to save one.");
             }
         }
@@ -1142,6 +1229,11 @@ fn handle_delete(arg: &str) {
         return;
     }
 
+    if crate::runtime::session_control::delete_managed_session(arg).is_ok() {
+        output::print_info(&format!("Deleted managed session: {}", arg));
+        return;
+    }
+
     match conversations::delete_conversation(arg) {
         Ok(()) => {
             output::print_info(&format!("Deleted conversation: {}", arg));
@@ -1153,7 +1245,11 @@ fn handle_delete(arg: &str) {
 }
 
 pub fn handle_export(arg: &str, session: &AgentSession) {
-    if session.turn_count == 0 {
+    if !session
+        .messages
+        .iter()
+        .any(|message| message.role != "system")
+    {
         output::print_warn("Nothing to export — no messages in session yet.");
         return;
     }
@@ -1332,22 +1428,29 @@ fn handle_sessions(arg: &str) {
     let sub_arg = sub_parts.get(1).map(|s| s.trim()).unwrap_or_default();
 
     match sub_cmd {
-        "" | "list" => {
-            let conn = match sessions::open_db() {
-                Ok(c) => c,
-                Err(e) => {
-                    output::print_error(&format!("Failed to open sessions DB: {:#}", e));
-                    return;
+        "" | "list" => match crate::runtime::session_control::list_managed_sessions() {
+            Ok(list) if !list.is_empty() => {
+                eprintln!("{}", "Managed Sessions:".cyan().bold());
+                if let Ok(dir) = crate::runtime::session_control::managed_session_dir() {
+                    eprintln!("  {}", dir.display().to_string().dimmed());
                 }
-            };
-            match sessions::list_sessions(&conn, 20) {
-                Ok(list) => {
-                    eprintln!("{}", "Sessions (SQLite):".cyan().bold());
-                    eprintln!("{}", sessions::format_session_list(&list));
+                for summary in &list {
+                    eprintln!(
+                        "  {}  {}  {} msgs  {}",
+                        summary.session_id.bold(),
+                        summary
+                            .updated_at
+                            .format("%Y-%m-%d %H:%M")
+                            .to_string()
+                            .dimmed(),
+                        summary.message_count,
+                        summary.path.display()
+                    );
                 }
-                Err(e) => output::print_error(&format!("Failed to list sessions: {:#}", e)),
             }
-        }
+            Ok(_) => output::print_info("No managed sessions found."),
+            Err(e) => output::print_error(&format!("Failed to list sessions: {:#}", e)),
+        },
         "search" => {
             if sub_arg.is_empty() {
                 output::print_warn("Usage: /sessions search <query>");
@@ -1515,9 +1618,12 @@ pub fn handle_rewind(arg: &str, session: &mut AgentSession) {
     }
 }
 
-pub fn handle_branch(arg: &str, session: &AgentSession) {
-    // For now, branch saves current state to a new SQLite session
-    if session.turn_count == 0 {
+pub fn handle_branch(arg: &str, session: &mut AgentSession) {
+    if !session
+        .messages
+        .iter()
+        .any(|message| message.role != "system")
+    {
         output::print_warn("Nothing to branch — no messages yet.");
         return;
     }
@@ -1527,6 +1633,32 @@ pub fn handle_branch(arg: &str, session: &AgentSession) {
     } else {
         arg.to_string()
     };
+
+    if let Some(session_id) = session
+        .managed_session_id()
+        .map(|session_id| session_id.to_string())
+    {
+        if let Err(error) = session.persist_managed_session() {
+            output::print_error(&format!(
+                "Failed to persist current session before fork: {error:#}"
+            ));
+            return;
+        }
+
+        match crate::runtime::session_control::fork_managed_session(&session_id) {
+            Ok(forked_session) => {
+                output::print_info(&format!(
+                    "Branched conversation '{}' as managed session {}. Resume with: agiworkforce --session {}",
+                    branch_name, forked_session.summary.session_id, forked_session.summary.session_id
+                ));
+                return;
+            }
+            Err(error) => {
+                output::print_error(&format!("Failed to fork managed session: {error:#}"));
+                return;
+            }
+        }
+    }
 
     let conn = match sessions::open_db() {
         Ok(c) => c,
@@ -1566,6 +1698,19 @@ fn sha2_short(input: &str) -> String {
     use sha2::{Digest, Sha256};
     let hash = Sha256::digest(input.as_bytes());
     format!("{:x}", hash)[..8].to_string()
+}
+
+fn load_messages_into_session(session: &mut AgentSession, messages: Vec<crate::models::Message>) {
+    if !messages.is_empty() {
+        session.messages = messages;
+    }
+    session.total_input_tokens = 0;
+    session.total_output_tokens = 0;
+    session.turn_count = session
+        .messages
+        .iter()
+        .filter(|message| message.role == "user")
+        .count() as u32;
 }
 
 fn handle_diff() {
