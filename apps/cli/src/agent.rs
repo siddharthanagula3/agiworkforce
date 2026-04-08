@@ -1,5 +1,6 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::path::PathBuf;
 
 use anyhow::Result;
 use colored::Colorize;
@@ -12,9 +13,10 @@ use crate::errors::CliError;
 use crate::hooks;
 use crate::mcp;
 use crate::memory::{self, MemoryManager};
-use crate::models::{
-    self, ContentBlock, Message, Provider, StreamCallback, ToolCallResponse, ToolDefinition,
-};
+#[cfg(test)]
+use crate::models::ToolDefinition;
+use crate::models::{self, ContentBlock, Message, Provider, StreamCallback, ToolCallResponse};
+use crate::runtime::session::ManagedSession;
 use crate::skills;
 use crate::subagent;
 use crate::teams;
@@ -25,282 +27,15 @@ use crate::tools;
 // ---------------------------------------------------------------------------
 
 /// Build native API tool definitions with JSON Schema for each tool.
+#[cfg(test)]
 fn build_tool_definitions() -> Vec<ToolDefinition> {
-    vec![
-        ToolDefinition {
-            name: "read_file".to_string(),
-            description: "Read the contents of a file at the given path. Optionally read a specific line range.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Absolute path to the file to read"
-                    },
-                    "start_line": {
-                        "type": "integer",
-                        "description": "First line to read (1-based, inclusive). Omit to start from beginning."
-                    },
-                    "end_line": {
-                        "type": "integer",
-                        "description": "Last line to read (1-based, inclusive). Omit to read to the end."
-                    }
-                },
-                "required": ["path"]
-            }),
-        },
-        ToolDefinition {
-            name: "write_file".to_string(),
-            description: "Write content to a file, creating it if it doesn't exist or overwriting if it does.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Absolute path to the file to write"
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "Content to write to the file"
-                    }
-                },
-                "required": ["path", "content"]
-            }),
-        },
-        ToolDefinition {
-            name: "run_command".to_string(),
-            description: "Execute a shell command and return stdout/stderr. Use for system commands, builds, tests, git operations, etc.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "command": {
-                        "type": "string",
-                        "description": "The shell command to execute"
-                    }
-                },
-                "required": ["command"]
-            }),
-        },
-        ToolDefinition {
-            name: "search_files".to_string(),
-            description: "Search for a regex pattern across files in a directory (like grep -rn).".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "Regex pattern to search for"
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to search in (defaults to current directory)"
-                    }
-                },
-                "required": ["pattern"]
-            }),
-        },
-        ToolDefinition {
-            name: "list_directory".to_string(),
-            description: "List contents of a directory with file types and sizes.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Directory path to list (defaults to current directory)"
-                    }
-                },
-                "required": []
-            }),
-        },
-        ToolDefinition {
-            name: "edit_file".to_string(),
-            description: "Apply a targeted edit to a file by replacing an exact string match with new content.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Absolute path to the file to edit"
-                    },
-                    "old_string": {
-                        "type": "string",
-                        "description": "Exact string to find (must be unique in the file)"
-                    },
-                    "new_string": {
-                        "type": "string",
-                        "description": "Replacement string"
-                    }
-                },
-                "required": ["path", "old_string", "new_string"]
-            }),
-        },
-        ToolDefinition {
-            name: "web_search".to_string(),
-            description: "Search the web for information.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query string"
-                    },
-                    "max_results": {
-                        "type": "integer",
-                        "description": "Maximum number of results to return (default 5)"
-                    }
-                },
-                "required": ["query"]
-            }),
-        },
-        ToolDefinition {
-            name: "web_fetch".to_string(),
-            description: "Fetch and extract text content from a URL.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "URL to fetch content from"
-                    }
-                },
-                "required": ["url"]
-            }),
-        },
-        ToolDefinition {
-            name: "task".to_string(),
-            description: "Spawn a subagent to handle a focused task in parallel. \
-                          The subagent has access to all the same tools (read, write, edit, \
-                          run commands, search) and runs concurrently. Use this to parallelize \
-                          independent work items — e.g., fixing multiple files, running \
-                          separate investigations, or implementing independent features. \
-                          Each task runs to completion and returns its result.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "description": {
-                        "type": "string",
-                        "description": "Short description of the task (shown in status output)"
-                    },
-                    "prompt": {
-                        "type": "string",
-                        "description": "The full prompt/instructions for the subagent"
-                    }
-                },
-                "required": ["description", "prompt"]
-            }),
-        },
-        // --- Extended tool set ---
-        ToolDefinition {
-            name: "apply_patch".to_string(),
-            description: "Apply a unified diff/patch to the working directory.".to_string(),
-            input_schema: serde_json::json!({"type":"object","properties":{"patch":{"type":"string","description":"Unified diff content"}},"required":["patch"]}),
-        },
-        ToolDefinition {
-            name: "grep_files".to_string(),
-            description: "Search for a regex pattern across files using ripgrep. Supports glob filtering.".to_string(),
-            input_schema: serde_json::json!({"type":"object","properties":{"pattern":{"type":"string","description":"Regex pattern"},"path":{"type":"string","description":"Directory (default .)"},"include":{"type":"string","description":"Glob filter e.g. *.rs"}},"required":["pattern"]}),
-        },
-        ToolDefinition {
-            name: "tool_search".to_string(),
-            description: "Search available tools by keyword.".to_string(),
-            input_schema: serde_json::json!({"type":"object","properties":{"query":{"type":"string","description":"Search query"},"max_results":{"type":"integer","description":"Max results (default 10)"}},"required":["query"]}),
-        },
-    ]
+    crate::runtime::tool_catalog::built_in_tool_definitions()
 }
 
 /// Build team-specific tool definitions (only included when team mode is active).
+#[cfg(test)]
 fn build_team_tool_definitions() -> Vec<ToolDefinition> {
-    vec![
-        ToolDefinition {
-            name: "send_message".to_string(),
-            description: "Send a message to a teammate. Use this to coordinate work, \
-                          share findings, request help, or notify teammates of status changes."
-                .to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "from": {
-                        "type": "string",
-                        "description": "Your teammate name (the sender)"
-                    },
-                    "to": {
-                        "type": "string",
-                        "description": "The recipient teammate name"
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "The message content"
-                    }
-                },
-                "required": ["from", "to", "content"]
-            }),
-        },
-        ToolDefinition {
-            name: "team_task".to_string(),
-            description: "Create, update, or list shared tasks visible to all teammates. \
-                          Use action 'create' to add a new task, 'update' to change status, \
-                          or 'list' to see all tasks."
-                .to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "action": {
-                        "type": "string",
-                        "enum": ["create", "update", "list"],
-                        "description": "The action to perform: create, update, or list"
-                    },
-                    "title": {
-                        "type": "string",
-                        "description": "Task title (required for 'create')"
-                    },
-                    "assignee": {
-                        "type": "string",
-                        "description": "Teammate name to assign the task to (optional, for 'create')"
-                    },
-                    "dependencies": {
-                        "type": "string",
-                        "description": "Comma-separated task IDs this task depends on (optional, for 'create')"
-                    },
-                    "task_id": {
-                        "type": "string",
-                        "description": "Task ID to update (required for 'update')"
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": ["pending", "in_progress", "completed", "blocked"],
-                        "description": "New status (required for 'update')"
-                    }
-                },
-                "required": ["action"]
-            }),
-        },
-        ToolDefinition {
-            name: "read_messages".to_string(),
-            description: "Read pending messages for a teammate. Messages are consumed \
-                          after reading (inbox is drained)."
-                .to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "The teammate name whose inbox to read"
-                    }
-                },
-                "required": ["name"]
-            }),
-        },
-        ToolDefinition {
-            name: "list_teammates".to_string(),
-            description: "List all registered teammates and their current status.".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {},
-                "required": []
-            }),
-        },
-    ]
+    crate::runtime::tool_catalog::team_tool_definitions()
 }
 
 /// Maximum agentic loop iterations to prevent infinite loops.
@@ -372,6 +107,10 @@ pub struct AgentSession {
     subagent_manager: Option<subagent::SubagentManager>,
     /// Optional team manager for teammate messaging and shared tasks.
     team_manager: Option<teams::TeamManager>,
+    /// Managed session snapshot persisted under ~/.agiworkforce/managed_sessions.
+    managed_session: Option<ManagedSession>,
+    /// Path of the managed session file backing this session.
+    managed_session_path: Option<PathBuf>,
 }
 
 /// Metadata returned after a single agent turn.
@@ -492,6 +231,8 @@ impl AgentSession {
             allowed_tools: None,
             subagent_manager: None,
             team_manager: None,
+            managed_session: None,
+            managed_session_path: None,
         }
     }
 
@@ -536,10 +277,15 @@ impl AgentSession {
     /// publishing the card.
     #[allow(dead_code)]
     pub fn a2a_card(&self) -> crate::a2a::AgentCard {
-        let tool_names: Vec<String> = build_tool_definitions()
-            .iter()
-            .map(|t| t.name.clone())
-            .collect();
+        let tool_names: Vec<String> = crate::runtime::tool_catalog::effective_tool_definitions(
+            false,
+            self.team_manager.is_some(),
+            self.allowed_tools.as_deref(),
+            None,
+        )
+        .iter()
+        .map(|t| t.name.clone())
+        .collect();
 
         crate::a2a::AgentCard {
             agent_id: crate::a2a::generate_agent_id(),
@@ -575,6 +321,45 @@ impl AgentSession {
         self.turn_count = 0;
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
+    }
+
+    /// Enable managed session persistence for this session.
+    pub fn enable_managed_session(&mut self) -> Result<()> {
+        if self.managed_session.is_some() {
+            return Ok(());
+        }
+
+        let resolved =
+            crate::runtime::session_control::create_managed_session(self.messages.clone())?;
+        let managed_session = ManagedSession::load_from_path(&resolved.path)?;
+        self.adopt_managed_session(managed_session, resolved.path);
+        Ok(())
+    }
+
+    /// Adopt an existing managed session as the persistence backing for this session.
+    pub fn adopt_managed_session(&mut self, managed_session: ManagedSession, path: PathBuf) {
+        self.managed_session = Some(managed_session);
+        self.managed_session_path = Some(path);
+    }
+
+    /// Persist the current in-memory conversation into the managed session file.
+    pub fn persist_managed_session(&mut self) -> Result<()> {
+        let (Some(managed_session), Some(path)) = (
+            self.managed_session.as_mut(),
+            self.managed_session_path.as_deref(),
+        ) else {
+            return Ok(());
+        };
+
+        managed_session.messages = self.messages.clone();
+        managed_session.touch();
+        managed_session.save_to_path(path)
+    }
+
+    pub fn managed_session_id(&self) -> Option<&str> {
+        self.managed_session
+            .as_ref()
+            .map(|managed_session| managed_session.session_id.as_str())
     }
 
     /// Normalize conversation history: ensure every tool_use call has a
@@ -773,28 +558,30 @@ impl AgentSession {
         // Save checkpoint for /rewind
         self.save_checkpoint();
 
+        if let Err(error) = self.persist_managed_session() {
+            eprintln!(
+                "{}",
+                format!("  warning: failed to persist managed session: {error:#}").yellow()
+            );
+        }
+
         let max_tokens = config.default.max_tokens;
 
         // Merge built-in tool definitions with MCP tools
-        let mut tool_defs = build_tool_definitions();
-        // In plan mode, only allow read-only tools
-        if self.plan_mode {
-            let read_only = [
-                "read_file",
-                "search_files",
-                "list_directory",
-                "web_search",
-                "web_fetch",
-            ];
-            tool_defs.retain(|t| read_only.contains(&t.name.as_str()));
-        }
-        // Add team tools when team mode is active
-        if self.team_manager.is_some() {
-            tool_defs.extend(build_team_tool_definitions());
-        }
-        if let Some(ref mcp) = self.mcp_manager {
-            tool_defs.extend(mcp.tool_definitions());
-        }
+        let mcp_tool_definitions = self
+            .mcp_manager
+            .as_ref()
+            .map(|mcp_manager| mcp_manager.tool_definitions());
+        let tool_defs = crate::runtime::tool_catalog::effective_tool_definitions(
+            self.plan_mode,
+            self.team_manager.is_some(),
+            self.allowed_tools.as_deref(),
+            mcp_tool_definitions.as_deref(),
+        );
+        let available_tool_names = tool_defs
+            .iter()
+            .map(|tool_definition| tool_definition.name.as_str())
+            .collect::<std::collections::HashSet<_>>();
 
         // --- First LLM call (with user's streaming callback) ---
         let result = match models::stream_completion(
@@ -935,6 +722,15 @@ impl AgentSession {
             // Spawn all task tool calls concurrently via subagent manager
             let mut task_spawn_results = Vec::new();
             for tc in &task_calls {
+                if !available_tool_names.contains(tc.name.as_str()) {
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id: tc.id.clone(),
+                        content: format!("Tool '{}' is not available in this session.", tc.name),
+                        is_error: true,
+                    });
+                    continue;
+                }
+
                 hooks::run_hooks(
                     &hcfg,
                     hooks::HookEvent::BeforeToolUse,
@@ -1090,6 +886,15 @@ Files modified:
 
             // Execute non-task tool calls sequentially (as before)
             for tc in &other_calls {
+                if !available_tool_names.contains(tc.name.as_str()) {
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id: tc.id.clone(),
+                        content: format!("Tool '{}' is not available in this session.", tc.name),
+                        is_error: true,
+                    });
+                    continue;
+                }
+
                 hooks::run_hooks(
                     &hcfg,
                     hooks::HookEvent::BeforeToolUse,
@@ -1300,6 +1105,13 @@ Files modified:
                     }
                 });
             }
+        }
+
+        if let Err(error) = self.persist_managed_session() {
+            eprintln!(
+                "{}",
+                format!("  warning: failed to persist managed session: {error:#}").yellow()
+            );
         }
 
         Ok(TurnResult {
