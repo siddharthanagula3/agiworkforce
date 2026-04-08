@@ -39,7 +39,10 @@ interface DialogContentProps extends React.ComponentPropsWithoutRef<
 > {
   ref?: React.Ref<React.ElementRef<typeof DialogPrimitive.Content>>;
   closeLabel?: string;
-  overlayProps?: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>;
+  overlayProps?: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> &
+    React.HTMLAttributes<HTMLDivElement> & {
+      [key: `data-${string}`]: string | undefined;
+    };
 }
 
 function DialogContent({

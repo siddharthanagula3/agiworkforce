@@ -1,4 +1,5 @@
-import { type LucideIcon, TrendingDown, TrendingUp } from 'lucide-react';
+import { TrendingDown, TrendingUp } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/Card';
 import { cn } from '../../../lib/utils';
 
