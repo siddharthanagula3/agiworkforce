@@ -1643,6 +1643,7 @@ pub async fn run(
     sys_context: &SystemContext,
     custom_system_prompt: Option<&str>,
     resume_messages: Option<Vec<crate::models::Message>>,
+    resume_managed_session: Option<(crate::runtime::session::ManagedSession, std::path::PathBuf)>,
     max_turns: Option<usize>,
     skip_permissions: bool,
     _fallback_model: Option<String>,
@@ -1664,9 +1665,40 @@ pub async fn run(
         session.enable_team_mode();
     }
 
-    if let Some(messages) = resume_messages {
-        for msg in messages {
-            session.messages.push(msg);
+    match (resume_messages, resume_managed_session) {
+        (Some(messages), Some((managed_session, path))) => {
+            if !messages.is_empty() {
+                session.messages = messages;
+            }
+            session.turn_count = session
+                .messages
+                .iter()
+                .filter(|message| message.role == "user")
+                .count() as u32;
+            session.adopt_managed_session(managed_session, path);
+        }
+        (Some(messages), None) => {
+            if !messages.is_empty() {
+                session.messages = messages;
+            }
+            session.turn_count = session
+                .messages
+                .iter()
+                .filter(|message| message.role == "user")
+                .count() as u32;
+            session.enable_managed_session()?;
+        }
+        (None, Some((managed_session, path))) => {
+            session.messages = managed_session.messages.clone();
+            session.turn_count = session
+                .messages
+                .iter()
+                .filter(|message| message.role == "user")
+                .count() as u32;
+            session.adopt_managed_session(managed_session, path);
+        }
+        (None, None) => {
+            session.enable_managed_session()?;
         }
     }
 
