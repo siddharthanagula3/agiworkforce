@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Input } from '@/components/ui';
-import { AlertCircle, Bot, CheckCircle2, Github, Mail, RefreshCw } from 'lucide-react';
+import { AlertCircle, Bot, CheckCircle2, GitBranch, Mail, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useMemo } from 'react';
 import { getSupabaseClient } from '../../services/supabase';
@@ -222,7 +222,7 @@ export default function SignupPage() {
                 });
               }}
             >
-              <Github className="mr-2 h-5 w-5" />
+              <GitBranch className="mr-2 h-5 w-5" />
               GitHub
             </Button>
             <Button

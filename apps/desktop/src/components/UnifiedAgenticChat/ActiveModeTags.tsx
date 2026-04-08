@@ -1,15 +1,6 @@
+import { Globe, Microscope, Palette, Film, Code, Zap, Brain, Music } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { X } from 'lucide-react';
-import {
-  Globe,
-  Microscope,
-  Palette,
-  Film,
-  Code,
-  Zap,
-  Brain,
-  Music,
-  type LucideIcon,
-} from 'lucide-react';
 import type { IntentType } from '../../lib/intentClassifier';
 import { cn } from '../../lib/utils';
 

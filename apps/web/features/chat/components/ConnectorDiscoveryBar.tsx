@@ -8,7 +8,7 @@
  * Dismiss state is persisted in the chat preferences store (Zustand persist).
  */
 
-import { Github, Settings, X } from 'lucide-react';
+import { GitBranch, Settings, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn } from '@shared/lib/utils';
@@ -29,7 +29,7 @@ const CONNECTORS: ConnectorDef[] = [
   {
     id: 'github',
     name: 'GitHub',
-    lucideIcon: Github,
+    lucideIcon: GitBranch,
     color: 'text-zinc-200',
     bgColor: 'bg-zinc-700/60',
   },

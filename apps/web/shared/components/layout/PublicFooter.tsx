@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { Sparkles, Mail, Github, Twitter, Linkedin } from 'lucide-react';
+import { Sparkles, Mail, GitBranch, Share2, Globe } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { motion } from 'framer-motion';
@@ -35,9 +35,9 @@ const PublicFooter: React.FC = () => {
   };
 
   const socialLinks = [
-    { icon: <Twitter className="h-5 w-5" />, href: '#', label: 'Twitter' },
-    { icon: <Linkedin className="h-5 w-5" />, href: '#', label: 'LinkedIn' },
-    { icon: <Github className="h-5 w-5" />, href: '#', label: 'GitHub' },
+    { icon: <Share2 className="h-5 w-5" />, href: '#', label: 'Twitter' },
+    { icon: <Globe className="h-5 w-5" />, href: '#', label: 'LinkedIn' },
+    { icon: <GitBranch className="h-5 w-5" />, href: '#', label: 'GitHub' },
   ];
 
   return (

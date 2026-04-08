@@ -5,12 +5,12 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  Github,
   KeyRound,
   Loader2,
   Lock,
   Mail,
   MailCheck,
+  GitBranch,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -658,7 +658,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                   }
                 }}
               >
-                <Github className="w-4 h-4" />
+                <GitBranch className="w-4 h-4" />
                 GitHub
               </Button>
               <Button
