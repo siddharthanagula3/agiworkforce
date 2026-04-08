@@ -6,7 +6,7 @@ import {
   Camera,
   FolderPlus,
   HardDrive,
-  Github,
+  GitBranch,
   Sparkles,
   Plug,
   BookOpen,
@@ -223,7 +223,7 @@ export function AttachmentMenu({
             }}
           />
           <MenuItem
-            icon={<Github size={15} />}
+            icon={<GitBranch size={15} />}
             label="Add from GitHub"
             onClick={() => {
               window.dispatchEvent(

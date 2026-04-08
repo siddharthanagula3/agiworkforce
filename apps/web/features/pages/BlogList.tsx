@@ -18,7 +18,7 @@ import {
   Building2,
   Loader2,
   AlertCircle,
-  type LucideProps,
+  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
@@ -70,7 +70,7 @@ const BlogPage: React.FC = () => {
   const [hasMore, setHasMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
 
-  const categoryIcons: Record<string, React.ComponentType<LucideProps>> = {
+  const categoryIcons: Record<string, LucideIcon> = {
     'ai-automation': Zap,
     productivity: Rocket,
     'case-studies': Building2,
@@ -261,7 +261,7 @@ const BlogPage: React.FC = () => {
                 >
                   {}
                   {}
-                  {React.createElement(IconComponent as React.ComponentType<LucideProps>, {
+                  {React.createElement(IconComponent as LucideIcon, {
                     size: 16,
                     'aria-hidden': 'true',
                   })}

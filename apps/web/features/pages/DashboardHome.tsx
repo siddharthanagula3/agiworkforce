@@ -30,7 +30,7 @@ import {
   TrendingUp,
   Monitor,
   Smartphone,
-  Chrome,
+  Globe,
   Terminal,
   CheckCircle2,
   XCircle,
@@ -140,7 +140,7 @@ const STATUS_DOT: Record<SurfaceStatus | 'up' | 'degraded' | 'down', string> = {
 const SURFACE_ICON: Record<SurfaceId, React.ElementType> = {
   desktop: Monitor,
   mobile: Smartphone,
-  extension: Chrome,
+  extension: Globe,
   cli: Terminal,
 };
 
@@ -543,7 +543,7 @@ const QuickActionCard: React.FC<QuickActionCardProps> = ({
 const DEFAULT_SURFACES: SurfaceState[] = [
   { id: 'desktop', label: 'Desktop', icon: Monitor, status: 'unknown', lastSeen: null },
   { id: 'mobile', label: 'Mobile', icon: Smartphone, status: 'unknown', lastSeen: null },
-  { id: 'extension', label: 'Extension', icon: Chrome, status: 'unknown', lastSeen: null },
+  { id: 'extension', label: 'Extension', icon: Globe, status: 'unknown', lastSeen: null },
   { id: 'cli', label: 'CLI', icon: Terminal, status: 'unknown', lastSeen: null },
 ];
 

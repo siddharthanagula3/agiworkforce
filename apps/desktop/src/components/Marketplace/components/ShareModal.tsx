@@ -1,4 +1,4 @@
-import { Check, Copy, Link, Linkedin, Mail, MessageSquare, Newspaper, Twitter } from 'lucide-react';
+import { Check, Copy, Link, Briefcase, Mail, MessageSquare, Newspaper, Send } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Button } from '../../../components/ui/Button';
@@ -138,13 +138,13 @@ export function ShareModal() {
             <label className="text-sm font-medium">Share on Social Media</label>
             <div className="grid grid-cols-3 gap-3">
               <SharePlatformButton
-                icon={<Twitter className="h-5 w-5" />}
+                icon={<Send className="h-5 w-5" />}
                 label="Twitter/X"
                 onClick={() => handlePlatformShare('twitter')}
                 className="bg-black hover:bg-black/90 text-white"
               />
               <SharePlatformButton
-                icon={<Linkedin className="h-5 w-5" />}
+                icon={<Briefcase className="h-5 w-5" />}
                 label="LinkedIn"
                 onClick={() => handlePlatformShare('linkedin')}
                 className="bg-[#0077B5] hover:bg-[#0077B5]/90 text-white"

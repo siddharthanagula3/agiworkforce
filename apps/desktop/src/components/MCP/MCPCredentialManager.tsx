@@ -5,8 +5,8 @@ import { Alert, AlertDescription } from '../ui/Alert';
 import { Input } from '../ui/Input';
 import { Label } from '../ui/Label';
 import {
-  Github,
   Cloud,
+  GitBranch,
   MessageSquare,
   CheckCircle,
   AlertCircle,
@@ -33,7 +33,7 @@ interface MCPCredentialManagerProps {
 const OAUTH_PROVIDERS = {
   github: {
     name: 'GitHub',
-    icon: Github,
+    icon: GitBranch,
     description: 'Connect your GitHub account for repository access',
     scopes: ['repo', 'read:user'],
   },
