@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Link, Linkedin, MessageSquare, X } from 'lucide-react';
+import { Check, Link, Briefcase, MessageSquare, X, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -179,7 +179,7 @@ export function ShareCardDialog({
             <ShareCircleButton
               label="X"
               onClick={handleShareX}
-              icon={<XIcon className="h-5 w-5" />}
+              icon={<Share2 className="h-5 w-5" />}
               bgClass="bg-black hover:bg-accent"
               iconClass="text-white"
             />
@@ -188,7 +188,7 @@ export function ShareCardDialog({
             <ShareCircleButton
               label="LinkedIn"
               onClick={handleShareLinkedIn}
-              icon={<Linkedin className="h-5 w-5" />}
+              icon={<Briefcase className="h-5 w-5" />}
               bgClass="bg-[#0077B5] hover:bg-[#006097]"
               iconClass="text-white"
             />
@@ -217,15 +217,6 @@ export function ShareCardDialog({
         </div>
       </div>
     </div>
-  );
-}
-
-/* Inline X (Twitter) icon since lucide-react exports X as close icon, not the platform */
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />
-    </svg>
   );
 }
 

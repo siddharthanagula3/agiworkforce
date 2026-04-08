@@ -6,7 +6,8 @@
  */
 
 import React, { useState } from 'react';
-import { Code2, PenLine, Search, BarChart3, Sparkles, Zap, type LucideIcon } from 'lucide-react';
+import { Code2, PenLine, Search, BarChart3, Sparkles, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface PromptCard {
