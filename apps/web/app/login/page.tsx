@@ -2,7 +2,7 @@
 
 import { Button, Input } from '@/components/ui';
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
-import { Bot, Building2, Github, Mail } from 'lucide-react';
+import { Bot, Building2, GitBranch, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useMemo, useRef, useEffect } from 'react';
@@ -269,7 +269,7 @@ function LoginForm() {
         <div className="mt-8 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Button variant="outline" className="h-12" onClick={() => handleOAuth('github')}>
-              <Github className="mr-2 h-5 w-5" />
+              <GitBranch className="mr-2 h-5 w-5" />
               GitHub
             </Button>
             <Button variant="outline" className="h-12" onClick={() => handleOAuth('google')}>

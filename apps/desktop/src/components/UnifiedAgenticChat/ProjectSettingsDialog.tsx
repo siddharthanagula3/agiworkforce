@@ -42,8 +42,8 @@ import {
   Upload,
   Brain,
   Database,
-  type LucideIcon,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
 import {
