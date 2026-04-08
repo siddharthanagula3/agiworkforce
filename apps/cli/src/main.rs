@@ -43,6 +43,7 @@ mod project_scope;
 mod review;
 #[allow(dead_code)]
 mod routing;
+mod runtime;
 mod sandbox;
 mod tool_search;
 // In-progress modules — compiled and partially wired. Public APIs available for future integration.
@@ -71,7 +72,7 @@ mod skill_learner;
 #[allow(dead_code)]
 mod sync;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use std::io::{self, IsTerminal, Read};
@@ -460,6 +461,71 @@ enum MarketplaceSubcommand {
     Update,
 }
 
+type ManagedResumeSession = (runtime::session::ManagedSession, std::path::PathBuf);
+
+type ResumePayload = (Vec<crate::models::Message>, Option<ManagedResumeSession>);
+
+fn managed_resume_payload_from_resolved(
+    resolved: runtime::session_control::ResolvedManagedSessionReference,
+) -> Result<ResumePayload> {
+    let managed_session = runtime::session::ManagedSession::load_from_path(&resolved.path)?;
+    let messages = managed_session.messages.clone();
+    Ok((messages, Some((managed_session, resolved.path))))
+}
+
+fn load_legacy_session_messages(reference: &str) -> Result<Vec<crate::models::Message>> {
+    if matches!(reference, "latest" | "@latest" | "last") {
+        return latest_legacy_session_messages()?
+            .map(|(_, messages)| messages)
+            .ok_or_else(|| anyhow::anyhow!("No legacy sessions found"));
+    }
+
+    let conn = sessions::open_db()?;
+    sessions::load_session(&conn, reference)
+}
+
+fn latest_legacy_session_messages() -> Result<Option<(String, Vec<crate::models::Message>)>> {
+    let conn = sessions::open_db()?;
+    let Some(summary) = sessions::list_sessions(&conn, 1)?.into_iter().next() else {
+        return Ok(None);
+    };
+    let messages = sessions::load_session(&conn, &summary.id)?;
+    Ok(Some((summary.id, messages)))
+}
+
+fn resolve_resume_payload(reference: &str, fork: bool) -> Result<ResumePayload> {
+    let managed_attempt = if fork {
+        runtime::session_control::fork_managed_session(reference)
+    } else {
+        runtime::session_control::resolve_managed_session_reference(reference)
+    };
+
+    match managed_attempt {
+        Ok(resolved) => managed_resume_payload_from_resolved(resolved),
+        Err(managed_error) => load_legacy_session_messages(reference).with_context(|| {
+            format!(
+                "Managed session resolution failed ({managed_error:#}); legacy session fallback also failed"
+            )
+        }).map(|messages| (messages, None)),
+    }
+}
+
+fn resolve_latest_resume_payload() -> Result<Option<(String, ResumePayload)>> {
+    if let Some(resolved) = runtime::session_control::latest_managed_session()? {
+        let session_id = resolved.summary.session_id.clone();
+        return Ok(Some((
+            session_id,
+            managed_resume_payload_from_resolved(resolved)?,
+        )));
+    }
+
+    if let Some((session_id, messages)) = latest_legacy_session_messages()? {
+        return Ok(Some((session_id, (messages, None))));
+    }
+
+    Ok(None)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -535,11 +601,13 @@ async fn main() -> Result<()> {
                     .unwrap_or(&app_config.default.model)
                     .to_string();
                 let mut session = agent::AgentSession::new(&m, &sys_ctx, None);
+                session.set_provider_override(&app_config.default.provider);
                 if *full_auto {
                     session.skip_permissions = true;
                     session.auto_approve_safe = true;
                 }
                 session.quiet = true;
+                session.enable_managed_session()?;
                 let is_json = *json;
                 let result = session
                     .send(
@@ -574,22 +642,28 @@ async fn main() -> Result<()> {
                 }
             }
             Command::Resume { session_id } => {
-                let conn = sessions::open_db()?;
-                let sid = match session_id {
-                    Some(id) => id.clone(),
-                    None => sessions::list_sessions(&conn, 1)?
-                        .first()
-                        .map(|s| s.id.clone())
+                let (session_label, (messages, managed_session)) = match session_id {
+                    Some(id) => (id.clone(), resolve_resume_payload(id, false)?),
+                    None => resolve_latest_resume_payload()?
                         .ok_or_else(|| anyhow::anyhow!("No sessions found"))?,
                 };
-                let msgs = sessions::load_session(&conn, &sid)?;
+                if messages.is_empty() {
+                    eprintln!("Warning: session '{}' has no messages.", session_label);
+                } else {
+                    eprintln!(
+                        "Resuming session '{}' ({} messages).",
+                        session_label,
+                        messages.len()
+                    );
+                }
                 let model = app_config.default.model.clone();
                 repl::run_repl(
                     &mut app_config,
                     &model,
                     &sys_ctx,
                     None,
-                    Some(msgs),
+                    Some(messages),
+                    managed_session,
                     None,
                     false,
                     None,
@@ -601,13 +675,12 @@ async fn main() -> Result<()> {
                 .await
             }
             Command::Fork { session_id } => {
-                let conn = sessions::open_db()?;
-                let msgs = sessions::load_session(&conn, session_id)?;
+                let (messages, managed_session) = resolve_resume_payload(session_id, true)?;
                 eprintln!(
                     "{} Forked session '{}' ({} messages)",
                     "fork:".cyan().bold(),
                     session_id,
-                    msgs.len()
+                    messages.len()
                 );
                 let model = app_config.default.model.clone();
                 repl::run_repl(
@@ -615,7 +688,8 @@ async fn main() -> Result<()> {
                     &model,
                     &sys_ctx,
                     None,
-                    Some(msgs),
+                    Some(messages),
+                    managed_session,
                     None,
                     false,
                     None,
@@ -1333,49 +1407,50 @@ async fn main() -> Result<()> {
     // --session / --resume / --continue: load a saved session for REPL
     let session_id = cli.session.as_ref().or(cli.resume.as_ref());
     let fork_session = cli.fork_session;
-    let resume_messages = if let Some(session_id) = session_id {
-        let conn = crate::sessions::open_db()?;
-        let messages = crate::sessions::load_session(&conn, session_id)?;
-        if messages.is_empty() {
+    let resume_payload = if let Some(session_id) = session_id {
+        let payload = resolve_resume_payload(session_id, fork_session)?;
+        let message_count = payload.0.len();
+        if message_count == 0 {
             eprintln!("Warning: session '{}' has no messages.", session_id);
         } else if fork_session {
             eprintln!(
                 "{} Forked session '{}' ({} messages). Changes will not modify the original.",
                 "fork:".cyan().bold(),
                 session_id,
-                messages.len()
+                message_count
             );
         } else {
             eprintln!(
                 "Resuming session '{}' ({} messages).",
-                session_id,
-                messages.len()
+                session_id, message_count
             );
         }
-        Some(messages)
+        Some(payload)
     } else if cli.continue_session {
-        // -c / --continue: load the most recent session
-        let conn = crate::sessions::open_db()?;
-        let sessions = crate::sessions::list_sessions(&conn, 1)?;
-        if let Some(latest) = sessions.first() {
-            let messages = crate::sessions::load_session(&conn, &latest.id)?;
-            if messages.is_empty() {
-                eprintln!("Warning: latest session '{}' has no messages.", latest.id);
+        if let Some((session_label, payload)) = resolve_latest_resume_payload()? {
+            let message_count = payload.0.len();
+            if message_count == 0 {
+                eprintln!(
+                    "Warning: latest session '{}' has no messages.",
+                    session_label
+                );
             } else {
                 eprintln!(
-                    "Continuing session '{}' — {} ({} messages).",
-                    latest.id,
-                    latest.title,
-                    messages.len()
+                    "Continuing session '{}' ({} messages).",
+                    session_label, message_count
                 );
             }
-            Some(messages)
+            Some(payload)
         } else {
             eprintln!("No saved sessions to continue.");
             None
         }
     } else {
         None
+    };
+    let (resume_messages, resume_managed_session) = match resume_payload {
+        Some((messages, managed_session)) => (Some(messages), managed_session),
+        None => (None, None),
     };
 
     // Resolve team mode from --team flag or AGI_TEAM env var
@@ -1389,6 +1464,7 @@ async fn main() -> Result<()> {
             &sys_context,
             effective_system_prompt.as_deref(),
             resume_messages,
+            resume_managed_session,
             effective_max_turns,
             cli.dangerously_skip_permissions,
             cli.fallback_model,
@@ -1405,6 +1481,7 @@ async fn main() -> Result<()> {
             &sys_context,
             effective_system_prompt.as_deref(),
             resume_messages,
+            resume_managed_session,
             effective_max_turns,
             cli.dangerously_skip_permissions,
             cli.fallback_model,
@@ -1498,6 +1575,7 @@ async fn run_oneshot(
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
+    session.enable_managed_session()?;
 
     if json_output {
         // Non-streaming JSON mode: collect full response
