@@ -8,18 +8,56 @@
  * categories (file ops, web, bash, code, screenshot, browser, etc.).
  */
 import { useState, useCallback } from 'react';
-import { X, ChevronRight } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import {
+  Activity,
+  AlignLeft,
+  Bell,
+  BookOpen,
+  Brain,
+  Camera,
+  ChevronRight,
+  Clipboard,
+  Code2,
+  FileEdit,
+  FilePlus,
+  FileText,
+  FolderSearch,
+  Globe,
+  Monitor,
+  ScanText,
+  Search,
+  Terminal,
+  Wrench,
+  X,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/ScrollArea';
 import { TOOL_CATEGORIES, type ToolCategory } from './toolCategories';
 import { ToolInvoker } from './ToolInvoker';
 import { cn } from '@/lib/utils';
 
-// Dynamic icon resolution from Lucide catalog
+const TOOL_ICONS: Record<string, LucideIcon> = {
+  Activity,
+  AlignLeft,
+  Bell,
+  BookOpen,
+  Brain,
+  Camera,
+  Clipboard,
+  Code2,
+  FileEdit,
+  FilePlus,
+  FileText,
+  FolderSearch,
+  Globe,
+  Monitor,
+  ScanText,
+  Search,
+  Terminal,
+};
+
 function getIcon(name: string): LucideIcon {
-  const icons = LucideIcons as unknown as Record<string, LucideIcon | undefined>;
-  return icons[name] ?? (icons['Wrench'] as LucideIcon);
+  return TOOL_ICONS[name] ?? Wrench;
 }
 
 interface ToolCardProps {

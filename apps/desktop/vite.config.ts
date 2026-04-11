@@ -169,10 +169,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
               return 'desktop-core';
             }
 
-            if (id.includes('/apps/desktop/src/stores/')) {
-              return 'desktop-core';
-            }
-
             if (!id.includes('node_modules')) {
               return undefined;
             }
