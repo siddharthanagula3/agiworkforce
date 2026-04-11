@@ -32,7 +32,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import {
@@ -48,47 +48,14 @@ import { SUPPORTED_LANGUAGES } from '../../i18n';
 import { useModelStore } from '../../stores/modelStore';
 import { errorTracking } from '../../services/errorTracking';
 import type { NotificationSettings } from '../../hooks/useNotifications';
-import { ResourceMonitor } from '../ResourceMonitor';
 import { Button } from '../ui/Button';
 import { SectionErrorBoundary } from '../ui/SectionErrorBoundary';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/Dialog';
 import { Label } from '../ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
 import { Switch } from '../ui/Switch';
-import { AllowedDirectoriesSettings } from './AllowedDirectoriesSettings';
-import { AutomationPermissionsSettings } from './AutomationPermissionsSettings';
-import { CacheManagement } from './CacheManagement';
-import { CustomInstructionsSettings } from './CustomInstructionsSettings';
-import { MasterPasswordSettings } from './MasterPasswordSettings';
-import { UpdateSettings } from './UpdateSettings';
-import { ExtensionsSettings } from './ExtensionsSettings';
-import { AgentsSettings } from './AgentsSettings';
-import { InstructionFilesSettings } from './InstructionFilesSettings';
-import { CustomModelsSettings } from './CustomModelsSettings';
-import { SkillsPluginsSettings } from './SkillsPluginsSettings';
-import { MCPServerSettings } from './MCPServerSettings';
-import { MCPToolsSettings } from './MCPToolsSettings';
 import { FavoriteModelsSelector } from './FavoriteModelsSelector';
-import { ConnectorGallery } from '../Connectors/ConnectorGallery';
-import { ConnectorHealthDashboard } from '../Connectors/ConnectorHealthDashboard';
 import { useConnectorsStore } from '../../stores/connectorsStore';
-import { VoiceSettings } from './VoiceSettings';
-import { MemoryPanel } from '../Memory/MemoryPanel';
-import { ResearchSettings } from './ResearchSettings';
-import { ToolsPanel } from '../Tools/ToolsPanel';
-import { KeybindingsSettings } from './KeybindingsSettings';
-import { ThemeSettings } from './ThemeSettings';
-import { TaskRoutingSettings } from './TaskRoutingSettings';
-import { NotificationsSettings } from './NotificationsSettings';
-import { AnalyticsSettings } from './AnalyticsSettings';
-import { AccountSettings } from './AccountSettings';
-import { FeaturesPrivacySettings } from './FeaturesPrivacySettings';
-import { OAuthCredentialsPanel } from './OAuthCredentialsPanel';
-import { SafetyPolicies } from '../Governance/SafetyPolicies';
-import { AgentExecutionSettings } from './AgentExecutionSettings';
-import { PersonalizationSettings } from './PersonalizationSettings';
-import { TeamAccountSettings } from './TeamAccountSettings';
-import { UsageDashboard } from './UsageDashboard';
 import { useSimpleModeStore } from '../../stores/ui';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { cn } from '@/lib/utils';
@@ -125,6 +92,147 @@ const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType 
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'voice', label: 'Voice', icon: Mic },
 ];
+
+const LazyResourceMonitor = lazy(() =>
+  import('../ResourceMonitor').then((module) => ({ default: module.ResourceMonitor })),
+);
+const LazyAllowedDirectoriesSettings = lazy(() =>
+  import('./AllowedDirectoriesSettings').then((module) => ({
+    default: module.AllowedDirectoriesSettings,
+  })),
+);
+const LazyAutomationPermissionsSettings = lazy(() =>
+  import('./AutomationPermissionsSettings').then((module) => ({
+    default: module.AutomationPermissionsSettings,
+  })),
+);
+const LazyCacheManagement = lazy(() =>
+  import('./CacheManagement').then((module) => ({ default: module.CacheManagement })),
+);
+const LazyCustomInstructionsSettings = lazy(() =>
+  import('./CustomInstructionsSettings').then((module) => ({
+    default: module.CustomInstructionsSettings,
+  })),
+);
+const LazyMasterPasswordSettings = lazy(() =>
+  import('./MasterPasswordSettings').then((module) => ({
+    default: module.MasterPasswordSettings,
+  })),
+);
+const LazyUpdateSettings = lazy(() =>
+  import('./UpdateSettings').then((module) => ({ default: module.UpdateSettings })),
+);
+const LazyExtensionsSettings = lazy(() =>
+  import('./ExtensionsSettings').then((module) => ({ default: module.ExtensionsSettings })),
+);
+const LazyAgentsSettings = lazy(() =>
+  import('./AgentsSettings').then((module) => ({ default: module.AgentsSettings })),
+);
+const LazyInstructionFilesSettings = lazy(() =>
+  import('./InstructionFilesSettings').then((module) => ({
+    default: module.InstructionFilesSettings,
+  })),
+);
+const LazyCustomModelsSettings = lazy(() =>
+  import('./CustomModelsSettings').then((module) => ({ default: module.CustomModelsSettings })),
+);
+const LazySkillsPluginsSettings = lazy(() =>
+  import('./SkillsPluginsSettings').then((module) => ({ default: module.SkillsPluginsSettings })),
+);
+const LazyMCPServerSettings = lazy(() =>
+  import('./MCPServerSettings').then((module) => ({ default: module.MCPServerSettings })),
+);
+const LazyMCPToolsSettings = lazy(() =>
+  import('./MCPToolsSettings').then((module) => ({ default: module.MCPToolsSettings })),
+);
+const LazyConnectorGallery = lazy(() =>
+  import('../Connectors/ConnectorGallery').then((module) => ({
+    default: module.ConnectorGallery,
+  })),
+);
+const LazyConnectorHealthDashboard = lazy(() =>
+  import('../Connectors/ConnectorHealthDashboard').then((module) => ({
+    default: module.ConnectorHealthDashboard,
+  })),
+);
+const LazyVoiceSettings = lazy(() =>
+  import('./VoiceSettings').then((module) => ({ default: module.VoiceSettings })),
+);
+const LazyMemoryPanel = lazy(() =>
+  import('../Memory/MemoryPanel').then((module) => ({ default: module.MemoryPanel })),
+);
+const LazyResearchSettings = lazy(() =>
+  import('./ResearchSettings').then((module) => ({ default: module.ResearchSettings })),
+);
+const LazyToolsPanel = lazy(() =>
+  import('../Tools/ToolsPanel').then((module) => ({ default: module.ToolsPanel })),
+);
+const LazyKeybindingsSettings = lazy(() =>
+  import('./KeybindingsSettings').then((module) => ({ default: module.KeybindingsSettings })),
+);
+const LazyThemeSettings = lazy(() =>
+  import('./ThemeSettings').then((module) => ({ default: module.ThemeSettings })),
+);
+const LazyTaskRoutingSettings = lazy(() =>
+  import('./TaskRoutingSettings').then((module) => ({ default: module.TaskRoutingSettings })),
+);
+const LazyNotificationsSettings = lazy(() =>
+  import('./NotificationsSettings').then((module) => ({
+    default: module.NotificationsSettings,
+  })),
+);
+const LazyAnalyticsSettings = lazy(() =>
+  import('./AnalyticsSettings').then((module) => ({ default: module.AnalyticsSettings })),
+);
+const LazyAccountSettings = lazy(() =>
+  import('./AccountSettings').then((module) => ({ default: module.AccountSettings })),
+);
+const LazyFeaturesPrivacySettings = lazy(() =>
+  import('./FeaturesPrivacySettings').then((module) => ({
+    default: module.FeaturesPrivacySettings,
+  })),
+);
+const LazyOAuthCredentialsPanel = lazy(() =>
+  import('./OAuthCredentialsPanel').then((module) => ({
+    default: module.OAuthCredentialsPanel,
+  })),
+);
+const LazySafetyPolicies = lazy(() =>
+  import('../Governance/SafetyPolicies').then((module) => ({
+    default: module.SafetyPolicies,
+  })),
+);
+const LazyAgentExecutionSettings = lazy(() =>
+  import('./AgentExecutionSettings').then((module) => ({
+    default: module.AgentExecutionSettings,
+  })),
+);
+const LazyPersonalizationSettings = lazy(() =>
+  import('./PersonalizationSettings').then((module) => ({
+    default: module.PersonalizationSettings,
+  })),
+);
+const LazyTeamAccountSettings = lazy(() =>
+  import('./TeamAccountSettings').then((module) => ({
+    default: module.TeamAccountSettings,
+  })),
+);
+const LazyUsageDashboard = lazy(() =>
+  import('./UsageDashboard').then((module) => ({ default: module.UsageDashboard })),
+);
+
+function SettingsSectionFallback({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function SettingsSectionLoader({ label, children }: { label: string; children: React.ReactNode }) {
+  return <Suspense fallback={<SettingsSectionFallback label={label} />}>{children}</Suspense>;
+}
 
 // ── Tabs that manage their own saves (no deferred Save/Cancel footer) ─────────
 const SELF_SAVING_TABS = new Set<CanonicalTab>(['mcp-skills', 'connectors']);
@@ -1201,7 +1309,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             {isTauri && (
               <div className="pt-6 border-t border-border">
                 <h3 className="text-lg font-semibold mb-4">System Resources</h3>
-                <ResourceMonitor showTools={true} />
+                <SettingsSectionLoader label="Loading system resource settings...">
+                  <LazyResourceMonitor showTools={true} />
+                </SettingsSectionLoader>
               </div>
             )}
 
@@ -1211,13 +1321,17 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 <p className="text-sm text-muted-foreground mb-4">
                   macOS system permissions required for agent mode automation.
                 </p>
-                <AutomationPermissionsSettings />
+                <SettingsSectionLoader label="Loading automation permissions...">
+                  <LazyAutomationPermissionsSettings />
+                </SettingsSectionLoader>
               </div>
             )}
 
             {isTauri && (
               <div className="pt-6 border-t border-border">
-                <UpdateSettings />
+                <SettingsSectionLoader label="Loading update settings...">
+                  <LazyUpdateSettings />
+                </SettingsSectionLoader>
               </div>
             )}
 
@@ -1230,7 +1344,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             {/* Keybindings (merged from old 'keybindings' tab) */}
             <div className="pt-6 border-t border-border">
               <h3 className="text-lg font-semibold mb-4">Keybindings</h3>
-              <KeybindingsSettings />
+              <SettingsSectionLoader label="Loading keybindings...">
+                <LazyKeybindingsSettings />
+              </SettingsSectionLoader>
             </div>
           </>
         );
@@ -1238,41 +1354,45 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       // ── 2. Account (Account & Billing + Usage + Team & Devices) ───────
       case 'account':
         return (
-          <>
-            <AccountSettings />
-            <div className="pt-6 border-t border-border">
-              <UsageDashboard />
-            </div>
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">Team &amp; Devices</h3>
-              <TeamAccountSettings />
-            </div>
-          </>
+          <SettingsSectionLoader label="Loading account settings...">
+            <>
+              <LazyAccountSettings />
+              <div className="pt-6 border-t border-border">
+                <LazyUsageDashboard />
+              </div>
+              <div className="pt-6 border-t border-border">
+                <h3 className="text-lg font-semibold mb-4">Team &amp; Devices</h3>
+                <LazyTeamAccountSettings />
+              </div>
+            </>
+          </SettingsSectionLoader>
         );
 
       // ── 3. Appearance (Personalization + Themes) ───────────────────────
       case 'appearance':
         return (
-          <>
-            <PersonalizationSettings />
-            <div className="pt-6 border-t border-border">
-              <MemoryPanel />
-            </div>
-            <div className="pt-6 border-t border-border">
-              <CustomInstructionsSettings />
-            </div>
-            <div className="pt-6 border-t border-border">
-              <InstructionFilesSettings />
-            </div>
-            <div className="pt-6 border-t border-border">
-              <AgentsSettings />
-            </div>
-            {/* Themes (merged from old 'themes' tab) */}
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">Themes</h3>
-              <ThemeSettings />
-            </div>
-          </>
+          <SettingsSectionLoader label="Loading appearance settings...">
+            <>
+              <LazyPersonalizationSettings />
+              <div className="pt-6 border-t border-border">
+                <LazyMemoryPanel />
+              </div>
+              <div className="pt-6 border-t border-border">
+                <LazyCustomInstructionsSettings />
+              </div>
+              <div className="pt-6 border-t border-border">
+                <LazyInstructionFilesSettings />
+              </div>
+              <div className="pt-6 border-t border-border">
+                <LazyAgentsSettings />
+              </div>
+              {/* Themes (merged from old 'themes' tab) */}
+              <div className="pt-6 border-t border-border">
+                <h3 className="text-lg font-semibold mb-4">Themes</h3>
+                <LazyThemeSettings />
+              </div>
+            </>
+          </SettingsSectionLoader>
         );
 
       // ── 4. Privacy (Privacy & Data + Analytics + Governance) ──────────
@@ -1284,21 +1404,29 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               <p className="text-sm text-muted-foreground mb-4">
                 Encrypt stored API keys and secrets with an Argon2id-derived master password.
               </p>
-              <MasterPasswordSettings />
+              <SettingsSectionLoader label="Loading security settings...">
+                <LazyMasterPasswordSettings />
+              </SettingsSectionLoader>
             </div>
             <div className="pt-6 border-t border-border">
               <DataPrivacySection />
             </div>
             <div className="pt-6 border-t border-border">
-              <CacheManagement />
+              <SettingsSectionLoader label="Loading cache settings...">
+                <LazyCacheManagement />
+              </SettingsSectionLoader>
             </div>
             <div className="pt-6 border-t border-border">
-              <AllowedDirectoriesSettings />
+              <SettingsSectionLoader label="Loading filesystem permissions...">
+                <LazyAllowedDirectoriesSettings />
+              </SettingsSectionLoader>
             </div>
             {/* Analytics (merged from old 'analytics' tab) */}
             <div className="pt-6 border-t border-border">
               <h3 className="text-lg font-semibold mb-4">Analytics</h3>
-              <AnalyticsSettings />
+              <SettingsSectionLoader label="Loading analytics settings...">
+                <LazyAnalyticsSettings />
+              </SettingsSectionLoader>
             </div>
             {/* Governance (merged from old 'governance' tab) */}
             <div className="pt-6 border-t border-border">
@@ -1322,7 +1450,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 </div>
               </div>
               <div className="pt-6">
-                <SafetyPolicies />
+                <SettingsSectionLoader label="Loading governance policies...">
+                  <LazySafetyPolicies />
+                </SettingsSectionLoader>
               </div>
             </div>
           </>
@@ -1465,14 +1595,18 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 </div>
 
                 <FavoriteModelsSelector />
-                <CustomModelsSettings />
+                <SettingsSectionLoader label="Loading custom model settings...">
+                  <LazyCustomModelsSettings />
+                </SettingsSectionLoader>
               </div>
             </div>
 
             {/* Task Routing (merged from old 'task-routing' tab) */}
             <div className="pt-6 border-t border-border">
               <h3 className="text-lg font-semibold mb-4">Task Routing</h3>
-              <TaskRoutingSettings />
+              <SettingsSectionLoader label="Loading task routing settings...">
+                <LazyTaskRoutingSettings />
+              </SettingsSectionLoader>
             </div>
 
             <div className="pt-6 border-t border-border">
@@ -1567,13 +1701,15 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       // ── 6. Agents (Agent Execution + Features) ────────────────────────
       case 'agents':
         return (
-          <>
-            <AgentExecutionSettings onSettingsChange={() => setHasUnsavedChanges(true)} />
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">Features</h3>
-              <FeaturesPrivacySettings />
-            </div>
-          </>
+          <SettingsSectionLoader label="Loading agent settings...">
+            <>
+              <LazyAgentExecutionSettings onSettingsChange={() => setHasUnsavedChanges(true)} />
+              <div className="pt-6 border-t border-border">
+                <h3 className="text-lg font-semibold mb-4">Features</h3>
+                <LazyFeaturesPrivacySettings />
+              </div>
+            </>
+          </SettingsSectionLoader>
         );
 
       // ── 7. MCP & Skills (MCP & Skills + MCP Server + Tools + Research) ─
@@ -1643,24 +1779,28 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               </div>
             </div>
 
-            <MCPToolsSettings />
-            <div className="pt-6 border-t border-border">
-              <SkillsPluginsSettings />
-            </div>
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">MCP Server</h3>
-              <MCPServerSettings />
-            </div>
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">Tools</h3>
-              <div className="h-full flex flex-col min-h-0">
-                <ToolsPanel />
-              </div>
-            </div>
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">Research</h3>
-              <ResearchSettings />
-            </div>
+            <SettingsSectionLoader label="Loading customization settings...">
+              <>
+                <LazyMCPToolsSettings />
+                <div className="pt-6 border-t border-border">
+                  <LazySkillsPluginsSettings />
+                </div>
+                <div className="pt-6 border-t border-border">
+                  <h3 className="text-lg font-semibold mb-4">MCP Server</h3>
+                  <LazyMCPServerSettings />
+                </div>
+                <div className="pt-6 border-t border-border">
+                  <h3 className="text-lg font-semibold mb-4">Tools</h3>
+                  <div className="h-full flex flex-col min-h-0">
+                    <LazyToolsPanel />
+                  </div>
+                </div>
+                <div className="pt-6 border-t border-border">
+                  <h3 className="text-lg font-semibold mb-4">Research</h3>
+                  <LazyResearchSettings />
+                </div>
+              </>
+            </SettingsSectionLoader>
           </div>
         );
 
@@ -1689,33 +1829,43 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               </div>
             </div>
 
-            <ConnectorGallery />
-            <ConnectorHealthDashboard />
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">OAuth Credentials</h3>
-              <OAuthCredentialsPanel />
-            </div>
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">Extensions</h3>
-              <ExtensionsSettings />
-            </div>
+            <SettingsSectionLoader label="Loading integrations settings...">
+              <>
+                <LazyConnectorGallery />
+                <LazyConnectorHealthDashboard />
+                <div className="pt-6 border-t border-border">
+                  <h3 className="text-lg font-semibold mb-4">OAuth Credentials</h3>
+                  <LazyOAuthCredentialsPanel />
+                </div>
+                <div className="pt-6 border-t border-border">
+                  <h3 className="text-lg font-semibold mb-4">Extensions</h3>
+                  <LazyExtensionsSettings />
+                </div>
+              </>
+            </SettingsSectionLoader>
           </div>
         );
 
       // ── 9. Notifications ───────────────────────────────────────────────
       case 'notifications':
         return (
-          <NotificationsSettings
-            notificationLoading={notificationLoading}
-            notificationSettings={notificationSettings}
-            notificationError={notificationError}
-            onUpdateNotificationSettings={updateNotificationSettings}
-          />
+          <SettingsSectionLoader label="Loading notification settings...">
+            <LazyNotificationsSettings
+              notificationLoading={notificationLoading}
+              notificationSettings={notificationSettings}
+              notificationError={notificationError}
+              onUpdateNotificationSettings={updateNotificationSettings}
+            />
+          </SettingsSectionLoader>
         );
 
       // ── 10. Voice ──────────────────────────────────────────────────────
       case 'voice':
-        return <VoiceSettings />;
+        return (
+          <SettingsSectionLoader label="Loading voice settings...">
+            <LazyVoiceSettings />
+          </SettingsSectionLoader>
+        );
 
       default:
         return null;
