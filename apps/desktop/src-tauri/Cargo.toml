@@ -76,48 +76,48 @@ bson = { version = "3.1", optional = true }
 
 # HIGH-008: "blocking" feature removed — refresh_oauth_token is now async.
 reqwest = { version = "0.13", features = ["json", "stream", "rustls", "multipart"], default-features = false }
-reqwest-middleware = "0.3"
-reqwest-retry = "0.5"
+reqwest-middleware = "0.5"
+reqwest-retry = "0.9"
 urlencoding = "2.1"
 mime_guess = "2.0"
 bytes = "1.5"
 
 
-oauth2 = "4.4"
+oauth2 = "5.0"
 
 
 enigo = { version = "0.6", features = ["serde"] }
 rdev = "0.5"
-xcap = "0.0.12"
+xcap = "0.9.4"
 arboard = "3.4"
 
 
-portable-pty = "0.8"
-which = "6.0"
+portable-pty = "0.9"
+which = "8.0"
 
 
 # Audio capture and voice activity detection
-cpal = "0.15"
+cpal = "0.17"
 # WebRTC VAD - simple and reliable voice activity detection
 # Note: As an alternative to Silero VAD via ONNX, webrtc-vad is simpler to integrate
 webrtc-vad = { version = "0.4", optional = true }
 # Local speech-to-text with Whisper.cpp (offline transcription)
-whisper-rs = { version = "0.11", optional = true }
+whisper-rs = { version = "0.16", optional = true }
 # For extracting Piper binary archives
 tar = "0.4"
 
 # keyring for OS-level secure credential storage (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 keyring = "3"
 argon2 = "0.5"
-machine-uid = "0.3"  # For getting machine-unique identifiers
+machine-uid = "0.5"  # For getting machine-unique identifiers
 hostname = "0.4"     # For getting machine hostname as part of key derivation salt
-sha2 = "0.10"
+sha2 = "0.11"
 subtle = "2"
 aes-gcm = "0.10"
 base64 = "0.22"
-rand = "0.8"
+rand = "0.10"
 pbkdf2 = { version = "0.12", features = ["simple"] }
-hmac = "0.12"
+hmac = "0.13"
 hex = "0.4"
 ed25519-dalek = { version = "2.1", features = ["pkcs8", "rand_core"] } # For update signature verification
 
@@ -129,33 +129,33 @@ imageproc = "0.26.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
-sentry = { version = "0.33", optional = true }
+sentry = { version = "0.47", optional = true }
 
 
-webrtc = { version = "0.14", optional = true }
-tokio-tungstenite = "0.21"
+webrtc = { version = "0.17", optional = true }
+tokio-tungstenite = "0.29"
 
 
-tungstenite = "0.21"
+tungstenite = "0.29"
 url = "2.5"
 
 
 uuid = { version = "1.8", features = ["v4", "v5", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
-cron = "0.12"
+cron = "0.16"
 tokio-cron-scheduler = "0.15"
 
 
-config = "0.14"
-toml = "0.8"
+config = "0.15"
+toml = "1.1"
 serde_yaml = "0.9"
 
 
-notify = "6.1"
+notify = "8.2"
 walkdir = "2.5"
 glob = "0.3"
-dirs = "5.0"
+dirs = "6.0"
 
 
 regex = "1.10"
@@ -165,25 +165,25 @@ unicode-segmentation = "1.11"
 rayon = "1.10"
 dashmap = "6.1"
 parking_lot = "0.12"
-sysinfo = "0.30"
-tiktoken-rs = "0.9.1"
+sysinfo = "0.38"
+tiktoken-rs = "0.11.0"
 lazy_static = "1.4"
 libc = "0.2"
 
 
 flate2 = "1.0"
-zip = "1"
+zip = "8"
 
 
 pdf-extract = "0.10"
-lopdf = "0.32"
-roxmltree = "0.20"
-calamine = "0.21"
+lopdf = "0.40"
+roxmltree = "0.21"
+calamine = "0.34"
 
 
 docx-rs = "0.4"              
-rust_xlsxwriter = "0.77"      
-printpdf = "0.7"             
+rust_xlsxwriter = "0.94"      
+printpdf = "0.9"             
 
 
 tempfile = "3.10"
@@ -195,19 +195,19 @@ tesseract = { version = "0.15", optional = true }
 llama-cpp-2 = { version = "0.1", optional = true }
 
 
-async-imap = "0.9"
+async-imap = "0.11"
 tokio-native-tls = "0.3"
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder", "smtp-transport"] }
-mailparse = "0.15"
+mailparse = "0.16"
 
 
 git2 = { version = "0.20", features = ["vendored-openssl"] }
-async-stripe = { version = "0.31", features = ["runtime-tokio-hyper"] }
+async-stripe = { version = "0.41", features = ["runtime-tokio-hyper"] }
 tauri-plugin-deep-link = "2.4.7"
 
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.56", features = [
+windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
@@ -231,11 +231,11 @@ windows = { version = "0.56", features = [
 ] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-accessibility-sys = "0.1.2"
-core-foundation = "0.9"
-core-graphics = "0.24"
+accessibility-sys = "0.2.0"
+core-foundation = "0.10"
+core-graphics = "0.25"
 objc = "0.2"
-cocoa = "0.25"
+cocoa = "0.26"
 
 
 [features]
@@ -269,10 +269,10 @@ tauri-build = { version = "2.5.6", features = [] }
 
 [dev-dependencies]
 tempfile = "3.10"
-mockall = "0.12"
+mockall = "0.14"
 serial_test = "3.0"
 tauri = { version = "2.10.3", features = ["test"] }
-criterion = "0.5"
+criterion = "0.8"
 proptest = "1.4"
 
 
