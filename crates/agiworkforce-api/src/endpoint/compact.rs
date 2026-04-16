@@ -66,11 +66,11 @@ struct CompactHistoryResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_trait::async_trait;
     use agiworkforce_client::Request;
     use agiworkforce_client::Response;
     use agiworkforce_client::StreamResponse;
     use agiworkforce_client::TransportError;
+    use async_trait::async_trait;
 
     #[derive(Clone, Default)]
     struct DummyTransport;

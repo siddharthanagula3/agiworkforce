@@ -244,7 +244,12 @@ fn keyring_auth_storage_save_persists_and_removes_fallback_file() -> anyhow::Res
     storage.save(&auth)?;
 
     let key = compute_store_key(agiworkforce_home.path())?;
-    assert_keyring_saved_auth_and_removed_fallback(&mock_keyring, &key, agiworkforce_home.path(), &auth);
+    assert_keyring_saved_auth_and_removed_fallback(
+        &mock_keyring,
+        &key,
+        agiworkforce_home.path(),
+        &auth,
+    );
     Ok(())
 }
 
@@ -256,10 +261,11 @@ fn keyring_auth_storage_delete_removes_keyring_and_file() -> anyhow::Result<()> 
         agiworkforce_home.path().to_path_buf(),
         Arc::new(mock_keyring.clone()),
     );
-    let (key, auth_file) =
-        seed_keyring_and_fallback_auth_file_for_delete(&mock_keyring, agiworkforce_home.path(), || {
-            compute_store_key(agiworkforce_home.path())
-        })?;
+    let (key, auth_file) = seed_keyring_and_fallback_auth_file_for_delete(
+        &mock_keyring,
+        agiworkforce_home.path(),
+        || compute_store_key(agiworkforce_home.path()),
+    )?;
 
     let removed = storage.delete()?;
 
@@ -302,7 +308,10 @@ fn auto_auth_storage_load_prefers_keyring_value() -> anyhow::Result<()> {
 fn auto_auth_storage_load_uses_file_when_keyring_empty() -> anyhow::Result<()> {
     let agiworkforce_home = tempdir()?;
     let mock_keyring = MockKeyringStore::default();
-    let storage = AutoAuthStorage::new(agiworkforce_home.path().to_path_buf(), Arc::new(mock_keyring));
+    let storage = AutoAuthStorage::new(
+        agiworkforce_home.path().to_path_buf(),
+        Arc::new(mock_keyring),
+    );
 
     let expected = auth_with_prefix("file-only");
     storage.file_storage.save(&expected)?;
@@ -395,10 +404,11 @@ fn auto_auth_storage_delete_removes_keyring_and_file() -> anyhow::Result<()> {
         agiworkforce_home.path().to_path_buf(),
         Arc::new(mock_keyring.clone()),
     );
-    let (key, auth_file) =
-        seed_keyring_and_fallback_auth_file_for_delete(&mock_keyring, agiworkforce_home.path(), || {
-            compute_store_key(agiworkforce_home.path())
-        })?;
+    let (key, auth_file) = seed_keyring_and_fallback_auth_file_for_delete(
+        &mock_keyring,
+        agiworkforce_home.path(),
+        || compute_store_key(agiworkforce_home.path()),
+    )?;
 
     let removed = storage.delete()?;
 

@@ -31,10 +31,10 @@ use crate::pkce::PkceCodes;
 use crate::pkce::generate_pkce;
 use crate::token_data::TokenData;
 use crate::token_data::parse_chatgpt_jwt_claims;
-use base64::Engine;
-use chrono::Utc;
 use agiworkforce_app_server_protocol::AuthMode;
 use agiworkforce_client::build_reqwest_client_with_custom_ca;
+use base64::Engine;
+use chrono::Utc;
 use rand::RngCore;
 use serde_json::Value as JsonValue;
 use tiny_http::Header;
@@ -482,7 +482,10 @@ fn build_authorize_url(
         ),
         ("code_challenge_method".to_string(), "S256".to_string()),
         ("id_token_add_organizations".to_string(), "true".to_string()),
-        ("agiworkforce_cli_simplified_flow".to_string(), "true".to_string()),
+        (
+            "agiworkforce_cli_simplified_flow".to_string(),
+            "true".to_string(),
+        ),
         ("state".to_string(), state.to_string()),
         ("originator".to_string(), originator().value),
     ];
@@ -902,7 +905,10 @@ fn login_error_response(
 }
 
 /// Returns true when the OAuth callback represents a missing Codex entitlement.
-fn is_missing_agiworkforce_entitlement_error(error_code: &str, error_description: Option<&str>) -> bool {
+fn is_missing_agiworkforce_entitlement_error(
+    error_code: &str,
+    error_description: Option<&str>,
+) -> bool {
     error_code == "access_denied"
         && error_description.is_some_and(|description| {
             description

@@ -47,8 +47,10 @@ impl OllamaClient {
 
     #[cfg(test)]
     async fn try_from_provider_with_base_url(base_url: &str) -> io::Result<Self> {
-        let provider =
-            agiworkforce_core::create_oss_provider_with_base_url(base_url, agiworkforce_core::WireApi::Responses);
+        let provider = agiworkforce_core::create_oss_provider_with_base_url(
+            base_url,
+            agiworkforce_core::WireApi::Responses,
+        );
         Self::try_from_provider(&provider).await
     }
 
@@ -265,7 +267,9 @@ mod tests {
     // Happy-path tests using a mock HTTP server; skip if sandbox network is disabled.
     #[tokio::test]
     async fn test_fetch_models_happy_path() {
-        if std::env::var(agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR).is_ok() {
+        if std::env::var(agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR)
+            .is_ok()
+        {
             tracing::info!(
                 "{} is set; skipping test_fetch_models_happy_path",
                 agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR
@@ -296,7 +300,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_version() {
-        if std::env::var(agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR).is_ok() {
+        if std::env::var(agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR)
+            .is_ok()
+        {
             tracing::info!(
                 "{} is set; skipping test_fetch_version",
                 agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR
@@ -332,7 +338,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_probe_server_happy_path_openai_compat_and_native() {
-        if std::env::var(agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR).is_ok() {
+        if std::env::var(agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR)
+            .is_ok()
+        {
             tracing::info!(
                 "{} set; skipping test_probe_server_happy_path_openai_compat_and_native",
                 agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR
@@ -369,7 +377,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_try_from_oss_provider_ok_when_server_running() {
-        if std::env::var(agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR).is_ok() {
+        if std::env::var(agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR)
+            .is_ok()
+        {
             tracing::info!(
                 "{} set; skipping test_try_from_oss_provider_ok_when_server_running",
                 agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR
@@ -393,7 +403,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_try_from_oss_provider_err_when_server_missing() {
-        if std::env::var(agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR).is_ok() {
+        if std::env::var(agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR)
+            .is_ok()
+        {
             tracing::info!(
                 "{} set; skipping test_try_from_oss_provider_err_when_server_missing",
                 agiworkforce_core::spawn::AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR

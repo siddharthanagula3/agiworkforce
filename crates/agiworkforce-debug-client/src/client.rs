@@ -12,8 +12,6 @@ use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 
-use anyhow::Context;
-use anyhow::Result;
 use agiworkforce_app_server_protocol::AskForApproval;
 use agiworkforce_app_server_protocol::ClientInfo;
 use agiworkforce_app_server_protocol::ClientNotification;
@@ -32,6 +30,8 @@ use agiworkforce_app_server_protocol::ThreadStartParams;
 use agiworkforce_app_server_protocol::ThreadStartResponse;
 use agiworkforce_app_server_protocol::TurnStartParams;
 use agiworkforce_app_server_protocol::UserInput;
+use anyhow::Context;
+use anyhow::Result;
 use serde::Serialize;
 
 use crate::output::Output;
@@ -326,7 +326,8 @@ fn handle_server_request(
     request: JSONRPCRequest,
     stdin: &Arc<Mutex<Option<ChildStdin>>>,
 ) -> Result<()> {
-    let Ok(server_request) = agiworkforce_app_server_protocol::ServerRequest::try_from(request) else {
+    let Ok(server_request) = agiworkforce_app_server_protocol::ServerRequest::try_from(request)
+    else {
         return Ok(());
     };
 
@@ -335,13 +336,15 @@ fn handle_server_request(
             request_id,
             ..
         } => {
-            let response = agiworkforce_app_server_protocol::CommandExecutionRequestApprovalResponse {
-                decision: CommandExecutionApprovalDecision::Decline,
-            };
+            let response =
+                agiworkforce_app_server_protocol::CommandExecutionRequestApprovalResponse {
+                    decision: CommandExecutionApprovalDecision::Decline,
+                };
             send_jsonrpc_response(stdin, request_id, response)
         }
         agiworkforce_app_server_protocol::ServerRequest::FileChangeRequestApproval {
-            request_id, ..
+            request_id,
+            ..
         } => {
             let response = agiworkforce_app_server_protocol::FileChangeRequestApprovalResponse {
                 decision: FileChangeApprovalDecision::Decline,

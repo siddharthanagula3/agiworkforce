@@ -76,8 +76,11 @@ pub(crate) async fn first_layer_config_error(layers: &ConfigLayerStack) -> Optio
 pub(crate) async fn first_layer_config_error_from_entries(
     layers: &[ConfigLayerEntry],
 ) -> Option<ConfigError> {
-    agiworkforce_config::first_layer_config_error_from_entries::<ConfigToml>(layers, CONFIG_TOML_FILE)
-        .await
+    agiworkforce_config::first_layer_config_error_from_entries::<ConfigToml>(
+        layers,
+        CONFIG_TOML_FILE,
+    )
+    .await
 }
 
 /// To build up the set of admin-enforced constraints, we build up from multiple
@@ -140,7 +143,8 @@ pub async fn load_config_layers_state(
 
     // Make a best-effort to support the legacy `managed_config.toml` as a
     // requirements specification.
-    let loaded_config_layers = layer_io::load_config_layers_internal(agiworkforce_home, overrides).await?;
+    let loaded_config_layers =
+        layer_io::load_config_layers_internal(agiworkforce_home, overrides).await?;
     load_requirements_from_legacy_scheme(
         &mut config_requirements_toml,
         loaded_config_layers.clone(),
@@ -181,7 +185,8 @@ pub async fn load_config_layers_state(
     // Add a layer for $AGIWORKFORCE_HOME/config.toml if it exists. Note if the file
     // exists, but is malformed, then this error should be propagated to the
     // user.
-    let user_file = AbsolutePathBuf::resolve_path_against_base(CONFIG_TOML_FILE, agiworkforce_home)?;
+    let user_file =
+        AbsolutePathBuf::resolve_path_against_base(CONFIG_TOML_FILE, agiworkforce_home)?;
     let user_layer = load_config_toml_for_required_layer(&user_file, |config_toml| {
         ConfigLayerEntry::new(
             ConfigLayerSource::User {
@@ -798,8 +803,8 @@ async fn load_project_layers(
     agiworkforce_home: &Path,
 ) -> io::Result<Vec<ConfigLayerEntry>> {
     let agiworkforce_home_abs = AbsolutePathBuf::from_absolute_path(agiworkforce_home)?;
-    let agiworkforce_home_normalized =
-        normalize_path(agiworkforce_home_abs.as_path()).unwrap_or_else(|_| agiworkforce_home_abs.to_path_buf());
+    let agiworkforce_home_normalized = normalize_path(agiworkforce_home_abs.as_path())
+        .unwrap_or_else(|_| agiworkforce_home_abs.to_path_buf());
     let mut dirs = cwd
         .as_path()
         .ancestors()
@@ -832,7 +837,9 @@ async fn load_project_layers(
         let dot_codex_abs = AbsolutePathBuf::from_absolute_path(&dot_codex)?;
         let dot_codex_normalized =
             normalize_path(dot_codex_abs.as_path()).unwrap_or_else(|_| dot_codex_abs.to_path_buf());
-        if dot_codex_abs == agiworkforce_home_abs || dot_codex_normalized == agiworkforce_home_normalized {
+        if dot_codex_abs == agiworkforce_home_abs
+            || dot_codex_normalized == agiworkforce_home_normalized
+        {
             continue;
         }
         let config_file = dot_codex_abs.join(CONFIG_TOML_FILE)?;

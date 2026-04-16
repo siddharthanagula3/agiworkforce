@@ -20,7 +20,10 @@ pub(crate) trait EventProcessor {
     );
 
     /// Handle a single typed app-server notification emitted by the agent.
-    fn process_server_notification(&mut self, notification: ServerNotification) -> AgiWorkforceStatus;
+    fn process_server_notification(
+        &mut self,
+        notification: ServerNotification,
+    ) -> AgiWorkforceStatus;
 
     /// Handle a local exec warning that is not represented as an app-server notification.
     fn process_warning(&mut self, message: String) -> AgiWorkforceStatus;

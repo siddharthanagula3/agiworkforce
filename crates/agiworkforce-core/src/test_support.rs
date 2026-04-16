@@ -13,8 +13,8 @@ use agiworkforce_protocol::openai_models::ModelPreset;
 use agiworkforce_protocol::openai_models::ModelsResponse;
 use once_cell::sync::Lazy;
 
-use crate::AuthManager;
 use crate::AgiWorkforceAuth;
+use crate::AuthManager;
 use crate::ModelProviderInfo;
 use crate::ThreadManager;
 use crate::config::Config;
@@ -45,7 +45,10 @@ pub fn auth_manager_from_auth(auth: AgiWorkforceAuth) -> Arc<AuthManager> {
     AuthManager::from_auth_for_testing(auth)
 }
 
-pub fn auth_manager_from_auth_with_home(auth: AgiWorkforceAuth, agiworkforce_home: PathBuf) -> Arc<AuthManager> {
+pub fn auth_manager_from_auth_with_home(
+    auth: AgiWorkforceAuth,
+    agiworkforce_home: PathBuf,
+) -> Arc<AuthManager> {
     AuthManager::from_auth_for_testing_with_home(auth, agiworkforce_home)
 }
 

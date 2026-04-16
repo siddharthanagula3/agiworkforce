@@ -8,16 +8,10 @@
 //! requirements cannot be loaded for those accounts, Codex fails configuration loading rather than
 //! continuing without them.
 
-use async_trait::async_trait;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use chrono::DateTime;
-use chrono::Duration as ChronoDuration;
-use chrono::Utc;
 use agiworkforce_backend_client::Client as BackendClient;
 use agiworkforce_core::AuthManager;
-use agiworkforce_core::auth::AuthCredentialsStoreMode;
 use agiworkforce_core::auth::AgiWorkforceAuth;
+use agiworkforce_core::auth::AuthCredentialsStoreMode;
 use agiworkforce_core::auth::RefreshTokenError;
 use agiworkforce_core::config_loader::CloudRequirementsLoadError;
 use agiworkforce_core::config_loader::CloudRequirementsLoadErrorCode;
@@ -25,6 +19,12 @@ use agiworkforce_core::config_loader::CloudRequirementsLoader;
 use agiworkforce_core::config_loader::ConfigRequirementsToml;
 use agiworkforce_core::util::backoff;
 use agiworkforce_protocol::account::PlanType;
+use async_trait::async_trait;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use chrono::DateTime;
+use chrono::Duration as ChronoDuration;
+use chrono::Utc;
 use hmac::Hmac;
 use hmac::Mac;
 use serde::Deserialize;
@@ -270,8 +270,10 @@ impl CloudRequirementsService {
     async fn fetch_with_timeout(
         &self,
     ) -> Result<Option<ConfigRequirementsToml>, CloudRequirementsLoadError> {
-        let _timer =
-            agiworkforce_otel::start_global_timer("codex.cloud_requirements.fetch.duration_ms", &[]);
+        let _timer = agiworkforce_otel::start_global_timer(
+            "codex.cloud_requirements.fetch.duration_ms",
+            &[],
+        );
         let started_at = Instant::now();
         let fetch_result = timeout(self.timeout, self.fetch())
             .await
@@ -818,10 +820,10 @@ fn emit_metric(metric_name: &str, tags: Vec<(&str, String)>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use agiworkforce_core::auth::AuthCredentialsStoreMode;
     use agiworkforce_protocol::protocol::AskForApproval;
+    use base64::Engine;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use std::collections::BTreeMap;
@@ -834,7 +836,10 @@ mod tests {
     use tempfile::tempdir;
 
     fn write_auth_json(agiworkforce_home: &Path, value: serde_json::Value) -> std::io::Result<()> {
-        std::fs::write(agiworkforce_home.join("auth.json"), serde_json::to_string(&value)?)?;
+        std::fs::write(
+            agiworkforce_home.join("auth.json"),
+            serde_json::to_string(&value)?,
+        )?;
         Ok(())
     }
 
@@ -1418,7 +1423,9 @@ enabled = false
             }))
         );
 
-        let path = agiworkforce_home.path().join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
+        let path = agiworkforce_home
+            .path()
+            .join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
         let cache_file: CloudRequirementsCacheFile =
             serde_json::from_str(&std::fs::read_to_string(path).expect("read cache"))
                 .expect("parse cache");
@@ -1611,7 +1618,9 @@ enabled = false
             }))
         );
 
-        let path = agiworkforce_home.path().join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
+        let path = agiworkforce_home
+            .path()
+            .join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
         let cache_file: CloudRequirementsCacheFile =
             serde_json::from_str(&std::fs::read_to_string(path).expect("read cache"))
                 .expect("parse cache");
@@ -1725,7 +1734,9 @@ enabled = false
         );
         let _ = prime_service.fetch().await;
 
-        let path = agiworkforce_home.path().join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
+        let path = agiworkforce_home
+            .path()
+            .join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
         let mut cache_file: CloudRequirementsCacheFile =
             serde_json::from_str(&std::fs::read_to_string(&path).expect("read cache"))
                 .expect("parse cache");
@@ -1768,7 +1779,9 @@ enabled = false
     #[tokio::test]
     async fn fetch_cloud_requirements_ignores_expired_cache() {
         let agiworkforce_home = tempdir().expect("tempdir");
-        let path = agiworkforce_home.path().join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
+        let path = agiworkforce_home
+            .path()
+            .join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
         let cache_file = CloudRequirementsCacheFile {
             signed_payload: CloudRequirementsCacheSignedPayload {
                 cached_at: Utc::now(),
@@ -1833,7 +1846,9 @@ enabled = false
 
         let _ = service.fetch().await;
 
-        let path = agiworkforce_home.path().join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
+        let path = agiworkforce_home
+            .path()
+            .join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
         let cache_file: CloudRequirementsCacheFile =
             serde_json::from_str(&std::fs::read_to_string(path).expect("read cache"))
                 .expect("parse cache");
@@ -1960,7 +1975,9 @@ enabled = false
 
         assert!(service.refresh_cache().await);
 
-        let path = agiworkforce_home.path().join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
+        let path = agiworkforce_home
+            .path()
+            .join(CLOUD_REQUIREMENTS_CACHE_FILENAME);
         let cache_file: CloudRequirementsCacheFile =
             serde_json::from_str(&std::fs::read_to_string(path).expect("read cache"))
                 .expect("parse cache");

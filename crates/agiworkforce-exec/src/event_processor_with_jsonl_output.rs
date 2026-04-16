@@ -125,7 +125,9 @@ impl EventProcessorWithJsonOutput {
         }
     }
 
-    pub fn map_todo_items(plan: &[agiworkforce_app_server_protocol::TurnPlanStep]) -> Vec<TodoItem> {
+    pub fn map_todo_items(
+        plan: &[agiworkforce_app_server_protocol::TurnPlanStep],
+    ) -> Vec<TodoItem> {
         plan.iter()
             .map(|step| TodoItem {
                 text: step.step.clone(),
@@ -595,7 +597,10 @@ impl EventProcessor for EventProcessorWithJsonOutput {
         self.emit(Self::thread_started_event(session_configured));
     }
 
-    fn process_server_notification(&mut self, notification: ServerNotification) -> AgiWorkforceStatus {
+    fn process_server_notification(
+        &mut self,
+        notification: ServerNotification,
+    ) -> AgiWorkforceStatus {
         let collected = self.collect_thread_events(notification);
         for event in collected.events {
             self.emit(event);

@@ -102,7 +102,10 @@ pub(crate) fn set_theme_override(
 
 /// Check whether a theme name resolves to a bundled theme or a custom
 /// `.tmTheme` file.  Returns a user-facing warning when it does not.
-pub(crate) fn validate_theme_name(name: Option<&str>, agiworkforce_home: Option<&Path>) -> Option<String> {
+pub(crate) fn validate_theme_name(
+    name: Option<&str>,
+    agiworkforce_home: Option<&Path>,
+) -> Option<String> {
     let name = name?;
     let custom_theme_path_display = agiworkforce_home
         .map(|home| custom_theme_path(name, home).display().to_string())
@@ -173,7 +176,9 @@ fn parse_theme_name(name: &str) -> Option<EmbeddedThemeName> {
 
 /// Build the expected path for a custom theme file.
 fn custom_theme_path(name: &str, agiworkforce_home: &Path) -> PathBuf {
-    agiworkforce_home.join("themes").join(format!("{name}.tmTheme"))
+    agiworkforce_home
+        .join("themes")
+        .join(format!("{name}.tmTheme"))
 }
 
 /// Try to load a custom `.tmTheme` file from `{agiworkforce_home}/themes/{name}.tmTheme`.

@@ -2,10 +2,11 @@
 
 mod firewall;
 
-use anyhow::Context;
-use anyhow::Result;
-use base64::engine::general_purpose::STANDARD as BASE64;
-use base64::Engine;
+use agiworkforce_windows_sandbox::LOG_FILE_NAME;
+use agiworkforce_windows_sandbox::SETUP_VERSION;
+use agiworkforce_windows_sandbox::SetupErrorCode;
+use agiworkforce_windows_sandbox::SetupErrorReport;
+use agiworkforce_windows_sandbox::SetupFailure;
 use agiworkforce_windows_sandbox::canonicalize_path;
 use agiworkforce_windows_sandbox::convert_string_sid_to_sid;
 use agiworkforce_windows_sandbox::ensure_allow_mask_aces_with_inheritance;
@@ -25,16 +26,15 @@ use agiworkforce_windows_sandbox::string_from_sid_bytes;
 use agiworkforce_windows_sandbox::to_wide;
 use agiworkforce_windows_sandbox::workspace_cap_sid_for_cwd;
 use agiworkforce_windows_sandbox::write_setup_error_report;
-use agiworkforce_windows_sandbox::SetupErrorCode;
-use agiworkforce_windows_sandbox::SetupErrorReport;
-use agiworkforce_windows_sandbox::SetupFailure;
-use agiworkforce_windows_sandbox::LOG_FILE_NAME;
-use agiworkforce_windows_sandbox::SETUP_VERSION;
+use anyhow::Context;
+use anyhow::Result;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashSet;
-use std::ffi::c_void;
 use std::ffi::OsStr;
+use std::ffi::c_void;
 use std::fs::File;
 use std::io::Write;
 use std::os::windows::process::CommandExt;
@@ -44,17 +44,17 @@ use std::process::Command;
 use std::process::Stdio;
 use std::sync::mpsc;
 use windows_sys::Win32::Foundation::GetLastError;
-use windows_sys::Win32::Foundation::LocalFree;
 use windows_sys::Win32::Foundation::HLOCAL;
+use windows_sys::Win32::Foundation::LocalFree;
+use windows_sys::Win32::Security::ACL;
 use windows_sys::Win32::Security::Authorization::ConvertStringSidToSidW;
-use windows_sys::Win32::Security::Authorization::SetEntriesInAclW;
-use windows_sys::Win32::Security::Authorization::SetNamedSecurityInfoW;
 use windows_sys::Win32::Security::Authorization::EXPLICIT_ACCESS_W;
 use windows_sys::Win32::Security::Authorization::GRANT_ACCESS;
 use windows_sys::Win32::Security::Authorization::SE_FILE_OBJECT;
+use windows_sys::Win32::Security::Authorization::SetEntriesInAclW;
+use windows_sys::Win32::Security::Authorization::SetNamedSecurityInfoW;
 use windows_sys::Win32::Security::Authorization::TRUSTEE_IS_SID;
 use windows_sys::Win32::Security::Authorization::TRUSTEE_W;
-use windows_sys::Win32::Security::ACL;
 use windows_sys::Win32::Security::CONTAINER_INHERIT_ACE;
 use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
 use windows_sys::Win32::Security::OBJECT_INHERIT_ACE;
@@ -565,7 +565,8 @@ fn run_setup_full(payload: &Payload, log: &mut File, sbx_dir: &Path) -> Result<(
             ))
         })?
     };
-    let workspace_sid_str = workspace_cap_sid_for_cwd(&payload.agiworkforce_home, &payload.command_cwd)?;
+    let workspace_sid_str =
+        workspace_cap_sid_for_cwd(&payload.agiworkforce_home, &payload.command_cwd)?;
     let workspace_psid = unsafe {
         convert_string_sid_to_sid(&workspace_sid_str)
             .ok_or_else(|| anyhow::anyhow!("convert workspace capability SID failed"))?

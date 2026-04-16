@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use agiworkforce_protocol::ThreadId;
+use agiworkforce_protocol::models::SandboxPermissions;
 use chrono::DateTime;
 use chrono::SecondsFormat;
 use chrono::Utc;
-use agiworkforce_protocol::ThreadId;
-use agiworkforce_protocol::models::SandboxPermissions;
 use futures::future::BoxFuture;
 use serde::Serialize;
 use serde::Serializer;
@@ -161,10 +161,10 @@ pub enum HookEvent {
 mod tests {
     use std::path::PathBuf;
 
-    use chrono::TimeZone;
-    use chrono::Utc;
     use agiworkforce_protocol::ThreadId;
     use agiworkforce_protocol::models::SandboxPermissions;
+    use chrono::TimeZone;
+    use chrono::Utc;
     use pretty_assertions::assert_eq;
     use serde_json::json;
 

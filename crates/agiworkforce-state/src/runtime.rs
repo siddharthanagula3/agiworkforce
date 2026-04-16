@@ -24,11 +24,11 @@ use crate::model::ThreadRow;
 use crate::model::anchor_from_item;
 use crate::model::datetime_to_epoch_seconds;
 use crate::paths::file_modified_time_utc;
-use chrono::DateTime;
-use chrono::Utc;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::dynamic_tools::DynamicToolSpec;
 use agiworkforce_protocol::protocol::RolloutItem;
+use chrono::DateTime;
+use chrono::Utc;
 use log::LevelFilter;
 use serde_json::Value;
 use sqlx::ConnectOptions;
@@ -80,7 +80,10 @@ impl StateRuntime {
     /// This opens (and migrates) the SQLite databases under `agiworkforce_home`,
     /// keeping logs in a dedicated file to reduce lock contention with the
     /// rest of the state store.
-    pub async fn init(agiworkforce_home: PathBuf, default_provider: String) -> anyhow::Result<Arc<Self>> {
+    pub async fn init(
+        agiworkforce_home: PathBuf,
+        default_provider: String,
+    ) -> anyhow::Result<Arc<Self>> {
         tokio::fs::create_dir_all(&agiworkforce_home).await?;
         let current_state_name = state_db_filename();
         let current_logs_name = logs_db_filename();

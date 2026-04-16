@@ -353,8 +353,8 @@ pub enum AppEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
     use agiworkforce_cloud_tasks_client::CloudTaskError;
+    use chrono::Utc;
 
     struct FakeBackend {
         // maps env key to titles
@@ -368,7 +368,8 @@ mod tests {
             env: Option<&str>,
             limit: Option<i64>,
             cursor: Option<&str>,
-        ) -> agiworkforce_cloud_tasks_client::Result<agiworkforce_cloud_tasks_client::TaskListPage> {
+        ) -> agiworkforce_cloud_tasks_client::Result<agiworkforce_cloud_tasks_client::TaskListPage>
+        {
             let key = env.map(str::to_string);
             let titles = self
                 .by_env
@@ -420,9 +421,7 @@ mod tests {
             &self,
             _id: TaskId,
         ) -> agiworkforce_cloud_tasks_client::Result<Option<String>> {
-            Err(agiworkforce_cloud_tasks_client::CloudTaskError::Unimplemented(
-                "not used in test",
-            ))
+            Err(agiworkforce_cloud_tasks_client::CloudTaskError::Unimplemented("not used in test"))
         }
 
         async fn get_task_messages(
@@ -434,7 +433,8 @@ mod tests {
         async fn get_task_text(
             &self,
             _id: TaskId,
-        ) -> agiworkforce_cloud_tasks_client::Result<agiworkforce_cloud_tasks_client::TaskText> {
+        ) -> agiworkforce_cloud_tasks_client::Result<agiworkforce_cloud_tasks_client::TaskText>
+        {
             Ok(agiworkforce_cloud_tasks_client::TaskText {
                 prompt: Some("Example prompt".to_string()),
                 messages: Vec::new(),
@@ -449,7 +449,9 @@ mod tests {
             &self,
             _task: TaskId,
             _turn_id: String,
-        ) -> agiworkforce_cloud_tasks_client::Result<Vec<agiworkforce_cloud_tasks_client::TurnAttempt>> {
+        ) -> agiworkforce_cloud_tasks_client::Result<
+            Vec<agiworkforce_cloud_tasks_client::TurnAttempt>,
+        > {
             Ok(Vec::new())
         }
 
@@ -457,20 +459,18 @@ mod tests {
             &self,
             _id: TaskId,
             _diff_override: Option<String>,
-        ) -> agiworkforce_cloud_tasks_client::Result<agiworkforce_cloud_tasks_client::ApplyOutcome> {
-            Err(agiworkforce_cloud_tasks_client::CloudTaskError::Unimplemented(
-                "not used in test",
-            ))
+        ) -> agiworkforce_cloud_tasks_client::Result<agiworkforce_cloud_tasks_client::ApplyOutcome>
+        {
+            Err(agiworkforce_cloud_tasks_client::CloudTaskError::Unimplemented("not used in test"))
         }
 
         async fn apply_task_preflight(
             &self,
             _id: TaskId,
             _diff_override: Option<String>,
-        ) -> agiworkforce_cloud_tasks_client::Result<agiworkforce_cloud_tasks_client::ApplyOutcome> {
-            Err(agiworkforce_cloud_tasks_client::CloudTaskError::Unimplemented(
-                "not used in test",
-            ))
+        ) -> agiworkforce_cloud_tasks_client::Result<agiworkforce_cloud_tasks_client::ApplyOutcome>
+        {
+            Err(agiworkforce_cloud_tasks_client::CloudTaskError::Unimplemented("not used in test"))
         }
 
         async fn create_task(
@@ -480,10 +480,9 @@ mod tests {
             _git_ref: &str,
             _qa_mode: bool,
             _best_of_n: usize,
-        ) -> agiworkforce_cloud_tasks_client::Result<agiworkforce_cloud_tasks_client::CreatedTask> {
-            Err(agiworkforce_cloud_tasks_client::CloudTaskError::Unimplemented(
-                "not used in test",
-            ))
+        ) -> agiworkforce_cloud_tasks_client::Result<agiworkforce_cloud_tasks_client::CreatedTask>
+        {
+            Err(agiworkforce_cloud_tasks_client::CloudTaskError::Unimplemented("not used in test"))
         }
     }
 

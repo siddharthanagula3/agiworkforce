@@ -91,8 +91,8 @@ use tracing::trace;
 use tracing::warn;
 
 use crate::AuthManager;
-use crate::auth::AuthMode;
 use crate::auth::AgiWorkforceAuth;
+use crate::auth::AuthMode;
 use crate::auth::RefreshTokenError;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
@@ -264,7 +264,8 @@ impl ModelClient {
         let agiworkforce_api_key_env_enabled = auth_manager
             .as_ref()
             .is_some_and(|manager| manager.agiworkforce_api_key_env_enabled());
-        let auth_env_telemetry = collect_auth_env_telemetry(&provider, agiworkforce_api_key_env_enabled);
+        let auth_env_telemetry =
+            collect_auth_env_telemetry(&provider, agiworkforce_api_key_env_enabled);
         Self {
             state: Arc::new(ModelClientState {
                 auth_manager,
@@ -966,7 +967,10 @@ impl ModelClientSession {
             ))
     }
 
-    fn responses_request_compression(&self, auth: Option<&crate::auth::AgiWorkforceAuth>) -> Compression {
+    fn responses_request_compression(
+        &self,
+        auth: Option<&crate::auth::AgiWorkforceAuth>,
+    ) -> Compression {
         if self.client.state.enable_request_compression
             && auth.is_some_and(AgiWorkforceAuth::is_chatgpt_auth)
             && self.client.state.provider.is_openai()

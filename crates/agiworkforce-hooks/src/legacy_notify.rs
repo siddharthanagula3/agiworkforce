@@ -74,8 +74,8 @@ pub fn notify_hook(argv: Vec<String>) -> Hook {
 
 #[cfg(test)]
 mod tests {
-    use anyhow::Result;
     use agiworkforce_protocol::ThreadId;
+    use anyhow::Result;
     use pretty_assertions::assert_eq;
     use serde_json::Value;
     use serde_json::json;

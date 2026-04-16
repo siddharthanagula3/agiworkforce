@@ -1,12 +1,12 @@
-use anyhow::Result;
-use chrono::DateTime;
-use chrono::Timelike;
-use chrono::Utc;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::openai_models::ReasoningEffort;
 use agiworkforce_protocol::protocol::AskForApproval;
 use agiworkforce_protocol::protocol::SandboxPolicy;
 use agiworkforce_protocol::protocol::SessionSource;
+use anyhow::Result;
+use chrono::DateTime;
+use chrono::Timelike;
+use chrono::Utc;
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 use std::path::PathBuf;
@@ -447,10 +447,10 @@ pub struct BackfillStats {
 mod tests {
     use super::ThreadMetadata;
     use super::ThreadRow;
-    use chrono::DateTime;
-    use chrono::Utc;
     use agiworkforce_protocol::ThreadId;
     use agiworkforce_protocol::openai_models::ReasoningEffort;
+    use chrono::DateTime;
+    use chrono::Utc;
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;
 

@@ -14,6 +14,7 @@ base64 = "0.22.1"
 chrono = { version = "0.4.43", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 agiworkforce-cloud-tasks-client = { path = "../agiworkforce-cloud-tasks-client", features = [
+    "mock",
     "online",
 ] }
 agiworkforce-client = { path = "../agiworkforce-client" }

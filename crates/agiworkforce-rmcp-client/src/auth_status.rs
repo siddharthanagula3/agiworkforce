@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use agiworkforce_protocol::protocol::McpAuthStatus;
 use anyhow::Error;
 use anyhow::Result;
-use agiworkforce_protocol::protocol::McpAuthStatus;
 use reqwest::Client;
 use reqwest::StatusCode;
 use reqwest::Url;
@@ -293,7 +293,10 @@ mod tests {
     #[tokio::test]
     #[serial(auth_status_env)]
     async fn determine_auth_status_uses_bearer_token_when_env_authorization_header_present() {
-        let _guard = EnvVarGuard::set("AGIWORKFORCE_RMCP_CLIENT_AUTH_STATUS_TEST_TOKEN", "Bearer token");
+        let _guard = EnvVarGuard::set(
+            "AGIWORKFORCE_RMCP_CLIENT_AUTH_STATUS_TEST_TOKEN",
+            "Bearer token",
+        );
         let status = determine_streamable_http_auth_status(
             "server",
             "not-a-url",

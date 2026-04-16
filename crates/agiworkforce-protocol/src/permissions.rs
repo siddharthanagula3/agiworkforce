@@ -1236,7 +1236,9 @@ mod tests {
         )
         .expect("absolute canonical blocked");
         let expected_agiworkforce = AbsolutePathBuf::from_absolute_path(
-            agiworkforce_dir.canonicalize().expect("canonicalize .agiworkforce"),
+            agiworkforce_dir
+                .canonicalize()
+                .expect("canonicalize .agiworkforce"),
         )
         .expect("absolute canonical .agiworkforce");
 
@@ -1301,7 +1303,9 @@ mod tests {
         )
         .expect("absolute canonical .agents");
         let expected_agiworkforce = AbsolutePathBuf::from_absolute_path(
-            agiworkforce_dir.canonicalize().expect("canonicalize .agiworkforce"),
+            agiworkforce_dir
+                .canonicalize()
+                .expect("canonicalize .agiworkforce"),
         )
         .expect("absolute canonical .agiworkforce");
 
@@ -1579,7 +1583,9 @@ mod tests {
         )
         .expect("absolute canonical blocked");
         let expected_agiworkforce = AbsolutePathBuf::from_absolute_path(
-            agiworkforce_dir.canonicalize().expect("canonicalize .agiworkforce"),
+            agiworkforce_dir
+                .canonicalize()
+                .expect("canonicalize .agiworkforce"),
         )
         .expect("absolute canonical .agiworkforce");
 

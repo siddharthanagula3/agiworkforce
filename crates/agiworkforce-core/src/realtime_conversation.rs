@@ -8,11 +8,6 @@ use crate::default_client::default_headers;
 use crate::error::CodexErr;
 use crate::error::Result as CodexResult;
 use crate::realtime_context::build_realtime_startup_context;
-use async_channel::Receiver;
-use async_channel::Sender;
-use async_channel::TrySendError;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use agiworkforce_api::Provider as ApiProvider;
 use agiworkforce_api::RealtimeAudioFrame;
 use agiworkforce_api::RealtimeEvent;
@@ -33,6 +28,11 @@ use agiworkforce_protocol::protocol::RealtimeConversationClosedEvent;
 use agiworkforce_protocol::protocol::RealtimeConversationRealtimeEvent;
 use agiworkforce_protocol::protocol::RealtimeConversationStartedEvent;
 use agiworkforce_protocol::protocol::RealtimeHandoffRequested;
+use async_channel::Receiver;
+use async_channel::Sender;
+use async_channel::TrySendError;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use http::HeaderMap;
 use http::HeaderValue;
 use http::header::AUTHORIZATION;
@@ -607,8 +607,13 @@ pub(crate) async fn handle_audio(
         if sess.conversation.running_state().await.is_some() {
             warn!("realtime audio input failed while the session was already ending");
         } else {
-            send_conversation_error(sess, sub_id, err.to_string(), AgiWorkforceErrorInfo::BadRequest)
-                .await;
+            send_conversation_error(
+                sess,
+                sub_id,
+                err.to_string(),
+                AgiWorkforceErrorInfo::BadRequest,
+            )
+            .await;
         }
     }
 }
@@ -685,8 +690,13 @@ pub(crate) async fn handle_text(
         if sess.conversation.running_state().await.is_some() {
             warn!("realtime text input failed while the session was already ending");
         } else {
-            send_conversation_error(sess, sub_id, err.to_string(), AgiWorkforceErrorInfo::BadRequest)
-                .await;
+            send_conversation_error(
+                sess,
+                sub_id,
+                err.to_string(),
+                AgiWorkforceErrorInfo::BadRequest,
+            )
+            .await;
         }
     }
 }

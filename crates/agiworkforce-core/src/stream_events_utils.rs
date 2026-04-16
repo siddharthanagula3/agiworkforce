@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use agiworkforce_protocol::config_types::ModeKind;
 use agiworkforce_protocol::items::TurnItem;
 use agiworkforce_utils_stream_parser::strip_citations;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use tokio_util::sync::CancellationToken;
 
 use crate::codex::Session;
@@ -93,7 +93,9 @@ pub(crate) fn raw_assistant_output_text_from_item(item: &ResponseItem) -> Option
         let combined = content
             .iter()
             .filter_map(|ci| match ci {
-                agiworkforce_protocol::models::ContentItem::OutputText { text } => Some(text.as_str()),
+                agiworkforce_protocol::models::ContentItem::OutputText { text } => {
+                    Some(text.as_str())
+                }
                 _ => None,
             })
             .collect::<String>();
@@ -337,13 +339,17 @@ pub(crate) async fn handle_non_tool_response_item(
                     .content
                     .iter()
                     .map(|entry| match entry {
-                        agiworkforce_protocol::items::AgentMessageContent::Text { text } => text.as_str(),
+                        agiworkforce_protocol::items::AgentMessageContent::Text { text } => {
+                            text.as_str()
+                        }
                     })
                     .collect::<String>();
                 let (stripped, memory_citation) =
                     strip_hidden_assistant_markup_and_parse_memory_citation(&combined, plan_mode);
                 agent_message.content =
-                    vec![agiworkforce_protocol::items::AgentMessageContent::Text { text: stripped }];
+                    vec![agiworkforce_protocol::items::AgentMessageContent::Text {
+                        text: stripped,
+                    }];
                 agent_message.memory_citation = memory_citation;
             }
             if let TurnItem::ImageGeneration(image_item) = &mut turn_item {

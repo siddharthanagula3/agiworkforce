@@ -288,10 +288,9 @@ pub(super) async fn run_guardian_review_session(
         .find(|preset| preset.model == super::GUARDIAN_PREFERRED_MODEL);
     let (guardian_model, guardian_reasoning_effort) = if let Some(preset) = preferred_model {
         let reasoning_effort = preferred_reasoning_effort(
-            preset
-                .supported_reasoning_efforts
-                .iter()
-                .any(|effort| effort.effort == agiworkforce_protocol::openai_models::ReasoningEffort::Low),
+            preset.supported_reasoning_efforts.iter().any(|effort| {
+                effort.effort == agiworkforce_protocol::openai_models::ReasoningEffort::Low
+            }),
             Some(preset.default_reasoning_effort),
         );
         (
@@ -303,7 +302,9 @@ pub(super) async fn run_guardian_review_session(
             turn.model_info
                 .supported_reasoning_levels
                 .iter()
-                .any(|preset| preset.effort == agiworkforce_protocol::openai_models::ReasoningEffort::Low),
+                .any(|preset| {
+                    preset.effort == agiworkforce_protocol::openai_models::ReasoningEffort::Low
+                }),
             turn.reasoning_effort
                 .or(turn.model_info.default_reasoning_level),
         );

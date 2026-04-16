@@ -1,7 +1,5 @@
 use std::io;
 
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD;
 use agiworkforce_app_server_protocol::FsCopyParams;
 use agiworkforce_app_server_protocol::FsCopyResponse;
 use agiworkforce_app_server_protocol::FsCreateDirectoryParams;
@@ -18,6 +16,8 @@ use agiworkforce_app_server_protocol::FsRemoveResponse;
 use agiworkforce_app_server_protocol::FsWriteFileParams;
 use agiworkforce_app_server_protocol::FsWriteFileResponse;
 use agiworkforce_app_server_protocol::JSONRPCErrorError;
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 
 use crate::CopyOptions;
 use crate::CreateDirectoryOptions;

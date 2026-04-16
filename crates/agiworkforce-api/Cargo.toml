@@ -18,7 +18,7 @@ tokio = { version = "1", features = ["macros", "net", "rt", "sync", "time"] }
 tokio-tungstenite = { version = "0.28.0", features = [
     "rustls-tls-native-roots",
 ] }
-tungstenite = "0.27.0"
+tungstenite = { version = "0.27.0", features = ["deflate", "proxy"] }
 tracing = "0.1.44"
 eventsource-stream = "0.2.3"
 regex-lite = "0.1.8"

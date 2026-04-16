@@ -1,8 +1,4 @@
 #[cfg(test)]
-use chrono::DateTime;
-#[cfg(test)]
-use chrono::Utc;
-#[cfg(test)]
 use agiworkforce_protocol::ThreadId;
 #[cfg(test)]
 use agiworkforce_protocol::openai_models::ReasoningEffort;
@@ -10,6 +6,10 @@ use agiworkforce_protocol::openai_models::ReasoningEffort;
 use agiworkforce_protocol::protocol::AskForApproval;
 #[cfg(test)]
 use agiworkforce_protocol::protocol::SandboxPolicy;
+#[cfg(test)]
+use chrono::DateTime;
+#[cfg(test)]
+use chrono::Utc;
 #[cfg(test)]
 use std::path::Path;
 #[cfg(test)]

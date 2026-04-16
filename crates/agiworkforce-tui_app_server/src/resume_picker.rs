@@ -11,8 +11,6 @@ use crate::text_formatting::truncate_text;
 use crate::tui::FrameRequester;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
-use chrono::DateTime;
-use chrono::Utc;
 use agiworkforce_app_server_protocol::Thread;
 use agiworkforce_app_server_protocol::ThreadListParams;
 use agiworkforce_app_server_protocol::ThreadSortKey as AppServerThreadSortKey;
@@ -27,6 +25,8 @@ use agiworkforce_core::config::Config;
 use agiworkforce_core::find_thread_names_by_ids;
 use agiworkforce_core::path_utils;
 use agiworkforce_protocol::ThreadId;
+use chrono::DateTime;
+use chrono::Utc;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -1604,8 +1604,8 @@ fn column_visibility(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
     use agiworkforce_protocol::ThreadId;
+    use chrono::Duration;
 
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;

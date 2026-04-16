@@ -242,7 +242,9 @@ async fn effective_mcp_servers_include_plugins_without_overriding_user_config() 
         .set(configured_servers)
         .expect("test config should accept MCP servers");
 
-    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(config.agiworkforce_home.clone())));
+    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(
+        config.agiworkforce_home.clone(),
+    )));
     let effective = mcp_manager.effective_servers(&config, None);
 
     let sample = effective.get("sample").expect("user server should exist");

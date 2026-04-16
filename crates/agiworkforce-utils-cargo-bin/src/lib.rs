@@ -91,7 +91,7 @@ fn resolve_bin_from_env(key: &str, value: OsString) -> Result<PathBuf, CargoBinE
         let runfiles = runfiles::Runfiles::create().map_err(|err| CargoBinError::CurrentExe {
             source: std::io::Error::other(err),
         })?;
-        if let Some(resolved) = runfiles::rlocation!(runfiles, &raw)
+        if let Some(resolved) = runfiles.rlocation(&raw)
             && resolved.exists()
         {
             return Ok(resolved);
@@ -148,7 +148,7 @@ pub fn resolve_bazel_runfile(
         }
     };
     let runfile_path = normalize_runfile_path(&runfile_path);
-    if let Some(resolved) = runfiles::rlocation!(runfiles, &runfile_path)
+    if let Some(resolved) = runfiles.rlocation(&runfile_path)
         && resolved.exists()
     {
         return Ok(resolved);
@@ -177,7 +177,7 @@ pub fn repo_root() -> io::Result<PathBuf> {
                     "AGIWORKFORCE_REPO_ROOT_MARKER was not set at compile time",
                 )
             })?;
-        runfiles::rlocation!(runfiles, &marker_path).ok_or_else(|| {
+        runfiles.rlocation(&marker_path).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
                 "repo_root.marker not available in runfiles",

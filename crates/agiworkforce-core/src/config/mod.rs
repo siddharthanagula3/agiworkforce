@@ -677,7 +677,8 @@ impl ConfigBuilder {
             cloud_requirements,
             fallback_cwd,
         } = self;
-        let agiworkforce_home = agiworkforce_home.map_or_else(find_agiworkforce_home, std::io::Result::Ok)?;
+        let agiworkforce_home =
+            agiworkforce_home.map_or_else(find_agiworkforce_home, std::io::Result::Ok)?;
         let cli_overrides = cli_overrides.unwrap_or_default();
         let mut harness_overrides = harness_overrides.unwrap_or_default();
         let loader_overrides = loader_overrides.unwrap_or_default();

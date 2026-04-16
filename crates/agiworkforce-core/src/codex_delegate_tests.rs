@@ -1,7 +1,6 @@
 use super::*;
 use crate::mcp_tool_call::MCP_TOOL_APPROVAL_DECLINE_SYNTHETIC;
 use crate::mcp_tool_call::MCP_TOOL_APPROVAL_QUESTION_ID_PREFIX;
-use async_channel::bounded;
 use agiworkforce_protocol::config_types::ApprovalsReviewer;
 use agiworkforce_protocol::models::NetworkPermissions;
 use agiworkforce_protocol::models::ResponseItem;
@@ -22,6 +21,7 @@ use agiworkforce_protocol::request_permissions::RequestPermissionsResponse;
 use agiworkforce_protocol::request_user_input::RequestUserInputAnswer;
 use agiworkforce_protocol::request_user_input::RequestUserInputEvent;
 use agiworkforce_protocol::request_user_input::RequestUserInputQuestion;
+use async_channel::bounded;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::HashMap;

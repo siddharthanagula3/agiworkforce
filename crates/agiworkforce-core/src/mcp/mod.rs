@@ -8,16 +8,16 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_channel::unbounded;
 use agiworkforce_protocol::mcp::Resource;
 use agiworkforce_protocol::mcp::ResourceTemplate;
 use agiworkforce_protocol::mcp::Tool;
 use agiworkforce_protocol::protocol::McpListToolsResponseEvent;
 use agiworkforce_protocol::protocol::SandboxPolicy;
+use async_channel::unbounded;
 use serde_json::Value;
 
-use crate::AuthManager;
 use crate::AgiWorkforceAuth;
+use crate::AuthManager;
 use crate::config::Config;
 use crate::config::types::McpServerConfig;
 use crate::config::types::McpServerTransportConfig;
@@ -151,7 +151,10 @@ pub(crate) fn codex_apps_mcp_url(config: &Config) -> String {
     codex_apps_mcp_url_for_base_url(&config.chatgpt_base_url)
 }
 
-fn codex_apps_mcp_server_config(config: &Config, auth: Option<&AgiWorkforceAuth>) -> McpServerConfig {
+fn codex_apps_mcp_server_config(
+    config: &Config,
+    auth: Option<&AgiWorkforceAuth>,
+) -> McpServerConfig {
     let bearer_token_env_var = codex_apps_mcp_bearer_token_env_var();
     let http_headers = if bearer_token_env_var.is_some() {
         None
@@ -256,7 +259,9 @@ pub async fn collect_mcp_snapshot(config: &Config) -> McpListToolsResponseEvent 
         config.cli_auth_credentials_store_mode,
     );
     let auth = auth_manager.auth().await;
-    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(config.agiworkforce_home.clone())));
+    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(
+        config.agiworkforce_home.clone(),
+    )));
     let mcp_servers = mcp_manager.effective_servers(config, auth.as_ref());
     let tool_plugin_provenance = mcp_manager.tool_plugin_provenance(config);
     if mcp_servers.is_empty() {

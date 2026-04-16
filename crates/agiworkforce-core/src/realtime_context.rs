@@ -1,13 +1,13 @@
 use crate::codex::Session;
 use crate::compact::content_items_to_text;
 use crate::event_mapping::is_contextual_user_message_content;
-use chrono::Utc;
 use agiworkforce_git_utils::resolve_root_git_project_for_trust;
 use agiworkforce_protocol::models::ResponseItem;
 use agiworkforce_state::SortKey;
 use agiworkforce_state::ThreadMetadata;
 use agiworkforce_utils_output_truncation::TruncationPolicy;
 use agiworkforce_utils_output_truncation::truncate_text;
+use chrono::Utc;
 use dirs::home_dir;
 use std::cmp::Reverse;
 use std::collections::HashMap;

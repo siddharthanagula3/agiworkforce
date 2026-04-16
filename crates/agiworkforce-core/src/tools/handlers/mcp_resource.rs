@@ -3,9 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use async_trait::async_trait;
 use agiworkforce_protocol::mcp::CallToolResult;
 use agiworkforce_protocol::models::function_call_output_content_items_to_text;
+use async_trait::async_trait;
 use rmcp::model::ListResourceTemplatesResult;
 use rmcp::model::ListResourcesResult;
 use rmcp::model::PaginatedRequestParams;

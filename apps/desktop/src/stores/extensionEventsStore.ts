@@ -1,11 +1,42 @@
 import { create } from 'zustand';
 import type { BrowserActivityState, BrowserAgentStatus } from '@agiworkforce/types';
-import { invoke, isTauri, listen } from '../lib/tauri-mock';
-import { EVENTS } from '../constants/event-names';
-import type {
-  ExtensionPageContextEvent,
-  ExtensionTaskResultEvent,
-} from '../hooks/useAgenticEvents';
+import { invoke, isTauri } from '../lib/tauri-mock';
+
+export interface ExtensionPageAction {
+  id: string;
+  type: string;
+  selector?: string | null;
+  value?: string | null;
+  delay?: number | null;
+}
+
+export interface ExtensionPageContextEvent {
+  task_id: string;
+  url: string;
+  title: string;
+  tab_id: number;
+  timestamp: number;
+  selected_text?: string | null;
+  actions?: ExtensionPageAction[];
+}
+
+export interface ExtensionTaskResultEvent {
+  task_id: string;
+  success: boolean;
+  screenshot_path?: string | null;
+  result?: unknown;
+  error?: string | null;
+  actions_performed?: number;
+  duration?: number;
+}
+
+export interface ExtensionConnectionStatusEvent {
+  connected: boolean;
+  status?: string;
+  extension_id?: string;
+  reason?: string;
+  timestamp?: number;
+}
 
 export type ExtensionAgentStatus = BrowserAgentStatus;
 export type ExtensionEventState = BrowserActivityState;
@@ -95,64 +126,3 @@ export const useExtensionEventsStore = create<ExtensionEventsStore>((set) => ({
     set(INITIAL_STATE);
   },
 }));
-
-let extensionEventListenersPromise: Promise<void> | null = null;
-const extensionEventUnlistenFns: Array<() => void> = [];
-
-export function cleanupExtensionEventListeners(): void {
-  for (const unlisten of extensionEventUnlistenFns.splice(0)) {
-    try {
-      unlisten();
-    } catch (error) {
-      console.error('[extensionEventsStore] Failed to cleanup extension listener:', error);
-    }
-  }
-
-  extensionEventListenersPromise = null;
-}
-
-export async function initializeExtensionEventListeners(): Promise<void> {
-  if (extensionEventListenersPromise) {
-    return extensionEventListenersPromise;
-  }
-
-  if (!isTauri) {
-    return;
-  }
-
-  extensionEventListenersPromise = (async () => {
-    try {
-      const unlistenPageContext = await listen<ExtensionPageContextEvent>(
-        EVENTS.EXTENSION_PAGE_CONTEXT,
-        ({ payload }) => {
-          useExtensionEventsStore.getState().applyPageContext(payload);
-        },
-      );
-
-      const unlistenTaskResult = await listen<ExtensionTaskResultEvent>(
-        EVENTS.EXTENSION_TASK_RESULT,
-        ({ payload }) => {
-          useExtensionEventsStore.getState().applyTaskResult(payload);
-        },
-      );
-
-      const unlistenConnectionStatus = await listen<{ connected: boolean }>(
-        'extension:connection-status',
-        ({ payload }) => {
-          useExtensionEventsStore.getState().applyConnectionStatus(payload.connected);
-        },
-      );
-
-      extensionEventUnlistenFns.push(
-        unlistenPageContext,
-        unlistenTaskResult,
-        unlistenConnectionStatus,
-      );
-    } catch (error) {
-      cleanupExtensionEventListeners();
-      console.warn('[extensionEventsStore] Failed to initialize extension listeners:', error);
-    }
-  })();
-
-  return extensionEventListenersPromise;
-}

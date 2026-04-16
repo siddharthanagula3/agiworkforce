@@ -223,7 +223,9 @@ pub(crate) async fn uninstall_remote_plugin(
     Ok(())
 }
 
-fn ensure_chatgpt_auth(auth: Option<&AgiWorkforceAuth>) -> Result<&AgiWorkforceAuth, RemotePluginMutationError> {
+fn ensure_chatgpt_auth(
+    auth: Option<&AgiWorkforceAuth>,
+) -> Result<&AgiWorkforceAuth, RemotePluginMutationError> {
     let Some(auth) = auth else {
         return Err(RemotePluginMutationError::AuthRequired);
     };
