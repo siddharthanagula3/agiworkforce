@@ -100,7 +100,9 @@ impl ConfigLayerEntry {
             ConfigLayerSource::Mdm { .. } => None,
             ConfigLayerSource::System { file } => file.parent(),
             ConfigLayerSource::User { file } => file.parent(),
-            ConfigLayerSource::Project { dot_agiworkforce_folder } => Some(dot_agiworkforce_folder.clone()),
+            ConfigLayerSource::Project {
+                dot_agiworkforce_folder,
+            } => Some(dot_agiworkforce_folder.clone()),
             ConfigLayerSource::SessionFlags => None,
             ConfigLayerSource::LegacyManagedConfigTomlFromFile { .. } => None,
             ConfigLayerSource::LegacyManagedConfigTomlFromMdm => None,
@@ -323,7 +325,8 @@ fn verify_layer_ordering(layers: &[ConfigLayerEntry]) -> std::io::Result<Option<
                     ));
                 }
             }
-            previous_project_dot_agiworkforce_folder = Some(current_project_dot_agiworkforce_folder);
+            previous_project_dot_agiworkforce_folder =
+                Some(current_project_dot_agiworkforce_folder);
         }
     }
 

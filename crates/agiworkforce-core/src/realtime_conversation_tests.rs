@@ -1,9 +1,9 @@
 use super::RealtimeHandoffState;
 use super::RealtimeSessionKind;
 use super::realtime_text_from_handoff_request;
-use async_channel::bounded;
 use agiworkforce_protocol::protocol::RealtimeHandoffRequested;
 use agiworkforce_protocol::protocol::RealtimeTranscriptEntry;
+use async_channel::bounded;
 use pretty_assertions::assert_eq;
 
 #[test]

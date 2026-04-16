@@ -230,13 +230,13 @@ pub(crate) struct OutgoingError {
 mod tests {
     use std::path::PathBuf;
 
-    use anyhow::Result;
     use agiworkforce_protocol::ThreadId;
     use agiworkforce_protocol::openai_models::ReasoningEffort;
     use agiworkforce_protocol::protocol::AskForApproval;
     use agiworkforce_protocol::protocol::EventMsg;
     use agiworkforce_protocol::protocol::SandboxPolicy;
     use agiworkforce_protocol::protocol::SessionConfiguredEvent;
+    use anyhow::Result;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use tempfile::NamedTempFile;

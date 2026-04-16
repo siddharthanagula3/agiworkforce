@@ -1,9 +1,9 @@
 use super::build_recent_work_section;
 use super::build_workspace_section_with_user_root;
-use chrono::TimeZone;
-use chrono::Utc;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_state::ThreadMetadata;
+use chrono::TimeZone;
+use chrono::Utc;
 use pretty_assertions::assert_eq;
 use std::fs;
 use std::path::PathBuf;

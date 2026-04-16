@@ -30,5 +30,8 @@ fn main() -> Result<()> {
             ..agiworkforce_app_server_protocol::GenerateTsOptions::default()
         },
     )?;
-    agiworkforce_app_server_protocol::generate_json_with_experimental(&args.out_dir, args.experimental)
+    agiworkforce_app_server_protocol::generate_json_with_experimental(
+        &args.out_dir,
+        args.experimental,
+    )
 }

@@ -326,7 +326,9 @@ mod tests {
             messages
                 .iter()
                 .map(|message| match message {
-                    agiworkforce_protocol::models::ResponseItem::Message { role, content, .. } => {
+                    agiworkforce_protocol::models::ResponseItem::Message {
+                        role, content, ..
+                    } => {
                         let text = content
                             .iter()
                             .map(|item| match item {

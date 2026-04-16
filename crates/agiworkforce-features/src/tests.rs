@@ -191,7 +191,8 @@ fn apps_require_feature_flag_and_chatgpt_auth() {
     let api_key_auth = agiworkforce_login::AgiWorkforceAuth::from_api_key("test-api-key");
     assert!(!features.apps_enabled_for_auth(Some(&api_key_auth)));
 
-    let chatgpt_auth = agiworkforce_login::AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing();
+    let chatgpt_auth =
+        agiworkforce_login::AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing();
     assert!(features.apps_enabled_for_auth(Some(&chatgpt_auth)));
 }
 

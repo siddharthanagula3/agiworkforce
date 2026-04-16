@@ -108,7 +108,10 @@ impl ArtifactRuntimeManagerConfig {
     }
 
     /// Creates a runtime-manager config that downloads from the default GitHub release location.
-    pub fn with_default_release(agiworkforce_home: PathBuf, runtime_version: impl Into<String>) -> Self {
+    pub fn with_default_release(
+        agiworkforce_home: PathBuf,
+        runtime_version: impl Into<String>,
+    ) -> Self {
         Self::new(
             agiworkforce_home,
             ArtifactRuntimeReleaseLocator::default(runtime_version),

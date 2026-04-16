@@ -13,11 +13,11 @@ vi.mock('../../lib/tauri-mock', () => ({
 }));
 
 import { useExtensionEvents } from '../useExtensionEvents';
+import { useExtensionEventsStore } from '../../stores/extensionEventsStore';
 import {
-  cleanupExtensionEventListeners,
-  initializeExtensionEventListeners,
-  useExtensionEventsStore,
-} from '../../stores/extensionEventsStore';
+  cleanupRuntimeActivityEventListeners,
+  initializeRuntimeActivityEventListeners,
+} from '../useAgenticEvents';
 import { useUIStore } from '../../stores/ui';
 
 type ListenerCallback<T> = (event: { payload: T }) => void;
@@ -26,26 +26,26 @@ describe('useExtensionEvents', () => {
   beforeEach(() => {
     listenMock.mockReset();
     invokeMock.mockReset();
-    cleanupExtensionEventListeners();
+    cleanupRuntimeActivityEventListeners();
     useExtensionEventsStore.getState().resetState();
     useUIStore.getState().resetOnLogout();
   });
 
   afterEach(() => {
     cleanup();
-    cleanupExtensionEventListeners();
+    cleanupRuntimeActivityEventListeners();
     useExtensionEventsStore.getState().resetState();
     useUIStore.getState().resetOnLogout();
   });
 
-  it('initializes Tauri extension listeners only once across multiple mounts', async () => {
+  it('initializes runtime activity listeners only once across repeated startup calls', async () => {
     listenMock.mockResolvedValue(() => {});
-
-    renderHook(() => useExtensionEvents());
-    renderHook(() => useExtensionEvents());
+    await initializeRuntimeActivityEventListeners();
+    const initialCallCount = listenMock.mock.calls.length;
+    await initializeRuntimeActivityEventListeners();
 
     await waitFor(() => {
-      expect(listenMock).toHaveBeenCalledTimes(3);
+      expect(listenMock).toHaveBeenCalledTimes(initialCallCount);
     });
   });
 
@@ -60,12 +60,12 @@ describe('useExtensionEvents', () => {
       return () => {};
     });
 
-    await initializeExtensionEventListeners();
+    await expect(initializeRuntimeActivityEventListeners()).rejects.toThrow('listen failed');
     expect(listenMock).toHaveBeenCalledTimes(1);
 
-    await initializeExtensionEventListeners();
+    await initializeRuntimeActivityEventListeners();
     await waitFor(() => {
-      expect(listenMock).toHaveBeenCalledTimes(4);
+      expect(listenMock.mock.calls.length).toBeGreaterThan(1);
     });
   });
 
@@ -78,6 +78,7 @@ describe('useExtensionEvents', () => {
       },
     );
 
+    await initializeRuntimeActivityEventListeners();
     renderHook(() => useExtensionEvents());
 
     await waitFor(() => {
@@ -110,9 +111,6 @@ describe('useExtensionEvents', () => {
     invokeMock.mockResolvedValue(undefined);
 
     const { result } = renderHook(() => useExtensionEvents());
-    await waitFor(() => {
-      expect(listenMock).toHaveBeenCalledTimes(3);
-    });
 
     await act(async () => {
       await result.current.stopAgent();

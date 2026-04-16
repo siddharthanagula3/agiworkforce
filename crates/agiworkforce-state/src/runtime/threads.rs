@@ -860,10 +860,11 @@ fn thread_spawn_parent_thread_id_from_source_str(source: &str) -> Option<ThreadI
     let parsed_source = serde_json::from_str(source)
         .or_else(|_| serde_json::from_value::<SessionSource>(Value::String(source.to_string())));
     match parsed_source.ok() {
-        Some(SessionSource::SubAgent(agiworkforce_protocol::protocol::SubAgentSource::ThreadSpawn {
-            parent_thread_id,
-            ..
-        })) => Some(parent_thread_id),
+        Some(SessionSource::SubAgent(
+            agiworkforce_protocol::protocol::SubAgentSource::ThreadSpawn {
+                parent_thread_id, ..
+            },
+        )) => Some(parent_thread_id),
         _ => None,
     }
 }
@@ -965,7 +966,8 @@ mod tests {
             .expect("state db should initialize");
         let thread_id =
             ThreadId::from_string("00000000-0000-0000-0000-000000000123").expect("valid thread id");
-        let mut metadata = test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
+        let mut metadata =
+            test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
 
         runtime
             .upsert_thread_with_creation_memory_mode(&metadata, Some("disabled"))
@@ -1003,7 +1005,8 @@ mod tests {
             .expect("state db should initialize");
         let thread_id =
             ThreadId::from_string("00000000-0000-0000-0000-000000000456").expect("valid thread id");
-        let metadata = test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
+        let metadata =
+            test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
 
         runtime
             .upsert_thread(&metadata)
@@ -1056,7 +1059,8 @@ mod tests {
             .expect("state db should initialize");
         let thread_id =
             ThreadId::from_string("00000000-0000-0000-0000-000000000457").expect("valid thread id");
-        let mut metadata = test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
+        let mut metadata =
+            test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
         metadata.git_branch = Some("sqlite-branch".to_string());
 
         runtime
@@ -1121,7 +1125,8 @@ mod tests {
             .expect("state db should initialize");
         let thread_id =
             ThreadId::from_string("00000000-0000-0000-0000-000000000789").expect("valid thread id");
-        let metadata = test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
+        let metadata =
+            test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
 
         runtime
             .upsert_thread(&metadata)
@@ -1181,7 +1186,8 @@ mod tests {
         let thread_id =
             ThreadId::from_string("00000000-0000-0000-0000-000000000791").expect("valid thread id");
 
-        let mut existing = test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
+        let mut existing =
+            test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
         existing.tokens_used = 123;
         existing.first_user_message = Some("newer preview".to_string());
         existing.updated_at = DateTime::<Utc>::from_timestamp(1_700_000_100, 0).expect("timestamp");
@@ -1190,7 +1196,8 @@ mod tests {
             .await
             .expect("initial upsert should succeed");
 
-        let mut fallback = test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
+        let mut fallback =
+            test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
         fallback.tokens_used = 0;
         fallback.first_user_message = None;
         fallback.updated_at = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).expect("timestamp");
@@ -1225,7 +1232,8 @@ mod tests {
             .expect("state db should initialize");
         let thread_id =
             ThreadId::from_string("00000000-0000-0000-0000-000000000790").expect("valid thread id");
-        let mut metadata = test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
+        let mut metadata =
+            test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
         metadata.git_sha = Some("abc123".to_string());
         metadata.git_branch = Some("feature/branch".to_string());
         metadata.git_origin_url = Some("git@example.com:openai/codex.git".to_string());
@@ -1259,7 +1267,8 @@ mod tests {
             .expect("state db should initialize");
         let thread_id =
             ThreadId::from_string("00000000-0000-0000-0000-000000000791").expect("valid thread id");
-        let mut metadata = test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
+        let mut metadata =
+            test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
         metadata.title = "original title".to_string();
         metadata.first_user_message = Some("first-user-message".to_string());
 
@@ -1296,7 +1305,8 @@ mod tests {
             .expect("state db should initialize");
         let thread_id =
             ThreadId::from_string("00000000-0000-0000-0000-000000000792").expect("valid thread id");
-        let metadata = test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
+        let metadata =
+            test_thread_metadata(&agiworkforce_home, thread_id, agiworkforce_home.clone());
 
         runtime
             .upsert_thread(&metadata)

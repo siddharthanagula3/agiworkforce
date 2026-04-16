@@ -50,7 +50,9 @@ impl ConfiguredHandler {
         match self.event_name {
             agiworkforce_protocol::protocol::HookEventName::PreToolUse => "pre-tool-use",
             agiworkforce_protocol::protocol::HookEventName::SessionStart => "session-start",
-            agiworkforce_protocol::protocol::HookEventName::UserPromptSubmit => "user-prompt-submit",
+            agiworkforce_protocol::protocol::HookEventName::UserPromptSubmit => {
+                "user-prompt-submit"
+            }
             agiworkforce_protocol::protocol::HookEventName::Stop => "stop",
         }
     }

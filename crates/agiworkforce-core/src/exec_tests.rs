@@ -543,7 +543,8 @@ fn windows_elevated_sandbox_allows_restricted_read_only_policies() {
 
 #[test]
 fn process_exec_tool_call_uses_platform_sandbox_for_network_only_restrictions() {
-    let expected = agiworkforce_sandboxing::get_platform_sandbox(false).unwrap_or(SandboxType::None);
+    let expected =
+        agiworkforce_sandboxing::get_platform_sandbox(false).unwrap_or(SandboxType::None);
 
     assert_eq!(
         select_process_exec_tool_sandbox_type(

@@ -56,11 +56,14 @@ impl JsRuntime {
 
 /// Returns `true` when artifact execution can find both runtime assets and a JS executable.
 pub fn is_js_runtime_available(agiworkforce_home: &Path, runtime_version: &str) -> bool {
-    load_cached_runtime(&default_cached_runtime_root(agiworkforce_home), runtime_version)
-        .ok()
-        .and_then(|runtime| runtime.resolve_js_runtime().ok())
-        .or_else(resolve_machine_js_runtime)
-        .is_some()
+    load_cached_runtime(
+        &default_cached_runtime_root(agiworkforce_home),
+        runtime_version,
+    )
+    .ok()
+    .and_then(|runtime| runtime.resolve_js_runtime().ok())
+    .or_else(resolve_machine_js_runtime)
+    .is_some()
 }
 
 /// Returns `true` when this machine can use the managed artifact runtime flow.

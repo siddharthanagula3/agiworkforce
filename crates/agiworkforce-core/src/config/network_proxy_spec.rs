@@ -1,5 +1,4 @@
 use crate::config_loader::NetworkConstraints;
-use async_trait::async_trait;
 use agiworkforce_execpolicy::Policy;
 use agiworkforce_network_proxy::BlockedRequestObserver;
 use agiworkforce_network_proxy::ConfigReloader;
@@ -17,6 +16,7 @@ use agiworkforce_network_proxy::host_and_port_from_network_addr;
 use agiworkforce_network_proxy::normalize_host;
 use agiworkforce_network_proxy::validate_policy_against_constraints;
 use agiworkforce_protocol::protocol::SandboxPolicy;
+use async_trait::async_trait;
 use std::collections::HashSet;
 use std::sync::Arc;
 

@@ -1,9 +1,9 @@
 use super::cache::ModelsCacheManager;
 use crate::api_bridge::auth_provider_from_auth;
 use crate::api_bridge::map_api_error;
+use crate::auth::AgiWorkforceAuth;
 use crate::auth::AuthManager;
 use crate::auth::AuthMode;
-use crate::auth::AgiWorkforceAuth;
 use crate::auth_env_telemetry::AuthEnvTelemetry;
 use crate::auth_env_telemetry::collect_auth_env_telemetry;
 use crate::config::Config;
@@ -429,8 +429,10 @@ impl ModelsManager {
     }
 
     async fn fetch_and_update_models(&self) -> CoreResult<()> {
-        let _timer =
-            agiworkforce_otel::start_global_timer("codex.remote_models.fetch_update.duration_ms", &[]);
+        let _timer = agiworkforce_otel::start_global_timer(
+            "codex.remote_models.fetch_update.duration_ms",
+            &[],
+        );
         let auth = self.auth_manager.auth().await;
         let auth_mode = auth.as_ref().map(AgiWorkforceAuth::auth_mode);
         let api_provider = self.provider.to_api_provider(auth_mode)?;
@@ -494,8 +496,10 @@ impl ModelsManager {
 
     /// Attempt to satisfy the refresh from the cache when it matches the provider and TTL.
     async fn try_load_cache(&self) -> bool {
-        let _timer =
-            agiworkforce_otel::start_global_timer("codex.remote_models.load_cache.duration_ms", &[]);
+        let _timer = agiworkforce_otel::start_global_timer(
+            "codex.remote_models.load_cache.duration_ms",
+            &[],
+        );
         let client_version = crate::models_manager::client_version_to_whole();
         info!(client_version, "models cache: evaluating cache eligibility");
         let cache = match self.cache_manager.load_fresh(&client_version).await {

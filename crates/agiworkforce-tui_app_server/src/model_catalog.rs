@@ -7,9 +7,9 @@ use agiworkforce_protocol::openai_models::ReasoningEffort;
 use std::convert::Infallible;
 
 const COLLABORATION_MODE_PLAN: &str =
-    include_str!("../../core/templates/collaboration_mode/plan.md");
+    include_str!("../../agiworkforce-core/templates/collaboration_mode/plan.md");
 const COLLABORATION_MODE_DEFAULT: &str =
-    include_str!("../../core/templates/collaboration_mode/default.md");
+    include_str!("../../agiworkforce-core/templates/collaboration_mode/default.md");
 const KNOWN_MODE_NAMES_PLACEHOLDER: &str = "{{KNOWN_MODE_NAMES}}";
 const REQUEST_USER_INPUT_AVAILABILITY_PLACEHOLDER: &str = "{{REQUEST_USER_INPUT_AVAILABILITY}}";
 const ASKING_QUESTIONS_GUIDANCE_PLACEHOLDER: &str = "{{ASKING_QUESTIONS_GUIDANCE}}";

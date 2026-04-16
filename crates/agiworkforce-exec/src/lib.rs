@@ -10,9 +10,6 @@ mod event_processor_with_human_output;
 pub mod event_processor_with_jsonl_output;
 pub mod exec_events;
 
-pub use cli::Cli;
-pub use cli::Command;
-pub use cli::ReviewArgs;
 use agiworkforce_app_server_client::DEFAULT_IN_PROCESS_CHANNEL_CAPACITY;
 use agiworkforce_app_server_client::InProcessAppServerClient;
 use agiworkforce_app_server_client::InProcessClientStartArgs;
@@ -82,6 +79,9 @@ use agiworkforce_protocol::user_input::UserInput;
 use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use agiworkforce_utils_oss::ensure_oss_provider_ready;
 use agiworkforce_utils_oss::get_default_model_for_oss_provider;
+pub use cli::Cli;
+pub use cli::Command;
+pub use cli::ReviewArgs;
 use event_processor_with_human_output::EventProcessorWithHumanOutput;
 use event_processor_with_jsonl_output::EventProcessorWithJsonOutput;
 use serde_json::Value;
@@ -578,7 +578,8 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
     let (initial_operation, prompt_summary) = match (command.as_ref(), prompt, images) {
         (Some(ExecCommand::Review(review_cli)), _, _) => {
             let review_request = build_review_request(review_cli)?;
-            let summary = agiworkforce_core::review_prompts::user_facing_hint(&review_request.target);
+            let summary =
+                agiworkforce_core::review_prompts::user_facing_hint(&review_request.target);
             (InitialOperation::Review { review_request }, summary)
         }
         (Some(ExecCommand::Resume(args)), root_prompt, imgs) => {
@@ -1959,7 +1960,8 @@ mod tests {
             service_tier: None,
             cwd: PathBuf::from("/tmp"),
             approval_policy: agiworkforce_app_server_protocol::AskForApproval::OnRequest,
-            approvals_reviewer: agiworkforce_app_server_protocol::ApprovalsReviewer::GuardianSubagent,
+            approvals_reviewer:
+                agiworkforce_app_server_protocol::ApprovalsReviewer::GuardianSubagent,
             sandbox: agiworkforce_app_server_protocol::SandboxPolicy::WorkspaceWrite {
                 writable_roots: vec![],
                 read_only_access: agiworkforce_app_server_protocol::ReadOnlyAccess::FullAccess,

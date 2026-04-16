@@ -1,7 +1,7 @@
-use async_trait::async_trait;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::models::ShellCommandToolCallParams;
 use agiworkforce_protocol::models::ShellToolCallParams;
+use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::codex::TurnContext;

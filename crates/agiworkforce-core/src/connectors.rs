@@ -9,21 +9,21 @@ use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 use std::time::Instant;
 
-use anyhow::Context;
-use async_channel::unbounded;
 pub use agiworkforce_app_server_protocol::AppBranding;
 pub use agiworkforce_app_server_protocol::AppInfo;
 pub use agiworkforce_app_server_protocol::AppMetadata;
 use agiworkforce_connectors::AllConnectorsCacheKey;
 use agiworkforce_connectors::DirectoryListResponse;
 use agiworkforce_protocol::protocol::SandboxPolicy;
+use anyhow::Context;
+use async_channel::unbounded;
 use rmcp::model::ToolAnnotations;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use tracing::warn;
 
-use crate::AuthManager;
 use crate::AgiWorkforceAuth;
+use crate::AuthManager;
 use crate::SandboxState;
 use crate::config::Config;
 use crate::config::types::AppToolApproval;
@@ -191,7 +191,9 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_options_and_status(
         });
     }
     let cache_key = accessible_connectors_cache_key(config, auth.as_ref());
-    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(config.agiworkforce_home.clone())));
+    let mcp_manager = McpManager::new(Arc::new(PluginsManager::new(
+        config.agiworkforce_home.clone(),
+    )));
     let tool_plugin_provenance = mcp_manager.tool_plugin_provenance(config);
     if !force_refetch && let Some(cached_connectors) = read_cached_accessible_connectors(&cache_key)
     {

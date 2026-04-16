@@ -292,7 +292,9 @@ fn format_config_layer_source(source: &ConfigLayerSource) -> String {
         ConfigLayerSource::User { file } => {
             format!("user ({})", file.as_path().display())
         }
-        ConfigLayerSource::Project { dot_agiworkforce_folder } => {
+        ConfigLayerSource::Project {
+            dot_agiworkforce_folder,
+        } => {
             format!(
                 "project ({}/config.toml)",
                 dot_agiworkforce_folder.as_path().display()

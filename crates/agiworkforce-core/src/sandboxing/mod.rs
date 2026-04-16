@@ -79,7 +79,10 @@ impl ExecRequest {
         }
         #[cfg(target_os = "macos")]
         if sandbox == SandboxType::MacosSeatbelt {
-            env.insert(AGIWORKFORCE_SANDBOX_ENV_VAR.to_string(), "seatbelt".to_string());
+            env.insert(
+                AGIWORKFORCE_SANDBOX_ENV_VAR.to_string(),
+                "seatbelt".to_string(),
+            );
         }
         Self {
             command,
