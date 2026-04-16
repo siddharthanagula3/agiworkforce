@@ -307,8 +307,9 @@ enabled = false
     let mut config = crate::plugins::test_support::load_plugins_config(tmp.path()).await;
     config.chatgpt_base_url = format!("{}/backend-api/", server.uri());
     let manager = Arc::new(PluginsManager::new(tmp.path().to_path_buf()));
-    let auth_manager =
-        AuthManager::from_auth_for_testing(AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
 
     start_startup_remote_plugin_sync_once(
         Arc::clone(&manager),

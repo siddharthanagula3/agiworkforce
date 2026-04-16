@@ -17,7 +17,8 @@
 use std::process;
 
 fn main() {
-    match agiworkforce_client::build_reqwest_client_for_subprocess_tests(reqwest::Client::builder()) {
+    match agiworkforce_client::build_reqwest_client_for_subprocess_tests(reqwest::Client::builder())
+    {
         Ok(_) => {
             println!("ok");
         }

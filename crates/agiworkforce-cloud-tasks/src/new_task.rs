@@ -1,4 +1,4 @@
-use agiworkforce_tui::ComposerInput;
+use crate::agiworkforce_tui::ComposerInput;
 
 pub struct NewTaskPage {
     pub composer: ComposerInput,

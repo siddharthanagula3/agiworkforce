@@ -1,6 +1,6 @@
-use async_trait::async_trait;
 use agiworkforce_protocol::request_permissions::RequestPermissionsArgs;
 use agiworkforce_sandboxing::policy_transforms::normalize_additional_permissions;
+use async_trait::async_trait;
 
 use crate::function_tool::FunctionCallError;
 use crate::tools::context::FunctionToolOutput;

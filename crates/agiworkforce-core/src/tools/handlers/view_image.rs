@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use agiworkforce_protocol::models::FunctionCallOutputBody;
 use agiworkforce_protocol::models::FunctionCallOutputContentItem;
 use agiworkforce_protocol::models::FunctionCallOutputPayload;
@@ -8,6 +7,7 @@ use agiworkforce_protocol::openai_models::InputModality;
 use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use agiworkforce_utils_image::PromptImageMode;
 use agiworkforce_utils_image::load_for_prompt_bytes;
+use async_trait::async_trait;
 use serde::Deserialize;
 
 use crate::function_tool::FunctionCallError;

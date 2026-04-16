@@ -23,9 +23,9 @@ use crate::unified_exec::ExecCommandRequest;
 use crate::unified_exec::UnifiedExecContext;
 use crate::unified_exec::UnifiedExecProcessManager;
 use crate::unified_exec::WriteStdinRequest;
-use async_trait::async_trait;
 use agiworkforce_features::Feature;
 use agiworkforce_protocol::models::PermissionProfile;
+use async_trait::async_trait;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -160,7 +160,8 @@ impl ToolHandler for UnifiedExecHandler {
                     turn.tools_config.allow_login_shell,
                 )
                 .map_err(FunctionCallError::RespondToModel)?;
-                let command_for_display = agiworkforce_shell_command::parse_command::shlex_join(&command);
+                let command_for_display =
+                    agiworkforce_shell_command::parse_command::shlex_join(&command);
 
                 let ExecCommandArgs {
                     workdir,

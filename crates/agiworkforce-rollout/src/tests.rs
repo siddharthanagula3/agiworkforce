@@ -27,7 +27,6 @@ use crate::list::ThreadsPage;
 use crate::list::get_threads;
 use crate::list::read_head_for_summary;
 use crate::rollout_date_parts;
-use anyhow::Result;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::models::ContentItem;
 use agiworkforce_protocol::models::ResponseItem;
@@ -38,6 +37,7 @@ use agiworkforce_protocol::protocol::SessionMeta;
 use agiworkforce_protocol::protocol::SessionMetaLine;
 use agiworkforce_protocol::protocol::SessionSource;
 use agiworkforce_protocol::protocol::UserMessageEvent;
+use anyhow::Result;
 
 const NO_SOURCE_FILTER: &[SessionSource] = &[];
 const TEST_PROVIDER: &str = "test-provider";
@@ -59,9 +59,10 @@ async fn insert_state_db_thread(
     rollout_path: &Path,
     archived: bool,
 ) {
-    let runtime = agiworkforce_state::StateRuntime::init(home.to_path_buf(), TEST_PROVIDER.to_string())
-        .await
-        .expect("state db should initialize");
+    let runtime =
+        agiworkforce_state::StateRuntime::init(home.to_path_buf(), TEST_PROVIDER.to_string())
+            .await
+            .expect("state db should initialize");
     runtime
         .mark_backfill_complete(None)
         .await
@@ -249,9 +250,10 @@ async fn find_thread_path_repairs_missing_db_row_after_filesystem_fallback() {
     let fs_rollout_path = home.join(format!("sessions/2025/01/03/rollout-{ts}-{uuid}.jsonl"));
 
     // Create an empty state DB so lookup takes the DB-first path and then falls back to files.
-    let _runtime = agiworkforce_state::StateRuntime::init(home.to_path_buf(), TEST_PROVIDER.to_string())
-        .await
-        .expect("state db should initialize");
+    let _runtime =
+        agiworkforce_state::StateRuntime::init(home.to_path_buf(), TEST_PROVIDER.to_string())
+            .await
+            .expect("state db should initialize");
     _runtime
         .mark_backfill_complete(None)
         .await
@@ -279,9 +281,10 @@ async fn assert_state_db_rollout_path(
     thread_id: ThreadId,
     expected_path: Option<&Path>,
 ) {
-    let runtime = agiworkforce_state::StateRuntime::init(home.to_path_buf(), TEST_PROVIDER.to_string())
-        .await
-        .expect("state db should initialize");
+    let runtime =
+        agiworkforce_state::StateRuntime::init(home.to_path_buf(), TEST_PROVIDER.to_string())
+            .await
+            .expect("state db should initialize");
     let path = runtime
         .find_rollout_path_by_id(thread_id, Some(false))
         .await

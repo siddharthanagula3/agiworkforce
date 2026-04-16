@@ -284,8 +284,9 @@ async fn new_uses_configured_openai_provider_for_model_refresh() {
         .expect("openai provider should exist")
         .base_url = Some(server.uri());
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let manager = ThreadManager::new(
         &config,
         auth_manager,
@@ -411,8 +412,9 @@ async fn interrupted_fork_snapshot_does_not_synthesize_turn_id_for_legacy_histor
     config.cwd = config.agiworkforce_home.clone();
     std::fs::create_dir_all(&config.agiworkforce_home).expect("create codex home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let manager = ThreadManager::new(
         &config,
         auth_manager.clone(),
@@ -508,8 +510,9 @@ async fn interrupted_fork_snapshot_preserves_explicit_turn_id() {
     config.cwd = config.agiworkforce_home.clone();
     std::fs::create_dir_all(&config.agiworkforce_home).expect("create codex home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let manager = ThreadManager::new(
         &config,
         auth_manager.clone(),
@@ -594,8 +597,9 @@ async fn interrupted_fork_snapshot_uses_persisted_mid_turn_history_without_live_
     config.cwd = config.agiworkforce_home.clone();
     std::fs::create_dir_all(&config.agiworkforce_home).expect("create codex home");
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let manager = ThreadManager::new(
         &config,
         auth_manager.clone(),

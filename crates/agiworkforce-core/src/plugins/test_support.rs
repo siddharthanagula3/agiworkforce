@@ -87,7 +87,10 @@ pub(crate) fn write_curated_plugin_sha(agiworkforce_home: &Path) {
 }
 
 pub(crate) fn write_curated_plugin_sha_with(agiworkforce_home: &Path, sha: &str) {
-    write_file(&agiworkforce_home.join(".tmp/plugins.sha"), &format!("{sha}\n"));
+    write_file(
+        &agiworkforce_home.join(".tmp/plugins.sha"),
+        &format!("{sha}\n"),
+    );
 }
 
 pub(crate) fn write_plugins_feature_config(agiworkforce_home: &Path) {

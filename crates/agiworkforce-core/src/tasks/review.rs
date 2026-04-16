@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use agiworkforce_protocol::config_types::WebSearchMode;
 use agiworkforce_protocol::items::TurnItem;
 use agiworkforce_protocol::models::ContentItem;
@@ -14,6 +13,7 @@ use agiworkforce_protocol::protocol::ExitedReviewModeEvent;
 use agiworkforce_protocol::protocol::ItemCompletedEvent;
 use agiworkforce_protocol::protocol::ReviewOutputEvent;
 use agiworkforce_protocol::protocol::SubAgentSource;
+use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
 use crate::codex::Session;

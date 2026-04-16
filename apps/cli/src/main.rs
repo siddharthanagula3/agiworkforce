@@ -477,19 +477,27 @@ fn load_legacy_session_messages(reference: &str) -> Result<Vec<crate::models::Me
     if matches!(reference, "latest" | "@latest" | "last") {
         return latest_legacy_session_messages()?
             .map(|(_, messages)| messages)
-            .ok_or_else(|| anyhow::anyhow!("No legacy sessions found"));
+            .ok_or_else(|| anyhow::anyhow!("No legacy JSON conversations found"));
     }
 
-    let conn = sessions::open_db()?;
-    sessions::load_session(&conn, reference)
+    let conversation = conversations::load_conversation(reference)?;
+    Ok(conversation
+        .messages
+        .into_iter()
+        .map(|message| crate::models::Message::text(&message.role, message.content))
+        .collect())
 }
 
 fn latest_legacy_session_messages() -> Result<Option<(String, Vec<crate::models::Message>)>> {
-    let conn = sessions::open_db()?;
-    let Some(summary) = sessions::list_sessions(&conn, 1)?.into_iter().next() else {
+    let Some(summary) = conversations::list_conversations()?.into_iter().next() else {
         return Ok(None);
     };
-    let messages = sessions::load_session(&conn, &summary.id)?;
+    let conversation = conversations::load_conversation(&summary.id)?;
+    let messages = conversation
+        .messages
+        .into_iter()
+        .map(|message| crate::models::Message::text(&message.role, message.content))
+        .collect();
     Ok(Some((summary.id, messages)))
 }
 
@@ -504,7 +512,7 @@ fn resolve_resume_payload(reference: &str, fork: bool) -> Result<ResumePayload> 
         Ok(resolved) => managed_resume_payload_from_resolved(resolved),
         Err(managed_error) => load_legacy_session_messages(reference).with_context(|| {
             format!(
-                "Managed session resolution failed ({managed_error:#}); legacy session fallback also failed"
+                "Managed session resolution failed ({managed_error:#}); legacy JSON conversation fallback also failed"
             )
         }).map(|messages| (messages, None)),
     }

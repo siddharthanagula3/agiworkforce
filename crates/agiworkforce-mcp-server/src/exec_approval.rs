@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use agiworkforce_core::AgiWorkforceThread;
+use agiworkforce_core::CodexThread;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::parse_command::ParsedCommand;
 use agiworkforce_protocol::protocol::Op;
@@ -52,7 +52,7 @@ pub(crate) async fn handle_exec_approval_request(
     command: Vec<String>,
     cwd: PathBuf,
     outgoing: Arc<crate::outgoing_message::OutgoingMessageSender>,
-    codex: Arc<AgiWorkforceThread>,
+    codex: Arc<CodexThread>,
     request_id: RequestId,
     tool_call_id: String,
     event_id: String,
@@ -113,7 +113,7 @@ async fn on_exec_approval_response(
     approval_id: String,
     event_id: String,
     receiver: tokio::sync::oneshot::Receiver<serde_json::Value>,
-    codex: Arc<AgiWorkforceThread>,
+    codex: Arc<CodexThread>,
 ) {
     let response = receiver.await;
     let value = match response {

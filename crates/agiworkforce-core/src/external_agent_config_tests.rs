@@ -9,7 +9,10 @@ fn fixture_paths() -> (TempDir, PathBuf, PathBuf) {
     (root, claude_home, agiworkforce_home)
 }
 
-fn service_for_paths(claude_home: PathBuf, agiworkforce_home: PathBuf) -> ExternalAgentConfigService {
+fn service_for_paths(
+    claude_home: PathBuf,
+    agiworkforce_home: PathBuf,
+) -> ExternalAgentConfigService {
     ExternalAgentConfigService::new_for_test(agiworkforce_home, claude_home)
 }
 

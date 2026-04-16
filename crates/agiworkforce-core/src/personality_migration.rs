@@ -63,7 +63,10 @@ pub async fn maybe_migrate_personality(
     Ok(PersonalityMigrationStatus::Applied)
 }
 
-async fn has_recorded_sessions(agiworkforce_home: &Path, default_provider: &str) -> io::Result<bool> {
+async fn has_recorded_sessions(
+    agiworkforce_home: &Path,
+    default_provider: &str,
+) -> io::Result<bool> {
     let allowed_sources: &[SessionSource] = &[];
 
     if let Some(state_db_ctx) = state_db::open_if_present(agiworkforce_home, default_provider).await

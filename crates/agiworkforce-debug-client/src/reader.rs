@@ -7,7 +7,6 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use std::thread::JoinHandle;
 
-use anyhow::Context;
 use agiworkforce_app_server_protocol::CommandExecutionApprovalDecision;
 use agiworkforce_app_server_protocol::CommandExecutionRequestApprovalResponse;
 use agiworkforce_app_server_protocol::FileChangeApprovalDecision;
@@ -22,6 +21,7 @@ use agiworkforce_app_server_protocol::ThreadItem;
 use agiworkforce_app_server_protocol::ThreadListResponse;
 use agiworkforce_app_server_protocol::ThreadResumeResponse;
 use agiworkforce_app_server_protocol::ThreadStartResponse;
+use anyhow::Context;
 use serde::Serialize;
 use std::io::Write;
 

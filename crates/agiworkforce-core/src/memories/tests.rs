@@ -6,10 +6,10 @@ use crate::memories::ensure_layout;
 use crate::memories::memory_root;
 use crate::memories::raw_memories_file;
 use crate::memories::rollout_summaries_dir;
-use chrono::TimeZone;
-use chrono::Utc;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_state::Stage1Output;
+use chrono::TimeZone;
+use chrono::Utc;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -19,7 +19,10 @@ use tempfile::tempdir;
 fn memory_root_uses_shared_global_path() {
     let dir = tempdir().expect("tempdir");
     let agiworkforce_home = dir.path().join("codex");
-    assert_eq!(memory_root(&agiworkforce_home), agiworkforce_home.join("memories"));
+    assert_eq!(
+        memory_root(&agiworkforce_home),
+        agiworkforce_home.join("memories")
+    );
 }
 
 #[test]
@@ -425,7 +428,6 @@ mod phase2 {
     use crate::memories::phase2;
     use crate::memories::raw_memories_file;
     use crate::memories::rollout_summaries_dir;
-    use chrono::Utc;
     use agiworkforce_config::Constrained;
     use agiworkforce_protocol::ThreadId;
     use agiworkforce_protocol::protocol::AskForApproval;
@@ -435,6 +437,7 @@ mod phase2 {
     use agiworkforce_state::Phase2JobClaimOutcome;
     use agiworkforce_state::Stage1Output;
     use agiworkforce_state::ThreadMetadataBuilder;
+    use chrono::Utc;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
@@ -528,7 +531,9 @@ mod phase2 {
                 .await
                 .expect("claim stage-1 job");
             let ownership_token = match claim {
-                agiworkforce_state::Stage1JobClaimOutcome::Claimed { ownership_token } => ownership_token,
+                agiworkforce_state::Stage1JobClaimOutcome::Claimed { ownership_token } => {
+                    ownership_token
+                }
                 other => panic!("unexpected stage-1 claim outcome: {other:?}"),
             };
             assert!(
@@ -672,7 +677,10 @@ mod phase2 {
             .expect("get consolidation thread");
         let config_snapshot = subagent.config_snapshot().await;
         pretty_assertions::assert_eq!(config_snapshot.approval_policy, AskForApproval::Never);
-        pretty_assertions::assert_eq!(config_snapshot.cwd, memory_root(&harness.config.agiworkforce_home));
+        pretty_assertions::assert_eq!(
+            config_snapshot.cwd,
+            memory_root(&harness.config.agiworkforce_home)
+        );
         match config_snapshot.sandbox_policy {
             SandboxPolicy::WorkspaceWrite { writable_roots, .. } => {
                 assert!(
@@ -900,7 +908,9 @@ mod phase2 {
         let thread_id = ThreadId::new();
         let mut metadata_builder = ThreadMetadataBuilder::new(
             thread_id,
-            config.agiworkforce_home.join(format!("rollout-{thread_id}.jsonl")),
+            config
+                .agiworkforce_home
+                .join(format!("rollout-{thread_id}.jsonl")),
             Utc::now(),
             SessionSource::Cli,
         );
@@ -917,7 +927,9 @@ mod phase2 {
             .await
             .expect("claim stage-1 job");
         let ownership_token = match claim {
-            agiworkforce_state::Stage1JobClaimOutcome::Claimed { ownership_token } => ownership_token,
+            agiworkforce_state::Stage1JobClaimOutcome::Claimed { ownership_token } => {
+                ownership_token
+            }
             other => panic!("unexpected stage-1 claim outcome: {other:?}"),
         };
         assert!(

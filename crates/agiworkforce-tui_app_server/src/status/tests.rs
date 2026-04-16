@@ -2,9 +2,6 @@ use super::new_status_output;
 use super::rate_limit_snapshot_display;
 use crate::history_cell::HistoryCell;
 use crate::status::StatusAccountDisplay;
-use chrono::Duration as ChronoDuration;
-use chrono::TimeZone;
-use chrono::Utc;
 use agiworkforce_core::config::Config;
 use agiworkforce_core::config::ConfigBuilder;
 use agiworkforce_protocol::ThreadId;
@@ -17,6 +14,9 @@ use agiworkforce_protocol::protocol::RateLimitWindow;
 use agiworkforce_protocol::protocol::SandboxPolicy;
 use agiworkforce_protocol::protocol::TokenUsage;
 use agiworkforce_protocol::protocol::TokenUsageInfo;
+use chrono::Duration as ChronoDuration;
+use chrono::TimeZone;
+use chrono::Utc;
 use insta::assert_snapshot;
 use pretty_assertions::assert_eq;
 use ratatui::prelude::*;
@@ -37,7 +37,8 @@ fn test_status_account_display() -> Option<StatusAccountDisplay> {
 
 fn token_info_for(model_slug: &str, config: &Config, usage: &TokenUsage) -> TokenUsageInfo {
     let context_window =
-        agiworkforce_core::test_support::construct_model_info_offline(model_slug, config).context_window;
+        agiworkforce_core::test_support::construct_model_info_offline(model_slug, config)
+            .context_window;
     TokenUsageInfo {
         total_token_usage: usage.clone(),
         last_token_usage: usage.clone(),

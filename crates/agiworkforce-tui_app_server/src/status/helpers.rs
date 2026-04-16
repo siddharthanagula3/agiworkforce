@@ -1,10 +1,10 @@
 use crate::exec_command::relativize_to_home;
 use crate::status::StatusAccountDisplay;
 use crate::text_formatting;
-use chrono::DateTime;
-use chrono::Local;
 use agiworkforce_core::config::Config;
 use agiworkforce_core::project_doc::discover_project_doc_paths;
+use chrono::DateTime;
+use chrono::Local;
 use std::path::Path;
 use unicode_width::UnicodeWidthStr;
 

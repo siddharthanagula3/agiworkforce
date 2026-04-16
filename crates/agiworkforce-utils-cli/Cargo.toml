@@ -12,7 +12,7 @@ agiworkforce-protocol = { path = "../agiworkforce-protocol" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
+toml = "0.9.5"
 
 [dev-dependencies]
 pretty_assertions = "1"

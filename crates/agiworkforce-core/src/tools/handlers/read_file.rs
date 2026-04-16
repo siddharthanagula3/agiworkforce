@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
-use async_trait::async_trait;
 use agiworkforce_utils_string::take_bytes_at_char_boundary;
+use async_trait::async_trait;
 use serde::Deserialize;
 
 use crate::function_tool::FunctionCallError;

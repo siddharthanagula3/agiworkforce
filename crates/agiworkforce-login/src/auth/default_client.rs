@@ -4,9 +4,9 @@
 //! Use [`crate::default_client`] or [`agiworkforce_login::default_client`] from other crates in this
 //! workspace.
 
-use agiworkforce_client::BuildCustomCaTransportError;
 use agiworkforce_client::AgiWorkforceHttpClient;
 pub use agiworkforce_client::AgiWorkforceRequestBuilder;
+use agiworkforce_client::BuildCustomCaTransportError;
 use agiworkforce_client::build_reqwest_client_with_custom_ca;
 use agiworkforce_terminal_detection::user_agent;
 use reqwest::header::HeaderMap;
@@ -32,7 +32,8 @@ use std::sync::RwLock;
 /// Parenthesis will be added by Codex. This should only specify what goes inside of the parenthesis.
 pub static USER_AGENT_SUFFIX: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 pub const DEFAULT_ORIGINATOR: &str = "agiworkforce_cli_rs";
-pub const AGIWORKFORCE_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR: &str = "AGIWORKFORCE_INTERNAL_ORIGINATOR_OVERRIDE";
+pub const AGIWORKFORCE_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR: &str =
+    "AGIWORKFORCE_INTERNAL_ORIGINATOR_OVERRIDE";
 pub const RESIDENCY_HEADER_NAME: &str = "x-openai-internal-codex-residency";
 
 pub use agiworkforce_config::ResidencyRequirement;

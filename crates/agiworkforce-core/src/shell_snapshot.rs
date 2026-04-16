@@ -10,12 +10,12 @@ use crate::rollout::list::find_thread_path_by_id_str;
 use crate::shell::Shell;
 use crate::shell::ShellType;
 use crate::shell::get_shell;
+use agiworkforce_otel::SessionTelemetry;
+use agiworkforce_protocol::ThreadId;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
 use anyhow::bail;
-use agiworkforce_otel::SessionTelemetry;
-use agiworkforce_protocol::ThreadId;
 use tokio::fs;
 use tokio::process::Command;
 use tokio::sync::watch;
@@ -135,7 +135,8 @@ impl ShellSnapshot {
         let agiworkforce_home = agiworkforce_home.to_path_buf();
         let cleanup_session_id = session_id;
         tokio::spawn(async move {
-            if let Err(err) = cleanup_stale_snapshots(&agiworkforce_home, cleanup_session_id).await {
+            if let Err(err) = cleanup_stale_snapshots(&agiworkforce_home, cleanup_session_id).await
+            {
                 tracing::warn!("Failed to clean up shell snapshots: {err:?}");
             }
         });
@@ -489,7 +490,10 @@ $envVars | ForEach-Object {
 /// Removes shell snapshots that either lack a matching session rollout file or
 /// whose rollouts have not been updated within the retention window.
 /// The active session id is exempt from cleanup.
-pub async fn cleanup_stale_snapshots(agiworkforce_home: &Path, active_session_id: ThreadId) -> Result<()> {
+pub async fn cleanup_stale_snapshots(
+    agiworkforce_home: &Path,
+    active_session_id: ThreadId,
+) -> Result<()> {
     let snapshot_dir = agiworkforce_home.join(SNAPSHOT_DIR);
 
     let mut entries = match fs::read_dir(&snapshot_dir).await {

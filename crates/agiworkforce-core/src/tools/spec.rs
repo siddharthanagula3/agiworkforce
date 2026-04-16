@@ -394,8 +394,8 @@ impl ToolsConfig {
             && features.enabled(Feature::Apps)
             && features.enabled(Feature::Plugins);
         let include_original_image_detail = can_request_original_image_detail(features, model_info);
-        let include_artifact_tools =
-            features.enabled(Feature::Artifact) && agiworkforce_artifacts::can_manage_artifact_runtime();
+        let include_artifact_tools = features.enabled(Feature::Artifact)
+            && agiworkforce_artifacts::can_manage_artifact_runtime();
         let include_image_gen_tool =
             features.enabled(Feature::ImageGeneration) && supports_image_generation(model_info);
         let exec_permission_approvals_enabled = features.enabled(Feature::ExecPermissionApprovals);
@@ -2822,7 +2822,8 @@ pub(crate) fn build_specs_with_discoverable_tools(
                     ToolSpec::Freeform(tool) => (tool.name, tool.description),
                     _ => return None,
                 };
-                agiworkforce_code_mode::is_code_mode_nested_tool(&name).then_some((name, description))
+                agiworkforce_code_mode::is_code_mode_nested_tool(&name)
+                    .then_some((name, description))
             })
             .collect::<Vec<_>>();
         enabled_tools.sort_by(|left, right| left.0.cmp(&right.0));

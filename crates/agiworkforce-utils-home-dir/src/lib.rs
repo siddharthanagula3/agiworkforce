@@ -16,7 +16,9 @@ pub fn find_agiworkforce_home() -> std::io::Result<PathBuf> {
     find_agiworkforce_home_from_env(agiworkforce_home_env.as_deref())
 }
 
-fn find_agiworkforce_home_from_env(agiworkforce_home_env: Option<&str>) -> std::io::Result<PathBuf> {
+fn find_agiworkforce_home_from_env(
+    agiworkforce_home_env: Option<&str>,
+) -> std::io::Result<PathBuf> {
     // Honor the `AGIWORKFORCE_HOME` environment variable when it is set to allow users
     // (and tests) to override the default location.
     match agiworkforce_home_env {
@@ -36,7 +38,9 @@ fn find_agiworkforce_home_from_env(agiworkforce_home_env: Option<&str>) -> std::
             if !metadata.is_dir() {
                 Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
-                    format!("AGIWORKFORCE_HOME points to {val:?}, but that path is not a directory"),
+                    format!(
+                        "AGIWORKFORCE_HOME points to {val:?}, but that path is not a directory"
+                    ),
                 ))
             } else {
                 path.canonicalize().map_err(|err| {
@@ -77,7 +81,8 @@ mod tests {
             .to_str()
             .expect("missing codex home path should be valid utf-8");
 
-        let err = find_agiworkforce_home_from_env(Some(missing_str)).expect_err("missing AGIWORKFORCE_HOME");
+        let err = find_agiworkforce_home_from_env(Some(missing_str))
+            .expect_err("missing AGIWORKFORCE_HOME");
         assert_eq!(err.kind(), ErrorKind::NotFound);
         assert!(
             err.to_string().contains("AGIWORKFORCE_HOME"),
@@ -94,7 +99,8 @@ mod tests {
             .to_str()
             .expect("file codex home path should be valid utf-8");
 
-        let err = find_agiworkforce_home_from_env(Some(file_str)).expect_err("file AGIWORKFORCE_HOME");
+        let err =
+            find_agiworkforce_home_from_env(Some(file_str)).expect_err("file AGIWORKFORCE_HOME");
         assert_eq!(err.kind(), ErrorKind::InvalidInput);
         assert!(
             err.to_string().contains("not a directory"),
@@ -110,7 +116,8 @@ mod tests {
             .to_str()
             .expect("temp codex home path should be valid utf-8");
 
-        let resolved = find_agiworkforce_home_from_env(Some(temp_str)).expect("valid AGIWORKFORCE_HOME");
+        let resolved =
+            find_agiworkforce_home_from_env(Some(temp_str)).expect("valid AGIWORKFORCE_HOME");
         let expected = temp_home
             .path()
             .canonicalize()

@@ -49,8 +49,8 @@ use crate::version::AGIWORKFORCE_CLI_VERSION;
 use agiworkforce_ansi_escape::ansi_escape_line;
 use agiworkforce_app_server_client::AppServerRequestHandle;
 use agiworkforce_app_server_client::TypedRequestError;
-use agiworkforce_app_server_protocol::ClientRequest;
 use agiworkforce_app_server_protocol::AgiWorkforceErrorInfo as AppServerAgiWorkforceErrorInfo;
+use agiworkforce_app_server_protocol::ClientRequest;
 use agiworkforce_app_server_protocol::ConfigLayerSource;
 use agiworkforce_app_server_protocol::ListMcpServerStatusParams;
 use agiworkforce_app_server_protocol::ListMcpServerStatusResponse;
@@ -81,7 +81,7 @@ use agiworkforce_core::config::types::ModelAvailabilityNuxConfig;
 use agiworkforce_core::config_loader::ConfigLayerStackOrdering;
 use agiworkforce_core::message_history;
 use agiworkforce_core::models_manager::collaboration_mode_presets::CollaborationModesConfig;
-use agiworkforce_core::models_manager::model_presets::HIDE_GPT_5_1_AGIWORKFORCE_MAX_MIGRATION_PROMPT_CONFIG;
+use agiworkforce_core::models_manager::model_presets::HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG;
 use agiworkforce_core::models_manager::model_presets::HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG;
 #[cfg(target_os = "windows")]
 use agiworkforce_core::windows_sandbox::WindowsSandboxLevelExt;
@@ -336,13 +336,15 @@ fn list_skills_response_to_core(response: SkillsListResponse) -> ListSkillsRespo
                                 tools: dependencies
                                     .tools
                                     .into_iter()
-                                    .map(|tool| agiworkforce_protocol::protocol::SkillToolDependency {
-                                        r#type: tool.r#type,
-                                        value: tool.value,
-                                        description: tool.description,
-                                        transport: tool.transport,
-                                        command: tool.command,
-                                        url: tool.url,
+                                    .map(|tool| {
+                                        agiworkforce_protocol::protocol::SkillToolDependency {
+                                            r#type: tool.r#type,
+                                            value: tool.value,
+                                            description: tool.description,
+                                            transport: tool.transport,
+                                            command: tool.command,
+                                            url: tool.url,
+                                        }
                                     })
                                     .collect(),
                             }
@@ -406,7 +408,10 @@ fn emit_project_config_warnings(app_event_tx: &AppEventSender, config: &Config) 
         ConfigLayerStackOrdering::LowestPrecedenceFirst,
         /*include_disabled*/ true,
     ) {
-        let ConfigLayerSource::Project { dot_agiworkforce_folder } = &layer.name else {
+        let ConfigLayerSource::Project {
+            dot_agiworkforce_folder,
+        } = &layer.name
+        else {
             continue;
         };
         if layer.disabled_reason.is_none() {
@@ -695,9 +700,9 @@ fn should_show_model_migration_prompt(
 
 fn migration_prompt_hidden(config: &Config, migration_config_key: &str) -> bool {
     match migration_config_key {
-        HIDE_GPT_5_1_AGIWORKFORCE_MAX_MIGRATION_PROMPT_CONFIG => config
+        HIDE_GPT_5_1_CODEX_MAX_MIGRATION_PROMPT_CONFIG => config
             .notices
-            .hide_gpt_5_1_agiworkforce_max_migration_prompt
+            .hide_gpt_5_1_codex_max_migration_prompt
             .unwrap_or(false),
         HIDE_GPT5_1_MIGRATION_PROMPT_CONFIG => {
             config.notices.hide_gpt5_1_migration_prompt.unwrap_or(false)
@@ -1649,7 +1654,9 @@ impl App {
                     .map(|amendments| {
                         amendments
                             .into_iter()
-                            .map(agiworkforce_app_server_protocol::NetworkPolicyAmendment::into_core)
+                            .map(
+                                agiworkforce_app_server_protocol::NetworkPolicyAmendment::into_core,
+                            )
                             .collect::<Vec<_>>()
                     });
                 Some(ThreadInteractiveRequest::Approval(ApprovalRequest::Exec {
@@ -3822,8 +3829,9 @@ impl App {
 
                     // If the elevated setup already ran on this machine, don't prompt for
                     // elevation again - just flip the config to use the elevated path.
-                    if agiworkforce_core::windows_sandbox::sandbox_setup_is_complete(agiworkforce_home.as_path())
-                    {
+                    if agiworkforce_core::windows_sandbox::sandbox_setup_is_complete(
+                        agiworkforce_home.as_path(),
+                    ) {
                         tx.send(AppEvent::EnableWindowsSandboxForAgentMode {
                             preset,
                             mode: WindowsSandboxEnableMode::Elevated,
@@ -3908,13 +3916,15 @@ impl App {
 
                     self.chat_widget.show_windows_sandbox_setup_status();
                     tokio::task::spawn_blocking(move || {
-                        if let Err(err) = agiworkforce_core::windows_sandbox::run_legacy_setup_preflight(
-                            &policy,
-                            policy_cwd.as_path(),
-                            command_cwd.as_path(),
-                            &env_map,
-                            agiworkforce_home.as_path(),
-                        ) {
+                        if let Err(err) =
+                            agiworkforce_core::windows_sandbox::run_legacy_setup_preflight(
+                                &policy,
+                                policy_cwd.as_path(),
+                                command_cwd.as_path(),
+                                &env_map,
+                                agiworkforce_home.as_path(),
+                            )
+                        {
                             session_telemetry.counter(
                                 "codex.windows_sandbox.legacy_setup_preflight_failed",
                                 /*inc*/ 1,
@@ -4978,8 +4988,10 @@ impl App {
 
     fn restore_runtime_theme_from_config(&self) {
         if let Some(name) = self.config.tui_theme.as_deref()
-            && let Some(theme) =
-                crate::render::highlight::resolve_theme_by_name(name, Some(&self.config.agiworkforce_home))
+            && let Some(theme) = crate::render::highlight::resolve_theme_by_name(
+                name,
+                Some(&self.config.agiworkforce_home),
+            )
         {
             crate::render::highlight::set_syntax_theme(theme);
             return;
@@ -5359,9 +5371,15 @@ fn mcp_inventory_maps_from_statuses(statuses: Vec<McpServerStatus>) -> McpInvent
         auth_statuses.insert(
             server_name.clone(),
             match status.auth_status {
-                agiworkforce_app_server_protocol::McpAuthStatus::Unsupported => McpAuthStatus::Unsupported,
-                agiworkforce_app_server_protocol::McpAuthStatus::NotLoggedIn => McpAuthStatus::NotLoggedIn,
-                agiworkforce_app_server_protocol::McpAuthStatus::BearerToken => McpAuthStatus::BearerToken,
+                agiworkforce_app_server_protocol::McpAuthStatus::Unsupported => {
+                    McpAuthStatus::Unsupported
+                }
+                agiworkforce_app_server_protocol::McpAuthStatus::NotLoggedIn => {
+                    McpAuthStatus::NotLoggedIn
+                }
+                agiworkforce_app_server_protocol::McpAuthStatus::BearerToken => {
+                    McpAuthStatus::BearerToken
+                }
                 agiworkforce_app_server_protocol::McpAuthStatus::OAuth => McpAuthStatus::OAuth,
             },
         );
@@ -6673,7 +6691,8 @@ mod tests {
         let (mut app, mut app_event_rx, mut op_rx) = make_test_app_with_channels().await;
         let agiworkforce_home = tempdir()?;
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = "approvals_reviewer = \"guardian_subagent\"\napproval_policy = \"on-request\"\nsandbox_mode = \"workspace-write\"\n\n[features]\nguardian_approval = true\n";
         std::fs::write(config_toml_path.as_path(), config_toml)?;
         let user_config = toml::from_str::<TomlValue>(config_toml)?;
@@ -6765,7 +6784,8 @@ mod tests {
         let agiworkforce_home = tempdir()?;
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
         let guardian_approvals = guardian_approvals_mode();
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = "approvals_reviewer = \"user\"\n";
         std::fs::write(config_toml_path.as_path(), config_toml)?;
         let user_config = toml::from_str::<TomlValue>(config_toml)?;
@@ -6832,7 +6852,8 @@ mod tests {
         let (mut app, mut app_event_rx, mut op_rx) = make_test_app_with_channels().await;
         let agiworkforce_home = tempdir()?;
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = "approvals_reviewer = \"user\"\napproval_policy = \"on-request\"\nsandbox_mode = \"workspace-write\"\n\n[features]\nguardian_approval = true\n";
         std::fs::write(config_toml_path.as_path(), config_toml)?;
         let user_config = toml::from_str::<TomlValue>(config_toml)?;
@@ -6893,7 +6914,8 @@ mod tests {
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
         let guardian_approvals = guardian_approvals_mode();
         app.active_profile = Some("guardian".to_string());
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = "profile = \"guardian\"\napprovals_reviewer = \"user\"\n";
         std::fs::write(config_toml_path.as_path(), config_toml)?;
         let user_config = toml::from_str::<TomlValue>(config_toml)?;
@@ -6963,7 +6985,8 @@ mod tests {
         let agiworkforce_home = tempdir()?;
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
         app.active_profile = Some("guardian".to_string());
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = r#"
 profile = "guardian"
 approvals_reviewer = "user"
@@ -7051,7 +7074,8 @@ guardian_approval = true
         let agiworkforce_home = tempdir()?;
         app.config.agiworkforce_home = agiworkforce_home.path().to_path_buf();
         app.active_profile = Some("guardian".to_string());
-        let config_toml_path = AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
+        let config_toml_path =
+            AbsolutePathBuf::try_from(agiworkforce_home.path().join("config.toml"))?;
         let config_toml = "profile = \"guardian\"\napprovals_reviewer = \"guardian_subagent\"\n\n[features]\nguardian_approval = true\n";
         std::fs::write(config_toml_path.as_path(), config_toml)?;
         let user_config = toml::from_str::<TomlValue>(config_toml)?;
@@ -7281,10 +7305,12 @@ guardian_approval = true
                 agiworkforce_protocol::protocol::ReviewDecision::Approved,
                 agiworkforce_protocol::protocol::ReviewDecision::ApprovedForSession,
                 agiworkforce_protocol::protocol::ReviewDecision::NetworkPolicyAmendment {
-                    network_policy_amendment: agiworkforce_protocol::approvals::NetworkPolicyAmendment {
-                        host: "example.com".to_string(),
-                        action: agiworkforce_protocol::approvals::NetworkPolicyRuleAction::Allow,
-                    },
+                    network_policy_amendment:
+                        agiworkforce_protocol::approvals::NetworkPolicyAmendment {
+                            host: "example.com".to_string(),
+                            action:
+                                agiworkforce_protocol::approvals::NetworkPolicyRuleAction::Allow,
+                        },
                 },
                 agiworkforce_protocol::protocol::ReviewDecision::Abort,
             ]
@@ -8092,7 +8118,8 @@ guardian_approval = true
     }
 
     fn test_session_telemetry(config: &Config, model: &str) -> SessionTelemetry {
-        let model_info = agiworkforce_core::test_support::construct_model_info_offline(model, config);
+        let model_info =
+            agiworkforce_core::test_support::construct_model_info_offline(model, config);
         SessionTelemetry::new(
             ThreadId::new(),
             model,

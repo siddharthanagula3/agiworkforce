@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 
 // Workspace dependency fix: Vercel build will now resolve packages directory
@@ -7,9 +9,13 @@ import type { NextConfig } from 'next';
 // replacing 'unsafe-inline' in script-src for stronger inline-script protection.
 // See: apps/web/proxy.ts → buildCspWithNonce()
 
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(configDir, '../..');
+
 const nextConfig: NextConfig = {
   // Turbopack config (Next.js 16+ default bundler)
   turbopack: {
+    root: workspaceRoot,
     resolveAlias: {
       // @webcontainer/api is optional — stub to empty module
       '@webcontainer/api': {

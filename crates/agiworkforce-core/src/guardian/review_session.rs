@@ -6,7 +6,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use agiworkforce_protocol::config_types::Personality;
 use agiworkforce_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use agiworkforce_protocol::models::DeveloperInstructions;
@@ -19,6 +18,7 @@ use agiworkforce_protocol::protocol::Op;
 use agiworkforce_protocol::protocol::RolloutItem;
 use agiworkforce_protocol::protocol::SubAgentSource;
 use agiworkforce_protocol::user_input::UserInput;
+use anyhow::anyhow;
 use serde_json::Value;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;

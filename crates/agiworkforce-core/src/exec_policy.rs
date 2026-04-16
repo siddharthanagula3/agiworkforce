@@ -628,7 +628,9 @@ pub fn render_decision_for_unmatched_command(
 }
 
 fn default_policy_path(agiworkforce_home: &Path) -> PathBuf {
-    agiworkforce_home.join(RULES_DIR_NAME).join(DEFAULT_POLICY_FILE)
+    agiworkforce_home
+        .join(RULES_DIR_NAME)
+        .join(DEFAULT_POLICY_FILE)
 }
 
 fn commands_for_exec_policy(command: &[String]) -> (Vec<Vec<String>>, bool) {

@@ -1172,8 +1172,11 @@ mod tests {
         let tx = AppEventSender::new(tx_raw);
         let home = dirs::home_dir().expect("home directory should be available");
         let agiworkforce_home = home.join(".agiworkforce");
-        let params =
-            crate::theme_picker::build_theme_picker_params(None, Some(&agiworkforce_home), Some(94));
+        let params = crate::theme_picker::build_theme_picker_params(
+            None,
+            Some(&agiworkforce_home),
+            Some(94),
+        );
         let view = ListSelectionView::new(params, tx);
 
         let rendered = render_lines_in_area(&view, 94, 35);

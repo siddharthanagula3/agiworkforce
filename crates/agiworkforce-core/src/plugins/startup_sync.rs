@@ -75,7 +75,10 @@ fn sync_openai_plugins_repo_with_transport_overrides(
     }
 }
 
-fn sync_openai_plugins_repo_via_git(agiworkforce_home: &Path, git_binary: &str) -> Result<String, String> {
+fn sync_openai_plugins_repo_via_git(
+    agiworkforce_home: &Path,
+    git_binary: &str,
+) -> Result<String, String> {
     let repo_path = curated_plugins_repo_path(agiworkforce_home);
     let sha_path = agiworkforce_home.join(CURATED_PLUGINS_SHA_FILE);
     let remote_sha = git_ls_remote_head_sha(git_binary)?;

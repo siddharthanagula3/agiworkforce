@@ -1,15 +1,10 @@
 /**
- * useExtensionEvents.ts
- *
- * Shared browser extension event hook backed by a singleton store.
- * Multiple mounted surfaces read the same extension state without
- * registering duplicate Tauri listeners or auto-opening sidecars.
+ * Shared browser extension state hook backed by a singleton store.
+ * Listener initialization is owned by app startup, not component mounts.
  */
 
-import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import {
-  initializeExtensionEventListeners,
   useExtensionEventsStore,
   type ExtensionAgentStatus,
   type ExtensionEventState,
@@ -43,10 +38,6 @@ export function useExtensionEvents(): UseExtensionEventsReturn {
       resetState: store.resetState,
     })),
   );
-
-  useEffect(() => {
-    void initializeExtensionEventListeners();
-  }, []);
 
   return state;
 }

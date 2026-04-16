@@ -70,11 +70,11 @@ mod tests {
     use crate::common::RawMemory;
     use crate::common::RawMemoryMetadata;
     use crate::provider::RetryConfig;
-    use async_trait::async_trait;
     use agiworkforce_client::Request;
     use agiworkforce_client::Response;
     use agiworkforce_client::StreamResponse;
     use agiworkforce_client::TransportError;
+    use async_trait::async_trait;
     use http::HeaderMap;
     use http::Method;
     use http::StatusCode;

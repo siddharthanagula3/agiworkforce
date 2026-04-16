@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use agiworkforce_core::AgiWorkforceThread;
+use agiworkforce_core::CodexThread;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::protocol::FileChange;
 use agiworkforce_protocol::protocol::Op;
@@ -47,7 +47,7 @@ pub(crate) async fn handle_patch_approval_request(
     grant_root: Option<PathBuf>,
     changes: HashMap<PathBuf, FileChange>,
     outgoing: Arc<OutgoingMessageSender>,
-    codex: Arc<AgiWorkforceThread>,
+    codex: Arc<CodexThread>,
     request_id: RequestId,
     tool_call_id: String,
     event_id: String,
@@ -103,7 +103,7 @@ pub(crate) async fn handle_patch_approval_request(
 pub(crate) async fn on_patch_approval_response(
     approval_id: String,
     receiver: tokio::sync::oneshot::Receiver<serde_json::Value>,
-    codex: Arc<AgiWorkforceThread>,
+    codex: Arc<CodexThread>,
 ) {
     let response = receiver.await;
     let value = match response {

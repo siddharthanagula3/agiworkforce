@@ -22,7 +22,8 @@ fn blocking_set_model_top_level() {
     )
     .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"model = "gpt-5.1-codex"
 model_reasoning_effort = "high"
 "#;
@@ -42,7 +43,8 @@ fn builder_with_edits_applies_custom_paths() {
         .apply_blocking()
         .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     assert_eq!(contents, "enabled = true\n");
 }
 
@@ -57,7 +59,8 @@ fn set_model_availability_nux_count_writes_shown_count() {
         .apply_blocking()
         .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[tui.model_availability_nux]
 gpt-foo = 4
 "#;
@@ -77,7 +80,8 @@ fn set_skill_config_writes_disabled_entry() {
         .apply_blocking()
         .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[[skills.config]]
 path = "/tmp/skills/demo/SKILL.md"
 enabled = false
@@ -106,7 +110,8 @@ enabled = false
         .apply_blocking()
         .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     assert_eq!(contents, "");
 }
 
@@ -123,7 +128,8 @@ fn set_skill_config_writes_name_selector_entry() {
         .apply_blocking()
         .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[[skills.config]]
 name = "github:yeet"
 enabled = false
@@ -156,7 +162,8 @@ profiles = { fast = { model = "gpt-4o", sandbox_mode = "strict" } }
     )
     .expect("persist");
 
-    let raw = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let raw =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let value: TomlValue = toml::from_str(&raw).expect("parse config");
 
     // Ensure sandbox_mode is preserved under profiles.fast and model updated.
@@ -286,7 +293,8 @@ network_access = false
     )
     .expect("apply");
 
-    let updated = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let updated =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"approval_policy = "never"
 
 [mcp_servers.linear]
@@ -328,7 +336,8 @@ profiles = { fast = { model = "gpt-4o", sandbox_mode = "strict" } }
     )
     .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"profile = "fast"
 
 [profiles.fast]
@@ -362,7 +371,8 @@ model_reasoning_effort = "low"
     )
     .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"profile = "team"
 
 [profiles.team]
@@ -394,7 +404,8 @@ model = "gpt-5.1-codex"
     )
     .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[profiles."team a"]
 model = "o4-mini"
 "#;
@@ -423,7 +434,8 @@ existing = "value"
     )
     .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"# Global comment
 
 [notice]
@@ -453,7 +465,8 @@ existing = "value"
     )
     .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[notice]
 existing = "value"
 hide_rate_limit_model_nudge = true
@@ -482,7 +495,8 @@ existing = "value"
     )
     .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[notice]
 existing = "value"
 hide_gpt5_1_migration_prompt = true
@@ -511,7 +525,8 @@ existing = "value"
     )
     .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[notice]
 existing = "value"
 "hide_gpt-5.1-codex-max_migration_prompt" = true
@@ -540,7 +555,8 @@ existing = "value"
     )
     .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[notice]
 existing = "value"
 
@@ -617,7 +633,8 @@ fn blocking_replace_mcp_servers_round_trips() {
     )
     .expect("persist");
 
-    let raw = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let raw =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = "\
 [mcp_servers.http]
 url = \"https://example.com\"
@@ -679,9 +696,15 @@ foo = { command = "cmd" }
         },
     );
 
-    apply_blocking(agiworkforce_home, None, &[ConfigEdit::ReplaceMcpServers(servers)]).expect("persist");
+    apply_blocking(
+        agiworkforce_home,
+        None,
+        &[ConfigEdit::ReplaceMcpServers(servers)],
+    )
+    .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[mcp_servers]
 # keep me
 foo = { command = "cmd" }
@@ -724,9 +747,15 @@ foo = { command = "cmd" } # keep me
         },
     );
 
-    apply_blocking(agiworkforce_home, None, &[ConfigEdit::ReplaceMcpServers(servers)]).expect("persist");
+    apply_blocking(
+        agiworkforce_home,
+        None,
+        &[ConfigEdit::ReplaceMcpServers(servers)],
+    )
+    .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[mcp_servers]
 foo = { command = "cmd" , enabled = false } # keep me
 "#;
@@ -768,9 +797,15 @@ foo = { command = "cmd", args = ["--flag"] } # keep me
         },
     );
 
-    apply_blocking(agiworkforce_home, None, &[ConfigEdit::ReplaceMcpServers(servers)]).expect("persist");
+    apply_blocking(
+        agiworkforce_home,
+        None,
+        &[ConfigEdit::ReplaceMcpServers(servers)],
+    )
+    .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[mcp_servers]
 foo = { command = "cmd"} # keep me
 "#;
@@ -813,9 +848,15 @@ foo = { command = "cmd" }
         },
     );
 
-    apply_blocking(agiworkforce_home, None, &[ConfigEdit::ReplaceMcpServers(servers)]).expect("persist");
+    apply_blocking(
+        agiworkforce_home,
+        None,
+        &[ConfigEdit::ReplaceMcpServers(servers)],
+    )
+    .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"[mcp_servers]
 # keep me
 foo = { command = "cmd" , enabled = false }
@@ -859,7 +900,8 @@ fn blocking_set_path_updates_notifications() {
     )
     .expect("apply");
 
-    let raw = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let raw =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let config: TomlValue = toml::from_str(&raw).expect("parse config");
     let notifications = config
         .get("tui")
@@ -880,7 +922,8 @@ async fn async_builder_set_model_persists() {
         .await
         .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let expected = r#"model = "gpt-5.1-codex"
 model_reasoning_effort = "high"
 "#;
@@ -910,14 +953,16 @@ model_reasoning_effort = "high"
         .set_model(Some("gpt-5.1-codex"), Some(ReasoningEffort::High))
         .apply_blocking()
         .expect("persist update");
-    contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     assert_eq!(contents, updated_expected);
 
     ConfigEditsBuilder::new(agiworkforce_home)
         .set_model(Some("o4-mini"), Some(ReasoningEffort::Low))
         .apply_blocking()
         .expect("persist revert");
-    contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     assert_eq!(contents, initial_expected);
 }
 
@@ -932,7 +977,8 @@ async fn blocking_set_asynchronous_helpers_available() {
         .await
         .expect("persist");
 
-    let raw = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let raw =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let notice = toml::from_str::<TomlValue>(&raw)
         .expect("parse config")
         .get("notice")
@@ -953,7 +999,8 @@ fn blocking_builder_set_realtime_audio_persists_and_clears() {
         .apply_blocking()
         .expect("persist realtime audio");
 
-    let raw = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let raw =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let config: TomlValue = toml::from_str(&raw).expect("parse config");
     let realtime_audio = config
         .get("audio")
@@ -973,7 +1020,8 @@ fn blocking_builder_set_realtime_audio_persists_and_clears() {
         .apply_blocking()
         .expect("clear realtime microphone");
 
-    let raw = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let raw =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     let config: TomlValue = toml::from_str(&raw).expect("parse config");
     let realtime_audio = config
         .get("audio")
@@ -1003,6 +1051,7 @@ fn replace_mcp_servers_blocking_clears_table_when_empty() {
     )
     .expect("persist");
 
-    let contents = std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
+    let contents =
+        std::fs::read_to_string(agiworkforce_home.join(CONFIG_TOML_FILE)).expect("read config");
     assert!(!contents.contains("mcp_servers"));
 }
