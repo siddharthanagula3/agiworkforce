@@ -49,8 +49,8 @@ use agiworkforce_protocol::parse_command::ParsedCommand as CoreParsedCommand;
 use agiworkforce_protocol::plan_tool::PlanItemArg as CorePlanItemArg;
 use agiworkforce_protocol::plan_tool::StepStatus as CorePlanStepStatus;
 use agiworkforce_protocol::protocol::AgentStatus as CoreAgentStatus;
-use agiworkforce_protocol::protocol::AskForApproval as CoreAskForApproval;
 use agiworkforce_protocol::protocol::AgiWorkforceErrorInfo as CoreAgiWorkforceErrorInfo;
+use agiworkforce_protocol::protocol::AskForApproval as CoreAskForApproval;
 use agiworkforce_protocol::protocol::CreditsSnapshot as CoreCreditsSnapshot;
 use agiworkforce_protocol::protocol::ExecCommandSource as CoreExecCommandSource;
 use agiworkforce_protocol::protocol::ExecCommandStatus as CoreExecCommandStatus;
@@ -189,8 +189,12 @@ pub enum AgiWorkforceErrorInfo {
 impl From<CoreAgiWorkforceErrorInfo> for AgiWorkforceErrorInfo {
     fn from(value: CoreAgiWorkforceErrorInfo) -> Self {
         match value {
-            CoreAgiWorkforceErrorInfo::ContextWindowExceeded => AgiWorkforceErrorInfo::ContextWindowExceeded,
-            CoreAgiWorkforceErrorInfo::UsageLimitExceeded => AgiWorkforceErrorInfo::UsageLimitExceeded,
+            CoreAgiWorkforceErrorInfo::ContextWindowExceeded => {
+                AgiWorkforceErrorInfo::ContextWindowExceeded
+            }
+            CoreAgiWorkforceErrorInfo::UsageLimitExceeded => {
+                AgiWorkforceErrorInfo::UsageLimitExceeded
+            }
             CoreAgiWorkforceErrorInfo::ServerOverloaded => AgiWorkforceErrorInfo::ServerOverloaded,
             CoreAgiWorkforceErrorInfo::HttpConnectionFailed { http_status_code } => {
                 AgiWorkforceErrorInfo::HttpConnectionFailed { http_status_code }
@@ -198,10 +202,14 @@ impl From<CoreAgiWorkforceErrorInfo> for AgiWorkforceErrorInfo {
             CoreAgiWorkforceErrorInfo::ResponseStreamConnectionFailed { http_status_code } => {
                 AgiWorkforceErrorInfo::ResponseStreamConnectionFailed { http_status_code }
             }
-            CoreAgiWorkforceErrorInfo::InternalServerError => AgiWorkforceErrorInfo::InternalServerError,
+            CoreAgiWorkforceErrorInfo::InternalServerError => {
+                AgiWorkforceErrorInfo::InternalServerError
+            }
             CoreAgiWorkforceErrorInfo::Unauthorized => AgiWorkforceErrorInfo::Unauthorized,
             CoreAgiWorkforceErrorInfo::BadRequest => AgiWorkforceErrorInfo::BadRequest,
-            CoreAgiWorkforceErrorInfo::ThreadRollbackFailed => AgiWorkforceErrorInfo::ThreadRollbackFailed,
+            CoreAgiWorkforceErrorInfo::ThreadRollbackFailed => {
+                AgiWorkforceErrorInfo::ThreadRollbackFailed
+            }
             CoreAgiWorkforceErrorInfo::SandboxError => AgiWorkforceErrorInfo::SandboxError,
             CoreAgiWorkforceErrorInfo::ResponseStreamDisconnected { http_status_code } => {
                 AgiWorkforceErrorInfo::ResponseStreamDisconnected { http_status_code }

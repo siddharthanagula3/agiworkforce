@@ -906,12 +906,18 @@ fn command_execution_completed_event(turn_id: &str, item: &ThreadItem) -> Option
     }
 
     let status = match status {
-        agiworkforce_app_server_protocol::CommandExecutionStatus::InProgress => return Some(Vec::new()),
+        agiworkforce_app_server_protocol::CommandExecutionStatus::InProgress => {
+            return Some(Vec::new());
+        }
         agiworkforce_app_server_protocol::CommandExecutionStatus::Completed => {
             ExecCommandStatus::Completed
         }
-        agiworkforce_app_server_protocol::CommandExecutionStatus::Failed => ExecCommandStatus::Failed,
-        agiworkforce_app_server_protocol::CommandExecutionStatus::Declined => ExecCommandStatus::Declined,
+        agiworkforce_app_server_protocol::CommandExecutionStatus::Failed => {
+            ExecCommandStatus::Failed
+        }
+        agiworkforce_app_server_protocol::CommandExecutionStatus::Declined => {
+            ExecCommandStatus::Declined
+        }
     };
 
     let duration = Duration::from_millis(

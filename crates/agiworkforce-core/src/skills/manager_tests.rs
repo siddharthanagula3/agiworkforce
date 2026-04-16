@@ -73,8 +73,11 @@ fn new_with_disabled_bundled_skills_removes_stale_cached_system_skills() {
         .expect("write stale system skill");
 
     let plugins_manager = Arc::new(PluginsManager::new(agiworkforce_home.path().to_path_buf()));
-    let _skills_manager =
-        SkillsManager::new(agiworkforce_home.path().to_path_buf(), plugins_manager, false);
+    let _skills_manager = SkillsManager::new(
+        agiworkforce_home.path().to_path_buf(),
+        plugins_manager,
+        false,
+    );
 
     assert!(
         !agiworkforce_home.path().join("skills/.system").exists(),
@@ -98,7 +101,11 @@ async fn skills_for_config_reuses_cache_for_same_effective_config() {
         .expect("defaults for test should always succeed");
 
     let plugins_manager = Arc::new(PluginsManager::new(agiworkforce_home.path().to_path_buf()));
-    let skills_manager = SkillsManager::new(agiworkforce_home.path().to_path_buf(), plugins_manager, true);
+    let skills_manager = SkillsManager::new(
+        agiworkforce_home.path().to_path_buf(),
+        plugins_manager,
+        true,
+    );
 
     write_user_skill(&agiworkforce_home, "a", "skill-a", "from a");
     let outcome1 = skills_manager.skills_for_config(&cfg);
@@ -128,7 +135,9 @@ async fn skills_for_config_disables_plugin_skills_by_name() {
         "search sample data",
     );
     fs::write(
-        agiworkforce_home.path().join(crate::config::CONFIG_TOML_FILE),
+        agiworkforce_home
+            .path()
+            .join(crate::config::CONFIG_TOML_FILE),
         r#"[features]
 plugins = true
 
@@ -194,7 +203,11 @@ async fn skills_for_cwd_reuses_cached_entry_even_when_entry_has_extra_roots() {
         .expect("defaults for test should always succeed");
 
     let plugins_manager = Arc::new(PluginsManager::new(agiworkforce_home.path().to_path_buf()));
-    let skills_manager = SkillsManager::new(agiworkforce_home.path().to_path_buf(), plugins_manager, true);
+    let skills_manager = SkillsManager::new(
+        agiworkforce_home.path().to_path_buf(),
+        plugins_manager,
+        true,
+    );
     let _ = skills_manager.skills_for_config(&config);
 
     write_user_skill(&extra_root, "x", "extra-skill", "from extra root");
@@ -233,7 +246,9 @@ async fn skills_for_cwd_reuses_cached_entry_even_when_entry_has_extra_roots() {
 async fn skills_for_config_excludes_bundled_skills_when_disabled_in_config() {
     let agiworkforce_home = tempfile::tempdir().expect("tempdir");
     let cwd = tempfile::tempdir().expect("tempdir");
-    let bundled_skill_dir = agiworkforce_home.path().join("skills/.system/bundled-skill");
+    let bundled_skill_dir = agiworkforce_home
+        .path()
+        .join("skills/.system/bundled-skill");
     fs::create_dir_all(&bundled_skill_dir).expect("create bundled skill dir");
     fs::write(
         bundled_skill_dir.join("SKILL.md"),
@@ -242,7 +257,9 @@ async fn skills_for_config_excludes_bundled_skills_when_disabled_in_config() {
     .expect("write bundled skill");
 
     fs::write(
-        agiworkforce_home.path().join(crate::config::CONFIG_TOML_FILE),
+        agiworkforce_home
+            .path()
+            .join(crate::config::CONFIG_TOML_FILE),
         "[skills.bundled]\nenabled = false\n",
     )
     .expect("write config");
@@ -306,7 +323,11 @@ async fn skills_for_cwd_with_extra_roots_only_refreshes_on_force_reload() {
         .expect("defaults for test should always succeed");
 
     let plugins_manager = Arc::new(PluginsManager::new(agiworkforce_home.path().to_path_buf()));
-    let skills_manager = SkillsManager::new(agiworkforce_home.path().to_path_buf(), plugins_manager, true);
+    let skills_manager = SkillsManager::new(
+        agiworkforce_home.path().to_path_buf(),
+        plugins_manager,
+        true,
+    );
     let _ = skills_manager.skills_for_config(&config);
 
     write_user_skill(&extra_root_a, "x", "extra-skill-a", "from extra root a");
@@ -566,7 +587,9 @@ async fn skills_for_config_ignores_cwd_cache_when_session_flags_reenable_skill()
     )
     .expect("write skill");
     fs::write(
-        agiworkforce_home.path().join(crate::config::CONFIG_TOML_FILE),
+        agiworkforce_home
+            .path()
+            .join(crate::config::CONFIG_TOML_FILE),
         format!(
             r#"[[skills.config]]
 path = "{}"
@@ -612,7 +635,11 @@ enabled = true
         .expect("custom role should apply");
 
     let plugins_manager = Arc::new(PluginsManager::new(agiworkforce_home.path().to_path_buf()));
-    let skills_manager = SkillsManager::new(agiworkforce_home.path().to_path_buf(), plugins_manager, true);
+    let skills_manager = SkillsManager::new(
+        agiworkforce_home.path().to_path_buf(),
+        plugins_manager,
+        true,
+    );
 
     let parent_outcome = skills_manager
         .skills_for_cwd(cwd.path(), &parent_config, true)

@@ -9,7 +9,7 @@ use crate::exec_approval::handle_exec_approval_request;
 use crate::outgoing_message::OutgoingMessageSender;
 use crate::outgoing_message::OutgoingNotificationMeta;
 use crate::patch_approval::handle_patch_approval_request;
-use agiworkforce_core::AgiWorkforceThread;
+use agiworkforce_core::CodexThread;
 use agiworkforce_core::NewThread;
 use agiworkforce_core::ThreadManager;
 use agiworkforce_core::config::Config as AgiWorkforceConfig;
@@ -127,7 +127,10 @@ pub async fn run_agiworkforce_tool_session(
         );
         outgoing.send_response(id.clone(), result).await;
         // unregister the id so we don't keep it in the map
-        running_requests_id_to_agiworkforce_uuid.lock().await.remove(&id);
+        running_requests_id_to_agiworkforce_uuid
+            .lock()
+            .await
+            .remove(&id);
         return;
     }
 
@@ -143,7 +146,7 @@ pub async fn run_agiworkforce_tool_session(
 
 pub async fn run_agiworkforce_tool_session_reply(
     thread_id: ThreadId,
-    thread: Arc<AgiWorkforceThread>,
+    thread: Arc<CodexThread>,
     outgoing: Arc<OutgoingMessageSender>,
     request_id: RequestId,
     prompt: String,
@@ -191,7 +194,7 @@ pub async fn run_agiworkforce_tool_session_reply(
 
 async fn run_agiworkforce_tool_session_inner(
     thread_id: ThreadId,
-    thread: Arc<AgiWorkforceThread>,
+    thread: Arc<CodexThread>,
     outgoing: Arc<OutgoingMessageSender>,
     request_id: RequestId,
     running_requests_id_to_agiworkforce_uuid: Arc<Mutex<HashMap<RequestId, ThreadId>>>,

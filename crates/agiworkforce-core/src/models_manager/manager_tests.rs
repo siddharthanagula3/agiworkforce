@@ -3,10 +3,10 @@ use crate::AgiWorkforceAuth;
 use crate::auth::AuthCredentialsStoreMode;
 use crate::config::ConfigBuilder;
 use crate::model_provider_info::WireApi;
-use base64::Engine as _;
-use chrono::Utc;
 use agiworkforce_api::TransportError;
 use agiworkforce_protocol::openai_models::ModelsResponse;
+use base64::Engine as _;
+use chrono::Utc;
 use core_test_support::responses::mount_models_once;
 use http::HeaderMap;
 use http::StatusCode;
@@ -141,7 +141,8 @@ async fn get_model_info_tracks_fallback_usage() {
         .build()
         .await
         .expect("load default test config");
-    let auth_manager = AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
     let manager = ModelsManager::new(
         agiworkforce_home.path().to_path_buf(),
         auth_manager,
@@ -178,7 +179,8 @@ async fn get_model_info_uses_custom_catalog() {
     let mut overlay = remote_model("gpt-overlay", "Overlay", 0);
     overlay.supports_image_detail_original = true;
 
-    let auth_manager = AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
     let manager = ModelsManager::new(
         agiworkforce_home.path().to_path_buf(),
         auth_manager,
@@ -210,7 +212,8 @@ async fn get_model_info_matches_namespaced_suffix() {
         .expect("load default test config");
     let mut remote = remote_model("gpt-image", "Image", 0);
     remote.supports_image_detail_original = true;
-    let auth_manager = AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
     let manager = ModelsManager::new(
         agiworkforce_home.path().to_path_buf(),
         auth_manager,
@@ -236,7 +239,8 @@ async fn get_model_info_rejects_multi_segment_namespace_suffix_matching() {
         .build()
         .await
         .expect("load default test config");
-    let auth_manager = AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
     let manager = ModelsManager::new(
         agiworkforce_home.path().to_path_buf(),
         auth_manager,
@@ -274,8 +278,9 @@ async fn refresh_available_models_sorts_by_priority() {
     .await;
 
     let agiworkforce_home = tempdir().expect("temp dir");
-    let auth_manager =
-        AuthManager::from_auth_for_testing(AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let provider = provider_for(server.uri());
     let manager = ModelsManager::with_provider_for_tests(
         agiworkforce_home.path().to_path_buf(),
@@ -323,8 +328,9 @@ async fn refresh_available_models_uses_cache_when_fresh() {
     .await;
 
     let agiworkforce_home = tempdir().expect("temp dir");
-    let auth_manager =
-        AuthManager::from_auth_for_testing(AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let provider = provider_for(server.uri());
     let manager = ModelsManager::with_provider_for_tests(
         agiworkforce_home.path().to_path_buf(),
@@ -364,8 +370,9 @@ async fn refresh_available_models_refetches_when_cache_stale() {
     .await;
 
     let agiworkforce_home = tempdir().expect("temp dir");
-    let auth_manager =
-        AuthManager::from_auth_for_testing(AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let provider = provider_for(server.uri());
     let manager = ModelsManager::with_provider_for_tests(
         agiworkforce_home.path().to_path_buf(),
@@ -427,8 +434,9 @@ async fn refresh_available_models_refetches_when_version_mismatch() {
     .await;
 
     let agiworkforce_home = tempdir().expect("temp dir");
-    let auth_manager =
-        AuthManager::from_auth_for_testing(AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let provider = provider_for(server.uri());
     let manager = ModelsManager::with_provider_for_tests(
         agiworkforce_home.path().to_path_buf(),
@@ -490,8 +498,9 @@ async fn refresh_available_models_drops_removed_remote_models() {
     .await;
 
     let agiworkforce_home = tempdir().expect("temp dir");
-    let auth_manager =
-        AuthManager::from_auth_for_testing(AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        AgiWorkforceAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let provider = provider_for(server.uri());
     let mut manager = ModelsManager::with_provider_for_tests(
         agiworkforce_home.path().to_path_buf(),
@@ -687,7 +696,8 @@ fn models_request_telemetry_emits_auth_env_feedback_tags_on_failure() {
 #[test]
 fn build_available_models_picks_default_after_hiding_hidden_models() {
     let agiworkforce_home = tempdir().expect("temp dir");
-    let auth_manager = AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
     let provider = provider_for("http://example.test".to_string());
     let manager = ModelsManager::with_provider_for_tests(
         agiworkforce_home.path().to_path_buf(),

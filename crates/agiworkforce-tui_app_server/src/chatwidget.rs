@@ -6105,7 +6105,11 @@ impl ChatWidget {
                 self.on_model_reroute(ModelRerouteEvent {
                     from_model: notification.from_model,
                     to_model: notification.to_model,
-                    reason: notification.reason.into(),
+                    reason: match notification.reason {
+                        agiworkforce_app_server_protocol::ModelRerouteReason::HighRiskCyberActivity => {
+                            ModelRerouteReason::HighRiskCyberActivity
+                        }
+                    },
                 })
             }
             ServerNotification::DeprecationNotice(notification) => {
@@ -7341,7 +7345,7 @@ impl ChatWidget {
                     }
                 };
             let should_schedule_force_refetch =
-                !force_refetch && !accessible_result.agiworkforce_apps_ready;
+                !force_refetch && !accessible_result.codex_apps_ready;
             let accessible_connectors = accessible_result.connectors;
 
             app_event_tx.send(AppEvent::ConnectorsLoaded {

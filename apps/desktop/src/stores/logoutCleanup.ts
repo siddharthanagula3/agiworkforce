@@ -20,6 +20,7 @@ import { useDatabaseStore } from './databaseStore';
 import { useExecutionStore, cleanupExecutionListeners } from './executionStore';
 import { cleanupAgentWorkflowEventListeners } from './chat/agentWorkflowEvents';
 import { cleanupBackgroundTaskEventListeners } from './chat/agentStore';
+import { cleanupRuntimeActivityEventListeners } from '../hooks/useAgenticEvents';
 import { useMcpStore } from './mcpStore';
 import { useModelStore } from './modelStore';
 // Orchestration store archived - visual workflow builder removed
@@ -92,6 +93,7 @@ export function cleanupAllStoresOnLogout(): void {
     cleanupBackgroundTaskEventListeners();
     cleanupAgentWorkflowEventListeners();
     cleanupExecutionListeners();
+    cleanupRuntimeActivityEventListeners();
     const executionStore = useExecutionStore.getState();
     executionStore.reset();
 

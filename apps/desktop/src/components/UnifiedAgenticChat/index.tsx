@@ -34,7 +34,6 @@ const PROMPT_INJECTION_PATTERNS = [
 ];
 
 import { cn } from '../../lib/utils';
-import { useAgenticEvents } from '../../hooks/useAgenticEvents';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
 import { sha256 } from '../../lib/hash';
 import { deriveTaskMetadata } from '../../lib/taskMetadata';
@@ -48,7 +47,6 @@ import {
 import { useBillingUsageStore } from '../../stores/billingUsage';
 import { useModelStore } from '../../stores/modelStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { initializeExtensionEventListeners } from '../../stores/extensionEventsStore';
 import { useUnifiedChatStore, type SidecarMode, uuidToDbId } from '../../stores/unifiedChatStore';
 import {
   useChatStore,
@@ -448,11 +446,6 @@ export const UnifiedAgenticChat: React.FC<{
     handleConfirm: handleRiskConfirm,
     handleCancel: handleRiskCancel,
   } = useRiskConfirmation();
-
-  useAgenticEvents();
-  useEffect(() => {
-    void initializeExtensionEventListeners();
-  }, []);
 
   // Initialize slash command parsing
   const { parseSlashCommand } = useSlashCommands();

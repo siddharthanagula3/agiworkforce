@@ -771,7 +771,10 @@ impl ThreadHistoryBuilder {
         self.upsert_item_in_current_turn(item);
     }
 
-    fn handle_collab_close_end(&mut self, payload: &agiworkforce_protocol::protocol::CollabCloseEndEvent) {
+    fn handle_collab_close_end(
+        &mut self,
+        payload: &agiworkforce_protocol::protocol::CollabCloseEndEvent,
+    ) {
         let status = match &payload.status {
             AgentStatus::Errored(_) | AgentStatus::NotFound => CollabAgentToolCallStatus::Failed,
             _ => CollabAgentToolCallStatus::Completed,
@@ -849,7 +852,10 @@ impl ThreadHistoryBuilder {
             .push(ThreadItem::ContextCompaction { id });
     }
 
-    fn handle_entered_review_mode(&mut self, payload: &agiworkforce_protocol::protocol::ReviewRequest) {
+    fn handle_entered_review_mode(
+        &mut self,
+        payload: &agiworkforce_protocol::protocol::ReviewRequest,
+    ) {
         let review = payload
             .user_facing_hint
             .clone()
@@ -1112,9 +1118,11 @@ fn map_patch_change_kind(change: &agiworkforce_protocol::protocol::FileChange) -
     match change {
         agiworkforce_protocol::protocol::FileChange::Add { .. } => PatchChangeKind::Add,
         agiworkforce_protocol::protocol::FileChange::Delete { .. } => PatchChangeKind::Delete,
-        agiworkforce_protocol::protocol::FileChange::Update { move_path, .. } => PatchChangeKind::Update {
-            move_path: move_path.clone(),
-        },
+        agiworkforce_protocol::protocol::FileChange::Update { move_path, .. } => {
+            PatchChangeKind::Update {
+                move_path: move_path.clone(),
+            }
+        }
     }
 }
 
@@ -1211,8 +1219,8 @@ mod tests {
     use agiworkforce_protocol::protocol::AgentMessageEvent;
     use agiworkforce_protocol::protocol::AgentReasoningEvent;
     use agiworkforce_protocol::protocol::AgentReasoningRawContentEvent;
-    use agiworkforce_protocol::protocol::ApplyPatchApprovalRequestEvent;
     use agiworkforce_protocol::protocol::AgiWorkforceErrorInfo;
+    use agiworkforce_protocol::protocol::ApplyPatchApprovalRequestEvent;
     use agiworkforce_protocol::protocol::CompactedItem;
     use agiworkforce_protocol::protocol::DynamicToolCallResponseEvent;
     use agiworkforce_protocol::protocol::ExecCommandEndEvent;
@@ -2518,17 +2526,19 @@ mod tests {
                 text_elements: Vec::new(),
                 local_images: Vec::new(),
             }),
-            EventMsg::CollabAgentSpawnEnd(agiworkforce_protocol::protocol::CollabAgentSpawnEndEvent {
-                call_id: "spawn-1".into(),
-                sender_thread_id,
-                new_thread_id: Some(spawned_thread_id),
-                new_agent_nickname: Some("Scout".into()),
-                new_agent_role: Some("explorer".into()),
-                prompt: "inspect the repo".into(),
-                model: "gpt-5.4-mini".into(),
-                reasoning_effort: agiworkforce_protocol::openai_models::ReasoningEffort::Medium,
-                status: AgentStatus::Running,
-            }),
+            EventMsg::CollabAgentSpawnEnd(
+                agiworkforce_protocol::protocol::CollabAgentSpawnEndEvent {
+                    call_id: "spawn-1".into(),
+                    sender_thread_id,
+                    new_thread_id: Some(spawned_thread_id),
+                    new_agent_nickname: Some("Scout".into()),
+                    new_agent_role: Some("explorer".into()),
+                    prompt: "inspect the repo".into(),
+                    model: "gpt-5.4-mini".into(),
+                    reasoning_effort: agiworkforce_protocol::openai_models::ReasoningEffort::Medium,
+                    status: AgentStatus::Running,
+                },
+            ),
         ];
 
         let items = events
@@ -2548,7 +2558,9 @@ mod tests {
                 receiver_thread_ids: vec!["00000000-0000-0000-0000-000000000002".into()],
                 prompt: Some("inspect the repo".into()),
                 model: Some("gpt-5.4-mini".into()),
-                reasoning_effort: Some(agiworkforce_protocol::openai_models::ReasoningEffort::Medium),
+                reasoning_effort: Some(
+                    agiworkforce_protocol::openai_models::ReasoningEffort::Medium
+                ),
                 agents_states: [(
                     "00000000-0000-0000-0000-000000000002".into(),
                     CollabAgentState {

@@ -30,7 +30,9 @@ pub fn system_cache_root_dir(agiworkforce_home: &Path) -> PathBuf {
         })
 }
 
-fn system_cache_root_dir_abs(agiworkforce_home: &AbsolutePathBuf) -> std::io::Result<AbsolutePathBuf> {
+fn system_cache_root_dir_abs(
+    agiworkforce_home: &AbsolutePathBuf,
+) -> std::io::Result<AbsolutePathBuf> {
     agiworkforce_home
         .join(SKILLS_DIR_NAME)?
         .join(SYSTEM_SKILLS_DIR_NAME)

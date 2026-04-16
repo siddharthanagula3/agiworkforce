@@ -1,36 +1,36 @@
 mod windows_impl {
     use crate::acl::allow_null_device;
-    use crate::allow::compute_allow_paths;
     use crate::allow::AllowDenyPaths;
+    use crate::allow::compute_allow_paths;
     use crate::cap::load_or_create_cap_sids;
     use crate::env::ensure_non_interactive_pager;
     use crate::env::inherit_path_env;
     use crate::env::normalize_null_device_env;
-    use crate::helper_materialization::resolve_helper_for_launch;
     use crate::helper_materialization::HelperExecutable;
+    use crate::helper_materialization::resolve_helper_for_launch;
     use crate::identity::require_logon_sandbox_creds;
-    use crate::ipc_framed::decode_bytes;
-    use crate::ipc_framed::read_frame;
-    use crate::ipc_framed::write_frame;
     use crate::ipc_framed::FramedMessage;
     use crate::ipc_framed::Message;
     use crate::ipc_framed::OutputStream;
     use crate::ipc_framed::SpawnRequest;
+    use crate::ipc_framed::decode_bytes;
+    use crate::ipc_framed::read_frame;
+    use crate::ipc_framed::write_frame;
     use crate::logging::log_failure;
     use crate::logging::log_note;
     use crate::logging::log_start;
     use crate::logging::log_success;
-    use crate::policy::parse_policy;
     use crate::policy::SandboxPolicy;
+    use crate::policy::parse_policy;
     use crate::token::convert_string_sid_to_sid;
     use crate::winutil::quote_windows_arg;
     use crate::winutil::resolve_sid;
     use crate::winutil::string_from_sid_bytes;
     use crate::winutil::to_wide;
     use anyhow::Result;
-    use rand::rngs::SmallRng;
     use rand::Rng;
     use rand::SeedableRng;
+    use rand::rngs::SmallRng;
     use std::collections::HashMap;
     use std::ffi::c_void;
     use std::fs::File;
@@ -224,8 +224,13 @@ mod windows_impl {
 
         let logs_base_dir: Option<&Path> = Some(sandbox_base.as_path());
         log_start(&command, logs_base_dir);
-        let sandbox_creds =
-            require_logon_sandbox_creds(&policy, sandbox_policy_cwd, cwd, &env_map, agiworkforce_home)?;
+        let sandbox_creds = require_logon_sandbox_creds(
+            &policy,
+            sandbox_policy_cwd,
+            cwd,
+            &env_map,
+            agiworkforce_home,
+        )?;
         let sandbox_sid = resolve_sid(&sandbox_creds.username).map_err(|err: anyhow::Error| {
             io::Error::new(io::ErrorKind::PermissionDenied, err.to_string())
         })?;
@@ -480,9 +485,9 @@ pub use windows_impl::run_windows_sandbox_capture;
 
 #[cfg(not(target_os = "windows"))]
 mod stub {
-    use anyhow::bail;
-    use anyhow::Result;
     use agiworkforce_protocol::protocol::SandboxPolicy;
+    use anyhow::Result;
+    use anyhow::bail;
     use std::collections::HashMap;
     use std::path::Path;
 

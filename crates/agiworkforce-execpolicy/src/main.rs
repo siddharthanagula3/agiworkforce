@@ -1,6 +1,6 @@
+use agiworkforce_execpolicy::execpolicycheck::ExecPolicyCheckCommand;
 use anyhow::Result;
 use clap::Parser;
-use agiworkforce_execpolicy::execpolicycheck::ExecPolicyCheckCommand;
 
 /// CLI for evaluating exec policies
 #[derive(Parser)]

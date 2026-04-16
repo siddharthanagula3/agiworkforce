@@ -35,10 +35,7 @@ import {
   buildToolResultStateMessageUpdate,
   resolveTerminalStreamTarget,
 } from '../../lib/streamLifecycle';
-import {
-  clearRunningToolTrailEntries,
-  reconcileToolArtifactTerminalState,
-} from '../../lib/toolStreamRuntime';
+import { clearRunningToolTrailEntries } from '../../lib/toolStreamRuntime';
 import {
   buildRunningToolTimelineEntry,
   buildTerminalToolTimelineUpdate,
@@ -968,7 +965,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
       );
 
       // AUDIT-APPROVAL-047 fix: Removed duplicate tool:confirmation_required handler.
-      // The tool confirmation flow is now handled exclusively by useAgenticEvents which
+      // The tool confirmation flow is now handled exclusively by the runtime activity listeners,
       // adds approvals to pendingApprovals store. Inline approval components then handle
       // user responses via useApprovalActions, which correctly routes to either
       // respond_tool_confirmation (for MCP/tool confirmations) or agent_resolve_approval
@@ -1205,10 +1202,9 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // AUDIT-STREAM-022 fix: Listen for agi:tool_stream cancelled events
-      // This ensures cancellation is properly handled for both event channels:
-      // - agi:tool_stream (handled by useAgenticEvents.ts via activeToolStreams)
-      // - chat:tool-* (handled here for UI updates)
+      // Keep a narrow agi:tool_stream cancellation listener here only for
+      // local timeout/watchdog cleanup. Runtime activity listeners own the
+      // canonical trail/artifact/tool-stream state updates.
       registerListener(
         listen<{
           event: {
@@ -1220,7 +1216,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           timestamp: string;
         }>('agi:tool_stream', (event) => {
           if (!isMountedRef.current) return;
-          const { event: streamEvent, timestamp } = event.payload;
+          const { event: streamEvent } = event.payload;
 
           // Mark activity on every AGI tool stream event so the watchdog
           // doesn't fire during long-running tools (e.g. image generation 30-90s)
@@ -1239,27 +1235,7 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           // Clear any tool execution timeout that might be pending
           clearToolExecutionTimeout(cancelledEvent.tool_id);
 
-          const state = useUnifiedChatStore.getState();
-          clearRunningToolTrailEntries(state, cancelledEvent.tool_id);
-
-          // Update action trail to reflect cancellation
-          state.addActionTrailEntry({
-            type: 'error',
-            message: `Tool cancelled: ${cancelledEvent.reason || 'Cancelled by user'}`,
-            metadata: { tool_call_id: cancelledEvent.tool_id },
-            fadeAfter: 3000,
-          });
-
-          reconcileToolArtifactTerminalState(state, cancelledEvent.tool_id, {
-            status: 'cancelled',
-            reason: cancelledEvent.reason,
-            completedAt: new Date(timestamp).toISOString(),
-            durationMs: cancelledEvent.duration_ms,
-            messageState: {
-              status: 'cancelled',
-              streaming: false,
-            },
-          });
+          // Canonical cancellation state is handled by runtime activity listeners.
         }),
       );
 

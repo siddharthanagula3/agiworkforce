@@ -1,6 +1,6 @@
+use agiworkforce_utils_cli::CliConfigOverrides;
 use clap::Args;
 use clap::Parser;
-use agiworkforce_utils_cli::CliConfigOverrides;
 
 #[derive(Parser, Debug, Default)]
 #[command(version)]

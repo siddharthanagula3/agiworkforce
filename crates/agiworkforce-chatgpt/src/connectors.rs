@@ -61,9 +61,12 @@ pub async fn list_cached_all_connectors(config: &Config) -> Option<Vec<AppInfo>>
         return Some(Vec::new());
     }
 
-    if init_chatgpt_token_from_auth(&config.agiworkforce_home, config.cli_auth_credentials_store_mode)
-        .await
-        .is_err()
+    if init_chatgpt_token_from_auth(
+        &config.agiworkforce_home,
+        config.cli_auth_credentials_store_mode,
+    )
+    .await
+    .is_err()
     {
         return None;
     }
@@ -82,8 +85,11 @@ pub async fn list_all_connectors_with_options(
     if !apps_enabled(config).await {
         return Ok(Vec::new());
     }
-    init_chatgpt_token_from_auth(&config.agiworkforce_home, config.cli_auth_credentials_store_mode)
-        .await?;
+    init_chatgpt_token_from_auth(
+        &config.agiworkforce_home,
+        config.cli_auth_credentials_store_mode,
+    )
+    .await?;
 
     let token_data =
         get_chatgpt_token_data().ok_or_else(|| anyhow::anyhow!("ChatGPT token not available"))?;

@@ -4,10 +4,6 @@
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 #![deny(clippy::disallowed_methods)]
 use additional_dirs::add_dir_warning_message;
-use app::App;
-pub use app::AppExitInfo;
-pub use app::ExitReason;
-use app_server_session::AppServerSession;
 use agiworkforce_app_server_client::AppServerClient;
 use agiworkforce_app_server_client::DEFAULT_IN_PROCESS_CHANNEL_CAPACITY;
 use agiworkforce_app_server_client::InProcessAppServerClient;
@@ -54,6 +50,10 @@ use agiworkforce_terminal_detection::terminal_info;
 use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use agiworkforce_utils_oss::ensure_oss_provider_ready;
 use agiworkforce_utils_oss::get_default_model_for_oss_provider;
+use app::App;
+pub use app::AppExitInfo;
+pub use app::ExitReason;
+use app_server_session::AppServerSession;
 use color_eyre::eyre::WrapErr;
 use cwd_prompt::CwdPromptAction;
 use cwd_prompt::CwdPromptOutcome;
@@ -252,8 +252,8 @@ pub mod test_backend;
 use crate::onboarding::onboarding_screen::OnboardingScreenArgs;
 use crate::onboarding::onboarding_screen::run_onboarding_app;
 use crate::tui::Tui;
-pub use cli::Cli;
 use agiworkforce_arg0::Arg0DispatchPaths;
+pub use cli::Cli;
 pub use markdown_render::render_markdown_text;
 pub use public_widgets::composer_input::ComposerAction;
 pub use public_widgets::composer_input::ComposerInput;
@@ -675,9 +675,11 @@ pub async fn run_main(
         }
     };
 
-    if let Err(err) =
-        agiworkforce_core::personality_migration::maybe_migrate_personality(&agiworkforce_home, &config_toml)
-            .await
+    if let Err(err) = agiworkforce_core::personality_migration::maybe_migrate_personality(
+        &agiworkforce_home,
+        &config_toml,
+    )
+    .await
     {
         tracing::warn!(error = %err, "failed to run personality migration");
     }
@@ -813,7 +815,9 @@ pub async fn run_main(
     // use RUST_LOG env var, default to info for codex crates.
     let env_filter = || {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            EnvFilter::new("agiworkforce_core=info,agiworkforce_tui=info,agiworkforce_rmcp_client=info")
+            EnvFilter::new(
+                "agiworkforce_core=info,agiworkforce_tui=info,agiworkforce_rmcp_client=info",
+            )
         })
     };
 

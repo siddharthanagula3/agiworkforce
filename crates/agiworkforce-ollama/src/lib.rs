@@ -3,9 +3,9 @@ mod parser;
 mod pull;
 mod url;
 
-pub use client::OllamaClient;
 use agiworkforce_core::ModelProviderInfo;
 use agiworkforce_core::config::Config;
+pub use client::OllamaClient;
 pub use pull::CliProgressReporter;
 pub use pull::PullEvent;
 pub use pull::PullProgressReporter;

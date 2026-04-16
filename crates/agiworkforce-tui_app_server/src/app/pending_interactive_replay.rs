@@ -566,8 +566,12 @@ fn app_server_request_id_to_mcp_request_id(
     request_id: &AppServerRequestId,
 ) -> agiworkforce_protocol::mcp::RequestId {
     match request_id {
-        AppServerRequestId::String(value) => agiworkforce_protocol::mcp::RequestId::String(value.clone()),
-        AppServerRequestId::Integer(value) => agiworkforce_protocol::mcp::RequestId::Integer(*value),
+        AppServerRequestId::String(value) => {
+            agiworkforce_protocol::mcp::RequestId::String(value.clone())
+        }
+        AppServerRequestId::Integer(value) => {
+            agiworkforce_protocol::mcp::RequestId::Integer(*value)
+        }
     }
 }
 

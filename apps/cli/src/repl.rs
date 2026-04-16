@@ -905,8 +905,8 @@ fn print_help() {
         "/export".bold()
     );
     eprintln!("  {} Rename session", "/rename <id> <title>".bold());
-    eprintln!("  {}         List sessions (SQLite)", "/sessions".bold());
-    eprintln!("  {}          Migrate JSON to SQLite", "/migrate".bold());
+    eprintln!("  {}         List managed sessions", "/sessions".bold());
+    eprintln!("  {}   Migrate JSON conversations", "/migrate".bold());
     eprintln!();
     eprintln!("{}", "Memory & Project:".cyan().bold());
     eprintln!(
@@ -1038,61 +1038,6 @@ pub fn handle_save(session: &mut AgentSession) {
     if let Some(session_id) = session.managed_session_id() {
         output::print_info(&format!("Managed session saved: {}", session_id));
     }
-
-    // Save to JSON (legacy format)
-    let json_id = match conversations::save_conversation(session) {
-        Ok(id) => {
-            output::print_info(&format!("Conversation saved (JSON): {}", id));
-            id
-        }
-        Err(e) => {
-            output::print_error(&format!("Failed to save JSON: {:#}", e));
-            return;
-        }
-    };
-
-    // Also save to SQLite
-    let conn = match sessions::open_db() {
-        Ok(c) => c,
-        Err(e) => {
-            output::print_error(&format!("Failed to open sessions DB: {:#}", e));
-            return;
-        }
-    };
-
-    let title = session
-        .messages
-        .iter()
-        .find(|m| m.role == "user")
-        .map(|m| {
-            let text = m.text_content();
-            let truncated: String = text.chars().take(50).collect();
-            if text.chars().count() > 50 {
-                format!("{}...", truncated)
-            } else {
-                truncated
-            }
-        })
-        .unwrap_or_else(|| "Untitled".to_string());
-
-    let cwd = std::env::current_dir()
-        .map(|p| p.display().to_string())
-        .unwrap_or_default();
-
-    if let Err(e) = sessions::save_session(&conn, &json_id, &title, &session.model, &cwd, "") {
-        output::print_error(&format!("Failed to save session to SQLite: {:#}", e));
-        return;
-    }
-
-    for msg in &session.messages {
-        let tokens = crate::compaction::estimate_tokens(&msg.text_content());
-        if let Err(e) = sessions::save_message(&conn, &json_id, msg, tokens) {
-            output::print_error(&format!("Failed to save message to SQLite: {:#}", e));
-            return;
-        }
-    }
-
-    output::print_info(&format!("Session saved (SQLite): {}", json_id));
 }
 
 pub fn handle_load(arg: &str, session: &mut AgentSession) {
@@ -1170,27 +1115,6 @@ pub fn handle_history() {
         Err(error) => output::print_error(&format!("Failed to list managed sessions: {error:#}")),
     }
 
-    // Show SQLite sessions first
-    let has_sqlite = match sessions::open_db() {
-        Ok(conn) => match sessions::list_sessions(&conn, 20) {
-            Ok(list) if !list.is_empty() => {
-                eprintln!("{}", "Sessions (SQLite):".cyan().bold());
-                eprintln!("{}", sessions::format_session_list(&list));
-                showed_any = true;
-                true
-            }
-            Ok(_) => false,
-            Err(e) => {
-                output::print_error(&format!("Failed to list sessions: {:#}", e));
-                false
-            }
-        },
-        Err(e) => {
-            output::print_error(&format!("Failed to open sessions DB: {:#}", e));
-            false
-        }
-    };
-
     // Then show legacy JSON conversations
     match conversations::list_conversations() {
         Ok(summaries) if !summaries.is_empty() => {
@@ -1213,7 +1137,7 @@ pub fn handle_history() {
             }
         }
         Ok(_) => {
-            if !has_sqlite && !showed_any {
+            if !showed_any {
                 output::print_info("No saved conversations yet. Use /save to save one.");
             }
         }
@@ -1419,7 +1343,7 @@ pub fn handle_permissions(arg: &str) {
 }
 
 // ---------------------------------------------------------------------------
-// Session commands (SQLite)
+// Session commands
 // ---------------------------------------------------------------------------
 
 fn handle_sessions(arg: &str) {
@@ -1459,7 +1383,7 @@ fn handle_sessions(arg: &str) {
             let conn = match sessions::open_db() {
                 Ok(c) => c,
                 Err(e) => {
-                    output::print_error(&format!("Failed to open sessions DB: {:#}", e));
+                    output::print_error(&format!("Failed to open session store: {:#}", e));
                     return;
                 }
             };
@@ -1478,13 +1402,13 @@ fn handle_sessions(arg: &str) {
             let conn = match sessions::open_db() {
                 Ok(c) => c,
                 Err(e) => {
-                    output::print_error(&format!("Failed to open sessions DB: {:#}", e));
+                    output::print_error(&format!("Failed to open session store: {:#}", e));
                     return;
                 }
             };
             match sessions::db_stats(&conn) {
                 Ok(stats) => {
-                    eprintln!("{}", "Session Database Stats:".cyan().bold());
+                    eprintln!("{}", "Managed Session Stats:".cyan().bold());
                     eprintln!("  Sessions:   {}", stats.session_count);
                     eprintln!("  Messages:   {}", stats.message_count);
                     eprintln!("  Tool calls: {}", stats.tool_call_count);
@@ -1515,7 +1439,7 @@ pub fn handle_rename(arg: &str) {
     let conn = match sessions::open_db() {
         Ok(c) => c,
         Err(e) => {
-            output::print_error(&format!("Failed to open sessions DB: {:#}", e));
+            output::print_error(&format!("Failed to open session store: {:#}", e));
             return;
         }
     };
@@ -1545,14 +1469,17 @@ fn handle_migrate() {
     let conn = match sessions::open_db() {
         Ok(c) => c,
         Err(e) => {
-            output::print_error(&format!("Failed to open sessions DB: {:#}", e));
+            output::print_error(&format!("Failed to open session store: {:#}", e));
             return;
         }
     };
 
     match sessions::migrate_json_conversations(&conn, &conv_dir) {
         Ok(0) => output::print_info("No new conversations to migrate."),
-        Ok(n) => output::print_info(&format!("Migrated {} conversation(s) to SQLite.", n)),
+        Ok(n) => output::print_info(&format!(
+            "Migrated {} conversation(s) into managed sessions.",
+            n
+        )),
         Err(e) => output::print_error(&format!("Migration failed: {:#}", e)),
     }
 }
@@ -1634,70 +1561,45 @@ pub fn handle_branch(arg: &str, session: &mut AgentSession) {
         arg.to_string()
     };
 
-    if let Some(session_id) = session
-        .managed_session_id()
-        .map(|session_id| session_id.to_string())
-    {
-        if let Err(error) = session.persist_managed_session() {
+    if session.managed_session_id().is_none() {
+        if let Err(error) = session.enable_managed_session() {
             output::print_error(&format!(
-                "Failed to persist current session before fork: {error:#}"
+                "Failed to initialize a managed session before branching: {error:#}"
             ));
             return;
         }
-
-        match crate::runtime::session_control::fork_managed_session(&session_id) {
-            Ok(forked_session) => {
-                output::print_info(&format!(
-                    "Branched conversation '{}' as managed session {}. Resume with: agiworkforce --session {}",
-                    branch_name, forked_session.summary.session_id, forked_session.summary.session_id
-                ));
-                return;
-            }
-            Err(error) => {
-                output::print_error(&format!("Failed to fork managed session: {error:#}"));
-                return;
-            }
-        }
     }
 
-    let conn = match sessions::open_db() {
-        Ok(c) => c,
-        Err(e) => {
-            output::print_error(&format!("Failed to open sessions DB: {:#}", e));
-            return;
-        }
+    let Some(session_id) = session.managed_session_id().map(str::to_string) else {
+        output::print_error("Managed session is unavailable for branching.");
+        return;
     };
 
-    let branch_id = format!("branch-{}", &sha2_short(&branch_name));
-    let cwd = std::env::current_dir()
-        .map(|p| p.display().to_string())
-        .unwrap_or_default();
-
-    if let Err(e) =
-        sessions::save_session(&conn, &branch_id, &branch_name, &session.model, &cwd, "")
-    {
-        output::print_error(&format!("Failed to save branch: {:#}", e));
+    if let Err(error) = session.persist_managed_session() {
+        output::print_error(&format!(
+            "Failed to persist current session before fork: {error:#}"
+        ));
         return;
     }
 
-    for msg in &session.messages {
-        let tokens = crate::compaction::estimate_tokens(&msg.text_content());
-        if let Err(e) = sessions::save_message(&conn, &branch_id, msg, tokens) {
-            output::print_error(&format!("Failed to save branch message: {:#}", e));
-            return;
+    match crate::runtime::session_control::fork_managed_session(&session_id) {
+        Ok(forked_session) => {
+            if let Ok(conn) = sessions::open_db() {
+                let _ = sessions::rename_session(
+                    &conn,
+                    &forked_session.summary.session_id,
+                    &branch_name,
+                );
+            }
+            output::print_info(&format!(
+                "Branched conversation '{}' as managed session {}. Resume with: agiworkforce --session {}",
+                branch_name, forked_session.summary.session_id, forked_session.summary.session_id
+            ));
+        }
+        Err(error) => {
+            output::print_error(&format!("Failed to fork managed session: {error:#}"));
         }
     }
-
-    output::print_info(&format!(
-        "Branched conversation as '{}' (id: {}). Resume with: agiworkforce --session {}",
-        branch_name, branch_id, branch_id
-    ));
-}
-
-fn sha2_short(input: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let hash = Sha256::digest(input.as_bytes());
-    format!("{:x}", hash)[..8].to_string()
 }
 
 fn load_messages_into_session(session: &mut AgentSession, messages: Vec<crate::models::Message>) {

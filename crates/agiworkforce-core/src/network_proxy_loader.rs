@@ -10,9 +10,6 @@ use crate::config_loader::load_config_layers_state;
 use crate::exec_policy::ExecPolicyError;
 use crate::exec_policy::format_exec_policy_error_with_source;
 use crate::exec_policy::load_exec_policy;
-use anyhow::Context;
-use anyhow::Result;
-use async_trait::async_trait;
 use agiworkforce_app_server_protocol::ConfigLayerSource;
 use agiworkforce_config::CONFIG_TOML_FILE;
 use agiworkforce_network_proxy::ConfigReloader;
@@ -24,6 +21,9 @@ use agiworkforce_network_proxy::NetworkProxyState;
 use agiworkforce_network_proxy::build_config_state;
 use agiworkforce_network_proxy::normalize_host;
 use agiworkforce_network_proxy::validate_policy_against_constraints;
+use anyhow::Context;
+use anyhow::Result;
+use async_trait::async_trait;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -41,7 +41,8 @@ pub async fn build_network_proxy_state_and_reloader() -> Result<(ConfigState, Mt
 }
 
 async fn build_config_state_with_mtimes() -> Result<(ConfigState, Vec<LayerMtime>)> {
-    let agiworkforce_home = find_agiworkforce_home().context("failed to resolve AGIWORKFORCE_HOME")?;
+    let agiworkforce_home =
+        find_agiworkforce_home().context("failed to resolve AGIWORKFORCE_HOME")?;
     let cli_overrides = Vec::new();
     let overrides = LoaderOverrides::default();
     let config_layer_stack = load_config_layers_state(
@@ -87,7 +88,9 @@ fn collect_layer_mtimes(stack: &ConfigLayerStack) -> Vec<LayerMtime> {
             let path = match &layer.name {
                 ConfigLayerSource::System { file } => Some(file.as_path().to_path_buf()),
                 ConfigLayerSource::User { file } => Some(file.as_path().to_path_buf()),
-                ConfigLayerSource::Project { dot_agiworkforce_folder } => dot_agiworkforce_folder
+                ConfigLayerSource::Project {
+                    dot_agiworkforce_folder,
+                } => dot_agiworkforce_folder
                     .join(CONFIG_TOML_FILE)
                     .ok()
                     .map(|p| p.as_path().to_path_buf()),

@@ -203,8 +203,12 @@ mod job {
                 );
                 (ownership_token, input_watermark)
             }
-            agiworkforce_state::Phase2JobClaimOutcome::SkippedNotDirty => return Err("skipped_not_dirty"),
-            agiworkforce_state::Phase2JobClaimOutcome::SkippedRunning => return Err("skipped_running"),
+            agiworkforce_state::Phase2JobClaimOutcome::SkippedNotDirty => {
+                return Err("skipped_not_dirty");
+            }
+            agiworkforce_state::Phase2JobClaimOutcome::SkippedRunning => {
+                return Err("skipped_running");
+            }
         };
 
         Ok(Claim { token, watermark })

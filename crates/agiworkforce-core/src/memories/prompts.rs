@@ -1,13 +1,13 @@
 use crate::memories::memory_root;
 use crate::memories::phase_one;
 use crate::memories::storage::rollout_summary_file_stem_from_parts;
-use askama::Template;
 use agiworkforce_protocol::openai_models::ModelInfo;
 use agiworkforce_state::Phase2InputSelection;
 use agiworkforce_state::Stage1Output;
 use agiworkforce_state::Stage1OutputRef;
 use agiworkforce_utils_output_truncation::TruncationPolicy;
 use agiworkforce_utils_output_truncation::truncate_text;
+use askama::Template;
 use std::path::Path;
 use tokio::fs;
 use tracing::warn;
@@ -155,7 +155,9 @@ pub(super) fn build_stage_one_input_message(
 /// Build prompt used for read path. This prompt must be added to the developer instructions. In
 /// case of large memory files, the `memory_summary.md` is truncated at
 /// [phase_one::MEMORY_TOOL_DEVELOPER_INSTRUCTIONS_SUMMARY_TOKEN_LIMIT].
-pub(crate) async fn build_memory_tool_developer_instructions(agiworkforce_home: &Path) -> Option<String> {
+pub(crate) async fn build_memory_tool_developer_instructions(
+    agiworkforce_home: &Path,
+) -> Option<String> {
     let base_path = memory_root(agiworkforce_home);
     let memory_summary_path = base_path.join("memory_summary.md");
     let memory_summary = fs::read_to_string(&memory_summary_path)

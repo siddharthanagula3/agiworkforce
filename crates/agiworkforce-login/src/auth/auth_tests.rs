@@ -6,8 +6,8 @@ use crate::token_data::KnownPlan as InternalKnownPlan;
 use crate::token_data::PlanType as InternalPlanType;
 use agiworkforce_protocol::account::PlanType as AccountPlanType;
 
-use base64::Engine;
 use agiworkforce_protocol::config_types::ForcedLoginMethod;
+use base64::Engine;
 use pretty_assertions::assert_eq;
 use serde::Serialize;
 use serde_json::json;
@@ -97,9 +97,13 @@ async fn pro_account_with_no_api_key_uses_chatgpt_auth() {
     )
     .expect("failed to write auth file");
 
-    let auth = super::load_auth(agiworkforce_home.path(), false, AuthCredentialsStoreMode::File)
-        .unwrap()
-        .unwrap();
+    let auth = super::load_auth(
+        agiworkforce_home.path(),
+        false,
+        AuthCredentialsStoreMode::File,
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(None, auth.api_key());
     assert_eq!(crate::AuthMode::Chatgpt, auth.auth_mode());
     assert_eq!(auth.get_chatgpt_user_id().as_deref(), Some("user-12345"));
@@ -210,9 +214,13 @@ fn refresh_failure_is_scoped_to_the_matching_auth_snapshot() {
     )
     .expect("failed to write auth file");
 
-    let auth = super::load_auth(agiworkforce_home.path(), false, AuthCredentialsStoreMode::File)
-        .expect("load auth")
-        .expect("auth available");
+    let auth = super::load_auth(
+        agiworkforce_home.path(),
+        false,
+        AuthCredentialsStoreMode::File,
+    )
+    .expect("load auth")
+    .expect("auth available");
     let mut updated_auth_dot_json = auth
         .get_current_auth_json()
         .expect("AuthDotJson should exist");
@@ -344,10 +352,19 @@ impl Drop for EnvVarGuard {
 #[tokio::test]
 async fn enforce_login_restrictions_logs_out_for_method_mismatch() {
     let agiworkforce_home = tempdir().unwrap();
-    login_with_api_key(agiworkforce_home.path(), "sk-test", AuthCredentialsStoreMode::File)
-        .expect("seed api key");
+    login_with_api_key(
+        agiworkforce_home.path(),
+        "sk-test",
+        AuthCredentialsStoreMode::File,
+    )
+    .expect("seed api key");
 
-    let config = build_config(agiworkforce_home.path(), Some(ForcedLoginMethod::Chatgpt), None).await;
+    let config = build_config(
+        agiworkforce_home.path(),
+        Some(ForcedLoginMethod::Chatgpt),
+        None,
+    )
+    .await;
 
     let err =
         super::enforce_login_restrictions(&config).expect_err("expected method mismatch to error");
@@ -410,8 +427,12 @@ async fn enforce_login_restrictions_allows_matching_workspace() {
 async fn enforce_login_restrictions_allows_api_key_if_login_method_not_set_but_forced_chatgpt_workspace_id_is_set()
  {
     let agiworkforce_home = tempdir().unwrap();
-    login_with_api_key(agiworkforce_home.path(), "sk-test", AuthCredentialsStoreMode::File)
-        .expect("seed api key");
+    login_with_api_key(
+        agiworkforce_home.path(),
+        "sk-test",
+        AuthCredentialsStoreMode::File,
+    )
+    .expect("seed api key");
 
     let config = build_config(agiworkforce_home.path(), None, Some("org_mine".to_string())).await;
 
@@ -428,7 +449,12 @@ async fn enforce_login_restrictions_blocks_env_api_key_when_chatgpt_required() {
     let _guard = EnvVarGuard::set(AGIWORKFORCE_API_KEY_ENV_VAR, "sk-env");
     let agiworkforce_home = tempdir().unwrap();
 
-    let config = build_config(agiworkforce_home.path(), Some(ForcedLoginMethod::Chatgpt), None).await;
+    let config = build_config(
+        agiworkforce_home.path(),
+        Some(ForcedLoginMethod::Chatgpt),
+        None,
+    )
+    .await;
 
     let err = super::enforce_login_restrictions(&config)
         .expect_err("environment API key should not satisfy forced ChatGPT login");
@@ -451,9 +477,13 @@ fn plan_type_maps_known_plan() {
     )
     .expect("failed to write auth file");
 
-    let auth = super::load_auth(agiworkforce_home.path(), false, AuthCredentialsStoreMode::File)
-        .expect("load auth")
-        .expect("auth available");
+    let auth = super::load_auth(
+        agiworkforce_home.path(),
+        false,
+        AuthCredentialsStoreMode::File,
+    )
+    .expect("load auth")
+    .expect("auth available");
 
     pretty_assertions::assert_eq!(auth.account_plan_type(), Some(AccountPlanType::Pro));
 }
@@ -471,9 +501,13 @@ fn plan_type_maps_unknown_to_unknown() {
     )
     .expect("failed to write auth file");
 
-    let auth = super::load_auth(agiworkforce_home.path(), false, AuthCredentialsStoreMode::File)
-        .expect("load auth")
-        .expect("auth available");
+    let auth = super::load_auth(
+        agiworkforce_home.path(),
+        false,
+        AuthCredentialsStoreMode::File,
+    )
+    .expect("load auth")
+    .expect("auth available");
 
     pretty_assertions::assert_eq!(auth.account_plan_type(), Some(AccountPlanType::Unknown));
 }
@@ -491,9 +525,13 @@ fn missing_plan_type_maps_to_unknown() {
     )
     .expect("failed to write auth file");
 
-    let auth = super::load_auth(agiworkforce_home.path(), false, AuthCredentialsStoreMode::File)
-        .expect("load auth")
-        .expect("auth available");
+    let auth = super::load_auth(
+        agiworkforce_home.path(),
+        false,
+        AuthCredentialsStoreMode::File,
+    )
+    .expect("load auth")
+    .expect("auth available");
 
     pretty_assertions::assert_eq!(auth.account_plan_type(), Some(AccountPlanType::Unknown));
 }

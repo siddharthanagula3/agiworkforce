@@ -385,7 +385,11 @@ pub fn login_with_api_key(
         tokens: None,
         last_refresh: None,
     };
-    save_auth(agiworkforce_home, &auth_dot_json, auth_credentials_store_mode)
+    save_auth(
+        agiworkforce_home,
+        &auth_dot_json,
+        auth_credentials_store_mode,
+    )
 }
 
 /// Writes an in-memory auth payload for externally managed ChatGPT tokens.
@@ -885,7 +889,9 @@ impl UnauthorizedRecoveryStepResult {
 impl UnauthorizedRecovery {
     fn new(manager: Arc<AuthManager>) -> Self {
         let cached_auth = manager.auth_cached();
-        let expected_account_id = cached_auth.as_ref().and_then(AgiWorkforceAuth::get_account_id);
+        let expected_account_id = cached_auth
+            .as_ref()
+            .and_then(AgiWorkforceAuth::get_account_id);
         let mode = if cached_auth
             .as_ref()
             .is_some_and(AgiWorkforceAuth::is_external_chatgpt_tokens)
@@ -1088,7 +1094,10 @@ impl AuthManager {
     }
 
     /// Create an AuthManager with a specific AgiWorkforceAuth and codex home, for testing only.
-    pub fn from_auth_for_testing_with_home(auth: AgiWorkforceAuth, agiworkforce_home: PathBuf) -> Arc<Self> {
+    pub fn from_auth_for_testing_with_home(
+        auth: AgiWorkforceAuth,
+        agiworkforce_home: PathBuf,
+    ) -> Arc<Self> {
         let cached = CachedAuth {
             auth: Some(auth),
             external_refresher: None,
@@ -1108,7 +1117,10 @@ impl AuthManager {
         self.inner.read().ok().and_then(|c| c.auth.clone())
     }
 
-    pub fn refresh_failure_for_auth(&self, auth: &AgiWorkforceAuth) -> Option<RefreshTokenFailedError> {
+    pub fn refresh_failure_for_auth(
+        &self,
+        auth: &AgiWorkforceAuth,
+    ) -> Option<RefreshTokenFailedError> {
         self.inner.read().ok().and_then(|cached| {
             cached
                 .permanent_refresh_failure
@@ -1383,7 +1395,9 @@ impl AuthManager {
     }
 
     pub fn get_api_auth_mode(&self) -> Option<ApiAuthMode> {
-        self.auth_cached().as_ref().map(AgiWorkforceAuth::api_auth_mode)
+        self.auth_cached()
+            .as_ref()
+            .map(AgiWorkforceAuth::api_auth_mode)
     }
 
     pub fn auth_mode(&self) -> Option<crate::AuthMode> {

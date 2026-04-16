@@ -1,15 +1,15 @@
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
-use base64::Engine;
 use agiworkforce_client::build_reqwest_client_with_custom_ca;
 use agiworkforce_core::auth::AuthCredentialsStoreMode;
 use agiworkforce_core::config::Config;
 use agiworkforce_core::config::find_agiworkforce_home;
 use agiworkforce_core::default_client::get_agiworkforce_user_agent;
-use agiworkforce_login::AuthMode;
 use agiworkforce_login::AgiWorkforceAuth;
+use agiworkforce_login::AuthMode;
 use agiworkforce_protocol::protocol::ConversationAudioParams;
 use agiworkforce_protocol::protocol::RealtimeAudioFrame;
+use base64::Engine;
 use cpal::traits::DeviceTrait;
 use cpal::traits::HostTrait;
 use cpal::traits::StreamTrait;
@@ -763,10 +763,12 @@ fn normalize_chatgpt_base_url(input: &str) -> String {
 }
 
 async fn resolve_auth() -> Result<TranscriptionAuthContext, String> {
-    let agiworkforce_home = find_agiworkforce_home().map_err(|e| format!("failed to find codex home: {e}"))?;
-    let auth = AgiWorkforceAuth::from_auth_storage(&agiworkforce_home, AuthCredentialsStoreMode::Auto)
-        .map_err(|e| format!("failed to read auth.json: {e}"))?
-        .ok_or_else(|| "No Codex auth is configured; please run `codex login`".to_string())?;
+    let agiworkforce_home =
+        find_agiworkforce_home().map_err(|e| format!("failed to find codex home: {e}"))?;
+    let auth =
+        AgiWorkforceAuth::from_auth_storage(&agiworkforce_home, AuthCredentialsStoreMode::Auto)
+            .map_err(|e| format!("failed to read auth.json: {e}"))?
+            .ok_or_else(|| "No Codex auth is configured; please run `codex login`".to_string())?;
 
     let chatgpt_account_id = auth.get_account_id();
 
