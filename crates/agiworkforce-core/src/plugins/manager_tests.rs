@@ -127,7 +127,8 @@ fn load_plugins_loads_default_skills_and_mcp_servers() {
 }"#,
     );
 
-    let outcome = load_plugins_from_config(&plugin_config_toml(true, true), agiworkforce_home.path());
+    let outcome =
+        load_plugins_from_config(&plugin_config_toml(true, true), agiworkforce_home.path());
 
     assert_eq!(
         outcome.plugins,
@@ -335,7 +336,8 @@ fn capability_summary_sanitizes_plugin_descriptions_to_one_line() {
         "---\nname: sample-search\ndescription: search sample data\n---\n",
     );
 
-    let outcome = load_plugins_from_config(&plugin_config_toml(true, true), agiworkforce_home.path());
+    let outcome =
+        load_plugins_from_config(&plugin_config_toml(true, true), agiworkforce_home.path());
 
     assert_eq!(
         outcome.plugins[0].manifest_description.as_deref(),
@@ -370,7 +372,8 @@ fn capability_summary_truncates_overlong_plugin_descriptions() {
         "---\nname: sample-search\ndescription: search sample data\n---\n",
     );
 
-    let outcome = load_plugins_from_config(&plugin_config_toml(true, true), agiworkforce_home.path());
+    let outcome =
+        load_plugins_from_config(&plugin_config_toml(true, true), agiworkforce_home.path());
 
     assert_eq!(
         outcome.plugins[0].manifest_description.as_deref(),
@@ -450,7 +453,8 @@ fn load_plugins_uses_manifest_configured_component_paths() {
 }"#,
     );
 
-    let outcome = load_plugins_from_config(&plugin_config_toml(true, true), agiworkforce_home.path());
+    let outcome =
+        load_plugins_from_config(&plugin_config_toml(true, true), agiworkforce_home.path());
 
     assert_eq!(
         outcome.plugins[0].skill_roots,
@@ -556,7 +560,8 @@ fn load_plugins_ignores_manifest_component_paths_without_dot_slash() {
 }"#,
     );
 
-    let outcome = load_plugins_from_config(&plugin_config_toml(true, true), agiworkforce_home.path());
+    let outcome =
+        load_plugins_from_config(&plugin_config_toml(true, true), agiworkforce_home.path());
 
     assert_eq!(
         outcome.plugins[0].skill_roots,
@@ -615,7 +620,8 @@ fn load_plugins_preserves_disabled_plugins_without_effective_contributions() {
 }"#,
     );
 
-    let outcome = load_plugins_from_config(&plugin_config_toml(false, true), agiworkforce_home.path());
+    let outcome =
+        load_plugins_from_config(&plugin_config_toml(false, true), agiworkforce_home.path());
 
     assert_eq!(
         outcome.plugins,
@@ -845,7 +851,8 @@ fn load_plugins_returns_empty_when_feature_disabled() {
     );
 
     let config = load_config_blocking(agiworkforce_home.path(), agiworkforce_home.path());
-    let outcome = PluginsManager::new(agiworkforce_home.path().to_path_buf()).plugins_for_config(&config);
+    let outcome =
+        PluginsManager::new(agiworkforce_home.path().to_path_buf()).plugins_for_config(&config);
 
     assert_eq!(outcome, PluginLoadOutcome::default());
 }
@@ -2235,7 +2242,8 @@ fn load_plugins_ignores_project_config_files() {
     let stack = ConfigLayerStack::new(
         vec![ConfigLayerEntry::new(
             ConfigLayerSource::Project {
-                dot_agiworkforce_folder: AbsolutePathBuf::try_from(project_root.join(".codex")).unwrap(),
+                dot_agiworkforce_folder: AbsolutePathBuf::try_from(project_root.join(".codex"))
+                    .unwrap(),
             },
             toml::from_str(&plugin_config_toml(true, true)).expect("project config should parse"),
         )],

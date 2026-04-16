@@ -64,19 +64,21 @@ fn conversations_dir() -> Result<PathBuf> {
     Ok(dir)
 }
 
+#[allow(dead_code)]
 /// Save the current agent session to disk as JSON.
 /// Returns the conversation ID (timestamp-based).
 ///
-/// **Deprecated**: JSON storage is deprecated in favour of SQLite.
+/// **Deprecated**: JSON storage is deprecated in favour of managed sessions.
 /// Use `/migrate` to move existing conversations.
 pub fn save_conversation(session: &AgentSession) -> Result<String> {
     eprintln!(
         "{}",
-        "Note: JSON storage is deprecated. Use /migrate to move to SQLite.".dimmed()
+        "Note: JSON storage is deprecated. Use /migrate to move into managed sessions.".dimmed()
     );
     save_conversation_in_dir(session, &conversations_dir()?)
 }
 
+#[allow(dead_code)]
 /// Save a conversation into `dir`. Extracted so tests can supply a temp directory.
 fn save_conversation_in_dir(session: &AgentSession, dir: &std::path::Path) -> Result<String> {
     std::fs::create_dir_all(dir).context("Failed to create conversations directory")?;

@@ -224,7 +224,10 @@ impl EventProcessor for EventProcessorWithHumanOutput {
         eprintln!("{}\n{}", "user".style(self.cyan), prompt);
     }
 
-    fn process_server_notification(&mut self, notification: ServerNotification) -> AgiWorkforceStatus {
+    fn process_server_notification(
+        &mut self,
+        notification: ServerNotification,
+    ) -> AgiWorkforceStatus {
         match notification {
             ServerNotification::ConfigWarning(notification) => {
                 let details = notification

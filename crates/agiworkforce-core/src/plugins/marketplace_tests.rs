@@ -581,7 +581,11 @@ fn list_marketplaces_resolves_plugin_interface_paths_to_absolute() {
     );
     assert_eq!(
         marketplaces[0].plugins[0].policy.products,
-        Some(vec![Product::AgiWorkforce, Product::Chatgpt, Product::Atlas])
+        Some(vec![
+            Product::AgiWorkforce,
+            Product::Chatgpt,
+            Product::Atlas
+        ])
     );
     assert_eq!(
         marketplaces[0].plugins[0].interface,

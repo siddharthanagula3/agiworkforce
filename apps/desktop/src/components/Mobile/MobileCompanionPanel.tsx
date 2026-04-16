@@ -21,11 +21,11 @@ export function MobileCompanionPanel() {
   const isConnected = status === 'streaming' || (status === 'pairing' && peerConnected);
   const isPaired = peerConnected;
 
-  // Listen for Tauri events — forwarded by useAgenticEvents hook already, so no
+  // Listen for Tauri events — forwarded by the startup-owned runtime activity listeners, so no
   // duplicate listeners needed. pendingApprovals in toolStore is the source of truth.
 
   useEffect(() => {
-    // Intentionally empty — approval events are handled by useAgenticEvents hook
+    // Intentionally empty — approval events are handled by the runtime activity listeners
     // which populates toolStore.pendingApprovals for us.
   }, []);
 

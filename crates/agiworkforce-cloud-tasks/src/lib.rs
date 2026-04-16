@@ -1,17 +1,20 @@
+pub mod agiworkforce_tui;
 mod app;
 mod cli;
 pub mod env_detect;
+#[cfg(test)]
+mod mock_backend;
 mod new_task;
 pub mod scrollable_diff;
 mod ui;
 pub mod util;
 pub use cli::Cli;
 
-use anyhow::anyhow;
-use chrono::Utc;
 use agiworkforce_cloud_tasks_client::TaskStatus;
 use agiworkforce_git_utils::current_branch_name;
 use agiworkforce_git_utils::default_branch_name;
+use anyhow::anyhow;
+use chrono::Utc;
 use owo_colors::OwoColorize;
 use owo_colors::Stream;
 use std::cmp::Ordering;
@@ -41,7 +44,9 @@ struct BackendContext {
 
 async fn init_backend(user_agent_suffix: &str) -> anyhow::Result<BackendContext> {
     let use_mock = matches!(
-        std::env::var("AGIWORKFORCE_CLOUD_TASKS_MODE").ok().as_deref(),
+        std::env::var("AGIWORKFORCE_CLOUD_TASKS_MODE")
+            .ok()
+            .as_deref(),
         Some("mock") | Some("MOCK")
     );
     let base_url = std::env::var("AGIWORKFORCE_CLOUD_TASKS_BASE_URL")
@@ -57,7 +62,8 @@ async fn init_backend(user_agent_suffix: &str) -> anyhow::Result<BackendContext>
     }
 
     let ua = agiworkforce_core::default_client::get_agiworkforce_user_agent();
-    let mut http = agiworkforce_cloud_tasks_client::HttpClient::new(base_url.clone())?.with_user_agent(ua);
+    let mut http =
+        agiworkforce_cloud_tasks_client::HttpClient::new(base_url.clone())?.with_user_agent(ua);
     let style = if base_url.contains("/backend-api") {
         "wham"
     } else {
@@ -301,10 +307,12 @@ async fn collect_attempt_diffs(
     task_id: &agiworkforce_cloud_tasks_client::TaskId,
 ) -> anyhow::Result<Vec<AttemptDiffData>> {
     let text =
-        agiworkforce_cloud_tasks_client::CloudBackend::get_task_text(backend, task_id.clone()).await?;
+        agiworkforce_cloud_tasks_client::CloudBackend::get_task_text(backend, task_id.clone())
+            .await?;
     let mut attempts = Vec::new();
     if let Some(diff) =
-        agiworkforce_cloud_tasks_client::CloudBackend::get_task_diff(backend, task_id.clone()).await?
+        agiworkforce_cloud_tasks_client::CloudBackend::get_task_diff(backend, task_id.clone())
+            .await?
     {
         attempts.push(AttemptDiffData {
             placement: text.attempt_placement,
@@ -497,7 +505,8 @@ async fn run_status_command(args: crate::cli::StatusCommand) -> anyhow::Result<(
     let ctx = init_backend("agiworkforce_cloud_tasks_status").await?;
     let task_id = parse_task_id(&args.task_id)?;
     let summary =
-        agiworkforce_cloud_tasks_client::CloudBackend::get_task_summary(&*ctx.backend, task_id).await?;
+        agiworkforce_cloud_tasks_client::CloudBackend::get_task_summary(&*ctx.backend, task_id)
+            .await?;
     let now = Utc::now();
     let colorize = supports_color::on(SupportStream::Stdout).is_some();
     for line in format_task_status_lines(&summary, now, colorize) {
@@ -606,7 +615,9 @@ async fn run_apply_command(args: crate::cli::ApplyCommand) -> anyhow::Result<()>
     Ok(())
 }
 
-fn level_from_status(status: agiworkforce_cloud_tasks_client::ApplyStatus) -> app::ApplyResultLevel {
+fn level_from_status(
+    status: agiworkforce_cloud_tasks_client::ApplyStatus,
+) -> app::ApplyResultLevel {
     match status {
         agiworkforce_cloud_tasks_client::ApplyStatus::Success => app::ApplyResultLevel::Success,
         agiworkforce_cloud_tasks_client::ApplyStatus::Partial => app::ApplyResultLevel::Partial,
@@ -731,7 +742,10 @@ fn spawn_apply(
 // (no standalone patch summarizer needed – UI displays raw diffs)
 
 /// Entry point for the `codex cloud` subcommand.
-pub async fn run_main(cli: Cli, _agiworkforce_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
+pub async fn run_main(
+    cli: Cli,
+    _agiworkforce_linux_sandbox_exe: Option<PathBuf>,
+) -> anyhow::Result<()> {
     if let Some(command) = cli.command {
         return match command {
             crate::cli::Command::Exec(args) => run_exec_command(args).await,
@@ -930,7 +944,7 @@ pub async fn run_main(cli: Cli, _agiworkforce_linux_sandbox_exe: Option<PathBuf>
                 if let Some(page) = app.new_task.as_mut() {
                     if page.composer.flush_paste_burst_if_due() { needs_redraw = true; }
                     if page.composer.is_in_paste_burst() {
-                        let _ = frame_tx.send(Instant::now() + agiworkforce_tui::ComposerInput::recommended_flush_delay());
+                        let _ = frame_tx.send(Instant::now() + crate::agiworkforce_tui::ComposerInput::recommended_flush_delay());
                     }
                 }
                 // Keep spinner pulsing only while loading.
@@ -1491,7 +1505,7 @@ pub async fn run_main(cli: Cli, _agiworkforce_linux_sandbox_exe: Option<PathBuf>
                                 _ => {
                                     if page.submitting {
                                         // Ignore input while submitting
-                                    } else if let agiworkforce_tui::ComposerAction::Submitted(text) = page.composer.input(key) {
+                                    } else if let crate::agiworkforce_tui::ComposerAction::Submitted(text) = page.composer.input(key) {
                                             // Submit only if we have an env id
                                             if let Some(env) = page.env_id.clone() {
                                                 append_error_log(format!(
@@ -1521,7 +1535,7 @@ pub async fn run_main(cli: Cli, _agiworkforce_linux_sandbox_exe: Option<PathBuf>
                                     needs_redraw = true;
                                     // If paste‑burst is active, schedule a micro‑flush frame.
                                     if page.composer.is_in_paste_burst() {
-                                        let _ = frame_tx.send(Instant::now() + agiworkforce_tui::ComposerInput::recommended_flush_delay());
+                                        let _ = frame_tx.send(Instant::now() + crate::agiworkforce_tui::ComposerInput::recommended_flush_delay());
                                     }
                                     // Always schedule an immediate redraw for key edits in the composer.
                                     let _ = frame_tx.send(Instant::now());
@@ -2124,14 +2138,14 @@ fn pretty_lines_from_error(raw: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agiworkforce_tui::ComposerAction;
+    use crate::agiworkforce_tui::ComposerInput;
+    use crate::mock_backend::MockClient;
     use crate::resolve_git_ref_with_git_info;
     use agiworkforce_cloud_tasks_client::DiffSummary;
-    use agiworkforce_cloud_tasks_client::MockClient;
     use agiworkforce_cloud_tasks_client::TaskId;
     use agiworkforce_cloud_tasks_client::TaskStatus;
     use agiworkforce_cloud_tasks_client::TaskSummary;
-    use agiworkforce_tui::ComposerAction;
-    use agiworkforce_tui::ComposerInput;
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;

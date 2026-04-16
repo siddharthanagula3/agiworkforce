@@ -3,8 +3,8 @@
 //! This crate defines the feature registry plus the logic used to resolve an
 //! effective feature set from config-like inputs.
 
-use agiworkforce_login::AuthManager;
 use agiworkforce_login::AgiWorkforceAuth;
+use agiworkforce_login::AuthManager;
 use agiworkforce_otel::SessionTelemetry;
 use agiworkforce_protocol::protocol::Event;
 use agiworkforce_protocol::protocol::EventMsg;

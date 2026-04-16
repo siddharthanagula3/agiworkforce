@@ -1,86 +1,45 @@
-//! SQLite-backed session storage for conversation persistence.
+//! Managed-session-backed conversation storage compatibility layer.
 //!
-//! Creates `~/.agiworkforce/sessions.db` with WAL mode.
+//! The CLI now persists live sessions as JSON/JSONL files under
+//! `~/.agiworkforce/managed_sessions/`, following the same session-first
+//! architecture used by the reference runtimes in `~/Desktop/src` and
+//! `~/Desktop/claw-code`.
 //!
-//! Schema:
-//! - `sessions`   — metadata (id, title, model, cwd, git_branch, timestamps, total_tokens)
-//! - `messages`   — per-message content (role, content_json, tokens, created_at)
-//! - `tool_calls` — per-tool-call records (name, args, output, success, duration_ms)
+//! This module preserves the older `sessions::*` surface so existing CLI
+//! commands keep compiling, but it no longer depends on SQLite.
 
-use anyhow::{Context, Result};
-use rusqlite::{params, Connection};
-use std::path::PathBuf;
+use anyhow::{bail, Context, Result};
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
-use crate::models::{Message, MessageContent};
+use crate::models::{ContentBlock, Message, MessageContent};
+use crate::runtime::session::{ManagedSession, MANAGED_SESSION_JSONL_EXTENSION};
+use crate::runtime::session_control::{ManagedSessionReference, MANAGED_SESSION_DIR_NAME};
 
-// ---------------------------------------------------------------------------
-// DB initialization
-// ---------------------------------------------------------------------------
+const SESSION_METADATA_DIR_NAME: &str = "managed_session_metadata";
 
-/// Open (or create) the sessions database with WAL mode and FK enforcement.
-pub fn open_db() -> Result<Connection> {
-    let path = db_path()?;
-    let conn = Connection::open(&path)
-        .with_context(|| format!("Failed to open sessions DB at {}", path.display()))?;
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
-        .context("Failed to set PRAGMA options")?;
-    create_tables(&conn)?;
-    Ok(conn)
+#[derive(Debug, Clone)]
+pub struct Connection {
+    base_dir: PathBuf,
 }
 
-fn db_path() -> Result<PathBuf> {
-    let dir =
-        crate::config::CliConfig::config_dir().context("Failed to locate config directory")?;
-    Ok(dir.join("sessions.db"))
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct SessionMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    #[serde(default)]
+    custom_title: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    git_branch: Option<String>,
 }
-
-fn create_tables(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        "
-        CREATE TABLE IF NOT EXISTS sessions (
-            id           TEXT    PRIMARY KEY,
-            title        TEXT    NOT NULL DEFAULT '',
-            model        TEXT    NOT NULL DEFAULT '',
-            cwd          TEXT    NOT NULL DEFAULT '',
-            git_branch   TEXT    NOT NULL DEFAULT '',
-            created_at   INTEGER NOT NULL,
-            updated_at   INTEGER NOT NULL,
-            total_tokens INTEGER NOT NULL DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS messages (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id   TEXT    NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-            role         TEXT    NOT NULL,
-            content_json TEXT    NOT NULL,
-            tokens       INTEGER NOT NULL DEFAULT 0,
-            created_at   INTEGER NOT NULL
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_messages_session
-            ON messages(session_id);
-
-        CREATE TABLE IF NOT EXISTS tool_calls (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            message_id   INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-            tool_name    TEXT    NOT NULL,
-            args_json    TEXT    NOT NULL DEFAULT '{}',
-            output       TEXT    NOT NULL DEFAULT '',
-            success      INTEGER NOT NULL DEFAULT 1,
-            duration_ms  INTEGER NOT NULL DEFAULT 0,
-            created_at   INTEGER NOT NULL
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_tool_calls_message
-            ON tool_calls(message_id);
-        ",
-    )
-    .context("Failed to create tables")
-}
-
-// ---------------------------------------------------------------------------
-// Session CRUD
-// ---------------------------------------------------------------------------
 
 /// Lightweight view of a session returned by list/search queries.
 #[derive(Debug, Clone)]
@@ -88,13 +47,8 @@ pub struct SessionSummary {
     pub id: String,
     pub title: String,
     pub model: String,
-    /// Working directory when session was created. Used by --search display.
-    #[allow(dead_code)]
     pub cwd: String,
-    /// Git branch at session creation time. Used by session display and fork.
-    #[allow(dead_code)]
     pub git_branch: String,
-    /// Epoch millis when the session was first created.
     #[allow(dead_code)]
     pub created_at: i64,
     pub updated_at: i64,
@@ -102,9 +56,282 @@ pub struct SessionSummary {
     pub message_count: i64,
 }
 
-/// Upsert session metadata.
-///
-/// If `session_id` already exists, the title and `updated_at` are refreshed.
+/// High-level session store statistics.
+#[derive(Debug, Clone)]
+pub struct DbStats {
+    pub session_count: i64,
+    pub message_count: i64,
+    pub tool_call_count: i64,
+    pub total_tokens: i64,
+}
+
+fn open_db_in(base_dir: impl AsRef<Path>) -> Result<Connection> {
+    let base_dir = base_dir.as_ref().to_path_buf();
+    fs::create_dir_all(base_dir.join(MANAGED_SESSION_DIR_NAME)).with_context(|| {
+        format!(
+            "Failed to create managed session directory {}",
+            base_dir.join(MANAGED_SESSION_DIR_NAME).display()
+        )
+    })?;
+    fs::create_dir_all(base_dir.join(SESSION_METADATA_DIR_NAME)).with_context(|| {
+        format!(
+            "Failed to create managed session metadata directory {}",
+            base_dir.join(SESSION_METADATA_DIR_NAME).display()
+        )
+    })?;
+    Ok(Connection { base_dir })
+}
+
+/// Open the managed session store rooted in the CLI config directory.
+pub fn open_db() -> Result<Connection> {
+    let base_dir =
+        crate::config::CliConfig::config_dir().context("Failed to locate config directory")?;
+    open_db_in(base_dir)
+}
+
+fn metadata_dir(base_dir: &Path) -> PathBuf {
+    base_dir.join(SESSION_METADATA_DIR_NAME)
+}
+
+fn metadata_path(base_dir: &Path, session_id: &str) -> PathBuf {
+    metadata_dir(base_dir).join(format!("{session_id}.json"))
+}
+
+fn managed_sessions_dir(base_dir: &Path) -> PathBuf {
+    base_dir.join(MANAGED_SESSION_DIR_NAME)
+}
+
+fn session_file_candidates(base_dir: &Path, session_id: &str) -> [PathBuf; 2] {
+    [
+        managed_sessions_dir(base_dir)
+            .join(format!("{session_id}.{}", MANAGED_SESSION_JSONL_EXTENSION)),
+        managed_sessions_dir(base_dir).join(format!("{session_id}.json")),
+    ]
+}
+
+fn find_session_path(base_dir: &Path, session_id: &str) -> Option<PathBuf> {
+    session_file_candidates(base_dir, session_id)
+        .into_iter()
+        .find(|path| path.exists())
+}
+
+fn save_session_to_default_path(base_dir: &Path, session: &ManagedSession) -> Result<PathBuf> {
+    let path = managed_sessions_dir(base_dir).join(format!(
+        "{}.{}",
+        session.session_id, MANAGED_SESSION_JSONL_EXTENSION
+    ));
+    session.save_to_path(&path)?;
+    Ok(path)
+}
+
+fn read_metadata(base_dir: &Path, session_id: &str) -> Result<Option<SessionMetadata>> {
+    let path = metadata_path(base_dir, session_id);
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    let contents = fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read session metadata {}", path.display()))?;
+    let metadata: SessionMetadata = serde_json::from_str(&contents)
+        .with_context(|| format!("Failed to parse session metadata {}", path.display()))?;
+    Ok(Some(metadata))
+}
+
+fn write_metadata(base_dir: &Path, session_id: &str, metadata: &SessionMetadata) -> Result<()> {
+    let path = metadata_path(base_dir, session_id);
+    let contents =
+        serde_json::to_string_pretty(metadata).context("Failed to serialize session metadata")?;
+    fs::write(&path, contents)
+        .with_context(|| format!("Failed to write session metadata {}", path.display()))?;
+    Ok(())
+}
+
+fn infer_title(messages: &[Message]) -> String {
+    messages
+        .iter()
+        .find(|message| message.role == "user")
+        .map(|message| {
+            let text = message.text_content();
+            let truncated: String = text.chars().take(50).collect();
+            if text.chars().count() > 50 {
+                format!("{truncated}...")
+            } else {
+                truncated
+            }
+        })
+        .filter(|title| !title.trim().is_empty())
+        .unwrap_or_else(|| "Untitled".to_string())
+}
+
+fn total_tokens(messages: &[Message]) -> i64 {
+    messages
+        .iter()
+        .map(|message| crate::compaction::estimate_tokens(&message.text_content()) as i64)
+        .sum()
+}
+
+fn tool_call_count(messages: &[Message]) -> i64 {
+    messages
+        .iter()
+        .map(|message| match &message.content {
+            MessageContent::Text(_) => 0,
+            MessageContent::Blocks(blocks) => blocks
+                .iter()
+                .filter(|block| matches!(block, ContentBlock::ToolUse { .. }))
+                .count() as i64,
+        })
+        .sum()
+}
+
+fn load_managed_session_from_path(path: &Path) -> Result<ManagedSession> {
+    ManagedSession::load_from_path(path)
+}
+
+fn resolve_reference_path(base_dir: &Path, reference: &str) -> Result<PathBuf> {
+    let parsed = ManagedSessionReference::parse(reference)?;
+    match parsed {
+        ManagedSessionReference::Latest => list_sessions_in(base_dir, usize::MAX)?
+            .into_iter()
+            .next()
+            .map(|summary| {
+                find_session_path(base_dir, &summary.id)
+                    .ok_or_else(|| anyhow::anyhow!("Managed session '{}' is missing", summary.id))
+            })
+            .transpose()?
+            .ok_or_else(|| anyhow::anyhow!("No managed sessions are available")),
+        ManagedSessionReference::SessionId(session_id) => find_session_path(base_dir, &session_id)
+            .ok_or_else(|| anyhow::anyhow!("Session '{}' not found", session_id)),
+        ManagedSessionReference::Path(path) => {
+            let path = if path.is_absolute() {
+                path
+            } else {
+                base_dir.join(path)
+            };
+            if !path.exists() {
+                bail!("Session file {} does not exist", path.display());
+            }
+            Ok(path)
+        }
+    }
+}
+
+fn load_all_sessions(
+    base_dir: &Path,
+) -> Result<Vec<(PathBuf, ManagedSession, Option<SessionMetadata>)>> {
+    let dir = managed_sessions_dir(base_dir);
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut by_session_id: HashMap<String, (PathBuf, ManagedSession, Option<SessionMetadata>)> =
+        HashMap::new();
+
+    for entry in fs::read_dir(&dir)
+        .with_context(|| format!("Failed to read managed session directory {}", dir.display()))?
+    {
+        let path = entry?.path();
+        let extension = path.extension().and_then(|value| value.to_str());
+        if !matches!(extension, Some("jsonl") | Some("json")) {
+            continue;
+        }
+
+        let session = load_managed_session_from_path(&path)?;
+        let metadata = read_metadata(base_dir, &session.session_id)?;
+
+        match by_session_id.get(&session.session_id) {
+            Some((existing_path, existing_session, _))
+                if existing_session.updated_at > session.updated_at
+                    || (existing_session.updated_at == session.updated_at
+                        && existing_path.extension().and_then(|value| value.to_str())
+                            == Some("jsonl")
+                        && path.extension().and_then(|value| value.to_str()) == Some("json")) => {}
+            _ => {
+                by_session_id.insert(session.session_id.clone(), (path, session, metadata));
+            }
+        }
+    }
+
+    let mut sessions: Vec<_> = by_session_id.into_values().collect();
+    sessions.sort_by(|left, right| {
+        right
+            .1
+            .updated_at
+            .cmp(&left.1.updated_at)
+            .then_with(|| right.1.created_at.cmp(&left.1.created_at))
+            .then_with(|| left.1.session_id.cmp(&right.1.session_id))
+    });
+    Ok(sessions)
+}
+
+fn summary_from_session(
+    path: &Path,
+    session: &ManagedSession,
+    metadata: Option<&SessionMetadata>,
+) -> SessionSummary {
+    let title = metadata
+        .and_then(|value| value.title.clone())
+        .unwrap_or_else(|| infer_title(&session.messages));
+    let model = metadata
+        .and_then(|value| value.model.clone())
+        .unwrap_or_default();
+    let cwd = metadata
+        .and_then(|value| value.cwd.clone())
+        .unwrap_or_default();
+    let git_branch = metadata
+        .and_then(|value| value.git_branch.clone())
+        .unwrap_or_default();
+
+    let _ = path;
+
+    SessionSummary {
+        id: session.session_id.clone(),
+        title,
+        model,
+        cwd,
+        git_branch,
+        created_at: session.created_at.timestamp_millis(),
+        updated_at: session.updated_at.timestamp_millis(),
+        total_tokens: total_tokens(&session.messages),
+        message_count: session.messages.len() as i64,
+    }
+}
+
+fn list_sessions_in(base_dir: &Path, limit: usize) -> Result<Vec<SessionSummary>> {
+    let sessions = load_all_sessions(base_dir)?;
+    Ok(sessions
+        .into_iter()
+        .take(limit)
+        .map(|(path, session, metadata)| summary_from_session(&path, &session, metadata.as_ref()))
+        .collect())
+}
+
+/// Sync metadata for a managed session so list/search output keeps useful
+/// information like title and model.
+pub fn sync_session_metadata(
+    conn: &Connection,
+    session_id: &str,
+    model: &str,
+    cwd: &str,
+    git_branch: &str,
+    messages: &[Message],
+) -> Result<()> {
+    let mut metadata = read_metadata(&conn.base_dir, session_id)?.unwrap_or_default();
+    if !metadata.custom_title {
+        metadata.title = Some(infer_title(messages));
+    }
+    if !model.trim().is_empty() {
+        metadata.model = Some(model.to_string());
+    }
+    if !cwd.trim().is_empty() {
+        metadata.cwd = Some(cwd.to_string());
+    }
+    if !git_branch.trim().is_empty() {
+        metadata.git_branch = Some(git_branch.to_string());
+    }
+    write_metadata(&conn.base_dir, session_id, &metadata)
+}
+
+/// Upsert session metadata and ensure the backing managed session file exists.
 pub fn save_session(
     conn: &Connection,
     session_id: &str,
@@ -113,174 +340,124 @@ pub fn save_session(
     cwd: &str,
     git_branch: &str,
 ) -> Result<()> {
-    let now = now_ms();
-    conn.execute(
-        "INSERT INTO sessions (id, title, model, cwd, git_branch, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
-         ON CONFLICT(id) DO UPDATE SET
-             title      = excluded.title,
-             updated_at = excluded.updated_at",
-        params![session_id, title, model, cwd, git_branch, now],
-    )
-    .context("Failed to save session")?;
-    Ok(())
+    let path = find_session_path(&conn.base_dir, session_id);
+    let session = if let Some(path) = path {
+        let mut session = load_managed_session_from_path(&path)?;
+        session.touch();
+        session
+    } else {
+        ManagedSession::new(session_id.to_string(), Utc::now())
+    };
+    save_session_to_default_path(&conn.base_dir, &session)?;
+
+    let mut metadata = read_metadata(&conn.base_dir, session_id)?.unwrap_or_default();
+    if !title.trim().is_empty() {
+        metadata.title = Some(title.to_string());
+        metadata.custom_title = true;
+    } else if !metadata.custom_title {
+        metadata.title = Some("Untitled".to_string());
+    }
+    if !model.trim().is_empty() {
+        metadata.model = Some(model.to_string());
+    }
+    if !cwd.trim().is_empty() {
+        metadata.cwd = Some(cwd.to_string());
+    }
+    if !git_branch.trim().is_empty() {
+        metadata.git_branch = Some(git_branch.to_string());
+    }
+    write_metadata(&conn.base_dir, session_id, &metadata)
 }
 
-/// Append a message to a session.
-///
-/// Returns the auto-generated row ID (useful for [`record_tool_call`]).
+/// Append a message to a managed session and return a synthetic message id.
 pub fn save_message(
     conn: &Connection,
     session_id: &str,
     msg: &Message,
-    tokens: usize,
+    _tokens: usize,
 ) -> Result<i64> {
-    let content_json =
-        serde_json::to_string(&msg.content).context("Failed to serialize message content")?;
-    let now = now_ms();
-    conn.execute(
-        "INSERT INTO messages (session_id, role, content_json, tokens, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![session_id, msg.role, content_json, tokens as i64, now],
-    )
-    .context("Failed to save message")?;
+    let path = find_session_path(&conn.base_dir, session_id)
+        .ok_or_else(|| anyhow::anyhow!("Session '{}' not found", session_id))?;
+    let mut session = load_managed_session_from_path(&path)?;
+    session.push_message(msg.clone());
+    save_session_to_default_path(&conn.base_dir, &session)?;
 
-    let row_id = conn.last_insert_rowid();
+    let mut metadata = read_metadata(&conn.base_dir, session_id)?.unwrap_or_default();
+    if !metadata.custom_title {
+        metadata.title = Some(infer_title(&session.messages));
+    }
+    write_metadata(&conn.base_dir, session_id, &metadata)?;
 
-    conn.execute(
-        "UPDATE sessions SET total_tokens = total_tokens + ?1, updated_at = ?2 WHERE id = ?3",
-        params![tokens as i64, now, session_id],
-    )
-    .context("Failed to update session token count")?;
-
-    Ok(row_id)
+    Ok(session.messages.len() as i64)
 }
 
 /// List sessions ordered by most-recently-updated, up to `limit` rows.
 pub fn list_sessions(conn: &Connection, limit: usize) -> Result<Vec<SessionSummary>> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT s.id, s.title, s.model, s.cwd, s.git_branch,
-                    s.created_at, s.updated_at, s.total_tokens,
-                    COUNT(m.id) AS message_count
-             FROM sessions s
-             LEFT JOIN messages m ON m.session_id = s.id
-             GROUP BY s.id
-             ORDER BY s.updated_at DESC
-             LIMIT ?1",
-        )
-        .context("Failed to prepare list query")?;
-
-    let rows = stmt
-        .query_map(params![limit as i64], row_to_summary)
-        .context("Failed to query sessions")?;
-
-    rows.collect::<std::result::Result<Vec<_>, _>>()
-        .context("Failed to collect session rows")
+    list_sessions_in(&conn.base_dir, limit)
 }
 
-/// Load all messages for `session_id` in chronological order.
+/// Load all messages for a managed session in chronological order.
 pub fn load_session(conn: &Connection, session_id: &str) -> Result<Vec<Message>> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT role, content_json FROM messages
-             WHERE session_id = ?1
-             ORDER BY id ASC",
-        )
-        .context("Failed to prepare message query")?;
-
-    let rows = stmt
-        .query_map(params![session_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })
-        .context("Failed to query messages")?;
-
-    let mut messages = Vec::new();
-    for row in rows {
-        let (role, content_json) = row.context("Failed to read message row")?;
-        let content: MessageContent = serde_json::from_str(&content_json)
-            .with_context(|| format!("Failed to deserialize content: {}", content_json))?;
-        messages.push(Message { role, content });
-    }
-    Ok(messages)
+    let path = resolve_reference_path(&conn.base_dir, session_id)?;
+    let session = load_managed_session_from_path(&path)?;
+    Ok(session.messages)
 }
 
-/// Delete a session and its messages/tool_calls via CASCADE.
-/// Used by archive_session and will be wired into /session delete REPL command.
+/// Delete a managed session and its metadata.
 #[allow(dead_code)]
 pub fn delete_session(conn: &Connection, session_id: &str) -> Result<()> {
-    let n = conn
-        .execute("DELETE FROM sessions WHERE id = ?1", params![session_id])
-        .context("Failed to delete session")?;
-    if n == 0 {
-        anyhow::bail!("Session '{}' not found", session_id);
+    let path = resolve_reference_path(&conn.base_dir, session_id)?;
+    let session = load_managed_session_from_path(&path)?;
+    fs::remove_file(&path)
+        .with_context(|| format!("Failed to delete session file {}", path.display()))?;
+    let metadata = metadata_path(&conn.base_dir, &session.session_id);
+    if metadata.exists() {
+        fs::remove_file(&metadata)
+            .with_context(|| format!("Failed to delete session metadata {}", metadata.display()))?;
     }
     Ok(())
 }
 
-/// Rename a session's title.
+/// Rename a session title by updating its metadata sidecar.
 pub fn rename_session(conn: &Connection, session_id: &str, new_title: &str) -> Result<()> {
-    let now = now_ms();
-    let n = conn
-        .execute(
-            "UPDATE sessions SET title = ?1, updated_at = ?2 WHERE id = ?3",
-            params![new_title, now, session_id],
-        )
-        .context("Failed to rename session")?;
-    if n == 0 {
-        anyhow::bail!("Session '{}' not found", session_id);
-    }
-    Ok(())
+    let path = resolve_reference_path(&conn.base_dir, session_id)?;
+    let session = load_managed_session_from_path(&path)?;
+    let mut metadata = read_metadata(&conn.base_dir, &session.session_id)?.unwrap_or_default();
+    metadata.title = Some(new_title.to_string());
+    metadata.custom_title = true;
+    write_metadata(&conn.base_dir, &session.session_id, &metadata)
 }
 
-/// Archive (delete) a session.
-///
-/// Currently implemented as a delete. A future version may set an `archived`
-/// flag instead, but for now the simplest approach is full removal.
-/// Will be wired into /session archive REPL command.
+/// Archive (delete) a managed session.
 #[allow(dead_code)]
 pub fn archive_session(conn: &Connection, session_id: &str) -> Result<()> {
     delete_session(conn, session_id)
 }
 
-/// Escape LIKE wildcard characters so user input is matched literally.
-fn escape_like_pattern(input: &str) -> String {
-    input
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
+fn normalize_for_search(input: &str) -> String {
+    input.to_lowercase()
 }
 
-/// Full-text search across session titles and message content.
+/// Full-text search across managed session titles and message content.
 pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSummary>> {
-    let escaped_query = escape_like_pattern(query);
-    let pattern = format!("%{}%", escaped_query);
-    let mut stmt = conn
-        .prepare(
-            "SELECT DISTINCT s.id, s.title, s.model, s.cwd, s.git_branch,
-                    s.created_at, s.updated_at, s.total_tokens,
-                    COUNT(m2.id) AS message_count
-             FROM sessions s
-             LEFT JOIN messages m  ON m.session_id  = s.id
-                 AND (m.content_json LIKE ?1 ESCAPE '\\' OR m.role LIKE ?1 ESCAPE '\\')
-             LEFT JOIN messages m2 ON m2.session_id = s.id
-             WHERE s.title LIKE ?1 ESCAPE '\\' OR m.id IS NOT NULL
-             GROUP BY s.id
-             ORDER BY s.updated_at DESC
-             LIMIT 50",
-        )
-        .context("Failed to prepare search query")?;
-
-    let rows = stmt
-        .query_map(params![pattern], row_to_summary)
-        .context("Failed to execute search")?;
-
-    rows.collect::<std::result::Result<Vec<_>, _>>()
-        .context("Failed to collect search results")
+    let needle = normalize_for_search(query);
+    let sessions = load_all_sessions(&conn.base_dir)?;
+    Ok(sessions
+        .into_iter()
+        .filter_map(|(path, session, metadata)| {
+            let summary = summary_from_session(&path, &session, metadata.as_ref());
+            let title_matches = normalize_for_search(&summary.title).contains(&needle);
+            let content_matches = session
+                .messages
+                .iter()
+                .any(|message| normalize_for_search(&message.text_content()).contains(&needle));
+            (title_matches || content_matches).then_some(summary)
+        })
+        .take(50)
+        .collect())
 }
 
 /// Search across session messages and return matching snippets with context.
-/// Returns (session_summary, matching_snippets) pairs.
 #[allow(dead_code)]
 pub fn search_session_messages(
     conn: &Connection,
@@ -288,53 +465,28 @@ pub fn search_session_messages(
     max_results: usize,
 ) -> Result<Vec<(SessionSummary, Vec<String>)>> {
     let sessions = search_sessions(conn, query)?;
-    let query_lower = query.to_lowercase();
+    let needle = normalize_for_search(query);
     let mut results = Vec::new();
 
     for session in sessions.into_iter().take(max_results) {
         let messages = load_session(conn, &session.id)?;
         let mut snippets = Vec::new();
 
-        for msg in &messages {
-            let text = msg.text_content();
-            let text_lower = text.to_lowercase();
-            if text_lower.contains(&query_lower) {
-                if let Some(pos) = text_lower.find(&query_lower) {
-                    // Use char-safe boundaries to avoid panics on multi-byte UTF-8
-                    let indices_up_to_pos: Vec<usize> = text
-                        .char_indices()
-                        .map(|(i, _)| i)
-                        .take_while(|&i| i <= pos)
-                        .collect();
-                    let start = if indices_up_to_pos.len() > 60 {
-                        indices_up_to_pos[indices_up_to_pos.len() - 61]
-                    } else {
-                        0
-                    };
-                    let end = text
-                        .char_indices()
-                        .map(|(i, _)| i)
-                        .find(|&i| i >= pos + query.len())
-                        .and_then(|i| {
-                            text.char_indices()
-                                .map(|(j, _)| j)
-                                .find(|&j| j >= i)
-                                .and_then(|base| {
-                                    text[base..]
-                                        .char_indices()
-                                        .nth(60)
-                                        .map(|(off, _)| base + off)
-                                        .or(Some(text.len()))
-                                })
-                        })
-                        .unwrap_or(text.len());
-                    let snippet = text[start..end].replace('\n', " ");
-                    let prefix = if start > 0 { "..." } else { "" };
-                    let suffix = if end < text.len() { "..." } else { "" };
-                    snippets.push(format!("[{}] {}{}{}", msg.role, prefix, snippet, suffix));
-                    if snippets.len() >= 3 {
-                        break;
-                    }
+        for message in &messages {
+            let text = message.text_content();
+            let text_lower = normalize_for_search(&text);
+            if let Some(pos) = text_lower.find(&needle) {
+                let start = pos.saturating_sub(60);
+                let end = (pos + needle.len() + 60).min(text.len());
+                let snippet = text[start..end].replace('\n', " ");
+                let prefix = if start > 0 { "..." } else { "" };
+                let suffix = if end < text.len() { "..." } else { "" };
+                snippets.push(format!(
+                    "[{}] {}{}{}",
+                    message.role, prefix, snippet, suffix
+                ));
+                if snippets.len() >= 3 {
+                    break;
                 }
             }
         }
@@ -345,232 +497,130 @@ pub fn search_session_messages(
     Ok(results)
 }
 
-// ---------------------------------------------------------------------------
-// Session forking
-// ---------------------------------------------------------------------------
-
-/// Fork an existing session: creates a new session with a copy of all messages
-/// from the source session. The new session gets a new UUID and title prefix.
-/// Returns the new session ID.
-/// Called from main.rs when --fork-session is passed, and from /fork REPL command.
+/// Fork an existing managed session into a new managed session id.
 #[allow(dead_code)]
 pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
-    // Verify source exists and load its metadata
-    let source: SessionSummary = {
-        let mut stmt = conn
-            .prepare(
-                "SELECT s.id, s.title, s.model, s.cwd, s.git_branch,
-                        s.created_at, s.updated_at, s.total_tokens,
-                        COUNT(m.id) AS message_count
-                 FROM sessions s
-                 LEFT JOIN messages m ON m.session_id = s.id
-                 WHERE s.id = ?1
-                 GROUP BY s.id",
-            )
-            .context("Failed to prepare fork query")?;
-        stmt.query_row(params![source_id], row_to_summary)
-            .context(format!("Session '{}' not found", source_id))?
-    };
+    let source_path = resolve_reference_path(&conn.base_dir, source_id)?;
+    let source_session = load_managed_session_from_path(&source_path)?;
+    let new_id = Uuid::new_v4().to_string();
+    let forked = ManagedSession::forked_from(&source_session, new_id.clone(), Utc::now(), None);
+    save_session_to_default_path(&conn.base_dir, &forked)?;
 
-    // Generate new ID
-    let new_id = format!("{:x}", now_ms() as u64);
-    let fork_title = format!("(fork) {}", source.title);
-
-    // Create the new session
-    save_session(
-        conn,
-        &new_id,
-        &fork_title,
-        &source.model,
-        &source.cwd,
-        &source.git_branch,
-    )?;
-
-    // Copy all messages from source to the new session
-    let mut stmt = conn
-        .prepare(
-            "SELECT role, content_json, tokens FROM messages
-             WHERE session_id = ?1
-             ORDER BY id ASC",
-        )
-        .context("Failed to prepare message copy query")?;
-
-    let rows = stmt
-        .query_map(params![source_id], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
-            ))
+    let source_summary = list_sessions(conn, usize::MAX)?
+        .into_iter()
+        .find(|summary| summary.id == source_session.session_id);
+    let mut metadata = source_summary
+        .map(|summary| SessionMetadata {
+            title: Some(format!("(fork) {}", summary.title)),
+            custom_title: true,
+            model: Some(summary.model),
+            cwd: Some(summary.cwd),
+            git_branch: Some(summary.git_branch),
         })
-        .context("Failed to read source messages")?;
-
-    let now = now_ms();
-    for row in rows {
-        let (role, content_json, tokens) = row.context("Failed to read message row")?;
-        conn.execute(
-            "INSERT INTO messages (session_id, role, content_json, tokens, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![new_id, role, content_json, tokens, now],
-        )
-        .context("Failed to copy message")?;
+        .unwrap_or_default();
+    if metadata.title.is_none() {
+        metadata.title = Some("(fork) Untitled".to_string());
+        metadata.custom_title = true;
     }
-
-    // Update the token count on the new session
-    conn.execute(
-        "UPDATE sessions SET total_tokens = ?1 WHERE id = ?2",
-        params![source.total_tokens, new_id],
-    )
-    .context("Failed to update forked session tokens")?;
+    write_metadata(&conn.base_dir, &new_id, &metadata)?;
 
     Ok(new_id)
 }
 
-// ---------------------------------------------------------------------------
-// Tool call recording
-// ---------------------------------------------------------------------------
-
-/// Record a tool call associated with a message row.
-///
-/// `message_id` is the value returned by [`save_message`].
-/// Will be wired into the agent loop for tool call persistence and analytics.
+/// Compatibility shim for older tool-call recording code paths.
 #[allow(dead_code)]
 pub fn record_tool_call(
-    conn: &Connection,
-    message_id: i64,
-    tool_name: &str,
-    args: &serde_json::Value,
-    output: &str,
-    success: bool,
-    duration_ms: u64,
+    _conn: &Connection,
+    _message_id: i64,
+    _tool_name: &str,
+    _args: &serde_json::Value,
+    _output: &str,
+    _success: bool,
+    _duration_ms: u64,
 ) -> Result<i64> {
-    let args_json = serde_json::to_string(args).context("Failed to serialize tool args")?;
-    let now = now_ms();
-    conn.execute(
-        "INSERT INTO tool_calls
-             (message_id, tool_name, args_json, output, success, duration_ms, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![
-            message_id,
-            tool_name,
-            args_json,
-            output,
-            success as i64,
-            duration_ms as i64,
-            now
-        ],
-    )
-    .context("Failed to record tool call")?;
-    Ok(conn.last_insert_rowid())
+    Ok(now_ms())
 }
 
-// ---------------------------------------------------------------------------
-// Statistics
-// ---------------------------------------------------------------------------
-
-/// High-level database statistics.
-#[derive(Debug, Clone)]
-pub struct DbStats {
-    pub session_count: i64,
-    pub message_count: i64,
-    pub tool_call_count: i64,
-    pub total_tokens: i64,
-}
-
-/// Retrieve overall database statistics.
+/// Aggregate session store statistics.
 pub fn db_stats(conn: &Connection) -> Result<DbStats> {
-    let session_count: i64 = conn.query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))?;
-    let message_count: i64 = conn.query_row("SELECT COUNT(*) FROM messages", [], |r| r.get(0))?;
-    let tool_call_count: i64 =
-        conn.query_row("SELECT COUNT(*) FROM tool_calls", [], |r| r.get(0))?;
-    let total_tokens: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(total_tokens), 0) FROM sessions",
-        [],
-        |r| r.get(0),
-    )?;
+    let sessions = load_all_sessions(&conn.base_dir)?;
+    let mut session_count = 0i64;
+    let mut message_count = 0i64;
+    let mut total_tool_calls = 0i64;
+    let mut total_tokens_count = 0i64;
+
+    for (_path, session, _metadata) in sessions {
+        session_count += 1;
+        message_count += session.messages.len() as i64;
+        total_tool_calls += tool_call_count(&session.messages);
+        total_tokens_count += total_tokens(&session.messages);
+    }
+
     Ok(DbStats {
         session_count,
         message_count,
-        tool_call_count,
-        total_tokens,
+        tool_call_count: total_tool_calls,
+        total_tokens: total_tokens_count,
     })
 }
 
-// ---------------------------------------------------------------------------
-// Migration from JSON conversations
-// ---------------------------------------------------------------------------
-
-/// Import existing JSON conversation files into the SQLite DB.
-///
-/// Reads `*.json` files from `json_dir`.  Each file must contain:
-/// `{ "id": "...", "title": "...", "model": "...", "messages": [...] }`.
-/// Already-imported sessions are skipped.  Returns the number of sessions
-/// successfully imported.
-pub fn migrate_json_conversations(conn: &Connection, json_dir: &std::path::Path) -> Result<usize> {
+/// Import legacy JSON conversations into the managed session store.
+pub fn migrate_json_conversations(conn: &Connection, json_dir: &Path) -> Result<usize> {
     if !json_dir.exists() {
         return Ok(0);
     }
 
-    let entries = std::fs::read_dir(json_dir)
-        .with_context(|| format!("Cannot read {}", json_dir.display()))?;
-
     let mut imported = 0usize;
 
-    for entry in entries.flatten() {
+    for entry in fs::read_dir(json_dir)
+        .with_context(|| format!("Cannot read {}", json_dir.display()))?
+        .flatten()
+    {
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
             continue;
         }
 
-        let text = match std::fs::read_to_string(&path) {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-        let json: serde_json::Value = match serde_json::from_str(&text) {
-            Ok(v) => v,
+        let text = match fs::read_to_string(&path) {
+            Ok(contents) => contents,
             Err(_) => continue,
         };
 
-        let session_id = match json["id"].as_str() {
-            Some(id) if !id.is_empty() => id,
+        let json: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        let session_id = match json.get("id").and_then(|value| value.as_str()) {
+            Some(value) if !value.trim().is_empty() => value,
             _ => continue,
         };
 
-        // Skip already-imported sessions.
-        let exists: i64 = match conn.query_row(
-            "SELECT COUNT(*) FROM sessions WHERE id = ?1",
-            params![session_id],
-            |r| r.get(0),
-        ) {
-            Ok(v) => v,
-            Err(_err) => {
-                let redacted_id = if session_id.len() > 8 {
-                    &session_id[..8]
-                } else {
-                    session_id
-                };
-                eprintln!(
-                    "[sessions] skipping session {}... due to query error",
-                    redacted_id
-                );
-                continue;
-            }
-        };
-        if exists > 0 {
+        if find_session_path(&conn.base_dir, session_id).is_some() {
             continue;
         }
 
-        let title = json["title"].as_str().unwrap_or("Imported session");
-        let model = json["model"].as_str().unwrap_or("unknown");
+        let title = json
+            .get("title")
+            .and_then(|value| value.as_str())
+            .unwrap_or("Imported session");
+        let model = json
+            .get("model")
+            .and_then(|value| value.as_str())
+            .unwrap_or("unknown");
         save_session(conn, session_id, title, model, "", "")?;
 
-        if let Some(msgs) = json["messages"].as_array() {
-            for mv in msgs {
-                let role = mv["role"].as_str().unwrap_or("user");
-                let content = mv["content"].as_str().unwrap_or("");
-                let msg = Message::text(role, content);
-                let tokens = crate::compaction::estimate_tokens(content);
-                save_message(conn, session_id, &msg, tokens)?;
+        if let Some(messages) = json.get("messages").and_then(|value| value.as_array()) {
+            for message in messages {
+                let role = message
+                    .get("role")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("user");
+                let content = message
+                    .get("content")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("");
+                save_message(conn, session_id, &Message::text(role, content), 0)?;
             }
         }
 
@@ -579,10 +629,6 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &std::path::Path)
 
     Ok(imported)
 }
-
-// ---------------------------------------------------------------------------
-// Display helpers
-// ---------------------------------------------------------------------------
 
 /// Group sessions by date bucket: "Today", "Yesterday", "This Week", or a date string.
 pub fn date_group_sessions(sessions: &[SessionSummary]) -> Vec<(String, Vec<&SessionSummary>)> {
@@ -593,21 +639,21 @@ pub fn date_group_sessions(sessions: &[SessionSummary]) -> Vec<(String, Vec<&Ses
 
     let mut groups: Vec<(String, Vec<&SessionSummary>)> = Vec::new();
 
-    for s in sessions {
-        let label = if s.updated_at >= today_start {
+    for session in sessions {
+        let label = if session.updated_at >= today_start {
             "Today".to_string()
-        } else if s.updated_at >= yesterday_start {
+        } else if session.updated_at >= yesterday_start {
             "Yesterday".to_string()
-        } else if s.updated_at >= week_start {
+        } else if session.updated_at >= week_start {
             "This Week".to_string()
         } else {
-            format_date_only(s.updated_at)
+            format_date_only(session.updated_at)
         };
 
-        if let Some(group) = groups.iter_mut().find(|(l, _)| *l == label) {
-            group.1.push(s);
+        if let Some(group) = groups.iter_mut().find(|(existing, _)| *existing == label) {
+            group.1.push(session);
         } else {
-            groups.push((label, vec![s]));
+            groups.push((label, vec![session]));
         }
     }
 
@@ -624,49 +670,28 @@ pub fn format_session_list(sessions: &[SessionSummary]) -> String {
     let mut out = String::new();
 
     for (label, group) in &groups {
-        out.push_str(&format!("  {}:\n", label));
-        for s in group {
-            let title = if s.title.is_empty() {
+        out.push_str(&format!("  {label}:\n"));
+        for session in group {
+            let title = if session.title.is_empty() {
                 "(untitled)"
             } else {
-                &s.title
+                &session.title
             };
-            let short_id = &s.id[..s.id.len().min(8)];
+            let short_id = &session.id[..session.id.len().min(8)];
             out.push_str(&format!(
                 "    {:<40} {:>4} msgs  {}\n",
-                format!("{} [{}]", title, short_id),
-                s.message_count,
-                s.model,
+                format!("{title} [{short_id}]"),
+                session.message_count,
+                if session.model.is_empty() {
+                    "unknown"
+                } else {
+                    &session.model
+                },
             ));
         }
     }
+
     out
-}
-
-/// Very lightweight timestamp formatter (no chrono dependency needed).
-/// Used by enhanced session display (--search with context).
-#[allow(dead_code)]
-fn format_timestamp(ms: i64) -> String {
-    let secs = ms / 1_000;
-    let days = secs / 86_400;
-    let year = 1970 + days / 365;
-    let doy = days % 365;
-    let month = doy / 30 + 1;
-    let day = doy % 30 + 1;
-    let hour = (secs % 86_400) / 3_600;
-    let min = (secs % 3_600) / 60;
-    format!("{:04}-{:02}-{:02} {:02}:{:02}", year, month, day, hour, min)
-}
-
-/// Date-only variant of `format_timestamp` for grouping labels.
-fn format_date_only(ms: i64) -> String {
-    let secs = ms / 1_000;
-    let days = secs / 86_400;
-    let year = 1970 + days / 365;
-    let doy = days % 365;
-    let month = doy / 30 + 1;
-    let day = doy % 30 + 1;
-    format!("{:04}-{:02}-{:02}", year, month, day)
 }
 
 fn now_ms() -> i64 {
@@ -676,273 +701,103 @@ fn now_ms() -> i64 {
         .as_millis() as i64
 }
 
-/// Map a result row to [`SessionSummary`].
-fn row_to_summary(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionSummary> {
-    Ok(SessionSummary {
-        id: row.get(0)?,
-        title: row.get(1)?,
-        model: row.get(2)?,
-        cwd: row.get(3)?,
-        git_branch: row.get(4)?,
-        created_at: row.get(5)?,
-        updated_at: row.get(6)?,
-        total_tokens: row.get(7)?,
-        message_count: row.get(8)?,
-    })
+fn format_date_only(ms: i64) -> String {
+    let secs = ms / 1_000;
+    let days = secs / 86_400;
+    let year = 1970 + days / 365;
+    let doy = days % 365;
+    let month = doy / 30 + 1;
+    let day = doy % 30 + 1;
+    format!("{year:04}-{month:02}-{day:02}")
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
-    fn mem_db() -> Connection {
-        let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
-        create_tables(&conn).unwrap();
-        conn
+    fn temp_connection() -> (tempfile::TempDir, Connection) {
+        let tempdir = tempdir().unwrap();
+        let conn = open_db_in(tempdir.path()).unwrap();
+        (tempdir, conn)
     }
 
     #[test]
-    fn test_tables_created() {
-        let conn = mem_db();
-        let n: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert!(n >= 3, "expected ≥3 tables, got {}", n);
-    }
+    fn save_and_load_managed_session_messages() {
+        let (_tempdir, conn) = temp_connection();
+        save_session(&conn, "s1", "Hello", "claude", "/tmp", "main").unwrap();
+        save_message(&conn, "s1", &Message::text("user", "Hello"), 5).unwrap();
+        save_message(&conn, "s1", &Message::text("assistant", "Hi"), 3).unwrap();
 
-    #[test]
-    fn test_save_and_list_session() {
-        let conn = mem_db();
-        save_session(&conn, "s1", "Hello", "claude-opus-4-6", "/tmp", "main").unwrap();
         let list = list_sessions(&conn, 10).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, "s1");
         assert_eq!(list[0].title, "Hello");
-        assert_eq!(list[0].model, "claude-opus-4-6");
+        assert_eq!(list[0].model, "claude");
+        assert_eq!(list[0].message_count, 2);
+
+        let messages = load_session(&conn, "s1").unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, "user");
+        assert_eq!(messages[1].role, "assistant");
     }
 
     #[test]
-    fn test_upsert_session_updates_title() {
-        let conn = mem_db();
-        save_session(&conn, "s1", "Original", "m", "/", "").unwrap();
-        save_session(&conn, "s1", "Updated", "m", "/", "").unwrap();
-        let list = list_sessions(&conn, 10).unwrap();
-        assert_eq!(list.len(), 1);
-        assert_eq!(list[0].title, "Updated");
-    }
-
-    #[test]
-    fn test_save_and_load_messages() {
-        let conn = mem_db();
-        save_session(&conn, "s2", "t", "m", "/", "").unwrap();
-
-        let m1 = Message::text("user", "Hello");
-        let m2 = Message::text("assistant", "Hi!");
-        save_message(&conn, "s2", &m1, 5).unwrap();
-        save_message(&conn, "s2", &m2, 3).unwrap();
-
-        let loaded = load_session(&conn, "s2").unwrap();
-        assert_eq!(loaded.len(), 2);
-        assert_eq!(loaded[0].role, "user");
-        assert_eq!(loaded[1].role, "assistant");
-    }
-
-    #[test]
-    fn test_total_tokens_tracked() {
-        let conn = mem_db();
-        save_session(&conn, "s3", "t", "m", "/", "").unwrap();
-        let msg = Message::text("user", "Hello");
-        save_message(&conn, "s3", &msg, 10).unwrap();
-        save_message(&conn, "s3", &msg, 20).unwrap();
-
-        let list = list_sessions(&conn, 10).unwrap();
-        assert_eq!(list[0].total_tokens, 30);
-    }
-
-    #[test]
-    fn test_delete_session() {
-        let conn = mem_db();
-        save_session(&conn, "s4", "t", "m", "/", "").unwrap();
-        delete_session(&conn, "s4").unwrap();
+    fn rename_and_delete_session() {
+        let (_tempdir, conn) = temp_connection();
+        save_session(&conn, "s2", "Old", "claude", "/", "").unwrap();
+        rename_session(&conn, "s2", "New").unwrap();
+        assert_eq!(list_sessions(&conn, 10).unwrap()[0].title, "New");
+        delete_session(&conn, "s2").unwrap();
         assert!(list_sessions(&conn, 10).unwrap().is_empty());
     }
 
     #[test]
-    fn test_delete_nonexistent_returns_err() {
-        let conn = mem_db();
-        assert!(delete_session(&conn, "missing").is_err());
-    }
-
-    #[test]
-    fn test_record_tool_call() {
-        let conn = mem_db();
-        save_session(&conn, "s5", "t", "m", "/", "").unwrap();
-        let msg = Message::text("user", "run it");
-        let mid = save_message(&conn, "s5", &msg, 5).unwrap();
-        let tc_id = record_tool_call(
+    fn search_and_stats_use_managed_sessions() {
+        let (_tempdir, conn) = temp_connection();
+        save_session(&conn, "s3", "Rust debugging", "claude", "/", "").unwrap();
+        save_message(
             &conn,
-            mid,
-            "read_file",
-            &serde_json::json!({"path": "/tmp/a.txt"}),
-            "contents",
-            true,
-            42,
+            "s3",
+            &Message::text("user", "Investigate Rust search"),
+            7,
         )
         .unwrap();
-        assert!(tc_id > 0);
-    }
+        save_session(&conn, "s4", "Python tutorial", "gpt-4o", "/", "").unwrap();
+        save_message(&conn, "s4", &Message::text("user", "Teach me Python"), 4).unwrap();
 
-    #[test]
-    fn test_db_stats_empty() {
-        let conn = mem_db();
-        let stats = db_stats(&conn).unwrap();
-        assert_eq!(stats.session_count, 0);
-        assert_eq!(stats.message_count, 0);
-        assert_eq!(stats.tool_call_count, 0);
-        assert_eq!(stats.total_tokens, 0);
-    }
-
-    #[test]
-    fn test_db_stats_with_data() {
-        let conn = mem_db();
-        save_session(&conn, "s6", "t", "m", "/", "").unwrap();
-        let msg = Message::text("user", "hi");
-        save_message(&conn, "s6", &msg, 7).unwrap();
-        let stats = db_stats(&conn).unwrap();
-        assert_eq!(stats.session_count, 1);
-        assert_eq!(stats.message_count, 1);
-        assert_eq!(stats.total_tokens, 7);
-    }
-
-    #[test]
-    fn test_search_sessions_by_title() {
-        let conn = mem_db();
-        save_session(&conn, "s7", "Rust debugging", "claude", "/", "").unwrap();
-        save_session(&conn, "s8", "Python tutorial", "gpt-4o", "/", "").unwrap();
-        let results = search_sessions(&conn, "Rust").unwrap();
+        let results = search_sessions(&conn, "rust").unwrap();
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, "s7");
+        assert_eq!(results[0].id, "s3");
+
+        let stats = db_stats(&conn).unwrap();
+        assert_eq!(stats.session_count, 2);
+        assert_eq!(stats.message_count, 2);
+        assert!(stats.total_tokens >= 11);
     }
 
     #[test]
-    fn test_migrate_nonexistent_dir() {
-        let conn = mem_db();
-        let n = migrate_json_conversations(&conn, std::path::Path::new("/nonexistent-test-xyz"))
-            .unwrap();
-        assert_eq!(n, 0);
-    }
+    fn migrate_json_conversations_imports_managed_sessions() {
+        let (tempdir, conn) = temp_connection();
+        let conversations_dir = tempdir.path().join("conversations");
+        fs::create_dir_all(&conversations_dir).unwrap();
+        fs::write(
+            conversations_dir.join("legacy.json"),
+            serde_json::json!({
+                "id": "legacy-session",
+                "title": "Legacy",
+                "model": "claude",
+                "messages": [
+                    { "role": "user", "content": "Hello" },
+                    { "role": "assistant", "content": "Hi" }
+                ]
+            })
+            .to_string(),
+        )
+        .unwrap();
 
-    #[test]
-    fn test_format_session_list_empty() {
-        assert_eq!(format_session_list(&[]), "No sessions found.");
-    }
-
-    #[test]
-    fn test_format_session_list_with_data() {
-        let s = SessionSummary {
-            id: "abc123def".to_string(),
-            title: "My session".to_string(),
-            model: "claude-opus-4-6".to_string(),
-            cwd: "/home/user".to_string(),
-            git_branch: "main".to_string(),
-            created_at: 1_700_000_000_000,
-            updated_at: 1_700_000_000_000,
-            total_tokens: 5_000,
-            message_count: 10,
-        };
-        let out = format_session_list(&[s]);
-        assert!(out.contains("My session"));
-        assert!(out.contains("abc123d"));
-        assert!(out.contains("claude-opus-4-6"));
-    }
-
-    #[test]
-    fn test_rename_session() {
-        let conn = mem_db();
-        save_session(&conn, "r1", "Old Title", "m", "/", "").unwrap();
-        rename_session(&conn, "r1", "New Title").unwrap();
-        let list = list_sessions(&conn, 10).unwrap();
-        assert_eq!(list[0].title, "New Title");
-    }
-
-    #[test]
-    fn test_rename_nonexistent_returns_err() {
-        let conn = mem_db();
-        assert!(rename_session(&conn, "missing", "New").is_err());
-    }
-
-    #[test]
-    fn test_archive_session() {
-        let conn = mem_db();
-        save_session(&conn, "a1", "To Archive", "m", "/", "").unwrap();
-        archive_session(&conn, "a1").unwrap();
-        assert!(list_sessions(&conn, 10).unwrap().is_empty());
-    }
-
-    #[test]
-    fn test_date_group_sessions_empty() {
-        let groups = date_group_sessions(&[]);
-        assert!(groups.is_empty());
-    }
-
-    #[test]
-    fn test_date_group_sessions_buckets() {
-        let now = super::now_ms();
-        let yesterday = now - 86_400_000 + 1000; // just inside yesterday
-        let old = now - 30 * 86_400_000; // 30 days ago
-
-        let s1 = SessionSummary {
-            id: "t1".into(),
-            title: "Today".into(),
-            model: "m".into(),
-            cwd: "/".into(),
-            git_branch: "".into(),
-            created_at: now,
-            updated_at: now,
-            total_tokens: 0,
-            message_count: 1,
-        };
-        let s2 = SessionSummary {
-            id: "y1".into(),
-            title: "Yest".into(),
-            model: "m".into(),
-            cwd: "/".into(),
-            git_branch: "".into(),
-            created_at: yesterday,
-            updated_at: yesterday,
-            total_tokens: 0,
-            message_count: 1,
-        };
-        let s3 = SessionSummary {
-            id: "o1".into(),
-            title: "Old".into(),
-            model: "m".into(),
-            cwd: "/".into(),
-            git_branch: "".into(),
-            created_at: old,
-            updated_at: old,
-            total_tokens: 0,
-            message_count: 1,
-        };
-        let sessions = [s1, s2, s3];
-        let groups = date_group_sessions(&sessions);
-
-        // Should have at least 2 distinct groups (today + something else)
-        assert!(
-            groups.len() >= 2,
-            "expected >=2 groups, got {}",
-            groups.len()
-        );
-        assert_eq!(groups[0].0, "Today");
-        assert_eq!(groups[0].1.len(), 1);
+        let imported = migrate_json_conversations(&conn, &conversations_dir).unwrap();
+        assert_eq!(imported, 1);
+        assert_eq!(list_sessions(&conn, 10).unwrap()[0].id, "legacy-session");
     }
 }

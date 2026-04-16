@@ -31,10 +31,10 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task;
 
-use crate::agiworkforce_tool_config::AgiWorkforceToolCallParam;
-use crate::agiworkforce_tool_config::AgiWorkforceToolCallReplyParam;
-use crate::agiworkforce_tool_config::create_tool_for_agiworkforce_tool_call_param;
-use crate::agiworkforce_tool_config::create_tool_for_agiworkforce_tool_call_reply_param;
+use crate::codex_tool_config::AgiWorkforceToolCallParam;
+use crate::codex_tool_config::AgiWorkforceToolCallReplyParam;
+use crate::codex_tool_config::create_tool_for_agiworkforce_tool_call_param;
+use crate::codex_tool_config::create_tool_for_agiworkforce_tool_call_reply_param;
 use crate::outgoing_message::OutgoingMessageSender;
 
 pub(crate) struct MessageProcessor {
@@ -238,7 +238,10 @@ impl MessageProcessor {
             }
         };
         if let serde_json::Value::Object(ref mut obj) = server_info_value {
-            obj.insert("user_agent".to_string(), json!(get_agiworkforce_user_agent()));
+            obj.insert(
+                "user_agent".to_string(),
+                json!(get_agiworkforce_user_agent()),
+            );
         }
 
         let mut result_value = match serde_json::to_value(InitializeResult {
@@ -403,13 +406,14 @@ impl MessageProcessor {
         // Clone outgoing and server to move into async task.
         let outgoing = self.outgoing.clone();
         let thread_manager = self.thread_manager.clone();
-        let running_requests_id_to_agiworkforce_uuid = self.running_requests_id_to_agiworkforce_uuid.clone();
+        let running_requests_id_to_agiworkforce_uuid =
+            self.running_requests_id_to_agiworkforce_uuid.clone();
 
         // Spawn an async task to handle the Codex session so that we do not
         // block the synchronous message-processing loop.
         task::spawn(async move {
             // Run the Codex session and stream events back to the client.
-            crate::agiworkforce_tool_runner::run_agiworkforce_tool_session(
+            crate::codex_tool_runner::run_agiworkforce_tool_session(
                 id,
                 initial_prompt,
                 config,
@@ -431,22 +435,24 @@ impl MessageProcessor {
 
         // parse arguments
         let agiworkforce_tool_call_reply_param: AgiWorkforceToolCallReplyParam = match arguments {
-            Some(json_val) => match serde_json::from_value::<AgiWorkforceToolCallReplyParam>(json_val) {
-                Ok(params) => params,
-                Err(e) => {
-                    tracing::error!("Failed to parse Codex tool call reply parameters: {e}");
-                    let result = CallToolResult {
-                        content: vec![rmcp::model::Content::text(format!(
-                            "Failed to parse configuration for Codex tool: {e}"
-                        ))],
-                        structured_content: None,
-                        is_error: Some(true),
-                        meta: None,
-                    };
-                    self.outgoing.send_response(request_id, result).await;
-                    return;
+            Some(json_val) => {
+                match serde_json::from_value::<AgiWorkforceToolCallReplyParam>(json_val) {
+                    Ok(params) => params,
+                    Err(e) => {
+                        tracing::error!("Failed to parse Codex tool call reply parameters: {e}");
+                        let result = CallToolResult {
+                            content: vec![rmcp::model::Content::text(format!(
+                                "Failed to parse configuration for Codex tool: {e}"
+                            ))],
+                            structured_content: None,
+                            is_error: Some(true),
+                            meta: None,
+                        };
+                        self.outgoing.send_response(request_id, result).await;
+                        return;
+                    }
                 }
-            },
+            }
             None => {
                 tracing::error!(
                     "Missing arguments for codex-reply tool-call; the `thread_id` and `prompt` fields are required."
@@ -483,13 +489,14 @@ impl MessageProcessor {
 
         // Clone outgoing to move into async task.
         let outgoing = self.outgoing.clone();
-        let running_requests_id_to_agiworkforce_uuid = self.running_requests_id_to_agiworkforce_uuid.clone();
+        let running_requests_id_to_agiworkforce_uuid =
+            self.running_requests_id_to_agiworkforce_uuid.clone();
 
         let codex = match self.thread_manager.get_thread(thread_id).await {
             Ok(c) => c,
             Err(_) => {
                 tracing::warn!("Session not found for thread_id: {thread_id}");
-                let result = crate::agiworkforce_tool_runner::create_call_tool_result_with_thread_id(
+                let result = crate::codex_tool_runner::create_call_tool_result_with_thread_id(
                     thread_id,
                     format!("Session not found for thread_id: {thread_id}"),
                     Some(true),
@@ -503,10 +510,11 @@ impl MessageProcessor {
         let prompt = agiworkforce_tool_call_reply_param.prompt.clone();
         tokio::spawn({
             let outgoing = outgoing.clone();
-            let running_requests_id_to_agiworkforce_uuid = running_requests_id_to_agiworkforce_uuid.clone();
+            let running_requests_id_to_agiworkforce_uuid =
+                running_requests_id_to_agiworkforce_uuid.clone();
 
             async move {
-                crate::agiworkforce_tool_runner::run_agiworkforce_tool_session_reply(
+                crate::codex_tool_runner::run_agiworkforce_tool_session_reply(
                     thread_id,
                     codex,
                     outgoing,

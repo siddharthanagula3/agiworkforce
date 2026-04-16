@@ -421,7 +421,8 @@ async fn guardian_subagent_does_not_inherit_parent_exec_policy_rules() {
         }
     );
 
-    let auth_manager = AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
     let models_manager = Arc::new(ModelsManager::new(
         config.agiworkforce_home.clone(),
         auth_manager.clone(),

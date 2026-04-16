@@ -721,7 +721,8 @@ async fn prepare_escalated_exec_permissions_preserve_macos_seatbelt_extensions()
         approval_policy: Constrained::allow_any(AskForApproval::Never),
         sandbox_policy: Constrained::allow_any(SandboxPolicy::new_read_only_policy()),
         file_system_sandbox_policy: read_only_file_system_sandbox_policy(),
-        network_sandbox_policy: agiworkforce_protocol::permissions::NetworkSandboxPolicy::Restricted,
+        network_sandbox_policy:
+            agiworkforce_protocol::permissions::NetworkSandboxPolicy::Restricted,
         network: None,
         allow_login_shell: true,
         shell_environment_policy: ShellEnvironmentPolicy::default(),

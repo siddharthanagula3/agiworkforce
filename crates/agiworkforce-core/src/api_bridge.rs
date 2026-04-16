@@ -1,11 +1,11 @@
-use base64::Engine;
-use chrono::DateTime;
-use chrono::Utc;
 use agiworkforce_api::AuthProvider as ApiAuthProvider;
 use agiworkforce_api::TransportError;
 use agiworkforce_api::error::ApiError;
 use agiworkforce_api::rate_limits::parse_promo_message;
 use agiworkforce_api::rate_limits::parse_rate_limit_for_limit;
+use base64::Engine;
+use chrono::DateTime;
+use chrono::Utc;
 use http::HeaderMap;
 use serde::Deserialize;
 use serde_json::Value;

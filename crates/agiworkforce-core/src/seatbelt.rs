@@ -34,7 +34,10 @@ pub async fn spawn_command_under_seatbelt(
         /*extensions*/ None,
     );
     let arg0 = None;
-    env.insert(AGIWORKFORCE_SANDBOX_ENV_VAR.to_string(), "seatbelt".to_string());
+    env.insert(
+        AGIWORKFORCE_SANDBOX_ENV_VAR.to_string(),
+        "seatbelt".to_string(),
+    );
     spawn_child_async(SpawnChildRequest {
         program: PathBuf::from(MACOS_PATH_TO_SEATBELT_EXECUTABLE),
         args,

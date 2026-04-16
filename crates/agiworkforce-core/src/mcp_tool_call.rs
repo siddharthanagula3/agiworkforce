@@ -1261,9 +1261,12 @@ async fn maybe_persist_mcp_tool_approval(
     };
     let tool_name = key.tool_name.clone();
 
-    if let Err(err) =
-        persist_codex_app_tool_approval(&turn_context.config.agiworkforce_home, &connector_id, &tool_name)
-            .await
+    if let Err(err) = persist_codex_app_tool_approval(
+        &turn_context.config.agiworkforce_home,
+        &connector_id,
+        &tool_name,
+    )
+    .await
     {
         error!(
             error = %err,

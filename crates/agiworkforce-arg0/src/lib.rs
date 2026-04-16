@@ -99,7 +99,9 @@ pub fn arg0_dispatch() -> Option<Arg0PathEntryGuard> {
                 }
             }
             None => {
-                eprintln!("Error: {AGIWORKFORCE_CORE_APPLY_PATCH_ARG1} requires a UTF-8 PATCH argument.");
+                eprintln!(
+                    "Error: {AGIWORKFORCE_CORE_APPLY_PATCH_ARG1} requires a UTF-8 PATCH argument."
+                );
                 1
             }
         };
@@ -160,9 +162,9 @@ where
         let paths = Arg0DispatchPaths {
             agiworkforce_linux_sandbox_exe: if cfg!(target_os = "linux") {
                 current_exe.or_else(|| {
-                    path_entry
-                        .as_ref()
-                        .and_then(|path_entry| path_entry.paths().agiworkforce_linux_sandbox_exe.clone())
+                    path_entry.as_ref().and_then(|path_entry| {
+                        path_entry.paths().agiworkforce_linux_sandbox_exe.clone()
+                    })
                 })
             } else {
                 None

@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
-use crate::AuthManager;
 use crate::AgiWorkforceAuth;
+use crate::AuthManager;
 use crate::SandboxState;
 use crate::agent::AgentControl;
 use crate::agent::AgentStatus;
@@ -48,10 +48,6 @@ use crate::stream_events_utils::raw_assistant_output_text_from_item;
 use crate::stream_events_utils::record_completed_response_item;
 use crate::turn_metadata::TurnMetadataState;
 use crate::util::error_or_panic;
-use async_channel::Receiver;
-use async_channel::Sender;
-use chrono::Local;
-use chrono::Utc;
 use agiworkforce_app_server_protocol::McpServerElicitationRequest;
 use agiworkforce_app_server_protocol::McpServerElicitationRequestParams;
 use agiworkforce_exec_server::Environment;
@@ -122,6 +118,10 @@ use agiworkforce_utils_stream_parser::AssistantTextStreamParser;
 use agiworkforce_utils_stream_parser::ProposedPlanSegment;
 use agiworkforce_utils_stream_parser::extract_proposed_plan_text;
 use agiworkforce_utils_stream_parser::strip_citations;
+use async_channel::Receiver;
+use async_channel::Sender;
+use chrono::Local;
+use chrono::Utc;
 use futures::future::BoxFuture;
 use futures::future::Shared;
 use futures::prelude::*;
@@ -1219,7 +1219,9 @@ impl Session {
         exec_policy: &agiworkforce_execpolicy::Policy,
         sandbox_policy: &SandboxPolicy,
         network_policy_decider: Option<Arc<dyn agiworkforce_network_proxy::NetworkPolicyDecider>>,
-        blocked_request_observer: Option<Arc<dyn agiworkforce_network_proxy::BlockedRequestObserver>>,
+        blocked_request_observer: Option<
+            Arc<dyn agiworkforce_network_proxy::BlockedRequestObserver>,
+        >,
         managed_network_requirements_enabled: bool,
         audit_metadata: NetworkProxyAuditMetadata,
     ) -> anyhow::Result<(StartedNetworkProxy, SessionNetworkProxyRuntime)> {
@@ -1627,7 +1629,9 @@ impl Session {
         }
 
         let auth = auth.as_ref();
-        let auth_mode = auth.map(AgiWorkforceAuth::auth_mode).map(TelemetryAuthMode::from);
+        let auth_mode = auth
+            .map(AgiWorkforceAuth::auth_mode)
+            .map(TelemetryAuthMode::from);
         let account_id = auth.and_then(AgiWorkforceAuth::get_account_id);
         let account_email = auth.and_then(AgiWorkforceAuth::get_account_email);
         let originator = crate::default_client::originator().value;
@@ -1733,20 +1737,22 @@ impl Session {
             default_shell.shell_snapshot = rx;
             tx
         };
-        let thread_name =
-            match session_index::find_thread_name_by_id(&config.agiworkforce_home, &conversation_id)
-                .instrument(info_span!(
-                    "session_init.thread_name_lookup",
-                    otel.name = "session_init.thread_name_lookup",
-                ))
-                .await
-            {
-                Ok(name) => name,
-                Err(err) => {
-                    warn!("Failed to read session index for thread name: {err}");
-                    None
-                }
-            };
+        let thread_name = match session_index::find_thread_name_by_id(
+            &config.agiworkforce_home,
+            &conversation_id,
+        )
+        .instrument(info_span!(
+            "session_init.thread_name_lookup",
+            otel.name = "session_init.thread_name_lookup",
+        ))
+        .await
+        {
+            Ok(name) => name,
+            Err(err) => {
+                warn!("Failed to read session index for thread name: {err}");
+                None
+            }
+        };
         session_configuration.thread_name = thread_name.clone();
         let state = SessionState::new(session_configuration.clone());
         let managed_network_requirements_enabled = config.managed_network_requirements_enabled();
@@ -2406,7 +2412,9 @@ impl Session {
         if sandbox_policy_changed {
             let sandbox_state = SandboxState {
                 sandbox_policy: per_turn_config.permissions.sandbox_policy.get().clone(),
-                agiworkforce_linux_sandbox_exe: per_turn_config.agiworkforce_linux_sandbox_exe.clone(),
+                agiworkforce_linux_sandbox_exe: per_turn_config
+                    .agiworkforce_linux_sandbox_exe
+                    .clone(),
                 sandbox_cwd: per_turn_config.cwd.clone(),
                 use_legacy_landlock: per_turn_config.features.use_legacy_landlock(),
             };
@@ -3491,7 +3499,8 @@ impl Session {
         if turn_context.features.enabled(Feature::MemoryTool)
             && turn_context.config.memories.use_memories
             && let Some(memory_prompt) =
-                build_memory_tool_developer_instructions(&turn_context.config.agiworkforce_home).await
+                build_memory_tool_developer_instructions(&turn_context.config.agiworkforce_home)
+                    .await
         {
             developer_sections.push(memory_prompt);
         }
@@ -3554,7 +3563,9 @@ impl Session {
         {
             developer_sections.push(plugin_section);
         }
-        if turn_context.features.enabled(Feature::AgiWorkforceGitCommit)
+        if turn_context
+            .features
+            .enabled(Feature::AgiWorkforceGitCommit)
             && let Some(commit_message_instruction) = commit_message_trailer_instruction(
                 turn_context.config.commit_attribution.as_deref(),
             )
@@ -4709,9 +4720,15 @@ mod handlers {
         meta: Option<Value>,
     ) {
         let action = match decision {
-            agiworkforce_protocol::approvals::ElicitationAction::Accept => ElicitationAction::Accept,
-            agiworkforce_protocol::approvals::ElicitationAction::Decline => ElicitationAction::Decline,
-            agiworkforce_protocol::approvals::ElicitationAction::Cancel => ElicitationAction::Cancel,
+            agiworkforce_protocol::approvals::ElicitationAction::Accept => {
+                ElicitationAction::Accept
+            }
+            agiworkforce_protocol::approvals::ElicitationAction::Decline => {
+                ElicitationAction::Decline
+            }
+            agiworkforce_protocol::approvals::ElicitationAction::Cancel => {
+                ElicitationAction::Cancel
+            }
         };
         let content = match action {
             // Preserve the legacy fallback for clients that only send an action.
@@ -4852,10 +4869,12 @@ mod handlers {
                     crate::protocol::GetHistoryEntryResponseEvent {
                         offset,
                         log_id,
-                        entry: entry_opt.map(|e| agiworkforce_protocol::message_history::HistoryEntry {
-                            conversation_id: e.session_id,
-                            ts: e.ts,
-                            text: e.text,
+                        entry: entry_opt.map(|e| {
+                            agiworkforce_protocol::message_history::HistoryEntry {
+                                conversation_id: e.session_id,
+                                ts: e.ts,
+                                text: e.text,
+                            }
                         }),
                     },
                 ),
@@ -5092,24 +5111,25 @@ mod handlers {
             return;
         }
 
-        let initial_history =
-            match RolloutRecorder::get_rollout_history(rollout_path.as_path()).await {
-                Ok(history) => history,
-                Err(err) => {
-                    sess.send_event_raw(Event {
-                        id: turn_context.sub_id.clone(),
-                        msg: EventMsg::Error(ErrorEvent {
-                            message: format!(
-                                "failed to load rollout `{}` for rollback replay: {err}",
-                                rollout_path.display()
-                            ),
-                            agiworkforce_error_info: Some(AgiWorkforceErrorInfo::ThreadRollbackFailed),
-                        }),
-                    })
-                    .await;
-                    return;
-                }
-            };
+        let initial_history = match RolloutRecorder::get_rollout_history(rollout_path.as_path())
+            .await
+        {
+            Ok(history) => history,
+            Err(err) => {
+                sess.send_event_raw(Event {
+                    id: turn_context.sub_id.clone(),
+                    msg: EventMsg::Error(ErrorEvent {
+                        message: format!(
+                            "failed to load rollout `{}` for rollback replay: {err}",
+                            rollout_path.display()
+                        ),
+                        agiworkforce_error_info: Some(AgiWorkforceErrorInfo::ThreadRollbackFailed),
+                    }),
+                })
+                .await;
+                return;
+            }
+        };
 
         let rollback_event = ThreadRolledBackEvent { num_turns };
         let rollback_msg = EventMsg::ThreadRolledBack(rollback_event.clone());
@@ -7155,7 +7175,9 @@ async fn try_run_sampling_request(
             .await
         {
             Ok(event) => event,
-            Err(agiworkforce_async_utils::CancelErr::Cancelled) => break Err(CodexErr::TurnAborted),
+            Err(agiworkforce_async_utils::CancelErr::Cancelled) => {
+                break Err(CodexErr::TurnAborted);
+            }
         };
 
         let event = match event {

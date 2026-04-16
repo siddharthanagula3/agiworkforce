@@ -231,7 +231,10 @@ struct AutoAuthStorage {
 impl AutoAuthStorage {
     fn new(agiworkforce_home: PathBuf, keyring_store: Arc<dyn KeyringStore>) -> Self {
         Self {
-            keyring_storage: Arc::new(KeyringAuthStorage::new(agiworkforce_home.clone(), keyring_store)),
+            keyring_storage: Arc::new(KeyringAuthStorage::new(
+                agiworkforce_home.clone(),
+                keyring_store,
+            )),
             file_storage: Arc::new(FileAuthStorage::new(agiworkforce_home)),
         }
     }
@@ -326,8 +329,12 @@ fn create_auth_storage_with_keyring_store(
         AuthCredentialsStoreMode::Keyring => {
             Arc::new(KeyringAuthStorage::new(agiworkforce_home, keyring_store))
         }
-        AuthCredentialsStoreMode::Auto => Arc::new(AutoAuthStorage::new(agiworkforce_home, keyring_store)),
-        AuthCredentialsStoreMode::Ephemeral => Arc::new(EphemeralAuthStorage::new(agiworkforce_home)),
+        AuthCredentialsStoreMode::Auto => {
+            Arc::new(AutoAuthStorage::new(agiworkforce_home, keyring_store))
+        }
+        AuthCredentialsStoreMode::Ephemeral => {
+            Arc::new(EphemeralAuthStorage::new(agiworkforce_home))
+        }
     }
 }
 

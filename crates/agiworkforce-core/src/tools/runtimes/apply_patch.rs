@@ -20,8 +20,8 @@ use crate::tools::sandboxing::ToolCtx;
 use crate::tools::sandboxing::ToolError;
 use crate::tools::sandboxing::ToolRuntime;
 use crate::tools::sandboxing::with_cached_approval;
-use agiworkforce_apply_patch::ApplyPatchAction;
 use agiworkforce_apply_patch::AGIWORKFORCE_CORE_APPLY_PATCH_ARG1;
+use agiworkforce_apply_patch::ApplyPatchAction;
 use agiworkforce_protocol::models::PermissionProfile;
 use agiworkforce_protocol::protocol::AskForApproval;
 use agiworkforce_protocol::protocol::FileChange;
@@ -75,7 +75,10 @@ impl ApplyPatchRuntime {
         } else {
             #[cfg(target_os = "windows")]
             {
-                agiworkforce_windows_sandbox::resolve_current_exe_for_launch(_agiworkforce_home, "codex.exe")
+                agiworkforce_windows_sandbox::resolve_current_exe_for_launch(
+                    _agiworkforce_home,
+                    "codex.exe",
+                )
             }
             #[cfg(not(target_os = "windows"))]
             {

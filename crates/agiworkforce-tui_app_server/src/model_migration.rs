@@ -531,7 +531,10 @@ mod tests {
             frame.render_widget_ref(&screen, frame.area());
         }
         terminal.flush().expect("flush");
-        assert_snapshot!("model_migration_prompt_gpt5_agiworkforce_mini", terminal.backend());
+        assert_snapshot!(
+            "model_migration_prompt_gpt5_agiworkforce_mini",
+            terminal.backend()
+        );
     }
 
     #[test]

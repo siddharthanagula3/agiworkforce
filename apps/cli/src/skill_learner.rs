@@ -4,7 +4,7 @@
 //! generates SKILL.md files in `~/.agiworkforce/skills/learned/`.
 //!
 //! Pattern detection is heuristic-based (no LLM call needed):
-//! 1. Query `sessions.db` for recent sessions (last 30 days)
+//! 1. Query managed sessions from the session store (last 30 days)
 //! 2. Find tool usage sequences that appear in 3+ sessions
 //! 3. Generate a SKILL.md with the detected pattern
 //!
@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+use crate::models::{ContentBlock, MessageContent};
 use crate::sessions;
 
 /// Minimum number of tool calls in a session to be eligible for pattern analysis.
@@ -201,10 +202,10 @@ fn signatures_match(a: &ToolSignature, b: &ToolSignature) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Database queries
+// Session store queries
 // ---------------------------------------------------------------------------
 
-/// Load tool usage patterns from recent sessions in the database.
+/// Load tool usage patterns from recent managed sessions.
 ///
 /// Returns a list of `(session_id, tool_signature)` pairs.
 fn load_recent_tool_patterns() -> Result<Vec<(String, ToolSignature)>> {
@@ -218,43 +219,37 @@ fn load_recent_tool_patterns() -> Result<Vec<(String, ToolSignature)>> {
         now - (SESSION_LOOKBACK_DAYS * 24 * 3600 * 1000)
     };
 
-    // Query: get tool usage per session for recent sessions
-    let mut stmt = conn.prepare(
-        "SELECT s.id, tc.tool_name, COUNT(tc.id) as call_count
-         FROM sessions s
-         JOIN messages m ON m.session_id = s.id
-         JOIN tool_calls tc ON tc.message_id = m.id
-         WHERE s.updated_at >= ?1
-         GROUP BY s.id, tc.tool_name
-         ORDER BY s.id, call_count DESC",
-    )?;
+    let recent_sessions = sessions::list_sessions(&conn, usize::MAX)?;
+    let mut patterns = Vec::new();
 
-    let rows = stmt.query_map(rusqlite::params![cutoff_ms], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, i64>(2)?,
-        ))
-    })?;
-
-    // Group by session_id
-    let mut session_tools: HashMap<String, Vec<(String, u32)>> = HashMap::new();
-    for row in rows {
-        let (session_id, tool_name, count) = row?;
-        session_tools
-            .entry(session_id)
-            .or_default()
-            .push((tool_name, count as u32));
-    }
-
-    // Build signatures
-    let patterns: Vec<(String, ToolSignature)> = session_tools
+    for session in recent_sessions
         .into_iter()
-        .map(|(sid, tools)| {
-            let sig = build_tool_signature(&tools);
-            (sid, sig)
-        })
-        .collect();
+        .filter(|session| session.updated_at >= cutoff_ms)
+    {
+        let messages = sessions::load_session(&conn, &session.id)
+            .with_context(|| format!("Failed to load managed session {}", session.id))?;
+        let mut tool_counts: HashMap<String, u32> = HashMap::new();
+
+        for message in messages {
+            let MessageContent::Blocks(blocks) = message.content else {
+                continue;
+            };
+
+            for block in blocks {
+                if let ContentBlock::ToolUse { name, .. } = block {
+                    *tool_counts.entry(name).or_default() += 1;
+                }
+            }
+        }
+
+        if tool_counts.is_empty() {
+            continue;
+        }
+
+        let mut tools: Vec<(String, u32)> = tool_counts.into_iter().collect();
+        tools.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+        patterns.push((session.id, build_tool_signature(&tools)));
+    }
 
     Ok(patterns)
 }

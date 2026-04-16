@@ -1,3 +1,4 @@
+mod agiworkforce_backend_openapi_models;
 mod client;
 pub mod types;
 

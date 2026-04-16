@@ -7,9 +7,9 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
+use agiworkforce_client::build_reqwest_client_with_custom_ca;
 use anyhow::Result;
 use anyhow::anyhow;
-use agiworkforce_client::build_reqwest_client_with_custom_ca;
 use futures::FutureExt;
 use futures::StreamExt;
 use futures::future::BoxFuture;
@@ -353,14 +353,15 @@ impl ProcessGroupGuard {
     #[cfg(unix)]
     fn maybe_terminate_process_group(&self) {
         let process_group_id = self.process_group_id;
-        let should_escalate =
-            match agiworkforce_utils_pty::process_group::terminate_process_group(process_group_id) {
-                Ok(exists) => exists,
-                Err(error) => {
-                    warn!("Failed to terminate MCP process group {process_group_id}: {error}");
-                    false
-                }
-            };
+        let should_escalate = match agiworkforce_utils_pty::process_group::terminate_process_group(
+            process_group_id,
+        ) {
+            Ok(exists) => exists,
+            Err(error) => {
+                warn!("Failed to terminate MCP process group {process_group_id}: {error}");
+                false
+            }
+        };
         if should_escalate {
             std::thread::spawn(move || {
                 std::thread::sleep(PROCESS_GROUP_TERM_GRACE_PERIOD);

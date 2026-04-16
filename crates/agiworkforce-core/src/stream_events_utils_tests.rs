@@ -87,10 +87,14 @@ async fn save_image_generation_result_saves_base64_to_png_in_agiworkforce_home()
         image_generation_artifact_path(agiworkforce_home.path(), "session-1", "ig_save_base64");
     let _ = std::fs::remove_file(&expected_path);
 
-    let saved_path =
-        save_image_generation_result(agiworkforce_home.path(), "session-1", "ig_save_base64", "Zm9v")
-            .await
-            .expect("image should be saved");
+    let saved_path = save_image_generation_result(
+        agiworkforce_home.path(),
+        "session-1",
+        "ig_save_base64",
+        "Zm9v",
+    )
+    .await
+    .expect("image should be saved");
 
     assert_eq!(saved_path, expected_path);
     assert_eq!(std::fs::read(&saved_path).expect("saved file"), b"foo");
@@ -121,10 +125,14 @@ async fn save_image_generation_result_overwrites_existing_file() {
     .expect("create image output dir");
     std::fs::write(&existing_path, b"existing").expect("seed existing image");
 
-    let saved_path =
-        save_image_generation_result(agiworkforce_home.path(), "session-1", "ig_overwrite", "Zm9v")
-            .await
-            .expect("image should be saved");
+    let saved_path = save_image_generation_result(
+        agiworkforce_home.path(),
+        "session-1",
+        "ig_overwrite",
+        "Zm9v",
+    )
+    .await
+    .expect("image should be saved");
 
     assert_eq!(saved_path, existing_path);
     assert_eq!(std::fs::read(&saved_path).expect("saved file"), b"foo");
@@ -134,7 +142,8 @@ async fn save_image_generation_result_overwrites_existing_file() {
 #[tokio::test]
 async fn save_image_generation_result_sanitizes_call_id_for_agiworkforce_home_output_path() {
     let agiworkforce_home = tempfile::tempdir().expect("create codex home");
-    let expected_path = image_generation_artifact_path(agiworkforce_home.path(), "session-1", "../ig/..");
+    let expected_path =
+        image_generation_artifact_path(agiworkforce_home.path(), "session-1", "../ig/..");
     let _ = std::fs::remove_file(&expected_path);
 
     let saved_path =
@@ -150,9 +159,10 @@ async fn save_image_generation_result_sanitizes_call_id_for_agiworkforce_home_ou
 #[tokio::test]
 async fn save_image_generation_result_rejects_non_standard_base64() {
     let agiworkforce_home = tempfile::tempdir().expect("create codex home");
-    let err = save_image_generation_result(agiworkforce_home.path(), "session-1", "ig_urlsafe", "_-8")
-        .await
-        .expect_err("non-standard base64 should error");
+    let err =
+        save_image_generation_result(agiworkforce_home.path(), "session-1", "ig_urlsafe", "_-8")
+            .await
+            .expect_err("non-standard base64 should error");
     assert!(matches!(err, CodexErr::InvalidRequest(_)));
 }
 

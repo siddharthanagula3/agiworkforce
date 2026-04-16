@@ -138,8 +138,6 @@ pub(crate) fn enum_to_string<T: Serialize>(value: &T) -> String {
 mod tests {
     use super::apply_rollout_item;
     use crate::model::ThreadMetadata;
-    use chrono::DateTime;
-    use chrono::Utc;
     use agiworkforce_protocol::ThreadId;
     use agiworkforce_protocol::config_types::ReasoningSummary;
     use agiworkforce_protocol::models::ContentItem;
@@ -155,6 +153,8 @@ mod tests {
     use agiworkforce_protocol::protocol::TurnContextItem;
     use agiworkforce_protocol::protocol::USER_MESSAGE_BEGIN;
     use agiworkforce_protocol::protocol::UserMessageEvent;
+    use chrono::DateTime;
+    use chrono::Utc;
 
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;

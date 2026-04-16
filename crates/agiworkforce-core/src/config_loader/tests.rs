@@ -168,8 +168,9 @@ fn schema_error_points_to_feature_value() {
     std::fs::write(&config_path, contents).expect("write config");
 
     let _guard = agiworkforce_utils_absolute_path::AbsolutePathBufGuard::new(tmp.path());
-    let error = agiworkforce_config::config_error_from_typed_toml::<ConfigToml>(&config_path, contents)
-        .expect("schema error");
+    let error =
+        agiworkforce_config::config_error_from_typed_toml::<ConfigToml>(&config_path, contents)
+            .expect("schema error");
 
     let value_line = contents.lines().nth(1).expect("value line");
     let value_column = value_line.find("\"true\"").expect("value") + 1;
@@ -848,7 +849,9 @@ async fn project_layers_prefer_closest_cwd() -> std::io::Result<()> {
         .layers_high_to_low()
         .into_iter()
         .filter_map(|layer| match &layer.name {
-            super::ConfigLayerSource::Project { dot_agiworkforce_folder } => Some(dot_agiworkforce_folder),
+            super::ConfigLayerSource::Project {
+                dot_agiworkforce_folder,
+            } => Some(dot_agiworkforce_folder),
             _ => None,
         })
         .collect();
@@ -984,7 +987,9 @@ async fn project_layer_is_added_when_dot_codex_exists_without_config_toml() -> s
     assert_eq!(
         vec![&ConfigLayerEntry {
             name: super::ConfigLayerSource::Project {
-                dot_agiworkforce_folder: AbsolutePathBuf::from_absolute_path(project_root.join(".codex"))?,
+                dot_agiworkforce_folder: AbsolutePathBuf::from_absolute_path(
+                    project_root.join(".codex")
+                )?,
             },
             config: TomlValue::Table(toml::map::Map::new()),
             raw_toml: None,
@@ -1421,7 +1426,9 @@ async fn project_root_markers_supports_alternate_markers() -> std::io::Result<()
         .layers_high_to_low()
         .into_iter()
         .filter_map(|layer| match &layer.name {
-            super::ConfigLayerSource::Project { dot_agiworkforce_folder } => Some(dot_agiworkforce_folder),
+            super::ConfigLayerSource::Project {
+                dot_agiworkforce_folder,
+            } => Some(dot_agiworkforce_folder),
             _ => None,
         })
         .collect();
@@ -1481,7 +1488,9 @@ mod requirements_exec_policy_tests {
         let dot_agiworkforce_folder = AbsolutePathBuf::from_absolute_path(dot_agiworkforce_folder)
             .expect("absolute dot_agiworkforce_folder");
         let layer = ConfigLayerEntry::new(
-            ConfigLayerSource::Project { dot_agiworkforce_folder },
+            ConfigLayerSource::Project {
+                dot_agiworkforce_folder,
+            },
             TomlValue::Table(Default::default()),
         );
         ConfigLayerStack::new(vec![layer], requirements, ConfigRequirementsToml::default())
@@ -1694,8 +1703,10 @@ prefix_rules = []
                 ]
             "#,
         );
-        let config_stack =
-            config_stack_for_dot_agiworkforce_folder_with_requirements(temp_dir.path(), requirements);
+        let config_stack = config_stack_for_dot_agiworkforce_folder_with_requirements(
+            temp_dir.path(),
+            requirements,
+        );
 
         let policy = load_exec_policy(&config_stack).await?;
 
@@ -1733,8 +1744,10 @@ prefix_rules = []
                 ]
             "#,
         );
-        let config_stack =
-            config_stack_for_dot_agiworkforce_folder_with_requirements(temp_dir.path(), requirements);
+        let config_stack = config_stack_for_dot_agiworkforce_folder_with_requirements(
+            temp_dir.path(),
+            requirements,
+        );
 
         let policy = load_exec_policy(&config_stack).await?;
 

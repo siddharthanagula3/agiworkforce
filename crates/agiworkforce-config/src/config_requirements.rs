@@ -694,12 +694,12 @@ impl TryFrom<ConfigRequirementsWithSources> for ConfigRequirements {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::Result;
     use agiworkforce_execpolicy::Decision;
     use agiworkforce_execpolicy::Evaluation;
     use agiworkforce_execpolicy::RuleMatch;
     use agiworkforce_protocol::protocol::NetworkAccess;
     use agiworkforce_utils_absolute_path::AbsolutePathBuf;
+    use anyhow::Result;
     use pretty_assertions::assert_eq;
     use toml::from_str;
 
