@@ -3,7 +3,6 @@ use crate::types::ConfigFileResponse;
 use crate::types::PaginatedListTaskListItem;
 use crate::types::RateLimitStatusPayload;
 use crate::types::TurnAttemptsSiblingTurnsResponse;
-use anyhow::Result;
 use agiworkforce_client::build_reqwest_client_with_custom_ca;
 use agiworkforce_core::auth::AgiWorkforceAuth;
 use agiworkforce_core::default_client::get_agiworkforce_user_agent;
@@ -11,6 +10,7 @@ use agiworkforce_protocol::account::PlanType as AccountPlanType;
 use agiworkforce_protocol::protocol::CreditsSnapshot;
 use agiworkforce_protocol::protocol::RateLimitSnapshot;
 use agiworkforce_protocol::protocol::RateLimitWindow;
+use anyhow::Result;
 use reqwest::StatusCode;
 use reqwest::header::AUTHORIZATION;
 use reqwest::header::CONTENT_TYPE;
@@ -348,7 +348,9 @@ impl Client {
         &self,
     ) -> std::result::Result<ConfigFileResponse, RequestError> {
         let url = match self.path_style {
-            PathStyle::AgiWorkforceApi => format!("{}/api/codex/config/requirements", self.base_url),
+            PathStyle::AgiWorkforceApi => {
+                format!("{}/api/codex/config/requirements", self.base_url)
+            }
             PathStyle::ChatGptApi => format!("{}/wham/config/requirements", self.base_url),
         };
         let req = self.http.get(&url).headers(self.headers());
@@ -564,7 +566,10 @@ mod tests {
         assert_eq!(snapshots[0].plan_type, Some(AccountPlanType::Pro));
 
         assert_eq!(snapshots[1].limit_id.as_deref(), Some("agiworkforce_other"));
-        assert_eq!(snapshots[1].limit_name.as_deref(), Some("agiworkforce_other"));
+        assert_eq!(
+            snapshots[1].limit_name.as_deref(),
+            Some("agiworkforce_other")
+        );
         assert_eq!(
             snapshots[1].primary.as_ref().map(|w| w.used_percent),
             Some(70.0)
@@ -592,7 +597,10 @@ mod tests {
         assert_eq!(snapshots[0].limit_name, None);
         assert_eq!(snapshots[0].primary, None);
         assert_eq!(snapshots[1].limit_id.as_deref(), Some("agiworkforce_other"));
-        assert_eq!(snapshots[1].limit_name.as_deref(), Some("agiworkforce_other"));
+        assert_eq!(
+            snapshots[1].limit_name.as_deref(),
+            Some("agiworkforce_other")
+        );
     }
 
     #[test]

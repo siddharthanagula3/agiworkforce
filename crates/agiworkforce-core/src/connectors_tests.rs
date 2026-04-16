@@ -569,7 +569,8 @@ async fn cloud_requirements_disable_connector_applies_without_user_apps_table() 
 async fn local_requirements_disable_connector_overrides_user_apps_config() {
     let agiworkforce_home = tempdir().expect("tempdir should succeed");
     let config_toml_path =
-        AbsolutePathBuf::try_from(agiworkforce_home.path().join(CONFIG_TOML_FILE)).expect("abs path");
+        AbsolutePathBuf::try_from(agiworkforce_home.path().join(CONFIG_TOML_FILE))
+            .expect("abs path");
     let mut config = ConfigBuilder::default()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))

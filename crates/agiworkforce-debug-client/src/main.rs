@@ -8,11 +8,11 @@ use std::io;
 use std::io::BufRead;
 use std::sync::mpsc;
 
+use agiworkforce_app_server_protocol::AskForApproval;
 use anyhow::Context;
 use anyhow::Result;
 use clap::ArgAction;
 use clap::Parser;
-use agiworkforce_app_server_protocol::AskForApproval;
 
 use crate::client::AppServerClient;
 use crate::client::build_thread_resume_params;

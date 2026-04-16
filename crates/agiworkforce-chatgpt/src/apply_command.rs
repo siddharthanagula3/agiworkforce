@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use clap::Parser;
 use agiworkforce_core::config::Config;
 use agiworkforce_git_utils::ApplyGitRequest;
 use agiworkforce_git_utils::apply_git_patch;
 use agiworkforce_utils_cli::CliConfigOverrides;
+use clap::Parser;
 
 use crate::chatgpt_token::init_chatgpt_token_from_auth;
 use crate::get_task::GetTaskResponse;
@@ -32,8 +32,11 @@ pub async fn run_apply_command(
     )
     .await?;
 
-    init_chatgpt_token_from_auth(&config.agiworkforce_home, config.cli_auth_credentials_store_mode)
-        .await?;
+    init_chatgpt_token_from_auth(
+        &config.agiworkforce_home,
+        config.cli_auth_credentials_store_mode,
+    )
+    .await?;
 
     let task_response = get_task(&config, apply_cli.task_id).await?;
     apply_diff_from_task(task_response, cwd).await

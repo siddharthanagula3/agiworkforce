@@ -333,6 +333,7 @@ impl AgentSession {
             crate::runtime::session_control::create_managed_session(self.messages.clone())?;
         let managed_session = ManagedSession::load_from_path(&resolved.path)?;
         self.adopt_managed_session(managed_session, resolved.path);
+        self.sync_managed_session_metadata()?;
         Ok(())
     }
 
@@ -353,13 +354,33 @@ impl AgentSession {
 
         managed_session.messages = self.messages.clone();
         managed_session.touch();
-        managed_session.save_to_path(path)
+        managed_session.save_to_path(path)?;
+        self.sync_managed_session_metadata()
     }
 
     pub fn managed_session_id(&self) -> Option<&str> {
         self.managed_session
             .as_ref()
             .map(|managed_session| managed_session.session_id.as_str())
+    }
+
+    fn sync_managed_session_metadata(&self) -> Result<()> {
+        let Some(session_id) = self.managed_session_id() else {
+            return Ok(());
+        };
+
+        let conn = crate::sessions::open_db()?;
+        let cwd = std::env::current_dir()
+            .map(|path| path.display().to_string())
+            .unwrap_or_default();
+        crate::sessions::sync_session_metadata(
+            &conn,
+            session_id,
+            &self.model,
+            &cwd,
+            "",
+            &self.messages,
+        )
     }
 
     /// Normalize conversation history: ensure every tool_use call has a

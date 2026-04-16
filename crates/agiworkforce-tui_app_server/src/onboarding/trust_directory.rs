@@ -144,7 +144,9 @@ impl TrustDirectoryWidget {
     fn handle_trust(&mut self) {
         let target =
             resolve_root_git_project_for_trust(&self.cwd).unwrap_or_else(|| self.cwd.clone());
-        if let Err(e) = set_project_trust_level(&self.agiworkforce_home, &target, TrustLevel::Trusted) {
+        if let Err(e) =
+            set_project_trust_level(&self.agiworkforce_home, &target, TrustLevel::Trusted)
+        {
             tracing::error!("Failed to set project trusted: {e:?}");
             self.error = Some(format!("Failed to set trust for {}: {e}", target.display()));
         }

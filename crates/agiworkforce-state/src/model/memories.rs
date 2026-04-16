@@ -1,7 +1,7 @@
+use agiworkforce_protocol::ThreadId;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Utc;
-use agiworkforce_protocol::ThreadId;
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 use std::path::PathBuf;

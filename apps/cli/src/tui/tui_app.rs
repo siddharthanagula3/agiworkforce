@@ -1474,12 +1474,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/fork" | "/branch" => {
-            crate::repl::handle_branch(arg, &app.session);
+            crate::repl::handle_branch(arg, &mut app.session);
+            app.sync_stats();
             SlashResult::SystemMessage("Session forked.".to_string())
         }
 
         "/save" => {
-            crate::repl::handle_save(&app.session);
+            crate::repl::handle_save(&mut app.session);
+            app.sync_stats();
             SlashResult::SystemMessage("Session saved.".to_string())
         }
 

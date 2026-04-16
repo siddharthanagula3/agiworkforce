@@ -1,6 +1,6 @@
+use agiworkforce_protocol::openai_models::ModelInfo;
 use chrono::DateTime;
 use chrono::Utc;
-use agiworkforce_protocol::openai_models::ModelInfo;
 use serde::Deserialize;
 use serde::Serialize;
 use std::io;

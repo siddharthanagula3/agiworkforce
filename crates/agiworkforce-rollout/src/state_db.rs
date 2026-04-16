@@ -3,10 +3,6 @@ use crate::config::RolloutConfigView;
 use crate::list::Cursor;
 use crate::list::ThreadSortKey;
 use crate::metadata;
-use chrono::DateTime;
-use chrono::NaiveDateTime;
-use chrono::Timelike;
-use chrono::Utc;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::dynamic_tools::DynamicToolSpec;
 use agiworkforce_protocol::protocol::RolloutItem;
@@ -14,6 +10,10 @@ use agiworkforce_protocol::protocol::SessionSource;
 pub use agiworkforce_state::LogEntry;
 use agiworkforce_state::ThreadMetadataBuilder;
 use agiworkforce_utils_path::normalize_for_path_comparison;
+use chrono::DateTime;
+use chrono::NaiveDateTime;
+use chrono::Timelike;
+use chrono::Utc;
 use serde_json::Value;
 use std::path::Path;
 use std::path::PathBuf;
@@ -80,15 +80,20 @@ pub async fn get_state_db(config: &impl RolloutConfigView) -> Option<StateDbHand
 /// Open the state runtime when the SQLite file exists, without feature gating.
 ///
 /// This is used for parity checks during the SQLite migration phase.
-pub async fn open_if_present(agiworkforce_home: &Path, default_provider: &str) -> Option<StateDbHandle> {
+pub async fn open_if_present(
+    agiworkforce_home: &Path,
+    default_provider: &str,
+) -> Option<StateDbHandle> {
     let db_path = agiworkforce_state::state_db_path(agiworkforce_home);
     if !tokio::fs::try_exists(&db_path).await.unwrap_or(false) {
         return None;
     }
-    let runtime =
-        agiworkforce_state::StateRuntime::init(agiworkforce_home.to_path_buf(), default_provider.to_string())
-            .await
-            .ok()?;
+    let runtime = agiworkforce_state::StateRuntime::init(
+        agiworkforce_home.to_path_buf(),
+        default_provider.to_string(),
+    )
+    .await
+    .ok()?;
     require_backfill_complete(runtime, agiworkforce_home).await
 }
 

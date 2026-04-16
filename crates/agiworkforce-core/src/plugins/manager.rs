@@ -687,18 +687,19 @@ impl PluginsManager {
         resolved: ResolvedMarketplacePlugin,
     ) -> Result<PluginInstallOutcome, PluginInstallError> {
         let auth_policy = resolved.auth_policy;
-        let plugin_version =
-            if resolved.plugin_id.marketplace_name == OPENAI_CURATED_MARKETPLACE_NAME {
-                Some(
-                    read_curated_plugins_sha(self.agiworkforce_home.as_path()).ok_or_else(|| {
-                        PluginStoreError::Invalid(
-                            "local curated marketplace sha is not available".to_string(),
-                        )
-                    })?,
-                )
-            } else {
-                None
-            };
+        let plugin_version = if resolved.plugin_id.marketplace_name
+            == OPENAI_CURATED_MARKETPLACE_NAME
+        {
+            Some(
+                read_curated_plugins_sha(self.agiworkforce_home.as_path()).ok_or_else(|| {
+                    PluginStoreError::Invalid(
+                        "local curated marketplace sha is not available".to_string(),
+                    )
+                })?,
+            )
+        } else {
+            None
+        };
         let store = self.store.clone();
         let result: StorePluginInstallResult = tokio::task::spawn_blocking(move || {
             if let Some(plugin_version) = plugin_version {
@@ -766,10 +767,9 @@ impl PluginsManager {
     }
 
     async fn uninstall_plugin_id(&self, plugin_id: PluginId) -> Result<(), PluginUninstallError> {
-        let plugin_telemetry = self
-            .store
-            .active_plugin_root(&plugin_id)
-            .map(|_| installed_plugin_telemetry_metadata(self.agiworkforce_home.as_path(), &plugin_id));
+        let plugin_telemetry = self.store.active_plugin_root(&plugin_id).map(|_| {
+            installed_plugin_telemetry_metadata(self.agiworkforce_home.as_path(), &plugin_id)
+        });
         let store = self.store.clone();
         let plugin_id_for_store = plugin_id.clone();
         tokio::task::spawn_blocking(move || store.uninstall(&plugin_id_for_store))

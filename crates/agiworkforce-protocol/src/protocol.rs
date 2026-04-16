@@ -2642,10 +2642,10 @@ impl From<crate::openai_models::TruncationPolicyConfig> for TruncationPolicy {
 impl TruncationPolicy {
     pub fn token_budget(&self) -> usize {
         match self {
-            TruncationPolicy::Bytes(bytes) => {
-                usize::try_from(agiworkforce_utils_string::approx_tokens_from_byte_count(*bytes))
-                    .unwrap_or(usize::MAX)
-            }
+            TruncationPolicy::Bytes(bytes) => usize::try_from(
+                agiworkforce_utils_string::approx_tokens_from_byte_count(*bytes),
+            )
+            .unwrap_or(usize::MAX),
             TruncationPolicy::Tokens(tokens) => *tokens,
         }
     }
@@ -3574,8 +3574,8 @@ mod tests {
     use crate::permissions::FileSystemSandboxPolicy;
     use crate::permissions::FileSystemSpecialPath;
     use crate::permissions::NetworkSandboxPolicy;
-    use anyhow::Result;
     use agiworkforce_utils_absolute_path::AbsolutePathBuf;
+    use anyhow::Result;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use std::path::PathBuf;
@@ -4025,8 +4025,9 @@ mod tests {
             .expect("canonical secret");
         let expected_agents = AbsolutePathBuf::from_absolute_path(canonical_cwd.join(".agents"))
             .expect("canonical .agents");
-        let expected_agiworkforce = AbsolutePathBuf::from_absolute_path(canonical_cwd.join(".agiworkforce"))
-            .expect("canonical .agiworkforce");
+        let expected_agiworkforce =
+            AbsolutePathBuf::from_absolute_path(canonical_cwd.join(".agiworkforce"))
+                .expect("canonical .agiworkforce");
         let policy = FileSystemSandboxPolicy::restricted(vec![
             FileSystemSandboxEntry {
                 path: FileSystemPath::Special {

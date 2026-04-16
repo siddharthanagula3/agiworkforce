@@ -29,10 +29,12 @@ use tempfile::tempdir;
 use toml::Value as TomlValue;
 
 fn config_stack_for_dot_agiworkforce_folder(dot_agiworkforce_folder: &Path) -> ConfigLayerStack {
-    let dot_agiworkforce_folder =
-        AbsolutePathBuf::from_absolute_path(dot_agiworkforce_folder).expect("absolute dot_agiworkforce_folder");
+    let dot_agiworkforce_folder = AbsolutePathBuf::from_absolute_path(dot_agiworkforce_folder)
+        .expect("absolute dot_agiworkforce_folder");
     let layer = ConfigLayerEntry::new(
-        ConfigLayerSource::Project { dot_agiworkforce_folder },
+        ConfigLayerSource::Project {
+            dot_agiworkforce_folder,
+        },
         TomlValue::Table(Default::default()),
     );
     ConfigLayerStack::new(
@@ -303,7 +305,9 @@ async fn merges_requirements_exec_policy_network_rules() -> anyhow::Result<()> {
     };
     let dot_agiworkforce_folder = AbsolutePathBuf::from_absolute_path(temp_dir.path())?;
     let layer = ConfigLayerEntry::new(
-        ConfigLayerSource::Project { dot_agiworkforce_folder },
+        ConfigLayerSource::Project {
+            dot_agiworkforce_folder,
+        },
         TomlValue::Table(Default::default()),
     );
     let config_stack =
@@ -350,7 +354,9 @@ host_executable(name = "git", paths = ["{git_path_literal}"])
     };
     let dot_agiworkforce_folder = AbsolutePathBuf::from_absolute_path(temp_dir.path())?;
     let layer = ConfigLayerEntry::new(
-        ConfigLayerSource::Project { dot_agiworkforce_folder },
+        ConfigLayerSource::Project {
+            dot_agiworkforce_folder,
+        },
         TomlValue::Table(Default::default()),
     );
     let config_stack =

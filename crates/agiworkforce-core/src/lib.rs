@@ -109,8 +109,8 @@ pub type NewConversation = NewThread;
 pub type CodexConversation = CodexThread;
 // Re-export common auth types for workspace consumers
 pub use analytics_client::AnalyticsEventsClient;
-pub use auth::AuthManager;
 pub use auth::AgiWorkforceAuth;
+pub use auth::AuthManager;
 mod default_client_forwarding;
 
 /// Default Codex HTTP client headers and reqwest construction.
@@ -171,6 +171,7 @@ pub(crate) use agiworkforce_shell_command::is_safe_command;
 pub(crate) use agiworkforce_shell_command::parse_command;
 pub(crate) use agiworkforce_shell_command::powershell;
 
+pub use agiworkforce_sandboxing::get_platform_sandbox;
 pub use client::ModelClient;
 pub use client::ModelClientSession;
 pub use client::X_CODEX_TURN_METADATA_HEADER;
@@ -178,7 +179,6 @@ pub use client_common::Prompt;
 pub use client_common::REVIEW_PROMPT;
 pub use client_common::ResponseEvent;
 pub use client_common::ResponseStream;
-pub use agiworkforce_sandboxing::get_platform_sandbox;
 pub use compact::content_items_to_text;
 pub use event_mapping::parse_turn_item;
 pub use exec_policy::ExecPolicyError;

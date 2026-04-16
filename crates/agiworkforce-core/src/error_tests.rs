@@ -1,10 +1,10 @@
 use super::*;
 use crate::exec::StreamOutput;
+use agiworkforce_protocol::protocol::RateLimitWindow;
 use chrono::DateTime;
 use chrono::Duration as ChronoDuration;
 use chrono::TimeZone;
 use chrono::Utc;
-use agiworkforce_protocol::protocol::RateLimitWindow;
 use pretty_assertions::assert_eq;
 use reqwest::Response;
 use reqwest::ResponseBuilderExt;

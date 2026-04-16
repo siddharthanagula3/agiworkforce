@@ -1535,8 +1535,8 @@ mod tests {
     use crate::config_types::SandboxMode;
     use crate::protocol::AskForApproval;
     use crate::protocol::GranularApprovalConfig;
-    use anyhow::Result;
     use agiworkforce_execpolicy::Policy;
+    use anyhow::Result;
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;
     use tempfile::tempdir;

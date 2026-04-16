@@ -9,12 +9,12 @@
 //!
 //! This allows us to ship a completely separate set of functionality as part
 //! of the `codex-exec` binary.
-use clap::Parser;
 use agiworkforce_arg0::Arg0DispatchPaths;
 use agiworkforce_arg0::arg0_dispatch_or_else;
 use agiworkforce_exec::Cli;
 use agiworkforce_exec::run_main;
 use agiworkforce_utils_cli::CliConfigOverrides;
+use clap::Parser;
 
 #[derive(Parser, Debug)]
 struct TopCli {

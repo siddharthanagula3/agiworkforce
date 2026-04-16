@@ -1,5 +1,5 @@
-use crate::AuthManager;
 use crate::AgiWorkforceAuth;
+use crate::AuthManager;
 use crate::ModelProviderInfo;
 use crate::OPENAI_PROVIDER_ID;
 use crate::agent::AgentControl;
@@ -273,9 +273,14 @@ impl ThreadManager {
         ));
         std::fs::create_dir_all(&agiworkforce_home)
             .unwrap_or_else(|err| panic!("temp codex home dir create failed: {err}"));
-        let mut manager =
-            Self::with_models_provider_and_home_for_tests(auth, provider, agiworkforce_home.clone());
-        manager._test_agiworkforce_home_guard = Some(TempCodexHomeGuard { path: agiworkforce_home });
+        let mut manager = Self::with_models_provider_and_home_for_tests(
+            auth,
+            provider,
+            agiworkforce_home.clone(),
+        );
+        manager._test_agiworkforce_home_guard = Some(TempCodexHomeGuard {
+            path: agiworkforce_home,
+        });
         manager
     }
 

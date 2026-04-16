@@ -2,10 +2,6 @@ use crate::exec::ExecToolCallOutput;
 use crate::network_policy_decision::NetworkPolicyDecisionPayload;
 use crate::token_data::KnownPlan;
 use crate::token_data::PlanType;
-use chrono::DateTime;
-use chrono::Datelike;
-use chrono::Local;
-use chrono::Utc;
 use agiworkforce_async_utils::CancelErr;
 pub use agiworkforce_login::auth::RefreshTokenFailedError;
 pub use agiworkforce_login::auth::RefreshTokenFailedReason;
@@ -15,6 +11,10 @@ use agiworkforce_protocol::protocol::ErrorEvent;
 use agiworkforce_protocol::protocol::RateLimitSnapshot;
 use agiworkforce_utils_output_truncation::TruncationPolicy;
 use agiworkforce_utils_output_truncation::truncate_text;
+use chrono::DateTime;
+use chrono::Datelike;
+use chrono::Local;
+use chrono::Utc;
 use reqwest::StatusCode;
 use serde_json;
 use std::io;
@@ -586,9 +586,11 @@ impl CodexErr {
             CodexErr::ConnectionFailed(_) => AgiWorkforceErrorInfo::HttpConnectionFailed {
                 http_status_code: self.http_status_code_value(),
             },
-            CodexErr::ResponseStreamFailed(_) => AgiWorkforceErrorInfo::ResponseStreamConnectionFailed {
-                http_status_code: self.http_status_code_value(),
-            },
+            CodexErr::ResponseStreamFailed(_) => {
+                AgiWorkforceErrorInfo::ResponseStreamConnectionFailed {
+                    http_status_code: self.http_status_code_value(),
+                }
+            }
             CodexErr::RefreshTokenFailed(_) => AgiWorkforceErrorInfo::Unauthorized,
             CodexErr::SessionConfiguredNotFirstEvent
             | CodexErr::InternalServerError

@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::Context;
-use chrono::DateTime;
-use clap::Parser;
 use agiworkforce_state::LogQuery;
 use agiworkforce_state::LogRow;
 use agiworkforce_state::StateRuntime;
+use anyhow::Context;
+use chrono::DateTime;
+use clap::Parser;
 use dirs::home_dir;
 use owo_colors::OwoColorize;
 
@@ -112,8 +112,13 @@ fn resolve_db_path(args: &Args) -> anyhow::Result<PathBuf> {
         return Ok(db.clone());
     }
 
-    let agiworkforce_home = args.agiworkforce_home.clone().unwrap_or_else(default_agiworkforce_home);
-    Ok(agiworkforce_state::logs_db_path(agiworkforce_home.as_path()))
+    let agiworkforce_home = args
+        .agiworkforce_home
+        .clone()
+        .unwrap_or_else(default_agiworkforce_home);
+    Ok(agiworkforce_state::logs_db_path(
+        agiworkforce_home.as_path(),
+    ))
 }
 
 fn default_agiworkforce_home() -> PathBuf {

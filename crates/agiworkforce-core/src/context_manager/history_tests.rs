@@ -1,6 +1,4 @@
 use super::*;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use agiworkforce_git_utils::GhostCommit;
 use agiworkforce_protocol::AgentPath;
 use agiworkforce_protocol::config_types::ReasoningSummary;
@@ -23,6 +21,8 @@ use agiworkforce_protocol::protocol::SandboxPolicy;
 use agiworkforce_protocol::protocol::TurnContextItem;
 use agiworkforce_utils_output_truncation::TruncationPolicy;
 use agiworkforce_utils_output_truncation::truncate_text;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use image::ImageBuffer;
 use image::ImageFormat;
 use image::Rgba;
@@ -142,7 +142,9 @@ fn reference_context_item() -> TurnContextItem {
         user_instructions: None,
         developer_instructions: None,
         final_output_json_schema: None,
-        truncation_policy: Some(agiworkforce_protocol::protocol::TruncationPolicy::Tokens(10_000)),
+        truncation_policy: Some(agiworkforce_protocol::protocol::TruncationPolicy::Tokens(
+            10_000,
+        )),
     }
 }
 

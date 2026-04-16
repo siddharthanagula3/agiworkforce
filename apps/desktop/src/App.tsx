@@ -15,6 +15,10 @@ import {
   initializeExecutionGoalSubscription,
   initializeExecutionListeners,
 } from './stores/executionStore';
+import {
+  cleanupRuntimeActivityEventListeners,
+  initializeRuntimeActivityEventListeners,
+} from './hooks/useAgenticEvents';
 
 import { useChatStore as useDesktopChatStore } from './stores/chat/chatStore';
 import { TauriRuntime } from './runtime/TauriRuntime';
@@ -360,6 +364,7 @@ const DesktopShell = () => {
     registerCleanup(() => cleanupBackgroundTaskEventListeners());
     registerCleanup(() => cleanupExecutionListeners());
     registerCleanup(() => cleanupAgentWorkflowEventListeners());
+    registerCleanup(() => cleanupRuntimeActivityEventListeners());
 
     void runStartupStep('Execution goal subscription', async () => {
       initializeExecutionGoalSubscription();
@@ -376,6 +381,9 @@ const DesktopShell = () => {
         initializeAgentWorkflowEventListeners(),
       );
       void runStartupStep('Execution event listener', () => initializeExecutionListeners());
+      void runStartupStep('Runtime activity event listener', () =>
+        initializeRuntimeActivityEventListeners(),
+      );
     }
 
     // Wire up mcpb:install_progress Tauri event into the MCPB store (Tauri-only)

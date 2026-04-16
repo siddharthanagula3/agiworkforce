@@ -381,7 +381,8 @@ mod tests {
                         "network": { "enabled": null }
                     }))
                     .expect("valid permissions"),
-                    scope: agiworkforce_protocol::request_permissions::PermissionGrantScope::Session,
+                    scope:
+                        agiworkforce_protocol::request_permissions::PermissionGrantScope::Session,
                 },
             })
             .expect("permissions response should serialize")

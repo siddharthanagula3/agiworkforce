@@ -13,7 +13,6 @@ use crate::config::types::NotificationMethod;
 use crate::config::types::Notifications;
 use crate::config::types::ToolSuggestDiscoverableType;
 use crate::config_loader::RequirementSource;
-use assert_matches::assert_matches;
 use agiworkforce_config::CONFIG_TOML_FILE;
 use agiworkforce_features::Feature;
 use agiworkforce_features::FeaturesToml;
@@ -23,6 +22,7 @@ use agiworkforce_protocol::permissions::FileSystemSandboxEntry;
 use agiworkforce_protocol::permissions::FileSystemSandboxPolicy;
 use agiworkforce_protocol::permissions::FileSystemSpecialPath;
 use agiworkforce_protocol::permissions::NetworkSandboxPolicy;
+use assert_matches::assert_matches;
 use serde::Deserialize;
 use tempfile::tempdir;
 
@@ -460,7 +460,8 @@ fn default_permissions_profile_populates_runtime_sandbox_policy() -> std::io::Re
         agiworkforce_home.path().to_path_buf(),
     )?;
 
-    let memories_root = AbsolutePathBuf::try_from(agiworkforce_home.path().join("memories")).unwrap();
+    let memories_root =
+        AbsolutePathBuf::try_from(agiworkforce_home.path().join("memories")).unwrap();
     assert_eq!(
         config.permissions.file_system_sandbox_policy,
         FileSystemSandboxPolicy::restricted(vec![
@@ -1777,12 +1778,14 @@ async fn managed_config_overrides_oauth_store_mode() -> anyhow::Result<()> {
         CloudRequirementsLoader::default(),
     )
     .await?;
-    let cfg =
-        deserialize_config_toml_with_base(config_layer_stack.effective_config(), agiworkforce_home.path())
-            .map_err(|e| {
-                tracing::error!("Failed to deserialize overridden config: {e}");
-                e
-            })?;
+    let cfg = deserialize_config_toml_with_base(
+        config_layer_stack.effective_config(),
+        agiworkforce_home.path(),
+    )
+    .map_err(|e| {
+        tracing::error!("Failed to deserialize overridden config: {e}");
+        e
+    })?;
     assert_eq!(
         cfg.mcp_oauth_credentials_store,
         Some(OAuthCredentialsStoreMode::Keyring),
@@ -1907,12 +1910,14 @@ async fn managed_config_wins_over_cli_overrides() -> anyhow::Result<()> {
     )
     .await?;
 
-    let cfg =
-        deserialize_config_toml_with_base(config_layer_stack.effective_config(), agiworkforce_home.path())
-            .map_err(|e| {
-                tracing::error!("Failed to deserialize overridden config: {e}");
-                e
-            })?;
+    let cfg = deserialize_config_toml_with_base(
+        config_layer_stack.effective_config(),
+        agiworkforce_home.path(),
+    )
+    .map_err(|e| {
+        tracing::error!("Failed to deserialize overridden config: {e}");
+        e
+    })?;
 
     assert_eq!(cfg.model.as_deref(), Some("managed_config"));
     Ok(())
@@ -2685,7 +2690,8 @@ async fn set_model_updates_defaults() -> anyhow::Result<()> {
         .apply()
         .await?;
 
-    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized =
+        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     let parsed: ConfigToml = toml::from_str(&serialized)?;
 
     assert_eq!(parsed.model.as_deref(), Some("gpt-5.1-codex"));
@@ -2742,7 +2748,8 @@ async fn set_model_updates_profile() -> anyhow::Result<()> {
         .apply()
         .await?;
 
-    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized =
+        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     let parsed: ConfigToml = toml::from_str(&serialized)?;
     let profile = parsed
         .profiles
@@ -2816,7 +2823,8 @@ async fn set_feature_enabled_updates_profile() -> anyhow::Result<()> {
         .apply()
         .await?;
 
-    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized =
+        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     let parsed: ConfigToml = toml::from_str(&serialized)?;
     let profile = parsed
         .profiles
@@ -2858,7 +2866,8 @@ async fn set_feature_enabled_persists_default_false_feature_disable_in_profile()
         .apply()
         .await?;
 
-    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized =
+        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     let parsed: ConfigToml = toml::from_str(&serialized)?;
     let profile = parsed
         .profiles
@@ -2898,7 +2907,8 @@ async fn set_feature_enabled_profile_disable_overrides_root_enable() -> anyhow::
         .apply()
         .await?;
 
-    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized =
+        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     let parsed: ConfigToml = toml::from_str(&serialized)?;
     let profile = parsed
         .profiles
@@ -3061,7 +3071,10 @@ fn load_config_ignores_empty_requirements_guardian_developer_instructions() -> s
 #[test]
 fn load_config_rejects_missing_agent_role_config_file() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
-    let missing_path = agiworkforce_home.path().join("agents").join("researcher.toml");
+    let missing_path = agiworkforce_home
+        .path()
+        .join("agents")
+        .join("researcher.toml");
     let cfg = ConfigToml {
         agents: Some(AgentsToml {
             max_threads: None,
@@ -3096,7 +3109,10 @@ fn load_config_rejects_missing_agent_role_config_file() -> std::io::Result<()> {
 #[tokio::test]
 async fn agent_role_relative_config_file_resolves_against_config_toml() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
-    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
+    let role_config_path = agiworkforce_home
+        .path()
+        .join("agents")
+        .join("researcher.toml");
     tokio::fs::create_dir_all(
         role_config_path
             .parent()
@@ -3145,7 +3161,10 @@ nickname_candidates = ["Hypatia", "Noether"]
 #[tokio::test]
 async fn agent_role_file_metadata_overrides_config_toml_metadata() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
-    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
+    let role_config_path = agiworkforce_home
+        .path()
+        .join("agents")
+        .join("researcher.toml");
     tokio::fs::create_dir_all(
         role_config_path
             .parent()
@@ -3265,7 +3284,10 @@ model = "gpt-5"
 async fn legacy_agent_role_config_file_allows_missing_developer_instructions() -> std::io::Result<()>
 {
     let agiworkforce_home = TempDir::new()?;
-    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
+    let role_config_path = agiworkforce_home
+        .path()
+        .join("agents")
+        .join("researcher.toml");
     tokio::fs::create_dir_all(
         role_config_path
             .parent()
@@ -3316,7 +3338,10 @@ config_file = "./agents/researcher.toml"
 async fn agent_role_without_description_after_merge_is_dropped_with_warning() -> std::io::Result<()>
 {
     let agiworkforce_home = TempDir::new()?;
-    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
+    let role_config_path = agiworkforce_home
+        .path()
+        .join("agents")
+        .join("researcher.toml");
     tokio::fs::create_dir_all(
         role_config_path
             .parent()
@@ -3433,7 +3458,10 @@ developer_instructions = "Review carefully"
 #[tokio::test]
 async fn agent_role_file_name_takes_precedence_over_config_key() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
-    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
+    let role_config_path = agiworkforce_home
+        .path()
+        .join("agents")
+        .join("researcher.toml");
     tokio::fs::create_dir_all(
         role_config_path
             .parent()
@@ -3478,8 +3506,14 @@ config_file = "./agents/researcher.toml"
 #[tokio::test]
 async fn loads_legacy_split_agent_roles_from_config_toml() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
-    let researcher_path = agiworkforce_home.path().join("agents").join("researcher.toml");
-    let reviewer_path = agiworkforce_home.path().join("agents").join("reviewer.toml");
+    let researcher_path = agiworkforce_home
+        .path()
+        .join("agents")
+        .join("researcher.toml");
+    let reviewer_path = agiworkforce_home
+        .path()
+        .join("agents")
+        .join("reviewer.toml");
     tokio::fs::create_dir_all(
         researcher_path
             .parent()
@@ -5755,7 +5789,8 @@ smart_approvals = true
     assert!(!config.features.enabled(Feature::GuardianApproval));
     assert_eq!(config.approvals_reviewer, ApprovalsReviewer::User);
 
-    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized =
+        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     assert!(serialized.contains("smart_approvals = true"));
     assert!(!serialized.contains("guardian_approval"));
     assert!(!serialized.contains("approvals_reviewer"));
@@ -5784,7 +5819,8 @@ smart_approvals = true
     assert!(!config.features.enabled(Feature::GuardianApproval));
     assert_eq!(config.approvals_reviewer, ApprovalsReviewer::User);
 
-    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized =
+        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     assert!(serialized.contains("[profiles.guardian.features]"));
     assert!(serialized.contains("smart_approvals = true"));
     assert!(!serialized.contains("guardian_approval"));

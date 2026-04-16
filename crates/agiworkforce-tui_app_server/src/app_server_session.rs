@@ -804,7 +804,9 @@ fn sandbox_mode_from_policy(
         SandboxPolicy::DangerFullAccess => {
             Some(agiworkforce_app_server_protocol::SandboxMode::DangerFullAccess)
         }
-        SandboxPolicy::ReadOnly { .. } => Some(agiworkforce_app_server_protocol::SandboxMode::ReadOnly),
+        SandboxPolicy::ReadOnly { .. } => {
+            Some(agiworkforce_app_server_protocol::SandboxMode::ReadOnly)
+        }
         SandboxPolicy::WorkspaceWrite { .. } => {
             Some(agiworkforce_app_server_protocol::SandboxMode::WorkspaceWrite)
         }

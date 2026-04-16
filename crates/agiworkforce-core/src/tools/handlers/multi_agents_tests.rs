@@ -1,6 +1,6 @@
 use super::*;
-use crate::AuthManager;
 use crate::AgiWorkforceAuth;
+use crate::AuthManager;
 use crate::ThreadManager;
 use crate::built_in_model_providers;
 use crate::codex::make_session_and_context;
@@ -148,8 +148,10 @@ where
             let content = match output.body {
                 FunctionCallOutputBody::Text(text) => text,
                 FunctionCallOutputBody::ContentItems(items) => {
-                    agiworkforce_protocol::models::function_call_output_content_items_to_text(&items)
-                        .unwrap_or_default()
+                    agiworkforce_protocol::models::function_call_output_content_items_to_text(
+                        &items,
+                    )
+                    .unwrap_or_default()
                 }
             };
             (content, output.success)

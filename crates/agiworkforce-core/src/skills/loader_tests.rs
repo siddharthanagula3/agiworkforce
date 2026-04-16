@@ -250,10 +250,20 @@ fn loads_skills_from_home_agents_dir_for_user_scope() -> anyhow::Result<()> {
 }
 
 fn write_skill(agiworkforce_home: &TempDir, dir: &str, name: &str, description: &str) -> PathBuf {
-    write_skill_at(&agiworkforce_home.path().join("skills"), dir, name, description)
+    write_skill_at(
+        &agiworkforce_home.path().join("skills"),
+        dir,
+        name,
+        description,
+    )
 }
 
-fn write_system_skill(agiworkforce_home: &TempDir, dir: &str, name: &str, description: &str) -> PathBuf {
+fn write_system_skill(
+    agiworkforce_home: &TempDir,
+    dir: &str,
+    name: &str,
+    description: &str,
+) -> PathBuf {
     write_skill_at(
         &agiworkforce_home.path().join("skills/.system"),
         dir,
@@ -1104,7 +1114,10 @@ async fn loads_skills_via_symlinked_subdir_for_user_scope() {
     let shared_skill_path = write_skill_at(shared.path(), "demo", "linked-skill", "from link");
 
     fs::create_dir_all(agiworkforce_home.path().join("skills")).unwrap();
-    symlink_dir(shared.path(), &agiworkforce_home.path().join("skills/shared"));
+    symlink_dir(
+        shared.path(),
+        &agiworkforce_home.path().join("skills/shared"),
+    );
 
     let cfg = make_config(&agiworkforce_home).await;
     let outcome = load_skills_for_test(&cfg);
@@ -1343,7 +1356,12 @@ async fn respects_max_scan_depth_for_user_scope() {
 #[tokio::test]
 async fn loads_valid_skill() {
     let agiworkforce_home = tempfile::tempdir().expect("tempdir");
-    let skill_path = write_skill(&agiworkforce_home, "demo", "demo-skill", "does things\ncarefully");
+    let skill_path = write_skill(
+        &agiworkforce_home,
+        "demo",
+        "demo-skill",
+        "does things\ncarefully",
+    );
     let cfg = make_config(&agiworkforce_home).await;
 
     let outcome = load_skills_for_test(&cfg);
@@ -2015,7 +2033,8 @@ async fn loads_skills_from_system_cache_when_present() {
     let agiworkforce_home = tempfile::tempdir().expect("tempdir");
     let work_dir = tempfile::tempdir().expect("tempdir");
 
-    let skill_path = write_system_skill(&agiworkforce_home, "system", "system-skill", "from system");
+    let skill_path =
+        write_system_skill(&agiworkforce_home, "system", "system-skill", "from system");
 
     let cfg = make_config_for_cwd(&agiworkforce_home, work_dir.path().to_path_buf()).await;
 

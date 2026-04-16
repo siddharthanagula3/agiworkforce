@@ -33,12 +33,13 @@ impl IntoProtocol<FunctionCallOutputContentItem>
             agiworkforce_code_mode::FunctionCallOutputContentItem::InputText { text } => {
                 FunctionCallOutputContentItem::InputText { text }
             }
-            agiworkforce_code_mode::FunctionCallOutputContentItem::InputImage { image_url, detail } => {
-                FunctionCallOutputContentItem::InputImage {
-                    image_url,
-                    detail: detail.map(IntoProtocol::into_protocol),
-                }
-            }
+            agiworkforce_code_mode::FunctionCallOutputContentItem::InputImage {
+                image_url,
+                detail,
+            } => FunctionCallOutputContentItem::InputImage {
+                image_url,
+                detail: detail.map(IntoProtocol::into_protocol),
+            },
         }
     }
 }

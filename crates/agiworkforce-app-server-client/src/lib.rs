@@ -15,6 +15,7 @@
 //! bridging async `mpsc` channels on both sides. Queues are bounded so overload
 //! surfaces as channel-full errors rather than unbounded memory growth.
 
+mod agiworkforce_app_server;
 mod remote;
 
 use std::error::Error;
@@ -25,9 +26,9 @@ use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::time::Duration;
 
-pub use agiworkforce_app_server::in_process::DEFAULT_IN_PROCESS_CHANNEL_CAPACITY;
-pub use agiworkforce_app_server::in_process::InProcessServerEvent;
-use agiworkforce_app_server::in_process::InProcessStartArgs;
+pub use crate::agiworkforce_app_server::in_process::DEFAULT_IN_PROCESS_CHANNEL_CAPACITY;
+pub use crate::agiworkforce_app_server::in_process::InProcessServerEvent;
+use crate::agiworkforce_app_server::in_process::InProcessStartArgs;
 use agiworkforce_app_server_protocol::ClientInfo;
 use agiworkforce_app_server_protocol::ClientNotification;
 use agiworkforce_app_server_protocol::ClientRequest;
@@ -285,7 +286,8 @@ impl InProcessAppServerClient {
     pub async fn start(args: InProcessClientStartArgs) -> IoResult<Self> {
         let channel_capacity = args.channel_capacity.max(1);
         let mut handle =
-            agiworkforce_app_server::in_process::start(args.into_runtime_start_args()).await?;
+            crate::agiworkforce_app_server::in_process::start(args.into_runtime_start_args())
+                .await?;
         let request_sender = handle.sender();
         let (command_tx, mut command_rx) = mpsc::channel::<ClientCommand>(channel_capacity);
         let (event_tx, event_rx) = mpsc::channel::<InProcessServerEvent>(channel_capacity);

@@ -2154,7 +2154,8 @@ async fn wait_for_thread_rollback_failed(rx: &async_channel::Receiver<Event>) ->
             .expect("event");
         match evt.msg {
             EventMsg::Error(payload)
-                if payload.agiworkforce_error_info == Some(AgiWorkforceErrorInfo::ThreadRollbackFailed) =>
+                if payload.agiworkforce_error_info
+                    == Some(AgiWorkforceErrorInfo::ThreadRollbackFailed) =>
             {
                 return payload;
             }
@@ -2282,8 +2283,8 @@ async fn session_configuration_apply_preserves_split_file_system_policy_on_cwd_o
     let original_cwd = project_root.join("subdir");
     let docs_dir = original_cwd.join("docs");
     std::fs::create_dir_all(&docs_dir).expect("create docs dir");
-    let docs_dir =
-        agiworkforce_utils_absolute_path::AbsolutePathBuf::from_absolute_path(&docs_dir).expect("docs");
+    let docs_dir = agiworkforce_utils_absolute_path::AbsolutePathBuf::from_absolute_path(&docs_dir)
+        .expect("docs");
 
     session_configuration.cwd = original_cwd;
     session_configuration.sandbox_policy =
@@ -2407,8 +2408,8 @@ async fn session_configuration_apply_rederives_legacy_file_system_policy_on_cwd_
     let original_cwd = project_root.join("subdir");
     let docs_dir = original_cwd.join("docs");
     std::fs::create_dir_all(&docs_dir).expect("create docs dir");
-    let docs_dir =
-        agiworkforce_utils_absolute_path::AbsolutePathBuf::from_absolute_path(&docs_dir).expect("docs");
+    let docs_dir = agiworkforce_utils_absolute_path::AbsolutePathBuf::from_absolute_path(&docs_dir)
+        .expect("docs");
 
     session_configuration.cwd = original_cwd;
     session_configuration.sandbox_policy =
@@ -2455,7 +2456,8 @@ async fn session_new_fails_when_zsh_fork_enabled_without_zsh_path() {
     config.zsh_path = None;
     let config = Arc::new(config);
 
-    let auth_manager = AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
     let models_manager = Arc::new(ModelsManager::new(
         config.agiworkforce_home.clone(),
         auth_manager.clone(),
@@ -2546,7 +2548,8 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
     let config = build_test_config(agiworkforce_home.path()).await;
     let config = Arc::new(config);
     let conversation_id = ThreadId::default();
-    let auth_manager = AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
     let models_manager = Arc::new(ModelsManager::new(
         config.agiworkforce_home.clone(),
         auth_manager.clone(),
@@ -2768,15 +2771,16 @@ async fn request_permissions_emits_event_when_granular_policy_allows_requests() 
     let session = Arc::new(session);
     let turn_context = Arc::new(turn_context);
     let call_id = "call-1".to_string();
-    let expected_response = agiworkforce_protocol::request_permissions::RequestPermissionsResponse {
-        permissions: RequestPermissionProfile {
-            network: Some(agiworkforce_protocol::models::NetworkPermissions {
-                enabled: Some(true),
-            }),
-            ..RequestPermissionProfile::default()
-        },
-        scope: PermissionGrantScope::Turn,
-    };
+    let expected_response =
+        agiworkforce_protocol::request_permissions::RequestPermissionsResponse {
+            permissions: RequestPermissionProfile {
+                network: Some(agiworkforce_protocol::models::NetworkPermissions {
+                    enabled: Some(true),
+                }),
+                ..RequestPermissionProfile::default()
+            },
+            scope: PermissionGrantScope::Turn,
+        };
 
     let handle = tokio::spawn({
         let session = Arc::clone(&session);
@@ -3168,7 +3172,8 @@ async fn spawn_task_turn_span_inherits_dispatch_trace_context() {
         .expect("turn task should capture the current span trace context");
     let submission_context =
         agiworkforce_otel::context_from_w3c_trace_context(&submission_trace).expect("submission");
-    let task_context = agiworkforce_otel::context_from_w3c_trace_context(&task_trace).expect("task trace");
+    let task_context =
+        agiworkforce_otel::context_from_w3c_trace_context(&task_trace).expect("task trace");
 
     assert_eq!(
         task_context.span().span_context().trace_id(),
@@ -3381,7 +3386,8 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
     let config = build_test_config(agiworkforce_home.path()).await;
     let config = Arc::new(config);
     let conversation_id = ThreadId::default();
-    let auth_manager = AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(AgiWorkforceAuth::from_api_key("Test API Key"));
     let models_manager = Arc::new(ModelsManager::new(
         config.agiworkforce_home.clone(),
         auth_manager.clone(),

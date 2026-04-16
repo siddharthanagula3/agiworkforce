@@ -55,13 +55,13 @@ pub(crate) fn load_local_chatgpt_auth(
 mod tests {
     use super::*;
 
-    use base64::Engine;
-    use chrono::Utc;
     use agiworkforce_app_server_protocol::AuthMode;
     use agiworkforce_core::auth::AuthDotJson;
     use agiworkforce_core::auth::save_auth;
     use agiworkforce_core::token_data::TokenData;
     use agiworkforce_login::auth::login_with_chatgpt_auth_tokens;
+    use base64::Engine;
+    use chrono::Utc;
     use pretty_assertions::assert_eq;
     use serde::Serialize;
     use serde_json::json;
@@ -132,8 +132,12 @@ mod tests {
     fn rejects_missing_local_auth() {
         let agiworkforce_home = TempDir::new().expect("tempdir");
 
-        let err = load_local_chatgpt_auth(agiworkforce_home.path(), AuthCredentialsStoreMode::File, None)
-            .expect_err("missing auth should fail");
+        let err = load_local_chatgpt_auth(
+            agiworkforce_home.path(),
+            AuthCredentialsStoreMode::File,
+            None,
+        )
+        .expect_err("missing auth should fail");
 
         assert_eq!(err, "no local auth available");
     }
@@ -153,8 +157,12 @@ mod tests {
         )
         .expect("api key auth should save");
 
-        let err = load_local_chatgpt_auth(agiworkforce_home.path(), AuthCredentialsStoreMode::File, None)
-            .expect_err("api key auth should fail");
+        let err = load_local_chatgpt_auth(
+            agiworkforce_home.path(),
+            AuthCredentialsStoreMode::File,
+            None,
+        )
+        .expect_err("api key auth should fail");
 
         assert_eq!(err, "local auth is not a ChatGPT login");
     }

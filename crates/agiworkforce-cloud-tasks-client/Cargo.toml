@@ -14,7 +14,13 @@ mock = []
 
 [dependencies]
 anyhow = "1"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+diffy = "0.4.2"
+thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json"] }
+agiworkforce-backend-client = { path = "../agiworkforce-backend-client" }
+agiworkforce-git-utils = { path = "../agiworkforce-git-utils" }

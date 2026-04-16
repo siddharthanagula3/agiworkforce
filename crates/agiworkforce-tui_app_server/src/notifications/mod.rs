@@ -4,8 +4,8 @@ mod osc9;
 use std::env;
 use std::io;
 
-use bel::BelBackend;
 use agiworkforce_core::config::types::NotificationMethod;
+use bel::BelBackend;
 use osc9::Osc9Backend;
 
 #[derive(Debug)]

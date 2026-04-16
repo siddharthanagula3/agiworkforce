@@ -23,8 +23,8 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
-mod agiworkforce_tool_config;
-mod agiworkforce_tool_runner;
+mod codex_tool_config;
+mod codex_tool_runner;
 mod exec_approval;
 pub(crate) mod message_processor;
 mod outgoing_message;
@@ -35,8 +35,8 @@ use crate::outgoing_message::OutgoingJsonRpcMessage;
 use crate::outgoing_message::OutgoingMessage;
 use crate::outgoing_message::OutgoingMessageSender;
 
-pub use crate::agiworkforce_tool_config::AgiWorkforceToolCallParam;
-pub use crate::agiworkforce_tool_config::AgiWorkforceToolCallReplyParam;
+pub use crate::codex_tool_config::AgiWorkforceToolCallParam;
+pub use crate::codex_tool_config::AgiWorkforceToolCallReplyParam;
 pub use crate::exec_approval::ExecApprovalElicitRequestParams;
 pub use crate::exec_approval::ExecApprovalResponse;
 pub use crate::patch_approval::PatchApprovalElicitRequestParams;

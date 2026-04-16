@@ -9,10 +9,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use anyhow::Result;
-use anyhow::anyhow;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::protocol::SessionSource;
+use anyhow::Result;
+use anyhow::anyhow;
 use feedback_diagnostics::FEEDBACK_DIAGNOSTICS_ATTACHMENT_FILENAME;
 use feedback_diagnostics::FeedbackDiagnostics;
 use tracing::Event;

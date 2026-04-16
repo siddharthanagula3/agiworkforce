@@ -2,10 +2,6 @@
 
 use super::*;
 use crate::config::RolloutConfig;
-use chrono::DateTime;
-use chrono::NaiveDateTime;
-use chrono::Timelike;
-use chrono::Utc;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::protocol::CompactedItem;
 use agiworkforce_protocol::protocol::GitInfo;
@@ -16,6 +12,10 @@ use agiworkforce_protocol::protocol::SessionMetaLine;
 use agiworkforce_protocol::protocol::SessionSource;
 use agiworkforce_state::BackfillStatus;
 use agiworkforce_state::ThreadMetadataBuilder;
+use chrono::DateTime;
+use chrono::NaiveDateTime;
+use chrono::Timelike;
+use chrono::Utc;
 use pretty_assertions::assert_eq;
 use std::fs::File;
 use std::io::Write;
@@ -196,10 +196,14 @@ async fn backfill_sessions_resumes_from_watermark_and_marks_complete() {
         None,
     );
 
-    let runtime = agiworkforce_state::StateRuntime::init(agiworkforce_home.clone(), "test-provider".to_string())
-        .await
-        .expect("initialize runtime");
-    let first_watermark = backfill_watermark_for_path(agiworkforce_home.as_path(), first_path.as_path());
+    let runtime = agiworkforce_state::StateRuntime::init(
+        agiworkforce_home.clone(),
+        "test-provider".to_string(),
+    )
+    .await
+    .expect("initialize runtime");
+    let first_watermark =
+        backfill_watermark_for_path(agiworkforce_home.as_path(), first_path.as_path());
     runtime.mark_backfill_running().await.expect("mark running");
     runtime
         .checkpoint_backfill(first_watermark.as_str())
@@ -262,9 +266,12 @@ async fn backfill_sessions_preserves_existing_git_branch_and_fills_missing_git_f
         }),
     );
 
-    let runtime = agiworkforce_state::StateRuntime::init(agiworkforce_home.clone(), "test-provider".to_string())
-        .await
-        .expect("initialize runtime");
+    let runtime = agiworkforce_state::StateRuntime::init(
+        agiworkforce_home.clone(),
+        "test-provider".to_string(),
+    )
+    .await
+    .expect("initialize runtime");
     let thread_id = ThreadId::from_string(&thread_uuid.to_string()).expect("thread id");
     let mut existing = extract_metadata_from_rollout(&rollout_path, "test-provider")
         .await
@@ -309,9 +316,12 @@ async fn backfill_sessions_normalizes_cwd_before_upsert() {
         None,
     );
 
-    let runtime = agiworkforce_state::StateRuntime::init(agiworkforce_home.clone(), "test-provider".to_string())
-        .await
-        .expect("initialize runtime");
+    let runtime = agiworkforce_state::StateRuntime::init(
+        agiworkforce_home.clone(),
+        "test-provider".to_string(),
+    )
+    .await
+    .expect("initialize runtime");
 
     let config = test_config(agiworkforce_home.clone());
     backfill_sessions(runtime.as_ref(), &config).await;

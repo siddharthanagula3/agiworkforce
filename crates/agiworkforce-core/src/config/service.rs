@@ -340,14 +340,13 @@ impl ConfigService {
             )
         })?;
         let user_config_toml =
-            deserialize_config_toml_with_base(user_config.clone(), &self.agiworkforce_home).map_err(
-                |err| {
+            deserialize_config_toml_with_base(user_config.clone(), &self.agiworkforce_home)
+                .map_err(|err| {
                     ConfigServiceError::write(
                         ConfigWriteErrorCode::ConfigValidationError,
                         format!("Invalid configuration: {err}"),
                     )
-                },
-            )?;
+                })?;
         validate_explicit_feature_settings_in_config_toml(
             &user_config_toml,
             layers.requirements().feature_requirements.as_ref(),
@@ -656,7 +655,9 @@ fn override_message(layer: &ConfigLayerSource) -> String {
         ConfigLayerSource::System { file } => {
             format!("Overridden by managed config (system): {}", file.display())
         }
-        ConfigLayerSource::Project { dot_agiworkforce_folder } => format!(
+        ConfigLayerSource::Project {
+            dot_agiworkforce_folder,
+        } => format!(
             "Overridden by project config: {}/{CONFIG_TOML_FILE}",
             dot_agiworkforce_folder.display(),
         ),

@@ -2,13 +2,13 @@ use crate::config::types::McpServerConfig;
 use crate::config::types::Notice;
 use crate::path_utils::resolve_symlink_write_paths;
 use crate::path_utils::write_atomically;
-use anyhow::Context;
 use agiworkforce_config::CONFIG_TOML_FILE;
 use agiworkforce_features::FEATURES;
 use agiworkforce_protocol::config_types::Personality;
 use agiworkforce_protocol::config_types::ServiceTier;
 use agiworkforce_protocol::config_types::TrustLevel;
 use agiworkforce_protocol::openai_models::ReasoningEffort;
+use anyhow::Context;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::Path;
@@ -1024,13 +1024,21 @@ impl ConfigEditsBuilder {
 
     /// Apply edits on a blocking thread.
     pub fn apply_blocking(self) -> anyhow::Result<()> {
-        apply_blocking(&self.agiworkforce_home, self.profile.as_deref(), &self.edits)
+        apply_blocking(
+            &self.agiworkforce_home,
+            self.profile.as_deref(),
+            &self.edits,
+        )
     }
 
     /// Apply edits asynchronously via a blocking offload.
     pub async fn apply(self) -> anyhow::Result<()> {
         task::spawn_blocking(move || {
-            apply_blocking(&self.agiworkforce_home, self.profile.as_deref(), &self.edits)
+            apply_blocking(
+                &self.agiworkforce_home,
+                self.profile.as_deref(),
+                &self.edits,
+            )
         })
         .await
         .context("config persistence task panicked")?

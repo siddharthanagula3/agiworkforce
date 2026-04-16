@@ -1,11 +1,11 @@
 use std::io::IsTerminal;
 use std::path::Path;
 
-use clap::Parser;
 use agiworkforce_file_search::Cli;
 use agiworkforce_file_search::FileMatch;
 use agiworkforce_file_search::Reporter;
 use agiworkforce_file_search::run_main;
+use clap::Parser;
 use serde_json::json;
 
 #[tokio::main]

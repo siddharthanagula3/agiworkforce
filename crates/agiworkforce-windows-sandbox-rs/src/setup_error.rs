@@ -1,6 +1,6 @@
+use agiworkforce_utils_string::sanitize_metric_tag_value;
 use anyhow::Context;
 use anyhow::Result;
-use agiworkforce_utils_string::sanitize_metric_tag_value;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;

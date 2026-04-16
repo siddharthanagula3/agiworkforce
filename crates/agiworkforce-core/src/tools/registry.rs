@@ -12,7 +12,6 @@ use crate::sandbox_tags::sandbox_tag;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
-use async_trait::async_trait;
 use agiworkforce_hooks::HookEvent;
 use agiworkforce_hooks::HookEventAfterToolUse;
 use agiworkforce_hooks::HookPayload;
@@ -24,6 +23,7 @@ use agiworkforce_protocol::models::ResponseInputItem;
 use agiworkforce_protocol::models::ShellCommandToolCallParams;
 use agiworkforce_protocol::models::ShellToolCallParams;
 use agiworkforce_utils_readiness::Readiness;
+use async_trait::async_trait;
 use serde::Deserialize;
 use tracing::warn;
 
@@ -441,7 +441,9 @@ fn pre_tool_use_command(tool_name: &str, payload: &ToolPayload) -> Option<String
         ("shell" | "container.exec", ToolPayload::Function { arguments }) => {
             serde_json::from_str::<ShellToolCallParams>(arguments)
                 .ok()
-                .map(|params| agiworkforce_shell_command::parse_command::shlex_join(&params.command))
+                .map(|params| {
+                    agiworkforce_shell_command::parse_command::shlex_join(&params.command)
+                })
         }
         ("local_shell", ToolPayload::LocalShell { params }) => Some(
             agiworkforce_shell_command::parse_command::shlex_join(&params.command),

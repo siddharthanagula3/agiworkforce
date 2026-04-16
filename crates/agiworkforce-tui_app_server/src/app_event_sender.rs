@@ -38,7 +38,9 @@ impl AppEventSender {
     }
 
     pub(crate) fn interrupt(&self) {
-        self.send(AppEvent::AgiWorkforceOp(AppCommand::interrupt().into_core()));
+        self.send(AppEvent::AgiWorkforceOp(
+            AppCommand::interrupt().into_core(),
+        ));
     }
 
     pub(crate) fn compact(&self) {
