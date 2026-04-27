@@ -30,14 +30,14 @@
     "format": "prettier --write \"src/**/*.{js,html}\""
   },
   "dependencies": {
-    "dompurify": "^3.3.3"
+    "dompurify": "^3.4.1"
   },
   "devDependencies": {
-    "@types/chrome": "^0.1.38",
+    "@types/chrome": "^0.1.40",
     "jsdom": "^27.4.0",
-    "terser": "^5.46.1",
+    "terser": "^5.46.2",
     "typescript": "5.9.3",
-    "vite": "^7.3.1",
+    "vite": "^7.3.2",
     "vite-plugin-static-copy": "^3.4.0",
     "vitest": "^4.0.18"
   },
