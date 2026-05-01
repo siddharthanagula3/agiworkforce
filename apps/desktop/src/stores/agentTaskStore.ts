@@ -3,6 +3,8 @@ import { devtools, persist } from 'zustand/middleware';
 import { toast } from 'sonner';
 import { invoke, isTauri, listen } from '../lib/tauri-mock';
 
+const MAX_LIVE_TASK_ENTRIES = 100;
+
 /**
  * Agent task status lifecycle.
  * Core states: pending, running, completed, failed, cancelled
@@ -117,6 +119,8 @@ interface AgentTaskState {
   getStatusLabel: (status: AgentTaskStatus) => string;
   /** Check if a task is in a recoverable state */
   isRecoverable: (taskId: string) => boolean;
+  /** Clear task state for logout and same-renderer account changes */
+  resetOnLogout: () => void;
 }
 
 interface GoalFromBackend {
@@ -722,6 +726,15 @@ export const useAgentTaskStore = create<AgentTaskState>()(
           if (!task) return false;
           return task.status === 'failed' || task.status === 'expired' || task.status === 'paused';
         },
+
+        resetOnLogout: () => {
+          set({
+            tasks: [],
+            loading: false,
+            liveStepsByTask: {},
+            liveProgressByTask: {},
+          });
+        },
       }),
       {
         name: 'agiworkforce-agent-tasks',
@@ -781,6 +794,15 @@ function markRunningStepsTerminal(
   return changed ? nextSteps : steps;
 }
 
+function capLiveTaskRecord<T>(record: Record<string, T>): Record<string, T> {
+  const entries = Object.entries(record);
+  if (entries.length <= MAX_LIVE_TASK_ENTRIES) {
+    return record;
+  }
+
+  return Object.fromEntries(entries.slice(-MAX_LIVE_TASK_ENTRIES));
+}
+
 export function applyAgentTaskGoalSubmitted(payload: AgiGoalSubmittedPayload): void {
   useAgentTaskStore.setState((state) => {
     const existingTask = state.tasks.find((task) => task.id === payload.goal_id);
@@ -818,10 +840,10 @@ export function applyAgentTaskGoalPlanCreated(payload: AgiGoalPlanCreatedPayload
         ? { ...task, status: 'running' }
         : task,
     ),
-    liveProgressByTask: {
+    liveProgressByTask: capLiveTaskRecord({
       ...state.liveProgressByTask,
       [payload.goal_id]: { step: 0, total: payload.total_steps },
-    },
+    }),
   }));
 }
 
@@ -845,11 +867,11 @@ export function applyAgentTaskGoalStepStarted(payload: AgiGoalStepStartedPayload
             }
           : task,
       ),
-      liveStepsByTask: {
+      liveStepsByTask: capLiveTaskRecord({
         ...state.liveStepsByTask,
         [payload.goal_id]: upsertLiveStep(existingSteps, nextStep),
-      },
-      liveProgressByTask: {
+      }),
+      liveProgressByTask: capLiveTaskRecord({
         ...state.liveProgressByTask,
         [payload.goal_id]: {
           step: Math.max(
@@ -858,7 +880,7 @@ export function applyAgentTaskGoalStepStarted(payload: AgiGoalStepStartedPayload
           ),
           total: payload.total_steps,
         },
-      },
+      }),
     };
   });
 }
@@ -879,11 +901,11 @@ export function applyAgentTaskGoalStepCompleted(payload: AgiGoalStepCompletedPay
     };
 
     return {
-      liveStepsByTask: {
+      liveStepsByTask: capLiveTaskRecord({
         ...state.liveStepsByTask,
         [payload.goal_id]: upsertLiveStep(existingSteps, nextStep),
-      },
-      liveProgressByTask: {
+      }),
+      liveProgressByTask: capLiveTaskRecord({
         ...state.liveProgressByTask,
         [payload.goal_id]: {
           step: Math.max(
@@ -892,7 +914,7 @@ export function applyAgentTaskGoalStepCompleted(payload: AgiGoalStepCompletedPay
           ),
           total: payload.total_steps,
         },
-      },
+      }),
     };
   });
 }
@@ -908,71 +930,71 @@ export function applyAgentTaskGoalProgress(payload: AgiGoalProgressPayload): voi
           }
         : task,
     ),
-    liveProgressByTask: {
+    liveProgressByTask: capLiveTaskRecord({
       ...state.liveProgressByTask,
       [payload.goal_id]: {
         step: payload.completed_steps,
         total: payload.total_steps,
       },
-    },
+    }),
   }));
 }
 
 export function applyAgentTaskGoalAchieved(payload: AgiGoalAchievedPayload): void {
-  useAgentTaskStore.setState((state) => ({
-    tasks: state.tasks.map((task) =>
-      task.id === payload.goal_id
-        ? {
-            ...task,
-            status: 'completed',
-            completedAt: task.completedAt ?? new Date().toISOString(),
-            iterations: payload.completed_steps,
-          }
-        : task,
-    ),
-    liveStepsByTask: {
-      ...state.liveStepsByTask,
-      ...(state.liveStepsByTask[payload.goal_id]
-        ? {
-            [payload.goal_id]:
-              markRunningStepsTerminal(state.liveStepsByTask[payload.goal_id], 'done') ??
-              state.liveStepsByTask[payload.goal_id],
-          }
-        : {}),
-    },
-    liveProgressByTask: {
-      ...state.liveProgressByTask,
-      [payload.goal_id]: {
-        step: payload.completed_steps,
-        total: payload.total_steps,
-      },
-    },
-  }));
+  useAgentTaskStore.setState((state) => {
+    const liveStepsByTask = { ...state.liveStepsByTask };
+    const currentSteps = liveStepsByTask[payload.goal_id];
+    if (currentSteps) {
+      liveStepsByTask[payload.goal_id] =
+        markRunningStepsTerminal(currentSteps, 'done') ?? currentSteps;
+    }
+
+    return {
+      tasks: state.tasks.map((task) =>
+        task.id === payload.goal_id
+          ? {
+              ...task,
+              status: 'completed',
+              completedAt: task.completedAt ?? new Date().toISOString(),
+              iterations: payload.completed_steps,
+            }
+          : task,
+      ),
+      liveStepsByTask: capLiveTaskRecord(liveStepsByTask),
+      liveProgressByTask: capLiveTaskRecord({
+        ...state.liveProgressByTask,
+        [payload.goal_id]: {
+          step: payload.completed_steps,
+          total: payload.total_steps,
+        },
+      }),
+    };
+  });
 }
 
 export function applyAgentTaskGoalError(payload: AgiGoalErrorPayload): void {
-  useAgentTaskStore.setState((state) => ({
-    tasks: state.tasks.map((task) =>
-      task.id === payload.goal_id
-        ? {
-            ...task,
-            status: 'failed',
-            completedAt: task.completedAt ?? new Date().toISOString(),
-            error: payload.error,
-          }
-        : task,
-    ),
-    liveStepsByTask: {
-      ...state.liveStepsByTask,
-      ...(state.liveStepsByTask[payload.goal_id]
-        ? {
-            [payload.goal_id]:
-              markRunningStepsTerminal(state.liveStepsByTask[payload.goal_id], 'failed') ??
-              state.liveStepsByTask[payload.goal_id],
-          }
-        : {}),
-    },
-  }));
+  useAgentTaskStore.setState((state) => {
+    const liveStepsByTask = { ...state.liveStepsByTask };
+    const currentSteps = liveStepsByTask[payload.goal_id];
+    if (currentSteps) {
+      liveStepsByTask[payload.goal_id] =
+        markRunningStepsTerminal(currentSteps, 'failed') ?? currentSteps;
+    }
+
+    return {
+      tasks: state.tasks.map((task) =>
+        task.id === payload.goal_id
+          ? {
+              ...task,
+              status: 'failed',
+              completedAt: task.completedAt ?? new Date().toISOString(),
+              error: payload.error,
+            }
+          : task,
+      ),
+      liveStepsByTask: capLiveTaskRecord(liveStepsByTask),
+    };
+  });
 }
 
 let agentTaskEventListenersInitialized = false;

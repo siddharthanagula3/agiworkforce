@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "tauri dev",
     "dev:vite": "vite",
-    "build": "vite build && tauri build",
+    "build": "pnpm run build:release",
+    "build:local": "vite build && tauri build --no-sign",
+    "build:release": "vite build && tauri build",
     "build:web": "tsc && vite build",
     "build:cloud": "VITE_BUILD_TARGET=web vite build",
     "preview": "vite preview",
