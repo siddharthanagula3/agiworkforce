@@ -52,7 +52,7 @@ impl ManagedSessionReference {
             bail!("Managed session reference cannot be empty");
         }
 
-        if matches!(input, "latest" | "@latest" | "last") {
+        if matches!(input, "latest" | "@latest" | "last" | "@last" | "newest") {
             return Ok(Self::Latest);
         }
 
@@ -359,6 +359,14 @@ mod tests {
         );
         assert_eq!(
             ManagedSessionReference::parse("@latest").unwrap(),
+            ManagedSessionReference::Latest
+        );
+        assert_eq!(
+            ManagedSessionReference::parse("@last").unwrap(),
+            ManagedSessionReference::Latest
+        );
+        assert_eq!(
+            ManagedSessionReference::parse("newest").unwrap(),
             ManagedSessionReference::Latest
         );
         assert_eq!(

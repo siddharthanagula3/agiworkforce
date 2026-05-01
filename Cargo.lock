@@ -469,6 +469,7 @@ dependencies = [
 name = "agiworkforce-cli"
 version = "0.1.0"
 dependencies = [
+ "agiworkforce-protocol",
  "agiworkforce-sandbox-policy",
  "anyhow",
  "arboard",
