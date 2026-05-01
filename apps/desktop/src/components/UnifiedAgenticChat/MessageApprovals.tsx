@@ -19,6 +19,11 @@ export function MessageApprovalsContent({ approvals, className }: MessageApprova
     return null;
   }
 
+  const approvalReviewCopy =
+    approvals.length === 1
+      ? 'Review before the agent continues with this action.'
+      : 'Review before the agent continues with these actions.';
+
   return (
     <div
       className={cn(
@@ -26,10 +31,16 @@ export function MessageApprovalsContent({ approvals, className }: MessageApprova
         className,
       )}
     >
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-yellow-300">
-        <Shield className="h-3.5 w-3.5" />
-        Pending approvals
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-yellow-300">
+          <Shield className="h-3.5 w-3.5" />
+          Approval needed
+        </div>
+        <span className="rounded-full border border-yellow-500/20 px-2 py-0.5 text-[10px] font-medium text-yellow-200">
+          {approvals.length} pending
+        </span>
       </div>
+      <p className="text-[11px] text-yellow-100/70">{approvalReviewCopy}</p>
       {approvals.map((approval) => (
         <ApprovalRequestCard
           key={approval.id}

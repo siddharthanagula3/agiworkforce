@@ -23,6 +23,7 @@ import {
   applyGoalProgress,
   applyGoalStepCompleted,
   applyToolConfirmationRequired,
+  applyToolConfirmationTimeout,
 } from '../agentWorkflowEvents';
 import { sha256 } from '../../../lib/hash';
 
@@ -268,6 +269,83 @@ describe('agentWorkflowEvents', () => {
     });
     expect(approval?.details['tool']).toBe('Delete file');
     expect(approval?.details['messageId']).toBe(messageId);
+  });
+
+  it('escalates dangerous MCP confirmations without trusting display-only parameter summaries', () => {
+    createAssistantMessage();
+
+    applyToolConfirmationRequired({
+      request_id: 'mcp-dangerous-low-risk',
+      tool_name: 'mcp__filesystem__delete_file',
+      tool_display_name: 'Delete file',
+      description: 'Delete /tmp/report.txt',
+      parameters_summary: 'path: "/tmp/report-with-a-very-long-name-that-was-truncated-by-rust..."',
+      risk_level: 'low',
+      safety_tier: 'dangerous',
+      reason: 'Cleanup temp file',
+      reversible: false,
+    });
+
+    const approval = useToolStore
+      .getState()
+      .pendingApprovals.find((entry) => entry.id === 'mcp-dangerous-low-risk');
+
+    expect(approval).toMatchObject({
+      riskLevel: 'high',
+    });
+    expect(approval?.actionSignature).toBeUndefined();
+    expect(approval?.details['signatureUnavailableReason']).toContain('canonical');
+  });
+
+  it('records tool confirmation timeouts in the visible activity log', () => {
+    const messageId = createAssistantMessage();
+
+    applyToolConfirmationRequired({
+      request_id: 'tool-confirm-timeout',
+      tool_name: 'mcp__filesystem__delete_file',
+      tool_display_name: 'Delete file',
+      description: 'Delete /tmp/report.txt',
+      parameters_summary: '{"path":"/tmp/report.txt"}',
+      risk_level: 'high',
+      safety_tier: 'dangerous',
+      reason: 'Cleanup temp file',
+      reversible: false,
+    });
+    applyToolConfirmationTimeout({ request_id: 'tool-confirm-timeout' });
+
+    const toolState = useToolStore.getState();
+    const agentState = useAgentStore.getState();
+
+    expect(toolState.pendingApprovals).toHaveLength(0);
+    expect(toolState.actionLog.find((entry) => entry.id === 'tool-confirm-timeout')).toMatchObject({
+      id: 'tool-confirm-timeout',
+      type: 'approval',
+      title: 'Approval timed out',
+      status: 'failed',
+      error: 'Delete file timed out waiting for approval.',
+      metadata: {
+        messageId,
+        toolName: 'Delete file',
+      },
+    });
+    expect(agentState.actionTrail[0]).toMatchObject({
+      type: 'error',
+      message: 'Delete file timed out waiting for approval.',
+      metadata: {
+        messageId,
+        approvalId: 'tool-confirm-timeout',
+      },
+    });
+  });
+
+  it('ignores stale tool confirmation timeout events after an approval is resolved', () => {
+    createAssistantMessage();
+
+    applyToolConfirmationTimeout({ request_id: 'unknown-confirmation' });
+
+    expect(useToolStore.getState().pendingApprovals).toHaveLength(0);
+    expect(useToolStore.getState().actionLog).toHaveLength(0);
+    expect(useAgentStore.getState().actionTrail).toHaveLength(0);
   });
 
   it('tracks approval requests and denials through the canonical approval store', () => {

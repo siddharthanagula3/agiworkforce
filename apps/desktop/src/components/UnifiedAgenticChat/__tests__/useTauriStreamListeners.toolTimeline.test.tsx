@@ -15,7 +15,9 @@ vi.mock('../../../lib/tauri-mock', () => ({
 }));
 
 import { useTauriStreamListeners } from '../useTauriStreamListeners';
+import { useAgentStore } from '../../../stores/chat/agentStore';
 import { useChatStore } from '../../../stores/chat/chatStore';
+import { useToolStore } from '../../../stores/chat/toolStore';
 import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
 
 type ListenerCallback<T> = (event: { payload: T }) => void;
@@ -59,11 +61,15 @@ describe('useTauriStreamListeners tool timeline', () => {
     invokeMock.mockReset();
     useUnifiedChatStore.getState().resetOnLogout();
     useChatStore.getState().resetOnLogout();
+    useAgentStore.getState().resetOnLogout();
+    useToolStore.getState().resetOnLogout();
   });
 
   afterEach(() => {
     useUnifiedChatStore.getState().resetOnLogout();
     useChatStore.getState().resetOnLogout();
+    useAgentStore.getState().resetOnLogout();
+    useToolStore.getState().resetOnLogout();
   });
 
   it('writes chat tool events into the per-message tool timeline', async () => {
@@ -164,5 +170,113 @@ describe('useTauriStreamListeners tool timeline', () => {
     });
 
     expect(useChatStore.getState().thinkingByMessage[messageId]).toBe('Planning next step');
+  });
+
+  it('records mode-blocked tools in the visible activity stores', async () => {
+    const listeners = new Map<string, ListenerCallback<unknown>>();
+    listenMock.mockImplementation(
+      async (eventName: string, callback: ListenerCallback<unknown>) => {
+        listeners.set(eventName, callback);
+        return () => {};
+      },
+    );
+
+    useChatStore.getState().createConversation('Blocked tool');
+    const messageId = useChatStore.getState().addMessage({
+      role: 'assistant',
+      content: 'Working...',
+    });
+    useChatStore.getState().setStreamingMessage(messageId);
+
+    renderHook(() => useTauriStreamListeners(createHookConfig(messageId)));
+
+    await waitFor(() => {
+      expect(listeners.has('tool:blocked_by_mode')).toBe(true);
+    });
+
+    act(() => {
+      listeners.get('tool:blocked_by_mode')?.({
+        payload: {
+          tool_name: 'browser_click',
+          mode: 'Safe',
+          hint: 'Switch to Build mode to interact with the browser.',
+        },
+      });
+    });
+
+    expect(useAgentStore.getState().actionTrail[0]).toMatchObject({
+      type: 'error',
+      message:
+        'browser_click is blocked in Safe mode. Switch to Build mode to interact with the browser.',
+      metadata: {
+        messageId,
+        toolName: 'browser_click',
+        mode: 'Safe',
+      },
+    });
+    expect(useToolStore.getState().actionLog[0]).toMatchObject({
+      type: 'approval',
+      title: 'Tool blocked by mode',
+      status: 'failed',
+      error:
+        'browser_click is blocked in Safe mode. Switch to Build mode to interact with the browser.',
+      metadata: {
+        messageId,
+        toolName: 'browser_click',
+        mode: 'Safe',
+      },
+    });
+  });
+
+  it('routes tool progress to the event conversation instead of the global streaming message', async () => {
+    const listeners = new Map<string, ListenerCallback<unknown>>();
+    listenMock.mockImplementation(
+      async (eventName: string, callback: ListenerCallback<unknown>) => {
+        listeners.set(eventName, callback);
+        return () => {};
+      },
+    );
+
+    useChatStore.getState().createConversation('Tool progress overlap');
+    const firstMessageId = useChatStore.getState().addMessage({
+      role: 'assistant',
+      content: 'Working on first...',
+    });
+    const secondMessageId = useChatStore.getState().addMessage({
+      role: 'assistant',
+      content: 'Working on second...',
+    });
+    useChatStore.getState().setStreamingMessage(secondMessageId);
+
+    const config = createHookConfig(firstMessageId);
+    config.activeStreamSessionsRef.current = new Map([
+      [42, firstMessageId],
+      [43, secondMessageId],
+    ]);
+
+    renderHook(() => useTauriStreamListeners(config));
+
+    await waitFor(() => {
+      expect(listeners.has('chat:tool-progress')).toBe(true);
+    });
+
+    act(() => {
+      listeners.get('chat:tool-progress')?.({
+        payload: {
+          conversation_id: 42,
+          tool_name: 'generate_image',
+          status: 'processing_result',
+          message: 'Rendering image...',
+        },
+      });
+    });
+
+    const state = useChatStore.getState();
+    const firstMessage = state.messages.find((message) => message.id === firstMessageId);
+    const secondMessage = state.messages.find((message) => message.id === secondMessageId);
+
+    expect(firstMessage?.metadata?.label).toBe('Rendering image...');
+    expect(firstMessage?.metadata?.status).toBe('tool_progress');
+    expect(secondMessage?.metadata?.label).toBeUndefined();
   });
 });

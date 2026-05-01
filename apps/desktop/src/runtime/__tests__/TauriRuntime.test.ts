@@ -53,7 +53,7 @@ describe('TauriRuntime', () => {
       if (command === 'chat_create_conversation') {
         return {
           id: 42,
-          title: (args?.request as { title?: string } | undefined)?.title ?? 'New Conversation',
+          title: (args?.['request'] as { title?: string } | undefined)?.title ?? 'New Conversation',
           created_at: '2026-03-28T00:00:00.000Z',
           updated_at: '2026-03-28T00:00:00.000Z',
         };
