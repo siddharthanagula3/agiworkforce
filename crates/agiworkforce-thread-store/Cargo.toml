@@ -1,0 +1,38 @@
+[package]
+edition = "2024"
+
+name = "agiworkforce-thread-store"
+version = "0.1.0"
+
+[lib]
+name = "agiworkforce_thread_store"
+path = "src/lib.rs"
+
+[[example]]
+name = "generate-proto"
+path = "examples/generate-proto.rs"
+
+[dependencies]
+async-trait = "0.1.89"
+chrono = { version = "0.4.43", features = ["serde"] }
+agiworkforce-git-utils = { path = "../agiworkforce-git-utils" }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-rollout = { path = "../agiworkforce-rollout" }
+agiworkforce-state = { path = "../agiworkforce-state" }
+prost = "0.14.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2.0.17"
+tokio = "1"
+tonic = { version = "0.14.3", default-features = false, features = ["channel", "codegen"] }
+tonic-prost = "0.14.3"
+tracing = "0.1.44"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+tempfile = "3.23.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio-stream = { version = "0.1.18", features = ["net"] }
+tonic = { version = "0.14.3", default-features = false, features = ["channel", "codegen"] , features = ["router", "transport"]}
+tonic-prost-build = { version = "=0.14.3", default-features = false, features = ["transport"] }
+uuid = "1"
