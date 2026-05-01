@@ -1,0 +1,23 @@
+[package]
+edition = "2024"
+
+name = "agiworkforce-core-api"
+version = "0.1.0"
+
+[lib]
+doctest = false
+name = "agiworkforce_core_api"
+path = "src/lib.rs"
+
+[dependencies]
+agiworkforce-arg0 = { path = "../agiworkforce-arg0" }
+agiworkforce-analytics = { path = "../agiworkforce-analytics" }
+agiworkforce-config = { path = "../agiworkforce-config" }
+agiworkforce-core = { path = "../agiworkforce-core" }
+agiworkforce-exec-server = { path = "../agiworkforce-exec-server" }
+agiworkforce-features = { path = "../agiworkforce-features" }
+agiworkforce-login = { path = "../agiworkforce-login" }
+agiworkforce-model-provider-info = { path = "../agiworkforce-model-provider-info" }
+agiworkforce-models-manager = { path = "../agiworkforce-models-manager" }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
