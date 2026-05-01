@@ -2,6 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
+    "rootDir": "../..",
+    "ignoreDeprecations": "6.0",
+    "incremental": false,
+    "composite": false,
     "types": ["vite/client", "@tauri-apps/api", "node", "vitest/globals"],
     "baseUrl": ".",
     "skipLibCheck": true,

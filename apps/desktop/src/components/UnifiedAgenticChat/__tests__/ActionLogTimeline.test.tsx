@@ -44,6 +44,7 @@ describe('ActionLogTimeline', () => {
     render(<ActionLogTimeline messageId="assistant-1" />);
 
     expect(screen.getByText('Agent activity')).toBeInTheDocument();
+    expect(screen.getByText('1 running')).toBeInTheDocument();
     expect(screen.getByText('Using filesystem.search')).toBeInTheDocument();
     expect(screen.getByText('Executing MCP tool from workspace')).toBeInTheDocument();
   });

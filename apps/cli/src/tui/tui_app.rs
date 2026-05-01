@@ -16,6 +16,9 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
 use ratatui::Terminal;
 
 use crate::agent::AgentSession;
+use crate::command_registry::{
+    registry_from_builtins_skills_and_prompts, CommandRegistry, RegistryCommand,
+};
 use crate::config::CliConfig;
 use crate::context::SystemContext;
 
@@ -89,209 +92,6 @@ enum ChatRole {
 }
 
 // ---------------------------------------------------------------------------
-// Slash command definition
-// ---------------------------------------------------------------------------
-
-struct SlashCommandDef {
-    name: &'static str,
-    description: &'static str,
-    aliases: &'static [&'static str],
-}
-
-const SLASH_COMMANDS: &[SlashCommandDef] = &[
-    // ── Most used (top of popup) ──
-    SlashCommandDef {
-        name: "/model",
-        description: "Switch model (e.g. /model gpt-4o)",
-        aliases: &["/m"],
-    },
-    SlashCommandDef {
-        name: "/plan",
-        description: "Toggle plan mode",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/fast",
-        description: "Toggle fast mode (2x speed)",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/compact",
-        description: "Compact context to free space",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/clear",
-        description: "Clear conversation and context",
-        aliases: &[],
-    },
-    // ── Code & review ──
-    SlashCommandDef {
-        name: "/review",
-        description: "Review current code changes",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/diff",
-        description: "Show git diff (incl. untracked)",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/copy",
-        description: "Copy last response to clipboard",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/init",
-        description: "Create CLAUDE.md for this project",
-        aliases: &[],
-    },
-    // ── Session management ──
-    SlashCommandDef {
-        name: "/new",
-        description: "Start a new conversation",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/resume",
-        description: "Resume a saved session",
-        aliases: &["/sessions"],
-    },
-    SlashCommandDef {
-        name: "/fork",
-        description: "Fork current conversation",
-        aliases: &["/branch"],
-    },
-    SlashCommandDef {
-        name: "/rename",
-        description: "Rename current session",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/save",
-        description: "Save session checkpoint",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/history",
-        description: "List saved conversations",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/export",
-        description: "Export conversation to file",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/rewind",
-        description: "Undo last code changes",
-        aliases: &[],
-    },
-    // ── Tools & plugins ──
-    SlashCommandDef {
-        name: "/mcp",
-        description: "List MCP servers and tools",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/skills",
-        description: "Browse available skills",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/permissions",
-        description: "Manage tool permissions",
-        aliases: &["/perms", "/approvals"],
-    },
-    SlashCommandDef {
-        name: "/hooks",
-        description: "Manage hooks configuration",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/plugins",
-        description: "Manage plugins",
-        aliases: &[],
-    },
-    // ── Information ──
-    SlashCommandDef {
-        name: "/status",
-        description: "Show session info (model, tokens, mode)",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/cost",
-        description: "Show session cost summary",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/context",
-        description: "Show context window usage",
-        aliases: &["/ctx"],
-    },
-    SlashCommandDef {
-        name: "/config",
-        description: "Show current configuration",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/models",
-        description: "List all available models",
-        aliases: &["/providers"],
-    },
-    // ── Memory ──
-    SlashCommandDef {
-        name: "/memory",
-        description: "Show/manage auto-memory",
-        aliases: &["/mem"],
-    },
-    SlashCommandDef {
-        name: "/btw",
-        description: "Ask a side question without interrupting",
-        aliases: &[],
-    },
-    // ── Voice ──
-    SlashCommandDef {
-        name: "/voice",
-        description: "Toggle voice input (Whisper)",
-        aliases: &["/v"],
-    },
-    // ── Theme ──
-    SlashCommandDef {
-        name: "/theme",
-        description: "Change syntax highlighting theme",
-        aliases: &[],
-    },
-    // ── Auth ──
-    SlashCommandDef {
-        name: "/login",
-        description: "Login to a provider",
-        aliases: &[],
-    },
-    SlashCommandDef {
-        name: "/logout",
-        description: "Logout from providers",
-        aliases: &[],
-    },
-    // ── System ──
-    SlashCommandDef {
-        name: "/feedback",
-        description: "Send feedback / report bug",
-        aliases: &["/bug"],
-    },
-    SlashCommandDef {
-        name: "/help",
-        description: "Show all commands and keybindings",
-        aliases: &["/h", "/?"],
-    },
-    SlashCommandDef {
-        name: "/exit",
-        description: "Exit AGI Workforce",
-        aliases: &["/quit", "/q"],
-    },
-];
-
-// ---------------------------------------------------------------------------
 // TUI App state
 // ---------------------------------------------------------------------------
 
@@ -323,6 +123,7 @@ struct TuiApp {
     stream_start: Option<Instant>,
     // Git branch
     git_branch: Option<String>,
+    command_registry: CommandRegistry,
 }
 
 impl TuiApp {
@@ -367,6 +168,10 @@ impl TuiApp {
             stream_buffer: String::new(),
             stream_start: None,
             git_branch,
+            command_registry: registry_from_builtins_skills_and_prompts(
+                &crate::skills::discover_skills(),
+                &[],
+            ),
         }
     }
 
@@ -383,21 +188,12 @@ impl TuiApp {
         FRAMES[(self.spinner_tick as usize) % FRAMES.len()]
     }
 
-    fn filtered_commands(&self) -> Vec<&SlashCommandDef> {
-        if self.slash_filter.is_empty() {
-            return SLASH_COMMANDS.iter().collect();
-        }
-        let filter = self.slash_filter.to_lowercase();
-        SLASH_COMMANDS
+    fn filtered_commands(&self) -> Vec<RegistryCommand> {
+        self.command_registry
+            .commands()
             .iter()
-            .filter(|cmd| {
-                cmd.name.to_lowercase().contains(&filter)
-                    || cmd.description.to_lowercase().contains(&filter)
-                    || cmd
-                        .aliases
-                        .iter()
-                        .any(|a| a.to_lowercase().contains(&filter))
-            })
+            .filter(|cmd| cmd.matches_filter(&self.slash_filter))
+            .cloned()
             .collect()
     }
 
@@ -807,7 +603,7 @@ fn render_slash_popup(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
             } else {
                 Style::default().fg(Color::White)
             };
-            let text = format!("{:<16} {}", cmd.name, cmd.description);
+            let text = format!("{:<16} {}", cmd.slash_name(), cmd.description);
             ListItem::new(text).style(style)
         })
         .collect();
@@ -1035,7 +831,7 @@ fn handle_slash_popup_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         KeyCode::Enter => {
             let commands = app.filtered_commands();
             if let Some(cmd) = commands.get(app.slash_selected) {
-                let cmd_name = cmd.name.to_string();
+                let cmd_name = cmd.slash_name();
                 app.show_slash_popup = false;
                 app.slash_filter.clear();
 
@@ -1257,7 +1053,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
     }
 
     let parts: Vec<&str> = input.splitn(2, ' ').collect();
-    let cmd = parts[0].to_lowercase();
+    let cmd = app
+        .command_registry
+        .find(parts[0])
+        .map(RegistryCommand::slash_name)
+        .unwrap_or_else(|| parts[0].to_lowercase());
     let arg = parts.get(1).map(|s| s.trim()).unwrap_or_default();
 
     match cmd.as_str() {
@@ -1424,13 +1224,19 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/help" | "/h" | "/?" => {
             let mut help = String::from("Commands:\n");
-            for cmd in SLASH_COMMANDS {
-                let aliases = if cmd.aliases.is_empty() {
+            for cmd in app.command_registry.commands() {
+                let slash_aliases = cmd.slash_aliases();
+                let aliases = if slash_aliases.is_empty() {
                     String::new()
                 } else {
-                    format!(" ({})", cmd.aliases.join(", "))
+                    format!(" ({})", slash_aliases.join(", "))
                 };
-                help.push_str(&format!("  {:<18} {}{}\n", cmd.name, cmd.description, aliases));
+                help.push_str(&format!(
+                    "  {:<18} {}{}\n",
+                    cmd.slash_name(),
+                    cmd.description,
+                    aliases
+                ));
             }
             help.push_str("\nKeyboard shortcuts:\n");
             help.push_str("  Shift+Tab    Cycle mode: Chat → Plan → AcceptEdits → BypassPerms → Debug\n");

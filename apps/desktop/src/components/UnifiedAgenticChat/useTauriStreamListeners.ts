@@ -1375,14 +1375,14 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
           // Find the streaming message for this conversation and surface the progress hint
           const state = useUnifiedChatStore.getState();
-          const currentId = state.currentStreamingMessageId;
-          if (!currentId) return;
+          const targetMessageId = resolveStreamTargetMessageId(payload.conversation_id);
+          if (!targetMessageId) return;
 
           const progressText =
             payload.message ??
             `Processing ${normalizeToolNameForUi(payload.tool_name).replace(/_/g, ' ')}...`;
 
-          state.updateMessage(currentId, {
+          state.updateMessage(targetMessageId, {
             ...buildStreamingStateMessageUpdate({
               streaming: true,
               status: 'tool_progress',
@@ -1392,11 +1392,43 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // Agent mode tool-blocked events — notify user when a tool is blocked by the current mode
+      // Agent mode tool-blocked events — make policy blocks visible beyond a transient toast.
       registerListener(
-        listen<{ tool_name: string; mode: string }>('tool:blocked_by_mode', ({ payload }) => {
-          toast.error(`Tool "${payload.tool_name}" is blocked in Safe mode`);
-        }),
+        listen<{ tool_name: string; mode: string; hint?: string }>(
+          'tool:blocked_by_mode',
+          ({ payload }) => {
+            const modeLabel = payload.mode || 'current';
+            const hint = payload.hint || 'Change agent mode to allow this tool.';
+            const message = `${payload.tool_name} is blocked in ${modeLabel} mode. ${hint}`;
+            const eventId = `tool-blocked-${payload.tool_name}-${Date.now()}`;
+
+            toast.error(message);
+            useUnifiedChatStore.getState().addActionTrailEntry({
+              type: 'error',
+              message,
+              fadeAfter: 10000,
+              metadata: {
+                toolName: payload.tool_name,
+                mode: modeLabel,
+                hint,
+              },
+            });
+            useUnifiedChatStore.getState().addActionLogEntry({
+              id: eventId,
+              actionId: eventId,
+              type: 'approval',
+              title: 'Tool blocked by mode',
+              description: message,
+              status: 'failed',
+              error: message,
+              metadata: {
+                toolName: payload.tool_name,
+                mode: modeLabel,
+                hint,
+              },
+            });
+          },
+        ),
       );
 
       // Agent budget and iteration limit events

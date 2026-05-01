@@ -134,6 +134,14 @@ interface ActionLogTimelineContentProps {
   className?: string;
 }
 
+function formatStatusCount(count: number, label: string): string | null {
+  if (count === 0) {
+    return null;
+  }
+
+  return `${count} ${label}`;
+}
+
 export function ActionLogTimelineContent({ entries, className }: ActionLogTimelineContentProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -141,6 +149,14 @@ export function ActionLogTimelineContent({ entries, className }: ActionLogTimeli
     (entry) => entry.status === 'running' || entry.status === 'blocked',
   );
   const isOpen = hasActiveEntries || isExpanded;
+  const runningCount = entries.filter((entry) => entry.status === 'running').length;
+  const blockedCount = entries.filter((entry) => entry.status === 'blocked').length;
+  const failedCount = entries.filter((entry) => entry.status === 'failed').length;
+  const statusSummary = [
+    formatStatusCount(runningCount, 'running'),
+    formatStatusCount(blockedCount, 'blocked'),
+    formatStatusCount(failedCount, 'failed'),
+  ].filter((value): value is string => Boolean(value));
 
   if (entries.length === 0) {
     return null;
@@ -162,6 +178,11 @@ export function ActionLogTimelineContent({ entries, className }: ActionLogTimeli
           Agent activity
           <span className="ml-1 text-muted-foreground">({entries.length})</span>
         </span>
+        {statusSummary.length > 0 && (
+          <span className="ml-auto text-[10px] text-muted-foreground">
+            {statusSummary.join(' · ')}
+          </span>
+        )}
       </button>
       <AnimatePresence initial={false}>
         {isOpen && (

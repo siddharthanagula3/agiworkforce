@@ -4,6 +4,8 @@ mod a2a;
 mod agent;
 mod agents;
 mod auth;
+mod cli_options;
+mod command_registry;
 mod compaction;
 mod config;
 mod context;
@@ -250,6 +252,58 @@ struct Cli {
     /// Disable full-screen TUI and use the classic line-based REPL instead.
     #[arg(long)]
     no_tui: bool,
+
+    /// Input format for print/SDK mode (text or stream-json).
+    #[arg(long, value_name = "FORMAT", value_enum, default_value = "text")]
+    input_format: cli_options::InputFormat,
+
+    /// Permission mode for tool use.
+    #[arg(long, value_name = "MODE", value_enum)]
+    permission_mode: Option<cli_options::PermissionMode>,
+
+    /// Allow specific tools or tool patterns. Comma-separated and repeatable.
+    #[arg(long = "allowedTools", alias = "allowed-tools", value_delimiter = ',')]
+    allowed_tools: Vec<String>,
+
+    /// Disallow specific tools or tool patterns. Comma-separated and repeatable.
+    #[arg(
+        long = "disallowedTools",
+        alias = "disallowed-tools",
+        value_delimiter = ','
+    )]
+    disallowed_tools: Vec<String>,
+
+    /// Load MCP server configuration from a file. Repeatable.
+    #[arg(long = "mcp-config", value_name = "FILE")]
+    mcp_config: Vec<String>,
+
+    /// Use only MCP servers from explicit --mcp-config files.
+    #[arg(long)]
+    strict_mcp_config: bool,
+
+    /// Add an extra working directory to the session context. Repeatable.
+    #[arg(long = "add-dir", value_name = "DIR")]
+    add_dir: Vec<String>,
+
+    /// Start with a named agent definition.
+    #[arg(long, value_name = "AGENT")]
+    agent: Option<String>,
+
+    /// Resume or bind to a specific agent thread id.
+    #[arg(long = "agent-id", value_name = "ID")]
+    agent_id: Option<String>,
+
+    /// Disable session persistence for this run.
+    #[arg(long = "no-session-persistence", default_value_t = true, action = clap::ArgAction::SetFalse)]
+    session_persistence: bool,
+
+    /// Resume a session at a specific event/turn marker.
+    #[arg(long = "resume-session-at", value_name = "MARKER")]
+    resume_session_at: Option<String>,
+
+    /// Restrict settings sources. Comma-separated and repeatable.
+    #[arg(long, value_name = "SOURCE", value_delimiter = ',')]
+    settings: Vec<String>,
 }
 
 /// Effort level presets that bundle max_turns + max_tokens + temperature.
@@ -272,6 +326,36 @@ enum OutputFormat {
     Json,
     /// Newline-delimited JSON for streaming consumption (CI/CD compatible)
     StreamJson,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OneShotOutputMode {
+    Text,
+    RawText,
+    JsonPretty,
+    JsonLine,
+}
+
+fn resolve_oneshot_output_mode(
+    json: bool,
+    raw: bool,
+    print: bool,
+    output: Option<OutputFormat>,
+) -> OneShotOutputMode {
+    match output {
+        Some(OutputFormat::Json) => OneShotOutputMode::JsonPretty,
+        Some(OutputFormat::StreamJson) => OneShotOutputMode::JsonLine,
+        Some(OutputFormat::Text) => {
+            if raw || print {
+                OneShotOutputMode::RawText
+            } else {
+                OneShotOutputMode::Text
+            }
+        }
+        None if json => OneShotOutputMode::JsonPretty,
+        None if raw || print => OneShotOutputMode::RawText,
+        None => OneShotOutputMode::Text,
+    }
 }
 
 /// Shell type for completions generation.
@@ -537,6 +621,7 @@ fn resolve_latest_resume_payload() -> Result<Option<(String, ResumePayload)>> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
 
     // Load configuration (global + project + env overrides merged)
     let mut app_config = config::CliConfig::load_merged()?;
@@ -1291,7 +1376,7 @@ async fn main() -> Result<()> {
 
     // Detect piped stdin early (before --cost check, since cost+stdin should work)
     let is_piped = !io::stdin().is_terminal();
-    let stdin_content = if is_piped || cli.stdin {
+    let stdin_content = if is_piped || cli.stdin || cli.prompt.as_deref() == Some("-") {
         let mut buf = String::new();
         io::stdin().read_to_string(&mut buf)?;
         if buf.is_empty() {
@@ -1376,8 +1461,10 @@ async fn main() -> Result<()> {
         (None, None) => None,
     };
 
-    // --print: force oneshot mode with raw output (for piping)
-    let raw_output = cli.raw || cli.print;
+    let oneshot_output_mode = resolve_oneshot_output_mode(cli.json, cli.raw, cli.print, cli.output);
+    let effective_skip_permissions =
+        normalized_cli_options.should_skip_permissions(cli.dangerously_skip_permissions);
+    let effective_auto_approve_safe = normalized_cli_options.should_auto_approve_safe(cli.yes);
 
     // Resolve effective max_turns: explicit --max-turns wins, then --effort preset
     let effective_max_turns = cli.max_turns.or(effort_max_turns);
@@ -1388,13 +1475,12 @@ async fn main() -> Result<()> {
             &app_config,
             &model,
             prompt,
-            cli.json,
-            raw_output,
+            oneshot_output_mode,
             &sys_context,
             effective_system_prompt.as_deref(),
             effective_max_turns,
-            cli.dangerously_skip_permissions,
-            cli.yes,
+            effective_skip_permissions,
+            effective_auto_approve_safe,
             cli.quiet,
         )
         .await;
@@ -1474,11 +1560,11 @@ async fn main() -> Result<()> {
             resume_messages,
             resume_managed_session,
             effective_max_turns,
-            cli.dangerously_skip_permissions,
+            effective_skip_permissions,
             cli.fallback_model,
             cli.name,
             team_mode,
-            cli.yes,
+            effective_auto_approve_safe,
             cli.quiet,
         )
         .await
@@ -1491,11 +1577,11 @@ async fn main() -> Result<()> {
             resume_messages,
             resume_managed_session,
             effective_max_turns,
-            cli.dangerously_skip_permissions,
+            effective_skip_permissions,
             cli.fallback_model,
             cli.name,
             team_mode,
-            cli.yes,
+            effective_auto_approve_safe,
             cli.quiet,
             cli.provider,
         )
@@ -1529,7 +1615,8 @@ fn build_final_prompt(
     stdin_content: Option<&str>,
     file_context: &str,
 ) -> Option<String> {
-    let has_positional = positional.is_some();
+    let positional_is_stdin_marker = positional == Some("-");
+    let has_positional = positional.is_some() && !positional_is_stdin_marker;
     let has_stdin = stdin_content.is_some();
     let has_files = !file_context.is_empty();
 
@@ -1560,14 +1647,122 @@ fn build_final_prompt(
     Some(prompt)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dash_prompt_uses_stdin_content_as_the_prompt() {
+        assert_eq!(
+            build_final_prompt(Some("-"), Some("explain this diff"), ""),
+            Some("explain this diff".to_string())
+        );
+    }
+
+    #[test]
+    fn dash_prompt_with_files_keeps_file_context_before_stdin_prompt() {
+        assert_eq!(
+            build_final_prompt(
+                Some("-"),
+                Some("summarize"),
+                "<file path=\"a.rs\">\nfn main() {}\n</file>\n\n"
+            ),
+            Some("<file path=\"a.rs\">\nfn main() {}\n</file>\n\nsummarize".to_string())
+        );
+    }
+
+    #[test]
+    fn output_format_selects_jsonl_for_stream_json() {
+        assert_eq!(
+            resolve_oneshot_output_mode(false, false, false, Some(OutputFormat::StreamJson)),
+            OneShotOutputMode::JsonLine
+        );
+    }
+
+    #[test]
+    fn parses_claude_style_global_options_into_normalized_contract() {
+        let cli = Cli::try_parse_from([
+            "agiworkforce",
+            "--print",
+            "--input-format",
+            "stream-json",
+            "--permission-mode",
+            "acceptEdits",
+            "--allowedTools",
+            "Read,Edit",
+            "--disallowedTools",
+            "Bash(rm*)",
+            "--mcp-config",
+            "project.mcp.json",
+            "--strict-mcp-config",
+            "--add-dir",
+            "../shared",
+            "--agent",
+            "planner",
+            "--agent-id",
+            "agent-123",
+            "--no-session-persistence",
+            "--resume-session-at",
+            "turn-9",
+            "--settings",
+            "project,user",
+            "fix bug",
+        ])
+        .expect("Claude-style options should parse");
+
+        let options = crate::cli_options::CliOptions::from_cli(&cli);
+
+        assert_eq!(
+            options.input_format,
+            crate::cli_options::InputFormat::StreamJson
+        );
+        assert_eq!(
+            options.permission_mode,
+            Some(crate::cli_options::PermissionMode::AcceptEdits)
+        );
+        assert_eq!(options.allowed_tools, vec!["Read", "Edit"]);
+        assert_eq!(options.disallowed_tools, vec!["Bash(rm*)"]);
+        assert_eq!(options.mcp_config_paths, vec!["project.mcp.json"]);
+        assert!(options.strict_mcp_config);
+        assert_eq!(options.additional_dirs, vec!["../shared"]);
+        assert_eq!(options.agent.as_deref(), Some("planner"));
+        assert_eq!(options.agent_id.as_deref(), Some("agent-123"));
+        assert!(!options.session_persistence);
+        assert_eq!(options.resume_session_at.as_deref(), Some("turn-9"));
+        assert_eq!(options.setting_sources, vec!["project", "user"]);
+    }
+
+    #[test]
+    fn permission_mode_contributes_to_effective_permission_flags() {
+        let bypass = Cli::try_parse_from([
+            "agiworkforce",
+            "--permission-mode",
+            "bypassPermissions",
+            "fix bug",
+        ])
+        .expect("bypass permission mode should parse");
+        let bypass_options = crate::cli_options::CliOptions::from_cli(&bypass);
+        assert!(bypass_options.should_skip_permissions(false));
+
+        let accept_edits = Cli::try_parse_from([
+            "agiworkforce",
+            "--permission-mode",
+            "acceptEdits",
+            "fix bug",
+        ])
+        .expect("accept edits permission mode should parse");
+        let accept_options = crate::cli_options::CliOptions::from_cli(&accept_edits);
+        assert!(accept_options.should_auto_approve_safe(false));
+    }
+}
+
 /// Execute a single prompt and exit.
 #[allow(clippy::too_many_arguments)]
 async fn run_oneshot(
     config: &config::CliConfig,
     model: &str,
     prompt: &str,
-    json_output: bool,
-    raw_output: bool,
+    output_mode: OneShotOutputMode,
     sys_context: &context::SystemContext,
     custom_system_prompt: Option<&str>,
     max_turns: Option<usize>,
@@ -1585,7 +1780,10 @@ async fn run_oneshot(
     session.quiet = quiet;
     session.enable_managed_session()?;
 
-    if json_output {
+    if matches!(
+        output_mode,
+        OneShotOutputMode::JsonPretty | OneShotOutputMode::JsonLine
+    ) {
         // Non-streaming JSON mode: collect full response
         let start = std::time::Instant::now();
         let result = session
@@ -1617,7 +1815,11 @@ async fn run_oneshot(
                     "duration_ms": duration_ms,
                     "is_error": false,
                 });
-                println!("{}", serde_json::to_string_pretty(&json_out)?);
+                if output_mode == OneShotOutputMode::JsonLine {
+                    println!("{}", serde_json::to_string(&json_out)?);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&json_out)?);
+                }
             }
             Err(e) => {
                 let json_out = serde_json::json!({
@@ -1626,11 +1828,15 @@ async fn run_oneshot(
                     "error": format!("{:#}", e),
                     "duration_ms": duration_ms,
                 });
-                eprintln!("{}", serde_json::to_string_pretty(&json_out)?);
+                if output_mode == OneShotOutputMode::JsonLine {
+                    eprintln!("{}", serde_json::to_string(&json_out)?);
+                } else {
+                    eprintln!("{}", serde_json::to_string_pretty(&json_out)?);
+                }
                 std::process::exit(1);
             }
         }
-    } else if raw_output {
+    } else if output_mode == OneShotOutputMode::RawText {
         // Raw text mode: no spinner, no cost, no formatting
         let result = session
             .send(

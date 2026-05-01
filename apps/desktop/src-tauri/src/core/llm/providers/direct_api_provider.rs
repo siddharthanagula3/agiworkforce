@@ -145,6 +145,42 @@ impl DirectApiProvider {
         }
         body.chars().take(500).collect()
     }
+
+    fn format_api_error(
+        provider: Provider,
+        status: u16,
+        retry_after: Option<&str>,
+        body: &str,
+    ) -> String {
+        let detail = Self::extract_error_detail(body);
+        let retry_hint = retry_after
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                if value.parse::<f64>().is_ok() {
+                    format!("Retry after {value} seconds.")
+                } else {
+                    format!("Retry after {value}.")
+                }
+            })
+            .unwrap_or_default();
+        let separator = if retry_hint.is_empty() {
+            ""
+        } else if matches!(detail.chars().last(), Some('.') | Some('!') | Some('?')) {
+            " "
+        } else {
+            ". "
+        };
+
+        format!(
+            "{} API error {}: {}{}{}",
+            provider.as_string(),
+            status,
+            detail,
+            separator,
+            retry_hint
+        )
+    }
 }
 
 /// Validates a provider base URL to prevent SSRF attacks.
@@ -277,13 +313,17 @@ impl LLMProvider for DirectApiProvider {
 
         let status = res.status().as_u16();
         if status != 200 {
+            let retry_after = res
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
             let body_text = res.text().await.unwrap_or_default();
-            let detail = Self::extract_error_detail(&body_text);
-            return Err(Box::new(std::io::Error::other(format!(
-                "{} API error {}: {}",
-                self.provider.as_string(),
+            return Err(Box::new(std::io::Error::other(Self::format_api_error(
+                self.provider,
                 status,
-                detail
+                retry_after.as_deref(),
+                &body_text,
             ))));
         }
 
@@ -330,13 +370,17 @@ impl LLMProvider for DirectApiProvider {
 
         if !res.status().is_success() {
             let status = res.status().as_u16();
+            let retry_after = res
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
             let body_text = res.text().await.unwrap_or_default();
-            let detail = Self::extract_error_detail(&body_text);
-            return Err(Box::new(std::io::Error::other(format!(
-                "{} API error {}: {}",
-                self.provider.as_string(),
+            return Err(Box::new(std::io::Error::other(Self::format_api_error(
+                self.provider,
                 status,
-                detail
+                retry_after.as_deref(),
+                &body_text,
             ))));
         }
 
@@ -461,6 +505,18 @@ mod tests {
         assert!(provider.is_ok());
         let p = provider.expect("should create");
         assert!(!p.is_configured());
+    }
+
+    #[test]
+    fn format_api_error_includes_retry_after_for_rate_limits() {
+        let body = r#"{"error":{"message":"Rate limit exceeded"}}"#;
+        let message =
+            DirectApiProvider::format_api_error(Provider::OpenAI, 429, Some("60"), body);
+
+        assert_eq!(
+            message,
+            "openai API error 429: Rate limit exceeded. Retry after 60 seconds."
+        );
     }
 
     #[test]

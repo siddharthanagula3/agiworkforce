@@ -213,6 +213,27 @@ function normalizeRiskLevel(risk?: string): 'low' | 'medium' | 'high' {
   return 'low';
 }
 
+function normalizeToolConfirmationRisk(
+  payload: ToolConfirmationSummary,
+): 'low' | 'medium' | 'high' {
+  const normalizedRisk = normalizeRiskLevel(payload.risk_level);
+  const safetyTier = payload.safety_tier.toLowerCase();
+  const toolName = payload.tool_name.toLowerCase();
+  const mutatingToolPattern =
+    /(delete|remove|write|create|update|modify|execute|run|shell|terminal)/;
+
+  if (
+    normalizedRisk === 'high' ||
+    safetyTier === 'dangerous' ||
+    payload.reversible === false ||
+    mutatingToolPattern.test(toolName)
+  ) {
+    return 'high';
+  }
+
+  return normalizedRisk;
+}
+
 function mapActionType(type?: string): ActionLogEntryType {
   switch ((type ?? '').toLowerCase()) {
     case 'filesystem':
@@ -716,7 +737,7 @@ export function applyToolConfirmationRequired(payload: ToolConfirmationSummary):
     id: payload.request_id,
     type: 'mcp_tool',
     description: payload.description,
-    riskLevel: normalizeRiskLevel(payload.risk_level),
+    riskLevel: normalizeToolConfirmationRisk(payload),
     details: {
       tool: payload.tool_display_name,
       toolName: payload.tool_name,
@@ -724,6 +745,8 @@ export function applyToolConfirmationRequired(payload: ToolConfirmationSummary):
       reason: payload.reason,
       reversible: payload.reversible,
       safetyTier: payload.safety_tier,
+      signatureUnavailableReason:
+        'Backend confirmation payload does not include canonical MCP parameters.',
     },
     timeoutSeconds: 120,
   });
@@ -736,7 +759,45 @@ export function applyToolConfirmationTimeout(payload: { request_id: string }): v
     return;
   }
 
-  useToolStore.getState().rejectOperation(payload.request_id, 'Operation timed out');
+  const existingApproval = useToolStore
+    .getState()
+    .pendingApprovals.find((approval) => approval.id === payload.request_id);
+  if (!existingApproval) {
+    return;
+  }
+
+  const toolName =
+    typeof existingApproval?.details['tool'] === 'string'
+      ? existingApproval.details['tool']
+      : typeof existingApproval?.details['toolName'] === 'string'
+        ? existingApproval.details['toolName']
+        : 'Tool approval';
+  const timeoutReason = `${toolName} timed out waiting for approval.`;
+
+  useToolStore.getState().rejectOperation(payload.request_id, timeoutReason);
+
+  addNormalizedActionTrailEntry({
+    type: 'error',
+    message: timeoutReason,
+    fadeAfter: 10000,
+    metadata: {
+      approvalId: payload.request_id,
+      toolName,
+    },
+  });
+
+  upsertActionLogEntry({
+    id: payload.request_id,
+    type: 'approval',
+    title: 'Approval timed out',
+    description: timeoutReason,
+    status: 'failed',
+    error: timeoutReason,
+    metadata: {
+      approvalId: payload.request_id,
+      toolName,
+    },
+  });
 }
 
 export function applyApprovalRequest(payload: ApprovalRequestPayload): void {
