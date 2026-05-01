@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+
+name = "agiworkforce-collaboration-mode-templates"
+version = "0.1.0"
+
+[lib]
+doctest = false
+name = "agiworkforce_collaboration_mode_templates"
+path = "src/lib.rs"
+
