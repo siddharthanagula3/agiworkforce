@@ -1,0 +1,14 @@
+[package]
+name = "agiworkforce-thread-manager-sample"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+# Keep this sample limited to a single Agiworkforce workspace dependency.
+# Add new Agiworkforce surface area to `agiworkforce-core-api` instead of depending on
+# additional `agiworkforce-*` crates here.
+agiworkforce-core-api = { path = "../agiworkforce-core-api" }
+tracing = "0.1.44"
