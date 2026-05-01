@@ -37,14 +37,27 @@ vi.mock('../Cards/ApprovalRequestCard', () => ({
   ),
 }));
 
-import { MessageApprovals } from '../MessageApprovals';
+import { MessageApprovals, MessageApprovalsContent } from '../MessageApprovals';
 
 describe('MessageApprovals', () => {
   it('renders only approvals owned by the message', () => {
     render(<MessageApprovals messageId="assistant-1" />);
 
-    expect(screen.getByText('Pending approvals')).toBeInTheDocument();
+    expect(screen.getByText('Approval needed')).toBeInTheDocument();
+    expect(screen.getByText('1 pending')).toBeInTheDocument();
+    expect(
+      screen.getByText('Review before the agent continues with this action.'),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('approval-card')).toHaveTextContent('Run filesystem.search');
     expect(screen.queryByText('Run npm install')).not.toBeInTheDocument();
+  });
+
+  it('uses plural review copy when multiple approvals are pending', () => {
+    render(<MessageApprovalsContent approvals={mockState.pendingApprovals} />);
+
+    expect(screen.getByText('2 pending')).toBeInTheDocument();
+    expect(
+      screen.getByText('Review before the agent continues with these actions.'),
+    ).toBeInTheDocument();
   });
 });

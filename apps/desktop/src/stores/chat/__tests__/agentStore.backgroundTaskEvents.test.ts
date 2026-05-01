@@ -37,6 +37,8 @@ describe('agentStore background task event reducers', () => {
   });
 
   it('normalizes terminal task snapshots from Rust payloads', () => {
+    const completedAt = new Date().toISOString();
+
     applyBackgroundTaskEvent(
       {
         id: 'task-2',
@@ -46,7 +48,7 @@ describe('agentStore background task event reducers', () => {
         progress: 80,
         priority: 'High',
         created_at: '2026-04-06T10:00:00.000Z',
-        completed_at: '2026-04-06T10:05:00.000Z',
+        completed_at: completedAt,
         result: {
           success: false,
           error: 'Disk full',

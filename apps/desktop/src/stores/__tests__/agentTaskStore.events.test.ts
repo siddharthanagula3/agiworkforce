@@ -121,4 +121,28 @@ describe('agentTaskStore goal event reducers', () => {
     expect(liveStep?.status).toBe('failed');
     expect(liveStep?.completedAt).toBeInstanceOf(Date);
   });
+
+  it('caps retained live task progress for long-running demo sessions', () => {
+    for (let index = 0; index < 105; index++) {
+      const goalId = `goal-${index}`;
+      applyAgentTaskGoalPlanCreated({
+        goal_id: goalId,
+        total_steps: 1,
+        estimated_duration_ms: 1000,
+      });
+      applyAgentTaskGoalStepStarted({
+        goal_id: goalId,
+        step_id: `step-${index}`,
+        step_index: 0,
+        total_steps: 1,
+        description: `Step ${index}`,
+      });
+    }
+
+    const state = useAgentTaskStore.getState();
+    expect(Object.keys(state.liveProgressByTask)).toHaveLength(100);
+    expect(Object.keys(state.liveStepsByTask)).toHaveLength(100);
+    expect(state.liveProgressByTask['goal-0']).toBeUndefined();
+    expect(state.liveStepsByTask['goal-104']).toBeDefined();
+  });
 });

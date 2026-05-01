@@ -20,6 +20,15 @@ export type FriendlyError = FriendlyErrorType;
 export { ErrorCode };
 export type { ErrorCodeValue };
 
+function extractRetryAfterHint(errorMessage: string): string | null {
+  const retryAfterMatch = errorMessage.match(/retry after ([^.]+)\.?/i);
+  if (!retryAfterMatch?.[1]) {
+    return null;
+  }
+
+  return retryAfterMatch[1].trim();
+}
+
 /**
  * Application error class with code, status, and details.
  *
@@ -423,6 +432,29 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
+  // Provider capability mismatches: common with Bedrock, Vertex, and gateway models
+  // when structured output, thinking, or effort fields are sent to unsupported models.
+  if (
+    (errorLower.includes('output_config') &&
+      (errorLower.includes('extra inputs') ||
+        errorLower.includes('not permitted') ||
+        errorLower.includes('unsupported'))) ||
+    errorLower.includes('thinking.type.enabled is not supported') ||
+    errorLower.includes('adaptive thinking is not supported') ||
+    errorLower.includes('does not support the effort parameter') ||
+    (errorLower.includes('effort') && errorLower.includes('not supported')) ||
+    (errorLower.includes('response_format') && errorLower.includes('not supported')) ||
+    (errorLower.includes('json_schema') && errorLower.includes('not supported'))
+  ) {
+    return {
+      title: 'Model Setting Not Supported',
+      message: "The selected model or provider doesn't support one of the requested AI settings.",
+      suggestion:
+        'Switch to Auto model routing, choose a different model, or turn off structured output, thinking, or effort for this request.',
+      icon: 'warning',
+    };
+  }
+
   // Invalid API key / unauthorized
   if (
     errorLower.includes('invalid_api_key') ||
@@ -504,10 +536,13 @@ export function getFriendlyError(error: Error | string): FriendlyError {
 
   // Rate limit errors
   if (errorLower.includes('429') || errorLower.includes('rate limit')) {
+    const retryAfterHint = extractRetryAfterHint(errorMessage);
     return {
       title: 'Slow Down',
       message: "You're sending requests too quickly.",
-      suggestion: 'Please wait a moment before trying again.',
+      suggestion: retryAfterHint
+        ? `Please wait ${retryAfterHint} before trying again.`
+        : 'Please wait a moment before trying again.',
       icon: 'warning',
     };
   }
