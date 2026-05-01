@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+
+name = "agiworkforce-plugin"
+version = "0.1.0"
+
+[lib]
+doctest = false
+name = "agiworkforce_plugin"
+path = "src/lib.rs"
+
+[dependencies]
+agiworkforce-config = { path = "../agiworkforce-config" }
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+agiworkforce-utils-plugins = { path = "../agiworkforce-utils-plugins" }
+thiserror = "2.0.17"
