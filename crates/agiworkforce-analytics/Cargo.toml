@@ -1,0 +1,31 @@
+[package]
+edition = "2024"
+
+name = "agiworkforce-analytics"
+version = "0.1.0"
+
+[lib]
+doctest = false
+name = "agiworkforce_analytics"
+path = "src/lib.rs"
+
+[dependencies]
+agiworkforce-app-server-protocol = { path = "../agiworkforce-app-server-protocol" }
+agiworkforce-git-utils = { path = "../agiworkforce-git-utils" }
+agiworkforce-login = { path = "../agiworkforce-login" }
+agiworkforce-model-provider = { path = "../agiworkforce-model-provider" }
+agiworkforce-plugin = { path = "../agiworkforce-plugin" }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+os_info = "3.12.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha1 = "0.10.6"
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+] }
+tracing = { version = "0.1.44", features = ["log"] }
+
+[dev-dependencies]
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+pretty_assertions = "1.4.1"
