@@ -46,6 +46,18 @@ interface EntryGroup {
   entries: ToolLabelEntry[];
 }
 
+function formatRunningSummary(entries: ToolLabelEntry[]): string {
+  const runningEntries = entries.filter((entry) => entry.status === 'running');
+  const latestRunning = runningEntries[runningEntries.length - 1];
+  const toolWord = entries.length === 1 ? 'tool' : 'tools';
+
+  if (!latestRunning) {
+    return `Running ${entries.length} ${toolWord}`;
+  }
+
+  return `Running ${runningEntries.length}/${entries.length} ${toolWord}: ${latestRunning.displayName}`;
+}
+
 export function ToolTimeline({
   entries,
   className,
@@ -150,7 +162,7 @@ export function ToolTimeline({
         <Wrench className="w-3 h-3" />
         <span>
           {hasRunning ? (
-            <span className="text-violet-400">Running tools...</span>
+            <span className="text-violet-400">{formatRunningSummary(entries)}</span>
           ) : (
             <>
               Used {entries.length} tool{entries.length !== 1 ? 's' : ''}

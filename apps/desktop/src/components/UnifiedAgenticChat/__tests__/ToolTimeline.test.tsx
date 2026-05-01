@@ -4,7 +4,7 @@
  * Covers:
  * - Returns null when entries array is empty
  * - Header shows "Used N tool(s)" when all tools are completed
- * - Header shows "Running tools..." when any entry is running
+ * - Header shows an active tool summary when any entry is running
  * - Error count is displayed in the header when errors exist
  * - Total duration is shown in the header for completed runs
  * - Tool list is expanded automatically while tools are running
@@ -95,21 +95,21 @@ describe('ToolTimeline', () => {
   });
 
   describe('running state header', () => {
-    it('shows "Running tools..." text when at least one entry is running', () => {
+    it('shows active tool name and running count when at least one entry is running', () => {
       const runningEntries: ToolLabelEntry[] = [
         { id: 'r1', displayName: 'Read', displayArgs: 'f', status: 'running' },
       ];
       render(<ToolTimeline entries={runningEntries} />);
-      expect(screen.getByText('Running tools...')).toBeInTheDocument();
+      expect(screen.getByText(/Running 1\/1 tool: Read/)).toBeInTheDocument();
     });
 
-    it('shows running state even when some entries are already completed', () => {
+    it('shows progress through the current batch when some entries are already completed', () => {
       const mixed: ToolLabelEntry[] = [
         ...completedEntries,
         { id: 'r', displayName: 'Bash', displayArgs: 'pnpm test', status: 'running' },
       ];
       render(<ToolTimeline entries={mixed} />);
-      expect(screen.getByText('Running tools...')).toBeInTheDocument();
+      expect(screen.getByText(/Running 1\/4 tools: Bash/)).toBeInTheDocument();
     });
 
     it('does not show "Used N tools" text when any entry is running', () => {

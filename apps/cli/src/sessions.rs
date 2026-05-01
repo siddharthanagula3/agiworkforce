@@ -9,7 +9,7 @@
 //! commands keep compiling, but it no longer depends on SQLite.
 
 use anyhow::{bail, Context, Result};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -166,7 +166,7 @@ fn infer_title(messages: &[Message]) -> String {
 fn total_tokens(messages: &[Message]) -> i64 {
     messages
         .iter()
-        .map(|message| crate::compaction::estimate_tokens(&message.text_content()) as i64)
+        .map(|message| crate::compaction::message_tokens(message) as i64)
         .sum()
 }
 
@@ -702,18 +702,15 @@ fn now_ms() -> i64 {
 }
 
 fn format_date_only(ms: i64) -> String {
-    let secs = ms / 1_000;
-    let days = secs / 86_400;
-    let year = 1970 + days / 365;
-    let doy = days % 365;
-    let month = doy / 30 + 1;
-    let day = doy % 30 + 1;
-    format!("{year:04}-{month:02}-{day:02}")
+    DateTime::<Utc>::from_timestamp_millis(ms)
+        .map(|timestamp| timestamp.format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| "1970-01-01".to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
     use tempfile::tempdir;
 
     fn temp_connection() -> (tempfile::TempDir, Connection) {
@@ -774,6 +771,16 @@ mod tests {
         assert_eq!(stats.session_count, 2);
         assert_eq!(stats.message_count, 2);
         assert!(stats.total_tokens >= 11);
+    }
+
+    #[test]
+    fn format_date_only_uses_real_calendar_dates() {
+        let timestamp = chrono::Utc
+            .with_ymd_and_hms(2024, 2, 29, 12, 0, 0)
+            .unwrap()
+            .timestamp_millis();
+
+        assert_eq!(format_date_only(timestamp), "2024-02-29");
     }
 
     #[test]

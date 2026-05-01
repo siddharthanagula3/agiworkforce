@@ -685,6 +685,9 @@ export function normalizeSubGoal(raw: unknown): SubGoal {
 export function normalizeReflectionInsight(raw: unknown): ReflectionInsight {
   const value = asRecord(raw);
   const assessment = asRecord(value['assessment']);
+  const rawFailedSteps = assessment['failedSteps'] ?? assessment['failed_steps'];
+  const rawFailurePatterns = value['failurePatterns'] ?? value['failure_patterns'];
+  const rawSubGoals = value['subGoals'] ?? value['sub_goals'];
 
   return {
     id: String(value['id'] ?? ''),
@@ -694,10 +697,8 @@ export function normalizeReflectionInsight(raw: unknown): ReflectionInsight {
       successfulSteps: asStringArray(
         assessment['successfulSteps'] ?? assessment['successful_steps'],
       ),
-      failedSteps: Array.isArray(assessment['failedSteps'] ?? assessment['failed_steps'])
-        ? (assessment['failedSteps'] ?? assessment['failed_steps']).map((step) =>
-            normalizeFailedStep(step),
-          )
+      failedSteps: Array.isArray(rawFailedSteps)
+        ? rawFailedSteps.map((step: unknown) => normalizeFailedStep(step))
         : [],
       goalAchievable: asBoolean(
         assessment['goalAchievable'] ?? assessment['goal_achievable'],
@@ -709,16 +710,14 @@ export function normalizeReflectionInsight(raw: unknown): ReflectionInsight {
       ),
       timeEfficiency: asNumber(assessment['timeEfficiency'] ?? assessment['time_efficiency']),
     },
-    failurePatterns: Array.isArray(value['failurePatterns'] ?? value['failure_patterns'])
-      ? (value['failurePatterns'] ?? value['failure_patterns']).map((pattern) =>
-          normalizeFailurePattern(pattern),
-        )
+    failurePatterns: Array.isArray(rawFailurePatterns)
+      ? rawFailurePatterns.map((pattern: unknown) => normalizeFailurePattern(pattern))
       : [],
     corrections: Array.isArray(value['corrections'])
-      ? value['corrections'].map((correction) => normalizeCorrection(correction))
+      ? value['corrections'].map((correction: unknown) => normalizeCorrection(correction))
       : [],
-    subGoals: Array.isArray(value['subGoals'] ?? value['sub_goals'])
-      ? (value['subGoals'] ?? value['sub_goals']).map((subGoal) => normalizeSubGoal(subGoal))
+    subGoals: Array.isArray(rawSubGoals)
+      ? rawSubGoals.map((subGoal: unknown) => normalizeSubGoal(subGoal))
       : [],
     recommendations: asStringArray(value['recommendations']),
     confidence: asNumber(value['confidence'], 1),

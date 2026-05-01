@@ -266,6 +266,8 @@ export function IterationProgressPanel({
     } else {
       setElapsedTime(0);
     }
+
+    return undefined;
   }, [iterationProgress.startTime, status]);
 
   const insightSummary = useMemo(

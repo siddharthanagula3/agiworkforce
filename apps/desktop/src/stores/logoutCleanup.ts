@@ -20,6 +20,7 @@ import { useDatabaseStore } from './databaseStore';
 import { useExecutionStore, cleanupExecutionListeners } from './executionStore';
 import { cleanupAgentWorkflowEventListeners } from './chat/agentWorkflowEvents';
 import { cleanupBackgroundTaskEventListeners } from './chat/agentStore';
+import { cleanupAgentTaskEventListeners, useAgentTaskStore } from './agentTaskStore';
 import { cleanupRuntimeActivityEventListeners } from '../hooks/useAgenticEvents';
 import { useMcpStore } from './mcpStore';
 import { useModelStore } from './modelStore';
@@ -92,6 +93,8 @@ export function cleanupAllStoresOnLogout(): void {
     // AUDIT-006-028: Execution store - cleanup event listeners and reset
     cleanupBackgroundTaskEventListeners();
     cleanupAgentWorkflowEventListeners();
+    cleanupAgentTaskEventListeners();
+    useAgentTaskStore.getState().resetOnLogout();
     cleanupExecutionListeners();
     cleanupRuntimeActivityEventListeners();
     const executionStore = useExecutionStore.getState();
@@ -212,7 +215,9 @@ export function clearPersistedUserData(): void {
 
   const keysToRemove = [
     'unified-chat-storage',
+    'chat-storage',
     'unified-auth-storage',
+    'agiworkforce-agent-tasks',
     'billing-usage-store',
     'connectors-store',
     'id-mappings',

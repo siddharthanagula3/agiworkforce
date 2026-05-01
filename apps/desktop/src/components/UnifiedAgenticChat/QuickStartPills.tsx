@@ -4,7 +4,7 @@
  * Quick action pills shown in the empty chat state.
  * Each pill populates the composer or opens the matching surface.
  *
- * Product source of truth target: Web, Code, Write, Research, Skills.
+ * Product source of truth target: Research, Browser, Code, Write, Skills.
  */
 
 import React from 'react';
@@ -23,28 +23,32 @@ interface PillDefinition {
 
 const PILLS: PillDefinition[] = [
   {
-    label: 'Web',
+    label: 'Research',
+    icon: Search,
+    action: 'research',
+    prompt:
+      'Research this topic deeply, compare the strongest alternatives, cite sources, and end with an executive summary: ',
+  },
+  {
+    label: 'Browser',
     icon: Globe,
     action: 'web',
-    prompt: 'Search the web for ',
+    prompt:
+      'Use the browser to complete this workflow, ask before risky actions, and summarize each step: ',
   },
   {
     label: 'Code',
     icon: Code,
     action: 'code',
-    prompt: 'Help me write code for ',
+    prompt:
+      'Inspect this project, explain the safest implementation plan, then make the code change for: ',
   },
   {
     label: 'Write',
     icon: Pen,
     action: 'write',
-    prompt: 'Help me write ',
-  },
-  {
-    label: 'Research',
-    icon: Search,
-    action: 'research',
-    prompt: 'Research this topic in depth: ',
+    prompt:
+      'Draft a polished investor-ready update with crisp structure, risks, and next steps about: ',
   },
   {
     label: 'Skills',
