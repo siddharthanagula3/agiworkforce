@@ -1,0 +1,22 @@
+[package]
+edition = "2024"
+
+name = "agiworkforce-memories-read"
+version = "0.1.0"
+
+[lib]
+name = "agiworkforce_memories_read"
+path = "src/lib.rs"
+
+[dependencies]
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-shell-command = { path = "../agiworkforce-shell-command" }
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+agiworkforce-utils-output-truncation = { path = "../agiworkforce-utils-output-truncation" }
+agiworkforce-utils-template = { path = "../agiworkforce-utils-template" }
+tokio = { version = "1", features = ["fs"] }
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+tempfile = "3.23.0"
+tokio = { version = "1", features = ["fs", "macros"] }
