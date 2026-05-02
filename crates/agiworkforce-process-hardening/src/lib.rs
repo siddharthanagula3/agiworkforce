@@ -4,6 +4,26 @@ use std::ffi::OsString;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 
+/// Mark the current process non-dumpable so a crash won't write a core
+/// file. Public stub used by the linux-sandbox proxy-routing path that
+/// needs the same hardening before re-exec'ing under bwrap, separate
+/// from the pre_main_hardening() ctor that fires once at process start.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub fn disable_process_dumping() {
+    let ret_code = unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) };
+    if ret_code != 0 {
+        eprintln!(
+            "ERROR: prctl(PR_SET_DUMPABLE, 0) failed: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+}
+
+/// No-op fallback on non-Linux platforms — keeps the call site
+/// portable without #[cfg] gymnastics in callers.
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+pub fn disable_process_dumping() {}
+
 /// This is designed to be called pre-main() (using `#[ctor::ctor]`) to perform
 /// various process hardening steps, such as
 /// - disabling core dumps
