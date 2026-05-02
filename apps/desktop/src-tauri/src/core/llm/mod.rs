@@ -8,6 +8,7 @@ pub mod background_manager;
 pub mod cache_manager;
 pub mod capability_detection;
 pub mod cost_calculator;
+pub mod daily_budget;
 pub mod fallback_chain;
 pub mod function_executor;
 pub mod job_autofill_runtime;
