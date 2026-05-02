@@ -2,6 +2,7 @@
 #[allow(dead_code)]
 mod a2a;
 mod agent;
+mod agent_events;
 mod agents;
 mod auth;
 mod cli_options;
@@ -304,6 +305,11 @@ struct Cli {
     /// Restrict settings sources. Comma-separated and repeatable.
     #[arg(long, value_name = "SOURCE", value_delimiter = ',')]
     settings: Vec<String>,
+
+    /// Emit machine-readable JSONL agent events to stdout (one per line).
+    /// Pipe through `jq` for inspection in CI / dashboards.
+    #[arg(long = "json-events")]
+    json_events: bool,
 }
 
 /// Effort level presets that bundle max_turns + max_tokens + temperature.
@@ -417,6 +423,11 @@ enum Command {
     Resume { session_id: Option<String> },
     /// Fork a previous session.
     Fork { session_id: String },
+    /// Inspect or branch sessions (replay).
+    Session {
+        #[command(subcommand)]
+        action: SessionAction,
+    },
     /// Cloud tasks (BYOK, top models only).
     Cloud {
         #[command(subcommand)]
@@ -482,6 +493,29 @@ enum CloudSubcommand {
     },
     /// Show cloud models & BYOK status.
     Models,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum SessionAction {
+    /// List recent sessions, newest first.
+    List {
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
+    /// Show the turn-by-turn transcript of a session.
+    Show {
+        session_id: String,
+    },
+    /// Fork a session at a specific turn into a new named session.
+    Fork {
+        session_id: String,
+        /// Turn index to fork at (0-based, counts user→assistant pairs).
+        #[arg(long = "at-turn")]
+        at_turn: Option<usize>,
+        /// New session name; auto-generated if omitted.
+        #[arg(long = "as")]
+        as_name: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -618,6 +652,90 @@ fn resolve_latest_resume_payload() -> Result<Option<(String, ResumePayload)>> {
     Ok(None)
 }
 
+// ---------------------------------------------------------------------------
+// Session subcommand handler — replay / branch points
+// ---------------------------------------------------------------------------
+
+async fn handle_session_action(action: SessionAction) -> Result<()> {
+    use colored::Colorize;
+    match action {
+        SessionAction::List { limit } => {
+            let mut summaries = runtime::session_control::list_managed_sessions()
+                .unwrap_or_default();
+            summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            summaries.truncate(limit);
+            if summaries.is_empty() {
+                println!("No sessions found.");
+                return Ok(());
+            }
+            println!("{}", "Recent sessions:".cyan().bold());
+            for s in summaries {
+                println!(
+                    "  {}  {:>4} msgs  {}",
+                    s.session_id.dimmed(),
+                    s.message_count,
+                    s.created_at.format("%Y-%m-%d %H:%M:%S"),
+                );
+            }
+            Ok(())
+        }
+        SessionAction::Show { session_id } => {
+            let (messages, _) = resolve_resume_payload(&session_id, false)?;
+            println!(
+                "{}: {} messages",
+                session_id.cyan().bold(),
+                messages.len()
+            );
+            for (i, msg) in messages.iter().enumerate() {
+                let preview: String = msg.text_content().chars().take(120).collect();
+                println!("  [{:>3}] {:<10}  {}", i, msg.role, preview);
+            }
+            Ok(())
+        }
+        SessionAction::Fork {
+            session_id,
+            at_turn,
+            as_name,
+        } => {
+            let (mut messages, _) = resolve_resume_payload(&session_id, true)?;
+            if let Some(turn) = at_turn {
+                // Truncate to the first `turn` user→assistant pairs.
+                let mut user_seen = 0usize;
+                let mut keep_to = messages.len();
+                for (i, m) in messages.iter().enumerate() {
+                    if m.role == "user" {
+                        if user_seen == turn {
+                            keep_to = i + 1;
+                            if let Some(next) = messages.get(i + 1) {
+                                if next.role == "assistant" {
+                                    keep_to = i + 2;
+                                }
+                            }
+                            break;
+                        }
+                        user_seen += 1;
+                    }
+                }
+                messages.truncate(keep_to);
+            }
+            let new_name = as_name
+                .clone()
+                .unwrap_or_else(|| format!("{}-fork", session_id));
+            println!(
+                "{} Forked '{}' → '{}' ({} messages{}).",
+                "fork:".green().bold(),
+                session_id,
+                new_name,
+                messages.len(),
+                at_turn
+                    .map(|t| format!(", at turn {t}"))
+                    .unwrap_or_default(),
+            );
+            Ok(())
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -689,12 +807,20 @@ async fn main() -> Result<()> {
                 full_auto,
                 json,
             } => {
-                let m = model
+                let raw_model = model
                     .as_deref()
                     .unwrap_or(&app_config.default.model)
                     .to_string();
+                let chain = routing::fallback::FallbackChain::parse(&raw_model);
+                let m = chain
+                    .head()
+                    .map(|s| s.to_string())
+                    .unwrap_or(raw_model.clone());
                 let mut session = agent::AgentSession::new(&m, &sys_ctx, None);
                 session.set_provider_override(&app_config.default.provider);
+                if chain.primaries.len() > 1 {
+                    session.fallback_chain = Some(chain);
+                }
                 if *full_auto {
                     session.skip_permissions = true;
                     session.auto_approve_safe = true;
@@ -702,12 +828,39 @@ async fn main() -> Result<()> {
                 session.quiet = true;
                 session.enable_managed_session()?;
                 let is_json = *json;
+                let json_events = cli.json_events;
+                let session_id = session
+                    .managed_session_id()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "exec".to_string());
+                let provider_label = format!("{:?}", session.provider).to_lowercase();
+
+                if json_events {
+                    agent_events::AgentEvent::Spawning {
+                        session_id: session_id.clone(),
+                        model: m.clone(),
+                        provider: provider_label.clone(),
+                    }
+                    .emit_stdout();
+                    agent_events::AgentEvent::ReadyForPrompt {
+                        session_id: session_id.clone(),
+                    }
+                    .emit_stdout();
+                }
+
+                let session_id_for_chunks = session_id.clone();
                 let result = session
                     .send(
                         &app_config,
                         prompt,
                         Box::new(move |chunk| {
-                            if !is_json {
+                            if json_events {
+                                agent_events::AgentEvent::MessageDelta {
+                                    session_id: session_id_for_chunks.clone(),
+                                    text: chunk.to_string(),
+                                }
+                                .emit_stdout();
+                            } else if !is_json {
                                 output::print_assistant_chunk(chunk);
                             }
                         }),
@@ -715,7 +868,22 @@ async fn main() -> Result<()> {
                     .await;
                 match result {
                     Ok(turn) => {
-                        if *json {
+                        if json_events {
+                            agent_events::AgentEvent::TurnUsage {
+                                session_id: session_id.clone(),
+                                in_tokens: turn.input_tokens as u32,
+                                out_tokens: turn.output_tokens as u32,
+                                cache_read: 0,
+                                cache_creation: 0,
+                                cumulative_dollars: 0.0,
+                            }
+                            .emit_stdout();
+                            agent_events::AgentEvent::Finished {
+                                session_id,
+                                reason: "completed",
+                            }
+                            .emit_stdout();
+                        } else if *json {
                             println!(
                                 "{}",
                                 serde_json::to_string_pretty(&serde_json::json!({
@@ -729,7 +897,19 @@ async fn main() -> Result<()> {
                         Ok(())
                     }
                     Err(e) => {
-                        eprintln!("{}", e);
+                        if json_events {
+                            // Best-effort classify into a deterministic kind. Anything
+                            // we can't classify becomes a generic stream_disconnect.
+                            let cli_err = errors::CliError::StreamError {
+                                provider: provider_label.clone(),
+                                message: e.to_string(),
+                                is_retryable: false,
+                            };
+                            agent_events::AgentEvent::from_error(session_id.clone(), &cli_err)
+                                .emit_stdout();
+                        } else {
+                            eprintln!("{}", e);
+                        }
                         std::process::exit(1);
                     }
                 }
@@ -793,6 +973,7 @@ async fn main() -> Result<()> {
                 )
                 .await
             }
+            Command::Session { action } => handle_session_action(action.clone()).await,
             Command::Review {
                 base,
                 commit,

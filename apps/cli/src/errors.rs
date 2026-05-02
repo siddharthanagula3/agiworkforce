@@ -158,6 +158,81 @@ impl fmt::Display for CliError {
 impl std::error::Error for CliError {}
 
 // ---------------------------------------------------------------------------
+// Deterministic error classification — for `--json-events` and CI
+// ---------------------------------------------------------------------------
+
+impl CliError {
+    /// Stable, machine-readable kind. Never localized, never reformatted; safe
+    /// to grep, `jq -r '.kind'`, and pattern-match in CI runbooks.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            CliError::Api { status, .. } if (500..600).contains(status) => "api_server_error",
+            CliError::Api { .. } => "api_http_error",
+            CliError::Auth { .. } => "auth_expired",
+            CliError::Config { .. } => "config_invalid",
+            CliError::Tool { .. } => "tool_failed",
+            CliError::Network { .. } => "network",
+            CliError::ContextOverflow { .. } => "context_overflow",
+            CliError::RateLimited { .. } => "api_rate_limit",
+            CliError::StreamError { .. } => "stream_disconnect",
+        }
+    }
+
+    /// Actionable runbook hint for the user. One sentence, imperative voice,
+    /// always present. No "please" or vague language — we tell the user
+    /// exactly what to try next.
+    pub fn hint(&self) -> String {
+        match self {
+            CliError::Api { provider, status, .. } if (500..600).contains(status) => format!(
+                "{provider} returned HTTP {status}. Retry the request, or run `agiworkforce \
+                 features` to fall back to a different provider."
+            ),
+            CliError::Api { provider, status, .. } => format!(
+                "{provider} rejected the request with HTTP {status}. Check `agiworkforce \
+                 auth-status` and the request payload for invalid fields."
+            ),
+            CliError::Auth { provider, .. } => format!(
+                "Run `agiworkforce login {provider}` to refresh credentials, or set the \
+                 corresponding API key environment variable."
+            ),
+            CliError::Config { .. } => {
+                "Run `agiworkforce init` to regenerate the default config, or fix the indicated \
+                 file path manually."
+                    .to_string()
+            }
+            CliError::Tool { tool_name, .. } => format!(
+                "Tool `{tool_name}` failed. Run `agiworkforce execpolicy` to see allowed commands \
+                 and re-prompt with the corrected invocation."
+            ),
+            CliError::Network { .. } => "Check your network connection and retry. If a corporate \
+                                         proxy is required, set `HTTPS_PROXY` and re-run."
+                .to_string(),
+            CliError::ContextOverflow { model, .. } => format!(
+                "Context exceeded for `{model}`. Try `/compact` to summarize history, or switch \
+                 to a model with a larger context window."
+            ),
+            CliError::RateLimited { provider, retry_after } => match retry_after {
+                Some(secs) => format!(
+                    "{provider} is rate-limiting. Wait {secs}s, or use a fallback model: \
+                     `--model claude-sonnet-4-6,gpt-5.4`."
+                ),
+                None => format!(
+                    "{provider} is rate-limiting. Switch to a fallback model with \
+                     `--model claude-sonnet-4-6,gpt-5.4`."
+                ),
+            },
+            CliError::StreamError { is_retryable, .. } => if *is_retryable {
+                "Stream disconnected. Retrying automatically; if it persists, check provider \
+                 status."
+            } else {
+                "Stream disconnected with a non-retryable signal. Re-run the command."
+            }
+            .to_string(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Conversions
 // ---------------------------------------------------------------------------
 
