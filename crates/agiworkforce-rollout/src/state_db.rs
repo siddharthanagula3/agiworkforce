@@ -1,8 +1,11 @@
 use crate::config::RolloutConfig;
 use crate::config::RolloutConfigView;
 use crate::list::Cursor;
+use crate::list::SortDirection;
 use crate::list::ThreadSortKey;
 use crate::metadata;
+use chrono::DateTime;
+use chrono::Utc;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::dynamic_tools::DynamicToolSpec;
 use agiworkforce_protocol::protocol::RolloutItem;
@@ -10,16 +13,11 @@ use agiworkforce_protocol::protocol::SessionSource;
 pub use agiworkforce_state::LogEntry;
 use agiworkforce_state::ThreadMetadataBuilder;
 use agiworkforce_utils_path::normalize_for_path_comparison;
-use chrono::DateTime;
-use chrono::NaiveDateTime;
-use chrono::Timelike;
-use chrono::Utc;
 use serde_json::Value;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::warn;
-use uuid::Uuid;
 
 /// Core-facing handle to the SQLite-backed state runtime.
 pub type StateDbHandle = Arc<agiworkforce_state::StateRuntime>;
@@ -80,20 +78,15 @@ pub async fn get_state_db(config: &impl RolloutConfigView) -> Option<StateDbHand
 /// Open the state runtime when the SQLite file exists, without feature gating.
 ///
 /// This is used for parity checks during the SQLite migration phase.
-pub async fn open_if_present(
-    agiworkforce_home: &Path,
-    default_provider: &str,
-) -> Option<StateDbHandle> {
+pub async fn open_if_present(agiworkforce_home: &Path, default_provider: &str) -> Option<StateDbHandle> {
     let db_path = agiworkforce_state::state_db_path(agiworkforce_home);
     if !tokio::fs::try_exists(&db_path).await.unwrap_or(false) {
         return None;
     }
-    let runtime = agiworkforce_state::StateRuntime::init(
-        agiworkforce_home.to_path_buf(),
-        default_provider.to_string(),
-    )
-    .await
-    .ok()?;
+    let runtime =
+        agiworkforce_state::StateRuntime::init(agiworkforce_home.to_path_buf(), default_provider.to_string())
+            .await
+            .ok()?;
     require_backfill_complete(runtime, agiworkforce_home).await
 }
 
@@ -123,22 +116,10 @@ async fn require_backfill_complete(
 
 fn cursor_to_anchor(cursor: Option<&Cursor>) -> Option<agiworkforce_state::Anchor> {
     let cursor = cursor?;
-    let value = serde_json::to_value(cursor).ok()?;
-    let cursor_str = value.as_str()?;
-    let (ts_str, id_str) = cursor_str.split_once('|')?;
-    if id_str.contains('|') {
-        return None;
-    }
-    let id = Uuid::parse_str(id_str).ok()?;
-    let ts = if let Ok(naive) = NaiveDateTime::parse_from_str(ts_str, "%Y-%m-%dT%H-%M-%S") {
-        DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc)
-    } else if let Ok(dt) = DateTime::parse_from_rfc3339(ts_str) {
-        dt.with_timezone(&Utc)
-    } else {
-        return None;
-    }
-    .with_nanosecond(0)?;
-    Some(agiworkforce_state::Anchor { ts, id })
+    let millis = cursor.timestamp().unix_timestamp_nanos() / 1_000_000;
+    let millis = i64::try_from(millis).ok()?;
+    let ts = chrono::DateTime::<Utc>::from_timestamp_millis(millis)?;
+    Some(agiworkforce_state::Anchor { ts })
 }
 
 pub fn normalize_cwd_for_state_db(cwd: &Path) -> PathBuf {
@@ -207,8 +188,10 @@ pub async fn list_threads_db(
     page_size: usize,
     cursor: Option<&Cursor>,
     sort_key: ThreadSortKey,
+    sort_direction: SortDirection,
     allowed_sources: &[SessionSource],
     model_providers: Option<&[String]>,
+    cwd_filters: Option<&[PathBuf]>,
     archived: bool,
     search_term: Option<&str>,
 ) -> Option<agiworkforce_state::ThreadsPage> {
@@ -231,18 +214,31 @@ pub async fn list_threads_db(
         })
         .collect();
     let model_providers = model_providers.map(<[String]>::to_vec);
+    let normalized_cwd_filters = cwd_filters.map(|filters| {
+        filters
+            .iter()
+            .map(|cwd| normalize_cwd_for_state_db(cwd))
+            .collect::<Vec<_>>()
+    });
     match ctx
         .list_threads(
             page_size,
-            anchor.as_ref(),
-            match sort_key {
-                ThreadSortKey::CreatedAt => agiworkforce_state::SortKey::CreatedAt,
-                ThreadSortKey::UpdatedAt => agiworkforce_state::SortKey::UpdatedAt,
+            agiworkforce_state::ThreadFilterOptions {
+                archived_only: archived,
+                allowed_sources: allowed_sources.as_slice(),
+                model_providers: model_providers.as_deref(),
+                cwd_filters: normalized_cwd_filters.as_deref(),
+                anchor: anchor.as_ref(),
+                sort_key: match sort_key {
+                    ThreadSortKey::CreatedAt => agiworkforce_state::SortKey::CreatedAt,
+                    ThreadSortKey::UpdatedAt => agiworkforce_state::SortKey::UpdatedAt,
+                },
+                sort_direction: match sort_direction {
+                    SortDirection::Asc => agiworkforce_state::SortDirection::Asc,
+                    SortDirection::Desc => agiworkforce_state::SortDirection::Desc,
+                },
+                search_term,
             },
-            allowed_sources.as_slice(),
-            model_providers.as_deref(),
-            archived,
-            search_term,
         )
         .await
     {

@@ -29,10 +29,32 @@ pub enum ApiError {
     InvalidRequest { message: String },
     #[error("server overloaded")]
     ServerOverloaded,
+    #[error("cyber policy: {message}")]
+    CyberPolicy { message: String },
 }
 
 impl From<RateLimitError> for ApiError {
     fn from(err: RateLimitError) -> Self {
         Self::RateLimit(err.to_string())
+    }
+}
+
+/// Convert an `ApiError` to a protocol-level `AgiworkforceErr`.
+pub fn map_api_error(err: ApiError) -> agiworkforce_protocol::error::AgiworkforceErr {
+    use agiworkforce_protocol::error::AgiworkforceErr;
+    match err {
+        ApiError::ContextWindowExceeded => AgiworkforceErr::ContextWindowExceeded,
+        ApiError::QuotaExceeded => AgiworkforceErr::QuotaExceeded,
+        ApiError::UsageNotIncluded => AgiworkforceErr::UsageNotIncluded,
+        ApiError::ServerOverloaded => AgiworkforceErr::ServerOverloaded,
+        ApiError::CyberPolicy { message } => AgiworkforceErr::CyberPolicy { message },
+        ApiError::InvalidRequest { message } => AgiworkforceErr::InvalidRequest(message),
+        ApiError::Stream(msg) => AgiworkforceErr::Stream(msg, None),
+        ApiError::Retryable { message, delay } => AgiworkforceErr::Stream(message, delay),
+        ApiError::Transport(e) => AgiworkforceErr::Fatal(e.to_string()),
+        ApiError::Api { status, message } => {
+            AgiworkforceErr::Fatal(format!("api error {status}: {message}"))
+        }
+        ApiError::RateLimit(msg) => AgiworkforceErr::Fatal(format!("rate limit: {msg}")),
     }
 }

@@ -1,6 +1,7 @@
 use super::*;
-use crate::codex::make_session_configuration_for_tests;
-use crate::protocol::RateLimitWindow;
+use crate::session::tests::make_session_configuration_for_tests;
+use agiworkforce_protocol::protocol::CreditsSnapshot;
+use agiworkforce_protocol::protocol::RateLimitWindow;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
@@ -33,7 +34,7 @@ async fn clear_connector_selection_removes_entries() {
 }
 
 #[tokio::test]
-async fn set_rate_limits_defaults_limit_id_to_codex_when_missing() {
+async fn set_rate_limits_defaults_limit_id_to_agiworkforce_when_missing() {
     let session_configuration = make_session_configuration_for_tests().await;
     let mut state = SessionState::new(session_configuration);
 
@@ -48,6 +49,7 @@ async fn set_rate_limits_defaults_limit_id_to_codex_when_missing() {
         secondary: None,
         credits: None,
         plan_type: None,
+        rate_limit_reached_type: None,
     });
 
     assert_eq!(
@@ -55,18 +57,18 @@ async fn set_rate_limits_defaults_limit_id_to_codex_when_missing() {
             .latest_rate_limits
             .as_ref()
             .and_then(|v| v.limit_id.clone()),
-        Some("codex".to_string())
+        Some("agiworkforce".to_string())
     );
 }
 
 #[tokio::test]
-async fn set_rate_limits_defaults_to_codex_when_limit_id_missing_after_other_bucket() {
+async fn set_rate_limits_defaults_to_agiworkforce_when_limit_id_missing_after_other_bucket() {
     let session_configuration = make_session_configuration_for_tests().await;
     let mut state = SessionState::new(session_configuration);
 
     state.set_rate_limits(RateLimitSnapshot {
-        limit_id: Some("codex_other".to_string()),
-        limit_name: Some("codex_other".to_string()),
+        limit_id: Some("agiworkforce_other".to_string()),
+        limit_name: Some("agiworkforce_other".to_string()),
         primary: Some(RateLimitWindow {
             used_percent: 20.0,
             window_minutes: Some(60),
@@ -75,6 +77,7 @@ async fn set_rate_limits_defaults_to_codex_when_limit_id_missing_after_other_buc
         secondary: None,
         credits: None,
         plan_type: None,
+        rate_limit_reached_type: None,
     });
     state.set_rate_limits(RateLimitSnapshot {
         limit_id: None,
@@ -87,6 +90,7 @@ async fn set_rate_limits_defaults_to_codex_when_limit_id_missing_after_other_buc
         secondary: None,
         credits: None,
         plan_type: None,
+        rate_limit_reached_type: None,
     });
 
     assert_eq!(
@@ -94,34 +98,35 @@ async fn set_rate_limits_defaults_to_codex_when_limit_id_missing_after_other_buc
             .latest_rate_limits
             .as_ref()
             .and_then(|v| v.limit_id.clone()),
-        Some("codex".to_string())
+        Some("agiworkforce".to_string())
     );
 }
 
 #[tokio::test]
-async fn set_rate_limits_carries_credits_and_plan_type_from_codex_to_codex_other() {
+async fn set_rate_limits_carries_credits_and_plan_type_from_agiworkforce_to_agiworkforce_other() {
     let session_configuration = make_session_configuration_for_tests().await;
     let mut state = SessionState::new(session_configuration);
 
     state.set_rate_limits(RateLimitSnapshot {
-        limit_id: Some("codex".to_string()),
-        limit_name: Some("codex".to_string()),
+        limit_id: Some("agiworkforce".to_string()),
+        limit_name: Some("agiworkforce".to_string()),
         primary: Some(RateLimitWindow {
             used_percent: 10.0,
             window_minutes: Some(60),
             resets_at: Some(100),
         }),
         secondary: None,
-        credits: Some(crate::protocol::CreditsSnapshot {
+        credits: Some(CreditsSnapshot {
             has_credits: true,
             unlimited: false,
             balance: Some("50".to_string()),
         }),
         plan_type: Some(agiworkforce_protocol::account::PlanType::Plus),
+        rate_limit_reached_type: None,
     });
 
     state.set_rate_limits(RateLimitSnapshot {
-        limit_id: Some("codex_other".to_string()),
+        limit_id: Some("agiworkforce_other".to_string()),
         limit_name: None,
         primary: Some(RateLimitWindow {
             used_percent: 30.0,
@@ -131,12 +136,13 @@ async fn set_rate_limits_carries_credits_and_plan_type_from_codex_to_codex_other
         secondary: None,
         credits: None,
         plan_type: None,
+        rate_limit_reached_type: None,
     });
 
     assert_eq!(
         state.latest_rate_limits,
         Some(RateLimitSnapshot {
-            limit_id: Some("codex_other".to_string()),
+            limit_id: Some("agiworkforce_other".to_string()),
             limit_name: None,
             primary: Some(RateLimitWindow {
                 used_percent: 30.0,
@@ -144,12 +150,13 @@ async fn set_rate_limits_carries_credits_and_plan_type_from_codex_to_codex_other
                 resets_at: Some(200),
             }),
             secondary: None,
-            credits: Some(crate::protocol::CreditsSnapshot {
+            credits: Some(CreditsSnapshot {
                 has_credits: true,
                 unlimited: false,
                 balance: Some("50".to_string()),
             }),
             plan_type: Some(agiworkforce_protocol::account::PlanType::Plus),
+            rate_limit_reached_type: None,
         })
     );
 }

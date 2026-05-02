@@ -3,23 +3,26 @@ name = "agiworkforce-app-server-client"
 version = "0.1.0"
 edition = "2024"
 
+
 [lib]
 name = "agiworkforce_app_server_client"
 path = "src/lib.rs"
 
 [dependencies]
+agiworkforce-app-server = { path = "../agiworkforce-app-server" }
 agiworkforce-app-server-protocol = { path = "../agiworkforce-app-server-protocol" }
 agiworkforce-arg0 = { path = "../agiworkforce-arg0" }
+agiworkforce-config = { path = "../agiworkforce-config" }
 agiworkforce-core = { path = "../agiworkforce-core" }
+agiworkforce-exec-server = { path = "../agiworkforce-exec-server" }
 agiworkforce-feedback = { path = "../agiworkforce-feedback" }
 agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-utils-rustls-provider = { path = "../agiworkforce-utils-rustls-provider" }
 futures = { version = "0.3", default-features = false }
 serde = "1"
 serde_json = "1"
 tokio = { version = "1", features = ["sync", "time", "rt"] }
-tokio-tungstenite = { version = "0.28.0", features = [
-    "rustls-tls-native-roots",
-] }
+tokio-tungstenite = { version = "0.28.0", features = ["proxy", "rustls-tls-native-roots"] }
 toml = "0.9.5"
 tracing = "0.1.44"
 url = "2"

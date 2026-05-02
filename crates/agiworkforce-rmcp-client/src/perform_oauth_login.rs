@@ -16,13 +16,13 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 use urlencoding::decode;
 
-use crate::OAuthCredentialsStoreMode;
 use crate::StoredOAuthTokens;
 use crate::WrappedOAuthTokenResponse;
 use crate::oauth::compute_expires_at_millis;
 use crate::save_oauth_tokens;
 use crate::utils::apply_default_headers;
 use crate::utils::build_default_headers;
+use agiworkforce_config::types::OAuthCredentialsStoreMode;
 
 struct OauthHeaders {
     http_headers: Option<HashMap<String, String>>,
@@ -443,7 +443,7 @@ impl OauthLoginFlow {
         let mut oauth_state = OAuthState::new(server_url, Some(http_client)).await?;
         let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
         oauth_state
-            .start_authorization(&scope_refs, &redirect_uri, Some("AGI Workforce"))
+            .start_authorization(&scope_refs, &redirect_uri, Some("Agiworkforce"))
             .await?;
         let auth_url = append_query_param(
             &oauth_state.get_authorization_url().await?,

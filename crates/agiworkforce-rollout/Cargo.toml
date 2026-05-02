@@ -1,7 +1,8 @@
 [package]
+edition = "2024"
+
 name = "agiworkforce-rollout"
 version = "0.1.0"
-edition = "2024"
 
 [lib]
 doctest = false
@@ -22,21 +23,8 @@ agiworkforce-utils-path = { path = "../agiworkforce-utils-path" }
 agiworkforce-utils-string = { path = "../agiworkforce-utils-string" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-time = { version = "0.3.47", features = [
-    "formatting",
-    "local-offset",
-    "macros",
-    "parsing",
-] }
-tokio = { version = "1", features = [
-    "fs",
-    "io-util",
-    "macros",
-    "process",
-    "rt",
-    "sync",
-    "time",
-] }
+time = { version = "0.3.47", features = [ "formatting", "local-offset", "macros", "parsing", ] }
+tokio = { version = "1", features = [ "fs", "io-util", "macros", "process", "rt", "sync", "time", ] }
 tracing = "0.1.44"
 uuid = "1"
 

@@ -1,14 +1,16 @@
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 
-use agiworkforce_protocol::models::DeveloperInstructions;
+use agiworkforce_connectors::metadata::connector_display_label;
 use agiworkforce_protocol::models::ResponseItem;
 
 use crate::connectors;
-use crate::mcp::CODEX_APPS_MCP_SERVER_NAME;
-use crate::mcp_connection_manager::ToolInfo;
+use crate::context::ContextualUserFragment;
+use crate::context::PluginInstructions;
 use crate::plugins::PluginCapabilitySummary;
 use crate::plugins::render_explicit_plugin_instructions;
+use agiworkforce_mcp::AGIWORKFORCE_APPS_MCP_SERVER_NAME;
+use agiworkforce_mcp::ToolInfo;
 
 pub(crate) fn build_plugin_injections(
     mentioned_plugins: &[PluginCapabilitySummary],
@@ -27,7 +29,7 @@ pub(crate) fn build_plugin_injections(
             let available_mcp_servers = mcp_tools
                 .values()
                 .filter(|tool| {
-                    tool.server_name != CODEX_APPS_MCP_SERVER_NAME
+                    tool.server_name != AGIWORKFORCE_APPS_MCP_SERVER_NAME
                         && tool
                             .plugin_display_names
                             .iter()
@@ -46,13 +48,13 @@ pub(crate) fn build_plugin_injections(
                             .iter()
                             .any(|plugin_name| plugin_name == &plugin.display_name)
                 })
-                .map(connectors::connector_display_label)
+                .map(connector_display_label)
                 .collect::<BTreeSet<String>>()
                 .into_iter()
                 .collect::<Vec<_>>();
             render_explicit_plugin_instructions(plugin, &available_mcp_servers, &available_apps)
-                .map(DeveloperInstructions::new)
-                .map(ResponseItem::from)
+                .map(PluginInstructions::new)
+                .map(ContextualUserFragment::into)
         })
         .collect()
 }

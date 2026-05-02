@@ -18,7 +18,7 @@ use agiworkforce_protocol::models::WebSearchAction;
 use agiworkforce_protocol::protocol::SessionConfiguredEvent;
 use serde_json::json;
 
-pub use crate::event_processor::AgiWorkforceStatus;
+pub use crate::event_processor::AgiworkforceStatus;
 use crate::event_processor::EventProcessor;
 use crate::event_processor::handle_last_message;
 use crate::exec_events::AgentMessageItem;
@@ -75,7 +75,7 @@ struct RunningTodoList {
 #[derive(Debug, PartialEq)]
 pub struct CollectedThreadEvents {
     pub events: Vec<ThreadEvent>,
-    pub status: AgiWorkforceStatus,
+    pub status: AgiworkforceStatus,
 }
 
 impl EventProcessorWithJsonOutput {
@@ -122,12 +122,11 @@ impl EventProcessorWithJsonOutput {
             input_tokens: usage.total.input_tokens,
             cached_input_tokens: usage.total.cached_input_tokens,
             output_tokens: usage.total.output_tokens,
+            reasoning_output_tokens: usage.total.reasoning_output_tokens,
         }
     }
 
-    pub fn map_todo_items(
-        plan: &[agiworkforce_app_server_protocol::TurnPlanStep],
-    ) -> Vec<TodoItem> {
+    pub fn map_todo_items(plan: &[agiworkforce_app_server_protocol::TurnPlanStep]) -> Vec<TodoItem> {
         plan.iter()
             .map(|step| TodoItem {
                 text: step.step.clone(),
@@ -405,7 +404,7 @@ impl EventProcessorWithJsonOutput {
                     details: ThreadItemDetails::Error(ErrorItem { message }),
                 },
             })],
-            status: AgiWorkforceStatus::Running,
+            status: AgiworkforceStatus::Running,
         }
     }
 
@@ -428,7 +427,7 @@ impl EventProcessorWithJsonOutput {
                         details: ThreadItemDetails::Error(ErrorItem { message }),
                     },
                 }));
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::Error(notification) => {
                 let message = match notification.error.additional_details {
@@ -440,7 +439,7 @@ impl EventProcessorWithJsonOutput {
                 let error = ThreadErrorEvent { message };
                 self.last_critical_error = Some(error.clone());
                 events.push(ThreadEvent::Error(error));
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::DeprecationNotice(notification) => {
                 let message = match notification.details {
@@ -455,16 +454,16 @@ impl EventProcessorWithJsonOutput {
                         details: ThreadItemDetails::Error(ErrorItem { message }),
                     },
                 }));
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::HookStarted(_) | ServerNotification::HookCompleted(_) => {
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::ItemStarted(notification) => {
                 if let Some(item) = self.map_started_item(notification.item) {
                     events.push(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
                 }
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::ItemCompleted(notification) => {
                 if let Some(item) = self.map_completed_item_mut(notification.item) {
@@ -475,7 +474,7 @@ impl EventProcessorWithJsonOutput {
                     }
                     events.push(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
                 }
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::ModelRerouted(notification) => {
                 events.push(ThreadEvent::ItemCompleted(ItemCompletedEvent {
@@ -489,11 +488,12 @@ impl EventProcessorWithJsonOutput {
                         }),
                     },
                 }));
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
+            ServerNotification::ModelVerification(_) => AgiworkforceStatus::Running,
             ServerNotification::ThreadTokenUsageUpdated(notification) => {
                 self.last_total_token_usage = Some(notification.token_usage);
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::TurnCompleted(notification) => {
                 if let Some(running) = self.running_todo_list.take() {
@@ -518,7 +518,7 @@ impl EventProcessorWithJsonOutput {
                         events.push(ThreadEvent::TurnCompleted(TurnCompletedEvent {
                             usage: self.usage_from_last_total(),
                         }));
-                        AgiWorkforceStatus::InitiateShutdown
+                        AgiworkforceStatus::InitiateShutdown
                     }
                     TurnStatus::Failed => {
                         self.final_message = None;
@@ -539,17 +539,17 @@ impl EventProcessorWithJsonOutput {
                                 message: "turn failed".to_string(),
                             });
                         events.push(ThreadEvent::TurnFailed(TurnFailedEvent { error }));
-                        AgiWorkforceStatus::InitiateShutdown
+                        AgiworkforceStatus::InitiateShutdown
                     }
                     TurnStatus::Interrupted => {
                         self.final_message = None;
                         self.emit_final_message_on_shutdown = false;
-                        AgiWorkforceStatus::InitiateShutdown
+                        AgiworkforceStatus::InitiateShutdown
                     }
-                    TurnStatus::InProgress => AgiWorkforceStatus::Running,
+                    TurnStatus::InProgress => AgiworkforceStatus::Running,
                 }
             }
-            ServerNotification::TurnDiffUpdated(_) => AgiWorkforceStatus::Running,
+            ServerNotification::TurnDiffUpdated(_) => AgiworkforceStatus::Running,
             ServerNotification::TurnPlanUpdated(notification) => {
                 let items = Self::map_todo_items(&notification.plan);
                 if let Some(running) = self.running_todo_list.as_mut() {
@@ -574,13 +574,13 @@ impl EventProcessorWithJsonOutput {
                         },
                     }));
                 }
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::TurnStarted(_) => {
                 events.push(ThreadEvent::TurnStarted(TurnStartedEvent {}));
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
-            _ => AgiWorkforceStatus::Running,
+            _ => AgiworkforceStatus::Running,
         };
 
         CollectedThreadEvents { events, status }
@@ -597,10 +597,7 @@ impl EventProcessor for EventProcessorWithJsonOutput {
         self.emit(Self::thread_started_event(session_configured));
     }
 
-    fn process_server_notification(
-        &mut self,
-        notification: ServerNotification,
-    ) -> AgiWorkforceStatus {
+    fn process_server_notification(&mut self, notification: ServerNotification) -> AgiworkforceStatus {
         let collected = self.collect_thread_events(notification);
         for event in collected.events {
             self.emit(event);
@@ -608,7 +605,7 @@ impl EventProcessor for EventProcessorWithJsonOutput {
         collected.status
     }
 
-    fn process_warning(&mut self, message: String) -> AgiWorkforceStatus {
+    fn process_warning(&mut self, message: String) -> AgiworkforceStatus {
         let collected = self.collect_warning(message);
         for event in collected.events {
             self.emit(event);
@@ -626,59 +623,5 @@ impl EventProcessor for EventProcessorWithJsonOutput {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use pretty_assertions::assert_eq;
-    use tempfile::tempdir;
-
-    #[test]
-    fn failed_turn_does_not_overwrite_output_last_message_file() {
-        let tempdir = tempdir().expect("create tempdir");
-        let output_path = tempdir.path().join("last-message.txt");
-        std::fs::write(&output_path, "keep existing contents").expect("seed output file");
-
-        let mut processor = EventProcessorWithJsonOutput::new(Some(output_path.clone()));
-
-        let collected = processor.collect_thread_events(ServerNotification::ItemCompleted(
-            agiworkforce_app_server_protocol::ItemCompletedNotification {
-                item: ThreadItem::AgentMessage {
-                    id: "msg-1".to_string(),
-                    text: "partial answer".to_string(),
-                    phase: None,
-                    memory_citation: None,
-                },
-                thread_id: "thread-1".to_string(),
-                turn_id: "turn-1".to_string(),
-            },
-        ));
-
-        assert_eq!(collected.status, AgiWorkforceStatus::Running);
-        assert_eq!(processor.final_message(), Some("partial answer"));
-
-        let status = processor.process_server_notification(ServerNotification::TurnCompleted(
-            agiworkforce_app_server_protocol::TurnCompletedNotification {
-                thread_id: "thread-1".to_string(),
-                turn: agiworkforce_app_server_protocol::Turn {
-                    id: "turn-1".to_string(),
-                    items: Vec::new(),
-                    status: TurnStatus::Failed,
-                    error: Some(agiworkforce_app_server_protocol::TurnError {
-                        message: "turn failed".to_string(),
-                        additional_details: None,
-                        agiworkforce_error_info: None,
-                    }),
-                },
-            },
-        ));
-
-        assert_eq!(status, AgiWorkforceStatus::InitiateShutdown);
-        assert_eq!(processor.final_message(), None);
-
-        EventProcessor::print_final_output(&mut processor);
-
-        assert_eq!(
-            std::fs::read_to_string(&output_path).expect("read output file"),
-            "keep existing contents"
-        );
-    }
-}
+#[path = "event_processor_with_jsonl_output_tests.rs"]
+mod tests;

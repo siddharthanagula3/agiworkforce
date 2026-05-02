@@ -2,24 +2,31 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::Prompt;
-use crate::codex::Session;
-use crate::codex::TurnContext;
-use crate::codex::built_tools;
+use crate::compact::CompactionAnalyticsAttempt;
 use crate::compact::InitialContextInjection;
+use crate::compact::compaction_status_from_result;
 use crate::compact::insert_initial_context_before_last_real_user_or_summary;
 use crate::context_manager::ContextManager;
 use crate::context_manager::TotalTokenUsageBreakdown;
 use crate::context_manager::estimate_response_item_model_visible_bytes;
-use crate::context_manager::is_codex_generated_item;
-use crate::error::CodexErr;
-use crate::error::Result as CodexResult;
-use crate::protocol::CompactedItem;
-use crate::protocol::EventMsg;
-use crate::protocol::TurnStartedEvent;
+use crate::context_manager::is_agiworkforce_generated_item;
+use crate::session::session::Session;
+use crate::session::turn::built_tools;
+use crate::session::turn_context::TurnContext;
+use agiworkforce_analytics::CompactionImplementation;
+use agiworkforce_analytics::CompactionPhase;
+use agiworkforce_analytics::CompactionReason;
+use agiworkforce_analytics::CompactionTrigger;
+use agiworkforce_protocol::error::AgiworkforceErr;
+use agiworkforce_protocol::error::Result as AgiworkforceResult;
 use agiworkforce_protocol::items::ContextCompactionItem;
 use agiworkforce_protocol::items::TurnItem;
 use agiworkforce_protocol::models::BaseInstructions;
 use agiworkforce_protocol::models::ResponseItem;
+use agiworkforce_protocol::protocol::CompactedItem;
+use agiworkforce_protocol::protocol::EventMsg;
+use agiworkforce_protocol::protocol::TurnStartedEvent;
+use agiworkforce_rollout_trace::CompactionCheckpointTracePayload;
 use futures::TryFutureExt;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -29,33 +36,71 @@ pub(crate) async fn run_inline_remote_auto_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
     initial_context_injection: InitialContextInjection,
-) -> CodexResult<()> {
-    run_remote_compact_task_inner(&sess, &turn_context, initial_context_injection).await?;
+    reason: CompactionReason,
+    phase: CompactionPhase,
+) -> AgiworkforceResult<()> {
+    run_remote_compact_task_inner(
+        &sess,
+        &turn_context,
+        initial_context_injection,
+        CompactionTrigger::Auto,
+        reason,
+        phase,
+    )
+    .await?;
     Ok(())
 }
 
 pub(crate) async fn run_remote_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
-) -> CodexResult<()> {
+) -> AgiworkforceResult<()> {
     let start_event = EventMsg::TurnStarted(TurnStartedEvent {
         turn_id: turn_context.sub_id.clone(),
+        started_at: turn_context.turn_timing_state.started_at_unix_secs().await,
         model_context_window: turn_context.model_context_window(),
         collaboration_mode_kind: turn_context.collaboration_mode.mode,
     });
     sess.send_event(&turn_context, start_event).await;
 
-    run_remote_compact_task_inner(&sess, &turn_context, InitialContextInjection::DoNotInject).await
+    run_remote_compact_task_inner(
+        &sess,
+        &turn_context,
+        InitialContextInjection::DoNotInject,
+        CompactionTrigger::Manual,
+        CompactionReason::UserRequested,
+        CompactionPhase::StandaloneTurn,
+    )
+    .await
 }
 
 async fn run_remote_compact_task_inner(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
     initial_context_injection: InitialContextInjection,
-) -> CodexResult<()> {
-    if let Err(err) =
-        run_remote_compact_task_inner_impl(sess, turn_context, initial_context_injection).await
-    {
+    trigger: CompactionTrigger,
+    reason: CompactionReason,
+    phase: CompactionPhase,
+) -> AgiworkforceResult<()> {
+    let attempt = CompactionAnalyticsAttempt::begin(
+        sess.as_ref(),
+        turn_context.as_ref(),
+        trigger,
+        reason,
+        CompactionImplementation::ResponsesCompact,
+        phase,
+    )
+    .await;
+    let result =
+        run_remote_compact_task_inner_impl(sess, turn_context, initial_context_injection).await;
+    attempt
+        .track(
+            sess.as_ref(),
+            compaction_status_from_result(&result),
+            result.as_ref().err().map(ToString::to_string),
+        )
+        .await;
+    if let Err(err) = result {
         let event = EventMsg::Error(
             err.to_error_event(Some("Error running remote compact task".to_string())),
         );
@@ -69,8 +114,17 @@ async fn run_remote_compact_task_inner_impl(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
     initial_context_injection: InitialContextInjection,
-) -> CodexResult<()> {
-    let compaction_item = TurnItem::ContextCompaction(ContextCompactionItem::new());
+) -> AgiworkforceResult<()> {
+    let context_compaction_item = ContextCompactionItem::new();
+    // Use the UI compaction item ID as the trace compaction ID so protocol lifecycle events,
+    // endpoint attempts, and the installed history checkpoint all have one join key.
+    let compaction_trace = sess.services.rollout_thread_trace.compaction_trace_context(
+        turn_context.sub_id.as_str(),
+        context_compaction_item.id.as_str(),
+        turn_context.model_info.slug.as_str(),
+        turn_context.provider.info().name.as_str(),
+    );
+    let compaction_item = TurnItem::ContextCompaction(context_compaction_item);
     sess.emit_turn_item_started(turn_context, &compaction_item)
         .await;
     let mut history = sess.clone_history().await;
@@ -87,14 +141,10 @@ async fn run_remote_compact_task_inner_impl(
             "trimmed history items before remote compaction"
         );
     }
-    // Required to keep `/undo` available after compaction
-    let ghost_snapshots: Vec<ResponseItem> = history
-        .raw_items()
-        .iter()
-        .filter(|item| matches!(item, ResponseItem::GhostSnapshot { .. }))
-        .cloned()
-        .collect();
-
+    // This is the history selected for remote compaction, after any trimming required to fit the
+    // compact endpoint. The checkpoint below records it separately from the next sampling request,
+    // whose prompt will repeat current developer/context prefix items.
+    let trace_input_history = history.raw_items().to_vec();
     let prompt_input = history.for_prompt(&turn_context.model_info.input_modalities);
     let tool_router = built_tools(
         sess.as_ref(),
@@ -112,8 +162,8 @@ async fn run_remote_compact_task_inner_impl(
         base_instructions,
         personality: turn_context.personality,
         output_schema: None,
+        output_schema_strict: true,
     };
-
     let mut new_history = sess
         .services
         .model_client
@@ -123,6 +173,7 @@ async fn run_remote_compact_task_inner_impl(
             turn_context.reasoning_effort,
             turn_context.reasoning_summary,
             &turn_context.session_telemetry,
+            &compaction_trace,
         )
         .or_else(|err| async {
             let total_usage_breakdown = sess.get_total_token_usage_breakdown().await;
@@ -145,9 +196,6 @@ async fn run_remote_compact_task_inner_impl(
     )
     .await;
 
-    if !ghost_snapshots.is_empty() {
-        new_history.extend(ghost_snapshots);
-    }
     let reference_context_item = match initial_context_injection {
         InitialContextInjection::DoNotInject => None,
         InitialContextInjection::BeforeLastUserMessage => Some(turn_context.to_turn_context_item()),
@@ -156,6 +204,13 @@ async fn run_remote_compact_task_inner_impl(
         message: String::new(),
         replacement_history: Some(new_history.clone()),
     };
+    // Install is the semantic boundary where the compact endpoint's output becomes live
+    // thread history. Keep it distinct from the later inference request so the reducer can
+    // still represent repeated developer/context prefix items exactly as the model saw them.
+    compaction_trace.record_installed(&CompactionCheckpointTracePayload {
+        input_history: &trace_input_history,
+        replacement_history: &new_history,
+    });
     sess.replace_compacted_history(new_history, reference_context_item, compacted_item)
         .await;
     sess.recompute_token_usage(turn_context).await;
@@ -224,7 +279,6 @@ fn should_keep_compacted_history_item(item: &ResponseItem) -> bool {
         | ResponseItem::CustomToolCallOutput { .. }
         | ResponseItem::WebSearchCall { .. }
         | ResponseItem::ImageGenerationCall { .. }
-        | ResponseItem::GhostSnapshot { .. }
         | ResponseItem::Other => false,
     }
 }
@@ -255,7 +309,7 @@ fn log_remote_compact_failure(
     turn_context: &TurnContext,
     log_data: &CompactRequestLogData,
     total_usage_breakdown: TotalTokenUsageBreakdown,
-    err: &CodexErr,
+    err: &AgiworkforceErr,
 ) {
     error!(
         turn_id = %turn_context.sub_id,
@@ -287,7 +341,7 @@ fn trim_function_call_history_to_fit_context_window(
         let Some(last_item) = history.raw_items().last() else {
             break;
         };
-        if !is_codex_generated_item(last_item) {
+        if !is_agiworkforce_generated_item(last_item) {
             break;
         }
         if !history.remove_last_item() {

@@ -1,15 +1,16 @@
 use crate::config::Config;
-use crate::config::ConfigToml;
 use crate::config::edit::ConfigEditsBuilder;
-use crate::config::profile::ConfigProfile;
-use crate::config::types::WindowsSandboxModeToml;
-use crate::default_client::originator;
-use crate::protocol::SandboxPolicy;
+use agiworkforce_config::config_toml::ConfigToml;
+use agiworkforce_config::config_toml::FeaturesToml as ConfigFeaturesToml;
+use agiworkforce_config::profile_toml::ConfigProfile;
+use agiworkforce_config::types::WindowsSandboxModeToml;
 use agiworkforce_features::Feature;
 use agiworkforce_features::Features;
 use agiworkforce_features::FeaturesToml;
+use agiworkforce_login::default_client::originator;
 use agiworkforce_otel::sanitize_metric_tag_value;
 use agiworkforce_protocol::config_types::WindowsSandboxLevel;
+use agiworkforce_protocol::protocol::SandboxPolicy;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::Path;
@@ -56,14 +57,24 @@ pub fn windows_sandbox_level_from_features(features: &Features) -> WindowsSandbo
     WindowsSandboxLevel::from_features(features)
 }
 
+fn config_features_to_features_toml(cfg: &ConfigFeaturesToml) -> FeaturesToml {
+    FeaturesToml {
+        entries: cfg.entries.clone(),
+        multi_agent_v2: None,
+        apps_mcp_path_override: None,
+    }
+}
+
 pub fn resolve_windows_sandbox_mode(
     cfg: &ConfigToml,
     profile: &ConfigProfile,
 ) -> Option<WindowsSandboxModeToml> {
-    if let Some(mode) = legacy_windows_sandbox_mode(profile.features.as_ref()) {
+    let profile_features = profile.features.as_ref().map(config_features_to_features_toml);
+    let cfg_features = cfg.features.as_ref().map(config_features_to_features_toml);
+    if let Some(mode) = legacy_windows_sandbox_mode(profile_features.as_ref()) {
         return Some(mode);
     }
-    if legacy_windows_sandbox_keys_present(profile.features.as_ref()) {
+    if legacy_windows_sandbox_keys_present(profile_features.as_ref()) {
         return None;
     }
 
@@ -72,7 +83,7 @@ pub fn resolve_windows_sandbox_mode(
         .as_ref()
         .and_then(|windows| windows.sandbox)
         .or_else(|| cfg.windows.as_ref().and_then(|windows| windows.sandbox))
-        .or_else(|| legacy_windows_sandbox_mode(cfg.features.as_ref()))
+        .or_else(|| legacy_windows_sandbox_mode(cfg_features.as_ref()))
 }
 
 pub fn resolve_windows_sandbox_private_desktop(cfg: &ConfigToml, profile: &ConfigProfile) -> bool {
@@ -89,7 +100,7 @@ pub fn resolve_windows_sandbox_private_desktop(cfg: &ConfigToml, profile: &Confi
 }
 
 fn legacy_windows_sandbox_keys_present(features: Option<&FeaturesToml>) -> bool {
-    let Some(entries) = features.map(|features| &features.entries) else {
+    let Some(entries) = features.map(FeaturesToml::entries) else {
         return false;
     };
     entries.contains_key(Feature::WindowsSandboxElevated.key())
@@ -100,8 +111,8 @@ fn legacy_windows_sandbox_keys_present(features: Option<&FeaturesToml>) -> bool 
 pub fn legacy_windows_sandbox_mode(
     features: Option<&FeaturesToml>,
 ) -> Option<WindowsSandboxModeToml> {
-    let entries = features.map(|features| &features.entries)?;
-    legacy_windows_sandbox_mode_from_entries(entries)
+    let entries = features.map(FeaturesToml::entries)?;
+    legacy_windows_sandbox_mode_from_entries(&entries)
 }
 
 pub fn legacy_windows_sandbox_mode_from_entries(
@@ -180,13 +191,15 @@ pub fn run_elevated_setup(
     agiworkforce_home: &Path,
 ) -> anyhow::Result<()> {
     agiworkforce_windows_sandbox::run_elevated_setup(
-        policy,
-        policy_cwd,
-        command_cwd,
-        env_map,
-        agiworkforce_home,
-        /*read_roots_override*/ None,
-        /*write_roots_override*/ None,
+        agiworkforce_windows_sandbox::SandboxSetupRequest {
+            policy,
+            policy_cwd,
+            command_cwd,
+            env_map,
+            agiworkforce_home,
+            proxy_enforced: false,
+        },
+        agiworkforce_windows_sandbox::SetupRootOverrides::default(),
     )
 }
 
@@ -234,6 +247,7 @@ pub fn run_setup_refresh_with_extra_read_roots(
         env_map,
         agiworkforce_home,
         extra_read_roots,
+        /*proxy_enforced*/ false,
     )
 }
 
@@ -360,7 +374,7 @@ fn emit_windows_sandbox_setup_success_metrics(
     originator_tag: &str,
     duration: std::time::Duration,
 ) {
-    let Some(metrics) = agiworkforce_otel::metrics::global() else {
+    let Some(metrics) = agiworkforce_otel::global() else {
         return;
     };
     let mode_tag = windows_sandbox_setup_mode_tag(mode);
@@ -386,7 +400,7 @@ fn emit_windows_sandbox_setup_failure_metrics(
     duration: std::time::Duration,
     _err: &anyhow::Error,
 ) {
-    let Some(metrics) = agiworkforce_otel::metrics::global() else {
+    let Some(metrics) = agiworkforce_otel::global() else {
         return;
     };
     let mode_tag = windows_sandbox_setup_mode_tag(mode);

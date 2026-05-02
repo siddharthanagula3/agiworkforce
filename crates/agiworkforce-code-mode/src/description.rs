@@ -1,6 +1,8 @@
+use agiworkforce_protocol::ToolName;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
+use std::collections::BTreeMap;
 
 use crate::PUBLIC_TOOL_NAME;
 
@@ -44,9 +46,16 @@ pub enum CodeModeToolKind {
     Freeform,
 }
 
+/// Metadata describing a namespace of tools exposed in exec context.
+pub struct ToolNamespaceDescription {
+    pub name: String,
+    pub description: String,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ToolDefinition {
     pub name: String,
+    pub tool_name: ToolName,
     pub description: String,
     pub kind: CodeModeToolKind,
     pub input_schema: Option<JsonValue>,
@@ -158,8 +167,10 @@ pub fn is_code_mode_nested_tool(tool_name: &str) -> bool {
 }
 
 pub fn build_exec_tool_description(
-    enabled_tools: &[(String, String)],
+    enabled_tools: &[ToolDefinition],
+    _namespace_descriptions: &BTreeMap<String, ToolNamespaceDescription>,
     code_mode_only: bool,
+    _deferred_tools_available: bool,
 ) -> String {
     if !code_mode_only {
         return EXEC_DESCRIPTION_TEMPLATE.to_string();
@@ -173,11 +184,12 @@ pub fn build_exec_tool_description(
     if !enabled_tools.is_empty() {
         let nested_tool_reference = enabled_tools
             .iter()
-            .map(|(name, nested_description)| {
-                let global_name = normalize_code_mode_identifier(name);
+            .map(|definition| {
+                let global_name = normalize_code_mode_identifier(&definition.name);
                 format!(
-                    "### `{global_name}` (`{name}`)\n{}",
-                    nested_description.trim()
+                    "### `{global_name}` (`{}`)\n{}",
+                    definition.name,
+                    definition.description.trim()
                 )
             })
             .collect::<Vec<_>>()
@@ -479,8 +491,10 @@ mod tests {
     use super::build_exec_tool_description;
     use super::normalize_code_mode_identifier;
     use super::parse_exec_source;
+    use agiworkforce_protocol::ToolName;
     use pretty_assertions::assert_eq;
     use serde_json::json;
+    use std::collections::BTreeMap;
 
     #[test]
     fn parse_exec_source_without_pragma() {
@@ -522,6 +536,7 @@ mod tests {
     fn augment_tool_definition_appends_typed_declaration() {
         let definition = ToolDefinition {
             name: "hidden_dynamic_tool".to_string(),
+            tool_name: ToolName::plain("hidden_dynamic_tool"),
             description: "Test tool".to_string(),
             kind: CodeModeToolKind::Function,
             input_schema: Some(json!({
@@ -548,8 +563,20 @@ mod tests {
 
     #[test]
     fn code_mode_only_description_includes_nested_tools() {
-        let description =
-            build_exec_tool_description(&[("foo".to_string(), "bar".to_string())], true);
+        let tools = vec![ToolDefinition {
+            name: "foo".to_string(),
+            tool_name: ToolName::plain("foo"),
+            description: "bar".to_string(),
+            kind: CodeModeToolKind::Function,
+            input_schema: None,
+            output_schema: None,
+        }];
+        let description = build_exec_tool_description(
+            &tools,
+            &BTreeMap::new(),
+            /*code_mode_only*/ true,
+            /*deferred_tools_available*/ false,
+        );
         assert!(description.contains("### `foo` (`foo`)"));
     }
 }

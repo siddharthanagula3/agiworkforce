@@ -3,9 +3,9 @@ mod parser;
 mod pull;
 mod url;
 
-use agiworkforce_core::ModelProviderInfo;
-use agiworkforce_core::config::Config;
 pub use client::OllamaClient;
+use agiworkforce_core::config::Config;
+use agiworkforce_model_provider_info::ModelProviderInfo;
 pub use pull::CliProgressReporter;
 pub use pull::PullEvent;
 pub use pull::PullProgressReporter;
@@ -71,7 +71,7 @@ pub async fn ensure_responses_supported(provider: &ModelProviderInfo) -> std::io
 
     let min = min_responses_version();
     Err(std::io::Error::other(format!(
-        "Ollama {version} is too old. Codex requires Ollama {min} or newer."
+        "Ollama {version} is too old. Agiworkforce requires Ollama {min} or newer."
     )))
 }
 
