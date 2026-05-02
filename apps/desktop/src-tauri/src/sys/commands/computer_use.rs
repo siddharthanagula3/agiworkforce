@@ -195,12 +195,42 @@ pub async fn computer_use_capture_screen(
     Ok(capture)
 }
 
+/// FIX-003 (Sprint 2): every `computer_use_*` IPC routes through
+/// `tool_confirmation::request_confirmation_simple` before touching the
+/// real OS input layer. Mirrors the gate that `terminal.rs:60-90` and
+/// `git.rs:307+` already enforce. Without this gate, an indirect prompt
+/// injection (PDF, web page, email contents) could drive the agent to
+/// click anywhere or type anything with zero user opportunity to refuse.
+async fn require_confirmation(
+    app_handle: &tauri::AppHandle,
+    tool_name: &'static str,
+    args: serde_json::Value,
+) -> Result<(), String> {
+    let approved = crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        app_handle, tool_name, &args,
+    )
+    .await?;
+    if !approved {
+        return Err(format!(
+            "{tool_name} denied by user. Re-issue the request or grant approval to retry."
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn computer_use_click(
     x: i32,
     y: i32,
     state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
+    require_confirmation(
+        &app_handle,
+        "computer_use_click",
+        serde_json::json!({ "x": x, "y": y }),
+    )
+    .await?;
     tracing::info!("Clicking at ({}, {})", x, y);
 
     perform_click(x, y).map_err(|e| format!("Failed to click: {}", e))?;
@@ -225,7 +255,14 @@ pub async fn computer_use_move_mouse(
     x: i32,
     y: i32,
     state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
+    require_confirmation(
+        &app_handle,
+        "computer_use_move_mouse",
+        serde_json::json!({ "x": x, "y": y }),
+    )
+    .await?;
     tracing::info!("Moving mouse to ({}, {})", x, y);
 
     perform_move(x, y).map_err(|e| format!("Failed to move mouse: {}", e))?;
@@ -249,8 +286,20 @@ pub async fn computer_use_move_mouse(
 pub async fn computer_use_type_text(
     text: String,
     state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
-    tracing::info!("Typing text: {}", text);
+    require_confirmation(
+        &app_handle,
+        "computer_use_type_text",
+        // Surface only the length to the approval prompt — the literal
+        // text could contain credentials the model captured from the
+        // user's clipboard or a previous tool call.
+        serde_json::json!({ "chars": text.chars().count() }),
+    )
+    .await?;
+    // FIX-003: replaced `tracing::info!("Typing text: {}", text)` — the
+    // previous form spilled raw passwords into the log pipeline.
+    tracing::info!("Typing {} chars", text.chars().count());
 
     perform_type(&text).map_err(|e| format!("Failed to type text: {}", e))?;
 
@@ -298,8 +347,28 @@ pub async fn computer_use_execute_tool(
     tool_name: String,
     args: serde_json::Value,
     state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    app_handle: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
     tracing::info!("Executing computer use tool: {}", tool_name);
+
+    // FIX-003 (Sprint 2): replaced the previous raw `match tool_name`
+    // with an explicit allow-list. Anything outside this set is refused
+    // before any state lookup so we don't leak the existence of internal
+    // helpers via error messages.
+    const ALLOWED_TOOLS: &[&str] = &[
+        "screenshot",
+        "click",
+        "type",
+        "move_mouse",
+        "zoom",
+        "zoom_at_point",
+    ];
+    if !ALLOWED_TOOLS.contains(&tool_name.as_str()) {
+        return Err(format!(
+            "Unknown computer-use tool: '{tool_name}'. Allowed: {}",
+            ALLOWED_TOOLS.join(", ")
+        ));
+    }
 
     match tool_name.as_str() {
         "screenshot" => {
@@ -309,18 +378,18 @@ pub async fn computer_use_execute_tool(
         "click" => {
             let x = args["x"].as_i64().ok_or("Missing x coordinate")? as i32;
             let y = args["y"].as_i64().ok_or("Missing y coordinate")? as i32;
-            computer_use_click(x, y, state).await?;
+            computer_use_click(x, y, state, app_handle).await?;
             Ok(serde_json::json!({"success": true}))
         }
         "type" => {
             let text = args["text"].as_str().ok_or("Missing text")?;
-            computer_use_type_text(text.to_string(), state).await?;
+            computer_use_type_text(text.to_string(), state, app_handle).await?;
             Ok(serde_json::json!({"success": true}))
         }
         "move_mouse" => {
             let x = args["x"].as_i64().ok_or("Missing x coordinate")? as i32;
             let y = args["y"].as_i64().ok_or("Missing y coordinate")? as i32;
-            computer_use_move_mouse(x, y, state).await?;
+            computer_use_move_mouse(x, y, state, app_handle).await?;
             Ok(serde_json::json!({"success": true}))
         }
         "zoom" => {
