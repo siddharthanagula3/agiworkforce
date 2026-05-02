@@ -12,7 +12,7 @@ use agiworkforce_network_proxy::NetworkProxy;
 use agiworkforce_protocol::config_types::WindowsSandboxLevel;
 #[cfg(target_os = "macos")]
 use agiworkforce_protocol::models::MacOsSeatbeltProfileExtensions;
-use agiworkforce_protocol::models::PermissionProfile;
+use agiworkforce_protocol::models::SimplePermissionProfile as PermissionProfile;
 use agiworkforce_protocol::permissions::FileSystemSandboxPolicy;
 use agiworkforce_protocol::permissions::NetworkSandboxPolicy;
 use agiworkforce_protocol::protocol::SandboxPolicy;
@@ -91,18 +91,14 @@ pub struct SandboxExecRequest {
 /// This keeps call sites self-documenting when several fields are optional.
 pub struct SandboxTransformRequest<'a> {
     pub command: SandboxCommand,
-    pub policy: &'a SandboxPolicy,
-    pub file_system_policy: &'a FileSystemSandboxPolicy,
-    pub network_policy: NetworkSandboxPolicy,
+    pub permissions: &'a agiworkforce_protocol::models::PermissionProfile,
     pub sandbox: SandboxType,
     pub enforce_managed_network: bool,
     // TODO(viyatb): Evaluate switching this to Option<Arc<NetworkProxy>>
     // to make shared ownership explicit across runtime/sandbox plumbing.
     pub network: Option<&'a NetworkProxy>,
     pub sandbox_policy_cwd: &'a Path,
-    #[cfg(target_os = "macos")]
-    pub macos_seatbelt_profile_extensions: Option<&'a MacOsSeatbeltProfileExtensions>,
-    pub agiworkforce_linux_sandbox_exe: Option<&'a PathBuf>,
+    pub agiworkforce_linux_sandbox_exe: Option<&'a Path>,
     pub use_legacy_landlock: bool,
     pub windows_sandbox_level: WindowsSandboxLevel,
     pub windows_sandbox_private_desktop: bool,
@@ -128,6 +124,12 @@ impl std::fmt::Display for SandboxTransformError {
 }
 
 impl std::error::Error for SandboxTransformError {}
+
+impl From<SandboxTransformError> for agiworkforce_protocol::error::AgiworkforceErr {
+    fn from(err: SandboxTransformError) -> Self {
+        agiworkforce_protocol::error::AgiworkforceErr::Fatal(err.to_string())
+    }
+}
 
 #[derive(Default)]
 pub struct SandboxManager;
@@ -172,22 +174,20 @@ impl SandboxManager {
     ) -> Result<SandboxExecRequest, SandboxTransformError> {
         let SandboxTransformRequest {
             mut command,
-            policy,
-            file_system_policy,
-            network_policy,
+            permissions,
             sandbox,
             enforce_managed_network,
             network,
             sandbox_policy_cwd,
-            #[cfg(target_os = "macos")]
-            macos_seatbelt_profile_extensions,
             agiworkforce_linux_sandbox_exe,
             use_legacy_landlock,
             windows_sandbox_level,
             windows_sandbox_private_desktop,
         } = request;
-        #[cfg(not(target_os = "macos"))]
-        let macos_seatbelt_profile_extensions = None;
+        let (file_system_policy, network_policy) = permissions.to_runtime_permissions();
+        let base_sandbox_policy = permissions
+            .to_legacy_sandbox_policy(sandbox_policy_cwd)
+            .unwrap_or(SandboxPolicy::DangerFullAccess);
         let additional_permissions = command.additional_permissions.take();
         let EffectiveSandboxPermissions {
             sandbox_policy: effective_policy,
@@ -196,12 +196,12 @@ impl SandboxManager {
             #[cfg(not(target_os = "macos"))]
                 macos_seatbelt_profile_extensions: _,
         } = EffectiveSandboxPermissions::new(
-            policy,
-            macos_seatbelt_profile_extensions,
+            &base_sandbox_policy,
+            None,
             additional_permissions.as_ref(),
         );
         let effective_file_system_policy = effective_file_system_sandbox_policy(
-            file_system_policy,
+            &file_system_policy,
             additional_permissions.as_ref(),
         );
         let effective_network_policy =
