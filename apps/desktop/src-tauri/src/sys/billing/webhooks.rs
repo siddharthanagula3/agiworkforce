@@ -572,26 +572,31 @@ impl WebhookHandler {
     }
 
     pub async fn retry_failed_events(&self, max_retries: i32) -> Result<()> {
-        let db = self
-            .db
-            .lock()
-            .map_err(|_| anyhow!("Failed to lock database"))?;
+        // FIX-032: load the candidate event list inside an inner scope so the
+        // std::sync::MutexGuard is provably dropped before the per-event
+        // `.await` below. Previously this used `drop(db)` for the same end
+        // but clippy's await_holding_lock can't always model explicit drops,
+        // and the goal is to keep that lint enforced going forward.
+        let events: Vec<(String, String)> = {
+            let db = self
+                .db
+                .lock()
+                .map_err(|_| anyhow!("Failed to lock database"))?;
 
-        let mut stmt = db.prepare(
-            "SELECT stripe_event_id, payload FROM billing_webhook_events
-             WHERE processed = 0 AND retry_count < ?1
-             ORDER BY created_at ASC
-             LIMIT 10",
-        )?;
+            let mut stmt = db.prepare(
+                "SELECT stripe_event_id, payload FROM billing_webhook_events
+                 WHERE processed = 0 AND retry_count < ?1
+                 ORDER BY created_at ASC
+                 LIMIT 10",
+            )?;
 
-        let events: Vec<(String, String)> = stmt
-            .query_map(rusqlite::params![max_retries], |row| {
-                Ok((row.get(0)?, row.get(1)?))
-            })?
-            .collect::<Result<Vec<_>, rusqlite::Error>>()?;
-
-        drop(stmt);
-        drop(db);
+            let rows = stmt
+                .query_map(rusqlite::params![max_retries], |row| {
+                    Ok((row.get(0)?, row.get(1)?))
+                })?
+                .collect::<Result<Vec<_>, rusqlite::Error>>()?;
+            rows
+        };
 
         for (event_id, payload) in events {
             // Retry by directly parsing and processing the stored event payload,
