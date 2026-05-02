@@ -19,7 +19,12 @@ mod sanitizer;
 pub use local::LocalSecretsBackend;
 pub use sanitizer::redact_secrets;
 
-const KEYRING_SERVICE: &str = "codex";
+const KEYRING_SERVICE: &str = "agiworkforce";
+
+/// Pre-rebrand keyring service name that we still read from for one
+/// migration window so users with existing "codex" entries don't lose their
+/// secrets. Writes always go to [`KEYRING_SERVICE`].
+const LEGACY_KEYRING_SERVICE: &str = "codex";
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SecretName(String);
@@ -178,6 +183,10 @@ pub(crate) fn compute_keyring_account(agiworkforce_home: &Path) -> String {
 
 pub(crate) fn keyring_service() -> &'static str {
     KEYRING_SERVICE
+}
+
+pub(crate) fn legacy_keyring_service() -> &'static str {
+    LEGACY_KEYRING_SERVICE
 }
 
 #[cfg(test)]
