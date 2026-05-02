@@ -32,6 +32,7 @@ use super::SecretScope;
 use super::SecretsBackend;
 use super::compute_keyring_account;
 use super::keyring_service;
+use super::legacy_keyring_service;
 
 const SECRETS_VERSION: u8 = 1;
 const LOCAL_SECRETS_FILENAME: &str = "local.age";
@@ -163,20 +164,39 @@ impl LocalSecretsBackend {
             .load(keyring_service(), &account)
             .map_err(|err| anyhow::anyhow!(err.message()))
             .with_context(|| format!("failed to load secrets key from keyring for {account}"))?;
-        match loaded {
-            Some(existing) => Ok(SecretString::from(existing)),
-            None => {
-                // Generate a high-entropy key and persist it in the OS keyring.
-                // This keeps secrets out of plaintext config while remaining
-                // fully local/offline for the MVP.
-                let generated = generate_passphrase()?;
-                self.keyring_store
-                    .save(keyring_service(), &account, generated.expose_secret())
-                    .map_err(|err| anyhow::anyhow!(err.message()))
-                    .context("failed to persist secrets key in keyring")?;
-                Ok(generated)
-            }
+        if let Some(existing) = loaded {
+            return Ok(SecretString::from(existing));
         }
+
+        // FIX-046 migration: before generating a brand-new key, look under the
+        // pre-rebrand "codex" service name. Users upgrading from an older
+        // build still have their passphrase there — promote it to the new
+        // service name so subsequent loads don't regenerate the key (which
+        // would orphan the existing encrypted secrets file).
+        let legacy = self
+            .keyring_store
+            .load(legacy_keyring_service(), &account)
+            .map_err(|err| anyhow::anyhow!(err.message()))
+            .with_context(|| {
+                format!("failed to load legacy secrets key from keyring for {account}")
+            })?;
+        if let Some(existing) = legacy {
+            self.keyring_store
+                .save(keyring_service(), &account, &existing)
+                .map_err(|err| anyhow::anyhow!(err.message()))
+                .context("failed to migrate legacy secrets key into renamed keyring service")?;
+            return Ok(SecretString::from(existing));
+        }
+
+        // Generate a high-entropy key and persist it in the OS keyring.
+        // This keeps secrets out of plaintext config while remaining
+        // fully local/offline for the MVP.
+        let generated = generate_passphrase()?;
+        self.keyring_store
+            .save(keyring_service(), &account, generated.expose_secret())
+            .map_err(|err| anyhow::anyhow!(err.message()))
+            .context("failed to persist secrets key in keyring")?;
+        Ok(generated)
     }
 }
 
@@ -406,6 +426,55 @@ mod tests {
             .collect();
         assert_eq!(filenames, vec![LOCAL_SECRETS_FILENAME.to_string()]);
         assert_eq!(backend.get(&scope, &name)?, Some("two".to_string()));
+        Ok(())
+    }
+
+    /// FIX-046: existing users have their passphrase stored under the legacy
+    /// "codex" service name. The first read after upgrade must find it,
+    /// promote it to the new "agiworkforce" service name, and successfully
+    /// decrypt the existing secrets file.
+    #[test]
+    fn legacy_codex_keyring_entry_is_promoted_on_first_read() -> Result<()> {
+        let agiworkforce_home = tempfile::tempdir().expect("tempdir");
+        let account = compute_keyring_account(agiworkforce_home.path());
+
+        // Pre-seed the keyring with a passphrase under the legacy service
+        // name and write a secrets file encrypted with that passphrase.
+        let legacy_keyring = Arc::new(MockKeyringStore::default());
+        let legacy_passphrase = generate_passphrase()?;
+        legacy_keyring
+            .save(
+                legacy_keyring_service(),
+                &account,
+                legacy_passphrase.expose_secret(),
+            )
+            .map_err(|err| anyhow::anyhow!(err.message()))?;
+
+        let backend =
+            LocalSecretsBackend::new(agiworkforce_home.path().to_path_buf(), legacy_keyring.clone());
+        let scope = SecretScope::Global;
+        let name = SecretName::new("LEGACY_SECRET")?;
+        backend.set(&scope, &name, "preserved-across-rename")?;
+
+        // Sanity check: the entry now lives under the new service name (the
+        // first set() through `load_or_create_passphrase` should have
+        // promoted it).
+        let promoted = legacy_keyring
+            .load(keyring_service(), &account)
+            .map_err(|err| anyhow::anyhow!(err.message()))?;
+        let expected_passphrase: &str = legacy_passphrase.expose_secret();
+        assert_eq!(
+            promoted.as_deref(),
+            Some(expected_passphrase),
+            "legacy passphrase must be copied verbatim to the new service name"
+        );
+
+        // And the secrets file written with the legacy passphrase is still
+        // readable.
+        assert_eq!(
+            backend.get(&scope, &name)?,
+            Some("preserved-across-rename".to_string())
+        );
         Ok(())
     }
 }
