@@ -310,6 +310,12 @@ struct Cli {
     /// Pipe through `jq` for inspection in CI / dashboards.
     #[arg(long = "json-events")]
     json_events: bool,
+
+    /// Demo mode: synthesizes a rate-limit error on the first model call so
+    /// the multi-model fallback chain visibly fires. For live demos and
+    /// integration tests where you don't want to wait for a real 429.
+    #[arg(long)]
+    demo: bool,
 }
 
 /// Effort level presets that bundle max_turns + max_tokens + temperature.
@@ -821,6 +827,7 @@ async fn main() -> Result<()> {
                 if chain.primaries.len() > 1 {
                     session.fallback_chain = Some(chain);
                 }
+                session.demo_force_rate_limit = cli.demo;
                 if *full_auto {
                     session.skip_permissions = true;
                     session.auto_approve_safe = true;
@@ -833,6 +840,25 @@ async fn main() -> Result<()> {
                     .managed_session_id()
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| "exec".to_string());
+                if cli.json_events {
+                    let sid = session_id.clone();
+                    session.on_fallback =
+                        Some(agent::FallbackSink(Box::new(move |from, to, kind| {
+                            agent_events::AgentEvent::FallbackTriggered {
+                                session_id: sid.clone(),
+                                from: from.to_string(),
+                                to: to.to_string(),
+                                reason: match kind {
+                                    "api_rate_limit" => "api_rate_limit",
+                                    "network" => "network",
+                                    "stream_disconnect" => "stream_disconnect",
+                                    "api_server_error" => "api_server_error",
+                                    _ => "transient",
+                                },
+                            }
+                            .emit_stdout();
+                        })));
+                }
                 let provider_label = format!("{:?}", session.provider).to_lowercase();
 
                 if json_events {
