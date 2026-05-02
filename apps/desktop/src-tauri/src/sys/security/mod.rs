@@ -16,6 +16,7 @@ pub mod guardrails;
 pub mod log_redaction;
 pub mod machine_key;
 pub mod master_password;
+pub mod master_password_encryption;
 pub mod oauth;
 pub mod permissions;
 pub mod policy;
@@ -57,6 +58,7 @@ pub use machine_key::{
     get_machine_id_hash, KeyPurpose,
 };
 pub use master_password::{MasterPasswordError, MasterPasswordManager, MasterPasswordStatus};
+pub use master_password_encryption::MasterPasswordEncryption;
 pub use oauth::{
     OAuthAuthorizationUrl, OAuthManager, OAuthProvider, OAuthTokenResult, OAuthUserInfo,
 };
