@@ -77,6 +77,9 @@ pub(crate) fn add_auth_headers(auth: &dyn AuthProvider, mut req: Request) -> Req
 }
 
 /// Simple bearer-token auth provider for use inside this crate.
+/// Kept for callers under feature-gated paths in the realtime/websocket
+/// endpoints that don't construct it from the default code path.
+#[allow(dead_code)]
 pub(crate) struct BearerToken(pub String);
 
 #[async_trait::async_trait]
