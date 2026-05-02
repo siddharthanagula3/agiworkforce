@@ -14,18 +14,11 @@ members = [
 # - `agiworkforce-cloud-tasks` depends on `agiworkforce-tui` so it has to ride
 #   along until the TUI port is finished.
 # - `crates/agiworkforce-utils` is a pre-existing exclusion (legacy stub).
-# - `agiworkforce-linux-sandbox` is mid-port — references symbols
-#   (`find_system_bwrap_in_path`, `disable_process_dumping`) that haven't
-#   been ported into agiworkforce-sandboxing / agiworkforce-process-hardening
-#   yet, plus a Sized-bound type error on a path. Runtime sandboxing falls
-#   back to the system bwrap; finish the port (FIX-021 follow-up) before
-#   re-enabling.
 exclude = [
   "crates/agiworkforce-utils",
   "crates/agiworkforce-tui",
   "crates/agiworkforce-tui_app_server",
   "crates/agiworkforce-cloud-tasks",
-  "crates/agiworkforce-linux-sandbox",
 ]
 resolver = "2"
 
