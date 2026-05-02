@@ -235,10 +235,13 @@ jobs:
           exit 1
 
   # ===========================================================================
-  # Cleanup Old Images
+  # Cleanup Old Images (advisory)
+  # FIX-040: continue-on-error is intentional here — this job *only* prunes
+  # old container image versions from GHCR. Failing it must not undo a
+  # successful deploy. The deploy + health-check steps above are blocking.
   # ===========================================================================
   cleanup:
-    name: Cleanup Old Images
+    name: Cleanup Old Images (advisory — not part of deploy)
     runs-on: ubuntu-latest
     needs: [build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
