@@ -6,6 +6,8 @@ import { useTerminal } from '../useTerminal';
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn(),
   listen: vi.fn(() => Promise.resolve(() => {})),
+  isTauri: false,
+  isTauriContext: () => false,
 }));
 
 import { invoke, listen } from '../../lib/tauri-mock';
