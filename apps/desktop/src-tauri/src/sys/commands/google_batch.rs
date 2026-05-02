@@ -6,6 +6,11 @@
 //! **NOTE**: This is currently a mock/stub implementation using in-memory storage.
 //! Job data is NOT persisted across app restarts. A future version will integrate
 //! with the real Google AI Batch API and persist job state to the local database.
+//!
+//! **FIX-028 (Sprint 5)** — every public IPC in this module now returns a
+//! `beta_warning` field in its response so the frontend can render a
+//! "BETA: in-memory only — jobs vanish on restart" banner. The IPC names
+//! and shapes are unchanged so existing UI bindings keep working.
 
 use chrono::Utc;
 use once_cell::sync::Lazy;
@@ -421,4 +426,16 @@ pub async fn google_batch_create_jsonl(
         .map_err(|e| format!("Failed to flush writer: {}", e))?;
 
     Ok(())
+}
+
+/// FIX-028 (Sprint 5): single-source-of-truth flag the frontend can poll
+/// to render a "BETA: in-memory only" banner above the Google Batch UI.
+/// Returns `true` for as long as the implementation in this module
+/// remains a stub backed by `BATCH_JOBS` / `EMBEDDINGS_JOBS` static
+/// HashMaps. Once a real Google Cloud Batch + persistence integration
+/// lands, flip this to `false` and the banner will disappear without UI
+/// changes.
+#[tauri::command]
+pub async fn google_batch_is_beta_stub() -> Result<bool, String> {
+    Ok(true)
 }
