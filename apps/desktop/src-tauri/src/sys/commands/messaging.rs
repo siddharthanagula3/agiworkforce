@@ -7,12 +7,52 @@ use crate::features::messaging::{
     UnifiedMessage, WhatsAppClient,
 };
 use crate::sys::commands::AppDatabase;
+use crate::sys::security::{KeyPurpose, MasterPasswordEncryption, MasterPasswordError};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+
+/// FIX-002 (Sprint 1): encrypt the per-platform credentials JSON blob
+/// with the master-password key when configured. When the user hasn't
+/// set up a master password yet we leave the value as the original JSON
+/// so the legacy decrypt path keeps working — that bridge is removed
+/// once the migration command runs.
+fn encrypt_messaging_credentials(
+    helper: &MasterPasswordEncryption,
+    credentials_json: &str,
+) -> Result<String, String> {
+    if !helper.is_configured() {
+        return Ok(credentials_json.to_string());
+    }
+    helper
+        .encrypt(KeyPurpose::Messaging, credentials_json)
+        .map_err(|e| match e {
+            MasterPasswordError::AppLocked => {
+                "Master password is set up but the vault is locked. Unlock the vault before connecting a messaging platform.".to_string()
+            }
+            other => format!("Failed to encrypt messaging credentials: {other}"),
+        })
+}
+
+/// FIX-002 (Sprint 1): try the master-password decrypt first; on failure
+/// (legacy plaintext JSON or no vault) return the stored value as-is so
+/// `serde_json::from_str` in the caller can parse it. New rows written by
+/// `encrypt_messaging_credentials` after master-password setup will go
+/// through the master-key branch.
+fn decrypt_messaging_credentials(
+    helper: &MasterPasswordEncryption,
+    stored: &str,
+) -> String {
+    if helper.is_configured() && helper.is_unlocked() {
+        if let Ok(plaintext) = helper.decrypt(KeyPurpose::Messaging, stored) {
+            return plaintext;
+        }
+    }
+    stored.to_string()
+}
 
 /// Shared state for multi-channel messaging connections
 pub struct MessagingState {
@@ -72,6 +112,7 @@ pub struct ConnectTeamsRequest {
 pub async fn connect_slack(
     request: ConnectSlackRequest,
     db: State<'_, AppDatabase>,
+    encryption: State<'_, MasterPasswordEncryption>,
 ) -> Result<MessagingConnection, String> {
     let config = SlackConfig {
         bot_token: request.bot_token.clone(),
@@ -84,14 +125,14 @@ pub async fn connect_slack(
     let connection_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp();
 
-    // TODO: SECURITY — Credentials should be encrypted via SecretManager before storage.
-    // Currently stored as plaintext JSON. See FIX-R10.
+    // FIX-002 (Sprint 1): encrypt the credentials JSON before INSERT.
     let credentials_json = serde_json::json!({
         "bot_token": request.bot_token,
         "app_token": request.app_token,
         "signing_secret": request.signing_secret,
     })
     .to_string();
+    let credentials_value = encrypt_messaging_credentials(encryption.inner(), &credentials_json)?;
 
     db.connection()?
         .execute(
@@ -104,7 +145,7 @@ pub async fn connect_slack(
                 "slack",
                 request.workspace_id,
                 request.workspace_name,
-                credentials_json,
+                credentials_value,
                 1,
                 now,
             ],
@@ -127,6 +168,7 @@ pub async fn connect_slack(
 pub async fn connect_whatsapp(
     request: ConnectWhatsAppRequest,
     db: State<'_, AppDatabase>,
+    encryption: State<'_, MasterPasswordEncryption>,
 ) -> Result<MessagingConnection, String> {
     WhatsAppClient::new(
         request.phone_number_id.clone(),
@@ -137,14 +179,14 @@ pub async fn connect_whatsapp(
     let connection_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp();
 
-    // TODO: SECURITY — Credentials should be encrypted via SecretManager before storage.
-    // Currently stored as plaintext JSON. See FIX-R10.
+    // FIX-002 (Sprint 1): encrypt the credentials JSON before INSERT.
     let credentials_json = serde_json::json!({
         "phone_number_id": request.phone_number_id,
         "access_token": request.access_token,
         "verify_token": request.verify_token,
     })
     .to_string();
+    let credentials_value = encrypt_messaging_credentials(encryption.inner(), &credentials_json)?;
 
     db.connection()?
         .execute(
@@ -155,7 +197,7 @@ pub async fn connect_whatsapp(
                 connection_id,
                 request.user_id,
                 "whatsapp",
-                credentials_json,
+                credentials_value,
                 1,
                 now,
             ],
@@ -178,6 +220,7 @@ pub async fn connect_whatsapp(
 pub async fn connect_teams(
     request: ConnectTeamsRequest,
     db: State<'_, AppDatabase>,
+    encryption: State<'_, MasterPasswordEncryption>,
 ) -> Result<MessagingConnection, String> {
     let config = TeamsConfig {
         tenant_id: request.tenant_id.clone(),
@@ -196,14 +239,14 @@ pub async fn connect_teams(
     let connection_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp();
 
-    // TODO: SECURITY — Credentials should be encrypted via SecretManager before storage.
-    // Currently stored as plaintext JSON. See FIX-R10.
+    // FIX-002 (Sprint 1): encrypt the credentials JSON before INSERT.
     let credentials_json = serde_json::json!({
         "tenant_id": request.tenant_id,
         "client_id": request.client_id,
         "client_secret": request.client_secret,
     })
     .to_string();
+    let credentials_value = encrypt_messaging_credentials(encryption.inner(), &credentials_json)?;
 
     db.connection()?
         .execute(
@@ -216,7 +259,7 @@ pub async fn connect_teams(
                 "teams",
                 Some(request.tenant_id.clone()),
                 request.workspace_name,
-                credentials_json,
+                credentials_value,
                 1,
                 now,
             ],
@@ -241,8 +284,9 @@ pub async fn send_message(
     channel_id: String,
     text: String,
     db: State<'_, AppDatabase>,
+    encryption: State<'_, MasterPasswordEncryption>,
 ) -> Result<SendMessageResponse, String> {
-    let (platform, credentials, user_id): (String, String, String) = {
+    let (platform, stored_credentials, user_id): (String, String, String) = {
         let conn = db.connection()?;
         conn.query_row(
             "SELECT platform, credentials, user_id FROM messaging_connections WHERE id = ?1 AND is_active = 1",
@@ -251,6 +295,12 @@ pub async fn send_message(
         )
         .map_err(|e| format!("Connection not found: {}", e))?
     };
+
+    // FIX-002 (Sprint 1): decrypt the stored credentials blob via the
+    // master-password vault when configured + unlocked; legacy plaintext
+    // rows pass through unchanged so `serde_json::from_str` below still
+    // parses them.
+    let credentials = decrypt_messaging_credentials(encryption.inner(), &stored_credentials);
 
     let platform = MessagingPlatform::from_str(&platform)
         .ok_or_else(|| format!("Invalid platform: {}", platform))?;
