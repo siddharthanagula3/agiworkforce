@@ -24,6 +24,7 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock, writabl
 
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn(),
+  isTauri: false,
   isTauriContext: vi.fn(() => false),
 }));
 
