@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../types/supabase';
+import { invoke, isTauri } from './tauri-mock';
 
 const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
 const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
@@ -19,15 +20,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
   // import this module, preventing any LLM streaming from ever starting.
 }
 
-// Derive a symmetric key from a stable per-device secret.
-// We use a combination of the app's origin + a fixed salt.
-// NOTE: This is not perfect (anyone with source can reproduce the derivation),
-// but it protects against static file exfiltration and naive localStorage dumps.
-let cachedKey: CryptoKey | null = null;
+// FIX-004 (Sprint 1): in Tauri, persist Supabase auth tokens through the
+// `supabase_token_*` IPCs which encrypt with the master-password vault.
+// In the web build, fall back to plain localStorage — the tokens are only
+// as protected as the browser session anyway, and the previous "encryption"
+// in Tauri was theatre because the key was reproducible from source.
+//
+// One-shot migration path: tauriStorage.getItem first checks the new IPC
+// store. If empty AND a localStorage value exists from the pre-FIX-004
+// build, it decrypts the legacy ciphertext (or accepts plaintext JSON),
+// promotes it into the IPC store via setItem, and removes the
+// localStorage entry. After the first read each key is fully migrated.
 
-async function deriveStorageKey(): Promise<CryptoKey> {
-  if (cachedKey) return cachedKey;
-
+let legacyKey: CryptoKey | null = null;
+async function deriveLegacyStorageKey(): Promise<CryptoKey> {
+  if (legacyKey) return legacyKey;
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode('agiworkforce-storage-v1-' + window.location.hostname),
@@ -47,61 +54,89 @@ async function deriveStorageKey(): Promise<CryptoKey> {
     false,
     ['encrypt', 'decrypt'],
   );
-
-  cachedKey = key;
+  legacyKey = key;
   return key;
 }
 
-async function encryptValue(value: string): Promise<string> {
-  const key = await deriveStorageKey();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(value);
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-  // Pack iv + ciphertext as base64
-  const combined = new Uint8Array(iv.byteLength + ciphertext.byteLength);
-  combined.set(iv, 0);
-  combined.set(new Uint8Array(ciphertext), iv.byteLength);
-  return btoa(String.fromCharCode(...combined));
-}
-
-async function decryptValue(stored: string): Promise<string> {
-  // If it looks like plaintext JSON (Supabase session data), return as-is (migration path)
+async function decryptLegacyValue(stored: string): Promise<string | null> {
   if (stored.startsWith('{') || stored.startsWith('"') || stored.startsWith('[')) {
     return stored;
   }
-
   try {
-    const key = await deriveStorageKey();
+    const key = await deriveLegacyStorageKey();
     const combined = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0));
     const iv = combined.slice(0, 12);
     const ciphertext = combined.slice(12);
     const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
     return new TextDecoder().decode(decrypted);
   } catch {
-    // Not plaintext and decryption failed — corrupted ciphertext
-    console.warn('[supabase] Removing corrupted encrypted value from localStorage');
-    return ''; // Supabase will treat empty as no session and trigger re-auth
+    return null;
   }
 }
 
-// localStorage-based storage adapter for Supabase auth with AES-GCM encryption.
-// Using localStorage instead of system keyring to avoid OS permission prompts.
-// Values are encrypted before write and decrypted on read to protect against
-// static file exfiltration and naive localStorage dumps.
-const secureStorage = {
+const tauriStorage = {
   getItem: async (key: string): Promise<string | null> => {
-    const stored = localStorage.getItem(key);
-    if (!stored) return null;
-    return decryptValue(stored);
+    try {
+      const value = await invoke<string | null>('supabase_token_get', { key });
+      if (value !== null) return value;
+    } catch (err) {
+      // Most likely: vault is locked or master password not configured.
+      // Surface as null so Supabase JS treats it as "no session" and
+      // re-auth triggers; the unlock UI can then prompt for the password.
+      console.warn('[supabase] vault read failed for', key, err);
+      return null;
+    }
+
+    // Legacy migration: the pre-FIX-004 build stored these in localStorage
+    // with a public-derivable key. Promote that single time, then forget.
+    const legacy = localStorage.getItem(key);
+    if (!legacy) return null;
+    const plaintext = await decryptLegacyValue(legacy);
+    if (plaintext === null) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    try {
+      await invoke<void>('supabase_token_set', { key, value: plaintext });
+      localStorage.removeItem(key);
+      return plaintext;
+    } catch (err) {
+      console.warn('[supabase] vault migration write failed; leaving legacy value in place', err);
+      return plaintext;
+    }
   },
   setItem: async (key: string, value: string): Promise<void> => {
-    const encrypted = await encryptValue(value);
-    localStorage.setItem(key, encrypted);
+    try {
+      await invoke<void>('supabase_token_set', { key, value });
+    } catch (err) {
+      console.error('[supabase] vault write failed for', key, err);
+      throw err;
+    }
   },
   removeItem: async (key: string): Promise<void> => {
+    try {
+      await invoke<void>('supabase_token_remove', { key });
+    } catch (err) {
+      console.warn('[supabase] vault remove failed for', key, err);
+    }
     localStorage.removeItem(key);
   },
 };
+
+const webStorage = {
+  getItem: async (key: string): Promise<string | null> =>
+    Promise.resolve(localStorage.getItem(key)),
+  setItem: async (key: string, value: string): Promise<void> => {
+    localStorage.setItem(key, value);
+    return Promise.resolve();
+  },
+  removeItem: async (key: string): Promise<void> => {
+    localStorage.removeItem(key);
+    return Promise.resolve();
+  },
+};
+
+const secureStorage = isTauri ? tauriStorage : webStorage;
 
 // Use a placeholder URL when env vars are missing so createClient doesn't throw
 // at module load time (empty string is rejected by the Supabase SDK).
