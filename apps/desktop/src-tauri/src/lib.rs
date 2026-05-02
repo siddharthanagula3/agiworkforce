@@ -318,14 +318,30 @@ pub fn run() {
             tracing::info!("SessionState initialized");
 
             // Master Password state for SECSYS-001 security enhancement
+            // FIX-001 / FIX-002 / FIX-004: also publish a `MasterPasswordEncryption`
+            // wrapper so credential-storage IPC handlers can grab a single
+            // injected helper instead of re-doing AES-GCM boilerplate per call.
+            // Both states share the same `Arc<Mutex<MasterPasswordManager>>`,
+            // so unlock/lock/migration progress is reflected everywhere.
             match MasterPasswordState::new(db_conn_arc.clone()) {
                 Ok(master_password_state) => {
+                    let encryption = crate::sys::security::MasterPasswordEncryption::new(
+                        master_password_state.manager.clone(),
+                    );
                     app.manage(master_password_state);
-                    tracing::info!("MasterPasswordState initialized");
+                    app.manage(encryption);
+                    tracing::info!(
+                        "MasterPasswordState + MasterPasswordEncryption initialized"
+                    );
                 }
                 Err(e) => {
                     tracing::warn!("Failed to initialize MasterPasswordState: {}. Master password features will be unavailable.", e);
-                    app.manage(MasterPasswordState::new_degraded());
+                    let degraded = MasterPasswordState::new_degraded();
+                    let encryption = crate::sys::security::MasterPasswordEncryption::new(
+                        degraded.manager.clone(),
+                    );
+                    app.manage(degraded);
+                    app.manage(encryption);
                 }
             }
 
