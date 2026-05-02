@@ -153,6 +153,11 @@ debug/
 *.crt
 *.p12
 *.pfx
+# Test fixtures — these are self-signed certs used only by unit
+# tests for the custom-CA loader. Safe to commit; do not contain
+# any production secrets.
+!crates/agiworkforce-client/tests/fixtures/*.pem
+!crates/agiworkforce-client/tests/fixtures/*.key
 
 # --- Tauri update signing keys (never commit private keys) ---
 apps/desktop/src-tauri/tauri-signing
