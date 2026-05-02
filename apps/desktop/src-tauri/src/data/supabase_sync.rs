@@ -213,33 +213,105 @@ impl SupabaseSyncClient {
         Ok(())
     }
 
-    /// Bulk sync multiple conversations and their messages.
+    /// FIX-030 (Sprint 5): Supabase REST upsert in batches of up to
+    /// `BATCH_SIZE` rows. The previous implementation issued one POST per
+    /// row, turning a 10 000-row sync into 10 000 round-trips. Now a
+    /// 10 000-row sync becomes ~10 round-trips, each with the
+    /// `Prefer: resolution=merge-duplicates` header set once.
+    ///
+    /// Each chunk gets up to `MAX_RETRIES` attempts with exponential
+    /// backoff. A whole chunk that still fails counts as failed for every
+    /// row in that chunk (best-effort sync — SQLite remains the source of
+    /// truth, so no data loss occurs from a failed batch).
     pub async fn bulk_sync(
         &self,
         conversations: &[Conversation],
         messages: &[Message],
     ) -> BulkSyncResult {
-        let mut conv_ok: usize = 0;
-        let mut conv_err: usize = 0;
-        let mut msg_ok: usize = 0;
-        let mut msg_err: usize = 0;
+        const BATCH_SIZE: usize = 1000;
 
-        for conv in conversations {
-            match self.sync_conversation(conv).await {
-                Ok(()) => conv_ok += 1,
+        let Some((jwt, user_uuid)) = Self::get_auth() else {
+            warn!("bulk_sync: not authenticated — skipping");
+            return BulkSyncResult {
+                conversations_synced: 0,
+                conversations_failed: conversations.len(),
+                messages_synced: 0,
+                messages_failed: messages.len(),
+            };
+        };
+
+        let mut conv_ok = 0usize;
+        let mut conv_err = 0usize;
+        let mut msg_ok = 0usize;
+        let mut msg_err = 0usize;
+
+        for chunk in conversations.chunks(BATCH_SIZE) {
+            let payload: Vec<SupabaseConversation> = chunk
+                .iter()
+                .map(|c| SupabaseConversation {
+                    id: Self::conversation_cloud_id(&user_uuid, c.id).to_string(),
+                    user_id: user_uuid.clone(),
+                    title: Some(c.title.clone()),
+                    model: None,
+                    provider: None,
+                    created_at: c.created_at.to_rfc3339(),
+                    updated_at: c.updated_at.to_rfc3339(),
+                    message_count: 0,
+                    source: "desktop".to_string(),
+                    metadata: serde_json::json!({"local_id": c.id}),
+                })
+                .collect();
+
+            match self
+                .post_batch_with_retry("conversations", &jwt, &payload)
+                .await
+            {
+                Ok(()) => conv_ok += chunk.len(),
                 Err(e) => {
-                    warn!("Bulk sync: conversation {} failed: {}", conv.id, e);
-                    conv_err += 1;
+                    warn!(
+                        "bulk_sync: conversation batch of {} failed: {}",
+                        chunk.len(),
+                        e
+                    );
+                    conv_err += chunk.len();
                 }
             }
         }
 
-        for msg in messages {
-            match self.sync_message(msg).await {
-                Ok(()) => msg_ok += 1,
+        for chunk in messages.chunks(BATCH_SIZE) {
+            let payload: Vec<SupabaseMessage> = chunk
+                .iter()
+                .map(|m| SupabaseMessage {
+                    id: Self::message_cloud_id(&user_uuid, m.id).to_string(),
+                    conversation_id: Self::conversation_cloud_id(&user_uuid, m.conversation_id)
+                        .to_string(),
+                    user_id: user_uuid.clone(),
+                    role: m.role.as_str().to_string(),
+                    content: m.content.clone(),
+                    model: m.model.clone(),
+                    provider: m.provider.clone(),
+                    token_count: m.tokens,
+                    cost: m.cost,
+                    created_at: m.created_at.to_rfc3339(),
+                    metadata: serde_json::json!({
+                        "local_id": m.id,
+                        "local_conversation_id": m.conversation_id,
+                    }),
+                })
+                .collect();
+
+            match self
+                .post_batch_with_retry("messages", &jwt, &payload)
+                .await
+            {
+                Ok(()) => msg_ok += chunk.len(),
                 Err(e) => {
-                    warn!("Bulk sync: message {} failed: {}", msg.id, e);
-                    msg_err += 1;
+                    warn!(
+                        "bulk_sync: message batch of {} failed: {}",
+                        chunk.len(),
+                        e
+                    );
+                    msg_err += chunk.len();
                 }
             }
         }
@@ -250,6 +322,68 @@ impl SupabaseSyncClient {
             messages_synced: msg_ok,
             messages_failed: msg_err,
         }
+    }
+
+    /// POST a JSON array to a Supabase REST endpoint with
+    /// `Prefer: resolution=merge-duplicates` (upsert semantics) and
+    /// exponential-backoff retry. Returns `Ok(())` once the chunk is
+    /// confirmed accepted, or the last error after `MAX_RETRIES`.
+    async fn post_batch_with_retry<T: Serialize>(
+        &self,
+        table: &str,
+        jwt: &str,
+        payload: &[T],
+    ) -> Result<(), String> {
+        const MAX_RETRIES: usize = 3;
+        let url = format!("{}/rest/v1/{table}", self.supabase_url);
+        let mut delay = std::time::Duration::from_millis(500);
+        let mut last_err = String::new();
+
+        for attempt in 0..MAX_RETRIES {
+            let res = self
+                .http_client
+                .post(&url)
+                .header("apikey", &self.supabase_anon_key)
+                .header("Authorization", format!("Bearer {jwt}"))
+                .header("Content-Type", "application/json")
+                .header("Prefer", "resolution=merge-duplicates")
+                .json(payload)
+                .send()
+                .await;
+
+            match res {
+                Ok(r) if r.status().is_success() => {
+                    if attempt > 0 {
+                        debug!(
+                            "supabase {table} batch succeeded on retry {} ({} rows)",
+                            attempt,
+                            payload.len()
+                        );
+                    }
+                    return Ok(());
+                }
+                Ok(r) => {
+                    let status = r.status();
+                    let body = r.text().await.unwrap_or_default();
+                    last_err = format!("HTTP {status}: {body}");
+                    // 4xx other than 408/429 are not retryable — schema or
+                    // auth errors won't get better with a re-send.
+                    if status.is_client_error() && status.as_u16() != 408 && status.as_u16() != 429
+                    {
+                        return Err(last_err);
+                    }
+                }
+                Err(e) => {
+                    last_err = format!("transport: {e}");
+                }
+            }
+
+            if attempt < MAX_RETRIES - 1 {
+                tokio::time::sleep(delay).await;
+                delay *= 2;
+            }
+        }
+        Err(last_err)
     }
 }
 
