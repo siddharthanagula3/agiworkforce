@@ -9,6 +9,10 @@
 // Core utilities
 export * from './signaling';
 
+// Secret-redacting logger facade (FIX-024)
+export { logger, redactSecrets } from './logger';
+export type { LogLevel } from './logger';
+
 // Formatting utilities
 export {
   formatDate,
