@@ -178,31 +178,82 @@ fn escape_glob_special_chars(path: &str) -> String {
     escaped
 }
 
+/// FIX-016 (Sprint 2): the previous implementation walked a substring
+/// blacklist via `path_lower.contains(blocked)`, which produced both
+/// false positives (`events.txt` blocked because it contained `.ent`-ish
+/// patterns is the canonical example) and false negatives (`.envrc`,
+/// `.kube/config`, `.netrc`, `id_rsa`, `.docker/config.json` weren't on
+/// the list at all). The new implementation compares **canonical path
+/// components** and per-component file names, so `.env` matches the
+/// directory `~/.env` and the file `~/.env` but not `~/dev/.envrc-prod`.
 pub(crate) fn is_blacklisted_path(path: &str) -> bool {
-    let path_lower = path.to_lowercase();
-    let blacklist = [
-        "c:\\windows\\system32",
-        "c:\\windows\\syswow64",
-        "c:\\program files",
-        "c:\\program files (x86)",
-        "/windows/system32",
-        "/program files",
+    let path = std::path::Path::new(path);
+
+    // Per-component basenames that are unsafe regardless of where they
+    // appear in the tree. Matches `.ssh/config` and `~/.ssh` but not
+    // `~/dev/.ssh-keys/notes.md`.
+    const BLOCKED_BASENAMES: &[&str] = &[
         ".ssh",
         ".aws",
         ".gnupg",
         ".env",
+        ".envrc",
+        ".netrc",
+        ".kube",
+        ".docker",
+        "id_rsa",
+        "id_ed25519",
+        "id_ecdsa",
+        "id_dsa",
         "credentials",
-        "/etc/passwd",
-        "/etc/shadow",
-        // Protect private key directories (but not macOS /private/ system prefix)
         "private_keys",
         "privatekeys",
-        "/private/etc/",
     ];
 
-    blacklist
-        .iter()
-        .any(|blocked| path_lower.contains(&blocked.to_lowercase()))
+    // Absolute path prefixes that must not be touched. Canonical paths on
+    // macOS resolve `/etc` → `/private/etc`; we list both forms.
+    const BLOCKED_PREFIXES: &[&str] = &[
+        "/etc/passwd",
+        "/etc/shadow",
+        "/etc/sudoers",
+        "/private/etc/passwd",
+        "/private/etc/shadow",
+        "/private/etc/sudoers",
+        "/private/etc/master.passwd",
+        "C:\\Windows\\System32",
+        "C:\\Windows\\SysWOW64",
+        "C:\\Program Files",
+        "C:\\Program Files (x86)",
+    ];
+
+    let path_str = path.to_string_lossy();
+    let path_str_for_prefix = path_str.as_ref();
+    if BLOCKED_PREFIXES.iter().any(|p| {
+        path_str_for_prefix == *p || path_str_for_prefix.starts_with(&format!("{p}/"))
+    }) {
+        return true;
+    }
+
+    let path_lower = path_str.to_lowercase();
+    if BLOCKED_PREFIXES.iter().any(|p| {
+        let lower = p.to_lowercase();
+        path_lower == lower || path_lower.starts_with(&format!("{lower}/"))
+    }) {
+        return true;
+    }
+
+    for component in path.components() {
+        let segment = component.as_os_str().to_string_lossy();
+        let segment_lower = segment.to_lowercase();
+        if BLOCKED_BASENAMES
+            .iter()
+            .any(|b| segment_lower == *b)
+        {
+            return true;
+        }
+    }
+
+    false
 }
 
 fn is_path_allowed(canonical_path: &str, allowed_dirs: &[PathBuf]) -> bool {
@@ -1339,6 +1390,55 @@ pub async fn fs_get_workspace_files(
     });
 
     Ok(files)
+}
+
+#[cfg(test)]
+mod fix_016_blacklist_tests {
+    //! FIX-016 (Sprint 2): pin the canonical-path-aware blacklist
+    //! semantics so a future refactor can't silently regress to substring
+    //! matching.
+    use super::is_blacklisted_path;
+
+    #[test]
+    fn blocks_exact_dotfile_basenames() {
+        assert!(is_blacklisted_path("/Users/me/.ssh"));
+        assert!(is_blacklisted_path("/Users/me/.ssh/config"));
+        assert!(is_blacklisted_path("/Users/me/.aws/credentials"));
+        assert!(is_blacklisted_path("/Users/me/.env"));
+        assert!(is_blacklisted_path("/Users/me/.netrc"));
+    }
+
+    #[test]
+    fn blocks_well_known_key_files_anywhere() {
+        assert!(is_blacklisted_path("/Users/me/projects/keys/id_rsa"));
+        assert!(is_blacklisted_path("/Users/me/.ssh/id_ed25519"));
+    }
+
+    #[test]
+    fn blocks_etc_and_private_etc_prefixes() {
+        assert!(is_blacklisted_path("/etc/passwd"));
+        assert!(is_blacklisted_path("/etc/shadow"));
+        assert!(is_blacklisted_path("/private/etc/passwd"));
+        assert!(is_blacklisted_path("/private/etc/master.passwd"));
+        assert!(is_blacklisted_path("/private/etc/sudoers"));
+    }
+
+    #[test]
+    fn does_not_match_substring_false_positives() {
+        // The pre-FIX-016 substring check would have flagged anything
+        // containing `.env` — including `.envrc-prod` and `development/.eslintrc`
+        // (no `.env` substring there, but `.environment` is a thing).
+        assert!(!is_blacklisted_path("/Users/me/dev/.envrc-prod"));
+        assert!(!is_blacklisted_path("/Users/me/dev/development/file.txt"));
+        assert!(!is_blacklisted_path("/Users/me/.environments/notes.md"));
+        assert!(!is_blacklisted_path("/Users/me/notes/credential-policy.md"));
+    }
+
+    #[test]
+    fn blocks_dotfile_dirs_with_trailing_slash_or_subpath() {
+        assert!(is_blacklisted_path("/Users/me/.docker/config.json"));
+        assert!(is_blacklisted_path("/Users/me/.kube/config"));
+    }
 }
 
 #[cfg(test)]

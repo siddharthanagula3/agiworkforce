@@ -95,9 +95,46 @@ pub struct GitDiff {
     pub diff_content: String,
 }
 
+/// FIX-013 (Sprint 2): every `path: String` argument crossing into a git
+/// operation goes through `validate_path_security` so symlinks, `..`
+/// traversal, and `/etc/passwd`-style targets fail loudly before libgit2
+/// touches the disk. Returns the canonical path as a String for callers
+/// that need to interpolate it into log lines.
+fn validate_git_path(path: &str) -> Result<String, String> {
+    let canonical = crate::sys::commands::file_ops::validate_path_security(path)?;
+    Ok(canonical.to_string_lossy().to_string())
+}
+
+const MAX_COMMIT_MESSAGE_BYTES: usize = 10 * 1024;
+
+/// FIX-013 (Sprint 2): bound commit messages and strip control characters
+/// other than the standard whitespace ones (\\n, \\r, \\t). git itself is
+/// tolerant of garbage, but anything that lands in our log/audit pipeline
+/// should be safe to echo back.
+fn sanitize_commit_message(message: &str) -> Result<String, String> {
+    if message.is_empty() {
+        return Err("Commit message must not be empty".to_string());
+    }
+    if message.len() > MAX_COMMIT_MESSAGE_BYTES {
+        return Err(format!(
+            "Commit message too long: {} bytes (max {MAX_COMMIT_MESSAGE_BYTES})",
+            message.len()
+        ));
+    }
+    if message.contains('\0') {
+        return Err("Commit message contains null bytes".to_string());
+    }
+    let cleaned: String = message
+        .chars()
+        .filter(|c| !c.is_control() || matches!(c, '\n' | '\r' | '\t'))
+        .collect();
+    Ok(cleaned)
+}
+
 #[tauri::command]
 pub async fn git_init(path: String) -> Result<String, String> {
     tracing::info!("Initializing Git repository at: {}", path);
+    let path = validate_git_path(&path)?;
 
     spawn_blocking(move || {
         Repository::init(&path)
@@ -111,6 +148,7 @@ pub async fn git_init(path: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn git_status(path: String) -> Result<GitStatus, String> {
     tracing::info!("Getting Git status for: {}", path);
+    let path = validate_git_path(&path)?;
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
@@ -200,12 +238,27 @@ pub async fn git_status(path: String) -> Result<GitStatus, String> {
 #[tauri::command]
 pub async fn git_add(path: String, files: Vec<String>) -> Result<String, String> {
     tracing::info!("Adding {} files to staging", files.len());
+    let path = validate_git_path(&path)?;
+
+    // FIX-013 (Sprint 2): validate every entry in `files` before we hand
+    // them to libgit2's index. The `.` shortcut is allowed verbatim; every
+    // other entry must canonicalize cleanly.
+    let mut validated_files = Vec::with_capacity(files.len());
+    for file in &files {
+        if file == "." {
+            validated_files.push(file.clone());
+        } else {
+            let _canonical = crate::sys::commands::file_ops::validate_path_security(file)
+                .map_err(|e| format!("git_add path '{file}' rejected: {e}"))?;
+            validated_files.push(file.clone());
+        }
+    }
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let mut index = repo.index().map_err(|e| e.message().to_string())?;
 
-        for file in &files {
+        for file in &validated_files {
             if file == "." {
                 index
                     .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
@@ -217,7 +270,7 @@ pub async fn git_add(path: String, files: Vec<String>) -> Result<String, String>
         }
 
         index.write().map_err(|e| e.message().to_string())?;
-        Ok(format!("Added {} files", files.len()))
+        Ok(format!("Added {} files", validated_files.len()))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -225,7 +278,9 @@ pub async fn git_add(path: String, files: Vec<String>) -> Result<String, String>
 
 #[tauri::command]
 pub async fn git_commit(path: String, message: String) -> Result<String, String> {
-    tracing::info!("Creating commit with message: {}", message);
+    let path = validate_git_path(&path)?;
+    let message = sanitize_commit_message(&message)?;
+    tracing::info!("Creating commit ({} bytes)", message.len());
 
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
