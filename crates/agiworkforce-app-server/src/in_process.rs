@@ -83,7 +83,7 @@ use agiworkforce_config::LoaderOverrides;
 use agiworkforce_config::ThreadConfigLoader;
 use agiworkforce_core::config::Config;
 use agiworkforce_exec_server::EnvironmentManager;
-use agiworkforce_feedback::AgiworkforceFeedback;
+use agiworkforce_feedback::AgiWorkforceFeedback;
 use agiworkforce_login::AuthManager;
 use agiworkforce_protocol::protocol::SessionSource;
 pub use agiworkforce_state::log_db::LogDbLayer;
@@ -123,7 +123,7 @@ pub struct InProcessStartArgs {
     /// Loader used to fetch typed thread config sources before a thread starts.
     pub thread_config_loader: Arc<dyn ThreadConfigLoader>,
     /// Feedback sink used by app-server/core telemetry and logs.
-    pub feedback: AgiworkforceFeedback,
+    pub feedback: AgiWorkforceFeedback,
     /// SQLite tracing layer used to flush recently emitted logs before feedback upload.
     pub log_db: Option<LogDbLayer>,
     /// Environment manager used by core execution and filesystem operations.
@@ -759,7 +759,7 @@ mod tests {
             loader_overrides: LoaderOverrides::default(),
             cloud_requirements: CloudRequirementsLoader::default(),
             thread_config_loader: Arc::new(agiworkforce_config::NoopThreadConfigLoader),
-            feedback: AgiworkforceFeedback::new(),
+            feedback: AgiWorkforceFeedback::new(),
             log_db: None,
             environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
             config_warnings: Vec::new(),

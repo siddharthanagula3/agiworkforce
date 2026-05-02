@@ -19,6 +19,7 @@ pub const HOOK_EVENT_NAMES_WITH_MATCHERS: &[&str] = &[
     "SessionStart",
 ];
 mod legacy_notify;
+mod list;
 mod registry;
 mod schema;
 mod types;
@@ -39,6 +40,9 @@ pub use events::user_prompt_submit::UserPromptSubmitOutcome;
 pub use events::user_prompt_submit::UserPromptSubmitRequest;
 pub use legacy_notify::legacy_notify_json;
 pub use legacy_notify::notify_hook;
+pub use list::HookListEntry;
+pub use list::HooksList;
+pub use list::list_hooks;
 pub use registry::Hooks;
 pub use registry::HooksConfig;
 pub use registry::command_from_argv;

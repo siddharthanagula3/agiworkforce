@@ -19,6 +19,10 @@ pub use process::combine_output_receivers;
 pub use process::ProcessHandle;
 /// Bundle of process handles plus split output and exit receivers returned by spawn helpers.
 pub use process::SpawnedProcess;
+/// Test-only driver-bag for constructing a stub [`SpawnedProcess`].
+pub use process::ProcessDriver;
+/// Test-only constructor that turns a [`ProcessDriver`] into a stub `SpawnedProcess`.
+pub use process::spawn_from_driver;
 /// Terminal size in character cells used for PTY spawn and resize operations.
 pub use process::TerminalSize;
 /// Backwards-compatible alias for ProcessHandle.
