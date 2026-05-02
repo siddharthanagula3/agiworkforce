@@ -8,21 +8,24 @@ use std::os::unix::ffi::OsStrExt;
 /// file. Public stub used by the linux-sandbox proxy-routing path that
 /// needs the same hardening before re-exec'ing under bwrap, separate
 /// from the pre_main_hardening() ctor that fires once at process start.
+///
+/// Returns `Ok(())` on success and the underlying io::Error otherwise so
+/// callers (e.g. linux-sandbox's harden_bridge_process) can propagate.
 #[cfg(any(target_os = "linux", target_os = "android"))]
-pub fn disable_process_dumping() {
+pub fn disable_process_dumping() -> std::io::Result<()> {
     let ret_code = unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) };
     if ret_code != 0 {
-        eprintln!(
-            "ERROR: prctl(PR_SET_DUMPABLE, 0) failed: {}",
-            std::io::Error::last_os_error()
-        );
+        return Err(std::io::Error::last_os_error());
     }
+    Ok(())
 }
 
 /// No-op fallback on non-Linux platforms — keeps the call site
 /// portable without #[cfg] gymnastics in callers.
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
-pub fn disable_process_dumping() {}
+pub fn disable_process_dumping() -> std::io::Result<()> {
+    Ok(())
+}
 
 /// This is designed to be called pre-main() (using `#[ctor::ctor]`) to perform
 /// various process hardening steps, such as
