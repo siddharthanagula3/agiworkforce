@@ -47,6 +47,18 @@ impl MasterPasswordEncryption {
             .unwrap_or(false)
     }
 
+    /// Returns whether the user has set up a master password. When this is
+    /// `false`, credential-storage call sites should fall back to
+    /// machine-key derivation for backwards compatibility — no vault has
+    /// been initialized yet.
+    pub fn is_configured(&self) -> bool {
+        self.manager
+            .lock()
+            .ok()
+            .and_then(|guard| guard.is_configured().ok())
+            .unwrap_or(false)
+    }
+
     /// Encrypt `plaintext` for the given purpose. Returns
     /// `base64(nonce || ciphertext)` so callers can store a single string.
     pub fn encrypt(

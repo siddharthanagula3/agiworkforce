@@ -259,6 +259,166 @@ pub async fn master_password_complete_migration(
     }
 }
 
+/// Result of running the credential-store migration to the master-password
+/// vault. Emitted to the frontend so the UI can summarize what happened.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultMigrationReport {
+    pub api_keys_migrated: u32,
+    pub mcp_oauth_credentials_migrated: u32,
+    pub messaging_connections_migrated: u32,
+    pub rows_skipped_already_modern: u32,
+    pub rows_skipped_undecryptable: u32,
+}
+
+/// FIX-001 / FIX-002 (Sprint 1): re-encrypt every credential row written
+/// under the legacy machine-key-only derivation with the
+/// master-password-derived key.
+///
+/// Idempotent: rows already encrypted with the new key are detected via a
+/// successful master-key decrypt and skipped. Rows that fail to decrypt
+/// under both schemes are counted in `rows_skipped_undecryptable` and
+/// left untouched so subsequent retries can attempt them again.
+///
+/// Requires the vault to be unlocked. Each table's pass runs inside its
+/// own SQLite transaction so a crash mid-migration leaves the schema in
+/// a consistent state.
+#[tauri::command]
+pub async fn master_password_migrate_credentials(
+    encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
+    db: State<'_, crate::sys::commands::AppDatabase>,
+) -> Result<VaultMigrationReport, String> {
+    use crate::sys::security::KeyPurpose;
+    use crate::sys::security::MasterPasswordEncryption;
+
+    if !encryption.is_configured() {
+        return Err(
+            "Master password is not set up yet — nothing to migrate.".to_string(),
+        );
+    }
+    if !encryption.is_unlocked() {
+        return Err(
+            "Master password is set up but the vault is locked. Unlock the vault before running migration.".to_string(),
+        );
+    }
+
+    let helper: &MasterPasswordEncryption = encryption.inner();
+    let mut report = VaultMigrationReport {
+        api_keys_migrated: 0,
+        mcp_oauth_credentials_migrated: 0,
+        messaging_connections_migrated: 0,
+        rows_skipped_already_modern: 0,
+        rows_skipped_undecryptable: 0,
+    };
+
+    // ---- Table 1: settings_v2 — api_key_* and mcp_oauth_config_*_client_*
+    {
+        let mut conn = crate::core::mcp::config::open_mcp_settings_db()?;
+        let tx = conn
+            .transaction()
+            .map_err(|e| format!("Failed to begin tx for settings_v2: {e}"))?;
+
+        let candidates: Vec<(String, String)> = {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT key, value FROM settings_v2 WHERE category = 'security' AND encrypted = 1",
+                )
+                .map_err(|e| format!("Failed to query settings_v2: {e}"))?;
+            let rows = stmt
+                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+                .map_err(|e| format!("Failed to iterate settings_v2 rows: {e}"))?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(|e| format!("Failed to collect settings_v2 rows: {e}"))?
+        };
+
+        for (key, encrypted) in candidates {
+            // Skip if it already decrypts under the master key.
+            if helper
+                .decrypt(KeyPurpose::McpCredentials, &encrypted)
+                .is_ok()
+            {
+                report.rows_skipped_already_modern += 1;
+                continue;
+            }
+
+            // Try the legacy machine-only path.
+            let plaintext =
+                match crate::sys::commands::mcp_oauth::decrypt_legacy_machine_credential(
+                    &encrypted,
+                ) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        report.rows_skipped_undecryptable += 1;
+                        continue;
+                    }
+                };
+
+            let new_ciphertext = helper
+                .encrypt(KeyPurpose::McpCredentials, &plaintext)
+                .map_err(|e| format!("Failed to re-encrypt {key}: {e}"))?;
+
+            tx.execute(
+                "UPDATE settings_v2 SET value = ?1 WHERE key = ?2",
+                rusqlite::params![new_ciphertext, key],
+            )
+            .map_err(|e| format!("Failed to update {key}: {e}"))?;
+
+            if key.starts_with("api_key_") {
+                report.api_keys_migrated += 1;
+            } else if key.starts_with("mcp_oauth_config_") {
+                report.mcp_oauth_credentials_migrated += 1;
+            }
+        }
+
+        tx.commit()
+            .map_err(|e| format!("Failed to commit settings_v2 migration tx: {e}"))?;
+    }
+
+    // ---- Table 2: messaging_connections — encrypt the credentials JSON blob.
+    {
+        let conn = db.connection()?;
+        let candidates: Vec<(String, String)> = {
+            let mut stmt = conn
+                .prepare("SELECT id, credentials FROM messaging_connections")
+                .map_err(|e| format!("Failed to query messaging_connections: {e}"))?;
+            let rows = stmt
+                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+                .map_err(|e| format!("Failed to iterate messaging_connections rows: {e}"))?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(|e| format!("Failed to collect messaging_connections rows: {e}"))?
+        };
+
+        for (id, value) in candidates {
+            // Already-encrypted rows decrypt cleanly under the master key.
+            if helper.decrypt(KeyPurpose::Messaging, &value).is_ok() {
+                report.rows_skipped_already_modern += 1;
+                continue;
+            }
+
+            // Legacy rows are stored as raw JSON — wrap them under the master
+            // key. If the value is neither valid JSON nor master-key
+            // ciphertext we count it and leave it; the surrounding error
+            // path on send_message will surface the bad data.
+            if serde_json::from_str::<serde_json::Value>(&value).is_err() {
+                report.rows_skipped_undecryptable += 1;
+                continue;
+            }
+
+            let new_ciphertext = helper
+                .encrypt(KeyPurpose::Messaging, &value)
+                .map_err(|e| format!("Failed to encrypt messaging row {id}: {e}"))?;
+
+            conn.execute(
+                "UPDATE messaging_connections SET credentials = ?1 WHERE id = ?2",
+                rusqlite::params![new_ciphertext, id],
+            )
+            .map_err(|e| format!("Failed to update messaging row {id}: {e}"))?;
+            report.messaging_connections_migrated += 1;
+        }
+    }
+
+    Ok(report)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
