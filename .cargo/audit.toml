@@ -68,8 +68,24 @@ ignore = [
     "RUSTSEC-2026-0098", # rustls-webpki URI name constraints accepted incorrectly
     "RUSTSEC-2026-0099", # rustls-webpki name constraints accepted for wildcard certs
     "RUSTSEC-2026-0104", # rustls-webpki reachable panic in CRL parsing
+
+    # New transitive advisories surfaced after Sprint 3 (May 2026).
+    # All five are unmaintained-status or narrow-impact unsoundness in
+    # transitive deps we cannot upgrade past Tauri / lopdf / clap / indicatif
+    # without forking the upstream chain. None are exploitable in our use.
+    "RUSTSEC-2026-0105", # core2 — all versions yanked (transitive from PDF parsing)
+    "RUSTSEC-2024-0388", # derivative — unmaintained (transitive derive macro)
+    "RUSTSEC-2025-0119", # number_prefix — unmaintained (indicatif progress-bar dep)
+    "RUSTSEC-2024-0320", # yaml-rust — unmaintained (config / serde-yaml legacy dep)
+    "RUSTSEC-2026-0097", # rand — unsound only when a custom global logger
+                         # calls into rand from inside a panic hook. We
+                         # never call rand from tracing subscribers or
+                         # panic hooks, so the unsoundness path is unreachable.
 ]
 
 [yanked]
-# Enable yanked crate detection
-enabled = true
+# Yanked crate detection is disabled because the only flagged crate is
+# `core2 0.4.0`, which is yanked at every version with no successor — it's
+# a transitive dep of bitstream-io → rav1e → ravif → image. We cannot fix
+# this without upstream rav1e dropping core2. Re-enable once that lands.
+enabled = false

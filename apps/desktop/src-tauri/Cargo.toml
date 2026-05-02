@@ -20,7 +20,12 @@ unused_qualifications = "allow"
 unused_results = "allow"
 
 [lints.clippy]
-await_holding_lock = "allow"
+# FIX-032 (Sprint 5): enforce that no std::sync::MutexGuard (or RwLockGuard)
+# is held across an await point. CI runs clippy with -D warnings, so this is
+# a blocking lint. If a hot async path genuinely needs sync locking, refactor
+# the lock scope into a block expression that returns the cloned data, or
+# switch to tokio::sync::Mutex.
+await_holding_lock = "warn"
 
 [dependencies]
 agiworkforce-sandbox-policy = { path = "../../../crates/sandbox-policy" }
