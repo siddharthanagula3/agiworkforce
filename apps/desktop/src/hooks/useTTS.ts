@@ -165,8 +165,12 @@ export function useTTS(): UseTTSReturn {
   useEffect(() => {
     return () => {
       if (isSupported) window.speechSynthesis.cancel();
-      // Also stop backend TTS
-      voiceTtsStop().catch(() => {});
+      // FIX-033 (Sprint 5): unmount-time TTS stop is best-effort — surface
+      // failures to the console instead of swallowing them silently so a
+      // dead TTS subsystem is at least diagnosable.
+      voiceTtsStop().catch((err: unknown) => {
+        console.warn('[useTTS] voiceTtsStop on unmount failed', err);
+      });
     };
   }, [isSupported]);
 

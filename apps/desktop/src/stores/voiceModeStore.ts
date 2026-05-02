@@ -332,7 +332,12 @@ export const useVoiceModeStore = create<VoiceModeState>()(
           // Fetch capabilities on open
           get()
             .fetchCapabilities()
-            .catch(() => {});
+            .catch((err: unknown) => {
+              // FIX-033 (Sprint 5): voice capability discovery is best-effort
+              // (we degrade to text mode if it fails), but the failure should
+              // still surface in the console so users can report it.
+              console.warn('[voiceMode] fetchCapabilities failed', err);
+            });
         },
 
         close: () => {
@@ -340,15 +345,20 @@ export const useVoiceModeStore = create<VoiceModeState>()(
 
           // Stop backend TTS if speaking
           if (get()._isSpeaking) {
-            voiceTtsStop().catch(() => {});
+            // FIX-033 (Sprint 5): swallow-and-log TTS stop failures so a
+            // dead/borked TTS subsystem doesn't block window-close, but the
+            // user still gets a console breadcrumb to triage from.
+            voiceTtsStop().catch((err: unknown) => {
+              console.warn('[voiceMode] voiceTtsStop on close failed', err);
+            });
           }
 
           // Clean up any active recording
           if (_recorder && _recorder.state !== 'inactive') {
             try {
               _recorder.stop();
-            } catch {
-              // ignore
+            } catch (err) {
+              console.warn('[voiceMode] recorder.stop on close failed', err);
             }
           }
           _mediaStream?.getTracks().forEach((t) => t.stop());
@@ -691,14 +701,17 @@ export const useVoiceModeStore = create<VoiceModeState>()(
 
           // Stop backend TTS if speaking
           if (_isSpeaking) {
-            voiceTtsStop().catch(() => {});
+            // FIX-033 (Sprint 5): see close() above — log instead of silent.
+            voiceTtsStop().catch((err: unknown) => {
+              console.warn('[voiceMode] voiceTtsStop on cancel failed', err);
+            });
           }
 
           if (_recorder && _recorder.state !== 'inactive') {
             try {
               _recorder.stop();
-            } catch {
-              // ignore
+            } catch (err) {
+              console.warn('[voiceMode] recorder.stop on cancel failed', err);
             }
           }
           _mediaStream?.getTracks().forEach((t) => t.stop());
