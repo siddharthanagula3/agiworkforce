@@ -56,6 +56,14 @@ pub enum KeyPurpose {
     CalendarCredentials,
     /// For encrypting cloud sync payloads
     CloudEncryption,
+    /// For encrypting Slack/WhatsApp/Teams credentials (FIX-002).
+    /// Single flat variant intentionally — all three platforms ride on the
+    /// same master-password-derived key; per-platform separation is theatre
+    /// when one master key controls every purpose anyway.
+    Messaging,
+    /// For encrypting Supabase auth tokens stored in the Tauri vault
+    /// instead of localStorage (FIX-004).
+    SupabaseAuth,
 }
 
 impl KeyPurpose {
@@ -70,6 +78,8 @@ impl KeyPurpose {
             KeyPurpose::EmailCredentials => "email_credentials",
             KeyPurpose::CalendarCredentials => "calendar_credentials",
             KeyPurpose::CloudEncryption => "cloud_encryption",
+            KeyPurpose::Messaging => "messaging",
+            KeyPurpose::SupabaseAuth => "supabase_auth",
         }
     }
 }
