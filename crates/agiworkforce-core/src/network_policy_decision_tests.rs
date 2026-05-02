@@ -1,5 +1,6 @@
 use super::*;
 use agiworkforce_network_proxy::BlockedRequest;
+use agiworkforce_network_proxy::NetworkDecisionSource;
 use agiworkforce_protocol::approvals::NetworkPolicyAmendment;
 use agiworkforce_protocol::approvals::NetworkPolicyRuleAction;
 use pretty_assertions::assert_eq;

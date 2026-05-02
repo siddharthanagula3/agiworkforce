@@ -14,47 +14,47 @@ use tracing::Span;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 #[derive(Clone, Debug)]
-pub struct AgiWorkforceHttpClient {
+pub struct AgiworkforceHttpClient {
     inner: reqwest::Client,
 }
 
-impl AgiWorkforceHttpClient {
+impl AgiworkforceHttpClient {
     pub fn new(inner: reqwest::Client) -> Self {
         Self { inner }
     }
 
-    pub fn get<U>(&self, url: U) -> AgiWorkforceRequestBuilder
+    pub fn get<U>(&self, url: U) -> AgiworkforceRequestBuilder
     where
         U: IntoUrl,
     {
         self.request(Method::GET, url)
     }
 
-    pub fn post<U>(&self, url: U) -> AgiWorkforceRequestBuilder
+    pub fn post<U>(&self, url: U) -> AgiworkforceRequestBuilder
     where
         U: IntoUrl,
     {
         self.request(Method::POST, url)
     }
 
-    pub fn request<U>(&self, method: Method, url: U) -> AgiWorkforceRequestBuilder
+    pub fn request<U>(&self, method: Method, url: U) -> AgiworkforceRequestBuilder
     where
         U: IntoUrl,
     {
         let url_str = url.as_str().to_string();
-        AgiWorkforceRequestBuilder::new(self.inner.request(method.clone(), url), method, url_str)
+        AgiworkforceRequestBuilder::new(self.inner.request(method.clone(), url), method, url_str)
     }
 }
 
 #[must_use = "requests are not sent unless `send` is awaited"]
 #[derive(Debug)]
-pub struct AgiWorkforceRequestBuilder {
+pub struct AgiworkforceRequestBuilder {
     builder: reqwest::RequestBuilder,
     method: Method,
     url: String,
 }
 
-impl AgiWorkforceRequestBuilder {
+impl AgiworkforceRequestBuilder {
     fn new(builder: reqwest::RequestBuilder, method: Method, url: String) -> Self {
         Self {
             builder,

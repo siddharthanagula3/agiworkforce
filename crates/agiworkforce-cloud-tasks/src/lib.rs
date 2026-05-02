@@ -1,20 +1,18 @@
-pub mod agiworkforce_tui;
 mod app;
 mod cli;
-pub mod env_detect;
-#[cfg(test)]
-mod mock_backend;
+pub(crate) mod env_detect;
 mod new_task;
-pub mod scrollable_diff;
+pub(crate) mod scrollable_diff;
 mod ui;
-pub mod util;
+pub(crate) mod util;
 pub use cli::Cli;
 
+use anyhow::anyhow;
+use chrono::Utc;
 use agiworkforce_cloud_tasks_client::TaskStatus;
 use agiworkforce_git_utils::current_branch_name;
 use agiworkforce_git_utils::default_branch_name;
-use anyhow::anyhow;
-use chrono::Utc;
+use agiworkforce_login::default_client::get_agiworkforce_user_agent;
 use owo_colors::OwoColorize;
 use owo_colors::Stream;
 use std::cmp::Ordering;
@@ -43,10 +41,9 @@ struct BackendContext {
 }
 
 async fn init_backend(user_agent_suffix: &str) -> anyhow::Result<BackendContext> {
+    #[cfg(debug_assertions)]
     let use_mock = matches!(
-        std::env::var("AGIWORKFORCE_CLOUD_TASKS_MODE")
-            .ok()
-            .as_deref(),
+        std::env::var("AGIWORKFORCE_CLOUD_TASKS_MODE").ok().as_deref(),
         Some("mock") | Some("MOCK")
     );
     let base_url = std::env::var("AGIWORKFORCE_CLOUD_TASKS_BASE_URL")
@@ -54,24 +51,24 @@ async fn init_backend(user_agent_suffix: &str) -> anyhow::Result<BackendContext>
 
     set_user_agent_suffix(user_agent_suffix);
 
+    #[cfg(debug_assertions)]
     if use_mock {
         return Ok(BackendContext {
-            backend: Arc::new(agiworkforce_cloud_tasks_client::MockClient),
+            backend: Arc::new(agiworkforce_cloud_tasks_mock_client::MockClient),
             base_url,
         });
     }
 
-    let ua = agiworkforce_core::default_client::get_agiworkforce_user_agent();
-    let mut http =
-        agiworkforce_cloud_tasks_client::HttpClient::new(base_url.clone())?.with_user_agent(ua);
+    let ua = get_agiworkforce_user_agent();
+    let mut http = agiworkforce_cloud_tasks_client::HttpClient::new(base_url.clone())?.with_user_agent(ua);
     let style = if base_url.contains("/backend-api") {
         "wham"
     } else {
-        "codex-api"
+        "agiworkforce-api"
     };
     append_error_log(format!("startup: base_url={base_url} path_style={style}"));
 
-    let auth_manager = util::load_auth_manager().await;
+    let auth_manager = util::load_auth_manager(Some(base_url.clone())).await;
     let auth = match auth_manager.as_ref() {
         Some(manager) => manager.auth().await,
         None => None,
@@ -90,23 +87,17 @@ async fn init_backend(user_agent_suffix: &str) -> anyhow::Result<BackendContext>
         append_error_log(format!("auth: mode=ChatGPT account_id={acc}"));
     }
 
-    let token = match auth.get_token() {
-        Ok(t) if !t.is_empty() => t,
-        _ => {
-            eprintln!(
-                "Not signed in. Please run 'codex login' to sign in with ChatGPT, then re-run 'codex cloud'."
-            );
-            std::process::exit(1);
-        }
-    };
+    if !auth.uses_agiworkforce_backend() {
+        eprintln!(
+            "Not signed in. Please run 'codex login' to sign in with ChatGPT, then re-run 'codex cloud'."
+        );
+        std::process::exit(1);
+    }
 
-    http = http.with_bearer_token(token.clone());
-    if let Some(acc) = auth
-        .get_account_id()
-        .or_else(|| util::extract_chatgpt_account_id(&token))
-    {
+    let auth_provider = agiworkforce_model_provider::auth_provider_from_auth(&auth);
+    http = http.with_auth_provider(auth_provider);
+    if let Some(acc) = auth.get_account_id() {
         append_error_log(format!("auth: set ChatGPT-Account-Id header: {acc}"));
-        http = http.with_chatgpt_account_id(acc);
     }
 
     Ok(BackendContext {
@@ -307,12 +298,10 @@ async fn collect_attempt_diffs(
     task_id: &agiworkforce_cloud_tasks_client::TaskId,
 ) -> anyhow::Result<Vec<AttemptDiffData>> {
     let text =
-        agiworkforce_cloud_tasks_client::CloudBackend::get_task_text(backend, task_id.clone())
-            .await?;
+        agiworkforce_cloud_tasks_client::CloudBackend::get_task_text(backend, task_id.clone()).await?;
     let mut attempts = Vec::new();
     if let Some(diff) =
-        agiworkforce_cloud_tasks_client::CloudBackend::get_task_diff(backend, task_id.clone())
-            .await?
+        agiworkforce_cloud_tasks_client::CloudBackend::get_task_diff(backend, task_id.clone()).await?
     {
         attempts.push(AttemptDiffData {
             placement: text.attempt_placement,
@@ -505,8 +494,7 @@ async fn run_status_command(args: crate::cli::StatusCommand) -> anyhow::Result<(
     let ctx = init_backend("agiworkforce_cloud_tasks_status").await?;
     let task_id = parse_task_id(&args.task_id)?;
     let summary =
-        agiworkforce_cloud_tasks_client::CloudBackend::get_task_summary(&*ctx.backend, task_id)
-            .await?;
+        agiworkforce_cloud_tasks_client::CloudBackend::get_task_summary(&*ctx.backend, task_id).await?;
     let now = Utc::now();
     let colorize = supports_color::on(SupportStream::Stdout).is_some();
     for line in format_task_status_lines(&summary, now, colorize) {
@@ -615,9 +603,7 @@ async fn run_apply_command(args: crate::cli::ApplyCommand) -> anyhow::Result<()>
     Ok(())
 }
 
-fn level_from_status(
-    status: agiworkforce_cloud_tasks_client::ApplyStatus,
-) -> app::ApplyResultLevel {
+fn level_from_status(status: agiworkforce_cloud_tasks_client::ApplyStatus) -> app::ApplyResultLevel {
     match status {
         agiworkforce_cloud_tasks_client::ApplyStatus::Success => app::ApplyResultLevel::Success,
         agiworkforce_cloud_tasks_client::ApplyStatus::Partial => app::ApplyResultLevel::Partial,
@@ -742,10 +728,7 @@ fn spawn_apply(
 // (no standalone patch summarizer needed – UI displays raw diffs)
 
 /// Entry point for the `codex cloud` subcommand.
-pub async fn run_main(
-    cli: Cli,
-    _agiworkforce_linux_sandbox_exe: Option<PathBuf>,
-) -> anyhow::Result<()> {
+pub async fn run_main(cli: Cli, _agiworkforce_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
     if let Some(command) = cli.command {
         return match command {
             crate::cli::Command::Exec(args) => run_exec_command(args).await,
@@ -816,7 +799,7 @@ pub async fn run_main(
     append_error_log(format!(
         "startup: wham_force_internal={} ua={}",
         force_internal,
-        agiworkforce_core::default_client::get_agiworkforce_user_agent()
+        get_agiworkforce_user_agent()
     ));
     // Non-blocking initial load so the in-box spinner can animate
     app.status = "Loading tasks…".to_string();
@@ -944,7 +927,8 @@ pub async fn run_main(
                 if let Some(page) = app.new_task.as_mut() {
                     if page.composer.flush_paste_burst_if_due() { needs_redraw = true; }
                     if page.composer.is_in_paste_burst() {
-                        let _ = frame_tx.send(Instant::now() + crate::agiworkforce_tui::ComposerInput::recommended_flush_delay());
+                        let _ = frame_tx
+                            .send(Instant::now() + agiworkforce_tui::ComposerInput::recommended_flush_delay());
                     }
                 }
                 // Keep spinner pulsing only while loading.
@@ -1505,7 +1489,9 @@ pub async fn run_main(
                                 _ => {
                                     if page.submitting {
                                         // Ignore input while submitting
-                                    } else if let crate::agiworkforce_tui::ComposerAction::Submitted(text) = page.composer.input(key) {
+                                    } else if let agiworkforce_tui::ComposerAction::Submitted(text) =
+                                        page.composer.input(key)
+                                    {
                                             // Submit only if we have an env id
                                             if let Some(env) = page.env_id.clone() {
                                                 append_error_log(format!(
@@ -1535,7 +1521,10 @@ pub async fn run_main(
                                     needs_redraw = true;
                                     // If paste‑burst is active, schedule a micro‑flush frame.
                                     if page.composer.is_in_paste_burst() {
-                                        let _ = frame_tx.send(Instant::now() + crate::agiworkforce_tui::ComposerInput::recommended_flush_delay());
+                                        let _ = frame_tx.send(
+                                            Instant::now()
+                                                + agiworkforce_tui::ComposerInput::recommended_flush_delay(),
+                                        );
                                     }
                                     // Always schedule an immediate redraw for key edits in the composer.
                                     let _ = frame_tx.send(Instant::now());
@@ -1601,7 +1590,7 @@ pub async fn run_main(
                                         let total = ov.attempt_display_total();
                                         let current = ov.selected_attempt + 1;
                                         app.status = format!("Viewing attempt {current} of {total}");
-                                        ov.sd.to_top();
+                                        ov.sd.scroll_to_top();
                                         needs_redraw = true;
                                     }
                             };
@@ -1677,7 +1666,7 @@ pub async fn run_main(
                                         let has_diff = ov.current_attempt().is_some_and(app::AttemptView::has_diff) || ov.base_can_apply;
                                         if has_text && has_diff {
                                             ov.set_view(app::DetailView::Prompt);
-                                            ov.sd.to_top();
+                                            ov.sd.scroll_to_top();
                                             needs_redraw = true;
                                         }
                                     }
@@ -1688,7 +1677,7 @@ pub async fn run_main(
                                         let has_diff = ov.current_attempt().is_some_and(app::AttemptView::has_diff) || ov.base_can_apply;
                                         if has_text && has_diff {
                                             ov.set_view(app::DetailView::Diff);
-                                            ov.sd.to_top();
+                                            ov.sd.scroll_to_top();
                                             needs_redraw = true;
                                         }
                                     }
@@ -1719,8 +1708,8 @@ pub async fn run_main(
                                     if let Some(ov) = &mut app.diff_overlay { let step = ov.sd.state.viewport_h.saturating_sub(1) as i16; ov.sd.page_by(-step); }
                                     needs_redraw = true;
                                 }
-                                KeyCode::Home => { if let Some(ov) = &mut app.diff_overlay { ov.sd.to_top(); } needs_redraw = true; }
-                                KeyCode::End  => { if let Some(ov) = &mut app.diff_overlay { ov.sd.to_bottom(); } needs_redraw = true; }
+                                KeyCode::Home => { if let Some(ov) = &mut app.diff_overlay { ov.sd.scroll_to_top(); } needs_redraw = true; }
+                                KeyCode::End  => { if let Some(ov) = &mut app.diff_overlay { ov.sd.scroll_to_bottom(); } needs_redraw = true; }
                                 _ => {}
                             }
                         } else if app.env_modal.is_some() {
@@ -2138,14 +2127,14 @@ fn pretty_lines_from_error(raw: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agiworkforce_tui::ComposerAction;
-    use crate::agiworkforce_tui::ComposerInput;
-    use crate::mock_backend::MockClient;
     use crate::resolve_git_ref_with_git_info;
     use agiworkforce_cloud_tasks_client::DiffSummary;
     use agiworkforce_cloud_tasks_client::TaskId;
     use agiworkforce_cloud_tasks_client::TaskStatus;
     use agiworkforce_cloud_tasks_client::TaskSummary;
+    use agiworkforce_cloud_tasks_mock_client::MockClient;
+    use agiworkforce_tui::ComposerAction;
+    use agiworkforce_tui::ComposerInput;
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;
     use crossterm::event::KeyModifiers;
@@ -2182,7 +2171,7 @@ mod tests {
     async fn branch_override_is_used_when_provided() {
         let git_ref = resolve_git_ref_with_git_info(
             Some(&"feature/override".to_string()),
-            &StubGitInfo::new(None, None),
+            &StubGitInfo::new(/*default_branch*/ None, /*current_branch*/ None),
         )
         .await;
 
@@ -2193,7 +2182,7 @@ mod tests {
     async fn trims_override_whitespace() {
         let git_ref = resolve_git_ref_with_git_info(
             Some(&"  feature/spaces  ".to_string()),
-            &StubGitInfo::new(None, None),
+            &StubGitInfo::new(/*default_branch*/ None, /*current_branch*/ None),
         )
         .await;
 
@@ -2203,7 +2192,7 @@ mod tests {
     #[tokio::test]
     async fn prefers_current_branch_when_available() {
         let git_ref = resolve_git_ref_with_git_info(
-            None,
+            /*branch_override*/ None,
             &StubGitInfo::new(
                 Some("default-main".to_string()),
                 Some("feature/current".to_string()),
@@ -2217,8 +2206,8 @@ mod tests {
     #[tokio::test]
     async fn falls_back_to_current_branch_when_default_is_missing() {
         let git_ref = resolve_git_ref_with_git_info(
-            None,
-            &StubGitInfo::new(None, Some("develop".to_string())),
+            /*branch_override*/ None,
+            &StubGitInfo::new(/*default_branch*/ None, Some("develop".to_string())),
         )
         .await;
 
@@ -2227,7 +2216,11 @@ mod tests {
 
     #[tokio::test]
     async fn falls_back_to_main_when_no_git_info_is_available() {
-        let git_ref = resolve_git_ref_with_git_info(None, &StubGitInfo::new(None, None)).await;
+        let git_ref = resolve_git_ref_with_git_info(
+            /*branch_override*/ None,
+            &StubGitInfo::new(/*default_branch*/ None, /*current_branch*/ None),
+        )
+        .await;
 
         assert_eq!(git_ref, "main");
     }
@@ -2250,7 +2243,7 @@ mod tests {
             is_review: false,
             attempt_total: None,
         };
-        let lines = format_task_status_lines(&task, now, false);
+        let lines = format_task_status_lines(&task, now, /*colorize*/ false);
         assert_eq!(
             lines,
             vec![
@@ -2275,7 +2268,7 @@ mod tests {
             is_review: false,
             attempt_total: Some(1),
         };
-        let lines = format_task_status_lines(&task, now, false);
+        let lines = format_task_status_lines(&task, now, /*colorize*/ false);
         assert_eq!(
             lines,
             vec![
@@ -2317,7 +2310,12 @@ mod tests {
                 attempt_total: Some(1),
             },
         ];
-        let lines = format_task_list_lines(&tasks, "https://chatgpt.com/backend-api", now, false);
+        let lines = format_task_list_lines(
+            &tasks,
+            "https://chatgpt.com/backend-api",
+            now,
+            /*colorize*/ false,
+        );
         assert_eq!(
             lines,
             vec![

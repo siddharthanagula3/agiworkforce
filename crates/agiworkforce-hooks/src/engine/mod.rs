@@ -10,6 +10,10 @@ use std::path::PathBuf;
 use agiworkforce_config::ConfigLayerStack;
 use agiworkforce_protocol::protocol::HookRunSummary;
 
+use crate::events::permission_request::PermissionRequestOutcome;
+use crate::events::permission_request::PermissionRequestRequest;
+use crate::events::post_tool_use::PostToolUseOutcome;
+use crate::events::post_tool_use::PostToolUseRequest;
 use crate::events::pre_tool_use::PreToolUseOutcome;
 use crate::events::pre_tool_use::PreToolUseRequest;
 use crate::events::session_start::SessionStartOutcome;
@@ -49,6 +53,10 @@ impl ConfiguredHandler {
     fn event_name_label(&self) -> &'static str {
         match self.event_name {
             agiworkforce_protocol::protocol::HookEventName::PreToolUse => "pre-tool-use",
+            agiworkforce_protocol::protocol::HookEventName::PermissionRequest => {
+                "permission-request"
+            }
+            agiworkforce_protocol::protocol::HookEventName::PostToolUse => "post-tool-use",
             agiworkforce_protocol::protocol::HookEventName::SessionStart => "session-start",
             agiworkforce_protocol::protocol::HookEventName::UserPromptSubmit => {
                 "user-prompt-submit"
@@ -146,5 +154,33 @@ impl ClaudeHooksEngine {
 
     pub(crate) async fn run_stop(&self, request: StopRequest) -> StopOutcome {
         crate::events::stop::run(&self.handlers, &self.shell, request).await
+    }
+
+    pub(crate) fn preview_permission_request(
+        &self,
+        request: &PermissionRequestRequest,
+    ) -> Vec<HookRunSummary> {
+        crate::events::permission_request::preview(&self.handlers, request)
+    }
+
+    pub(crate) async fn run_permission_request(
+        &self,
+        request: PermissionRequestRequest,
+    ) -> PermissionRequestOutcome {
+        crate::events::permission_request::run(&self.handlers, &self.shell, request).await
+    }
+
+    pub(crate) fn preview_post_tool_use(
+        &self,
+        request: &PostToolUseRequest,
+    ) -> Vec<HookRunSummary> {
+        crate::events::post_tool_use::preview(&self.handlers, request)
+    }
+
+    pub(crate) async fn run_post_tool_use(
+        &self,
+        request: PostToolUseRequest,
+    ) -> PostToolUseOutcome {
+        crate::events::post_tool_use::run(&self.handlers, &self.shell, request).await
     }
 }

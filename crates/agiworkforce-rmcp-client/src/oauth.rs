@@ -19,6 +19,7 @@
 use anyhow::Context;
 use anyhow::Error;
 use anyhow::Result;
+use agiworkforce_config::types::OAuthCredentialsStoreMode;
 use oauth2::AccessToken;
 use oauth2::EmptyExtraTokenFields;
 use oauth2::RefreshToken;
@@ -26,7 +27,6 @@ use oauth2::Scope;
 use oauth2::TokenResponse;
 use oauth2::basic::BasicTokenType;
 use rmcp::transport::auth::OAuthTokenResponse;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -50,7 +50,7 @@ use tokio::sync::Mutex;
 
 use agiworkforce_utils_home_dir::find_agiworkforce_home;
 
-const KEYRING_SERVICE: &str = "Codex MCP Credentials";
+const KEYRING_SERVICE: &str = "Agiworkforce MCP Credentials";
 const REFRESH_SKEW_MILLIS: u64 = 30_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -61,21 +61,6 @@ pub struct StoredOAuthTokens {
     pub token_response: WrappedOAuthTokenResponse,
     #[serde(default)]
     pub expires_at: Option<u64>,
-}
-
-/// Determine where Codex should store and read MCP credentials.
-#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum OAuthCredentialsStoreMode {
-    /// `Keyring` when available; otherwise, `File`.
-    /// Credentials stored in the keyring will only be readable by Codex unless the user explicitly grants access via OS-level keyring access.
-    #[default]
-    Auto,
-    /// AGIWORKFORCE_HOME/.credentials.json
-    /// This file will be readable to Codex and other applications running as the same user.
-    File,
-    /// Keyring when available, otherwise fail.
-    Keyring,
 }
 
 /// Wrap OAuthTokenResponse to allow for partial equality comparison.
@@ -298,6 +283,10 @@ impl OAuthPersistor {
 
     /// Persists the latest stored credentials if they have changed.
     /// Deletes the credentials if they are no longer present.
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "AuthorizationManager async access must be serialized through its mutex"
+    )]
     pub(crate) async fn persist_if_needed(&self) -> Result<()> {
         let (client_id, maybe_credentials) = {
             let manager = self.inner.authorization_manager.clone();
@@ -350,6 +339,10 @@ impl OAuthPersistor {
         Ok(())
     }
 
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "AuthorizationManager async access must be serialized through its mutex"
+    )]
     pub(crate) async fn refresh_if_needed(&self) -> Result<()> {
         let expires_at = {
             let guard = self.inner.last_credentials.lock().await;
@@ -535,9 +528,7 @@ fn compute_store_key(server_name: &str, server_url: &str) -> Result<String> {
 }
 
 fn fallback_file_path() -> Result<PathBuf> {
-    let mut path = find_agiworkforce_home()?;
-    path.push(FALLBACK_FILENAME);
-    Ok(path)
+    Ok(find_agiworkforce_home()?.join(FALLBACK_FILENAME).to_path_buf())
 }
 
 fn read_fallback_file() -> Result<Option<FallbackFile>> {
@@ -614,12 +605,12 @@ mod tests {
 
     use agiworkforce_keyring_store::tests::MockKeyringStore;
 
-    struct TempAgiWorkforceHome {
+    struct TempAgiworkforceHome {
         _guard: MutexGuard<'static, ()>,
         _dir: tempfile::TempDir,
     }
 
-    impl TempAgiWorkforceHome {
+    impl TempAgiworkforceHome {
         fn new() -> Self {
             static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
             let guard = LOCK
@@ -637,7 +628,7 @@ mod tests {
         }
     }
 
-    impl Drop for TempAgiWorkforceHome {
+    impl Drop for TempAgiworkforceHome {
         fn drop(&mut self) {
             unsafe {
                 std::env::remove_var("AGIWORKFORCE_HOME");
@@ -647,7 +638,7 @@ mod tests {
 
     #[test]
     fn load_oauth_tokens_reads_from_keyring_when_available() -> Result<()> {
-        let _env = TempAgiWorkforceHome::new();
+        let _env = TempAgiworkforceHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let expected = tokens.clone();
@@ -664,7 +655,7 @@ mod tests {
 
     #[test]
     fn load_oauth_tokens_falls_back_when_missing_in_keyring() -> Result<()> {
-        let _env = TempAgiWorkforceHome::new();
+        let _env = TempAgiworkforceHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let expected = tokens.clone();
@@ -683,7 +674,7 @@ mod tests {
 
     #[test]
     fn load_oauth_tokens_falls_back_when_keyring_errors() -> Result<()> {
-        let _env = TempAgiWorkforceHome::new();
+        let _env = TempAgiworkforceHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let expected = tokens.clone();
@@ -704,7 +695,7 @@ mod tests {
 
     #[test]
     fn save_oauth_tokens_prefers_keyring_when_available() -> Result<()> {
-        let _env = TempAgiWorkforceHome::new();
+        let _env = TempAgiworkforceHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let key = super::compute_store_key(&tokens.server_name, &tokens.url)?;
@@ -726,7 +717,7 @@ mod tests {
 
     #[test]
     fn save_oauth_tokens_writes_fallback_when_keyring_fails() -> Result<()> {
-        let _env = TempAgiWorkforceHome::new();
+        let _env = TempAgiworkforceHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let key = super::compute_store_key(&tokens.server_name, &tokens.url)?;
@@ -756,7 +747,7 @@ mod tests {
 
     #[test]
     fn delete_oauth_tokens_removes_all_storage() -> Result<()> {
-        let _env = TempAgiWorkforceHome::new();
+        let _env = TempAgiworkforceHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let serialized = serde_json::to_string(&tokens)?;
@@ -778,7 +769,7 @@ mod tests {
 
     #[test]
     fn delete_oauth_tokens_file_mode_removes_keyring_only_entry() -> Result<()> {
-        let _env = TempAgiWorkforceHome::new();
+        let _env = TempAgiworkforceHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let serialized = serde_json::to_string(&tokens)?;
@@ -800,7 +791,7 @@ mod tests {
 
     #[test]
     fn delete_oauth_tokens_propagates_keyring_errors() -> Result<()> {
-        let _env = TempAgiWorkforceHome::new();
+        let _env = TempAgiworkforceHome::new();
         let store = MockKeyringStore::default();
         let tokens = sample_tokens();
         let key = super::compute_store_key(&tokens.server_name, &tokens.url)?;

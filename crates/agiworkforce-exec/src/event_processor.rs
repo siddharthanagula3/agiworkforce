@@ -5,7 +5,7 @@ use agiworkforce_core::config::Config;
 use agiworkforce_protocol::protocol::SessionConfiguredEvent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AgiWorkforceStatus {
+pub enum AgiworkforceStatus {
     Running,
     InitiateShutdown,
 }
@@ -20,13 +20,10 @@ pub(crate) trait EventProcessor {
     );
 
     /// Handle a single typed app-server notification emitted by the agent.
-    fn process_server_notification(
-        &mut self,
-        notification: ServerNotification,
-    ) -> AgiWorkforceStatus;
+    fn process_server_notification(&mut self, notification: ServerNotification) -> AgiworkforceStatus;
 
     /// Handle a local exec warning that is not represented as an app-server notification.
-    fn process_warning(&mut self, message: String) -> AgiWorkforceStatus;
+    fn process_warning(&mut self, message: String) -> AgiworkforceStatus;
 
     fn print_final_output(&mut self) {}
 }

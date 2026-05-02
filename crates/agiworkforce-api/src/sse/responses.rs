@@ -51,7 +51,7 @@ pub fn stream_from_fixture(
         idle_timeout,
         /*telemetry*/ None,
     ));
-    Ok(ResponseStream { rx_event })
+    Ok(ResponseStream { rx_event, upstream_request_id: None })
 }
 
 pub fn spawn_response_stream(
@@ -102,7 +102,7 @@ pub fn spawn_response_stream(
         process_sse(stream_response.bytes, tx_event, idle_timeout, telemetry).await;
     });
 
-    ResponseStream { rx_event }
+    ResponseStream { rx_event, upstream_request_id: None }
 }
 
 #[derive(Debug, Deserialize)]

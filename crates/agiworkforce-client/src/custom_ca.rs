@@ -1,6 +1,6 @@
-//! Custom CA handling for Codex outbound HTTP and websocket clients.
+//! Custom CA handling for Agiworkforce outbound HTTP and websocket clients.
 //!
-//! Codex constructs outbound reqwest clients and secure websocket connections in a few crates, but
+//! Agiworkforce constructs outbound reqwest clients and secure websocket connections in a few crates, but
 //! they all need the same trust-store policy when enterprise proxies or gateways intercept TLS.
 //! This module centralizes that policy so callers can start from an ordinary
 //! `reqwest::ClientBuilder` or rustls client config, layer in custom CA support, and either get
@@ -26,7 +26,7 @@
 //! - on macOS seatbelt runs, `reqwest::Client::builder().build()` can panic inside
 //!   `system-configuration` while probing platform proxy settings, which means the process can die
 //!   before the custom-CA code reports success or a structured error. That matters in practice
-//!   because Codex itself commonly runs spawned test processes under seatbelt, so this is not just
+//!   because Agiworkforce itself commonly runs spawned test processes under seatbelt, so this is not just
 //!   a hypothetical CI edge case.
 //! - child processes inherit CA-related environment variables by default, which lets developer
 //!   shell state or CI configuration affect a test unless the test scrubs those variables first
@@ -161,7 +161,7 @@ impl From<BuildCustomCaTransportError> for io::Error {
     }
 }
 
-/// Builds a reqwest client that honors Codex custom CA environment variables.
+/// Builds a reqwest client that honors Agiworkforce custom CA environment variables.
 ///
 /// Callers supply the baseline builder configuration they need, and this helper layers in custom
 /// CA handling before finally constructing the client. `AGIWORKFORCE_CA_CERTIFICATE` takes precedence
@@ -169,7 +169,7 @@ impl From<BuildCustomCaTransportError> for io::Error {
 /// accidentally turn `VAR=""` into a bogus path lookup.
 ///
 /// Callers that build a raw `reqwest::Client` directly bypass this policy entirely. That is an
-/// easy mistake to make when adding a new outbound Codex HTTP path, and the resulting bug only
+/// easy mistake to make when adding a new outbound Agiworkforce HTTP path, and the resulting bug only
 /// shows up in environments where a proxy or gateway requires a custom root CA.
 ///
 /// # Errors
@@ -182,7 +182,7 @@ pub fn build_reqwest_client_with_custom_ca(
     build_reqwest_client_with_env(&ProcessEnv, builder)
 }
 
-/// Builds a rustls client config when a Codex custom CA bundle is configured.
+/// Builds a rustls client config when a Agiworkforce custom CA bundle is configured.
 ///
 /// This is the websocket-facing sibling of [`build_reqwest_client_with_custom_ca`]. When
 /// `AGIWORKFORCE_CA_CERTIFICATE` or `SSL_CERT_FILE` selects a CA bundle, the returned config starts from
@@ -222,7 +222,7 @@ fn maybe_build_rustls_client_config_with_env(
     ensure_rustls_crypto_provider();
 
     // Start from the platform roots so websocket callers keep the same baseline trust behavior
-    // they would get from tungstenite's default rustls connector, then layer in the Codex custom
+    // they would get from tungstenite's default rustls connector, then layer in the Agiworkforce custom
     // CA bundle on top when configured.
     let mut root_store = RootCertStore::empty();
     let rustls_native_certs::CertificateResult { certs, errors, .. } =
@@ -358,7 +358,7 @@ trait EnvSource {
 
     /// Returns the configured CA bundle and which environment variable selected it.
     ///
-    /// `AGIWORKFORCE_CA_CERTIFICATE` wins over `SSL_CERT_FILE` because it is the Codex-specific override.
+    /// `AGIWORKFORCE_CA_CERTIFICATE` wins over `SSL_CERT_FILE` because it is the Agiworkforce-specific override.
     /// Keeping the winning variable name with the path lets later logging explain not only which
     /// file was used but also why that file was chosen.
     fn configured_ca_bundle(&self) -> Option<ConfiguredCaBundle> {
@@ -433,9 +433,9 @@ impl ConfiguredCaBundle {
         }
     }
 
-    /// Loads every certificate block from a PEM file intended for Codex CA overrides.
+    /// Loads every certificate block from a PEM file intended for Agiworkforce CA overrides.
     ///
-    /// This accepts a few common real-world variants so Codex behaves like other CA-aware tooling:
+    /// This accepts a few common real-world variants so Agiworkforce behaves like other CA-aware tooling:
     /// leading comments are preserved, `TRUSTED CERTIFICATE` labels are normalized to standard
     /// certificate labels, and embedded CRLs are ignored when they are well-formed enough for the
     /// section iterator to classify them.
@@ -545,7 +545,7 @@ enum NormalizedPem {
 impl NormalizedPem {
     /// Normalizes PEM text from a CA bundle into the label shape this module expects.
     ///
-    /// Codex only needs certificate DER bytes to seed `reqwest`'s root store, but operators may
+    /// Agiworkforce only needs certificate DER bytes to seed `reqwest`'s root store, but operators may
     /// point it at CA files that came from OpenSSL tooling rather than from a minimal certificate
     /// bundle. OpenSSL's `TRUSTED CERTIFICATE` form is one such variant: it is still certificate
     /// material, but it uses a different PEM label and may carry auxiliary trust metadata that
@@ -688,8 +688,8 @@ mod tests {
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
 
-    use super::AGIWORKFORCE_CA_CERT_ENV;
     use super::BuildCustomCaTransportError;
+    use super::AGIWORKFORCE_CA_CERT_ENV;
     use super::EnvSource;
     use super::SSL_CERT_FILE_ENV;
     use super::maybe_build_rustls_client_config_with_env;
@@ -763,10 +763,7 @@ mod tests {
     fn rustls_config_uses_custom_ca_bundle_when_configured() {
         let temp_dir = TempDir::new().expect("tempdir");
         let cert_path = write_cert_file(&temp_dir, "ca.pem", TEST_CERT);
-        let env = map_env(&[(
-            AGIWORKFORCE_CA_CERT_ENV,
-            cert_path.to_string_lossy().as_ref(),
-        )]);
+        let env = map_env(&[(AGIWORKFORCE_CA_CERT_ENV, cert_path.to_string_lossy().as_ref())]);
 
         let config = maybe_build_rustls_client_config_with_env(&env)
             .expect("rustls config")
@@ -779,10 +776,7 @@ mod tests {
     fn rustls_config_reports_invalid_ca_file() {
         let temp_dir = TempDir::new().expect("tempdir");
         let cert_path = write_cert_file(&temp_dir, "empty.pem", "");
-        let env = map_env(&[(
-            AGIWORKFORCE_CA_CERT_ENV,
-            cert_path.to_string_lossy().as_ref(),
-        )]);
+        let env = map_env(&[(AGIWORKFORCE_CA_CERT_ENV, cert_path.to_string_lossy().as_ref())]);
 
         let error = maybe_build_rustls_client_config_with_env(&env).expect_err("invalid CA");
 

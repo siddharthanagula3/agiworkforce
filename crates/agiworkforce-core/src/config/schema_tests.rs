@@ -12,7 +12,7 @@ fn trim_single_trailing_newline(contents: &str) -> &str {
 
 #[test]
 fn config_schema_matches_fixture() {
-    let fixture_path = codex_utils_cargo_bin::find_resource!("config.schema.json")
+    let fixture_path = agiworkforce_utils_cargo_bin::find_resource!("config.schema.json")
         .expect("resolve config schema fixture path");
     let fixture = std::fs::read_to_string(fixture_path).expect("read config schema fixture");
     let fixture_value: serde_json::Value =
@@ -51,5 +51,25 @@ Run `just write-config-schema` to overwrite with your changes.\n\n{diff}"
         trim_single_trailing_newline(&fixture),
         trim_single_trailing_newline(&tmp_contents),
         "fixture should match exactly with generated schema"
+    );
+}
+
+#[test]
+fn config_schema_hides_unsupported_inline_mcp_bearer_token() {
+    let schema_json = config_schema_json().expect("serialize config schema");
+    let schema_value: serde_json::Value =
+        serde_json::from_slice(&schema_json).expect("decode schema json");
+    let properties = schema_value
+        .pointer("/definitions/RawMcpServerConfig/properties")
+        .expect("RawMcpServerConfig properties should exist")
+        .as_object()
+        .expect("RawMcpServerConfig properties should be an object");
+
+    assert_eq!(
+        (
+            properties.contains_key("bearer_token"),
+            properties.contains_key("bearer_token_env_var"),
+        ),
+        (false, true),
     );
 }

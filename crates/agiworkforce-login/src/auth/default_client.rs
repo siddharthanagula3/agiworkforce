@@ -1,16 +1,18 @@
-//! Default Codex HTTP client: shared `User-Agent`, `originator`, optional residency header, and
-//! reqwest/`AgiWorkforceHttpClient` construction.
+//! Default Agiworkforce HTTP client: shared `User-Agent`, `originator`, optional residency header, and
+//! reqwest/`AgiworkforceHttpClient` construction.
 //!
 //! Use [`crate::default_client`] or [`agiworkforce_login::default_client`] from other crates in this
 //! workspace.
 
-use agiworkforce_client::AgiWorkforceHttpClient;
-pub use agiworkforce_client::AgiWorkforceRequestBuilder;
 use agiworkforce_client::BuildCustomCaTransportError;
+use agiworkforce_client::AgiworkforceHttpClient;
+pub use agiworkforce_client::AgiworkforceRequestBuilder;
 use agiworkforce_client::build_reqwest_client_with_custom_ca;
+use agiworkforce_client::with_chatgpt_cloudflare_cookie_store;
 use agiworkforce_terminal_detection::user_agent;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
+use reqwest::header::USER_AGENT;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::RwLock;
@@ -29,12 +31,11 @@ use std::sync::RwLock;
 ///
 /// A space is automatically added between the suffix and the rest of the User-Agent string.
 /// The full user agent string is returned from the mcp initialize response.
-/// Parenthesis will be added by Codex. This should only specify what goes inside of the parenthesis.
+/// Parenthesis will be added by Agiworkforce. This should only specify what goes inside of the parenthesis.
 pub static USER_AGENT_SUFFIX: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 pub const DEFAULT_ORIGINATOR: &str = "agiworkforce_cli_rs";
-pub const AGIWORKFORCE_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR: &str =
-    "AGIWORKFORCE_INTERNAL_ORIGINATOR_OVERRIDE";
-pub const RESIDENCY_HEADER_NAME: &str = "x-openai-internal-codex-residency";
+pub const AGIWORKFORCE_INTERNAL_ORIGINATOR_OVERRIDE_ENV_VAR: &str = "AGIWORKFORCE_INTERNAL_ORIGINATOR_OVERRIDE";
+pub const RESIDENCY_HEADER_NAME: &str = "x-openai-internal-agiworkforce-residency";
 
 pub use agiworkforce_config::ResidencyRequirement;
 
@@ -120,8 +121,9 @@ pub fn originator() -> Originator {
 
 pub fn is_first_party_originator(originator_value: &str) -> bool {
     originator_value == DEFAULT_ORIGINATOR
+        || originator_value == "agiworkforce-tui"
         || originator_value == "agiworkforce_vscode"
-        || originator_value.starts_with("Codex ")
+        || originator_value.starts_with("Agiworkforce ")
 }
 
 pub fn is_first_party_chat_originator(originator_value: &str) -> bool {
@@ -170,55 +172,59 @@ fn sanitize_user_agent(candidate: String, fallback: &str) -> String {
         .collect();
     if !sanitized.is_empty() && HeaderValue::from_str(sanitized.as_str()).is_ok() {
         tracing::warn!(
-            "Sanitized Codex user agent because provided suffix contained invalid header characters"
+            "Sanitized Agiworkforce user agent because provided suffix contained invalid header characters"
         );
         sanitized
     } else if HeaderValue::from_str(fallback).is_ok() {
         tracing::warn!(
-            "Falling back to base Codex user agent because provided suffix could not be sanitized"
+            "Falling back to base Agiworkforce user agent because provided suffix could not be sanitized"
         );
         fallback.to_string()
     } else {
         tracing::warn!(
-            "Falling back to default Codex originator because base user agent string is invalid"
+            "Falling back to default Agiworkforce originator because base user agent string is invalid"
         );
         originator().value
     }
 }
 
 /// Create an HTTP client with default `originator` and `User-Agent` headers set.
-pub fn create_client() -> AgiWorkforceHttpClient {
+pub fn create_client() -> AgiworkforceHttpClient {
     let inner = build_reqwest_client();
-    AgiWorkforceHttpClient::new(inner)
+    AgiworkforceHttpClient::new(inner)
 }
 
-/// Builds the default reqwest client used for ordinary Codex HTTP traffic.
+/// Builds the default reqwest client used for ordinary Agiworkforce HTTP traffic.
 ///
-/// This starts from the standard Codex user agent, default headers, and sandbox-specific proxy
+/// This starts from the standard Agiworkforce user agent, default headers, and sandbox-specific proxy
 /// policy, then layers in shared custom CA handling from `AGIWORKFORCE_CA_CERTIFICATE` /
 /// `SSL_CERT_FILE`. The function remains infallible for compatibility with existing call sites, so
 /// a custom-CA or builder failure is logged and falls back to `reqwest::Client::new()`.
 pub fn build_reqwest_client() -> reqwest::Client {
     try_build_reqwest_client().unwrap_or_else(|error| {
         tracing::warn!(error = %error, "failed to build default reqwest client");
-        reqwest::Client::new()
+        with_chatgpt_cloudflare_cookie_store(reqwest::Client::builder())
+            .build()
+            .unwrap_or_else(|fallback_error| {
+                tracing::warn!(
+                    error = %fallback_error,
+                    "failed to build fallback reqwest client with ChatGPT Cloudflare cookie store"
+                );
+                reqwest::Client::new()
+            })
     })
 }
 
-/// Tries to build the default reqwest client used for ordinary Codex HTTP traffic.
+/// Tries to build the default reqwest client used for ordinary Agiworkforce HTTP traffic.
 ///
 /// Callers that need a structured CA-loading failure instead of the legacy logged fallback can use
 /// this method directly.
 pub fn try_build_reqwest_client() -> Result<reqwest::Client, BuildCustomCaTransportError> {
-    let ua = get_agiworkforce_user_agent();
-
-    let mut builder = reqwest::Client::builder()
-        // Set UA via dedicated helper to avoid header validation pitfalls
-        .user_agent(ua)
-        .default_headers(default_headers());
+    let mut builder = reqwest::Client::builder().default_headers(default_headers());
     if is_sandboxed() {
         builder = builder.no_proxy();
     }
+    builder = with_chatgpt_cloudflare_cookie_store(builder);
 
     build_reqwest_client_with_custom_ca(builder)
 }
@@ -226,6 +232,9 @@ pub fn try_build_reqwest_client() -> Result<reqwest::Client, BuildCustomCaTransp
 pub fn default_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert("originator", originator().header_value);
+    if let Ok(user_agent) = HeaderValue::from_str(&get_agiworkforce_user_agent()) {
+        headers.insert(USER_AGENT, user_agent);
+    }
     if let Ok(guard) = REQUIREMENTS_RESIDENCY.read()
         && let Some(requirement) = guard.as_ref()
         && !headers.contains_key(RESIDENCY_HEADER_NAME)

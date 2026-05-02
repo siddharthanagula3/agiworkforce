@@ -9,6 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 dirs = "6"
+dunce = "1.0.4"
 path-absolutize = "3.1.1"
 schemars = "0.8.22"
 serde = { version = "1", features = ["derive"] }

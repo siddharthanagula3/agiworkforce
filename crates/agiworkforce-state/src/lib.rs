@@ -2,7 +2,7 @@
 //!
 //! This crate is intentionally small and focused: it extracts rollout metadata
 //! from JSONL rollouts and mirrors it into a local SQLite database. Backfill
-//! orchestration and rollout scanning live in `codex-core`.
+//! orchestration and rollout scanning live in `agiworkforce-core`.
 
 mod extract;
 pub mod log_db;
@@ -14,7 +14,6 @@ mod runtime;
 pub use model::LogEntry;
 pub use model::LogQuery;
 pub use model::LogRow;
-pub use model::Phase2InputSelection;
 pub use model::Phase2JobClaimOutcome;
 /// Preferred entrypoint: owns configuration and metrics.
 pub use runtime::StateRuntime;
@@ -37,15 +36,23 @@ pub use model::BackfillStats;
 pub use model::BackfillStatus;
 pub use model::DirectionalThreadSpawnEdgeStatus;
 pub use model::ExtractionOutcome;
+pub use model::SortDirection;
 pub use model::SortKey;
 pub use model::Stage1JobClaim;
 pub use model::Stage1JobClaimOutcome;
 pub use model::Stage1Output;
-pub use model::Stage1OutputRef;
 pub use model::Stage1StartupClaimParams;
+pub use model::ThreadGoal;
+pub use model::ThreadGoalStatus;
 pub use model::ThreadMetadata;
 pub use model::ThreadMetadataBuilder;
 pub use model::ThreadsPage;
+pub use runtime::DeviceKeyBindingRecord;
+pub use runtime::RemoteControlEnrollmentRecord;
+pub use runtime::ThreadFilterOptions;
+pub use runtime::ThreadGoalAccountingMode;
+pub use runtime::ThreadGoalAccountingOutcome;
+pub use runtime::ThreadGoalUpdate;
 pub use runtime::logs_db_filename;
 pub use runtime::logs_db_path;
 pub use runtime::state_db_filename;
@@ -55,7 +62,7 @@ pub use runtime::state_db_path;
 pub const SQLITE_HOME_ENV: &str = "AGIWORKFORCE_SQLITE_HOME";
 
 pub const LOGS_DB_FILENAME: &str = "logs";
-pub const LOGS_DB_VERSION: u32 = 1;
+pub const LOGS_DB_VERSION: u32 = 2;
 pub const STATE_DB_FILENAME: &str = "state";
 pub const STATE_DB_VERSION: u32 = 5;
 

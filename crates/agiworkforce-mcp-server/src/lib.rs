@@ -3,9 +3,14 @@
 
 use std::io::ErrorKind;
 use std::io::Result as IoResult;
+use std::sync::Arc;
 
 use agiworkforce_arg0::Arg0DispatchPaths;
 use agiworkforce_core::config::Config;
+use agiworkforce_exec_server::EnvironmentManager;
+use agiworkforce_exec_server::EnvironmentManagerArgs;
+use agiworkforce_exec_server::ExecServerRuntimePaths;
+use agiworkforce_login::default_client::set_default_client_residency_requirement;
 use agiworkforce_utils_cli::CliConfigOverrides;
 
 use rmcp::model::ClientNotification;
@@ -23,8 +28,8 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
-mod codex_tool_config;
-mod codex_tool_runner;
+mod agiworkforce_tool_config;
+mod agiworkforce_tool_runner;
 mod exec_approval;
 pub(crate) mod message_processor;
 mod outgoing_message;
@@ -35,8 +40,8 @@ use crate::outgoing_message::OutgoingJsonRpcMessage;
 use crate::outgoing_message::OutgoingMessage;
 use crate::outgoing_message::OutgoingMessageSender;
 
-pub use crate::codex_tool_config::AgiWorkforceToolCallParam;
-pub use crate::codex_tool_config::AgiWorkforceToolCallReplyParam;
+pub use crate::agiworkforce_tool_config::AgiworkforceToolCallParam;
+pub use crate::agiworkforce_tool_config::AgiworkforceToolCallReplyParam;
 pub use crate::exec_approval::ExecApprovalElicitRequestParams;
 pub use crate::exec_approval::ExecApprovalResponse;
 pub use crate::patch_approval::PatchApprovalElicitRequestParams;
@@ -55,6 +60,15 @@ pub async fn run_main(
     arg0_paths: Arg0DispatchPaths,
     cli_config_overrides: CliConfigOverrides,
 ) -> IoResult<()> {
+    let environment_manager = Arc::new(
+        EnvironmentManager::new(EnvironmentManagerArgs::new(
+            ExecServerRuntimePaths::from_optional_paths(
+                arg0_paths.agiworkforce_self_exe.clone(),
+                arg0_paths.agiworkforce_linux_sandbox_exe.clone(),
+            )?,
+        ))
+        .await,
+    );
     // Parse CLI overrides once and derive the base Config eagerly so later
     // components do not need to work with raw TOML values.
     let cli_kv_overrides = cli_config_overrides.parse_overrides().map_err(|e| {
@@ -68,6 +82,7 @@ pub async fn run_main(
         .map_err(|e| {
             std::io::Error::new(ErrorKind::InvalidData, format!("error loading config: {e}"))
         })?;
+    set_default_client_residency_requirement(config.enforce_residency.value());
 
     let otel = agiworkforce_core::otel_init::build_provider(
         &config,
@@ -127,8 +142,10 @@ pub async fn run_main(
         let mut processor = MessageProcessor::new(
             outgoing_message_sender,
             arg0_paths,
-            std::sync::Arc::new(config),
-        );
+            Arc::new(config),
+            environment_manager,
+        )
+        .await;
         async move {
             while let Some(msg) = incoming_rx.recv().await {
                 match msg {
@@ -177,8 +194,8 @@ pub async fn run_main(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agiworkforce_config::types::OtelExporterKind;
     use agiworkforce_core::config::ConfigBuilder;
-    use agiworkforce_core::config::types::OtelExporterKind;
     use pretty_assertions::assert_eq;
     use std::collections::HashMap;
     use tempfile::TempDir;

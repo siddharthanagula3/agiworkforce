@@ -24,6 +24,11 @@ use tracing_subscriber::fmt::writer::MakeWriter;
 use tracing_subscriber::registry::LookupSpan;
 
 pub mod feedback_diagnostics;
+mod request_tags;
+
+pub use request_tags::FeedbackRequestTags;
+pub use request_tags::emit_feedback_request_tags;
+pub use request_tags::emit_feedback_request_tags_with_auth_env;
 
 const DEFAULT_MAX_BYTES: usize = 4 * 1024 * 1024; // 4 MiB
 const SENTRY_DSN: &str =
