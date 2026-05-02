@@ -5306,6 +5306,134 @@ mod tests {
         assert_eq!(fk_enabled, 1);
     }
 
+    /// FIX-047: verify run_migrations is idempotent. The current_version
+    /// guard means the second call should be a no-op (no errors, no
+    /// duplicate schema_version rows for a single version, schema still
+    /// at CURRENT_VERSION).
+    #[test]
+    fn test_migrations_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).expect("first run_migrations should succeed");
+
+        let version_after_first: i32 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            version_after_first, CURRENT_VERSION,
+            "after first run, schema_version should equal CURRENT_VERSION"
+        );
+
+        run_migrations(&conn).expect("second run_migrations should succeed");
+
+        let version_after_second: i32 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            version_after_second, CURRENT_VERSION,
+            "after second run, schema_version still equals CURRENT_VERSION"
+        );
+
+        // No version should appear twice in schema_version after re-run.
+        let dup_count: i32 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM (
+                     SELECT version FROM schema_version GROUP BY version HAVING COUNT(*) > 1
+                 )",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(dup_count, 0, "no version should be applied twice");
+    }
+
+    /// FIX-047: verify schema_version table records every migration that
+    /// ran. After run_migrations on a fresh DB we should see 1..=CURRENT_VERSION.
+    #[test]
+    fn test_schema_version_records_every_migration() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let recorded: Vec<i32> = conn
+            .prepare("SELECT version FROM schema_version ORDER BY version ASC")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+
+        let expected: Vec<i32> = (1..=CURRENT_VERSION).collect();
+        assert_eq!(
+            recorded, expected,
+            "schema_version should contain exactly 1..=CURRENT_VERSION after fresh migration"
+        );
+    }
+
+    /// FIX-047: smoke-test the most critical tables produced by the
+    /// migration chain — conversations, messages, settings — by doing a
+    /// minimal INSERT then SELECT round-trip. Catches "table exists but
+    /// is the wrong shape" regressions where a later migration drops or
+    /// renames a column the runtime still depends on.
+    #[test]
+    fn test_critical_tables_round_trip() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        // conversations
+        conn.execute(
+            "INSERT INTO conversations (id, user_id, title, created_at, updated_at)
+             VALUES (1, 'user-test', 'hello', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .expect("insert into conversations should succeed");
+
+        let title: String = conn
+            .query_row(
+                "SELECT title FROM conversations WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(title, "hello");
+
+        // messages — needs to FK against the conversation just inserted
+        conn.execute(
+            "INSERT INTO messages (id, conversation_id, role, content, created_at)
+             VALUES (1, 1, 'user', 'ping', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .expect("insert into messages should succeed");
+
+        let role: String = conn
+            .query_row("SELECT role FROM messages WHERE id = 1", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(role, "user");
+
+        // settings_v2 — categorized KV table used by the runtime to read user prefs
+        conn.execute(
+            "INSERT INTO settings_v2 (key, value, category, created_at, updated_at)
+             VALUES ('test_key', 'test_value', 'ui', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .expect("insert into settings_v2 should succeed");
+
+        let value: String = conn
+            .query_row(
+                "SELECT value FROM settings_v2 WHERE key = 'test_key'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(value, "test_value");
+    }
+
     #[test]
     fn test_migration_v59_rebuilds_and_redacts_auth_sessions() {
         let conn = Connection::open_in_memory().unwrap();
