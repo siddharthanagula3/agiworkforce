@@ -38,6 +38,12 @@
     /* Completeness */
     "skipLibCheck": true,
 
+    // FIX-017 follow-up (Sprint 3): silence the TS 6.0 deprecation
+    // errors for `baseUrl` + `downlevelIteration` introduced when the
+    // pnpm overrides bumped TypeScript from 5.6 to 5.9. TS 5.x accepts
+    // "5.0" as the version-skew ignore string.
+    "ignoreDeprecations": "5.0",
+
     /* Interop Constraints */
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,

@@ -2,7 +2,12 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
-    "lib": ["ES2022"],
+    // Include DOM lib here even though VS Code extensions don't run in
+    // a DOM context — `packages/types/src/tauri.ts` references DOM
+    // types (PerformanceEntry, Node, DOMRectReadOnly) that TS 6 needs
+    // to resolve through the type-source check even when the import is
+    // never instantiated.
+    "lib": ["ES2022", "DOM"],
     "outDir": "./out",
     "rootDir": "./src",
     "strict": true,
@@ -21,6 +26,12 @@
     "sourceMap": true,
     "inlineSources": false,
     "moduleResolution": "node",
+    // FIX-017 follow-up (Sprint 3): TS 6.0 starts warning that the
+    // legacy `node` resolver alias is deprecated. We're not ready to
+    // migrate to `nodenext` here yet (the VS Code extension API
+    // surface is still CJS-flavored), so silence until Sprint 5. TS
+    // 5.x accepts "5.0" as the version-skew ignore string.
+    "ignoreDeprecations": "5.0",
     "allowSyntheticDefaultImports": true,
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo"
