@@ -5,6 +5,7 @@
 //! the Rust equivalent for flags that must be shared across those paths.
 
 use clap::ValueEnum;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum InputFormat {
@@ -13,7 +14,8 @@ pub(crate) enum InputFormat {
     StreamJson,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) enum PermissionMode {
     Default,
     Plan,
@@ -21,6 +23,10 @@ pub(crate) enum PermissionMode {
     AcceptEdits,
     #[value(name = "bypassPermissions", alias = "bypass-permissions")]
     BypassPermissions,
+    /// Headless mode: no interactive prompts, fall back to local rules.
+    /// Used by SDK embedders where canUseTool comes through the control channel.
+    #[value(name = "dontAsk", alias = "dont-ask")]
+    DontAsk,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,11 +67,19 @@ impl CliOptions {
         explicit_skip
             || matches!(
                 self.permission_mode,
-                Some(PermissionMode::BypassPermissions)
+                Some(PermissionMode::BypassPermissions) | Some(PermissionMode::DontAsk)
             )
     }
 
     pub(crate) fn should_auto_approve_safe(&self, explicit_yes: bool) -> bool {
         explicit_yes || matches!(self.permission_mode, Some(PermissionMode::AcceptEdits))
+    }
+
+    /// True when the embedder owns permission decisions over the SDK control channel
+    /// rather than the CLI prompting interactively. Wired in the next session
+    /// when sdk_io's control channel intercepts canUseTool decisions.
+    #[allow(dead_code)]
+    pub(crate) fn is_headless_permissions(&self) -> bool {
+        matches!(self.permission_mode, Some(PermissionMode::DontAsk))
     }
 }
