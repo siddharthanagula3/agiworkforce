@@ -1,16 +1,17 @@
-use crate::config::types::McpServerConfig;
-use crate::config::types::Notice;
 use crate::path_utils::resolve_symlink_write_paths;
 use crate::path_utils::write_atomically;
+use anyhow::Context;
 use agiworkforce_config::CONFIG_TOML_FILE;
+use agiworkforce_config::types::McpServerConfig;
+use agiworkforce_config::types::ToolSuggestDisabledTool;
 use agiworkforce_features::FEATURES;
 use agiworkforce_protocol::config_types::Personality;
 use agiworkforce_protocol::config_types::ServiceTier;
 use agiworkforce_protocol::config_types::TrustLevel;
 use agiworkforce_protocol::openai_models::ReasoningEffort;
-use anyhow::Context;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use tokio::task;
@@ -19,6 +20,8 @@ use toml_edit::DocumentMut;
 use toml_edit::Item as TomlItem;
 use toml_edit::Table as TomlTable;
 use toml_edit::value;
+
+const NOTICE_TABLE_KEY: &str = "notice";
 
 /// Discrete config mutations supported by the persistence engine.
 #[derive(Clone, Debug)]
@@ -36,16 +39,28 @@ pub enum ConfigEdit {
     SetNoticeHideFullAccessWarning(bool),
     /// Toggle the Windows world-writable directories warning acknowledgement flag.
     SetNoticeHideWorldWritableWarning(bool),
+    /// Toggle the opt-out marker for Agiworkforce-managed fast defaults.
+    SetNoticeFastDefaultOptOut(bool),
     /// Toggle the rate limit model nudge acknowledgement flag.
     SetNoticeHideRateLimitModelNudge(bool),
     /// Toggle the Windows onboarding acknowledgement flag.
     SetWindowsWslSetupAcknowledged(bool),
     /// Toggle the model migration prompt acknowledgement flag.
     SetNoticeHideModelMigrationPrompt(String, bool),
+    /// Toggle the home external config migration prompt acknowledgement flag.
+    SetNoticeHideExternalConfigMigrationPromptHome(bool),
+    /// Record when the home external config migration prompt was last shown.
+    SetNoticeExternalConfigMigrationPromptHomeLastPromptedAt(i64),
+    /// Toggle the project external config migration prompt acknowledgement flag.
+    SetNoticeHideExternalConfigMigrationPromptProject(String, bool),
+    /// Record when the project external config migration prompt was last shown.
+    SetNoticeExternalConfigMigrationPromptProjectLastPromptedAt(String, i64),
     /// Record that a migration prompt was shown for an old->new model mapping.
     RecordModelMigrationSeen { from: String, to: String },
     /// Replace the entire `[mcp_servers]` table.
     ReplaceMcpServers(BTreeMap<String, McpServerConfig>),
+    /// Add a disabled tool suggestion under `[tool_suggest].disabled_tools`.
+    AddToolSuggestDisabledTool(ToolSuggestDisabledTool),
     /// Set or clear a skill config entry under `[[skills.config]]` by path.
     SetSkillConfig { path: PathBuf, enabled: bool },
     /// Set or clear a skill config entry under `[[skills.config]]` by name.
@@ -102,6 +117,45 @@ pub fn terminal_title_items_edit(items: &[String]) -> ConfigEdit {
     }
 }
 
+fn keymap_binding_value(keys: &[String]) -> TomlItem {
+    if let [key] = keys {
+        value(key.to_string())
+    } else {
+        let array = keys.iter().cloned().collect::<toml_edit::Array>();
+        TomlItem::Value(array.into())
+    }
+}
+
+/// Produces a config edit that replaces one root-level TUI keymap binding list.
+pub fn keymap_bindings_edit(context: &str, action: &str, keys: &[String]) -> ConfigEdit {
+    ConfigEdit::SetPath {
+        segments: vec![
+            "tui".to_string(),
+            "keymap".to_string(),
+            context.to_string(),
+            action.to_string(),
+        ],
+        value: keymap_binding_value(keys),
+    }
+}
+
+/// Produces a config edit that replaces one root-level TUI keymap binding.
+pub fn keymap_binding_edit(context: &str, action: &str, key: &str) -> ConfigEdit {
+    keymap_bindings_edit(context, action, &[key.to_string()])
+}
+
+/// Produces a config edit that removes one root-level TUI keymap binding.
+pub fn keymap_binding_clear_edit(context: &str, action: &str) -> ConfigEdit {
+    ConfigEdit::ClearPath {
+        segments: vec![
+            "tui".to_string(),
+            "keymap".to_string(),
+            context.to_string(),
+            action.to_string(),
+        ],
+    }
+}
+
 pub fn model_availability_nux_count_edits(shown_count: &HashMap<String, u32>) -> Vec<ConfigEdit> {
     let mut shown_count_entries: Vec<_> = shown_count.iter().collect();
     shown_count_entries.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));
@@ -125,12 +179,18 @@ pub fn model_availability_nux_count_edits(shown_count: &HashMap<String, u32>) ->
 
 // TODO(jif) move to a dedicated file
 mod document_helpers {
-    use crate::config::types::McpServerConfig;
-    use crate::config::types::McpServerTransportConfig;
+    use agiworkforce_config::types::AppToolApproval;
+    use agiworkforce_config::types::McpServerConfig;
+    use agiworkforce_config::types::McpServerEnvVar;
+    use agiworkforce_config::types::McpServerToolConfig;
+    use agiworkforce_config::types::McpServerTransportConfig;
+    use agiworkforce_config::types::ToolSuggestDisabledTool;
+    use agiworkforce_config::types::ToolSuggestDiscoverableType;
     use toml_edit::Array as TomlArray;
     use toml_edit::InlineTable;
     use toml_edit::Item as TomlItem;
     use toml_edit::Table as TomlTable;
+    use toml_edit::Value as TomlValue;
     use toml_edit::value;
 
     pub(super) fn ensure_table_for_write(item: &mut TomlItem) -> Option<&mut TomlTable> {
@@ -187,7 +247,7 @@ mod document_helpers {
                     entry["env"] = table_from_pairs(env.iter());
                 }
                 if !env_vars.is_empty() {
-                    entry["env_vars"] = array_from_iter(env_vars.iter().cloned());
+                    entry["env_vars"] = array_from_env_vars(env_vars);
                 }
                 if let Some(cwd) = cwd {
                     entry["cwd"] = value(cwd.to_string_lossy().to_string());
@@ -219,14 +279,27 @@ mod document_helpers {
         if !config.enabled {
             entry["enabled"] = value(false);
         }
+        if let Some(environment) = &config.experimental_environment {
+            entry["experimental_environment"] = value(environment.clone());
+        }
         if config.required {
             entry["required"] = value(true);
+        }
+        if config.supports_parallel_tool_calls {
+            entry["supports_parallel_tool_calls"] = value(true);
         }
         if let Some(timeout) = config.startup_timeout_sec {
             entry["startup_timeout_sec"] = value(timeout.as_secs_f64());
         }
         if let Some(timeout) = config.tool_timeout_sec {
             entry["tool_timeout_sec"] = value(timeout.as_secs_f64());
+        }
+        if let Some(approval_mode) = config.default_tools_approval_mode {
+            entry["default_tools_approval_mode"] = value(match approval_mode {
+                AppToolApproval::Auto => "auto",
+                AppToolApproval::Prompt => "prompt",
+                AppToolApproval::Approve => "approve",
+            });
         }
         if let Some(enabled_tools) = &config.enabled_tools
             && !enabled_tools.is_empty()
@@ -248,8 +321,30 @@ mod document_helpers {
         {
             entry["oauth_resource"] = value(resource.clone());
         }
+        if !config.tools.is_empty() {
+            let mut tools = new_implicit_table();
+            let mut tool_entries: Vec<_> = config.tools.iter().collect();
+            tool_entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            for (name, tool_config) in tool_entries {
+                tools.insert(name, serialize_mcp_server_tool(tool_config));
+            }
+            entry.insert("tools", TomlItem::Table(tools));
+        }
 
         entry
+    }
+
+    fn serialize_mcp_server_tool(config: &McpServerToolConfig) -> TomlItem {
+        let mut entry = TomlTable::new();
+        entry.set_implicit(false);
+        if let Some(approval_mode) = config.approval_mode {
+            entry["approval_mode"] = value(match approval_mode {
+                AppToolApproval::Auto => "auto",
+                AppToolApproval::Prompt => "prompt",
+                AppToolApproval::Approve => "approve",
+            });
+        }
+        TomlItem::Table(entry)
     }
 
     pub(super) fn serialize_mcp_server(config: &McpServerConfig) -> TomlItem {
@@ -291,6 +386,57 @@ mod document_helpers {
         table
     }
 
+    pub(super) fn parse_tool_suggest_disabled_tool(
+        value: &TomlValue,
+    ) -> Option<ToolSuggestDisabledTool> {
+        let table = value.as_inline_table()?;
+        let kind = match table.get("type").and_then(TomlValue::as_str) {
+            Some("connector") => ToolSuggestDiscoverableType::Connector,
+            Some("plugin") => ToolSuggestDiscoverableType::Plugin,
+            _ => return None,
+        };
+        let id = table.get("id").and_then(TomlValue::as_str)?;
+        Some(ToolSuggestDisabledTool {
+            kind,
+            id: id.to_string(),
+        })
+    }
+
+    pub(super) fn parse_tool_suggest_disabled_tool_table(
+        table: &TomlTable,
+    ) -> Option<ToolSuggestDisabledTool> {
+        let kind = match table.get("type").and_then(TomlItem::as_str) {
+            Some("connector") => ToolSuggestDiscoverableType::Connector,
+            Some("plugin") => ToolSuggestDiscoverableType::Plugin,
+            _ => return None,
+        };
+        let id = table.get("id").and_then(TomlItem::as_str)?;
+        Some(ToolSuggestDisabledTool {
+            kind,
+            id: id.to_string(),
+        })
+    }
+
+    pub(super) fn tool_suggest_disabled_tools_value(
+        disabled_tools: &[ToolSuggestDisabledTool],
+    ) -> TomlItem {
+        let mut array = TomlArray::new();
+        for disabled_tool in disabled_tools {
+            let mut table = InlineTable::new();
+            table.insert(
+                "type",
+                match disabled_tool.kind {
+                    ToolSuggestDiscoverableType::Connector => "connector",
+                    ToolSuggestDiscoverableType::Plugin => "plugin",
+                }
+                .into(),
+            );
+            table.insert("id", disabled_tool.id.clone().into());
+            array.push(table);
+        }
+        TomlItem::Value(array.into())
+    }
+
     fn array_from_iter<I>(iter: I) -> TomlItem
     where
         I: Iterator<Item = String>,
@@ -298,6 +444,24 @@ mod document_helpers {
         let mut array = TomlArray::new();
         for value in iter {
             array.push(value);
+        }
+        TomlItem::Value(array.into())
+    }
+
+    fn array_from_env_vars(env_vars: &[McpServerEnvVar]) -> TomlItem {
+        let mut array = TomlArray::new();
+        for env_var in env_vars {
+            match env_var {
+                McpServerEnvVar::Name(name) => array.push(name.clone()),
+                McpServerEnvVar::Config { name, source } => {
+                    let mut table = InlineTable::new();
+                    table.insert("name", name.clone().into());
+                    if let Some(source) = source {
+                        table.insert("source", source.clone().into());
+                    }
+                    array.push(table);
+                }
+            }
         }
         TomlItem::Value(array.into())
     }
@@ -363,29 +527,81 @@ impl ConfigDocument {
             )),
             ConfigEdit::SetNoticeHideFullAccessWarning(acknowledged) => Ok(self.write_value(
                 Scope::Global,
-                &[Notice::TABLE_KEY, "hide_full_access_warning"],
+                &[NOTICE_TABLE_KEY, "hide_full_access_warning"],
                 value(*acknowledged),
             )),
             ConfigEdit::SetNoticeHideWorldWritableWarning(acknowledged) => Ok(self.write_value(
                 Scope::Global,
-                &[Notice::TABLE_KEY, "hide_world_writable_warning"],
+                &[NOTICE_TABLE_KEY, "hide_world_writable_warning"],
                 value(*acknowledged),
+            )),
+            ConfigEdit::SetNoticeFastDefaultOptOut(opted_out) => Ok(self.write_value(
+                Scope::Global,
+                &[NOTICE_TABLE_KEY, "fast_default_opt_out"],
+                value(*opted_out),
             )),
             ConfigEdit::SetNoticeHideRateLimitModelNudge(acknowledged) => Ok(self.write_value(
                 Scope::Global,
-                &[Notice::TABLE_KEY, "hide_rate_limit_model_nudge"],
+                &[NOTICE_TABLE_KEY, "hide_rate_limit_model_nudge"],
                 value(*acknowledged),
             )),
             ConfigEdit::SetNoticeHideModelMigrationPrompt(migration_config, acknowledged) => {
                 Ok(self.write_value(
                     Scope::Global,
-                    &[Notice::TABLE_KEY, migration_config.as_str()],
+                    &[NOTICE_TABLE_KEY, migration_config.as_str()],
                     value(*acknowledged),
                 ))
             }
+            ConfigEdit::SetNoticeHideExternalConfigMigrationPromptHome(acknowledged) => Ok(self
+                .write_value(
+                    Scope::Global,
+                    &[
+                        NOTICE_TABLE_KEY,
+                        "external_config_migration_prompts",
+                        "home",
+                    ],
+                    value(*acknowledged),
+                )),
+            ConfigEdit::SetNoticeExternalConfigMigrationPromptHomeLastPromptedAt(timestamp) => {
+                Ok(self.write_value(
+                    Scope::Global,
+                    &[
+                        NOTICE_TABLE_KEY,
+                        "external_config_migration_prompts",
+                        "home_last_prompted_at",
+                    ],
+                    value(*timestamp),
+                ))
+            }
+            ConfigEdit::SetNoticeHideExternalConfigMigrationPromptProject(
+                project,
+                acknowledged,
+            ) => Ok(self.write_value(
+                Scope::Global,
+                &[
+                    NOTICE_TABLE_KEY,
+                    "external_config_migration_prompts",
+                    "projects",
+                    project.as_str(),
+                ],
+                value(*acknowledged),
+            )),
+            ConfigEdit::SetNoticeExternalConfigMigrationPromptProjectLastPromptedAt(
+                project,
+                timestamp,
+            ) => Ok(self.write_value(
+                Scope::Global,
+                &[
+                    NOTICE_TABLE_KEY,
+                    "external_config_migration_prompts",
+                    "project_last_prompted_at",
+                    project.as_str(),
+                ],
+                value(*timestamp),
+            )),
             ConfigEdit::RecordModelMigrationSeen { from, to } => Ok(self.write_value(
                 Scope::Global,
-                &[Notice::TABLE_KEY, "model_migrations", from.as_str()],
+                &[NOTICE_TABLE_KEY, "model_migrations", from.as_str()],
                 value(to.clone()),
             )),
             ConfigEdit::SetWindowsWslSetupAcknowledged(acknowledged) => Ok(self.write_value(
@@ -394,6 +610,9 @@ impl ConfigDocument {
                 value(*acknowledged),
             )),
             ConfigEdit::ReplaceMcpServers(servers) => Ok(self.replace_mcp_servers(servers)),
+            ConfigEdit::AddToolSuggestDisabledTool(disabled_tool) => {
+                Ok(self.add_tool_suggest_disabled_tool(disabled_tool))
+            }
             ConfigEdit::SetSkillConfig { path, enabled } => {
                 Ok(self.set_skill_config(SkillConfigSelector::Path(path.clone()), *enabled))
             }
@@ -430,6 +649,41 @@ impl ConfigDocument {
     fn clear(&mut self, scope: Scope, segments: &[&str]) -> bool {
         let resolved = self.scoped_segments(scope, segments);
         self.remove(&resolved)
+    }
+
+    fn add_tool_suggest_disabled_tool(&mut self, disabled_tool: &ToolSuggestDisabledTool) -> bool {
+        let disabled_tools_item = self
+            .doc
+            .get("tool_suggest")
+            .and_then(|item| item.as_table_like())
+            .and_then(|table| table.get("disabled_tools"));
+        let existing_from_array = disabled_tools_item
+            .and_then(|item| item.as_value())
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flat_map(|array| array.iter())
+            .filter_map(document_helpers::parse_tool_suggest_disabled_tool);
+        let existing_from_tables = disabled_tools_item
+            .and_then(|item| match item {
+                TomlItem::ArrayOfTables(array) => Some(array),
+                _ => None,
+            })
+            .into_iter()
+            .flat_map(|array| array.iter())
+            .filter_map(document_helpers::parse_tool_suggest_disabled_tool_table);
+
+        let mut seen = HashSet::new();
+        let disabled_tools = existing_from_array
+            .chain(existing_from_tables)
+            .chain(std::iter::once(disabled_tool.clone()))
+            .filter_map(|disabled_tool| disabled_tool.normalized())
+            .filter(|disabled_tool| seen.insert(disabled_tool.clone()))
+            .collect::<Vec<_>>();
+        self.write_value(
+            Scope::Global,
+            &["tool_suggest", "disabled_tools"],
+            document_helpers::tool_suggest_disabled_tools_value(&disabled_tools),
+        )
     }
 
     fn clear_owned(&mut self, segments: &[String]) -> bool {
@@ -866,6 +1120,12 @@ impl ConfigEditsBuilder {
         self
     }
 
+    pub fn set_fast_default_opt_out(mut self, opted_out: bool) -> Self {
+        self.edits
+            .push(ConfigEdit::SetNoticeFastDefaultOptOut(opted_out));
+        self
+    }
+
     pub fn set_hide_rate_limit_model_nudge(mut self, acknowledged: bool) -> Self {
         self.edits
             .push(ConfigEdit::SetNoticeHideRateLimitModelNudge(acknowledged));
@@ -878,6 +1138,28 @@ impl ConfigEditsBuilder {
                 model.to_string(),
                 acknowledged,
             ));
+        self
+    }
+
+    pub fn set_hide_external_config_migration_prompt_home(mut self, acknowledged: bool) -> Self {
+        self.edits
+            .push(ConfigEdit::SetNoticeHideExternalConfigMigrationPromptHome(
+                acknowledged,
+            ));
+        self
+    }
+
+    pub fn set_hide_external_config_migration_prompt_project(
+        mut self,
+        project: &str,
+        acknowledged: bool,
+    ) -> Self {
+        self.edits.push(
+            ConfigEdit::SetNoticeHideExternalConfigMigrationPromptProject(
+                project.to_string(),
+                acknowledged,
+            ),
+        );
         self
     }
 
@@ -994,6 +1276,18 @@ impl ConfigEditsBuilder {
         self
     }
 
+    pub fn set_realtime_voice(mut self, voice: Option<&str>) -> Self {
+        let segments = vec!["realtime".to_string(), "voice".to_string()];
+        match voice {
+            Some(voice) => self.edits.push(ConfigEdit::SetPath {
+                segments,
+                value: value(voice),
+            }),
+            None => self.edits.push(ConfigEdit::ClearPath { segments }),
+        }
+        self
+    }
+
     pub fn clear_legacy_windows_sandbox_keys(mut self) -> Self {
         for key in [
             "experimental_windows_sandbox",
@@ -1024,21 +1318,13 @@ impl ConfigEditsBuilder {
 
     /// Apply edits on a blocking thread.
     pub fn apply_blocking(self) -> anyhow::Result<()> {
-        apply_blocking(
-            &self.agiworkforce_home,
-            self.profile.as_deref(),
-            &self.edits,
-        )
+        apply_blocking(&self.agiworkforce_home, self.profile.as_deref(), &self.edits)
     }
 
     /// Apply edits asynchronously via a blocking offload.
     pub async fn apply(self) -> anyhow::Result<()> {
         task::spawn_blocking(move || {
-            apply_blocking(
-                &self.agiworkforce_home,
-                self.profile.as_deref(),
-                &self.edits,
-            )
+            apply_blocking(&self.agiworkforce_home, self.profile.as_deref(), &self.edits)
         })
         .await
         .context("config persistence task panicked")?

@@ -1,0 +1,138 @@
+[package]
+name = "agiworkforce-tui"
+version = "0.1.0"
+edition = "2024"
+
+autobins = false
+
+[[bin]]
+name = "agiworkforce-tui"
+path = "src/main.rs"
+
+[[bin]]
+name = "md-events"
+path = "src/bin/md-events.rs"
+
+[lib]
+name = "agiworkforce_tui"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22.1"
+chrono = { version = "0.4.43", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+agiworkforce-ansi-escape = { path = "../agiworkforce-ansi-escape" }
+agiworkforce-app-server-client = { path = "../agiworkforce-app-server-client" }
+agiworkforce-app-server-protocol = { path = "../agiworkforce-app-server-protocol" }
+agiworkforce-arg0 = { path = "../agiworkforce-arg0" }
+agiworkforce-install-context = { path = "../agiworkforce-install-context" }
+agiworkforce-chatgpt = { path = "../agiworkforce-chatgpt" }
+agiworkforce-cloud-requirements = { path = "../agiworkforce-cloud-requirements" }
+agiworkforce-config = { path = "../agiworkforce-config" }
+agiworkforce-connectors = { path = "../agiworkforce-connectors" }
+agiworkforce-core-plugins = { path = "../agiworkforce-core-plugins" }
+agiworkforce-core-skills = { path = "../agiworkforce-core-skills" }
+agiworkforce-exec-server = { path = "../agiworkforce-exec-server" }
+agiworkforce-features = { path = "../agiworkforce-features" }
+agiworkforce-feedback = { path = "../agiworkforce-feedback" }
+agiworkforce-file-search = { path = "../agiworkforce-file-search" }
+agiworkforce-git-utils = { path = "../agiworkforce-git-utils" }
+agiworkforce-login = { path = "../agiworkforce-login" }
+agiworkforce-model-provider-info = { path = "../agiworkforce-model-provider-info" }
+agiworkforce-models-manager = { path = "../agiworkforce-models-manager" }
+agiworkforce-otel = { path = "../agiworkforce-otel" }
+agiworkforce-plugin = { path = "../agiworkforce-plugin" }
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-realtime-webrtc = { path = "../agiworkforce-realtime-webrtc" }
+agiworkforce-rollout = { path = "../agiworkforce-rollout" }
+agiworkforce-shell-command = { path = "../agiworkforce-shell-command" }
+agiworkforce-state = { path = "../agiworkforce-state" }
+agiworkforce-terminal-detection = { path = "../agiworkforce-terminal-detection" }
+agiworkforce-utils-approval-presets = { path = "../agiworkforce-utils-approval-presets" }
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+agiworkforce-utils-cli = { path = "../agiworkforce-utils-cli" }
+agiworkforce-utils-elapsed = { path = "../agiworkforce-utils-elapsed" }
+agiworkforce-utils-fuzzy-match = { path = "../agiworkforce-utils-fuzzy-match" }
+agiworkforce-utils-oss = { path = "../agiworkforce-utils-oss" }
+agiworkforce-utils-path = { path = "../agiworkforce-utils-path" }
+agiworkforce-utils-plugins = { path = "../agiworkforce-utils-plugins" }
+agiworkforce-utils-sandbox-summary = { path = "../agiworkforce-utils-sandbox-summary" }
+agiworkforce-utils-sleep-inhibitor = { path = "../agiworkforce-utils-sleep-inhibitor" }
+agiworkforce-utils-string = { path = "../agiworkforce-utils-string" }
+color-eyre = "0.6.3"
+crossterm = { version = "0.28.1", features = ["bracketed-paste", "event-stream"] }
+derive_more = { version = "2", features = ["is_variant"] }
+diffy = "0.4.2"
+dirs = "6"
+dunce = "1.0.4"
+image = { version = "^0.25.9", default-features = false , features = ["jpeg", "png", "gif", "webp"]}
+itertools = "0.14.0"
+lazy_static = "1"
+pathdiff = "0.2"
+pulldown-cmark = "0.10"
+rand = "0.9"
+ratatui = { version = "0.29.0", features = ["scrolling-regions", "unstable-backend-writer", "unstable-rendered-line-info", "unstable-widget-ref"] }
+ratatui-macros = "0.6.0"
+regex-lite = "0.1.8"
+reqwest = { version = "0.12", features = ["cookies", "json"]}
+rmcp = { version = "0.15.0", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+shlex = "1.3.0"
+strum = "0.27.2"
+strum_macros = "0.28.0"
+supports-color = "3.0.2"
+tempfile = "3.23.0"
+textwrap = "0.16.2"
+thiserror = "2.0.17"
+tokio = { version = "1", features = ["io-std", "macros", "process", "rt-multi-thread", "signal", "test-util", "time"] }
+tokio-stream = { version = "0.1.18", features = ["sync"] }
+toml = "0.9.5"
+tracing = { version = "0.1.44", features = ["log"] }
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+syntect = "5"
+two-face = { version = "0.5", default-features = false, features = ["syntect-default-onig"] }
+unicode-segmentation = "1.12.0"
+unicode-width = "0.2"
+url = "2"
+urlencoding = "2.1"
+webbrowser = "1.0"
+uuid = "1"
+
+agiworkforce-windows-sandbox = { path = "../agiworkforce-windows-sandbox-rs" }
+tokio-util = { version = "0.7.18", features = ["time"] }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+cpal = "0.15"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.182"
+
+[target.'cfg(windows)'.dependencies]
+which = "8"
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Console",
+] }
+winsplit = "0.1"
+
+# Clipboard support via `arboard` is not available on Android/Termux.
+# Only include it for non-Android targets so the crate builds on Android.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+arboard = { version = "3", features = ["wayland-data-control"] }
+
+
+[dev-dependencies]
+agiworkforce-cli = { path = "../../apps/cli" }
+agiworkforce-mcp = { path = "../agiworkforce-mcp" }
+agiworkforce-utils-cargo-bin = { path = "../agiworkforce-utils-cargo-bin" }
+agiworkforce-utils-pty = { path = "../agiworkforce-utils-pty" }
+assert_matches = "1.5.0"
+chrono = { version = "0.4.43", features = ["serde"] }
+insta = "1.46.3"
+pretty_assertions = "1.4.1"
+rand = "0.9"
+serial_test = "3.2.0"
+uuid = "1"

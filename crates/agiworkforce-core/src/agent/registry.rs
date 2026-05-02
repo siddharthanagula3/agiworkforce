@@ -1,7 +1,7 @@
-use crate::error::CodexErr;
-use crate::error::Result;
 use agiworkforce_protocol::AgentPath;
 use agiworkforce_protocol::ThreadId;
+use agiworkforce_protocol::error::AgiworkforceErr;
+use agiworkforce_protocol::error::Result;
 use agiworkforce_protocol::protocol::SessionSource;
 use agiworkforce_protocol::protocol::SubAgentSource;
 use rand::prelude::IndexedRandom;
@@ -13,7 +13,7 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-/// This structure is used to add some limits on the multi-agent capabilities for Codex. In
+/// This structure is used to add some limits on the multi-agent capabilities for Agiworkforce. In
 /// the current implementation, it limits:
 /// * Total number of sub-agents (i.e. threads) per user session
 ///
@@ -83,7 +83,7 @@ impl AgentRegistry {
     ) -> Result<SpawnReservation> {
         if let Some(max_threads) = max_threads {
             if !self.try_increment_spawned(max_threads) {
-                return Err(CodexErr::AgentLimitReached { max_threads });
+                return Err(AgiworkforceErr::AgentLimitReached { max_threads });
             }
         } else {
             self.total_count.fetch_add(1, Ordering::AcqRel);
@@ -220,7 +220,7 @@ impl AgentRegistry {
             } else {
                 active_agents.used_agent_nicknames.clear();
                 active_agents.nickname_reset_count += 1;
-                if let Some(metrics) = agiworkforce_otel::metrics::global() {
+                if let Some(metrics) = agiworkforce_otel::global() {
                     let _ = metrics.counter(
                         "codex.multi_agent.nickname_pool_reset",
                         /*inc*/ 1,
@@ -245,7 +245,7 @@ impl AgentRegistry {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         match active_agents.agent_tree.entry(agent_path.to_string()) {
-            Entry::Occupied(_) => Err(CodexErr::UnsupportedOperation(format!(
+            Entry::Occupied(_) => Err(AgiworkforceErr::UnsupportedOperation(format!(
                 "agent path `{agent_path}` already exists"
             ))),
             Entry::Vacant(entry) => {
@@ -308,7 +308,7 @@ impl SpawnReservation {
             .state
             .reserve_agent_nickname(names, preferred)
             .ok_or_else(|| {
-                CodexErr::UnsupportedOperation("no available agent nicknames".to_string())
+                AgiworkforceErr::UnsupportedOperation("no available agent nicknames".to_string())
             })?;
         self.reserved_agent_nickname = Some(agent_nickname.clone());
         Ok(agent_nickname)

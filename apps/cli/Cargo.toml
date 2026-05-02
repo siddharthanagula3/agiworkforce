@@ -68,5 +68,60 @@ arboard = "3"
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29", features = ["signal", "process"] }
 
+[features]
+default = []
+full = [
+  "agiworkforce-rollout-trace",
+  "agiworkforce-core-plugins",
+  "agiworkforce-core-skills",
+  "agiworkforce-memories-read",
+  "agiworkforce-memories-write",
+  "agiworkforce-thread-store",
+  "agiworkforce-model-provider",
+  "agiworkforce-models-manager",
+  "agiworkforce-agent-graph-store",
+  "agiworkforce-plugin",
+]
+
+[dependencies.agiworkforce-rollout-trace]
+path = "../../crates/agiworkforce-rollout-trace"
+optional = true
+
+[dependencies.agiworkforce-core-plugins]
+path = "../../crates/agiworkforce-core-plugins"
+optional = true
+
+[dependencies.agiworkforce-core-skills]
+path = "../../crates/agiworkforce-core-skills"
+optional = true
+
+[dependencies.agiworkforce-memories-read]
+path = "../../crates/agiworkforce-memories-read"
+optional = true
+
+[dependencies.agiworkforce-memories-write]
+path = "../../crates/agiworkforce-memories-write"
+optional = true
+
+[dependencies.agiworkforce-thread-store]
+path = "../../crates/agiworkforce-thread-store"
+optional = true
+
+[dependencies.agiworkforce-model-provider]
+path = "../../crates/agiworkforce-model-provider"
+optional = true
+
+[dependencies.agiworkforce-models-manager]
+path = "../../crates/agiworkforce-models-manager"
+optional = true
+
+[dependencies.agiworkforce-agent-graph-store]
+path = "../../crates/agiworkforce-agent-graph-store"
+optional = true
+
+[dependencies.agiworkforce-plugin]
+path = "../../crates/agiworkforce-plugin"
+optional = true
+
 [dev-dependencies]
 tempfile = "3"

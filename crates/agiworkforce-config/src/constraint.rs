@@ -49,7 +49,7 @@ type ConstraintNormalizer<T> = dyn Fn(T) -> T + Send + Sync;
 
 #[derive(Clone)]
 pub struct Constrained<T> {
-    value: T,
+    pub value: T,
     validator: Arc<ConstraintValidator<T>>,
     normalizer: Option<Arc<ConstraintNormalizer<T>>>,
 }
@@ -125,6 +125,24 @@ impl<T: Send + Sync> Constrained<T> {
 
     pub fn get(&self) -> &T {
         &self.value
+    }
+
+    /// Add an additional validator to this `Constrained`. Runs the new validator
+    /// against the current value immediately and returns an error if it fails.
+    pub fn add_validator(
+        &mut self,
+        new_validator: impl Fn(&T) -> ConstraintResult<()> + Send + Sync + 'static,
+    ) -> ConstraintResult<()>
+    where
+        T: 'static,
+    {
+        new_validator(&self.value)?;
+        let old_validator = self.validator.clone();
+        self.validator = Arc::new(move |value| {
+            old_validator(value)?;
+            new_validator(value)
+        });
+        Ok(())
     }
 
     pub fn value(&self) -> T

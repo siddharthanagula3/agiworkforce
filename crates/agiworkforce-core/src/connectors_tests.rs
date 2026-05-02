@@ -1,19 +1,26 @@
 use super::*;
 use crate::config::CONFIG_TOML_FILE;
 use crate::config::ConfigBuilder;
-use crate::config::types::AppConfig;
-use crate::config::types::AppToolConfig;
-use crate::config::types::AppToolsConfig;
-use crate::config::types::AppsDefaultConfig;
-use crate::config_loader::AppRequirementToml;
-use crate::config_loader::AppsRequirementsToml;
-use crate::config_loader::CloudRequirementsLoader;
-use crate::config_loader::ConfigLayerStack;
-use crate::config_loader::ConfigRequirements;
-use crate::config_loader::ConfigRequirementsToml;
-use crate::mcp::CODEX_APPS_MCP_SERVER_NAME;
-use crate::mcp_connection_manager::ToolInfo;
+use agiworkforce_config::AppRequirementToml;
+use agiworkforce_config::AppsRequirementsToml;
+use agiworkforce_config::CloudRequirementsLoader;
+use agiworkforce_config::ConfigLayerStack;
+use agiworkforce_config::ConfigRequirements;
+use agiworkforce_config::ConfigRequirementsToml;
+use agiworkforce_config::types::AppConfig;
+use agiworkforce_config::types::AppToolConfig;
+use agiworkforce_config::types::AppToolsConfig;
+use agiworkforce_config::types::AppsDefaultConfig;
+use agiworkforce_connectors::filter::filter_disallowed_connectors;
+use agiworkforce_connectors::filter::filter_tool_suggest_discoverable_connectors;
+use agiworkforce_connectors::merge::merge_connectors;
+use agiworkforce_connectors::merge::plugin_connector_to_app_info;
+use agiworkforce_connectors::metadata::connector_install_url;
+use agiworkforce_connectors::metadata::connector_mention_slug;
+use agiworkforce_connectors::metadata::sanitize_name;
 use agiworkforce_features::Feature;
+use agiworkforce_mcp::AGIWORKFORCE_APPS_MCP_SERVER_NAME;
+use agiworkforce_mcp::ToolInfo;
 use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use rmcp::model::JsonObject;
@@ -97,7 +104,7 @@ fn google_calendar_accessible_connector(plugin_display_names: &[&str]) -> AppInf
     }
 }
 
-fn codex_app_tool(
+fn agiworkforce_app_tool(
     tool_name: &str,
     connector_id: &str,
     connector_name: Option<&str>,
@@ -105,13 +112,14 @@ fn codex_app_tool(
 ) -> ToolInfo {
     let tool_namespace = connector_name
         .map(sanitize_name)
-        .map(|connector_name| format!("mcp__{CODEX_APPS_MCP_SERVER_NAME}__{connector_name}"))
-        .unwrap_or_else(|| CODEX_APPS_MCP_SERVER_NAME.to_string());
+        .map(|connector_name| format!("mcp__{AGIWORKFORCE_APPS_MCP_SERVER_NAME}__{connector_name}"))
+        .unwrap_or_else(|| AGIWORKFORCE_APPS_MCP_SERVER_NAME.to_string());
 
     ToolInfo {
-        server_name: CODEX_APPS_MCP_SERVER_NAME.to_string(),
-        tool_name: tool_name.to_string(),
-        tool_namespace,
+        server_name: AGIWORKFORCE_APPS_MCP_SERVER_NAME.to_string(),
+        callable_name: tool_name.to_string(),
+        callable_namespace: tool_namespace,
+        server_instructions: None,
         tool: test_tool_definition(tool_name),
         connector_id: Some(connector_id.to_string()),
         connector_name: connector_name.map(ToOwned::to_owned),
@@ -137,7 +145,7 @@ fn with_accessible_connectors_cache_cleared<R>(f: impl FnOnce() -> R) -> R {
 
 #[test]
 fn merge_connectors_replaces_plugin_placeholder_name_with_accessible_name() {
-    let plugin = plugin_app_to_app_info(AppConnectorId("calendar".to_string()));
+    let plugin = plugin_connector_to_app_info("calendar".to_string());
     let accessible = google_calendar_accessible_connector(&[]);
 
     let merged = merge_connectors(vec![plugin], vec![accessible]);
@@ -167,17 +175,17 @@ fn merge_connectors_replaces_plugin_placeholder_name_with_accessible_name() {
 fn accessible_connectors_from_mcp_tools_carries_plugin_display_names() {
     let tools = HashMap::from([
         (
-            "mcp__codex_apps__calendar_list_events".to_string(),
-            codex_app_tool(
+            "mcp__agiworkforce_apps__calendar_list_events".to_string(),
+            agiworkforce_app_tool(
                 "calendar_list_events",
                 "calendar",
-                None,
+                /*connector_name*/ None,
                 &["sample", "sample"],
             ),
         ),
         (
-            "mcp__codex_apps__calendar_create_event".to_string(),
-            codex_app_tool(
+            "mcp__agiworkforce_apps__calendar_create_event".to_string(),
+            agiworkforce_app_tool(
                 "calendar_create_event",
                 "calendar",
                 Some("Google Calendar"),
@@ -188,8 +196,9 @@ fn accessible_connectors_from_mcp_tools_carries_plugin_display_names() {
             "mcp__sample__echo".to_string(),
             ToolInfo {
                 server_name: "sample".to_string(),
-                tool_name: "echo".to_string(),
-                tool_namespace: "sample".to_string(),
+                callable_name: "echo".to_string(),
+                callable_namespace: "sample".to_string(),
+                server_instructions: None,
                 tool: test_tool_definition("echo"),
                 connector_id: None,
                 connector_name: None,
@@ -229,12 +238,12 @@ async fn refresh_accessible_connectors_cache_from_mcp_tools_writes_latest_instal
         .build()
         .await
         .expect("config should load");
-    let _ = config.features.set_enabled(Feature::Apps, true);
-    let cache_key = accessible_connectors_cache_key(&config, None);
+    let _ = config.features.set_enabled(Feature::Apps, /*enabled*/ true);
+    let cache_key = accessible_connectors_cache_key(&config, /*auth*/ None);
     let tools = HashMap::from([
         (
-            "mcp__codex_apps__calendar_list_events".to_string(),
-            codex_app_tool(
+            "mcp__agiworkforce_apps__calendar_list_events".to_string(),
+            agiworkforce_app_tool(
                 "calendar_list_events",
                 "calendar",
                 Some("Google Calendar"),
@@ -242,8 +251,8 @@ async fn refresh_accessible_connectors_cache_from_mcp_tools_writes_latest_instal
             ),
         ),
         (
-            "mcp__codex_apps__openai_hidden".to_string(),
-            codex_app_tool(
+            "mcp__agiworkforce_apps__openai_hidden".to_string(),
+            agiworkforce_app_tool(
                 "openai_hidden",
                 "connector_openai_hidden",
                 Some("Hidden"),
@@ -253,7 +262,7 @@ async fn refresh_accessible_connectors_cache_from_mcp_tools_writes_latest_instal
     ]);
 
     let cached = with_accessible_connectors_cache_cleared(|| {
-        refresh_accessible_connectors_cache_from_mcp_tools(&config, None, &tools);
+        refresh_accessible_connectors_cache_from_mcp_tools(&config, /*auth*/ None, &tools);
         read_cached_accessible_connectors(&cache_key).expect("cache should be populated")
     });
 
@@ -279,7 +288,7 @@ async fn refresh_accessible_connectors_cache_from_mcp_tools_writes_latest_instal
 
 #[test]
 fn merge_connectors_unions_and_dedupes_plugin_display_names() {
-    let mut plugin = plugin_app_to_app_info(AppConnectorId("calendar".to_string()));
+    let mut plugin = plugin_connector_to_app_info("calendar".to_string());
     plugin.plugin_display_names = plugin_names(&["sample", "alpha", "sample"]);
 
     let accessible = google_calendar_accessible_connector(&["beta", "alpha"]);
@@ -309,11 +318,12 @@ fn merge_connectors_unions_and_dedupes_plugin_display_names() {
 #[test]
 fn accessible_connectors_from_mcp_tools_preserves_description() {
     let mcp_tools = HashMap::from([(
-        "mcp__codex_apps__calendar_create_event".to_string(),
+        "mcp__agiworkforce_apps__calendar_create_event".to_string(),
         ToolInfo {
-            server_name: CODEX_APPS_MCP_SERVER_NAME.to_string(),
-            tool_name: "calendar_create_event".to_string(),
-            tool_namespace: "mcp__codex_apps__calendar".to_string(),
+            server_name: AGIWORKFORCE_APPS_MCP_SERVER_NAME.to_string(),
+            callable_name: "calendar_create_event".to_string(),
+            callable_namespace: "mcp__agiworkforce_apps__calendar".to_string(),
+            server_instructions: None,
             tool: Tool {
                 name: "calendar_create_event".to_string().into(),
                 title: None,
@@ -367,8 +377,64 @@ fn app_tool_policy_uses_global_defaults_for_destructive_hints() {
         Some(&apps_config),
         Some("calendar"),
         "events/create",
-        None,
-        Some(&annotations(Some(true), None)),
+        /*tool_title*/ None,
+        Some(&annotations(Some(true), /*open_world_hint*/ None)),
+    );
+
+    assert_eq!(
+        policy,
+        AppToolPolicy {
+            enabled: false,
+            approval: AppToolApproval::Auto,
+        }
+    );
+}
+
+#[test]
+fn app_tool_policy_defaults_missing_destructive_hint_to_true() {
+    let apps_config = AppsConfigToml {
+        default: Some(AppsDefaultConfig {
+            enabled: true,
+            destructive_enabled: false,
+            open_world_enabled: true,
+        }),
+        apps: HashMap::new(),
+    };
+
+    let policy = app_tool_policy_from_apps_config(
+        Some(&apps_config),
+        Some("calendar"),
+        "events/create",
+        /*tool_title*/ None,
+        Some(&annotations(/*destructive_hint*/ None, Some(false))),
+    );
+
+    assert_eq!(
+        policy,
+        AppToolPolicy {
+            enabled: false,
+            approval: AppToolApproval::Auto,
+        }
+    );
+}
+
+#[test]
+fn app_tool_policy_defaults_missing_open_world_hint_to_true() {
+    let apps_config = AppsConfigToml {
+        default: Some(AppsDefaultConfig {
+            enabled: true,
+            destructive_enabled: true,
+            open_world_enabled: false,
+        }),
+        apps: HashMap::new(),
+    };
+
+    let policy = app_tool_policy_from_apps_config(
+        Some(&apps_config),
+        Some("calendar"),
+        "events/create",
+        /*tool_title*/ None,
+        Some(&annotations(Some(false), /*open_world_hint*/ None)),
     );
 
     assert_eq!(
@@ -392,7 +458,7 @@ fn app_is_enabled_uses_default_for_unconfigured_apps() {
     };
 
     assert!(!app_is_enabled(&apps_config, Some("calendar")));
-    assert!(!app_is_enabled(&apps_config, None));
+    assert!(!app_is_enabled(&apps_config, /*connector_id*/ None));
 }
 
 #[test]
@@ -518,7 +584,13 @@ enabled = true
         .await
         .expect("config should build");
 
-    let policy = app_tool_policy(&config, Some("connector_123123"), "events.list", None, None);
+    let policy = app_tool_policy(
+        &config,
+        Some("connector_123123"),
+        "events.list",
+        /*tool_title*/ None,
+        /*annotations*/ None,
+    );
     assert_eq!(
         policy,
         AppToolPolicy {
@@ -555,7 +627,13 @@ async fn cloud_requirements_disable_connector_applies_without_user_apps_table() 
         .await
         .expect("config should build");
 
-    let policy = app_tool_policy(&config, Some("connector_123123"), "events.list", None, None);
+    let policy = app_tool_policy(
+        &config,
+        Some("connector_123123"),
+        "events.list",
+        /*tool_title*/ None,
+        /*annotations*/ None,
+    );
     assert_eq!(
         policy,
         AppToolPolicy {
@@ -569,8 +647,7 @@ async fn cloud_requirements_disable_connector_applies_without_user_apps_table() 
 async fn local_requirements_disable_connector_overrides_user_apps_config() {
     let agiworkforce_home = tempdir().expect("tempdir should succeed");
     let config_toml_path =
-        AbsolutePathBuf::try_from(agiworkforce_home.path().join(CONFIG_TOML_FILE))
-            .expect("abs path");
+        AbsolutePathBuf::try_from(agiworkforce_home.path().join(CONFIG_TOML_FILE)).expect("abs path");
     let mut config = ConfigBuilder::default()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
@@ -603,7 +680,13 @@ enabled = true
                 .expect("apps config"),
             );
 
-    let policy = app_tool_policy(&config, Some("connector_123123"), "events.list", None, None);
+    let policy = app_tool_policy(
+        &config,
+        Some("connector_123123"),
+        "events.list",
+        /*tool_title*/ None,
+        /*annotations*/ None,
+    );
     assert_eq!(
         policy,
         AppToolPolicy {
@@ -638,7 +721,13 @@ async fn local_requirements_disable_connector_applies_without_user_apps_table() 
         ConfigLayerStack::new(Vec::new(), ConfigRequirements::default(), requirements)
             .expect("requirements stack");
 
-    let policy = app_tool_policy(&config, Some("connector_123123"), "events.list", None, None);
+    let policy = app_tool_policy(
+        &config,
+        Some("connector_123123"),
+        "events.list",
+        /*tool_title*/ None,
+        /*annotations*/ None,
+    );
     assert_eq!(
         policy,
         AppToolPolicy {
@@ -700,8 +789,10 @@ fn app_tool_policy_honors_default_app_enabled_false() {
         Some(&apps_config),
         Some("calendar"),
         "events/list",
-        None,
-        Some(&annotations(None, None)),
+        /*tool_title*/ None,
+        Some(&annotations(
+            /*destructive_hint*/ None, /*open_world_hint*/ None,
+        )),
     );
 
     assert_eq!(
@@ -738,8 +829,10 @@ fn app_tool_policy_allows_per_app_enable_when_default_is_disabled() {
         Some(&apps_config),
         Some("calendar"),
         "events/list",
-        None,
-        Some(&annotations(None, None)),
+        /*tool_title*/ None,
+        Some(&annotations(
+            /*destructive_hint*/ None, /*open_world_hint*/ None,
+        )),
     );
 
     assert_eq!(
@@ -780,7 +873,7 @@ fn app_tool_policy_per_tool_enabled_true_overrides_app_level_disable_flags() {
         Some(&apps_config),
         Some("calendar"),
         "events/create",
-        None,
+        /*tool_title*/ None,
         Some(&annotations(Some(true), Some(true))),
     );
 
@@ -814,7 +907,7 @@ fn app_tool_policy_default_tools_enabled_true_overrides_app_level_tool_hints() {
         Some(&apps_config),
         Some("calendar"),
         "events/create",
-        None,
+        /*tool_title*/ None,
         Some(&annotations(Some(true), Some(true))),
     );
 
@@ -848,8 +941,10 @@ fn app_tool_policy_default_tools_enabled_false_overrides_app_level_tool_hints() 
         Some(&apps_config),
         Some("calendar"),
         "events/list",
-        None,
-        Some(&annotations(None, None)),
+        /*tool_title*/ None,
+        Some(&annotations(
+            /*destructive_hint*/ None, /*open_world_hint*/ None,
+        )),
     );
 
     assert_eq!(
@@ -884,8 +979,10 @@ fn app_tool_policy_uses_default_tools_approval_mode() {
         Some(&apps_config),
         Some("calendar"),
         "events/list",
-        None,
-        Some(&annotations(None, None)),
+        /*tool_title*/ None,
+        Some(&annotations(
+            /*destructive_hint*/ None, /*open_world_hint*/ None,
+        )),
     );
 
     assert_eq!(
@@ -941,39 +1038,46 @@ fn app_tool_policy_matches_prefix_stripped_tool_name_for_tool_config() {
 
 #[test]
 fn filter_disallowed_connectors_allows_non_disallowed_connectors() {
-    let filtered = filter_disallowed_connectors(vec![app("asdk_app_hidden"), app("alpha")]);
+    let filtered =
+        filter_disallowed_connectors(vec![app("asdk_app_hidden"), app("alpha")], "agiworkforce_cli");
     assert_eq!(filtered, vec![app("asdk_app_hidden"), app("alpha")]);
 }
 
 #[test]
 fn filter_disallowed_connectors_filters_openai_prefix() {
-    let filtered = filter_disallowed_connectors(vec![
-        app("connector_openai_foo"),
-        app("connector_openai_bar"),
-        app("gamma"),
-    ]);
+    let filtered = filter_disallowed_connectors(
+        vec![
+            app("connector_openai_foo"),
+            app("connector_openai_bar"),
+            app("gamma"),
+        ],
+        "agiworkforce_cli",
+    );
     assert_eq!(filtered, vec![app("gamma")]);
 }
 
 #[test]
 fn filter_disallowed_connectors_filters_disallowed_connector_ids() {
-    let filtered = filter_disallowed_connectors(vec![
-        app("asdk_app_6938a94a61d881918ef32cb999ff937c"),
-        app("connector_3f8d1a79f27c4c7ba1a897ab13bf37dc"),
-        app("delta"),
-    ]);
+    let filtered = filter_disallowed_connectors(
+        vec![
+            app("asdk_app_6938a94a61d881918ef32cb999ff937c"),
+            app("connector_3f8d1a79f27c4c7ba1a897ab13bf37dc"),
+            app("delta"),
+        ],
+        "agiworkforce_cli",
+    );
     assert_eq!(filtered, vec![app("delta")]);
 }
 
 #[test]
 fn first_party_chat_originator_filters_target_and_openai_prefixed_connectors() {
-    let filtered = filter_disallowed_connectors_for_originator(
+    let filtered = filter_disallowed_connectors(
         vec![
             app("connector_openai_foo"),
             app("asdk_app_6938a94a61d881918ef32cb999ff937c"),
             app("connector_0f9c9d4592e54d0a9a12b3f44a1e2010"),
         ],
-        "codex_atlas",
+        "agiworkforce_atlas",
     );
     assert_eq!(
         filtered,
@@ -1003,8 +1107,37 @@ discoverables = [
         .expect("config should load");
 
     assert_eq!(
-        tool_suggest_connector_ids(&config),
+        tool_suggest_connector_ids(&config).await,
         HashSet::from(["connector_2128aebfecb84f64a069897515042a44".to_string()])
+    );
+}
+
+#[tokio::test]
+async fn tool_suggest_connector_ids_exclude_disabled_tool_suggestions() {
+    let agiworkforce_home = tempdir().expect("tempdir should succeed");
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"
+[tool_suggest]
+discoverables = [
+  { type = "connector", id = "connector_calendar" },
+  { type = "connector", id = "connector_gmail" }
+]
+disabled_tools = [
+  { type = "connector", id = "connector_calendar" }
+]
+"#,
+    )
+    .expect("write config");
+    let config = ConfigBuilder::default()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .build()
+        .await
+        .expect("config should load");
+
+    assert_eq!(
+        tool_suggest_connector_ids(&config).await,
+        HashSet::from(["connector_gmail".to_string()])
     );
 }
 
@@ -1030,6 +1163,7 @@ fn filter_tool_suggest_discoverable_connectors_keeps_only_plugin_backed_uninstal
             "connector_2128aebfecb84f64a069897515042a44".to_string(),
             "connector_68df038e0ba48191908c8434991bbac2".to_string(),
         ]),
+        "agiworkforce_cli",
     );
 
     assert_eq!(
@@ -1069,6 +1203,7 @@ fn filter_tool_suggest_discoverable_connectors_excludes_accessible_apps_even_whe
             "connector_2128aebfecb84f64a069897515042a44".to_string(),
             "connector_68df038e0ba48191908c8434991bbac2".to_string(),
         ]),
+        "agiworkforce_cli",
     );
 
     assert_eq!(filtered, Vec::<AppInfo>::new());

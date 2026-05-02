@@ -1,22 +1,25 @@
 use crate::agent::AgentStatus;
-use crate::codex::Session;
-use crate::codex::TurnContext;
 use crate::config::Config;
-use crate::error::CodexErr;
+use crate::config::DEFAULT_MULTI_AGENT_V2_MIN_WAIT_TIMEOUT_MS;
+use crate::config::MAX_MULTI_AGENT_V2_WAIT_TIMEOUT_MS;
 use crate::function_tool::FunctionCallError;
-use crate::models_manager::manager::RefreshStrategy;
+use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
 use agiworkforce_features::Feature;
+use agiworkforce_models_manager::manager::RefreshStrategy;
 use agiworkforce_protocol::AgentPath;
 use agiworkforce_protocol::ThreadId;
+use agiworkforce_protocol::error::AgiworkforceErr;
 use agiworkforce_protocol::models::BaseInstructions;
 use agiworkforce_protocol::models::ResponseInputItem;
 use agiworkforce_protocol::openai_models::ReasoningEffort;
 use agiworkforce_protocol::openai_models::ReasoningEffortPreset;
 use agiworkforce_protocol::protocol::CollabAgentRef;
 use agiworkforce_protocol::protocol::CollabAgentStatusEntry;
+use agiworkforce_protocol::protocol::Op;
 use agiworkforce_protocol::protocol::SessionSource;
 use agiworkforce_protocol::protocol::SubAgentSource;
 use agiworkforce_protocol::user_input::UserInput;
@@ -25,9 +28,9 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
 /// Minimum wait timeout to prevent tight polling loops from burning CPU.
-pub(crate) const MIN_WAIT_TIMEOUT_MS: i64 = 10_000;
+pub(crate) const MIN_WAIT_TIMEOUT_MS: i64 = DEFAULT_MULTI_AGENT_V2_MIN_WAIT_TIMEOUT_MS;
 pub(crate) const DEFAULT_WAIT_TIMEOUT_MS: i64 = 30_000;
-pub(crate) const MAX_WAIT_TIMEOUT_MS: i64 = 3600 * 1000;
+pub(crate) const MAX_WAIT_TIMEOUT_MS: i64 = MAX_MULTI_AGENT_V2_WAIT_TIMEOUT_MS;
 
 pub(crate) fn function_arguments(payload: ToolPayload) -> Result<String, FunctionCallError> {
     match payload {
@@ -107,25 +110,25 @@ pub(crate) fn build_wait_agent_statuses(
     entries
 }
 
-pub(crate) fn collab_spawn_error(err: CodexErr) -> FunctionCallError {
+pub(crate) fn collab_spawn_error(err: AgiworkforceErr) -> FunctionCallError {
     match err {
-        CodexErr::UnsupportedOperation(message) if message == "thread manager dropped" => {
+        AgiworkforceErr::UnsupportedOperation(message) if message == "thread manager dropped" => {
             FunctionCallError::RespondToModel("collab manager unavailable".to_string())
         }
-        CodexErr::UnsupportedOperation(message) => FunctionCallError::RespondToModel(message),
+        AgiworkforceErr::UnsupportedOperation(message) => FunctionCallError::RespondToModel(message),
         err => FunctionCallError::RespondToModel(format!("collab spawn failed: {err}")),
     }
 }
 
-pub(crate) fn collab_agent_error(agent_id: ThreadId, err: CodexErr) -> FunctionCallError {
+pub(crate) fn collab_agent_error(agent_id: ThreadId, err: AgiworkforceErr) -> FunctionCallError {
     match err {
-        CodexErr::ThreadNotFound(id) => {
+        AgiworkforceErr::ThreadNotFound(id) => {
             FunctionCallError::RespondToModel(format!("agent with id {id} not found"))
         }
-        CodexErr::InternalAgentDied => {
+        AgiworkforceErr::InternalAgentDied => {
             FunctionCallError::RespondToModel(format!("agent with id {agent_id} is closed"))
         }
-        CodexErr::UnsupportedOperation(_) => {
+        AgiworkforceErr::UnsupportedOperation(_) => {
             FunctionCallError::RespondToModel("collab manager unavailable".to_string())
         }
         err => FunctionCallError::RespondToModel(format!("collab tool failed: {err}")),
@@ -161,7 +164,7 @@ pub(crate) fn thread_spawn_source(
 pub(crate) fn parse_collab_input(
     message: Option<String>,
     items: Option<Vec<UserInput>>,
-) -> Result<Vec<UserInput>, FunctionCallError> {
+) -> Result<Op, FunctionCallError> {
     match (message, items) {
         (Some(_), Some(_)) => Err(FunctionCallError::RespondToModel(
             "Provide either message or items, but not both".to_string(),
@@ -178,7 +181,8 @@ pub(crate) fn parse_collab_input(
             Ok(vec![UserInput::Text {
                 text: message,
                 text_elements: Vec::new(),
-            }])
+            }]
+            .into())
         }
         (None, Some(items)) => {
             if items.is_empty() {
@@ -186,27 +190,9 @@ pub(crate) fn parse_collab_input(
                     "Items can't be empty".to_string(),
                 ));
             }
-            Ok(items)
+            Ok(items.into())
         }
     }
-}
-
-pub(crate) fn input_preview(items: &[UserInput]) -> String {
-    let parts: Vec<String> = items
-        .iter()
-        .map(|item| match item {
-            UserInput::Text { text, .. } => text.clone(),
-            UserInput::Image { .. } => "[image]".to_string(),
-            UserInput::LocalImage { path } => format!("[local_image:{}]", path.display()),
-            UserInput::Skill { name, path } => {
-                format!("[skill:${name}]({})", path.display())
-            }
-            UserInput::Mention { name, path } => format!("[mention:${name}]({path})"),
-            _ => "[input]".to_string(),
-        })
-        .collect();
-
-    parts.join("\n")
 }
 
 /// Builds the base config snapshot for a newly spawned sub-agent.
@@ -240,14 +226,29 @@ fn build_agent_shared_config(turn: &TurnContext) -> Result<Config, FunctionCallE
     let base_config = turn.config.clone();
     let mut config = (*base_config).clone();
     config.model = Some(turn.model_info.slug.clone());
-    config.model_provider = turn.provider.clone();
-    config.model_reasoning_effort = turn.reasoning_effort;
+    config.model_provider = turn.provider.info().clone();
+    config.model_reasoning_effort = turn
+        .reasoning_effort
+        .or(turn.model_info.default_reasoning_level);
     config.model_reasoning_summary = Some(turn.reasoning_summary);
     config.developer_instructions = turn.developer_instructions.clone();
     config.compact_prompt = turn.compact_prompt.clone();
     apply_spawn_agent_runtime_overrides(&mut config, turn)?;
 
     Ok(config)
+}
+
+pub(crate) fn reject_full_fork_spawn_overrides(
+    agent_type: Option<&str>,
+    model: Option<&str>,
+    reasoning_effort: Option<ReasoningEffort>,
+) -> Result<(), FunctionCallError> {
+    if agent_type.is_some() || model.is_some() || reasoning_effort.is_some() {
+        return Err(FunctionCallError::RespondToModel(
+            "Full-history forked agents inherit the parent agent type, model, and reasoning effort; omit agent_type, model, and reasoning_effort, or spawn without a full-history fork.".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// Copies runtime-only turn state onto a child config before it is handed to `AgentControl`.
@@ -270,18 +271,15 @@ pub(crate) fn apply_spawn_agent_runtime_overrides(
     config.cwd = turn.cwd.clone();
     config
         .permissions
-        .sandbox_policy
-        .set(turn.sandbox_policy.get().clone())
+        .set_permission_profile(turn.permission_profile())
         .map_err(|err| {
-            FunctionCallError::RespondToModel(format!("sandbox_policy is invalid: {err}"))
+            FunctionCallError::RespondToModel(format!("permission_profile is invalid: {err}"))
         })?;
-    config.permissions.file_system_sandbox_policy = turn.file_system_sandbox_policy.clone();
-    config.permissions.network_sandbox_policy = turn.network_sandbox_policy;
     Ok(())
 }
 
 pub(crate) fn apply_spawn_agent_overrides(config: &mut Config, child_depth: i32) {
-    if child_depth >= config.agent_max_depth {
+    if child_depth >= config.agent_max_depth && !config.features.enabled(Feature::MultiAgentV2) {
         let _ = config.features.disable(Feature::SpawnCsv);
         let _ = config.features.disable(Feature::Collab);
     }
@@ -308,7 +306,7 @@ pub(crate) async fn apply_requested_spawn_agent_model_overrides(
         let selected_model_info = session
             .services
             .models_manager
-            .get_model_info(&selected_model_name, config)
+            .get_model_info(&selected_model_name, &config.to_models_manager_config())
             .await;
 
         config.model = Some(selected_model_name.clone());

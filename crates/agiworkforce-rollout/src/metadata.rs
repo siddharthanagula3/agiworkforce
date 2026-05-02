@@ -5,6 +5,10 @@ use crate::list;
 use crate::list::parse_timestamp_uuid_from_filename;
 use crate::recorder::RolloutRecorder;
 use crate::state_db::normalize_cwd_for_state_db;
+use chrono::DateTime;
+use chrono::NaiveDateTime;
+use chrono::Timelike;
+use chrono::Utc;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::protocol::AskForApproval;
 use agiworkforce_protocol::protocol::RolloutItem;
@@ -20,10 +24,6 @@ use agiworkforce_state::DB_METRIC_BACKFILL_DURATION_MS;
 use agiworkforce_state::ExtractionOutcome;
 use agiworkforce_state::ThreadMetadataBuilder;
 use agiworkforce_state::apply_rollout_item;
-use chrono::DateTime;
-use chrono::NaiveDateTime;
-use chrono::Timelike;
-use chrono::Utc;
 use std::path::Path;
 use std::path::PathBuf;
 use tracing::info;
@@ -137,7 +137,7 @@ pub(crate) async fn backfill_sessions(
     runtime: &agiworkforce_state::StateRuntime,
     config: &impl RolloutConfigView,
 ) {
-    let metric_client = agiworkforce_otel::metrics::global();
+    let metric_client = agiworkforce_otel::global();
     let timer = metric_client
         .as_ref()
         .and_then(|otel| otel.start_timer(DB_METRIC_BACKFILL_DURATION_MS, &[]).ok());
@@ -371,7 +371,7 @@ fn backfill_watermark_for_path(agiworkforce_home: &Path, path: &Path) -> String 
 async fn file_modified_time_utc(path: &Path) -> Option<DateTime<Utc>> {
     let modified = tokio::fs::metadata(path).await.ok()?.modified().ok()?;
     let updated_at: DateTime<Utc> = modified.into();
-    updated_at.with_nanosecond(0)
+    Some(updated_at)
 }
 
 fn parse_timestamp_to_utc(ts: &str) -> Option<DateTime<Utc>> {
@@ -381,7 +381,7 @@ fn parse_timestamp_to_utc(ts: &str) -> Option<DateTime<Utc>> {
         return dt.with_nanosecond(0);
     }
     if let Ok(dt) = DateTime::parse_from_rfc3339(ts) {
-        return dt.with_timezone(&Utc).with_nanosecond(0);
+        return Some(dt.with_timezone(&Utc));
     }
     None
 }

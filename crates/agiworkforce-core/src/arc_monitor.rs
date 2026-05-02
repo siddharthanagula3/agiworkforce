@@ -5,17 +5,17 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::warn;
 
-use crate::codex::Session;
-use crate::codex::TurnContext;
 use crate::compact::content_items_to_text;
-use crate::default_client::build_reqwest_client;
 use crate::event_mapping::is_contextual_user_message_content;
+use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
+use agiworkforce_login::default_client::build_reqwest_client;
 use agiworkforce_protocol::models::MessagePhase;
 use agiworkforce_protocol::models::ResponseItem;
 
 const ARC_MONITOR_TIMEOUT: Duration = Duration::from_secs(30);
-const CODEX_ARC_MONITOR_ENDPOINT_OVERRIDE: &str = "CODEX_ARC_MONITOR_ENDPOINT_OVERRIDE";
-const CODEX_ARC_MONITOR_TOKEN: &str = "CODEX_ARC_MONITOR_TOKEN";
+const AGIWORKFORCE_ARC_MONITOR_ENDPOINT_OVERRIDE: &str = "AGIWORKFORCE_ARC_MONITOR_ENDPOINT_OVERRIDE";
+const AGIWORKFORCE_ARC_MONITOR_TOKEN: &str = "AGIWORKFORCE_ARC_MONITOR_TOKEN";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ArcMonitorOutcome {
@@ -62,8 +62,8 @@ struct ArcMonitorPolicies {
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct ArcMonitorMetadata {
-    codex_thread_id: String,
-    codex_turn_id: String,
+    agiworkforce_thread_id: String,
+    agiworkforce_turn_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     conversation_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -103,30 +103,17 @@ pub(crate) async fn monitor_action(
 ) -> ArcMonitorOutcome {
     let auth = match turn_context.auth_manager.as_ref() {
         Some(auth_manager) => match auth_manager.auth().await {
-            Some(auth) if auth.is_chatgpt_auth() => Some(auth),
+            Some(auth) if auth.uses_agiworkforce_backend() => Some(auth),
             _ => None,
         },
         None => None,
     };
-    let token = if let Some(token) = read_non_empty_env_var(CODEX_ARC_MONITOR_TOKEN) {
-        token
-    } else {
-        let Some(auth) = auth.as_ref() else {
-            return ArcMonitorOutcome::Ok;
-        };
-        match auth.get_token() {
-            Ok(token) => token,
-            Err(err) => {
-                warn!(
-                    error = %err,
-                    "skipping safety monitor because auth token is unavailable"
-                );
-                return ArcMonitorOutcome::Ok;
-            }
-        }
-    };
+    let env_token = read_non_empty_env_var(AGIWORKFORCE_ARC_MONITOR_TOKEN);
+    if env_token.is_none() && auth.is_none() {
+        return ArcMonitorOutcome::Ok;
+    }
 
-    let url = read_non_empty_env_var(CODEX_ARC_MONITOR_ENDPOINT_OVERRIDE).unwrap_or_else(|| {
+    let url = read_non_empty_env_var(AGIWORKFORCE_ARC_MONITOR_ENDPOINT_OVERRIDE).unwrap_or_else(|| {
         format!(
             "{}/codex/safety/arc",
             turn_context.config.chatgpt_base_url.trim_end_matches('/')
@@ -142,16 +129,12 @@ pub(crate) async fn monitor_action(
     let body =
         build_arc_monitor_request(sess, turn_context, action, protection_client_callsite).await;
     let client = build_reqwest_client();
-    let mut request = client
-        .post(&url)
-        .timeout(ARC_MONITOR_TIMEOUT)
-        .json(&body)
-        .bearer_auth(token);
-    if let Some(account_id) = auth
-        .as_ref()
-        .and_then(crate::auth::AgiWorkforceAuth::get_account_id)
-    {
-        request = request.header("chatgpt-account-id", account_id);
+    let mut request = client.post(&url).timeout(ARC_MONITOR_TIMEOUT).json(&body);
+    if let Some(token) = env_token {
+        request = request.bearer_auth(token);
+    } else if let Some(auth) = auth.as_ref() {
+        request =
+            request.headers(agiworkforce_model_provider::auth_provider_from_auth(auth).to_auth_headers());
     }
 
     let response = match request.send().await {
@@ -254,8 +237,8 @@ async fn build_arc_monitor_request(
     let conversation_id = sess.conversation_id.to_string();
     ArcMonitorRequest {
         metadata: ArcMonitorMetadata {
-            codex_thread_id: conversation_id.clone(),
-            codex_turn_id: turn_context.sub_id.clone(),
+            agiworkforce_thread_id: conversation_id.clone(),
+            agiworkforce_turn_id: turn_context.sub_id.clone(),
             conversation_id: Some(conversation_id),
             protection_client_callsite: Some(protection_client_callsite.to_string()),
         },
@@ -400,7 +383,6 @@ fn build_arc_monitor_message_item(
         | ResponseItem::CustomToolCallOutput { .. }
         | ResponseItem::ToolSearchOutput { .. }
         | ResponseItem::ImageGenerationCall { .. }
-        | ResponseItem::GhostSnapshot { .. }
         | ResponseItem::Compaction { .. }
         | ResponseItem::Other => None,
     }

@@ -1,13 +1,13 @@
 use crate::config::Config;
-use crate::config::types::OtelExporterKind as Kind;
-use crate::config::types::OtelHttpProtocol as Protocol;
-use crate::default_client::originator;
+use agiworkforce_config::types::OtelExporterKind as Kind;
+use agiworkforce_config::types::OtelHttpProtocol as Protocol;
 use agiworkforce_features::Feature;
+use agiworkforce_login::default_client::originator;
+use agiworkforce_otel::OtelExporter;
+use agiworkforce_otel::OtelHttpProtocol;
 use agiworkforce_otel::OtelProvider;
-use agiworkforce_otel::config::OtelExporter;
-use agiworkforce_otel::config::OtelHttpProtocol;
-use agiworkforce_otel::config::OtelSettings;
-use agiworkforce_otel::config::OtelTlsConfig as OtelTlsSettings;
+use agiworkforce_otel::OtelSettings;
+use agiworkforce_otel::OtelTlsConfig as OtelTlsSettings;
 use std::error::Error;
 
 /// Build an OpenTelemetry provider from the app Config.
@@ -83,7 +83,7 @@ pub fn build_provider(
     OtelProvider::from(&OtelSettings {
         service_name: service_name.to_string(),
         service_version: service_version.to_string(),
-        agiworkforce_home: config.agiworkforce_home.clone(),
+        agiworkforce_home: config.agiworkforce_home.to_path_buf(),
         environment: config.otel.environment.to_string(),
         exporter,
         trace_exporter,
@@ -92,8 +92,8 @@ pub fn build_provider(
     })
 }
 
-/// Filter predicate for exporting only Codex-owned events via OTEL.
+/// Filter predicate for exporting only Agiworkforce-owned events via OTEL.
 /// Keeps events that originated from agiworkforce_otel module
-pub fn codex_export_filter(meta: &tracing::Metadata<'_>) -> bool {
+pub fn agiworkforce_export_filter(meta: &tracing::Metadata<'_>) -> bool {
     meta.target().starts_with("agiworkforce_otel")
 }

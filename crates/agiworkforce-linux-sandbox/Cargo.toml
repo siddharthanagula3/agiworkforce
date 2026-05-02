@@ -3,6 +3,7 @@ name = "agiworkforce-linux-sandbox"
 version = "0.1.0"
 edition = "2024"
 
+
 [[bin]]
 name = "agiworkforce-linux-sandbox"
 path = "src/main.rs"
@@ -13,9 +14,11 @@ path = "src/lib.rs"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 clap = { version = "4", features = ["derive"] }
-agiworkforce-core = { path = "../agiworkforce-core" }
+agiworkforce-process-hardening = { path = "../agiworkforce-process-hardening" }
 agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-sandboxing = { path = "../agiworkforce-sandboxing" }
 agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+globset = "0.4"
 landlock = "0.4.4"
 libc = "0.2.182"
 seccompiler = "0.5.0"
@@ -24,15 +27,10 @@ serde_json = "1"
 url = "2"
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
+agiworkforce-core = { path = "../agiworkforce-core" }
 pretty_assertions = "1.4.1"
 tempfile = "3.23.0"
-tokio = { version = "1", features = [
-    "io-std",
-    "macros",
-    "process",
-    "rt-multi-thread",
-    "signal",
-] }
+tokio = { version = "1", features = [ "io-std", "macros", "process", "rt-multi-thread", "signal", ] }
 
 [build-dependencies]
 cc = "1"

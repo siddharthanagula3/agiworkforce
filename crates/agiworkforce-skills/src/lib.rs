@@ -21,8 +21,7 @@ const SYSTEM_SKILLS_MARKER_SALT: &str = "v1";
 /// This is typically located at `AGIWORKFORCE_HOME/skills/.system`.
 pub fn system_cache_root_dir(agiworkforce_home: &Path) -> PathBuf {
     AbsolutePathBuf::try_from(agiworkforce_home)
-        .and_then(|agiworkforce_home| system_cache_root_dir_abs(&agiworkforce_home))
-        .map(AbsolutePathBuf::into_path_buf)
+        .map(|agiworkforce_home| system_cache_root_dir_abs(&agiworkforce_home).into_path_buf())
         .unwrap_or_else(|_| {
             agiworkforce_home
                 .join(SKILLS_DIR_NAME)
@@ -30,11 +29,9 @@ pub fn system_cache_root_dir(agiworkforce_home: &Path) -> PathBuf {
         })
 }
 
-fn system_cache_root_dir_abs(
-    agiworkforce_home: &AbsolutePathBuf,
-) -> std::io::Result<AbsolutePathBuf> {
+fn system_cache_root_dir_abs(agiworkforce_home: &AbsolutePathBuf) -> AbsolutePathBuf {
     agiworkforce_home
-        .join(SKILLS_DIR_NAME)?
+        .join(SKILLS_DIR_NAME)
         .join(SYSTEM_SKILLS_DIR_NAME)
 }
 
@@ -48,19 +45,14 @@ fn system_cache_root_dir_abs(
 /// install is skipped.
 pub fn install_system_skills(agiworkforce_home: &Path) -> Result<(), SystemSkillsError> {
     let agiworkforce_home = AbsolutePathBuf::try_from(agiworkforce_home)
-        .map_err(|source| SystemSkillsError::io("normalize codex home dir", source))?;
-    let skills_root_dir = agiworkforce_home
-        .join(SKILLS_DIR_NAME)
-        .map_err(|source| SystemSkillsError::io("resolve skills root dir", source))?;
+        .map_err(|source| SystemSkillsError::io("normalize agiworkforce home dir", source))?;
+    let skills_root_dir = agiworkforce_home.join(SKILLS_DIR_NAME);
     fs::create_dir_all(skills_root_dir.as_path())
         .map_err(|source| SystemSkillsError::io("create skills root dir", source))?;
 
-    let dest_system = system_cache_root_dir_abs(&agiworkforce_home)
-        .map_err(|source| SystemSkillsError::io("resolve system skills cache root dir", source))?;
+    let dest_system = system_cache_root_dir_abs(&agiworkforce_home);
 
-    let marker_path = dest_system
-        .join(SYSTEM_SKILLS_MARKER_FILENAME)
-        .map_err(|source| SystemSkillsError::io("resolve system skills marker path", source))?;
+    let marker_path = dest_system.join(SYSTEM_SKILLS_MARKER_FILENAME);
     let expected_fingerprint = embedded_system_skills_fingerprint();
     if dest_system.as_path().is_dir()
         && read_marker(&marker_path).is_ok_and(|marker| marker == expected_fingerprint)
@@ -129,18 +121,14 @@ fn write_embedded_dir(dir: &Dir<'_>, dest: &AbsolutePathBuf) -> Result<(), Syste
     for entry in dir.entries() {
         match entry {
             include_dir::DirEntry::Dir(subdir) => {
-                let subdir_dest = dest.join(subdir.path()).map_err(|source| {
-                    SystemSkillsError::io("resolve system skills subdir", source)
-                })?;
+                let subdir_dest = dest.join(subdir.path());
                 fs::create_dir_all(subdir_dest.as_path()).map_err(|source| {
                     SystemSkillsError::io("create system skills subdir", source)
                 })?;
                 write_embedded_dir(subdir, dest)?;
             }
             include_dir::DirEntry::File(file) => {
-                let path = dest.join(file.path()).map_err(|source| {
-                    SystemSkillsError::io("resolve system skills file", source)
-                })?;
+                let path = dest.join(file.path());
                 if let Some(parent) = path.as_path().parent() {
                     fs::create_dir_all(parent).map_err(|source| {
                         SystemSkillsError::io("create system skills file parent", source)

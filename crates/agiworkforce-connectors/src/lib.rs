@@ -1,3 +1,8 @@
+pub mod accessible;
+pub mod filter;
+pub mod merge;
+pub mod metadata;
+
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::LazyLock;
@@ -368,12 +373,12 @@ fn directory_app_to_app_info(app: DirectoryApp) -> AppInfo {
     }
 }
 
-fn connector_install_url(name: &str, connector_id: &str) -> String {
+pub(crate) fn connector_install_url(name: &str, connector_id: &str) -> String {
     let slug = connector_name_slug(name);
     format!("https://chatgpt.com/apps/{slug}/{connector_id}")
 }
 
-fn connector_name_slug(name: &str) -> String {
+pub(crate) fn connector_name_slug(name: &str) -> String {
     let mut normalized = String::with_capacity(name.len());
     for character in name.chars() {
         if character.is_ascii_alphanumeric() {

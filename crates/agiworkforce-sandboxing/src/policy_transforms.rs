@@ -1,9 +1,11 @@
 use crate::macos_permissions::intersect_macos_seatbelt_profile_extensions;
 use crate::macos_permissions::merge_macos_seatbelt_profile_extensions;
-use agiworkforce_protocol::models::FileSystemPermissions;
+use agiworkforce_protocol::models::AdditionalPermissionProfile;
+use agiworkforce_protocol::models::PermissionProfile as FullPermissionProfile;
+use agiworkforce_protocol::models::SandboxFileSystemPermissions as FileSystemPermissions;
 use agiworkforce_protocol::models::MacOsSeatbeltProfileExtensions;
 use agiworkforce_protocol::models::NetworkPermissions;
-use agiworkforce_protocol::models::PermissionProfile;
+use agiworkforce_protocol::models::SimplePermissionProfile as PermissionProfile;
 use agiworkforce_protocol::permissions::FileSystemAccessMode;
 use agiworkforce_protocol::permissions::FileSystemPath;
 use agiworkforce_protocol::permissions::FileSystemSandboxEntry;
@@ -455,6 +457,241 @@ pub fn should_require_platform_sandbox(
     match file_system_policy.kind {
         FileSystemSandboxKind::Restricted => !file_system_policy.has_full_disk_write_access(),
         FileSystemSandboxKind::Unrestricted | FileSystemSandboxKind::ExternalSandbox => false,
+    }
+}
+
+/// Intersect two `AdditionalPermissionProfile` values.
+///
+/// Returns only permissions that appear in both `requested` and `granted`.
+/// The `cwd` parameter is accepted for API compatibility but is not currently
+/// used in the intersection logic.
+pub fn intersect_additional_permission_profiles(
+    requested: AdditionalPermissionProfile,
+    granted: AdditionalPermissionProfile,
+    _cwd: &std::path::Path,
+) -> AdditionalPermissionProfile {
+    use agiworkforce_protocol::models::FileSystemPermissions as Fsp;
+    use agiworkforce_protocol::permissions::FileSystemPath;
+
+    let network = match (requested.network.as_ref(), granted.network.as_ref()) {
+        (
+            Some(NetworkPermissions { enabled: Some(true) }),
+            Some(NetworkPermissions { enabled: Some(true) }),
+        ) => Some(NetworkPermissions { enabled: Some(true) }),
+        _ => None,
+    };
+
+    let file_system = match (requested.file_system, granted.file_system) {
+        (Some(req_fs), Some(granted_fs)) => {
+            let granted_paths: std::collections::HashSet<_> = granted_fs
+                .entries
+                .iter()
+                .filter_map(|e| {
+                    if let FileSystemPath::Path { path } = &e.path {
+                        Some((path.clone(), e.access))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let entries: Vec<_> = req_fs
+                .entries
+                .into_iter()
+                .filter(|e| {
+                    if let FileSystemPath::Path { path } = &e.path {
+                        granted_paths.contains(&(path.clone(), e.access))
+                    } else {
+                        false
+                    }
+                })
+                .collect();
+            if entries.is_empty() {
+                None
+            } else {
+                Some(Fsp { entries, glob_scan_max_depth: None })
+            }
+        }
+        _ => None,
+    };
+
+    AdditionalPermissionProfile { network, file_system }
+}
+
+/// Merge two `AdditionalPermissionProfile` values.
+///
+/// This is the `AdditionalPermissionProfile` analogue of [`merge_permission_profiles`]
+/// which operates on `SimplePermissionProfile`.
+pub fn merge_additional_permission_profiles(
+    base: Option<&AdditionalPermissionProfile>,
+    overlay: Option<&AdditionalPermissionProfile>,
+) -> Option<AdditionalPermissionProfile> {
+    use agiworkforce_protocol::models::FileSystemPermissions as Fsp;
+
+    let Some(overlay) = overlay else {
+        return base.cloned();
+    };
+
+    match base {
+        Some(base) => {
+            let network = match (base.network.as_ref(), overlay.network.as_ref()) {
+                (
+                    Some(NetworkPermissions {
+                        enabled: Some(true),
+                    }),
+                    _,
+                )
+                | (
+                    _,
+                    Some(NetworkPermissions {
+                        enabled: Some(true),
+                    }),
+                ) => Some(NetworkPermissions {
+                    enabled: Some(true),
+                }),
+                _ => None,
+            };
+            let file_system = match (base.file_system.as_ref(), overlay.file_system.as_ref()) {
+                (Some(base_fs), Some(overlay_fs)) => {
+                    let mut entries = base_fs.entries.clone();
+                    entries.extend(overlay_fs.entries.iter().cloned());
+                    let fs = Fsp {
+                        entries,
+                        glob_scan_max_depth: overlay_fs.glob_scan_max_depth.or(base_fs.glob_scan_max_depth),
+                    };
+                    if fs.is_empty() { None } else { Some(fs) }
+                }
+                (Some(b), None) => Some(b.clone()),
+                (None, Some(o)) => Some(o.clone()),
+                (None, None) => None,
+            };
+            let result = AdditionalPermissionProfile { network, file_system };
+            if result.is_empty() { None } else { Some(result) }
+        }
+        None => {
+            if overlay.is_empty() { None } else { Some(overlay.clone()) }
+        }
+    }
+}
+
+/// Apply an `AdditionalPermissionProfile` overlay on top of a `PermissionProfile`.
+///
+/// Returns a new `PermissionProfile` with the additional permissions merged in.
+pub fn effective_permission_profile(
+    base: &FullPermissionProfile,
+    additional: Option<&AdditionalPermissionProfile>,
+) -> FullPermissionProfile {
+    use agiworkforce_protocol::permissions::FileSystemPath;
+
+    let Some(additional) = additional else {
+        return base.clone();
+    };
+    if additional.is_empty() {
+        return base.clone();
+    }
+    // Apply additional permissions by merging through the runtime policy layer.
+    let (mut fs_policy, network_policy) = base.to_runtime_permissions();
+    if let Some(extra_fs) = &additional.file_system {
+        for entry in &extra_fs.entries {
+            if let FileSystemPath::Path { path } = &entry.path {
+                use agiworkforce_protocol::permissions::FileSystemAccessMode;
+                match entry.access {
+                    FileSystemAccessMode::Write => {
+                        // Use a dummy cwd that will not match any existing entry
+                        // so the path always gets appended.
+                        let dummy_cwd = std::path::Path::new("/");
+                        fs_policy = fs_policy.with_additional_writable_roots(
+                            dummy_cwd,
+                            std::slice::from_ref(path),
+                        );
+                    }
+                    FileSystemAccessMode::Read | FileSystemAccessMode::None => {
+                        let dummy_cwd = std::path::Path::new("/");
+                        fs_policy = fs_policy.with_additional_readable_roots(
+                            dummy_cwd,
+                            std::slice::from_ref(path),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    let network = if additional
+        .network
+        .as_ref()
+        .and_then(|n| n.enabled)
+        .unwrap_or(false)
+    {
+        NetworkSandboxPolicy::Enabled
+    } else {
+        network_policy
+    };
+    FullPermissionProfile::from_runtime_permissions_with_enforcement(
+        base.enforcement(),
+        &fs_policy,
+        network,
+    )
+}
+
+/// Derive a `SandboxPolicy` (legacy) from a `PermissionProfile`.
+///
+/// This is the compatibility bridge between the modern permission profile system
+/// and the legacy `SandboxPolicy` used by older code paths.
+pub fn compatibility_sandbox_policy_for_permission_profile(
+    permission_profile: &FullPermissionProfile,
+    file_system_sandbox_policy: &FileSystemSandboxPolicy,
+    network_sandbox_policy: NetworkSandboxPolicy,
+    cwd: &std::path::Path,
+) -> SandboxPolicy {
+    use agiworkforce_protocol::models::SandboxEnforcement;
+    let _ = file_system_sandbox_policy;
+    let _ = network_sandbox_policy;
+    permission_profile
+        .to_legacy_sandbox_policy(cwd)
+        .unwrap_or_else(|_| match permission_profile.enforcement() {
+            SandboxEnforcement::Disabled => SandboxPolicy::DangerFullAccess,
+            SandboxEnforcement::External => SandboxPolicy::ExternalSandbox {
+                network_access: if network_sandbox_policy.is_enabled() {
+                    NetworkAccess::Enabled
+                } else {
+                    NetworkAccess::Restricted
+                },
+            },
+            SandboxEnforcement::Managed => SandboxPolicy::DangerFullAccess,
+        })
+}
+
+/// Check if bubblewrap is available on the system and return a user-visible
+/// warning when it is missing or inaccessible.
+///
+/// Returns `Some(message)` when the system does not have a working bubblewrap
+/// installation, or `None` when no warning is needed.
+///
+/// On non-Linux platforms this always returns `None`.
+pub fn system_bwrap_warning(
+    #[allow(unused_variables)] permission_profile: &FullPermissionProfile,
+) -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        use agiworkforce_protocol::models::SandboxEnforcement;
+        if permission_profile.enforcement() == SandboxEnforcement::Disabled {
+            return None;
+        }
+        // Probe for bwrap
+        match std::process::Command::new("bwrap")
+            .arg("--version")
+            .output()
+        {
+            Ok(output) if output.status.success() => None,
+            _ => Some(
+                "Warning: `bwrap` (bubblewrap) was not found or could not be executed. \
+                 Filesystem sandbox will not be active for this session."
+                    .to_string(),
+            ),
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
     }
 }
 

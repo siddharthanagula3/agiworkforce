@@ -406,7 +406,11 @@ mod tests {
 
     #[test]
     fn resource_attributes_omit_host_name_when_missing_or_empty() {
-        let missing = resource_attributes(&test_otel_settings(), None, ResourceKind::Logs);
+        let missing = resource_attributes(
+            &test_otel_settings(),
+            /*host_name*/ None,
+            ResourceKind::Logs,
+        );
         let empty = resource_attributes(&test_otel_settings(), Some("   "), ResourceKind::Logs);
         let trace_attrs = resource_attributes(
             &test_otel_settings(),
@@ -450,7 +454,7 @@ mod tests {
     fn test_otel_settings() -> OtelSettings {
         OtelSettings {
             environment: "test".to_string(),
-            service_name: "codex-test".to_string(),
+            service_name: "agiworkforce-test".to_string(),
             service_version: "0.0.0".to_string(),
             agiworkforce_home: PathBuf::from("."),
             exporter: OtelExporter::None,

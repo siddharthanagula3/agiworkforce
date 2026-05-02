@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use agiworkforce_git_utils::GitSha;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::config_types::ForcedLoginMethod;
 use agiworkforce_protocol::config_types::ReasoningSummary;
@@ -11,6 +10,7 @@ use agiworkforce_protocol::openai_models::ReasoningEffort;
 use agiworkforce_protocol::parse_command::ParsedCommand;
 use agiworkforce_protocol::protocol::AskForApproval;
 use agiworkforce_protocol::protocol::FileChange;
+pub use agiworkforce_protocol::protocol::GitSha;
 use agiworkforce_protocol::protocol::ReviewDecision;
 use agiworkforce_protocol::protocol::SandboxPolicy;
 use agiworkforce_protocol::protocol::SessionSource;

@@ -19,29 +19,32 @@
 //! This keeps policy logic and user interaction centralized while the PTY/process
 //! concerns remain isolated here. The implementation is split between:
 //! - `process.rs`: PTY process lifecycle + output buffering.
+//! - `process_state.rs`: shared exit/failure state for local and remote processes.
 //! - `process_manager.rs`: orchestration (approvals, sandboxing, reuse) and request handling.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Weak;
 
 use agiworkforce_network_proxy::NetworkProxy;
-use agiworkforce_protocol::models::PermissionProfile;
+use agiworkforce_protocol::models::AdditionalPermissionProfile;
+use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use rand::Rng;
 use rand::rng;
 use tokio::sync::Mutex;
 
-use crate::codex::Session;
-use crate::codex::TurnContext;
 use crate::sandboxing::SandboxPermissions;
+use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
+use crate::tools::network_approval::DeferredNetworkApproval;
 
 mod async_watcher;
 mod errors;
 mod head_tail_buffer;
 mod process;
 mod process_manager;
+mod process_state;
 
 pub(crate) fn set_deterministic_process_ids_for_tests(enabled: bool) {
     process_manager::set_deterministic_process_ids_for_tests(enabled);
@@ -86,14 +89,15 @@ impl UnifiedExecContext {
 #[derive(Debug)]
 pub(crate) struct ExecCommandRequest {
     pub command: Vec<String>,
+    pub hook_command: String,
     pub process_id: i32,
     pub yield_time_ms: u64,
     pub max_output_tokens: Option<usize>,
-    pub workdir: Option<PathBuf>,
+    pub workdir: Option<AbsolutePathBuf>,
     pub network: Option<NetworkProxy>,
     pub tty: bool,
     pub sandbox_permissions: SandboxPermissions,
-    pub additional_permissions: Option<PermissionProfile>,
+    pub additional_permissions: Option<AdditionalPermissionProfile>,
     pub additional_permissions_preapproved: bool,
     pub justification: Option<String>,
     pub prefix_rule: Option<Vec<String>>,
@@ -145,9 +149,9 @@ struct ProcessEntry {
     process: Arc<UnifiedExecProcess>,
     call_id: String,
     process_id: i32,
-    command: Vec<String>,
+    hook_command: String,
     tty: bool,
-    network_approval_id: Option<String>,
+    network_approval: Option<DeferredNetworkApproval>,
     session: Weak<Session>,
     last_used: tokio::time::Instant,
 }
@@ -167,6 +171,10 @@ pub(crate) fn generate_chunk_id() -> String {
         .collect()
 }
 
+#[cfg(test)]
+#[cfg(unix)]
+#[path = "process_tests.rs"]
+mod process_tests;
 #[cfg(test)]
 #[cfg(unix)]
 #[path = "mod_tests.rs"]
