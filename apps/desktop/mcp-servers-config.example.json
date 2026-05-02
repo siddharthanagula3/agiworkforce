@@ -2,7 +2,7 @@
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/siddhartha/Desktop"],
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "${HOME}/Documents"],
       "env": {},
       "enabled": true,
       "description": "Access to local filesystem for file operations"
