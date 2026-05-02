@@ -17,6 +17,7 @@ import { useSettingsStore } from '../settingsStore';
 // Stub tauri-mock so the store does not try to invoke Rust commands
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
+  isTauri: false,
   isTauriContext: vi.fn(() => false),
 }));
 

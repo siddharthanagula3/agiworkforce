@@ -5,6 +5,8 @@ const invokeMock = vi.fn();
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: invokeMock,
   listen: vi.fn(),
+  isTauri: false,
+  isTauriContext: () => false,
 }));
 
 vi.mock('../../stores/chat/chatStore', () => ({
