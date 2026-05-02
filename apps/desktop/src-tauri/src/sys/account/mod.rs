@@ -821,9 +821,13 @@ pub async fn account_list_devices() -> Result<Vec<ConnectedDevice>, String> {
 
 /// Disconnect / revoke a device session by its identifier.
 ///
-/// Validates the `device_id` format (must be a 64-character hex SHA-256
-/// digest) and returns `Ok(())`.  Once the backend API exposes a revocation
-/// endpoint this will forward the call.
+/// FIX-029 (Sprint 5): the previous body validated input then returned
+/// `Ok(())` while doing nothing — callers got a green checkmark in the
+/// UI even though the device session was still live. Now we surface an
+/// explicit `not_implemented` error so the UI can render "Pending — full
+/// revocation lands with the device-management API". Once the backend
+/// exposes `/api/devices/:id/revoke` and the Supabase admin endpoint
+/// for refresh-token revocation is wired up, this will forward both calls.
 #[tauri::command]
 pub async fn account_disconnect_device(device_id: String) -> Result<(), String> {
     // Validate device_id looks like a hex SHA-256 digest (64 hex chars).
@@ -844,6 +848,5 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
         return Err("Cannot disconnect the current device. Sign out instead.".to_string());
     }
 
-    // TODO: Forward to backend API when /api/devices/:id/revoke is available.
-    Ok(())
+    Err("[ERR_NOT_IMPLEMENTED] Remote device revocation requires the device-management API + the Supabase refresh-token revocation endpoint. Both are pending — revoke from the Supabase dashboard for now.".to_string())
 }
