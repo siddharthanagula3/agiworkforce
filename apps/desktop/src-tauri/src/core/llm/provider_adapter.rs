@@ -9,6 +9,28 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
 
+/// FIX-007 (Sprint 3): hard upper bound on `max_tokens` for any single
+/// LLM request. Without this, an indirect prompt injection could request
+/// `max_tokens: 1_000_000` and bleed the user's BYOK budget — there is
+/// no per-request cap on the LLM provider side either. 16 384 covers
+/// every legitimate code-mode response we ship today; UI flows that
+/// genuinely need more still go through `clamp_max_tokens` and accept
+/// the cap so the bound applies even when the request shape is exotic.
+const PER_REQUEST_MAX_TOKENS_CEILING: u32 = 16_384;
+
+/// Clamp `max_tokens` to [`PER_REQUEST_MAX_TOKENS_CEILING`] when the caller
+/// supplied a value. None inputs stay None — the provider's own default
+/// applies. Returns the (possibly clamped) value plus a `clamped` flag
+/// for callers that want to log when the cap fired.
+fn clamp_max_tokens(requested: Option<u32>) -> (Option<u32>, bool) {
+    match requested {
+        Some(value) if value > PER_REQUEST_MAX_TOKENS_CEILING => {
+            (Some(PER_REQUEST_MAX_TOKENS_CEILING), true)
+        }
+        other => (other, false),
+    }
+}
+
 #[cfg(test)]
 #[path = "provider_adapter_tests.rs"]
 mod provider_adapter_tests;
@@ -710,8 +732,17 @@ impl OpenAIAdapter {
             }
         }
 
-        // Responses API uses max_output_tokens (not max_tokens)
-        if let Some(max_tokens) = request.max_tokens {
+        // Responses API uses max_output_tokens (not max_tokens). FIX-007:
+        // clamp through PER_REQUEST_MAX_TOKENS_CEILING.
+        let (max_tokens, clamped) = clamp_max_tokens(request.max_tokens);
+        if let Some(max_tokens) = max_tokens {
+            if clamped {
+                tracing::warn!(
+                    requested = request.max_tokens,
+                    capped_at = max_tokens,
+                    "max_output_tokens clamped to per-request ceiling (FIX-007)"
+                );
+            }
             api_request["max_output_tokens"] = serde_json::json!(max_tokens);
         }
 
@@ -804,8 +835,16 @@ impl OpenAIAdapter {
             api_request["temperature"] = serde_json::json!(temp);
         }
 
-        // Add max_tokens
-        if let Some(max_tokens) = request.max_tokens {
+        // Add max_tokens (FIX-007: clamp through PER_REQUEST_MAX_TOKENS_CEILING)
+        let (max_tokens, clamped) = clamp_max_tokens(request.max_tokens);
+        if let Some(max_tokens) = max_tokens {
+            if clamped {
+                tracing::warn!(
+                    requested = request.max_tokens,
+                    capped_at = max_tokens,
+                    "max_tokens clamped to per-request ceiling (FIX-007)"
+                );
+            }
             api_request["max_tokens"] = serde_json::json!(max_tokens);
         }
 
@@ -1712,7 +1751,8 @@ impl ProviderAdapter for AnthropicAdapter {
         // Anthropic uses Messages API format with flat tool definitions
         let mut anthropic_request = serde_json::json!({
             "model": canonical_model,
-            "max_tokens": request.max_tokens.unwrap_or(4096),
+            // FIX-007: clamp through PER_REQUEST_MAX_TOKENS_CEILING.
+            "max_tokens": clamp_max_tokens(Some(request.max_tokens.unwrap_or(4096))).0.unwrap_or(4096),
             "messages": messages,
         });
 
