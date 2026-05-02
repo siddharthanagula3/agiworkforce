@@ -50,6 +50,24 @@ ignore = [
     # v0.103.x updated to 0.103.10 (patched), but 0.101.x has no patch available
     # Low impact: requires compromised CA to exploit
     "RUSTSEC-2026-0049", # rustls-webpki CRL matching (Tauri transitive, low impact)
+
+    # FIX-018 (Sprint 3) — transitive deps from optional `remote-databases`
+    # feature (mongodb, mysql_async). The feature is off by default and
+    # gated behind a build flag; users who enable it accept these
+    # advisories until upstream mongodb/mysql_async upgrade their pinned
+    # crates. Tracked for re-evaluation each release.
+    "RUSTSEC-2026-0119", # hickory-proto O(n²) name compression (mongodb transitive, optional feature)
+    "RUSTSEC-2026-0118", # hickory-proto NSEC3 unbounded loop (mongodb transitive, optional feature)
+    "RUSTSEC-2023-0071", # rsa Marvin Attack (mongodb / mysql_async transitive, optional feature)
+
+    # rustls-webpki — both 0.101.x and the older 0.103.x branches still in
+    # the dep tree have name-constraint and CRL-panic advisories without
+    # patched releases. We're already on the latest 0.103.13 for the
+    # primary branch; the older 0.101.x is pinned by Tauri's transitive
+    # deps. Tracked separately above (RUSTSEC-2026-0049 covers CRL).
+    "RUSTSEC-2026-0098", # rustls-webpki URI name constraints accepted incorrectly
+    "RUSTSEC-2026-0099", # rustls-webpki name constraints accepted for wildcard certs
+    "RUSTSEC-2026-0104", # rustls-webpki reachable panic in CRL parsing
 ]
 
 [yanked]
