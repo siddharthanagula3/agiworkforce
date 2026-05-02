@@ -304,9 +304,14 @@ mod tests {
             HeaderValue::from_static("1704074400"),
         );
 
+        // The wire-protocol header prefix is `x-codex-*` (set by the
+        // upstream codex API server). The internal limit_id we use to
+        // address it stays `codex_secondary` to match. The agiworkforce
+        // rebrand applies to our own products, not the codex API
+        // headers.
         let snapshot =
-            parse_rate_limit_for_limit(&headers, Some("agiworkforce_secondary")).expect("snapshot");
-        assert_eq!(snapshot.limit_id.as_deref(), Some("agiworkforce_secondary"));
+            parse_rate_limit_for_limit(&headers, Some("codex_secondary")).expect("snapshot");
+        assert_eq!(snapshot.limit_id.as_deref(), Some("codex_secondary"));
         assert_eq!(snapshot.limit_name, None);
         let primary = snapshot.primary.expect("primary");
         assert_eq!(primary.used_percent, 80.0);
@@ -328,8 +333,8 @@ mod tests {
         );
 
         let snapshot =
-            parse_rate_limit_for_limit(&headers, Some("agiworkforce_bengalfox")).expect("snapshot");
-        assert_eq!(snapshot.limit_id.as_deref(), Some("agiworkforce_bengalfox"));
+            parse_rate_limit_for_limit(&headers, Some("codex_bengalfox")).expect("snapshot");
+        assert_eq!(snapshot.limit_id.as_deref(), Some("codex_bengalfox"));
         assert_eq!(snapshot.limit_name.as_deref(), Some("gpt-5.2-codex-sonic"));
     }
 
@@ -348,10 +353,7 @@ mod tests {
         let updates = parse_all_rate_limits(&headers);
         assert_eq!(updates.len(), 2);
         assert_eq!(updates[0].limit_id.as_deref(), Some("codex"));
-        assert_eq!(
-            updates[1].limit_id.as_deref(),
-            Some("agiworkforce_secondary")
-        );
+        assert_eq!(updates[1].limit_id.as_deref(), Some("codex_secondary"));
         assert_eq!(updates[0].limit_name, None);
         assert_eq!(updates[1].limit_name, None);
     }
