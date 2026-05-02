@@ -15,6 +15,7 @@ import { formatTokens } from '../../utils/tokenCount';
 import { PROVIDER_LABELS } from '../../constants/llm';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip';
 import type { Provider } from '../../stores/settingsStore';
+import { BudgetStatusWidget } from './BudgetStatusWidget';
 
 export interface StatusBarProps {
   provider: Provider;
@@ -33,6 +34,9 @@ export interface StatusBarProps {
 
   isSending?: boolean;
 
+  /** FIX-007: user identity used by the budget widget. Defaults to "default" for guests. */
+  budgetUserId?: string;
+
   className?: string;
 }
 
@@ -45,6 +49,7 @@ export function StatusBar({
   agiStatus = 'idle',
   isOnline = true,
   isSending = false,
+  budgetUserId = 'default',
   className,
 }: StatusBarProps) {
   const tokenUsagePercent = useMemo(() => {
@@ -196,6 +201,10 @@ export function StatusBar({
 
         {}
         <div className="h-4 w-px bg-border" />
+
+        {/* FIX-007: daily LLM-spend chip — silent in web build, only shown
+            in Tauri once the IPC returns a status. */}
+        <BudgetStatusWidget userId={budgetUserId} />
 
         {}
         <Tooltip>
