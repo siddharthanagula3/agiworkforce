@@ -4,6 +4,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use agiworkforce_protocol::ToolName;
 use async_trait::async_trait;
 use serde_json::Value as JsonValue;
 use tokio::sync::Mutex;
@@ -13,12 +14,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use crate::FunctionCallOutputContentItem;
+use crate::runtime::CodeModeNestedToolCall;
 use crate::runtime::DEFAULT_EXEC_YIELD_TIME_MS;
 use crate::runtime::ExecuteRequest;
 use crate::runtime::RuntimeCommand;
 use crate::runtime::RuntimeEvent;
 use crate::runtime::RuntimeResponse;
 use crate::runtime::TurnMessage;
+use crate::runtime::WaitOutcome;
 use crate::runtime::WaitRequest;
 use crate::runtime::spawn_runtime;
 
@@ -26,8 +29,7 @@ use crate::runtime::spawn_runtime;
 pub trait CodeModeTurnHost: Send + Sync {
     async fn invoke_tool(
         &self,
-        tool_name: String,
-        input: Option<JsonValue>,
+        invocation: CodeModeNestedToolCall,
         cancellation_token: CancellationToken,
     ) -> Result<JsonValue, String>;
 
@@ -75,12 +77,25 @@ impl CodeModeService {
         *self.inner.stored_values.lock().await = values;
     }
 
-    pub async fn execute(&self, request: ExecuteRequest) -> Result<RuntimeResponse, String> {
-        let cell_id = self
-            .inner
+    /// Reserves the runtime cell id for a future `execute` request.
+    ///
+    /// The runtime can issue nested tool calls before the first `execute`
+    /// response is returned. Hosts that need a parent trace object for those
+    /// nested calls should allocate the cell id up front and pass it back on
+    /// the `ExecuteRequest`.
+    pub fn allocate_cell_id(&self) -> String {
+        self.inner
             .next_cell_id
             .fetch_add(1, Ordering::Relaxed)
-            .to_string();
+            .to_string()
+    }
+
+    pub async fn execute(&self, request: ExecuteRequest) -> Result<RuntimeResponse, String> {
+        let cell_id = if request.cell_id.is_empty() {
+            self.allocate_cell_id()
+        } else {
+            request.cell_id.clone()
+        };
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let (runtime_tx, runtime_terminate_handle) = spawn_runtime(request.clone(), event_tx)?;
         let (control_tx, control_rx) = mpsc::unbounded_channel();
@@ -112,7 +127,7 @@ impl CodeModeService {
             .map_err(|_| "exec runtime ended unexpectedly".to_string())
     }
 
-    pub async fn wait(&self, request: WaitRequest) -> Result<RuntimeResponse, String> {
+    pub async fn wait(&self, request: WaitRequest) -> Result<WaitOutcome, String> {
         let cell_id = request.cell_id.clone();
         let handle = self
             .inner
@@ -122,7 +137,7 @@ impl CodeModeService {
             .get(&request.cell_id)
             .cloned();
         let Some(handle) = handle else {
-            return Ok(missing_cell_response(cell_id));
+            return Ok(WaitOutcome::NotFound(missing_cell_response(cell_id)));
         };
         let (response_tx, response_rx) = oneshot::channel();
         let control_message = if request.terminate {
@@ -134,11 +149,11 @@ impl CodeModeService {
             }
         };
         if handle.control_tx.send(control_message).is_err() {
-            return Ok(missing_cell_response(cell_id));
+            return Ok(WaitOutcome::NotFound(missing_cell_response(cell_id)));
         }
         match response_rx.await {
-            Ok(response) => Ok(response),
-            Err(_) => Ok(missing_cell_response(request.cell_id)),
+            Ok(response) => Ok(WaitOutcome::LiveCell(response)),
+            Err(_) => Ok(WaitOutcome::NotFound(missing_cell_response(request.cell_id))),
         }
     }
 
@@ -180,8 +195,14 @@ impl CodeModeService {
                         let host = Arc::clone(&host);
                         let inner = Arc::clone(&inner);
                         tokio::spawn(async move {
+                            let invocation = CodeModeNestedToolCall {
+                                cell_id: cell_id.clone(),
+                                runtime_tool_call_id: id.clone(),
+                                tool_name: ToolName::plain(name),
+                                input: input.unwrap_or(JsonValue::Null),
+                            };
                             let response = host
-                                .invoke_tool(name, input, CancellationToken::new())
+                                .invoke_tool(invocation, CancellationToken::new())
                                 .await;
                             let runtime_tx = inner
                                 .sessions
