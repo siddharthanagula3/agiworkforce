@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use futures::future::join_all;
 
 use agiworkforce_protocol::protocol::HookCompletedEvent;
@@ -9,6 +10,7 @@ use agiworkforce_protocol::protocol::HookHandlerType;
 use agiworkforce_protocol::protocol::HookRunStatus;
 use agiworkforce_protocol::protocol::HookRunSummary;
 use agiworkforce_protocol::protocol::HookScope;
+use agiworkforce_protocol::protocol::HookSource;
 
 use super::CommandShell;
 use super::ConfiguredHandler;
@@ -31,7 +33,10 @@ pub(crate) fn select_handlers(
         .iter()
         .filter(|handler| handler.event_name == event_name)
         .filter(|handler| match event_name {
-            HookEventName::PreToolUse | HookEventName::SessionStart => {
+            HookEventName::PreToolUse
+            | HookEventName::PermissionRequest
+            | HookEventName::PostToolUse
+            | HookEventName::SessionStart => {
                 matches_matcher(handler.matcher.as_deref(), matcher_input)
             }
             HookEventName::UserPromptSubmit | HookEventName::Stop => true,
@@ -47,7 +52,9 @@ pub(crate) fn running_summary(handler: &ConfiguredHandler) -> HookRunSummary {
         handler_type: HookHandlerType::Command,
         execution_mode: HookExecutionMode::Sync,
         scope: scope_for_event(handler.event_name),
-        source_path: handler.source_path.clone(),
+        source_path: AbsolutePathBuf::try_from(handler.source_path.clone())
+            .unwrap_or_else(|_| AbsolutePathBuf::try_from(std::env::current_dir().unwrap_or_default()).unwrap()),
+        source: HookSource::default(),
         display_order: handler.display_order,
         status: HookRunStatus::Running,
         status_message: handler.status_message.clone(),
@@ -92,7 +99,9 @@ pub(crate) fn completed_summary(
         handler_type: HookHandlerType::Command,
         execution_mode: HookExecutionMode::Sync,
         scope: scope_for_event(handler.event_name),
-        source_path: handler.source_path.clone(),
+        source_path: AbsolutePathBuf::try_from(handler.source_path.clone())
+            .unwrap_or_else(|_| AbsolutePathBuf::try_from(std::env::current_dir().unwrap_or_default()).unwrap()),
+        source: HookSource::default(),
         display_order: handler.display_order,
         status,
         status_message: handler.status_message.clone(),
@@ -106,9 +115,11 @@ pub(crate) fn completed_summary(
 fn scope_for_event(event_name: HookEventName) -> HookScope {
     match event_name {
         HookEventName::SessionStart => HookScope::Thread,
-        HookEventName::PreToolUse | HookEventName::UserPromptSubmit | HookEventName::Stop => {
-            HookScope::Turn
-        }
+        HookEventName::PreToolUse
+        | HookEventName::PermissionRequest
+        | HookEventName::PostToolUse
+        | HookEventName::UserPromptSubmit
+        | HookEventName::Stop => HookScope::Turn,
     }
 }
 

@@ -32,14 +32,16 @@ echo "==> Copying $REF_RS/$SRC_NAME → $TARGET"
 cp -r "$REF_RS/$SRC_NAME" "$TARGET"
 
 echo "==> Renaming identifiers (codex→agiworkforce)"
-find "$TARGET" -type f \( -name "*.rs" -o -name "*.toml" -o -name "*.md" -o -name "*.json" \) \
-    -print0 | xargs -0 LC_ALL=C sed -i '' \
+while IFS= read -r -d '' f; do
+    sed -i '' \
         -e 's/CODEX_/AGIWORKFORCE_/g' \
         -e 's/CODEX/AGIWORKFORCE/g' \
         -e 's/Codex/Agiworkforce/g' \
         -e 's/codex_/agiworkforce_/g' \
         -e 's/codex-/agiworkforce-/g' \
-        -e 's/"codex"/"agiworkforce"/g'
+        -e 's/"codex"/"agiworkforce"/g' \
+        "$f"
+done < <(find "$TARGET" -type f \( -name "*.rs" -o -name "*.toml" -o -name "*.md" -o -name "*.json" \) -print0)
 
 echo "==> Expanding workspace deps in Cargo.toml(s)"
 find "$TARGET" -name "Cargo.toml" | while read -r ct; do

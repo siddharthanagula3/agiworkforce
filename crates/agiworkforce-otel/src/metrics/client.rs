@@ -41,7 +41,7 @@ use std::time::Duration;
 use tracing::debug;
 
 const ENV_ATTRIBUTE: &str = "env";
-const METER_NAME: &str = "codex";
+const METER_NAME: &str = "agiworkforce";
 const DURATION_UNIT: &str = "ms";
 const DURATION_DESCRIPTION: &str = "Duration in milliseconds.";
 
@@ -179,7 +179,7 @@ impl MetricsClientInner {
     }
 }
 
-/// OpenTelemetry metrics client used by Codex.
+/// OpenTelemetry metrics client used by Agiworkforce.
 #[derive(Clone, Debug)]
 pub struct MetricsClient(std::sync::Arc<MetricsClientInner>);
 

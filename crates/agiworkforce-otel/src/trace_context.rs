@@ -141,7 +141,9 @@ mod tests {
 
     #[test]
     fn invalid_traceparent_returns_none() {
-        assert!(context_from_trace_headers(Some("not-a-traceparent"), None).is_none());
+        assert!(
+            context_from_trace_headers(Some("not-a-traceparent"), /*tracestate*/ None).is_none()
+        );
     }
 
     #[test]
@@ -158,7 +160,7 @@ mod tests {
     #[test]
     fn current_span_trace_id_returns_hex_trace_id() {
         let provider = SdkTracerProvider::builder().build();
-        let tracer = provider.tracer("codex-otel-tests");
+        let tracer = provider.tracer("agiworkforce-otel-tests");
         let subscriber =
             tracing_subscriber::registry().with(tracing_opentelemetry::layer().with_tracer(tracer));
         let _guard = subscriber.set_default();

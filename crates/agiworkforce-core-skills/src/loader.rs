@@ -299,11 +299,14 @@ fn skill_roots_from_layer_stack_inner(
 
                 // Embedded system skills are cached under `$AGIWORKFORCE_HOME/skills/.system` and are a
                 // special case (not a config layer).
-                roots.push(SkillRoot {
-                    path: system_cache_root_dir(&config_folder),
-                    scope: SkillScope::System,
-                    file_system: Arc::clone(&LOCAL_FS),
-                });
+                let system_cache = system_cache_root_dir(config_folder.as_path());
+                if let Ok(system_cache) = AbsolutePathBuf::try_from(system_cache) {
+                    roots.push(SkillRoot {
+                        path: system_cache,
+                        scope: SkillScope::System,
+                        file_system: Arc::clone(&LOCAL_FS),
+                    });
+                }
             }
             ConfigLayerSource::System { .. } => {
                 // The system config layer lives under `/etc/codex/` on Unix, so treat

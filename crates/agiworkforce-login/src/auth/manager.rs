@@ -12,34 +12,52 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use tokio::sync::Semaphore;
 
+use agiworkforce_agent_identity::decode_agent_identity_jwt;
+use agiworkforce_agent_identity::fetch_agent_identity_jwks;
+use agiworkforce_app_server_protocol::AuthMode;
 use agiworkforce_app_server_protocol::AuthMode as ApiAuthMode;
 use agiworkforce_protocol::config_types::ForcedLoginMethod;
+use agiworkforce_protocol::config_types::ModelProviderAuthInfo;
 
-use crate::auth::error::RefreshTokenFailedError;
-use crate::auth::error::RefreshTokenFailedReason;
-pub use crate::auth::storage::AuthCredentialsStoreMode;
+use super::external_bearer::BearerTokenRefresher;
+use super::revoke::revoke_auth_tokens;
+pub use crate::auth::agent_identity::AgentIdentityAuth;
+pub use crate::auth::storage::AgentIdentityAuthRecord;
 pub use crate::auth::storage::AuthDotJson;
 use crate::auth::storage::AuthStorageBackend;
 use crate::auth::storage::create_auth_storage;
 use crate::auth::util::try_parse_error_message;
+use crate::default_client::build_reqwest_client;
 use crate::default_client::create_client;
-use crate::token_data::KnownPlan as InternalKnownPlan;
-use crate::token_data::PlanType as InternalPlanType;
 use crate::token_data::TokenData;
 use crate::token_data::parse_chatgpt_jwt_claims;
 use crate::token_data::parse_jwt_expiration;
-use agiworkforce_client::AgiWorkforceHttpClient;
+use agiworkforce_client::AgiworkforceHttpClient;
+use agiworkforce_config::types::AuthCredentialsStoreMode;
 use agiworkforce_protocol::account::PlanType as AccountPlanType;
+use agiworkforce_protocol::auth::PlanType as InternalPlanType;
+use agiworkforce_protocol::auth::RefreshTokenFailedError;
+use agiworkforce_protocol::auth::RefreshTokenFailedReason;
 use serde_json::Value;
 use thiserror::Error;
 
 /// Authentication mechanism used by the current user.
 #[derive(Debug, Clone)]
-pub enum AgiWorkforceAuth {
+pub enum AgiworkforceAuth {
     ApiKey(ApiKeyAuth),
     Chatgpt(ChatgptAuth),
     ChatgptAuthTokens(ChatgptAuthTokens),
+    AgentIdentity(AgentIdentityAuth),
+}
+
+impl PartialEq for AgiworkforceAuth {
+    fn eq(&self, other: &Self) -> bool {
+        self.api_auth_mode() == other.api_auth_mode()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -61,13 +79,7 @@ pub struct ChatgptAuthTokens {
 #[derive(Debug, Clone)]
 struct ChatgptAuthState {
     auth_dot_json: Arc<Mutex<Option<AuthDotJson>>>,
-    client: AgiWorkforceHttpClient,
-}
-
-impl PartialEq for AgiWorkforceAuth {
-    fn eq(&self, other: &Self) -> bool {
-        self.api_auth_mode() == other.api_auth_mode()
-    }
+    client: AgiworkforceHttpClient,
 }
 
 const TOKEN_REFRESH_INTERVAL: i64 = 8;
@@ -78,8 +90,12 @@ const REFRESH_TOKEN_INVALIDATED_MESSAGE: &str = "Your access token could not be 
 const REFRESH_TOKEN_UNKNOWN_MESSAGE: &str =
     "Your access token could not be refreshed. Please log out and sign in again.";
 const REFRESH_TOKEN_ACCOUNT_MISMATCH_MESSAGE: &str = "Your access token could not be refreshed because you have since logged out or signed in to another account. Please sign in again.";
+const DEFAULT_CHATGPT_BACKEND_BASE_URL: &str = "https://chatgpt.com/backend-api";
 const REFRESH_TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
+pub(super) const REVOKE_TOKEN_URL: &str = "https://auth.openai.com/oauth/revoke";
 pub const REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR: &str = "AGIWORKFORCE_REFRESH_TOKEN_URL_OVERRIDE";
+pub const REVOKE_TOKEN_URL_OVERRIDE_ENV_VAR: &str = "AGIWORKFORCE_REVOKE_TOKEN_URL_OVERRIDE";
+static NEXT_DUMMY_AUTH_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Error)]
 pub enum RefreshTokenError {
@@ -92,8 +108,40 @@ pub enum RefreshTokenError {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExternalAuthTokens {
     pub access_token: String,
-    pub chatgpt_account_id: String,
-    pub chatgpt_plan_type: Option<String>,
+    pub chatgpt_metadata: Option<ExternalAuthChatgptMetadata>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExternalAuthChatgptMetadata {
+    pub account_id: String,
+    pub plan_type: Option<String>,
+}
+
+impl ExternalAuthTokens {
+    pub fn access_token_only(access_token: impl Into<String>) -> Self {
+        Self {
+            access_token: access_token.into(),
+            chatgpt_metadata: None,
+        }
+    }
+
+    pub fn chatgpt(
+        access_token: impl Into<String>,
+        chatgpt_account_id: impl Into<String>,
+        chatgpt_plan_type: Option<String>,
+    ) -> Self {
+        Self {
+            access_token: access_token.into(),
+            chatgpt_metadata: Some(ExternalAuthChatgptMetadata {
+                account_id: chatgpt_account_id.into(),
+                plan_type: chatgpt_plan_type,
+            }),
+        }
+    }
+
+    pub fn chatgpt_metadata(&self) -> Option<&ExternalAuthChatgptMetadata> {
+        self.chatgpt_metadata.as_ref()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -108,7 +156,21 @@ pub struct ExternalAuthRefreshContext {
 }
 
 #[async_trait]
-pub trait ExternalAuthRefresher: Send + Sync {
+/// Pluggable auth provider used by `AuthManager` for externally managed auth flows.
+///
+/// Implementations may either resolve auth eagerly via `resolve()` or provide refreshed
+/// credentials on demand via `refresh()`.
+pub trait ExternalAuth: Send + Sync {
+    /// Indicates which top-level auth mode this external provider supplies.
+    fn auth_mode(&self) -> AuthMode;
+
+    /// Returns cached or immediately available auth, if this provider can resolve it synchronously
+    /// from the caller's perspective.
+    async fn resolve(&self) -> std::io::Result<Option<ExternalAuthTokens>> {
+        Ok(None)
+    }
+
+    /// Refreshes auth in response to a manager-driven refresh attempt.
     async fn refresh(
         &self,
         context: ExternalAuthRefreshContext,
@@ -133,11 +195,12 @@ impl From<RefreshTokenError> for std::io::Error {
     }
 }
 
-impl AgiWorkforceAuth {
-    fn from_auth_dot_json(
+impl AgiworkforceAuth {
+    async fn from_auth_dot_json(
         agiworkforce_home: &Path,
         auth_dot_json: AuthDotJson,
         auth_credentials_store_mode: AuthCredentialsStoreMode,
+        chatgpt_base_url: Option<&str>,
     ) -> std::io::Result<Self> {
         let auth_mode = auth_dot_json.resolved_mode();
         let client = create_client();
@@ -146,6 +209,14 @@ impl AgiWorkforceAuth {
                 return Err(std::io::Error::other("API key auth is missing a key."));
             };
             return Ok(Self::from_api_key(api_key));
+        }
+        if auth_mode == ApiAuthMode::AgentIdentity {
+            let Some(agent_identity) = auth_dot_json.agent_identity else {
+                return Err(std::io::Error::other(
+                    "agent identity auth is missing an agent identity token.",
+                ));
+            };
+            return Self::from_agent_identity_jwt(&agent_identity, chatgpt_base_url).await;
         }
 
         let storage_mode = auth_dot_json.storage_mode(auth_credentials_store_mode);
@@ -163,24 +234,41 @@ impl AgiWorkforceAuth {
                 Ok(Self::ChatgptAuthTokens(ChatgptAuthTokens { state }))
             }
             ApiAuthMode::ApiKey => unreachable!("api key mode is handled above"),
+            ApiAuthMode::AgentIdentity => unreachable!("agent identity mode is handled above"),
         }
     }
 
-    pub fn from_auth_storage(
+    pub async fn from_auth_storage(
         agiworkforce_home: &Path,
         auth_credentials_store_mode: AuthCredentialsStoreMode,
+        chatgpt_base_url: Option<&str>,
     ) -> std::io::Result<Option<Self>> {
         load_auth(
             agiworkforce_home,
             /*enable_agiworkforce_api_key_env*/ false,
             auth_credentials_store_mode,
+            chatgpt_base_url,
         )
+        .await
     }
 
-    pub fn auth_mode(&self) -> crate::AuthMode {
+    pub async fn from_agent_identity_jwt(
+        jwt: &str,
+        chatgpt_base_url: Option<&str>,
+    ) -> std::io::Result<Self> {
+        let base_url = chatgpt_base_url
+            .unwrap_or(DEFAULT_CHATGPT_BACKEND_BASE_URL)
+            .trim_end_matches('/')
+            .to_string();
+        let record = verified_agent_identity_record(jwt, &base_url).await?;
+        Ok(Self::AgentIdentity(AgentIdentityAuth::load(record).await?))
+    }
+
+    pub fn auth_mode(&self) -> AuthMode {
         match self {
-            Self::ApiKey(_) => crate::AuthMode::ApiKey,
-            Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) => crate::AuthMode::Chatgpt,
+            Self::ApiKey(_) => AuthMode::ApiKey,
+            Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) => AuthMode::Chatgpt,
+            Self::AgentIdentity(_) => AuthMode::AgentIdentity,
         }
     }
 
@@ -189,15 +277,23 @@ impl AgiWorkforceAuth {
             Self::ApiKey(_) => ApiAuthMode::ApiKey,
             Self::Chatgpt(_) => ApiAuthMode::Chatgpt,
             Self::ChatgptAuthTokens(_) => ApiAuthMode::ChatgptAuthTokens,
+            Self::AgentIdentity(_) => ApiAuthMode::AgentIdentity,
         }
     }
 
     pub fn is_api_key_auth(&self) -> bool {
-        self.auth_mode() == crate::AuthMode::ApiKey
+        self.auth_mode() == AuthMode::ApiKey
     }
 
     pub fn is_chatgpt_auth(&self) -> bool {
-        self.auth_mode() == crate::AuthMode::Chatgpt
+        matches!(self, Self::Chatgpt(_) | Self::ChatgptAuthTokens(_))
+    }
+
+    pub fn uses_agiworkforce_backend(&self) -> bool {
+        matches!(
+            self,
+            Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) | Self::AgentIdentity(_)
+        )
     }
 
     pub fn is_external_chatgpt_tokens(&self) -> bool {
@@ -208,11 +304,11 @@ impl AgiWorkforceAuth {
     pub fn api_key(&self) -> Option<&str> {
         match self {
             Self::ApiKey(auth) => Some(auth.api_key.as_str()),
-            Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) => None,
+            Self::Chatgpt(_) | Self::ChatgptAuthTokens(_) | Self::AgentIdentity(_) => None,
         }
     }
 
-    /// Returns `Err` if `is_chatgpt_auth()` is false.
+    /// Returns `Err` if token-backed ChatGPT auth is unavailable.
     pub fn get_token_data(&self) -> Result<TokenData, std::io::Error> {
         let auth_dot_json: Option<AuthDotJson> = self.get_current_auth_json();
         match auth_dot_json {
@@ -233,66 +329,81 @@ impl AgiWorkforceAuth {
                 let access_token = self.get_token_data()?.access_token;
                 Ok(access_token)
             }
+            Self::AgentIdentity(_) => Err(std::io::Error::other(
+                "agent identity auth does not expose a bearer token",
+            )),
         }
     }
 
-    /// Returns `None` if `is_chatgpt_auth()` is false.
+    /// Returns `None` if Agiworkforce backend auth does not expose an account id.
     pub fn get_account_id(&self) -> Option<String> {
-        self.get_current_token_data().and_then(|t| t.account_id)
+        match self {
+            Self::AgentIdentity(auth) => Some(auth.account_id().to_string()),
+            _ => self.get_current_token_data().and_then(|t| t.account_id),
+        }
     }
 
-    /// Returns `None` if `is_chatgpt_auth()` is false.
+    /// Returns false if Agiworkforce backend auth omits the FedRAMP claim.
+    pub fn is_fedramp_account(&self) -> bool {
+        match self {
+            Self::AgentIdentity(auth) => auth.is_fedramp_account(),
+            _ => self
+                .get_current_token_data()
+                .is_some_and(|t| t.id_token.is_fedramp_account()),
+        }
+    }
+
+    /// Returns `None` if Agiworkforce backend auth does not expose an account email.
     pub fn get_account_email(&self) -> Option<String> {
-        self.get_current_token_data().and_then(|t| t.id_token.email)
+        match self {
+            Self::AgentIdentity(auth) => Some(auth.email().to_string()),
+            _ => self.get_current_token_data().and_then(|t| t.id_token.email),
+        }
     }
 
-    /// Returns `None` if `is_chatgpt_auth()` is false.
+    /// Returns `None` if Agiworkforce backend auth does not expose a ChatGPT user id.
     pub fn get_chatgpt_user_id(&self) -> Option<String> {
-        self.get_current_token_data()
-            .and_then(|t| t.id_token.chatgpt_user_id)
+        match self {
+            Self::AgentIdentity(auth) => Some(auth.chatgpt_user_id().to_string()),
+            _ => self
+                .get_current_token_data()
+                .and_then(|t| t.id_token.chatgpt_user_id),
+        }
     }
 
-    /// Account-facing plan classification derived from the current token.
+    /// Account-facing plan classification derived from the current auth.
     /// Returns a high-level `AccountPlanType` (e.g., Free/Plus/Pro/Team/…)
-    /// mapped from the ID token's internal plan value. Prefer this when you
-    /// need to make UI or product decisions based on the user's subscription.
-    /// When ChatGPT auth is active but the token omits the plan claim, report
-    /// `Unknown` instead of treating the account as invalid.
+    /// for UI or product decisions based on the user's subscription.
     pub fn account_plan_type(&self) -> Option<AccountPlanType> {
-        let map_known = |kp: &InternalKnownPlan| match kp {
-            InternalKnownPlan::Free => AccountPlanType::Free,
-            InternalKnownPlan::Go => AccountPlanType::Go,
-            InternalKnownPlan::Plus => AccountPlanType::Plus,
-            InternalKnownPlan::Pro => AccountPlanType::Pro,
-            InternalKnownPlan::Team => AccountPlanType::Team,
-            InternalKnownPlan::Business => AccountPlanType::Business,
-            InternalKnownPlan::Enterprise => AccountPlanType::Enterprise,
-            InternalKnownPlan::Edu => AccountPlanType::Edu,
-        };
+        if let Self::AgentIdentity(auth) = self {
+            return Some(auth.plan_type());
+        }
 
         self.get_current_token_data().map(|t| {
             t.id_token
                 .chatgpt_plan_type
-                .map(|pt| match pt {
-                    InternalPlanType::Known(k) => map_known(&k),
-                    InternalPlanType::Unknown(_) => AccountPlanType::Unknown,
-                })
+                .map(AccountPlanType::from)
                 .unwrap_or(AccountPlanType::Unknown)
         })
     }
 
-    /// Returns `None` if `is_chatgpt_auth()` is false.
+    pub fn is_workspace_account(&self) -> bool {
+        self.account_plan_type()
+            .is_some_and(AccountPlanType::is_workspace_account)
+    }
+
+    /// Returns `None` if token-backed ChatGPT auth is unavailable.
     fn get_current_auth_json(&self) -> Option<AuthDotJson> {
         let state = match self {
             Self::Chatgpt(auth) => &auth.state,
             Self::ChatgptAuthTokens(auth) => &auth.state,
-            Self::ApiKey(_) => return None,
+            Self::ApiKey(_) | Self::AgentIdentity(_) => return None,
         };
         #[expect(clippy::unwrap_used)]
         state.auth_dot_json.lock().unwrap().clone()
     }
 
-    /// Returns `None` if `is_chatgpt_auth()` is false.
+    /// Returns `None` if token-backed ChatGPT auth is unavailable.
     fn get_current_token_data(&self) -> Option<TokenData> {
         self.get_current_auth_json().and_then(|t| t.tokens)
     }
@@ -309,6 +420,7 @@ impl AgiWorkforceAuth {
                 account_id: Some("account_id".to_string()),
             }),
             last_refresh: Some(Utc::now()),
+            agent_identity: None,
         };
 
         let client = create_client();
@@ -316,7 +428,11 @@ impl AgiWorkforceAuth {
             auth_dot_json: Arc::new(Mutex::new(Some(auth_dot_json))),
             client,
         };
-        let storage = create_auth_storage(PathBuf::new(), AuthCredentialsStoreMode::File);
+        let dummy_auth_id = NEXT_DUMMY_AUTH_ID.fetch_add(1, Ordering::Relaxed);
+        let storage = create_auth_storage(
+            PathBuf::from(format!("dummy-chatgpt-auth-{dummy_auth_id}")),
+            AuthCredentialsStoreMode::Ephemeral,
+        );
         Self::Chatgpt(ChatgptAuth { state, storage })
     }
 
@@ -341,13 +457,14 @@ impl ChatgptAuth {
         &self.storage
     }
 
-    fn client(&self) -> &AgiWorkforceHttpClient {
+    fn client(&self) -> &AgiworkforceHttpClient {
         &self.state.client
     }
 }
 
 pub const OPENAI_API_KEY_ENV_VAR: &str = "OPENAI_API_KEY";
 pub const AGIWORKFORCE_API_KEY_ENV_VAR: &str = "AGIWORKFORCE_API_KEY";
+pub const AGIWORKFORCE_AGENT_IDENTITY_ENV_VAR: &str = "AGIWORKFORCE_AGENT_IDENTITY";
 
 pub fn read_openai_api_key_from_env() -> Option<String> {
     env::var(OPENAI_API_KEY_ENV_VAR)
@@ -363,6 +480,25 @@ pub fn read_agiworkforce_api_key_from_env() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+pub fn read_agiworkforce_agent_identity_from_env() -> Option<String> {
+    env::var(AGIWORKFORCE_AGENT_IDENTITY_ENV_VAR)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+async fn verified_agent_identity_record(
+    jwt: &str,
+    chatgpt_base_url: &str,
+) -> std::io::Result<AgentIdentityAuthRecord> {
+    AgentIdentityAuthRecord::from_agent_identity_jwt(jwt)?;
+    let jwks = fetch_agent_identity_jwks(&build_reqwest_client(), chatgpt_base_url)
+        .await
+        .map_err(std::io::Error::other)?;
+    let claims = decode_agent_identity_jwt(jwt, Some(&jwks)).map_err(std::io::Error::other)?;
+    Ok(claims.into())
+}
+
 /// Delete the auth.json file inside `agiworkforce_home` if it exists. Returns `Ok(true)`
 /// if a file was removed, `Ok(false)` if no auth file was present.
 pub fn logout(
@@ -371,6 +507,21 @@ pub fn logout(
 ) -> std::io::Result<bool> {
     let storage = create_auth_storage(agiworkforce_home.to_path_buf(), auth_credentials_store_mode);
     storage.delete()
+}
+
+pub async fn logout_with_revoke(
+    agiworkforce_home: &Path,
+    auth_credentials_store_mode: AuthCredentialsStoreMode,
+) -> std::io::Result<bool> {
+    AuthManager::new(
+        agiworkforce_home.to_path_buf(),
+        /*enable_agiworkforce_api_key_env*/ false,
+        auth_credentials_store_mode,
+        /*chatgpt_base_url*/ None,
+    )
+    .await
+    .logout_with_revoke()
+    .await
 }
 
 /// Writes an `auth.json` that contains only the API key.
@@ -384,12 +535,31 @@ pub fn login_with_api_key(
         openai_api_key: Some(api_key.to_string()),
         tokens: None,
         last_refresh: None,
+        agent_identity: None,
     };
-    save_auth(
-        agiworkforce_home,
-        &auth_dot_json,
-        auth_credentials_store_mode,
-    )
+    save_auth(agiworkforce_home, &auth_dot_json, auth_credentials_store_mode)
+}
+
+/// Writes an `auth.json` that contains only the Agent Identity token.
+pub async fn login_with_agent_identity(
+    agiworkforce_home: &Path,
+    agent_identity: &str,
+    auth_credentials_store_mode: AuthCredentialsStoreMode,
+    chatgpt_base_url: Option<&str>,
+) -> std::io::Result<()> {
+    let base_url = chatgpt_base_url
+        .unwrap_or(DEFAULT_CHATGPT_BACKEND_BASE_URL)
+        .trim_end_matches('/')
+        .to_string();
+    verified_agent_identity_record(agent_identity, &base_url).await?;
+    let auth_dot_json = AuthDotJson {
+        auth_mode: Some(ApiAuthMode::AgentIdentity),
+        openai_api_key: None,
+        tokens: None,
+        last_refresh: None,
+        agent_identity: Some(agent_identity.to_string()),
+    };
+    save_auth(agiworkforce_home, &auth_dot_json, auth_credentials_store_mode)
 }
 
 /// Writes an in-memory auth payload for externally managed ChatGPT tokens.
@@ -440,29 +610,34 @@ pub struct AuthConfig {
     pub auth_credentials_store_mode: AuthCredentialsStoreMode,
     pub forced_login_method: Option<ForcedLoginMethod>,
     pub forced_chatgpt_workspace_id: Option<String>,
+    pub chatgpt_base_url: Option<String>,
 }
 
-pub fn enforce_login_restrictions(config: &AuthConfig) -> std::io::Result<()> {
+pub async fn enforce_login_restrictions(config: &AuthConfig) -> std::io::Result<()> {
     let Some(auth) = load_auth(
         &config.agiworkforce_home,
         /*enable_agiworkforce_api_key_env*/ true,
         config.auth_credentials_store_mode,
-    )?
+        config.chatgpt_base_url.as_deref(),
+    )
+    .await?
     else {
         return Ok(());
     };
 
     if let Some(required_method) = config.forced_login_method {
         let method_violation = match (required_method, auth.auth_mode()) {
-            (ForcedLoginMethod::Api, crate::AuthMode::ApiKey) => None,
-            (ForcedLoginMethod::Chatgpt, crate::AuthMode::Chatgpt)
-            | (ForcedLoginMethod::Chatgpt, crate::AuthMode::ChatgptAuthTokens) => None,
-            (ForcedLoginMethod::Api, crate::AuthMode::Chatgpt)
-            | (ForcedLoginMethod::Api, crate::AuthMode::ChatgptAuthTokens) => Some(
+            (ForcedLoginMethod::Api, AuthMode::ApiKey) => None,
+            (ForcedLoginMethod::Chatgpt, AuthMode::Chatgpt)
+            | (ForcedLoginMethod::Chatgpt, AuthMode::ChatgptAuthTokens)
+            | (ForcedLoginMethod::Chatgpt, AuthMode::AgentIdentity) => None,
+            (ForcedLoginMethod::Api, AuthMode::Chatgpt)
+            | (ForcedLoginMethod::Api, AuthMode::ChatgptAuthTokens)
+            | (ForcedLoginMethod::Api, AuthMode::AgentIdentity) => Some(
                 "API key login is required, but ChatGPT is currently being used. Logging out."
                     .to_string(),
             ),
-            (ForcedLoginMethod::Chatgpt, crate::AuthMode::ApiKey) => Some(
+            (ForcedLoginMethod::Chatgpt, AuthMode::ApiKey) => Some(
                 "ChatGPT login is required, but an API key is currently being used. Logging out."
                     .to_string(),
             ),
@@ -478,26 +653,27 @@ pub fn enforce_login_restrictions(config: &AuthConfig) -> std::io::Result<()> {
     }
 
     if let Some(expected_account_id) = config.forced_chatgpt_workspace_id.as_deref() {
-        if !auth.is_chatgpt_auth() {
-            return Ok(());
-        }
-
-        let token_data = match auth.get_token_data() {
-            Ok(data) => data,
-            Err(err) => {
-                return logout_with_message(
-                    &config.agiworkforce_home,
-                    format!(
-                        "Failed to load ChatGPT credentials while enforcing workspace restrictions: {err}. Logging out."
-                    ),
-                    config.auth_credentials_store_mode,
-                );
+        // workspace is the external identifier for account id.
+        let chatgpt_account_id = match auth {
+            AgiworkforceAuth::ApiKey(_) => return Ok(()),
+            AgiworkforceAuth::AgentIdentity(_) => auth.get_account_id(),
+            AgiworkforceAuth::Chatgpt(_) | AgiworkforceAuth::ChatgptAuthTokens(_) => {
+                let token_data = match auth.get_token_data() {
+                    Ok(data) => data,
+                    Err(err) => {
+                        return logout_with_message(
+                            &config.agiworkforce_home,
+                            format!(
+                                "Failed to load ChatGPT credentials while enforcing workspace restrictions: {err}. Logging out."
+                            ),
+                            config.auth_credentials_store_mode,
+                        );
+                    }
+                };
+                token_data.id_token.chatgpt_account_id
             }
         };
-
-        // workspace is the external identifier for account id.
-        let chatgpt_account_id = token_data.id_token.chatgpt_account_id.as_deref();
-        if chatgpt_account_id != Some(expected_account_id) {
+        if chatgpt_account_id.as_deref() != Some(expected_account_id) {
             let message = match chatgpt_account_id {
                 Some(actual) => format!(
                     "Login is restricted to workspace {expected_account_id}, but current credentials belong to {actual}. Logging out."
@@ -544,18 +720,15 @@ fn logout_all_stores(
     Ok(removed_ephemeral || removed_managed)
 }
 
-fn load_auth(
+async fn load_auth(
     agiworkforce_home: &Path,
     enable_agiworkforce_api_key_env: bool,
     auth_credentials_store_mode: AuthCredentialsStoreMode,
-) -> std::io::Result<Option<AgiWorkforceAuth>> {
-    let build_auth = |auth_dot_json: AuthDotJson, storage_mode| {
-        AgiWorkforceAuth::from_auth_dot_json(agiworkforce_home, auth_dot_json, storage_mode)
-    };
-
+    chatgpt_base_url: Option<&str>,
+) -> std::io::Result<Option<AgiworkforceAuth>> {
     // API key via env var takes precedence over any other auth method.
     if enable_agiworkforce_api_key_env && let Some(api_key) = read_agiworkforce_api_key_from_env() {
-        return Ok(Some(AgiWorkforceAuth::from_api_key(api_key.as_str())));
+        return Ok(Some(AgiworkforceAuth::from_api_key(api_key.as_str())));
     }
 
     // External ChatGPT auth tokens live in the in-memory (ephemeral) store. Always check this
@@ -565,13 +738,25 @@ fn load_auth(
         AuthCredentialsStoreMode::Ephemeral,
     );
     if let Some(auth_dot_json) = ephemeral_storage.load()? {
-        let auth = build_auth(auth_dot_json, AuthCredentialsStoreMode::Ephemeral)?;
+        let auth = AgiworkforceAuth::from_auth_dot_json(
+            agiworkforce_home,
+            auth_dot_json,
+            AuthCredentialsStoreMode::Ephemeral,
+            chatgpt_base_url,
+        )
+        .await?;
         return Ok(Some(auth));
     }
 
     // If the caller explicitly requested ephemeral auth, there is no persisted fallback.
     if auth_credentials_store_mode == AuthCredentialsStoreMode::Ephemeral {
         return Ok(None);
+    }
+
+    if let Some(agent_identity) = read_agiworkforce_agent_identity_from_env() {
+        return AgiworkforceAuth::from_agent_identity_jwt(&agent_identity, chatgpt_base_url)
+            .await
+            .map(Some);
     }
 
     // Fall back to the configured persistent store (file/keyring/auto) for managed auth.
@@ -581,7 +766,13 @@ fn load_auth(
         None => return Ok(None),
     };
 
-    let auth = build_auth(auth_dot_json, auth_credentials_store_mode)?;
+    let auth = AgiworkforceAuth::from_auth_dot_json(
+        agiworkforce_home,
+        auth_dot_json,
+        auth_credentials_store_mode,
+        chatgpt_base_url,
+    )
+    .await?;
     Ok(Some(auth))
 }
 
@@ -615,7 +806,7 @@ fn persist_tokens(
 // The caller is responsible for persisting any returned tokens.
 async fn request_chatgpt_token_refresh(
     refresh_token: String,
-    client: &AgiWorkforceHttpClient,
+    client: &AgiworkforceHttpClient,
 ) -> Result<RefreshResponse, RefreshTokenError> {
     let refresh_request = RefreshRequest {
         client_id: CLIENT_ID,
@@ -735,11 +926,16 @@ fn refresh_token_endpoint() -> String {
 
 impl AuthDotJson {
     fn from_external_tokens(external: &ExternalAuthTokens) -> std::io::Result<Self> {
+        let Some(chatgpt_metadata) = external.chatgpt_metadata() else {
+            return Err(std::io::Error::other(
+                "external auth tokens are missing ChatGPT metadata",
+            ));
+        };
         let mut token_info =
             parse_chatgpt_jwt_claims(&external.access_token).map_err(std::io::Error::other)?;
-        token_info.chatgpt_account_id = Some(external.chatgpt_account_id.clone());
-        token_info.chatgpt_plan_type = external
-            .chatgpt_plan_type
+        token_info.chatgpt_account_id = Some(chatgpt_metadata.account_id.clone());
+        token_info.chatgpt_plan_type = chatgpt_metadata
+            .plan_type
             .as_deref()
             .map(InternalPlanType::from_raw_value)
             .or(token_info.chatgpt_plan_type)
@@ -748,7 +944,7 @@ impl AuthDotJson {
             id_token: token_info,
             access_token: external.access_token.clone(),
             refresh_token: String::new(),
-            account_id: Some(external.chatgpt_account_id.clone()),
+            account_id: Some(chatgpt_metadata.account_id.clone()),
         };
 
         Ok(Self {
@@ -756,6 +952,7 @@ impl AuthDotJson {
             openai_api_key: None,
             tokens: Some(tokens),
             last_refresh: Some(Utc::now()),
+            agent_identity: None,
         })
     }
 
@@ -764,11 +961,11 @@ impl AuthDotJson {
         chatgpt_account_id: &str,
         chatgpt_plan_type: Option<&str>,
     ) -> std::io::Result<Self> {
-        let external = ExternalAuthTokens {
-            access_token: access_token.to_string(),
-            chatgpt_account_id: chatgpt_account_id.to_string(),
-            chatgpt_plan_type: chatgpt_plan_type.map(str::to_string),
-        };
+        let external = ExternalAuthTokens::chatgpt(
+            access_token,
+            chatgpt_account_id,
+            chatgpt_plan_type.map(str::to_string),
+        );
         Self::from_external_tokens(&external)
     }
 
@@ -797,9 +994,7 @@ impl AuthDotJson {
 /// Internal cached auth state.
 #[derive(Clone)]
 struct CachedAuth {
-    auth: Option<AgiWorkforceAuth>,
-    /// Callback used to refresh external auth by asking the parent app for new tokens.
-    external_refresher: Option<Arc<dyn ExternalAuthRefresher>>,
+    auth: Option<AgiworkforceAuth>,
     /// Permanent refresh failure cached for the current auth snapshot so
     /// later refresh attempts for the same credentials fail fast without network.
     permanent_refresh_failure: Option<AuthScopedRefreshFailure>,
@@ -807,7 +1002,7 @@ struct CachedAuth {
 
 #[derive(Clone)]
 struct AuthScopedRefreshFailure {
-    auth: AgiWorkforceAuth,
+    auth: AgiworkforceAuth,
     error: RefreshTokenFailedError,
 }
 
@@ -816,11 +1011,7 @@ impl Debug for CachedAuth {
         f.debug_struct("CachedAuth")
             .field(
                 "auth_mode",
-                &self.auth.as_ref().map(AgiWorkforceAuth::api_auth_mode),
-            )
-            .field(
-                "external_refresher",
-                &self.external_refresher.as_ref().map(|_| "present"),
+                &self.auth.as_ref().map(AgiworkforceAuth::api_auth_mode),
             )
             .field(
                 "permanent_refresh_failure",
@@ -865,9 +1056,14 @@ enum UnauthorizedRecoveryMode {
 // 2. Attempt to refresh the token using OAuth token refresh flow.
 // If after both steps the server still responds with 401 we let the error bubble to the user.
 //
-// For external ChatGPT auth tokens (chatgptAuthTokens), UnauthorizedRecovery does not touch disk or refresh
-// tokens locally. Instead it calls the ExternalAuthRefresher (account/chatgptAuthTokens/refresh) to ask the
-// parent app for new tokens, stores them in the ephemeral auth store, and retries once.
+// For external auth sources, UnauthorizedRecovery retries once.
+//
+// - External ChatGPT auth tokens (`chatgptAuthTokens`) are refreshed by asking
+//   the parent app for new tokens through the configured
+//   `ExternalAuth`, persisting them in the ephemeral auth store, and
+//   reloading the cached auth snapshot.
+// - External bearer auth sources for custom model providers rerun the provider
+//   auth command without touching disk.
 pub struct UnauthorizedRecovery {
     manager: Arc<AuthManager>,
     step: UnauthorizedRecoveryStep,
@@ -889,12 +1085,11 @@ impl UnauthorizedRecoveryStepResult {
 impl UnauthorizedRecovery {
     fn new(manager: Arc<AuthManager>) -> Self {
         let cached_auth = manager.auth_cached();
-        let expected_account_id = cached_auth
-            .as_ref()
-            .and_then(AgiWorkforceAuth::get_account_id);
-        let mode = if cached_auth
-            .as_ref()
-            .is_some_and(AgiWorkforceAuth::is_external_chatgpt_tokens)
+        let expected_account_id = cached_auth.as_ref().and_then(AgiworkforceAuth::get_account_id);
+        let mode = if manager.has_external_api_key_auth()
+            || cached_auth
+                .as_ref()
+                .is_some_and(AgiworkforceAuth::is_external_chatgpt_tokens)
         {
             UnauthorizedRecoveryMode::External
         } else {
@@ -913,18 +1108,20 @@ impl UnauthorizedRecovery {
     }
 
     pub fn has_next(&self) -> bool {
+        if self.manager.has_external_api_key_auth() {
+            return !matches!(self.step, UnauthorizedRecoveryStep::Done);
+        }
+
         if !self
             .manager
             .auth_cached()
             .as_ref()
-            .is_some_and(AgiWorkforceAuth::is_chatgpt_auth)
+            .is_some_and(AgiworkforceAuth::is_chatgpt_auth)
         {
             return false;
         }
 
-        if self.mode == UnauthorizedRecoveryMode::External
-            && !self.manager.has_external_auth_refresher()
-        {
+        if self.mode == UnauthorizedRecoveryMode::External && !self.manager.has_external_auth() {
             return false;
         }
 
@@ -932,19 +1129,25 @@ impl UnauthorizedRecovery {
     }
 
     pub fn unavailable_reason(&self) -> &'static str {
+        if self.manager.has_external_api_key_auth() {
+            return if matches!(self.step, UnauthorizedRecoveryStep::Done) {
+                "recovery_exhausted"
+            } else {
+                "ready"
+            };
+        }
+
         if !self
             .manager
             .auth_cached()
             .as_ref()
-            .is_some_and(AgiWorkforceAuth::is_chatgpt_auth)
+            .is_some_and(AgiworkforceAuth::is_chatgpt_auth)
         {
             return "not_chatgpt_auth";
         }
 
-        if self.mode == UnauthorizedRecoveryMode::External
-            && !self.manager.has_external_auth_refresher()
-        {
-            return "no_external_refresher";
+        if self.mode == UnauthorizedRecoveryMode::External && !self.manager.has_external_auth() {
+            return "no_external_auth";
         }
 
         if matches!(self.step, UnauthorizedRecoveryStep::Done) {
@@ -983,6 +1186,7 @@ impl UnauthorizedRecovery {
                 match self
                     .manager
                     .reload_if_account_id_matches(self.expected_account_id.as_deref())
+                    .await
                 {
                     ReloadOutcome::ReloadedChanged => {
                         self.step = UnauthorizedRecoveryStep::RefreshToken;
@@ -1031,19 +1235,61 @@ impl UnauthorizedRecovery {
 
 /// Central manager providing a single source of truth for auth.json derived
 /// authentication data. It loads once (or on preference change) and then
-/// hands out cloned `AgiWorkforceAuth` values so the rest of the program has a
+/// hands out cloned `AgiworkforceAuth` values so the rest of the program has a
 /// consistent snapshot.
 ///
 /// External modifications to `auth.json` will NOT be observed until
 /// `reload()` is called explicitly. This matches the design goal of avoiding
 /// different parts of the program seeing inconsistent auth data mid‑run.
-#[derive(Debug)]
 pub struct AuthManager {
     agiworkforce_home: PathBuf,
     inner: RwLock<CachedAuth>,
     enable_agiworkforce_api_key_env: bool,
     auth_credentials_store_mode: AuthCredentialsStoreMode,
     forced_chatgpt_workspace_id: RwLock<Option<String>>,
+    chatgpt_base_url: Option<String>,
+    refresh_lock: Semaphore,
+    external_auth: RwLock<Option<Arc<dyn ExternalAuth>>>,
+}
+
+/// Configuration view required to construct a shared [`AuthManager`].
+///
+/// Implementations should return the auth-related config values for the
+/// already-resolved runtime configuration. The primary implementation is
+/// `agiworkforce_core::config::Config`, but this trait keeps `agiworkforce-login` independent
+/// from `agiworkforce-core`.
+pub trait AuthManagerConfig {
+    /// Returns the Agiworkforce home directory used for auth storage.
+    fn agiworkforce_home(&self) -> PathBuf;
+
+    /// Returns the CLI auth credential storage mode for auth loading.
+    fn cli_auth_credentials_store_mode(&self) -> AuthCredentialsStoreMode;
+
+    /// Returns the workspace ID that ChatGPT auth should be restricted to, if any.
+    fn forced_chatgpt_workspace_id(&self) -> Option<String>;
+
+    /// Returns the ChatGPT backend base URL used for first-party backend authorization.
+    fn chatgpt_base_url(&self) -> String;
+}
+
+impl Debug for AuthManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthManager")
+            .field("agiworkforce_home", &self.agiworkforce_home)
+            .field("inner", &self.inner)
+            .field("enable_agiworkforce_api_key_env", &self.enable_agiworkforce_api_key_env)
+            .field(
+                "auth_credentials_store_mode",
+                &self.auth_credentials_store_mode,
+            )
+            .field(
+                "forced_chatgpt_workspace_id",
+                &self.forced_chatgpt_workspace_id,
+            )
+            .field("chatgpt_base_url", &self.chatgpt_base_url)
+            .field("has_external_auth", &self.has_external_auth())
+            .finish_non_exhaustive()
+    }
 }
 
 impl AuthManager {
@@ -1051,36 +1297,40 @@ impl AuthManager {
     /// preferred auth method. Errors loading auth are swallowed; `auth()` will
     /// simply return `None` in that case so callers can treat it as an
     /// unauthenticated state.
-    pub fn new(
+    pub async fn new(
         agiworkforce_home: PathBuf,
         enable_agiworkforce_api_key_env: bool,
         auth_credentials_store_mode: AuthCredentialsStoreMode,
+        chatgpt_base_url: Option<String>,
     ) -> Self {
         let managed_auth = load_auth(
             &agiworkforce_home,
             enable_agiworkforce_api_key_env,
             auth_credentials_store_mode,
+            chatgpt_base_url.as_deref(),
         )
+        .await
         .ok()
         .flatten();
         Self {
             agiworkforce_home,
             inner: RwLock::new(CachedAuth {
                 auth: managed_auth,
-                external_refresher: None,
                 permanent_refresh_failure: None,
             }),
             enable_agiworkforce_api_key_env,
             auth_credentials_store_mode,
             forced_chatgpt_workspace_id: RwLock::new(None),
+            chatgpt_base_url,
+            refresh_lock: Semaphore::new(/*permits*/ 1),
+            external_auth: RwLock::new(None),
         }
     }
 
-    /// Create an AuthManager with a specific AgiWorkforceAuth, for testing only.
-    pub fn from_auth_for_testing(auth: AgiWorkforceAuth) -> Arc<Self> {
+    /// Create an AuthManager with a specific AgiworkforceAuth, for testing only.
+    pub fn from_auth_for_testing(auth: AgiworkforceAuth) -> Arc<Self> {
         let cached = CachedAuth {
             auth: Some(auth),
-            external_refresher: None,
             permanent_refresh_failure: None,
         };
 
@@ -1090,17 +1340,16 @@ impl AuthManager {
             enable_agiworkforce_api_key_env: false,
             auth_credentials_store_mode: AuthCredentialsStoreMode::File,
             forced_chatgpt_workspace_id: RwLock::new(None),
+            chatgpt_base_url: None,
+            refresh_lock: Semaphore::new(/*permits*/ 1),
+            external_auth: RwLock::new(None),
         })
     }
 
-    /// Create an AuthManager with a specific AgiWorkforceAuth and codex home, for testing only.
-    pub fn from_auth_for_testing_with_home(
-        auth: AgiWorkforceAuth,
-        agiworkforce_home: PathBuf,
-    ) -> Arc<Self> {
+    /// Create an AuthManager with a specific AgiworkforceAuth and codex home, for testing only.
+    pub fn from_auth_for_testing_with_home(auth: AgiworkforceAuth, agiworkforce_home: PathBuf) -> Arc<Self> {
         let cached = CachedAuth {
             auth: Some(auth),
-            external_refresher: None,
             permanent_refresh_failure: None,
         };
         Arc::new(Self {
@@ -1109,18 +1358,36 @@ impl AuthManager {
             enable_agiworkforce_api_key_env: false,
             auth_credentials_store_mode: AuthCredentialsStoreMode::File,
             forced_chatgpt_workspace_id: RwLock::new(None),
+            chatgpt_base_url: None,
+            refresh_lock: Semaphore::new(/*permits*/ 1),
+            external_auth: RwLock::new(None),
+        })
+    }
+
+    pub fn external_bearer_only(config: ModelProviderAuthInfo) -> Arc<Self> {
+        Arc::new(Self {
+            agiworkforce_home: PathBuf::from("non-existent"),
+            inner: RwLock::new(CachedAuth {
+                auth: None,
+                permanent_refresh_failure: None,
+            }),
+            enable_agiworkforce_api_key_env: false,
+            auth_credentials_store_mode: AuthCredentialsStoreMode::File,
+            forced_chatgpt_workspace_id: RwLock::new(None),
+            chatgpt_base_url: None,
+            refresh_lock: Semaphore::new(/*permits*/ 1),
+            external_auth: RwLock::new(Some(
+                Arc::new(BearerTokenRefresher::new(config)) as Arc<dyn ExternalAuth>
+            )),
         })
     }
 
     /// Current cached auth (clone) without attempting a refresh.
-    pub fn auth_cached(&self) -> Option<AgiWorkforceAuth> {
+    pub fn auth_cached(&self) -> Option<AgiworkforceAuth> {
         self.inner.read().ok().and_then(|c| c.auth.clone())
     }
 
-    pub fn refresh_failure_for_auth(
-        &self,
-        auth: &AgiWorkforceAuth,
-    ) -> Option<RefreshTokenFailedError> {
+    pub fn refresh_failure_for_auth(&self, auth: &AgiworkforceAuth) -> Option<RefreshTokenFailedError> {
         self.inner.read().ok().and_then(|cached| {
             cached
                 .permanent_refresh_failure
@@ -1133,7 +1400,11 @@ impl AuthManager {
     /// Current cached auth (clone). May be `None` if not logged in or load failed.
     /// For stale managed ChatGPT auth, first performs a guarded reload and then
     /// refreshes only if the on-disk auth is unchanged.
-    pub async fn auth(&self) -> Option<AgiWorkforceAuth> {
+    pub async fn auth(&self) -> Option<AgiworkforceAuth> {
+        if let Some(auth) = self.resolve_external_api_key_auth().await {
+            return Some(auth);
+        }
+
         let auth = self.auth_cached()?;
         if Self::is_stale_for_proactive_refresh(&auth)
             && let Err(err) = self.refresh_token().await
@@ -1146,13 +1417,16 @@ impl AuthManager {
 
     /// Force a reload of the auth information from auth.json. Returns
     /// whether the auth value changed.
-    pub fn reload(&self) -> bool {
+    pub async fn reload(&self) -> bool {
         tracing::info!("Reloading auth");
-        let new_auth = self.load_auth_from_storage();
+        let new_auth = self.load_auth_from_storage().await;
         self.set_cached_auth(new_auth)
     }
 
-    fn reload_if_account_id_matches(&self, expected_account_id: Option<&str>) -> ReloadOutcome {
+    async fn reload_if_account_id_matches(
+        &self,
+        expected_account_id: Option<&str>,
+    ) -> ReloadOutcome {
         let expected_account_id = match expected_account_id {
             Some(account_id) => account_id,
             None => {
@@ -1161,8 +1435,8 @@ impl AuthManager {
             }
         };
 
-        let new_auth = self.load_auth_from_storage();
-        let new_account_id = new_auth.as_ref().and_then(AgiWorkforceAuth::get_account_id);
+        let new_auth = self.load_auth_from_storage().await;
+        let new_account_id = new_auth.as_ref().and_then(AgiworkforceAuth::get_account_id);
 
         if new_account_id.as_deref() != Some(expected_account_id) {
             let found_account_id = new_account_id.as_deref().unwrap_or("unknown");
@@ -1184,7 +1458,7 @@ impl AuthManager {
         }
     }
 
-    fn auths_equal_for_refresh(a: Option<&AgiWorkforceAuth>, b: Option<&AgiWorkforceAuth>) -> bool {
+    fn auths_equal_for_refresh(a: Option<&AgiworkforceAuth>, b: Option<&AgiworkforceAuth>) -> bool {
         match (a, b) {
             (None, None) => true,
             (Some(a), Some(b)) => match (a.api_auth_mode(), b.api_auth_mode()) {
@@ -1193,13 +1467,19 @@ impl AuthManager {
                 | (ApiAuthMode::ChatgptAuthTokens, ApiAuthMode::ChatgptAuthTokens) => {
                     a.get_current_auth_json() == b.get_current_auth_json()
                 }
+                (ApiAuthMode::AgentIdentity, ApiAuthMode::AgentIdentity) => match (a, b) {
+                    (AgiworkforceAuth::AgentIdentity(a), AgiworkforceAuth::AgentIdentity(b)) => {
+                        a.record() == b.record()
+                    }
+                    _ => false,
+                },
                 _ => false,
             },
             _ => false,
         }
     }
 
-    fn auths_equal(a: Option<&AgiWorkforceAuth>, b: Option<&AgiWorkforceAuth>) -> bool {
+    fn auths_equal(a: Option<&AgiworkforceAuth>, b: Option<&AgiworkforceAuth>) -> bool {
         match (a, b) {
             (None, None) => true,
             (Some(a), Some(b)) => a == b,
@@ -1211,7 +1491,7 @@ impl AuthManager {
     /// attempted against the auth snapshot that is still cached.
     fn record_permanent_refresh_failure_if_unchanged(
         &self,
-        attempted_auth: &AgiWorkforceAuth,
+        attempted_auth: &AgiworkforceAuth,
         error: &RefreshTokenFailedError,
     ) {
         if let Ok(mut guard) = self.inner.write() {
@@ -1226,17 +1506,19 @@ impl AuthManager {
         }
     }
 
-    fn load_auth_from_storage(&self) -> Option<AgiWorkforceAuth> {
+    async fn load_auth_from_storage(&self) -> Option<AgiworkforceAuth> {
         load_auth(
             &self.agiworkforce_home,
             self.enable_agiworkforce_api_key_env,
             self.auth_credentials_store_mode,
+            self.chatgpt_base_url.as_deref(),
         )
+        .await
         .ok()
         .flatten()
     }
 
-    fn set_cached_auth(&self, new_auth: Option<AgiWorkforceAuth>) -> bool {
+    fn set_cached_auth(&self, new_auth: Option<AgiworkforceAuth>) -> bool {
         if let Ok(mut guard) = self.inner.write() {
             let previous = guard.auth.as_ref();
             let changed = !AuthManager::auths_equal(previous, new_auth.as_ref());
@@ -1253,20 +1535,22 @@ impl AuthManager {
         }
     }
 
-    pub fn set_external_auth_refresher(&self, refresher: Arc<dyn ExternalAuthRefresher>) {
-        if let Ok(mut guard) = self.inner.write() {
-            guard.external_refresher = Some(refresher);
+    pub fn set_external_auth(&self, external_auth: Arc<dyn ExternalAuth>) {
+        if let Ok(mut guard) = self.external_auth.write() {
+            *guard = Some(external_auth);
         }
     }
 
-    pub fn clear_external_auth_refresher(&self) {
-        if let Ok(mut guard) = self.inner.write() {
-            guard.external_refresher = None;
+    pub fn clear_external_auth(&self) {
+        if let Ok(mut guard) = self.external_auth.write() {
+            *guard = None;
         }
     }
 
     pub fn set_forced_chatgpt_workspace_id(&self, workspace_id: Option<String>) {
-        if let Ok(mut guard) = self.forced_chatgpt_workspace_id.write() {
+        if let Ok(mut guard) = self.forced_chatgpt_workspace_id.write()
+            && *guard != workspace_id
+        {
             *guard = workspace_id;
         }
     }
@@ -1278,18 +1562,14 @@ impl AuthManager {
             .and_then(|guard| guard.clone())
     }
 
-    pub fn has_external_auth_refresher(&self) -> bool {
-        self.inner
-            .read()
-            .ok()
-            .map(|guard| guard.external_refresher.is_some())
-            .unwrap_or(false)
+    pub fn has_external_auth(&self) -> bool {
+        self.external_auth().is_some()
     }
 
-    pub fn is_external_auth_active(&self) -> bool {
+    pub fn is_external_chatgpt_auth_active(&self) -> bool {
         self.auth_cached()
             .as_ref()
-            .is_some_and(AgiWorkforceAuth::is_external_chatgpt_tokens)
+            .is_some_and(AgiworkforceAuth::is_external_chatgpt_tokens)
     }
 
     pub fn agiworkforce_api_key_env_enabled(&self) -> bool {
@@ -1297,20 +1577,75 @@ impl AuthManager {
     }
 
     /// Convenience constructor returning an `Arc` wrapper.
-    pub fn shared(
+    pub async fn shared(
         agiworkforce_home: PathBuf,
         enable_agiworkforce_api_key_env: bool,
         auth_credentials_store_mode: AuthCredentialsStoreMode,
+        chatgpt_base_url: Option<String>,
     ) -> Arc<Self> {
-        Arc::new(Self::new(
-            agiworkforce_home,
+        Arc::new(
+            Self::new(
+                agiworkforce_home,
+                enable_agiworkforce_api_key_env,
+                auth_credentials_store_mode,
+                chatgpt_base_url,
+            )
+            .await,
+        )
+    }
+
+    /// Convenience constructor returning an `Arc` wrapper from resolved config.
+    pub async fn shared_from_config(
+        config: &impl AuthManagerConfig,
+        enable_agiworkforce_api_key_env: bool,
+    ) -> Arc<Self> {
+        let auth_manager = Self::shared(
+            config.agiworkforce_home(),
             enable_agiworkforce_api_key_env,
-            auth_credentials_store_mode,
-        ))
+            config.cli_auth_credentials_store_mode(),
+            Some(config.chatgpt_base_url()),
+        )
+        .await;
+        auth_manager.set_forced_chatgpt_workspace_id(config.forced_chatgpt_workspace_id());
+        auth_manager
     }
 
     pub fn unauthorized_recovery(self: &Arc<Self>) -> UnauthorizedRecovery {
         UnauthorizedRecovery::new(Arc::clone(self))
+    }
+
+    fn external_auth(&self) -> Option<Arc<dyn ExternalAuth>> {
+        self.external_auth
+            .read()
+            .ok()
+            .and_then(|guard| guard.as_ref().cloned())
+    }
+
+    fn external_auth_mode(&self) -> Option<AuthMode> {
+        self.external_auth()
+            .as_ref()
+            .map(|external_auth| external_auth.auth_mode())
+    }
+
+    fn has_external_api_key_auth(&self) -> bool {
+        self.external_auth_mode() == Some(AuthMode::ApiKey)
+    }
+
+    async fn resolve_external_api_key_auth(&self) -> Option<AgiworkforceAuth> {
+        if !self.has_external_api_key_auth() {
+            return None;
+        }
+
+        let external_auth = self.external_auth()?;
+
+        match external_auth.resolve().await {
+            Ok(Some(tokens)) => Some(AgiworkforceAuth::from_api_key(&tokens.access_token)),
+            Ok(None) => None,
+            Err(err) => {
+                tracing::error!("Failed to resolve external API key auth: {err}");
+                None
+            }
+        }
     }
 
     /// Attempt to refresh the token by first performing a guarded reload. Auth
@@ -1319,23 +1654,32 @@ impl AuthManager {
     /// can assume that some other instance already refreshed it. If the persisted
     /// token is the same as the cached, then ask the token authority to refresh.
     pub async fn refresh_token(&self) -> Result<(), RefreshTokenError> {
+        let _refresh_guard = self.refresh_lock.acquire().await.map_err(|_| {
+            RefreshTokenError::Permanent(RefreshTokenFailedError::new(
+                RefreshTokenFailedReason::Other,
+                REFRESH_TOKEN_UNKNOWN_MESSAGE.to_string(),
+            ))
+        })?;
         let auth_before_reload = self.auth_cached();
         if auth_before_reload
             .as_ref()
-            .is_some_and(AgiWorkforceAuth::is_api_key_auth)
+            .is_some_and(AgiworkforceAuth::is_api_key_auth)
         {
             return Ok(());
         }
         let expected_account_id = auth_before_reload
             .as_ref()
-            .and_then(AgiWorkforceAuth::get_account_id);
+            .and_then(AgiworkforceAuth::get_account_id);
 
-        match self.reload_if_account_id_matches(expected_account_id.as_deref()) {
+        match self
+            .reload_if_account_id_matches(expected_account_id.as_deref())
+            .await
+        {
             ReloadOutcome::ReloadedChanged => {
                 tracing::info!("Skipping token refresh because auth changed after guarded reload.");
                 Ok(())
             }
-            ReloadOutcome::ReloadedNoChange => self.refresh_token_from_authority().await,
+            ReloadOutcome::ReloadedNoChange => self.refresh_token_from_authority_impl().await,
             ReloadOutcome::Skipped => {
                 Err(RefreshTokenError::Permanent(RefreshTokenFailedError::new(
                     RefreshTokenFailedReason::Other,
@@ -1350,6 +1694,16 @@ impl AuthManager {
     /// observe refreshed token. If the token refresh fails, returns the error to
     /// the caller.
     pub async fn refresh_token_from_authority(&self) -> Result<(), RefreshTokenError> {
+        let _refresh_guard = self.refresh_lock.acquire().await.map_err(|_| {
+            RefreshTokenError::Permanent(RefreshTokenFailedError::new(
+                RefreshTokenFailedReason::Other,
+                REFRESH_TOKEN_UNKNOWN_MESSAGE.to_string(),
+            ))
+        })?;
+        self.refresh_token_from_authority_impl().await
+    }
+
+    async fn refresh_token_from_authority_impl(&self) -> Result<(), RefreshTokenError> {
         tracing::info!("Refreshing token");
 
         let auth = match self.auth_cached() {
@@ -1362,11 +1716,11 @@ impl AuthManager {
 
         let attempted_auth = auth.clone();
         let result = match auth {
-            AgiWorkforceAuth::ChatgptAuthTokens(_) => {
+            AgiworkforceAuth::ChatgptAuthTokens(_) => {
                 self.refresh_external_auth(ExternalAuthRefreshReason::Unauthorized)
                     .await
             }
-            AgiWorkforceAuth::Chatgpt(chatgpt_auth) => {
+            AgiworkforceAuth::Chatgpt(chatgpt_auth) => {
                 let token_data = chatgpt_auth.current_token_data().ok_or_else(|| {
                     RefreshTokenError::Transient(std::io::Error::other(
                         "Token data is not available.",
@@ -1375,7 +1729,7 @@ impl AuthManager {
                 self.refresh_and_persist_chatgpt_token(&chatgpt_auth, token_data.refresh_token)
                     .await
             }
-            AgiWorkforceAuth::ApiKey(_) => Ok(()),
+            AgiworkforceAuth::ApiKey(_) | AgiworkforceAuth::AgentIdentity(_) => Ok(()),
         };
         if let Err(RefreshTokenError::Permanent(error)) = &result {
             self.record_permanent_refresh_failure_if_unchanged(&attempted_auth, error);
@@ -1387,26 +1741,50 @@ impl AuthManager {
     /// if a file was removed, Ok(false) if no auth file existed. On success,
     /// reloads the in‑memory auth cache so callers immediately observe the
     /// unauthenticated state.
-    pub fn logout(&self) -> std::io::Result<bool> {
+    pub async fn logout(&self) -> std::io::Result<bool> {
         let removed = logout_all_stores(&self.agiworkforce_home, self.auth_credentials_store_mode)?;
         // Always reload to clear any cached auth (even if file absent).
-        self.reload();
+        self.reload().await;
         Ok(removed)
     }
 
+    pub async fn logout_with_revoke(&self) -> std::io::Result<bool> {
+        let auth_dot_json = self
+            .auth_cached()
+            .and_then(|auth| auth.get_current_auth_json());
+        if let Err(err) = revoke_auth_tokens(auth_dot_json.as_ref()).await {
+            tracing::warn!("failed to revoke auth tokens during logout: {err}");
+        }
+        let result = logout_all_stores(&self.agiworkforce_home, self.auth_credentials_store_mode)?;
+        // Always reload to clear any cached auth (even if file absent).
+        self.reload().await;
+        Ok(result)
+    }
+
     pub fn get_api_auth_mode(&self) -> Option<ApiAuthMode> {
-        self.auth_cached()
-            .as_ref()
-            .map(AgiWorkforceAuth::api_auth_mode)
+        if self.has_external_api_key_auth() {
+            return Some(ApiAuthMode::ApiKey);
+        }
+        self.auth_cached().as_ref().map(AgiworkforceAuth::api_auth_mode)
     }
 
-    pub fn auth_mode(&self) -> Option<crate::AuthMode> {
-        self.auth_cached().as_ref().map(AgiWorkforceAuth::auth_mode)
+    pub fn auth_mode(&self) -> Option<AuthMode> {
+        if self.has_external_api_key_auth() {
+            return Some(AuthMode::ApiKey);
+        }
+        self.auth_cached().as_ref().map(AgiworkforceAuth::auth_mode)
     }
 
-    fn is_stale_for_proactive_refresh(auth: &AgiWorkforceAuth) -> bool {
+    pub fn current_auth_uses_agiworkforce_backend(&self) -> bool {
+        matches!(
+            self.auth_mode(),
+            Some(AuthMode::Chatgpt | AuthMode::ChatgptAuthTokens | AuthMode::AgentIdentity)
+        )
+    }
+
+    fn is_stale_for_proactive_refresh(auth: &AgiworkforceAuth) -> bool {
         let chatgpt_auth = match auth {
-            AgiWorkforceAuth::Chatgpt(chatgpt_auth) => chatgpt_auth,
+            AgiworkforceAuth::Chatgpt(chatgpt_auth) => chatgpt_auth,
             _ => return false,
         };
 
@@ -1430,39 +1808,40 @@ impl AuthManager {
         &self,
         reason: ExternalAuthRefreshReason,
     ) -> Result<(), RefreshTokenError> {
-        let forced_chatgpt_workspace_id = self.forced_chatgpt_workspace_id();
-        let refresher = match self.inner.read() {
-            Ok(guard) => guard.external_refresher.clone(),
-            Err(_) => {
-                return Err(RefreshTokenError::Transient(std::io::Error::other(
-                    "failed to read external auth state",
-                )));
-            }
-        };
-
-        let Some(refresher) = refresher else {
+        let Some(external_auth) = self.external_auth() else {
             return Err(RefreshTokenError::Transient(std::io::Error::other(
-                "external auth refresher is not configured",
+                "external auth is not configured",
             )));
         };
-
+        let forced_chatgpt_workspace_id = self.forced_chatgpt_workspace_id();
         let previous_account_id = self
             .auth_cached()
             .as_ref()
-            .and_then(AgiWorkforceAuth::get_account_id);
+            .and_then(AgiworkforceAuth::get_account_id);
         let context = ExternalAuthRefreshContext {
             reason,
             previous_account_id,
         };
 
-        let refreshed = refresher.refresh(context).await?;
+        let refreshed = external_auth
+            .refresh(context)
+            .await
+            .map_err(RefreshTokenError::Transient)?;
+        if external_auth.auth_mode() == AuthMode::ApiKey {
+            return Ok(());
+        }
+        let Some(chatgpt_metadata) = refreshed.chatgpt_metadata() else {
+            return Err(RefreshTokenError::Transient(std::io::Error::other(
+                "external auth refresh did not return ChatGPT metadata",
+            )));
+        };
         if let Some(expected_workspace_id) = forced_chatgpt_workspace_id.as_deref()
-            && refreshed.chatgpt_account_id != expected_workspace_id
+            && chatgpt_metadata.account_id != expected_workspace_id
         {
             return Err(RefreshTokenError::Transient(std::io::Error::other(
                 format!(
                     "external auth refresh returned workspace {:?}, expected {expected_workspace_id:?}",
-                    refreshed.chatgpt_account_id,
+                    chatgpt_metadata.account_id,
                 ),
             )));
         }
@@ -1474,7 +1853,7 @@ impl AuthManager {
             AuthCredentialsStoreMode::Ephemeral,
         )
         .map_err(RefreshTokenError::Transient)?;
-        self.reload();
+        self.reload().await;
         Ok(())
     }
 
@@ -1494,7 +1873,7 @@ impl AuthManager {
             refresh_response.refresh_token,
         )
         .map_err(RefreshTokenError::from)?;
-        self.reload();
+        self.reload().await;
 
         Ok(())
     }

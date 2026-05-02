@@ -9,18 +9,18 @@ fn blank_attribution_disables_trailer_prompt() {
 }
 
 #[test]
-fn default_attribution_uses_codex_trailer() {
+fn default_attribution_uses_agiworkforce_trailer() {
     assert_eq!(
-        build_commit_message_trailer(None).as_deref(),
-        Some("Co-authored-by: Codex <noreply@openai.com>")
+        build_commit_message_trailer(/*config_attribution*/ None).as_deref(),
+        Some("Co-authored-by: Agiworkforce <noreply@openai.com>")
     );
 }
 
 #[test]
 fn resolve_value_handles_default_custom_and_blank() {
     assert_eq!(
-        resolve_attribution_value(None),
-        Some("Codex <noreply@openai.com>".to_string())
+        resolve_attribution_value(/*config_attribution*/ None),
+        Some("Agiworkforce <noreply@openai.com>".to_string())
     );
     assert_eq!(
         resolve_attribution_value(Some("MyAgent <me@example.com>")),

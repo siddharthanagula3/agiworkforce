@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use agiworkforce_core::CodexThread;
+use agiworkforce_core::AgiworkforceThread;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::parse_command::ParsedCommand;
 use agiworkforce_protocol::protocol::Op;
@@ -52,7 +52,7 @@ pub(crate) async fn handle_exec_approval_request(
     command: Vec<String>,
     cwd: PathBuf,
     outgoing: Arc<crate::outgoing_message::OutgoingMessageSender>,
-    codex: Arc<CodexThread>,
+    codex: Arc<AgiworkforceThread>,
     request_id: RequestId,
     tool_call_id: String,
     event_id: String,
@@ -64,7 +64,7 @@ pub(crate) async fn handle_exec_approval_request(
     let escaped_command =
         shlex::try_join(command.iter().map(String::as_str)).unwrap_or_else(|_| command.join(" "));
     let message = format!(
-        "Allow Codex to run `{escaped_command}` in `{cwd}`?",
+        "Allow Agiworkforce to run `{escaped_command}` in `{cwd}`?",
         cwd = cwd.to_string_lossy()
     );
 
@@ -113,7 +113,7 @@ async fn on_exec_approval_response(
     approval_id: String,
     event_id: String,
     receiver: tokio::sync::oneshot::Receiver<serde_json::Value>,
-    codex: Arc<CodexThread>,
+    codex: Arc<AgiworkforceThread>,
 ) {
     let response = receiver.await;
     let value = match response {

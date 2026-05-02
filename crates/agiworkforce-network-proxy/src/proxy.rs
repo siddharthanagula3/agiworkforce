@@ -264,6 +264,38 @@ pub const PROXY_URL_ENV_KEYS: &[&str] = &[
 pub const ALL_PROXY_ENV_KEYS: &[&str] = &["ALL_PROXY", "all_proxy"];
 pub const ALLOW_LOCAL_BINDING_ENV_KEY: &str = "AGIWORKFORCE_NETWORK_ALLOW_LOCAL_BINDING";
 
+/// Environment variable set when the network proxy is active.
+pub const PROXY_ACTIVE_ENV_KEY: &str = "AGIWORKFORCE_PROXY_ACTIVE";
+
+/// GIT_SSH_COMMAND environment variable key used for SSH proxy injection.
+pub const PROXY_GIT_SSH_COMMAND_ENV_KEY: &str = "GIT_SSH_COMMAND";
+
+/// Marker prefix injected into GIT_SSH_COMMAND by the network proxy.
+pub const AGIWORKFORCE_PROXY_GIT_SSH_COMMAND_MARKER: &str = "agiworkforce-network-proxy";
+
+/// All proxy-related environment variable keys (URL keys + active + git SSH).
+pub const PROXY_ENV_KEYS: &[&str] = &[
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "WS_PROXY",
+    "WSS_PROXY",
+    "ALL_PROXY",
+    "all_proxy",
+    "FTP_PROXY",
+    "YARN_HTTP_PROXY",
+    "YARN_HTTPS_PROXY",
+    "NPM_CONFIG_HTTP_PROXY",
+    "NPM_CONFIG_HTTPS_PROXY",
+    "NPM_CONFIG_PROXY",
+    "BUNDLE_HTTP_PROXY",
+    "BUNDLE_HTTPS_PROXY",
+    "PIP_PROXY",
+    "DOCKER_HTTP_PROXY",
+    "DOCKER_HTTPS_PROXY",
+    PROXY_ACTIVE_ENV_KEY,
+    PROXY_GIT_SSH_COMMAND_ENV_KEY,
+];
+
 const FTP_PROXY_ENV_KEYS: &[&str] = &["FTP_PROXY", "ftp_proxy"];
 const WEBSOCKET_PROXY_ENV_KEYS: &[&str] = &["WS_PROXY", "WSS_PROXY", "ws_proxy", "wss_proxy"];
 
@@ -399,6 +431,10 @@ impl NetworkProxy {
 
     pub async fn add_denied_domain(&self, host: &str) -> Result<()> {
         self.state.add_denied_domain(host).await
+    }
+
+    pub async fn replace_config_state(&self, state: crate::runtime::ConfigState) -> Result<()> {
+        self.state.replace_config_state(state).await
     }
 
     pub fn allow_local_binding(&self) -> bool {

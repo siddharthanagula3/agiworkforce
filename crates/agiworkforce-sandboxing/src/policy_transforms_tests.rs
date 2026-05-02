@@ -7,7 +7,7 @@ use super::merge_file_system_policy_with_additional_permissions;
 use super::normalize_additional_permissions;
 use super::sandbox_policy_with_additional_permissions;
 use super::should_require_platform_sandbox;
-use agiworkforce_protocol::models::FileSystemPermissions;
+use agiworkforce_protocol::models::SandboxFileSystemPermissions as FileSystemPermissions;
 #[cfg(target_os = "macos")]
 use agiworkforce_protocol::models::MacOsAutomationPermission;
 #[cfg(target_os = "macos")]
@@ -17,7 +17,7 @@ use agiworkforce_protocol::models::MacOsPreferencesPermission;
 #[cfg(target_os = "macos")]
 use agiworkforce_protocol::models::MacOsSeatbeltProfileExtensions;
 use agiworkforce_protocol::models::NetworkPermissions;
-use agiworkforce_protocol::models::PermissionProfile;
+use agiworkforce_protocol::models::SimplePermissionProfile as PermissionProfile;
 use agiworkforce_protocol::permissions::FileSystemAccessMode;
 use agiworkforce_protocol::permissions::FileSystemPath;
 use agiworkforce_protocol::permissions::FileSystemSandboxEntry;

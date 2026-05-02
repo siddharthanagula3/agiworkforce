@@ -79,6 +79,11 @@ pub enum ResponseEvent {
         token_usage: Option<TokenUsage>,
     },
     OutputTextDelta(String),
+    ToolCallInputDelta {
+        call_id: String,
+        delta: String,
+    },
+    ModelVerifications(Vec<agiworkforce_protocol::protocol::ModelVerification>),
     ReasoningSummaryDelta {
         delta: String,
         summary_index: i64,
@@ -270,6 +275,8 @@ pub fn create_text_param_for_request(
 
 pub struct ResponseStream {
     pub rx_event: mpsc::Receiver<Result<ResponseEvent, ApiError>>,
+    /// Optional upstream request ID from response headers (e.g., X-Request-Id).
+    pub upstream_request_id: Option<String>,
 }
 
 impl Stream for ResponseStream {

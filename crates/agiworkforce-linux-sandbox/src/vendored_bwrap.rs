@@ -60,11 +60,11 @@ mod imp {
     ) -> libc::c_int {
         panic!(
             r#"build-time bubblewrap is not available in this build.
-codex-linux-sandbox should always compile vendored bubblewrap on Linux targets.
+agiworkforce-linux-sandbox should always compile vendored bubblewrap on Linux targets.
 Notes:
 - ensure the target OS is Linux
 - libcap headers must be available via pkg-config
-- bubblewrap sources expected at codex-rs/vendor/bubblewrap (default)"#
+- bubblewrap sources expected at agiworkforce-rs/vendor/bubblewrap (default)"#
         );
     }
 

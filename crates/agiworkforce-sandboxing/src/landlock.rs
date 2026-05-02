@@ -1,7 +1,42 @@
+use agiworkforce_protocol::models::PermissionProfile;
 use agiworkforce_protocol::permissions::FileSystemSandboxPolicy;
 use agiworkforce_protocol::permissions::NetworkSandboxPolicy;
 use agiworkforce_protocol::protocol::SandboxPolicy;
+use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use std::path::Path;
+
+/// Arg0 (basename) used to identify the agiworkforce-linux-sandbox helper binary.
+pub const AGIWORKFORCE_LINUX_SANDBOX_ARG0: &str = "agiworkforce-linux-sandbox";
+
+/// Derive the Linux sandbox command args from a full `PermissionProfile`.
+///
+/// This wrapper computes the derived policies from the profile and delegates to
+/// [`create_linux_sandbox_command_args_for_policies`].
+pub fn create_linux_sandbox_command_args_for_permission_profile(
+    command: Vec<String>,
+    command_cwd: &Path,
+    permission_profile: &PermissionProfile,
+    sandbox_policy_cwd: &AbsolutePathBuf,
+    use_legacy_landlock: bool,
+    allow_network_for_proxy: bool,
+) -> Vec<String> {
+    let file_system_sandbox_policy = permission_profile.file_system_sandbox_policy();
+    let network_sandbox_policy = permission_profile.network_sandbox_policy();
+    let sandbox_policy = permission_profile
+        .to_legacy_sandbox_policy(sandbox_policy_cwd.as_path())
+        .unwrap_or(SandboxPolicy::DangerFullAccess);
+    create_linux_sandbox_command_args_for_policies(
+        command,
+        command_cwd,
+        &sandbox_policy,
+        &file_system_sandbox_policy,
+        network_sandbox_policy,
+        sandbox_policy_cwd.as_path(),
+        use_legacy_landlock,
+        allow_network_for_proxy,
+    )
+}
+
 pub fn allow_network_for_proxy(enforce_managed_network: bool) -> bool {
     // When managed network requirements are active, request proxy-only
     // networking from the Linux sandbox helper. Without managed requirements,

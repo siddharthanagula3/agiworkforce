@@ -5,6 +5,7 @@ use crate::provider::Provider;
 use crate::telemetry::run_with_request_telemetry;
 use agiworkforce_client::HttpTransport;
 use agiworkforce_client::Request;
+use agiworkforce_client::RequestBody;
 use agiworkforce_client::RequestTelemetry;
 use agiworkforce_client::Response;
 use agiworkforce_client::StreamResponse;
@@ -53,7 +54,7 @@ impl<T: HttpTransport, A: AuthProvider> EndpointSession<T, A> {
         let mut req = self.provider.build_request(method.clone(), path);
         req.headers.extend(extra_headers.clone());
         if let Some(body) = body {
-            req.body = Some(body.clone());
+            req.body = Some(RequestBody::Json(body.clone()));
         }
         add_auth_headers(&self.auth, req)
     }

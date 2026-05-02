@@ -1,6 +1,5 @@
 use std::io::ErrorKind;
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,12 +9,13 @@ use crate::rollout::list::find_thread_path_by_id_str;
 use crate::shell::Shell;
 use crate::shell::ShellType;
 use crate::shell::get_shell;
-use agiworkforce_otel::SessionTelemetry;
-use agiworkforce_protocol::ThreadId;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
 use anyhow::bail;
+use agiworkforce_otel::SessionTelemetry;
+use agiworkforce_protocol::ThreadId;
+use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use tokio::fs;
 use tokio::process::Command;
 use tokio::sync::watch;
@@ -25,8 +25,8 @@ use tracing::info_span;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShellSnapshot {
-    pub path: PathBuf,
-    pub cwd: PathBuf,
+    pub path: AbsolutePathBuf,
+    pub cwd: AbsolutePathBuf,
 }
 
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -36,9 +36,9 @@ const EXCLUDED_EXPORT_VARS: &[&str] = &["PWD", "OLDPWD"];
 
 impl ShellSnapshot {
     pub fn start_snapshotting(
-        agiworkforce_home: PathBuf,
+        agiworkforce_home: AbsolutePathBuf,
         session_id: ThreadId,
-        session_cwd: PathBuf,
+        session_cwd: AbsolutePathBuf,
         shell: &mut Shell,
         session_telemetry: SessionTelemetry,
     ) -> watch::Sender<Option<Arc<ShellSnapshot>>> {
@@ -58,9 +58,9 @@ impl ShellSnapshot {
     }
 
     pub fn refresh_snapshot(
-        agiworkforce_home: PathBuf,
+        agiworkforce_home: AbsolutePathBuf,
         session_id: ThreadId,
-        session_cwd: PathBuf,
+        session_cwd: AbsolutePathBuf,
         shell: Shell,
         shell_snapshot_tx: watch::Sender<Option<Arc<ShellSnapshot>>>,
         session_telemetry: SessionTelemetry,
@@ -76,9 +76,9 @@ impl ShellSnapshot {
     }
 
     fn spawn_snapshot_task(
-        agiworkforce_home: PathBuf,
+        agiworkforce_home: AbsolutePathBuf,
         session_id: ThreadId,
-        session_cwd: PathBuf,
+        session_cwd: AbsolutePathBuf,
         snapshot_shell: Shell,
         shell_snapshot_tx: watch::Sender<Option<Arc<ShellSnapshot>>>,
         session_telemetry: SessionTelemetry,
@@ -87,14 +87,10 @@ impl ShellSnapshot {
         tokio::spawn(
             async move {
                 let timer = session_telemetry.start_timer("codex.shell_snapshot.duration_ms", &[]);
-                let snapshot = ShellSnapshot::try_new(
-                    &agiworkforce_home,
-                    session_id,
-                    session_cwd.as_path(),
-                    &snapshot_shell,
-                )
-                .await
-                .map(Arc::new);
+                let snapshot =
+                    ShellSnapshot::try_new(&agiworkforce_home, session_id, &session_cwd, &snapshot_shell)
+                        .await
+                        .map(Arc::new);
                 let success = snapshot.is_ok();
                 let success_tag = if success { "true" } else { "false" };
                 let _ = timer.map(|timer| timer.record(&[("success", success_tag)]));
@@ -110,9 +106,9 @@ impl ShellSnapshot {
     }
 
     async fn try_new(
-        agiworkforce_home: &Path,
+        agiworkforce_home: &AbsolutePathBuf,
         session_id: ThreadId,
-        session_cwd: &Path,
+        session_cwd: &AbsolutePathBuf,
         shell: &Shell,
     ) -> std::result::Result<Self, &'static str> {
         // File to store the snapshot
@@ -132,51 +128,44 @@ impl ShellSnapshot {
             .join(format!("{session_id}.tmp-{nonce}"));
 
         // Clean the (unlikely) leaked snapshot files.
-        let agiworkforce_home = agiworkforce_home.to_path_buf();
+        let agiworkforce_home = agiworkforce_home.clone();
         let cleanup_session_id = session_id;
         tokio::spawn(async move {
-            if let Err(err) = cleanup_stale_snapshots(&agiworkforce_home, cleanup_session_id).await
-            {
+            if let Err(err) = cleanup_stale_snapshots(&agiworkforce_home, cleanup_session_id).await {
                 tracing::warn!("Failed to clean up shell snapshots: {err:?}");
             }
         });
 
         // Make the new snapshot.
-        let temp_path =
-            match write_shell_snapshot(shell.shell_type.clone(), &temp_path, session_cwd).await {
-                Ok(path) => {
-                    tracing::info!("Shell snapshot successfully created: {}", path.display());
-                    path
-                }
-                Err(err) => {
-                    tracing::warn!(
-                        "Failed to create shell snapshot for {}: {err:?}",
-                        shell.name()
-                    );
-                    return Err("write_failed");
-                }
-            };
+        if let Err(err) =
+            write_shell_snapshot(shell.shell_type.clone(), &temp_path, session_cwd).await
+        {
+            tracing::warn!(
+                "Failed to create shell snapshot for {}: {err:?}",
+                shell.name()
+            );
+            return Err("write_failed");
+        }
+        tracing::info!(
+            "Shell snapshot successfully created: {}",
+            temp_path.display()
+        );
 
-        let temp_snapshot = Self {
-            path: temp_path.clone(),
-            cwd: session_cwd.to_path_buf(),
-        };
-
-        if let Err(err) = validate_snapshot(shell, &temp_snapshot.path, session_cwd).await {
+        if let Err(err) = validate_snapshot(shell, &temp_path, session_cwd).await {
             tracing::error!("Shell snapshot validation failed: {err:?}");
-            remove_snapshot_file(&temp_snapshot.path).await;
+            remove_snapshot_file(&temp_path).await;
             return Err("validation_failed");
         }
 
-        if let Err(err) = fs::rename(&temp_snapshot.path, &path).await {
+        if let Err(err) = fs::rename(&temp_path, &path).await {
             tracing::warn!("Failed to finalize shell snapshot: {err:?}");
-            remove_snapshot_file(&temp_snapshot.path).await;
+            remove_snapshot_file(&temp_path).await;
             return Err("write_failed");
         }
 
         Ok(Self {
             path,
-            cwd: session_cwd.to_path_buf(),
+            cwd: session_cwd.clone(),
         })
     }
 }
@@ -194,9 +183,9 @@ impl Drop for ShellSnapshot {
 
 async fn write_shell_snapshot(
     shell_type: ShellType,
-    output_path: &Path,
-    cwd: &Path,
-) -> Result<PathBuf> {
+    output_path: &AbsolutePathBuf,
+    cwd: &AbsolutePathBuf,
+) -> Result<()> {
     if shell_type == ShellType::PowerShell || shell_type == ShellType::Cmd {
         bail!("Shell snapshot not supported yet for {shell_type:?}");
     }
@@ -208,7 +197,7 @@ async fn write_shell_snapshot(
 
     if let Some(parent) = output_path.parent() {
         let parent_display = parent.display();
-        fs::create_dir_all(parent)
+        fs::create_dir_all(&parent)
             .await
             .with_context(|| format!("Failed to create snapshot parent {parent_display}"))?;
     }
@@ -218,10 +207,10 @@ async fn write_shell_snapshot(
         .await
         .with_context(|| format!("Failed to write snapshot to {snapshot_path}"))?;
 
-    Ok(output_path.to_path_buf())
+    Ok(())
 }
 
-async fn capture_snapshot(shell: &Shell, cwd: &Path) -> Result<String> {
+async fn capture_snapshot(shell: &Shell, cwd: &AbsolutePathBuf) -> Result<String> {
     let shell_type = shell.shell_type.clone();
     match shell_type {
         ShellType::Zsh => run_shell_script(shell, &zsh_snapshot_script(), cwd).await,
@@ -241,7 +230,11 @@ fn strip_snapshot_preamble(snapshot: &str) -> Result<String> {
     Ok(snapshot[start..].to_string())
 }
 
-async fn validate_snapshot(shell: &Shell, snapshot_path: &Path, cwd: &Path) -> Result<()> {
+async fn validate_snapshot(
+    shell: &Shell,
+    snapshot_path: &AbsolutePathBuf,
+    cwd: &AbsolutePathBuf,
+) -> Result<()> {
     let snapshot_path_display = snapshot_path.display();
     let script = format!("set -e; . \"{snapshot_path_display}\"");
     run_script_with_timeout(
@@ -255,7 +248,7 @@ async fn validate_snapshot(shell: &Shell, snapshot_path: &Path, cwd: &Path) -> R
     .map(|_| ())
 }
 
-async fn run_shell_script(shell: &Shell, script: &str, cwd: &Path) -> Result<String> {
+async fn run_shell_script(shell: &Shell, script: &str, cwd: &AbsolutePathBuf) -> Result<String> {
     run_script_with_timeout(
         shell,
         script,
@@ -271,7 +264,7 @@ async fn run_script_with_timeout(
     script: &str,
     snapshot_timeout: Duration,
     use_login_shell: bool,
-    cwd: &Path,
+    cwd: &AbsolutePathBuf,
 ) -> Result<String> {
     let args = shell.derive_exec_args(script, use_login_shell);
     let shell_name = shell.name();
@@ -491,7 +484,7 @@ $envVars | ForEach-Object {
 /// whose rollouts have not been updated within the retention window.
 /// The active session id is exempt from cleanup.
 pub async fn cleanup_stale_snapshots(
-    agiworkforce_home: &Path,
+    agiworkforce_home: &AbsolutePathBuf,
     active_session_id: ThreadId,
 ) -> Result<()> {
     let snapshot_dir = agiworkforce_home.join(SNAPSHOT_DIR);

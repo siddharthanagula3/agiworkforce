@@ -9,6 +9,16 @@ use std::path::Path;
 use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
+/// Returns `true` if two paths refer to the same filesystem location after normalization.
+///
+/// Normalization uses `canonicalize()` on both paths; if either call fails (e.g. the path
+/// does not exist), the raw paths are compared as-is.
+pub fn paths_match_after_normalization(a: impl AsRef<Path>, b: impl AsRef<Path>) -> bool {
+    let a_norm = normalize_for_path_comparison(a.as_ref()).unwrap_or_else(|_| a.as_ref().to_path_buf());
+    let b_norm = normalize_for_path_comparison(b.as_ref()).unwrap_or_else(|_| b.as_ref().to_path_buf());
+    a_norm == b_norm
+}
+
 pub fn normalize_for_path_comparison(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
     let canonical = path.as_ref().canonicalize()?;
     Ok(normalize_for_wsl(canonical))
@@ -82,7 +92,7 @@ pub fn resolve_symlink_write_paths(path: &Path) -> io::Result<SymlinkWritePaths>
         let next = if target.is_absolute() {
             AbsolutePathBuf::from_absolute_path(&target)
         } else if let Some(parent) = current.parent() {
-            AbsolutePathBuf::resolve_path_against_base(&target, parent)
+            Ok(AbsolutePathBuf::resolve_path_against_base(&target, parent))
         } else {
             return Ok(SymlinkWritePaths {
                 read_path: None,

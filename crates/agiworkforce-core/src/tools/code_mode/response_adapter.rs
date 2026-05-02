@@ -1,4 +1,5 @@
 use agiworkforce_code_mode::ImageDetail as CodeModeImageDetail;
+use agiworkforce_protocol::models::DEFAULT_IMAGE_DETAIL;
 use agiworkforce_protocol::models::FunctionCallOutputContentItem;
 use agiworkforce_protocol::models::ImageDetail;
 
@@ -33,13 +34,14 @@ impl IntoProtocol<FunctionCallOutputContentItem>
             agiworkforce_code_mode::FunctionCallOutputContentItem::InputText { text } => {
                 FunctionCallOutputContentItem::InputText { text }
             }
-            agiworkforce_code_mode::FunctionCallOutputContentItem::InputImage {
-                image_url,
-                detail,
-            } => FunctionCallOutputContentItem::InputImage {
-                image_url,
-                detail: detail.map(IntoProtocol::into_protocol),
-            },
+            agiworkforce_code_mode::FunctionCallOutputContentItem::InputImage { image_url, detail } => {
+                FunctionCallOutputContentItem::InputImage {
+                    image_url,
+                    detail: detail
+                        .map(IntoProtocol::into_protocol)
+                        .or(Some(DEFAULT_IMAGE_DETAIL)),
+                }
+            }
         }
     }
 }

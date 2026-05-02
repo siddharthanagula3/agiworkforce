@@ -544,7 +544,7 @@ fn append_convertible_hook_groups(
     };
 
     for event_name in HOOK_EVENT_NAMES {
-        let Some(groups) = hooks_config.get(event_name).and_then(JsonValue::as_array) else {
+        let Some(groups) = hooks_config.get(*event_name).and_then(JsonValue::as_array) else {
             continue;
         };
         for group in groups {

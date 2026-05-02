@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1"
+agiworkforce-login = { path = "../agiworkforce-login" }
 agiworkforce-protocol = { path = "../agiworkforce-protocol" }
 sentry = "0.46"
 tracing = "0.1.44"

@@ -1,6 +1,7 @@
 use super::*;
-use crate::config::types::ShellEnvironmentPolicyInherit;
+use agiworkforce_protocol::config_types::ShellEnvironmentPolicyInherit;
 use maplit::hashmap;
+use pretty_assertions::assert_eq;
 
 fn make_vars(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
     pairs
@@ -28,7 +29,7 @@ fn test_core_inherit_defaults_keep_sensitive_vars() {
         "API_KEY".to_string() => "secret".to_string(),
         "SECRET_TOKEN".to_string() => "t".to_string(),
     };
-    expected.insert(CODEX_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
+    expected.insert(AGIWORKFORCE_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
 
     assert_eq!(result, expected);
 }
@@ -53,7 +54,7 @@ fn test_core_inherit_with_default_excludes_enabled() {
         "PATH".to_string() => "/usr/bin".to_string(),
         "HOME".to_string() => "/home/user".to_string(),
     };
-    expected.insert(CODEX_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
+    expected.insert(AGIWORKFORCE_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
 
     assert_eq!(result, expected);
 }
@@ -75,7 +76,7 @@ fn test_include_only() {
     let mut expected: HashMap<String, String> = hashmap! {
         "PATH".to_string() => "/usr/bin".to_string(),
     };
-    expected.insert(CODEX_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
+    expected.insert(AGIWORKFORCE_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
 
     assert_eq!(result, expected);
 }
@@ -97,7 +98,7 @@ fn test_set_overrides() {
         "PATH".to_string() => "/usr/bin".to_string(),
         "NEW_VAR".to_string() => "42".to_string(),
     };
-    expected.insert(CODEX_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
+    expected.insert(AGIWORKFORCE_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
 
     assert_eq!(result, expected);
 }
@@ -112,7 +113,7 @@ fn populate_env_inserts_thread_id() {
     let mut expected: HashMap<String, String> = hashmap! {
         "PATH".to_string() => "/usr/bin".to_string(),
     };
-    expected.insert(CODEX_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
+    expected.insert(AGIWORKFORCE_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
 
     assert_eq!(result, expected);
 }
@@ -121,7 +122,7 @@ fn populate_env_inserts_thread_id() {
 fn populate_env_omits_thread_id_when_missing() {
     let vars = make_vars(&[("PATH", "/usr/bin")]);
     let policy = ShellEnvironmentPolicy::default();
-    let result = populate_env(vars, &policy, None);
+    let result = populate_env(vars, &policy, /*thread_id*/ None);
 
     let expected: HashMap<String, String> = hashmap! {
         "PATH".to_string() => "/usr/bin".to_string(),
@@ -143,7 +144,7 @@ fn test_inherit_all() {
     let thread_id = ThreadId::new();
     let result = populate_env(vars.clone(), &policy, Some(thread_id));
     let mut expected: HashMap<String, String> = vars.into_iter().collect();
-    expected.insert(CODEX_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
+    expected.insert(AGIWORKFORCE_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
     assert_eq!(result, expected);
 }
 
@@ -162,7 +163,7 @@ fn test_inherit_all_with_default_excludes() {
     let mut expected: HashMap<String, String> = hashmap! {
         "PATH".to_string() => "/usr/bin".to_string(),
     };
-    expected.insert(CODEX_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
+    expected.insert(AGIWORKFORCE_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
     assert_eq!(result, expected);
 }
 
@@ -171,6 +172,7 @@ fn test_inherit_all_with_default_excludes() {
 fn test_core_inherit_respects_case_insensitive_names_on_windows() {
     let vars = make_vars(&[
         ("Path", "C:\\Windows\\System32"),
+        ("PathExt", ".COM;.EXE;.BAT;.CMD"),
         ("TEMP", "C:\\Temp"),
         ("FOO", "bar"),
     ]);
@@ -185,11 +187,53 @@ fn test_core_inherit_respects_case_insensitive_names_on_windows() {
     let result = populate_env(vars, &policy, Some(thread_id));
     let mut expected: HashMap<String, String> = hashmap! {
         "Path".to_string() => "C:\\Windows\\System32".to_string(),
+        "PathExt".to_string() => ".COM;.EXE;.BAT;.CMD".to_string(),
         "TEMP".to_string() => "C:\\Temp".to_string(),
     };
-    expected.insert(CODEX_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
+    expected.insert(AGIWORKFORCE_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
 
     assert_eq!(result, expected);
+}
+
+#[test]
+#[cfg(target_os = "windows")]
+fn create_env_inserts_pathext_on_windows_when_missing() {
+    let vars = make_vars(&[]);
+
+    let policy = ShellEnvironmentPolicy {
+        inherit: ShellEnvironmentPolicyInherit::None,
+        ignore_default_excludes: true,
+        ..Default::default()
+    };
+
+    let result = create_env_from_vars(vars, &policy, /*thread_id*/ None);
+
+    let expected: HashMap<String, String> = hashmap! {
+        "PATHEXT".to_string() => ".COM;.EXE;.BAT;.CMD".to_string(),
+    };
+    assert_eq!(result, expected);
+}
+
+#[test]
+#[cfg(target_os = "windows")]
+fn create_env_preserves_existing_pathext_case_insensitively_on_windows() {
+    let vars = make_vars(&[("PathExt", ".COM;.EXE;.BAT;.CMD;.PS1")]);
+
+    let policy = ShellEnvironmentPolicy {
+        inherit: ShellEnvironmentPolicyInherit::Core,
+        ignore_default_excludes: true,
+        ..Default::default()
+    };
+
+    let result = create_env_from_vars(vars, &policy, /*thread_id*/ None);
+
+    let pathext_vars = result
+        .iter()
+        .filter(|(key, _)| key.eq_ignore_ascii_case("PATHEXT"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(pathext_vars.len(), 1);
+    assert_eq!(pathext_vars[0].1, ".COM;.EXE;.BAT;.CMD;.PS1");
 }
 
 #[test]
@@ -210,6 +254,6 @@ fn test_inherit_none() {
     let mut expected: HashMap<String, String> = hashmap! {
         "ONLY_VAR".to_string() => "yes".to_string(),
     };
-    expected.insert(CODEX_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
+    expected.insert(AGIWORKFORCE_THREAD_ID_ENV_VAR.to_string(), thread_id.to_string());
     assert_eq!(result, expected);
 }

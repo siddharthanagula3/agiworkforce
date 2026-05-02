@@ -1,4 +1,5 @@
 use agiworkforce_network_proxy::NetworkProxy;
+use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -11,13 +12,12 @@ use agiworkforce_protocol::permissions::NetworkSandboxPolicy;
 /// Experimental environment variable that will be set to some non-empty value
 /// if both of the following are true:
 ///
-/// 1. The process was spawned by Codex as part of a shell tool call.
+/// 1. The process was spawned by Agiworkforce as part of a shell tool call.
 /// 2. NetworkSandboxPolicy is restricted for the tool call.
 ///
 /// We may try to have just one environment variable for all sandboxing
 /// attributes, so this may change in the future.
-pub const AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR: &str =
-    "AGIWORKFORCE_SANDBOX_NETWORK_DISABLED";
+pub const AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR: &str = "AGIWORKFORCE_SANDBOX_NETWORK_DISABLED";
 
 /// Should be set when the process is spawned under a sandbox. Currently, the
 /// value is "seatbelt" for macOS, but it may change in the future to
@@ -41,7 +41,7 @@ pub(crate) struct SpawnChildRequest<'a> {
     pub program: PathBuf,
     pub args: Vec<String>,
     pub arg0: Option<&'a str>,
-    pub cwd: PathBuf,
+    pub cwd: AbsolutePathBuf,
     pub network_sandbox_policy: NetworkSandboxPolicy,
     pub network: Option<&'a NetworkProxy>,
     pub stdio_policy: StdioPolicy,
@@ -79,7 +79,7 @@ pub(crate) async fn spawn_child_async(request: SpawnChildRequest<'_>) -> std::io
         cmd.env(AGIWORKFORCE_SANDBOX_NETWORK_DISABLED_ENV_VAR, "1");
     }
 
-    // If this Codex process dies (including being killed via SIGKILL), we want
+    // If this Agiworkforce process dies (including being killed via SIGKILL), we want
     // any child processes that were spawned as part of a `"shell"` tool call
     // to also be terminated.
 
