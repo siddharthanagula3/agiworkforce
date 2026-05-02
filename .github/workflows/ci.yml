@@ -125,6 +125,13 @@ jobs:
           # binary (not the compile-time-vendored one), so unit tests
           # don't need it. The build.rs already honours this opt-out.
           AGIWORKFORCE_SKIP_VENDORED_BWRAP: '1'
+          # actions-rust-lang/setup-rust-toolchain@v1 sets
+          # `RUSTFLAGS=-D warnings` by default, which turns every unused
+          # import / dead_code warning across the workspace into a test
+          # build failure even though they have nothing to do with whether
+          # the tests pass. Lint cleanliness is enforced separately by the
+          # Clippy step below; keep the Test step focused on test outcomes.
+          RUSTFLAGS: ''
         run: xvfb-run --auto-servernum cargo test --workspace --lib
 
       - name: Clippy (Rust workspace, default features)
