@@ -1415,9 +1415,10 @@ mod tests {
             thread_name: Some("CLI visibility audit".to_string()),
             created_at: None,
             updated_at: None,
-            cwd: Some(PathBuf::from(
-                "/Users/siddhartha/Desktop/agiworkforce/apps/cli",
-            )),
+            // FIX-044 (Sprint 5): use the CARGO_MANIFEST_DIR resolved at
+            // compile time so the test passes on any developer's checkout
+            // and on CI runners, not just the original author's machine.
+            cwd: Some(PathBuf::from(env!("CARGO_MANIFEST_DIR"))),
             git_branch: Some("feature/cli-visibility".to_string()),
         };
 
