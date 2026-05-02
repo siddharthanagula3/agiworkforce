@@ -2085,6 +2085,7 @@ pub fn run() {
             crate::sys::commands::master_password::master_password_needs_migration,
             crate::sys::commands::master_password::master_password_start_migration,
             crate::sys::commands::master_password::master_password_complete_migration,
+            crate::sys::commands::master_password::master_password_migrate_credentials,
 
             // Background Agents (push to background with "&" prefix)
             crate::sys::commands::background_agents::background_agent_push,

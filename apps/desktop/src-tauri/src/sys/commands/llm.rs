@@ -380,6 +380,7 @@ pub async fn llm_configure_provider(
     api_key: Option<String>,
     base_url: Option<String>,
     state: State<'_, LLMState>,
+    encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<(), String> {
     if provider.trim().is_empty() {
         return Err("Provider name cannot be empty".to_string());
@@ -407,12 +408,17 @@ pub async fn llm_configure_provider(
                 .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
             // Try the explicitly passed api_key first, then fall back to the
-            // encrypted key stored in the MCP settings database.
+            // encrypted key stored in the MCP settings database (FIX-001 —
+            // pass through the master-password helper so the lookup tries
+            // the vault key first before falling back to machine-key).
             let resolved_key = api_key
                 .filter(|k| !k.is_empty())
                 .or_else(|| {
-                    crate::sys::commands::mcp_oauth::retrieve_api_key(provider_enum.as_string())
-                        .ok()
+                    crate::sys::commands::mcp_oauth::retrieve_api_key(
+                        Some(encryption.inner()),
+                        provider_enum.as_string(),
+                    )
+                    .ok()
                 })
                 .ok_or_else(|| {
                     format!(
