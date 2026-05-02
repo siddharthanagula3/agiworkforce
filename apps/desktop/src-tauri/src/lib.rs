@@ -345,6 +345,21 @@ pub fn run() {
                 }
             }
 
+            // FIX-007 (Sprint 3): per-user daily LLM-spend cap. Reuses
+            // the main app DB so the budget table sits next to other
+            // settings and ships in regular backups.
+            match crate::core::llm::daily_budget::DailyBudgetGuard::new(db_conn_arc.clone()) {
+                Ok(guard) => {
+                    app.manage(guard);
+                    tracing::info!("DailyBudgetGuard initialized at default $25/day cap");
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to initialize DailyBudgetGuard: {e}. Budget enforcement disabled."
+                    );
+                }
+            }
+
             use crate::sys::commands::analytics::TelemetryState;
             use crate::sys::telemetry::{AnalyticsMetricsCollector, CollectorConfig, TelemetryCollector};
 
@@ -2089,6 +2104,9 @@ pub fn run() {
             crate::sys::commands::supabase_token::supabase_token_set,
             crate::sys::commands::supabase_token::supabase_token_get,
             crate::sys::commands::supabase_token::supabase_token_remove,
+            crate::sys::commands::daily_budget::budget_get_status,
+            crate::sys::commands::daily_budget::budget_set_cap_usd,
+            crate::sys::commands::daily_budget::budget_record_actual,
 
             // Background Agents (push to background with "&" prefix)
             crate::sys::commands::background_agents::background_agent_push,

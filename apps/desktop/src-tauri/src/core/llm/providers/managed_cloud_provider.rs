@@ -45,19 +45,20 @@ fn method_not_allowed_message() -> &'static str {
 }
 
 impl Default for ManagedCloudProvider {
+    /// FIX-007 (Sprint 3): the previous implementation silently fell back
+    /// to `Client::new()` (no connect timeout, no request timeout, no
+    /// pool config) whenever `Self::new()`'s timeout-respecting builder
+    /// failed. That meant every long-tail request inherited an
+    /// open-ended waiting period — exactly the failure mode the timeouts
+    /// were added to prevent. Production callers must use
+    /// [`Self::new`] and handle the error explicitly; the only
+    /// historical caller of `Default` was a unit test, which now uses
+    /// `Self::new().expect(...)`.
     fn default() -> Self {
-        Self::new().unwrap_or_else(|e| {
-            tracing::warn!(
-                "Failed to create ManagedCloudProvider with custom timeouts: {}. Using default client.",
-                e
-            );
-            // Fallback to default client which cannot fail
-            let fallback = Client::new();
-            Self {
-                client: fallback.clone(),
-                streaming_client: fallback,
-            }
-        })
+        Self::new().expect(
+            "ManagedCloudProvider::default — Client::builder rejected the required timeouts; \
+             use ManagedCloudProvider::new() and propagate the error instead",
+        )
     }
 }
 
@@ -835,7 +836,7 @@ mod tests {
 
     #[test]
     fn transform_request_adds_items_for_array_tool_params() {
-        let provider = ManagedCloudProvider::default();
+        let provider = ManagedCloudProvider::new().expect("ManagedCloudProvider::new");
         let request = LLMRequest {
             messages: vec![ChatMessage {
                 role: "user".to_string(),
