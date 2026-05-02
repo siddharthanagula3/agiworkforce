@@ -21,6 +21,38 @@
 use crate::core::llm::{ToolCall, ToolDefinition};
 use uuid::Uuid;
 
+/// FIX-015 (Sprint 2): build a 16-byte hex nonce that we wrap the
+/// injected tool catalog in. The nonce is per-call so a model that's
+/// been jailbroken via attachment text can't pre-construct a forged
+/// `<tool_catalog>` block in its own user-content reply.
+fn build_injection_nonce() -> String {
+    let bytes = Uuid::new_v4();
+    format!("{:x}", bytes.as_u128())
+}
+
+/// FIX-015: wrap the catalog text in nonce-bearing sentinels. The model
+/// is instructed elsewhere (in system instructions) that legitimate tool
+/// catalogs always carry the nonce — anything purporting to be a catalog
+/// without it is treated as untrusted user content.
+fn wrap_with_nonce(nonce: &str, body: &str) -> String {
+    format!(
+        "\n\n<tool_catalog version=\"1\" nonce=\"{nonce}\">\n{body}\n</tool_catalog nonce=\"{nonce}\">\n"
+    )
+}
+
+/// FIX-015: scrub any literal occurrences of `nonce` from a chat message
+/// so user-supplied content can't impersonate the catalog boundary.
+fn strip_nonce_occurrences(
+    nonce: &str,
+    message: &crate::core::llm::ChatMessage,
+) -> crate::core::llm::ChatMessage {
+    let mut clone = message.clone();
+    if clone.content.contains(nonce) {
+        clone.content = clone.content.replace(nonce, "");
+    }
+    clone
+}
+
 /// Generate the tool-description section to inject into a system prompt.
 ///
 /// Returns the text block that should be *appended* to the existing system
@@ -86,8 +118,17 @@ pub fn inject_tools_into_system_prompt(
         return messages.to_vec();
     }
 
-    let injection = build_tool_injection_prompt(tools);
-    let mut result: Vec<crate::core::llm::ChatMessage> = messages.to_vec();
+    // FIX-015 (Sprint 2): wrap the tool catalog in a per-call random nonce
+    // so a model that's been jailbroken via attachment text can't forge a
+    // fake tool catalog inside its own user-content reply. Strip any
+    // occurrences of the nonce from the user-content side before building
+    // the injection so the boundary stays cryptographically distinct.
+    let nonce = build_injection_nonce();
+    let injection = wrap_with_nonce(&nonce, &build_tool_injection_prompt(tools));
+    let mut result: Vec<crate::core::llm::ChatMessage> = messages
+        .iter()
+        .map(|m| strip_nonce_occurrences(&nonce, m))
+        .collect();
 
     // Look for an existing system message to augment.
     if let Some(sys_msg) = result.iter_mut().find(|m| m.role == "system") {

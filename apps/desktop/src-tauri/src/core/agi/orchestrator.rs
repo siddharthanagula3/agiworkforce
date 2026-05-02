@@ -601,6 +601,13 @@ impl AgentOrchestrator {
         let mut enriched_instruction = instruction.to_string();
 
         if let Some(atts) = attachments {
+            // FIX-015 (Sprint 2): generate a per-call hex nonce and use it
+            // as the attachment terminator instead of the literal
+            // "[End Attachment]". A malicious PDF could previously emit
+            // the literal terminator inside its extracted text and break
+            // the boundary so subsequent text was treated as the user's
+            // own instruction.
+            let attachment_nonce = format!("{:x}", Uuid::new_v4().as_u128());
             for attachment in atts {
                 if let Some(path) = &attachment.path {
                     let path_lower = path.to_lowercase();
@@ -617,16 +624,21 @@ impl AgentOrchestrator {
                                 } else {
                                     text
                                 };
+                                // Strip any literal occurrences of the
+                                // nonce from the extracted text so the
+                                // boundary stays cryptographically distinct.
+                                let safe_text =
+                                    truncated_text.replace(&attachment_nonce, "");
                                 enriched_instruction.push_str(&format!(
-                                    "\n\n[Attachment Content: {}]\n{}\n[End Attachment]\n",
-                                    attachment.name, truncated_text
+                                    "\n\n<attachment name=\"{}\" nonce=\"{}\">\n{}\n</attachment nonce=\"{}\">\n",
+                                    attachment.name, attachment_nonce, safe_text, attachment_nonce
                                 ));
                             }
                             Err(e) => {
                                 tracing::error!("Failed to extract PDF text: {}", e);
                                 enriched_instruction.push_str(&format!(
-                                    "\n\n[System Note: Failed to extract text from attachment: {} - {}]\n",
-                                    attachment.name, e
+                                    "\n\n<system_note nonce=\"{}\">Failed to extract text from attachment: {} - {}</system_note nonce=\"{}\">\n",
+                                    attachment_nonce, attachment.name, e, attachment_nonce
                                 ));
                             }
                         }
