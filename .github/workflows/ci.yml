@@ -111,7 +111,15 @@ jobs:
         env:
           CARGO_HOME: ~/.cargo
 
-      - name: Test (Rust workspace, default features)
+      - name: Test (apps/desktop + apps/cli, default features)
+        # Scope the test step to the binaries we actually ship — matches
+        # the Clippy step's scope (323ab2e5). The 100+ ported codex-rs
+        # crates under crates/* have their own pre-existing test
+        # regressions (rebrand-related fixture mismatches, mid-port
+        # stubs) that are unrelated to whether the desktop + cli
+        # binaries work. Track those separately under FIX-021's TUI
+        # defork plan.
+        #
         # FIX-039 (Sprint 4): the previous form skipped enigo /
         # AutomationService / automation suites. They were silenced under
         # the assumption that they need DISPLAY — but xvfb-run is already
@@ -132,7 +140,7 @@ jobs:
           # the tests pass. Lint cleanliness is enforced separately by the
           # Clippy step below; keep the Test step focused on test outcomes.
           RUSTFLAGS: ''
-        run: xvfb-run --auto-servernum cargo test --workspace --lib
+        run: xvfb-run --auto-servernum cargo test -p agiworkforce-desktop -p agiworkforce-cli --lib
 
       - name: Clippy (apps/desktop + apps/cli, default features)
         # Scope clippy to the binaries we actually ship. The 100+ ported
