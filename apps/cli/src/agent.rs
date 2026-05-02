@@ -86,6 +86,10 @@ pub struct AgentSession {
     /// `CliError::RateLimited` instead of hitting the network. Cleared after
     /// it fires once so the fallback path executes normally afterwards.
     pub demo_force_rate_limit: bool,
+    /// Active output style name (`default`, `explanatory`, `learning`, or a
+    /// user-defined entry from `~/.agiworkforce/output-styles/`).
+    #[allow(dead_code)]
+    pub output_style: String,
     /// Optional sink for fallback rotation notifications. Wired by the CLI
     /// when `--json-events` is set so the operator can pipe rotations to
     /// `jq` / dashboards.
@@ -243,6 +247,7 @@ impl AgentSession {
             fallback_chain: None,
             demo_force_rate_limit: false,
             on_fallback: None,
+            output_style: "default".to_string(),
             recent_tool_calls: Vec::new(),
             loop_strike_count: 0,
             hooks_config,
@@ -341,6 +346,30 @@ impl AgentSession {
     pub fn set_provider_override(&mut self, provider_name: &str) {
         if let Some(p) = models::provider_from_name(provider_name) {
             self.provider = p;
+        }
+    }
+
+    /// Switch the active output style. Appends the style preamble to the
+    /// existing system message so the change applies on the next turn
+    /// without losing prior conversation context.
+    #[allow(dead_code)]
+    pub fn apply_output_style(&mut self, style_name: &str) {
+        let style = crate::output_styles::resolve(style_name);
+        self.output_style = style.name.clone();
+        if let Some(system_msg) = self.messages.first_mut() {
+            if system_msg.role == "system" {
+                let mut text = system_msg.text_content();
+                // Strip any prior style preamble so styles are mutually
+                // exclusive — re-applying default removes the override.
+                if let Some(idx) = text.find("\n\n## Output style:") {
+                    text.truncate(idx);
+                }
+                if !style.system_prompt.trim().is_empty() {
+                    text.push_str("\n\n");
+                    text.push_str(style.system_prompt.trim());
+                }
+                *system_msg = Message::text("system", text);
+            }
         }
     }
 

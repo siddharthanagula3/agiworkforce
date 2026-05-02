@@ -1201,6 +1201,66 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(format!("Turns: {} │ {}", app.session.turn_count, cost))
         }
 
+        "/output-style" => {
+            if arg.is_empty() {
+                let active = &app.session.output_style;
+                let mut lines = vec![format!("Active: {}", active)];
+                lines.push(String::new());
+                lines.push("Available styles:".to_string());
+                for s in crate::output_styles::load_all() {
+                    let marker = if s.name == *active { "*" } else { " " };
+                    lines.push(format!(" {} {:<14}  {}", marker, s.name, s.description));
+                }
+                lines.push(String::new());
+                lines.push("Switch with: /output-style <name>".to_string());
+                SlashResult::SystemMessage(lines.join("\n"))
+            } else {
+                app.session.apply_output_style(arg);
+                SlashResult::SystemMessage(format!(
+                    "Output style: {} (applies on next turn)",
+                    app.session.output_style
+                ))
+            }
+        }
+
+        "/fallback" => {
+            match app.session.fallback_chain.as_ref() {
+                Some(chain) if !chain.primaries.is_empty() => {
+                    let head = chain.head().unwrap_or("?");
+                    let tail = chain.tail().join(" → ");
+                    let display = if tail.is_empty() {
+                        head.to_string()
+                    } else {
+                        format!("{} → {}", head, tail)
+                    };
+                    SlashResult::SystemMessage(format!(
+                        "Fallback chain: {}\nRotates on: {:?}",
+                        display, chain.on
+                    ))
+                }
+                _ => SlashResult::SystemMessage(
+                    "No fallback chain set. Restart with -m a,b,c to enable."
+                        .to_string(),
+                ),
+            }
+        }
+
+        "/replay" => SlashResult::SystemMessage(
+            "Session replay: drop to shell and run\n  agiworkforce session list\n  agiworkforce session fork <id> --at-turn N --as <name>\n(Inline turn picker coming in v0.2.)"
+                .to_string(),
+        ),
+
+        "/insights" => {
+            let sid = app
+                .session
+                .managed_session_id()
+                .unwrap_or("(no session)");
+            SlashResult::SystemMessage(format!(
+                "Inspect this session as JSONL events:\n  agiworkforce exec --json-events --session {} \"<prompt>\" | jq",
+                sid
+            ))
+        }
+
         "/status" => {
             let msg = format!(
                 "Version: {}\nModel: {}\nProvider: {:?}\nMode: {}\nTurns: {}\nTokens: {} in / {} out\nContext: {}%",
