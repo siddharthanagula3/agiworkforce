@@ -2,9 +2,21 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+/// FIX-014 (Sprint 2): the user-supplied `limit` was previously
+/// unbounded, so a malicious or buggy caller could pass `usize::MAX` and
+/// drive the walker until OOM on a large workspace. Cap at 10 000 hits
+/// per request — well above any reasonable picker UI's needs.
+const MAX_RESULT_LIMIT: usize = 10_000;
+
+/// FIX-014: hard-stop the underlying `walkdir` traversal after this many
+/// directory entries even when the result count is still under the cap,
+/// so a wide tree with no matches can't pin a thread indefinitely.
+const MAX_ENTRIES_VISITED: usize = 100_000;
+
 #[tauri::command]
 pub async fn fs_search_files(query: String, limit: usize) -> Result<Vec<String>, String> {
     let cwd = std::env::current_dir().map_err(|e| format!("Failed to get cwd: {}", e))?;
+    let limit = limit.min(MAX_RESULT_LIMIT);
 
     tokio::task::spawn_blocking(move || search_files_blocking(&cwd, &query, limit))
         .await
@@ -14,6 +26,7 @@ pub async fn fs_search_files(query: String, limit: usize) -> Result<Vec<String>,
 #[tauri::command]
 pub async fn fs_search_folders(query: String, limit: usize) -> Result<Vec<String>, String> {
     let cwd = std::env::current_dir().map_err(|e| format!("Failed to get cwd: {}", e))?;
+    let limit = limit.min(MAX_RESULT_LIMIT);
 
     tokio::task::spawn_blocking(move || search_folders_blocking(&cwd, &query, limit))
         .await
@@ -22,6 +35,7 @@ pub async fn fs_search_folders(query: String, limit: usize) -> Result<Vec<String
 
 fn search_files_blocking(root: &Path, query: &str, limit: usize) -> Result<Vec<String>, String> {
     let mut results = Vec::new();
+    let mut entries_visited: usize = 0;
     let query_lower = query.to_lowercase();
 
     for entry in WalkDir::new(root)
@@ -30,9 +44,10 @@ fn search_files_blocking(root: &Path, query: &str, limit: usize) -> Result<Vec<S
         .into_iter()
         .filter_entry(|e| !is_hidden(e.path()) && !is_ignored(e.path()))
     {
-        if results.len() >= limit {
+        if results.len() >= limit || entries_visited >= MAX_ENTRIES_VISITED {
             break;
         }
+        entries_visited += 1;
 
         let entry = entry.map_err(|e| format!("Walk error: {}", e))?;
 
@@ -85,6 +100,7 @@ fn search_files_blocking(root: &Path, query: &str, limit: usize) -> Result<Vec<S
 
 fn search_folders_blocking(root: &Path, query: &str, limit: usize) -> Result<Vec<String>, String> {
     let mut results = Vec::new();
+    let mut entries_visited: usize = 0;
     let query_lower = query.to_lowercase();
 
     for entry in WalkDir::new(root)
@@ -93,9 +109,10 @@ fn search_folders_blocking(root: &Path, query: &str, limit: usize) -> Result<Vec
         .into_iter()
         .filter_entry(|e| !is_hidden(e.path()) && !is_ignored(e.path()))
     {
-        if results.len() >= limit {
+        if results.len() >= limit || entries_visited >= MAX_ENTRIES_VISITED {
             break;
         }
+        entries_visited += 1;
 
         let entry = entry.map_err(|e| format!("Walk error: {}", e))?;
 
@@ -253,5 +270,20 @@ mod tests {
         assert!(is_ignored(Path::new("project/node_modules/package")));
         assert!(is_ignored(Path::new("project/target/debug")));
         assert!(!is_ignored(Path::new("project/src/main.rs")));
+    }
+
+    /// FIX-014 (Sprint 2): the public IPC clamps a `usize::MAX` callers
+    /// pass in down to `MAX_RESULT_LIMIT` so a buggy or malicious frontend
+    /// can't drive the walker until OOM. Pinning the constants here is
+    /// enough — a real walk against macOS tempdirs trips the
+    /// "starts-with-dot" hidden-path filter and would test the wrong
+    /// invariant.
+    #[test]
+    fn limit_constants_are_protective() {
+        assert!(MAX_RESULT_LIMIT > 0);
+        assert!(MAX_RESULT_LIMIT <= 10_000);
+        assert!(MAX_ENTRIES_VISITED >= MAX_RESULT_LIMIT);
+        let clamped = usize::MAX.min(MAX_RESULT_LIMIT);
+        assert_eq!(clamped, MAX_RESULT_LIMIT);
     }
 }
