@@ -1239,20 +1239,22 @@ pub async fn mcp_oauth_set_credentials(
     provider: String,
     client_id: String,
     client_secret: String,
+    encryption: tauri::State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<(), String> {
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
     let conn = open_mcp_settings_db()?;
+    let helper = Some(encryption.inner());
 
-    // Encrypt and store client_id
-    let encrypted_id = encrypt_credential(&client_id)?;
+    // Encrypt and store client_id (FIX-001 — uses master-password key when configured)
+    let encrypted_id = encrypt_credential(helper, &client_id)?;
     let id_key = format!("mcp_oauth_config_{}_client_id", oauth_provider.as_str());
     upsert_settings_v2_value(&conn, &id_key, &encrypted_id, "security", true)
         .map_err(|e| format!("Failed to store client_id: {}", e))?;
 
-    // Encrypt and store client_secret
-    let encrypted_secret = encrypt_credential(&client_secret)?;
+    // Encrypt and store client_secret (FIX-001 — uses master-password key when configured)
+    let encrypted_secret = encrypt_credential(helper, &client_secret)?;
     let secret_key = format!("mcp_oauth_config_{}_client_secret", oauth_provider.as_str());
     upsert_settings_v2_value(&conn, &secret_key, &encrypted_secret, "security", true)
         .map_err(|e| format!("Failed to store client_secret: {}", e))?;
@@ -1265,8 +1267,36 @@ pub async fn mcp_oauth_set_credentials(
     Ok(())
 }
 
-/// Encrypt a single credential value
-fn encrypt_credential(value: &str) -> Result<String, String> {
+/// Encrypt a single credential value.
+///
+/// FIX-001 (Sprint 1): when the user has set up a master password and the
+/// vault is unlocked, derives the AES-256-GCM key from the master password
+/// (HKDF-SHA256 over Argon2id-derived material). When the vault is
+/// configured but locked, returns an error so the caller can prompt for
+/// unlock instead of silently writing under a different key. When no
+/// master password is configured, falls back to the machine-key derivation
+/// preserving pre-FIX-001 behavior so existing installs aren't broken.
+fn encrypt_credential(
+    helper: Option<&crate::sys::security::MasterPasswordEncryption>,
+    value: &str,
+) -> Result<String, String> {
+    if let Some(helper) = helper {
+        if helper.is_configured() {
+            return helper
+                .encrypt(KeyPurpose::McpCredentials, value)
+                .map_err(|e| match e {
+                    crate::sys::security::MasterPasswordError::AppLocked => {
+                        "Master password is set up but the vault is locked. Unlock the vault before storing credentials.".to_string()
+                    }
+                    other => format!("Failed to encrypt with master password: {other}"),
+                });
+        }
+    }
+
+    encrypt_credential_machine_only(value)
+}
+
+fn encrypt_credential_machine_only(value: &str) -> Result<String, String> {
     let key = derive_key(KeyPurpose::McpCredentials);
     let cipher =
         Aes256Gcm::new_from_slice(&key).map_err(|e| format!("Failed to create cipher: {}", e))?;
@@ -1564,8 +1594,12 @@ pub async fn mcp_connect_connector(
             }
         }
         ConnectorCredentialSource::ApiKey => {
-            // Retrieve API key from settings_v2
-            let api_key = retrieve_api_key(&connector_id)?;
+            // Retrieve API key from settings_v2 (FIX-001 — master-password helper
+            // is grabbed off the AppHandle so legacy rows still decrypt via
+            // machine-key fallback when the vault isn't configured).
+            let encryption_state =
+                app_handle.state::<crate::sys::security::MasterPasswordEncryption>();
+            let api_key = retrieve_api_key(Some(encryption_state.inner()), &connector_id)?;
             for (env_var, _desc) in mapping.env_keys {
                 runtime_env.insert(env_var.to_string(), api_key.clone());
                 persisted_env.insert(
@@ -1732,11 +1766,12 @@ pub async fn save_api_key(
     provider: String,
     key: String,
     llm_state: tauri::State<'_, crate::sys::commands::llm::LLMState>,
+    encryption: tauri::State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<(), String> {
     let conn = open_mcp_settings_db()?;
 
-    // Encrypt the API key before storing
-    let encrypted = encrypt_credential(&key)?;
+    // Encrypt the API key before storing (FIX-001 — uses master-password key when configured)
+    let encrypted = encrypt_credential(Some(encryption.inner()), &key)?;
     let setting_key = format!("api_key_{}", provider);
 
     upsert_settings_v2_value(&conn, &setting_key, &encrypted, "security", true)
@@ -1816,7 +1851,16 @@ fn retrieve_tokens_by_id(provider_id: &str) -> Result<Option<StoredTokens>, Stri
 ///
 /// Exposed as `pub(crate)` so that `llm.rs` can use it as a fallback when
 /// the caller does not pass an explicit API key to `llm_configure_provider`.
-pub(crate) fn retrieve_api_key(connector_id: &str) -> Result<String, String> {
+///
+/// FIX-001 (Sprint 1): callers thread the optional
+/// [`MasterPasswordEncryption`] helper through. When it's `Some` and the
+/// vault is unlocked, decrypt prefers master-password-derived keys; on any
+/// failure or when the helper is absent, falls back to machine-key
+/// decryption so legacy rows remain readable across the migration window.
+pub(crate) fn retrieve_api_key(
+    helper: Option<&crate::sys::security::MasterPasswordEncryption>,
+    connector_id: &str,
+) -> Result<String, String> {
     let conn = open_mcp_settings_db()?;
 
     let setting_key = format!("api_key_{}", connector_id);
@@ -1833,12 +1877,40 @@ pub(crate) fn retrieve_api_key(connector_id: &str) -> Result<String, String> {
             )
         })?;
 
-    // Decrypt using the same mechanism
-    decrypt_credential_value(&encrypted)
+    decrypt_credential_value(helper, &encrypted)
 }
 
-/// Decrypt a credential value stored in settings_v2
-fn decrypt_credential_value(encrypted: &str) -> Result<String, String> {
+/// Decrypt a credential value stored in settings_v2.
+///
+/// FIX-001 (Sprint 1): if a master-password helper is supplied AND the
+/// vault is unlocked, try master-password-derived decryption first. On
+/// failure (the row was written under the legacy machine-only key), fall
+/// back to machine-key decryption so existing installs remain readable
+/// across the migration window. New writes always use master-password
+/// encryption when the vault is configured.
+fn decrypt_credential_value(
+    helper: Option<&crate::sys::security::MasterPasswordEncryption>,
+    encrypted: &str,
+) -> Result<String, String> {
+    if let Some(helper) = helper {
+        if helper.is_configured() && helper.is_unlocked() {
+            if let Ok(plaintext) = helper.decrypt(KeyPurpose::McpCredentials, encrypted) {
+                return Ok(plaintext);
+            }
+        }
+    }
+
+    decrypt_credential_value_machine_only(encrypted)
+}
+
+/// Public alias of [`decrypt_credential_value_machine_only`] for the
+/// vault migration command — exposed so `master_password.rs` can read
+/// legacy rows without re-implementing the AES-GCM unpacking.
+pub(crate) fn decrypt_legacy_machine_credential(encrypted: &str) -> Result<String, String> {
+    decrypt_credential_value_machine_only(encrypted)
+}
+
+fn decrypt_credential_value_machine_only(encrypted: &str) -> Result<String, String> {
     let key = derive_key(KeyPurpose::McpCredentials);
     let cipher =
         Aes256Gcm::new_from_slice(&key).map_err(|e| format!("Failed to create cipher: {}", e))?;
