@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Lock, Sparkles } from 'lucide-react';
+import { ArrowRight, Loader2, Lock, Sparkles } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { checkSubscriptionGate, getUpgradeMessage } from '../../utils/subscriptionGate';
-import { useAccountStore } from '../../stores/auth';
+import { useAccountStore, useUnifiedAuthStore } from '../../stores/auth';
 import { openPricingPage } from '../../utils/navigation';
 import { supabaseAuth } from '../../services/supabaseAuth';
 
 export function SubscriptionGate({ children }: { children: React.ReactNode }) {
   const [gateResult, setGateResult] = useState(() => checkSubscriptionGate());
   const account = useAccountStore((state) => state.account);
+  // FIX-037: avoid the cold-boot flash where Supabase hasn't resolved yet
+  // and the gate paints "Not signed in?" for a signed-in user.
+  const sessionValidated = useUnifiedAuthStore((state) => state.sessionValidated);
 
   useEffect(() => {
     const unsubscribe = supabaseAuth.onAuthStateChange(() => {
@@ -20,6 +23,17 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
 
   if (gateResult.hasAccess) {
     return <>{children}</>;
+  }
+
+  if (!sessionValidated) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-zinc-950 p-8">
+        <div className="flex items-center gap-3 text-zinc-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">Checking authentication…</span>
+        </div>
+      </div>
+    );
   }
 
   return (
