@@ -49,6 +49,8 @@ mod review;
 mod routing;
 mod runtime;
 mod sandbox;
+#[allow(dead_code)]
+mod sdk_io;
 mod tool_search;
 // In-progress modules — compiled and partially wired. Public APIs available for future integration.
 #[allow(dead_code)]
@@ -179,8 +181,14 @@ struct Cli {
     #[arg(short, long)]
     quiet: bool,
 
-    /// Output format for structured commands
-    #[arg(long, value_name = "FORMAT", value_enum)]
+    /// Output format for structured commands. Canonical name `--output-format`;
+    /// `--output` is kept as an alias for backward compatibility.
+    #[arg(
+        long = "output-format",
+        alias = "output",
+        value_name = "FORMAT",
+        value_enum
+    )]
     output: Option<OutputFormat>,
 
     /// Generate shell completions and exit
@@ -317,6 +325,33 @@ struct Cli {
     /// integration tests where you don't want to wait for a real 429.
     #[arg(long)]
     demo: bool,
+
+    /// Read the system prompt from a file. Mutually composes with
+    /// `--system-prompt`: file contents win when both are supplied.
+    #[arg(long = "system-prompt-file", value_name = "FILE")]
+    system_prompt_file: Option<String>,
+
+    /// Append the contents of a file to the system prompt.
+    #[arg(long = "append-system-prompt-file", value_name = "FILE")]
+    append_system_prompt_file: Option<String>,
+
+    /// Emit partial-message chunks (token deltas) as `stream_event` events
+    /// when `--output-format stream-json` is active. Off by default — final
+    /// `assistant_message` events are still emitted either way.
+    #[arg(long = "include-partial-messages")]
+    include_partial_messages: bool,
+
+    /// Stop the session when total spend exceeds this many USD.
+    /// Returns a `status_update` event with reason `budget_exhausted`.
+    #[arg(long = "max-budget-usd", value_name = "USD")]
+    max_budget_usd: Option<f64>,
+
+    /// Use a specific session UUID for this run. Differs from `--resume <id>`
+    /// (which loads an existing session): `--session-id` sets the id at start
+    /// even when no prior session exists, useful for embedder-driven flows
+    /// that pre-allocate ids.
+    #[arg(long = "session-id", value_name = "UUID")]
+    session_id_override: Option<String>,
 }
 
 /// Effort level presets that bundle max_turns + max_tokens + temperature.
@@ -1988,20 +2023,86 @@ async fn run_oneshot(
     session.quiet = quiet;
     session.enable_managed_session()?;
 
-    if matches!(
-        output_mode,
-        OneShotOutputMode::JsonPretty | OneShotOutputMode::JsonLine
-    ) {
-        // Non-streaming JSON mode: collect full response
+    if output_mode == OneShotOutputMode::JsonLine {
+        // Stream-JSON: NDJSON events on stdout, one per line. The full
+        // streaming surface (per-token deltas, tool_use start, control
+        // requests) is wired in a follow-up; this path currently emits
+        // session_start → assistant_message → session_end so embedders see a
+        // valid event sequence even before the agent loop is fully ported
+        // through NdjsonWriter.
+        use sdk_io::{
+            AssistantMessageEvent, NdjsonWriter, SdkEvent, StatusUpdateEvent, StatusUpdateReason,
+        };
+        let writer = NdjsonWriter::new(tokio::io::stdout());
+        let session_id = session
+            .managed_session_id()
+            .map(str::to_string)
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+        writer
+            .emit(&SdkEvent::StatusUpdate(StatusUpdateEvent {
+                session_id: session_id.clone(),
+                reason: StatusUpdateReason::SessionStart,
+                detail: Some(model.to_string()),
+            }))
+            .await
+            .ok();
+
         let start = std::time::Instant::now();
         let result = session
-            .send(
-                config,
-                prompt,
-                Box::new(|_chunk| {
-                    // Collect silently — we use the returned text
-                }),
-            )
+            .send(config, prompt, Box::new(|_chunk| {}))
+            .await;
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        match result {
+            Ok(turn) => {
+                writer
+                    .emit(&SdkEvent::AssistantMessage(AssistantMessageEvent {
+                        session_id: session_id.clone(),
+                        message_id: uuid::Uuid::new_v4().to_string(),
+                        model: model.to_string(),
+                        content: serde_json::json!([{ "type": "text", "text": turn.response }]),
+                        stop_reason: Some("end_turn".to_string()),
+                        input_tokens: turn.input_tokens,
+                        output_tokens: turn.output_tokens,
+                    }))
+                    .await
+                    .ok();
+                writer
+                    .emit(&SdkEvent::StatusUpdate(StatusUpdateEvent {
+                        session_id,
+                        reason: StatusUpdateReason::SessionEnd,
+                        detail: Some(format!("{}ms", duration_ms)),
+                    }))
+                    .await
+                    .ok();
+            }
+            Err(e) => {
+                writer
+                    .emit(&SdkEvent::Error(sdk_io::ErrorEvent {
+                        session_id: Some(session_id.clone()),
+                        code: "turn_failed".to_string(),
+                        message: format!("{:#}", e),
+                    }))
+                    .await
+                    .ok();
+                writer
+                    .emit(&SdkEvent::StatusUpdate(StatusUpdateEvent {
+                        session_id,
+                        reason: StatusUpdateReason::SessionEnd,
+                        detail: Some(format!("{}ms (error)", duration_ms)),
+                    }))
+                    .await
+                    .ok();
+                std::process::exit(1);
+            }
+        }
+    } else if output_mode == OneShotOutputMode::JsonPretty {
+        // Pretty-printed single JSON object — non-streaming, for shell users
+        // running `agiworkforce -p '...' --output-format json`.
+        let start = std::time::Instant::now();
+        let result = session
+            .send(config, prompt, Box::new(|_chunk| {}))
             .await;
         let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -2023,11 +2124,7 @@ async fn run_oneshot(
                     "duration_ms": duration_ms,
                     "is_error": false,
                 });
-                if output_mode == OneShotOutputMode::JsonLine {
-                    println!("{}", serde_json::to_string(&json_out)?);
-                } else {
-                    println!("{}", serde_json::to_string_pretty(&json_out)?);
-                }
+                println!("{}", serde_json::to_string_pretty(&json_out)?);
             }
             Err(e) => {
                 let json_out = serde_json::json!({
@@ -2036,11 +2133,7 @@ async fn run_oneshot(
                     "error": format!("{:#}", e),
                     "duration_ms": duration_ms,
                 });
-                if output_mode == OneShotOutputMode::JsonLine {
-                    eprintln!("{}", serde_json::to_string(&json_out)?);
-                } else {
-                    eprintln!("{}", serde_json::to_string_pretty(&json_out)?);
-                }
+                eprintln!("{}", serde_json::to_string_pretty(&json_out)?);
                 std::process::exit(1);
             }
         }
