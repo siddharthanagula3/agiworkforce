@@ -2107,6 +2107,7 @@ pub fn run() {
             crate::sys::commands::daily_budget::budget_get_status,
             crate::sys::commands::daily_budget::budget_set_cap_usd,
             crate::sys::commands::daily_budget::budget_record_actual,
+            crate::sys::commands::google_batch::google_batch_is_beta_stub,
 
             // Background Agents (push to background with "&" prefix)
             crate::sys::commands::background_agents::background_agent_push,

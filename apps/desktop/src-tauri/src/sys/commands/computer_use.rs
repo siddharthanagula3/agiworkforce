@@ -444,7 +444,27 @@ fn current_timestamp() -> u64 {
         .as_secs()
 }
 
+/// FIX-025 (Sprint 5): on Linux we can't reliably synthesize OS input
+/// without an AT-SPI or libei integration that hasn't been built yet.
+/// Returning a clear error instead of letting `enigo` silently no-op
+/// (X11 sessions) or panic (pure Wayland) lets the frontend surface a
+/// "Computer use is not supported on Linux yet" banner instead of the
+/// agent thinking it succeeded. macOS + Windows continue to work.
+fn ensure_supported_platform() -> Result<(), anyhow::Error> {
+    #[cfg(target_os = "linux")]
+    {
+        Err(anyhow::anyhow!(
+            "Computer use is not supported on Linux yet. Run the agent on macOS or Windows for click/type/move actions."
+        ))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        Ok(())
+    }
+}
+
 fn perform_click(x: i32, y: i32) -> Result<(), anyhow::Error> {
+    ensure_supported_platform()?;
     let mut enigo = Enigo::new(&Settings::default())?;
     enigo.move_mouse(x, y, Coordinate::Abs)?;
     enigo.button(Button::Left, Direction::Click)?;
@@ -452,12 +472,14 @@ fn perform_click(x: i32, y: i32) -> Result<(), anyhow::Error> {
 }
 
 fn perform_move(x: i32, y: i32) -> Result<(), anyhow::Error> {
+    ensure_supported_platform()?;
     let mut enigo = Enigo::new(&Settings::default())?;
     enigo.move_mouse(x, y, Coordinate::Abs)?;
     Ok(())
 }
 
 fn perform_type(text: &str) -> Result<(), anyhow::Error> {
+    ensure_supported_platform()?;
     let mut enigo = Enigo::new(&Settings::default())?;
     enigo.text(text)?;
     Ok(())
