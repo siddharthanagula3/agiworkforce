@@ -124,6 +124,14 @@ jobs:
         # M28: -D warnings matches [lints] table in Cargo.toml; keeps CI and local linting consistent
         run: cargo clippy --workspace --lib -- -D warnings -D unsafe-code
 
+      - name: Tauri IPC wiring (FIX-023)
+        # Catches two regressions:
+        #   1. Frontend invoke('foo') where lib.rs has no `foo` registered.
+        #   2. #[tauri::command] fn defined in src-tauri but missing from
+        #      the generate_handler!{} list (silently dead — a frontend
+        #      invoke would fail at runtime instead of compile time).
+        run: bash apps/desktop/check-wiring.sh
+
   desktop-e2e:
     name: Desktop E2E (deterministic mocks)
     runs-on: ubuntu-latest
