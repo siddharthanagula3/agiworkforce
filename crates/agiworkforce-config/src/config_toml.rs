@@ -276,15 +276,25 @@ impl ConfigToml {
     }
 
     /// Get the active project config for the given cwd, if any.
+    ///
+    /// FIX-026 (Sprint 3): the upstream codex-rs implementation walked
+    /// `projects` to match the supplied `cwd`/`repo_root`. The current crate
+    /// has not yet ported the project-config layer, so the safe default is to
+    /// report "no active project" rather than `todo!()` (which panicked on
+    /// the first call from the desktop binary).
     pub fn get_active_project(
         &self,
         _cwd: &std::path::Path,
         _repo_root: Option<&std::path::Path>,
     ) -> Option<ProjectConfig> {
-        todo!()
+        None
     }
 
     /// Derive a permission profile from this config, given various inputs.
+    ///
+    /// FIX-026 (Sprint 3): replaces `todo!()` with a default permission
+    /// profile so callers don't panic before the real derivation lands. The
+    /// real port belongs in the broader sandbox-policy refactor.
     pub fn derive_permission_profile(
         &self,
         _sandbox_mode_override: Option<agiworkforce_protocol::config_types::SandboxMode>,
@@ -295,7 +305,7 @@ impl ConfigToml {
             &crate::constraint::Constrained<agiworkforce_protocol::models::PermissionProfile>,
         >,
     ) -> agiworkforce_protocol::models::PermissionProfile {
-        todo!()
+        agiworkforce_protocol::models::PermissionProfile::default()
     }
 }
 
@@ -464,8 +474,13 @@ impl WebSearchToml {
 }
 
 impl From<WebSearchToml> for agiworkforce_protocol::config_types::WebSearchConfig {
+    /// FIX-026 (Sprint 3): replaces `todo!()` with a default `WebSearchConfig`
+    /// so callers don't panic before the real toml→runtime mapping is ported.
+    /// All optional fields default to `None`, which the runtime treats as
+    /// "let the model decide" — equivalent to the WebSearchToml flag being
+    /// off entirely.
     fn from(_val: WebSearchToml) -> Self {
-        todo!()
+        agiworkforce_protocol::config_types::WebSearchConfig::default()
     }
 }
 
@@ -503,5 +518,53 @@ impl ConfigEditsBuilder {
 
     pub async fn apply(self) -> std::io::Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod fix_026_panic_prevention_tests {
+    //! FIX-026 (Sprint 3): the three sites below previously called `todo!()`,
+    //! which panics. These tests pin the new safe-default behavior so a future
+    //! refactor can't silently regress to a panic.
+    use super::*;
+    use agiworkforce_protocol::config_types::SandboxMode;
+    use agiworkforce_protocol::config_types::WindowsSandboxLevel;
+
+    #[test]
+    fn get_active_project_returns_none_instead_of_panicking() {
+        let config = ConfigToml::default();
+        assert_eq!(
+            config.get_active_project(std::path::Path::new("/tmp"), None),
+            None,
+        );
+    }
+
+    #[test]
+    fn derive_permission_profile_returns_default_instead_of_panicking() {
+        let config = ConfigToml::default();
+        let profile = config.derive_permission_profile(
+            Some(SandboxMode::ReadOnly),
+            None,
+            WindowsSandboxLevel::Disabled,
+            None,
+            None,
+        );
+        assert_eq!(
+            profile,
+            agiworkforce_protocol::models::PermissionProfile::default(),
+        );
+    }
+
+    #[test]
+    fn web_search_toml_into_config_returns_default_instead_of_panicking() {
+        let toml = WebSearchToml {
+            enabled: Some(true),
+            mode: None,
+        };
+        let config: agiworkforce_protocol::config_types::WebSearchConfig = toml.into();
+        assert_eq!(
+            config,
+            agiworkforce_protocol::config_types::WebSearchConfig::default(),
+        );
     }
 }
