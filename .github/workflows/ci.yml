@@ -59,8 +59,7 @@ jobs:
       - name: Dependency audit (JS) — critical (blocking)
         run: pnpm audit --audit-level=critical
 
-      - name: Dependency audit (JS) — high (advisory)
-        continue-on-error: true
+      - name: Dependency audit (JS) — high (blocking, FIX-043)
         run: pnpm audit --audit-level=high
 
       - name: Lint
@@ -107,8 +106,7 @@ jobs:
         env:
           CARGO_HOME: ~/.cargo
 
-      - name: Dependency audit (Rust) — high (advisory)
-        continue-on-error: true
+      - name: Dependency audit (Rust) — high (blocking, FIX-043)
         run: cargo audit
         env:
           CARGO_HOME: ~/.cargo
