@@ -19,6 +19,7 @@ const TOKIO_WORKER_STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Arg0DispatchPaths {
+    pub agiworkforce_self_exe: Option<PathBuf>,
     pub agiworkforce_linux_sandbox_exe: Option<PathBuf>,
     pub main_execve_wrapper_exe: Option<PathBuf>,
 }
@@ -160,6 +161,7 @@ where
     runtime.block_on(async move {
         let current_exe = std::env::current_exe().ok();
         let paths = Arg0DispatchPaths {
+            agiworkforce_self_exe: current_exe.clone(),
             agiworkforce_linux_sandbox_exe: if cfg!(target_os = "linux") {
                 current_exe.or_else(|| {
                     path_entry.as_ref().and_then(|path_entry| {
@@ -328,6 +330,7 @@ pub fn prepend_path_entry_for_agiworkforce_aliases() -> std::io::Result<Arg0Path
     }
 
     let paths = Arg0DispatchPaths {
+        agiworkforce_self_exe: std::env::current_exe().ok(),
         agiworkforce_linux_sandbox_exe: {
             #[cfg(target_os = "linux")]
             {
