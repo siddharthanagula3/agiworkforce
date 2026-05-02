@@ -115,6 +115,13 @@ pub struct AGICore {
     // TODO: Migrate to tokio::sync::Mutex when all callers are fully async-native.
     active_goals: Arc<Mutex<Vec<Goal>>>,
     execution_contexts: Arc<Mutex<HashMap<String, ExecutionContext>>>,
+    /// FIX-031 (Sprint 5): registry of spawned goal-execution JoinHandles,
+    /// keyed by goal_id. Lets `cancel_goal` `.abort()` the worker so it
+    /// stops within the next .await even if the loop is mid-LLM-call.
+    /// The polling-based `cancellation_requested` flag in
+    /// `execution_contexts` is still set for graceful exit; abort is the
+    /// hard fallback if the worker can't return to the loop top in time.
+    goal_handles: Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
     stop_signal: Arc<AtomicBool>,
     pause_signal: Arc<AtomicBool>,
     pub(crate) app_handle: Option<tauri::AppHandle>,
@@ -183,6 +190,7 @@ impl AGICore {
             automation,
             active_goals: Arc::new(Mutex::new(Vec::new())),
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
+            goal_handles: Arc::new(Mutex::new(HashMap::new())),
             stop_signal: Arc::new(AtomicBool::new(false)),
             pause_signal: Arc::new(AtomicBool::new(false)),
             app_handle,
@@ -273,6 +281,7 @@ impl AGICore {
             automation,
             active_goals: Arc::new(Mutex::new(Vec::new())),
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
+            goal_handles: Arc::new(Mutex::new(HashMap::new())),
             stop_signal: Arc::new(AtomicBool::new(false)),
             pause_signal: Arc::new(AtomicBool::new(false)),
             app_handle,
@@ -401,11 +410,18 @@ impl AGICore {
         core_with_app.app_handle = app_handle_clone;
         let goal_id_for_spawn = goal_id.clone();
 
-        tokio::spawn(async move {
+        // FIX-031: keep the JoinHandle so cancel_goal can abort the worker
+        // even if it's mid-LLM-call (the polling flag inside achieve_goal
+        // only fires at loop boundaries, which can be 30s+ apart).
+        let handle = tokio::spawn(async move {
             if let Err(e) = core_with_app.achieve_goal(goal_id_for_spawn).await {
                 tracing::error!("[AGI] Goal execution failed: {}", e);
             }
         });
+        if let Ok(mut handles) = lock_with_recovery(&self.goal_handles, "submit_goal:goal_handles")
+        {
+            handles.insert(goal_id.clone(), handle);
+        }
 
         Ok(goal.id)
     }
@@ -1227,6 +1243,17 @@ impl AGICore {
             }
         }
 
+        // FIX-031: drop the JoinHandle so the registry doesn't grow without
+        // bound. We don't .abort() here — by the time cleanup_goal runs the
+        // worker has already returned (achieve_goal exited on its own).
+        if let Ok(mut handles) =
+            lock_with_recovery(&self.goal_handles, "cleanup_goal:goal_handles")
+        {
+            if handles.remove(goal_id).is_some() {
+                tracing::debug!("[AGI] Removed goal {} JoinHandle from registry", goal_id);
+            }
+        }
+
         self.emit_event("agi:goal:cleanup", json!({ "goal_id": goal_id }));
     }
 
@@ -1316,6 +1343,7 @@ impl AGICore {
             automation: self.automation.clone(),
             active_goals: self.active_goals.clone(),
             execution_contexts: self.execution_contexts.clone(),
+            goal_handles: self.goal_handles.clone(),
             stop_signal: self.stop_signal.clone(),
             pause_signal: self.pause_signal.clone(),
             app_handle: None,
@@ -1335,19 +1363,35 @@ impl AGICore {
     }
 
     pub async fn cancel_goal(&self, goal_id: &str) -> Result<()> {
-        // CRITICAL-001 fix: Use recovery helper
-        let mut contexts = lock_with_recovery(&self.execution_contexts, "cancel_goal")?;
-
-        if let Some(context) = contexts.get_mut(goal_id) {
-            context.current_state.insert(
-                "cancellation_requested".to_string(),
-                serde_json::Value::Bool(true),
-            );
-            tracing::info!("[AGI] Cancellation requested for goal {}", goal_id);
-            Ok(())
-        } else {
-            Err(anyhow!("Goal {} not found", goal_id))
+        // Step 1: set the polling flag so the loop can exit gracefully on
+        // its next iteration (preserving the existing event-emit + cleanup
+        // path inside achieve_goal).
+        {
+            let mut contexts = lock_with_recovery(&self.execution_contexts, "cancel_goal")?;
+            if let Some(context) = contexts.get_mut(goal_id) {
+                context.current_state.insert(
+                    "cancellation_requested".to_string(),
+                    serde_json::Value::Bool(true),
+                );
+            } else {
+                return Err(anyhow!("Goal {} not found", goal_id));
+            }
         }
+
+        // FIX-031: hard-cancel — abort the spawned worker so a long-running
+        // .await (e.g. an LLM call) is interrupted immediately instead of
+        // waiting for the iteration to finish. The handle is removed from
+        // the registry so future cancels are no-ops on the same id.
+        if let Ok(mut handles) = lock_with_recovery(&self.goal_handles, "cancel_goal:goal_handles")
+        {
+            if let Some(handle) = handles.remove(goal_id) {
+                handle.abort();
+                tracing::info!("[AGI] Aborted goal {} worker via JoinHandle", goal_id);
+            }
+        }
+
+        tracing::info!("[AGI] Cancellation requested for goal {}", goal_id);
+        Ok(())
     }
 
     /// HIGH-001 fix: Properly handle mutex poisoning in cancellation check.
