@@ -58,6 +58,15 @@ const CONTENT_LOOP_DISTANCE: usize = 500;
 // Session
 // ---------------------------------------------------------------------------
 
+/// Sink invoked when the fallback chain rotates: `(from_model, to_model, error_kind)`.
+pub struct FallbackSink(pub Box<dyn Fn(&str, &str, &str) + Send + Sync>);
+
+impl std::fmt::Debug for FallbackSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("FallbackSink(<callback>)")
+    }
+}
+
 /// Tracks the state of an agent conversation session.
 #[derive(Debug)]
 pub struct AgentSession {
@@ -73,6 +82,15 @@ pub struct AgentSession {
     /// with a transient error, the next model is tried before surfacing the
     /// failure. See `crate::routing::fallback`.
     pub fallback_chain: Option<crate::routing::fallback::FallbackChain>,
+    /// Demo mode: when `true`, the very next model call synthesizes a
+    /// `CliError::RateLimited` instead of hitting the network. Cleared after
+    /// it fires once so the fallback path executes normally afterwards.
+    pub demo_force_rate_limit: bool,
+    /// Optional sink for fallback rotation notifications. Wired by the CLI
+    /// when `--json-events` is set so the operator can pipe rotations to
+    /// `jq` / dashboards.
+    #[allow(clippy::type_complexity)]
+    pub on_fallback: Option<FallbackSink>,
     /// Recent tool calls for loop detection (name + args hash).
     recent_tool_calls: Vec<u64>,
     /// Number of loop detections (tool or content) in this session.
@@ -223,6 +241,8 @@ impl AgentSession {
             total_cache_creation_tokens: 0,
             turn_count: 0,
             fallback_chain: None,
+            demo_force_rate_limit: false,
+            on_fallback: None,
             recent_tool_calls: Vec::new(),
             loop_strike_count: 0,
             hooks_config,
@@ -614,43 +634,69 @@ impl AgentSession {
             .collect::<std::collections::HashSet<_>>();
 
         // --- First LLM call (with user's streaming callback) ---
-        let result = match models::stream_completion(
-            config,
-            &self.provider,
-            &self.model,
-            &self.messages,
-            max_tokens,
-            Some(&tool_defs),
-            on_chunk,
-        )
-        .await
-        {
+        // Demo hook: if the operator passed `--demo`, synthesize a 429 on the
+        // very first call so the fallback chain visibly fires. Cleared after
+        // it triggers so subsequent turns behave normally.
+        let first_call_result = if self.demo_force_rate_limit {
+            self.demo_force_rate_limit = false;
+            eprintln!(
+                "  {}",
+                "DEMO: synthesizing rate-limit on primary model".dimmed()
+            );
+            Err(anyhow::Error::new(CliError::RateLimited {
+                provider: format!("{:?}", self.provider).to_lowercase(),
+                retry_after: Some(0),
+            }))
+        } else {
+            models::stream_completion(
+                config,
+                &self.provider,
+                &self.model,
+                &self.messages,
+                max_tokens,
+                Some(&tool_defs),
+                on_chunk,
+            )
+            .await
+        };
+        let result = match first_call_result {
             Ok(r) => r,
             Err(e) => {
-                // First: in-place retry if the error self-classifies as retryable.
+                // First: in-place retry if the error self-classifies as
+                // retryable. Skip the retry when a fallback chain is set AND
+                // the error rotates the chain — the operator's intent is to
+                // jump providers, not burn a redundant retry.
                 let mut last_err = e;
                 let mut recovered: Option<_> = None;
-                if let Some(cli_err) = last_err.downcast_ref::<CliError>() {
-                    if cli_err.is_retryable() {
-                        let delay = cli_err.retry_delay();
-                        eprintln!(
-                            "  {}",
-                            format!("Retrying in {}s: {}", delay.as_secs(), cli_err).yellow()
-                        );
-                        tokio::time::sleep(delay).await;
-                        match models::stream_completion(
-                            config,
-                            &self.provider,
-                            &self.model,
-                            &self.messages,
-                            max_tokens,
-                            Some(&tool_defs),
-                            Box::new(|chunk| print!("{}", chunk)),
-                        )
-                        .await
-                        {
-                            Ok(r) => recovered = Some(r),
-                            Err(retry_err) => last_err = retry_err,
+                let prefer_fallback = self
+                    .fallback_chain
+                    .as_ref()
+                    .zip(last_err.downcast_ref::<CliError>())
+                    .map(|(chain, err)| chain.should_rotate(err))
+                    .unwrap_or(false);
+                if !prefer_fallback {
+                    if let Some(cli_err) = last_err.downcast_ref::<CliError>() {
+                        if cli_err.is_retryable() {
+                            let delay = cli_err.retry_delay();
+                            eprintln!(
+                                "  {}",
+                                format!("Retrying in {}s: {}", delay.as_secs(), cli_err).yellow()
+                            );
+                            tokio::time::sleep(delay).await;
+                            match models::stream_completion(
+                                config,
+                                &self.provider,
+                                &self.model,
+                                &self.messages,
+                                max_tokens,
+                                Some(&tool_defs),
+                                Box::new(|chunk| print!("{}", chunk)),
+                            )
+                            .await
+                            {
+                                Ok(r) => recovered = Some(r),
+                                Err(retry_err) => last_err = retry_err,
+                            }
                         }
                     }
                 }
@@ -675,6 +721,9 @@ impl AgentSession {
                                     )
                                     .yellow()
                                 );
+                                if let Some(sink) = self.on_fallback.as_ref() {
+                                    (sink.0)(&prev_model, fallback_model, kind);
+                                }
                                 match models::stream_completion(
                                     config,
                                     &self.provider,

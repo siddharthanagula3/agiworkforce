@@ -83,6 +83,30 @@ fn print_welcome_banner() {
     );
     eprintln!("  {}\n", "Multi-model AI agent in your terminal.".dimmed());
     eprintln!(
+        "  {}",
+        "What makes us different:".dimmed()
+    );
+    eprintln!(
+        "  {}  {}",
+        "✦".cyan(),
+        "Live cost HUD — see tokens, $, and context % in real time".dimmed()
+    );
+    eprintln!(
+        "  {}  {}",
+        "✦".cyan(),
+        "JSON event stream — `--json-events` for CI / dashboards / automation".dimmed()
+    );
+    eprintln!(
+        "  {}  {}",
+        "✦".cyan(),
+        "Multi-model fallback — `-m claude-opus-4-6,gpt-5.4,llama3.1:8b`".dimmed()
+    );
+    eprintln!(
+        "  {}  {}\n",
+        "✦".cyan(),
+        "Session replay — `agiworkforce session fork <id> --at-turn N --as <name>`".dimmed()
+    );
+    eprintln!(
         "  {}\n",
         "Sign in with your preferred AI provider to get started,\n  or connect an API key for usage-based billing."
             .dimmed()
