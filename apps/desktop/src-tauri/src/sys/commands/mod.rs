@@ -91,6 +91,7 @@ pub mod shortcuts;
 pub mod skills;
 pub mod subscription;
 pub mod supabase_token;
+pub mod daily_budget;
 pub mod task_persistence;
 pub mod teams;
 pub mod templates;
