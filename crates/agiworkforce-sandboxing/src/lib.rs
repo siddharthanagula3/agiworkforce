@@ -15,3 +15,6 @@ pub use manager::SandboxTransformRequest;
 pub use manager::SandboxType;
 pub use manager::SandboxablePreference;
 pub use manager::get_platform_sandbox;
+pub use policy_transforms::compatibility_sandbox_policy_for_permission_profile;
+pub use policy_transforms::effective_permission_profile;
+pub use policy_transforms::system_bwrap_warning;

@@ -8,12 +8,15 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt;
 
+use crate::permissions_toml::NetworkDomainPermissionsToml;
+use crate::permissions_toml::NetworkUnixSocketPermissionsToml;
+
 use super::requirements_exec_policy::RequirementsExecPolicy;
 use super::requirements_exec_policy::RequirementsExecPolicyToml;
 use crate::Constrained;
 use crate::ConstraintError;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RequirementSource {
     Unknown,
     MdmManagedPreferences { domain: String, key: String },
@@ -77,14 +80,22 @@ impl<T> std::ops::DerefMut for ConstrainedWithSource<T> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfigRequirements {
     pub approval_policy: ConstrainedWithSource<AskForApproval>,
+    pub approvals_reviewer: ConstrainedWithSource<agiworkforce_protocol::config_types::ApprovalsReviewer>,
+    pub permission_profile: crate::constraint::Constrained<agiworkforce_protocol::models::PermissionProfile>,
     pub sandbox_policy: ConstrainedWithSource<SandboxPolicy>,
     pub web_search_mode: ConstrainedWithSource<WebSearchMode>,
     pub feature_requirements: Option<Sourced<FeatureRequirementsToml>>,
+    pub managed_hooks: Option<Sourced<crate::hooks::ManagedHooksRequirementsToml>>,
     pub mcp_servers: Option<Sourced<BTreeMap<String, McpServerRequirement>>>,
+    pub plugins: Option<Sourced<BTreeMap<String, PluginRequirementsToml>>>,
     pub exec_policy: Option<Sourced<RequirementsExecPolicy>>,
     pub enforce_residency: ConstrainedWithSource<Option<ResidencyRequirement>>,
     /// Managed network constraints derived from requirements.
     pub network: Option<Sourced<NetworkConstraints>>,
+    /// Managed filesystem constraints derived from requirements.
+    pub filesystem: Option<Sourced<FilesystemConstraints>>,
+    /// Source of the guardian policy config override (if any).
+    pub guardian_policy_config_source: Option<GuardianPolicyConfigSource>,
 }
 
 impl Default for ConfigRequirements {
@@ -93,6 +104,13 @@ impl Default for ConfigRequirements {
             approval_policy: ConstrainedWithSource::new(
                 Constrained::allow_any_from_default(),
                 /*source*/ None,
+            ),
+            approvals_reviewer: ConstrainedWithSource::new(
+                Constrained::allow_any_from_default(),
+                /*source*/ None,
+            ),
+            permission_profile: Constrained::allow_any(
+                agiworkforce_protocol::models::PermissionProfile::default(),
             ),
             sandbox_policy: ConstrainedWithSource::new(
                 Constrained::allow_any(SandboxPolicy::new_read_only_policy()),
@@ -103,13 +121,17 @@ impl Default for ConfigRequirements {
                 /*source*/ None,
             ),
             feature_requirements: None,
+            managed_hooks: None,
             mcp_servers: None,
+            plugins: None,
             exec_policy: None,
             enforce_residency: ConstrainedWithSource::new(
                 Constrained::allow_any(/*initial_value*/ None),
                 /*source*/ None,
             ),
             network: None,
+            filesystem: None,
+            guardian_policy_config_source: None,
         }
     }
 }
@@ -147,6 +169,12 @@ pub struct NetworkRequirementsToml {
     pub denied_domains: Option<Vec<String>>,
     pub allow_unix_sockets: Option<Vec<String>>,
     pub allow_local_binding: Option<bool>,
+    /// Structured domain permission list (allow/deny per entry).
+    #[serde(default)]
+    pub domains: Option<NetworkDomainPermissionsToml>,
+    /// Structured unix socket permission list.
+    #[serde(default)]
+    pub unix_sockets: Option<NetworkUnixSocketPermissionsToml>,
 }
 
 /// Normalized network constraints derived from requirements TOML.
@@ -165,6 +193,18 @@ pub struct NetworkConstraints {
     pub denied_domains: Option<Vec<String>>,
     pub allow_unix_sockets: Option<Vec<String>>,
     pub allow_local_binding: Option<bool>,
+    /// Structured domain permission list (allow/deny per entry).
+    #[serde(default)]
+    pub domains: Option<NetworkDomainPermissionsToml>,
+    /// Structured unix socket permission list.
+    #[serde(default)]
+    pub unix_sockets: Option<NetworkUnixSocketPermissionsToml>,
+    /// Whether the allowlist can be expanded by user config.
+    #[serde(default)]
+    pub allowlist_expansion_enabled: Option<bool>,
+    /// Whether the denylist can be expanded by user config.
+    #[serde(default)]
+    pub denylist_expansion_enabled: Option<bool>,
 }
 
 impl From<NetworkRequirementsToml> for NetworkConstraints {
@@ -181,6 +221,8 @@ impl From<NetworkRequirementsToml> for NetworkConstraints {
             denied_domains,
             allow_unix_sockets,
             allow_local_binding,
+            domains,
+            unix_sockets,
         } = value;
         Self {
             enabled,
@@ -194,6 +236,10 @@ impl From<NetworkRequirementsToml> for NetworkConstraints {
             denied_domains,
             allow_unix_sockets,
             allow_local_binding,
+            domains,
+            unix_sockets,
+            allowlist_expansion_enabled: None,
+            denylist_expansion_enabled: None,
         }
     }
 }
@@ -289,17 +335,29 @@ pub(crate) fn merge_enablement_settings_descending(
 #[derive(Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct ConfigRequirementsToml {
     pub allowed_approval_policies: Option<Vec<AskForApproval>>,
+    #[serde(default)]
+    pub allowed_approvals_reviewers: Option<Vec<agiworkforce_protocol::config_types::ApprovalsReviewer>>,
     pub allowed_sandbox_modes: Option<Vec<SandboxModeRequirement>>,
+    #[serde(default)]
+    pub remote_sandbox_config: Option<Vec<toml::Value>>,
     pub allowed_web_search_modes: Option<Vec<WebSearchModeRequirement>>,
     #[serde(rename = "features", alias = "feature_requirements")]
     pub feature_requirements: Option<FeatureRequirementsToml>,
+    #[serde(default)]
+    pub hooks: Option<crate::hooks::ManagedHooksRequirementsToml>,
     pub mcp_servers: Option<BTreeMap<String, McpServerRequirement>>,
+    #[serde(default)]
+    pub plugins: Option<BTreeMap<String, PluginRequirementsToml>>,
     pub apps: Option<AppsRequirementsToml>,
     pub rules: Option<RequirementsExecPolicyToml>,
     pub enforce_residency: Option<ResidencyRequirement>,
     #[serde(rename = "experimental_network")]
     pub network: Option<NetworkRequirementsToml>,
+    #[serde(default)]
+    pub permissions: Option<PermissionRequirementsToml>,
     pub guardian_developer_instructions: Option<String>,
+    #[serde(default)]
+    pub guardian_policy_config: Option<String>,
 }
 
 /// Value paired with the requirement source it came from, for better error
@@ -327,15 +385,21 @@ impl<T> std::ops::Deref for Sourced<T> {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ConfigRequirementsWithSources {
     pub allowed_approval_policies: Option<Sourced<Vec<AskForApproval>>>,
+    pub allowed_approvals_reviewers: Option<Sourced<Vec<agiworkforce_protocol::config_types::ApprovalsReviewer>>>,
     pub allowed_sandbox_modes: Option<Sourced<Vec<SandboxModeRequirement>>>,
+    pub remote_sandbox_config: Option<Sourced<Vec<toml::Value>>>,
     pub allowed_web_search_modes: Option<Sourced<Vec<WebSearchModeRequirement>>>,
     pub feature_requirements: Option<Sourced<FeatureRequirementsToml>>,
+    pub hooks: Option<Sourced<crate::hooks::ManagedHooksRequirementsToml>>,
     pub mcp_servers: Option<Sourced<BTreeMap<String, McpServerRequirement>>>,
+    pub plugins: Option<Sourced<BTreeMap<String, PluginRequirementsToml>>>,
     pub apps: Option<Sourced<AppsRequirementsToml>>,
     pub rules: Option<Sourced<RequirementsExecPolicyToml>>,
     pub enforce_residency: Option<Sourced<ResidencyRequirement>>,
     pub network: Option<Sourced<NetworkRequirementsToml>>,
+    pub permissions: Option<Sourced<PermissionRequirementsToml>>,
     pub guardian_developer_instructions: Option<Sourced<String>>,
+    pub guardian_policy_config: Option<Sourced<String>>,
 }
 
 impl ConfigRequirementsWithSources {
@@ -358,15 +422,21 @@ impl ConfigRequirementsWithSources {
         // forces this merge logic to be updated.
         let ConfigRequirementsToml {
             allowed_approval_policies: _,
+            allowed_approvals_reviewers: _,
             allowed_sandbox_modes: _,
+            remote_sandbox_config: _,
             allowed_web_search_modes: _,
             feature_requirements: _,
+            hooks: _,
             mcp_servers: _,
+            plugins: _,
             apps: _,
             rules: _,
             enforce_residency: _,
             network: _,
+            permissions: _,
             guardian_developer_instructions: _,
+            guardian_policy_config: _,
         } = &other;
 
         let mut other = other;
@@ -377,20 +447,33 @@ impl ConfigRequirementsWithSources {
         {
             other.guardian_developer_instructions = None;
         }
+        if other
+            .guardian_policy_config
+            .as_deref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
+            other.guardian_policy_config = None;
+        }
         fill_missing_take!(
             self,
             other,
             source,
             {
                 allowed_approval_policies,
+                allowed_approvals_reviewers,
                 allowed_sandbox_modes,
+                remote_sandbox_config,
                 allowed_web_search_modes,
                 feature_requirements,
+                hooks,
                 mcp_servers,
+                plugins,
                 rules,
                 enforce_residency,
                 network,
+                permissions,
                 guardian_developer_instructions,
+                guardian_policy_config,
             }
         );
 
@@ -406,28 +489,40 @@ impl ConfigRequirementsWithSources {
     pub fn into_toml(self) -> ConfigRequirementsToml {
         let ConfigRequirementsWithSources {
             allowed_approval_policies,
+            allowed_approvals_reviewers,
             allowed_sandbox_modes,
+            remote_sandbox_config,
             allowed_web_search_modes,
             feature_requirements,
+            hooks,
             mcp_servers,
+            plugins,
             apps,
             rules,
             enforce_residency,
             network,
+            permissions,
             guardian_developer_instructions,
+            guardian_policy_config,
         } = self;
         ConfigRequirementsToml {
             allowed_approval_policies: allowed_approval_policies.map(|sourced| sourced.value),
+            allowed_approvals_reviewers: allowed_approvals_reviewers.map(|sourced| sourced.value),
             allowed_sandbox_modes: allowed_sandbox_modes.map(|sourced| sourced.value),
+            remote_sandbox_config: remote_sandbox_config.map(|sourced| sourced.value),
             allowed_web_search_modes: allowed_web_search_modes.map(|sourced| sourced.value),
             feature_requirements: feature_requirements.map(|sourced| sourced.value),
+            hooks: hooks.map(|sourced| sourced.value),
             mcp_servers: mcp_servers.map(|sourced| sourced.value),
+            plugins: plugins.map(|sourced| sourced.value),
             apps: apps.map(|sourced| sourced.value),
             rules: rules.map(|sourced| sourced.value),
             enforce_residency: enforce_residency.map(|sourced| sourced.value),
             network: network.map(|sourced| sourced.value),
+            permissions: permissions.map(|sourced| sourced.value),
             guardian_developer_instructions: guardian_developer_instructions
                 .map(|sourced| sourced.value),
+            guardian_policy_config: guardian_policy_config.map(|sourced| sourced.value),
         }
     }
 }
@@ -468,13 +563,17 @@ pub enum ResidencyRequirement {
 impl ConfigRequirementsToml {
     pub fn is_empty(&self) -> bool {
         self.allowed_approval_policies.is_none()
+            && self.allowed_approvals_reviewers.is_none()
             && self.allowed_sandbox_modes.is_none()
+            && self.remote_sandbox_config.is_none()
             && self.allowed_web_search_modes.is_none()
             && self
                 .feature_requirements
                 .as_ref()
                 .is_none_or(FeatureRequirementsToml::is_empty)
+            && self.hooks.is_none()
             && self.mcp_servers.is_none()
+            && self.plugins.is_none()
             && self
                 .apps
                 .as_ref()
@@ -482,8 +581,13 @@ impl ConfigRequirementsToml {
             && self.rules.is_none()
             && self.enforce_residency.is_none()
             && self.network.is_none()
+            && self.permissions.is_none()
             && self
                 .guardian_developer_instructions
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
+            && self
+                .guardian_policy_config
                 .as_deref()
                 .is_none_or(|value| value.trim().is_empty())
     }
@@ -495,15 +599,21 @@ impl TryFrom<ConfigRequirementsWithSources> for ConfigRequirements {
     fn try_from(toml: ConfigRequirementsWithSources) -> Result<Self, Self::Error> {
         let ConfigRequirementsWithSources {
             allowed_approval_policies,
+            allowed_approvals_reviewers: _allowed_approvals_reviewers,
             allowed_sandbox_modes,
+            remote_sandbox_config: _remote_sandbox_config,
             allowed_web_search_modes,
             feature_requirements,
+            hooks: managed_hooks,
             mcp_servers,
+            plugins,
             apps: _apps,
             rules,
             enforce_residency,
             network,
+            permissions: filesystem_permissions,
             guardian_developer_instructions: _guardian_developer_instructions,
+            guardian_policy_config: _guardian_policy_config,
         } = toml;
 
         let approval_policy = match allowed_approval_policies {
@@ -678,17 +788,144 @@ impl TryFrom<ConfigRequirementsWithSources> for ConfigRequirements {
             let Sourced { value, source } = sourced_network;
             Sourced::new(NetworkConstraints::from(value), source)
         });
+        let filesystem = filesystem_permissions.map(|sourced| {
+            let Sourced { value, source } = sourced;
+            // PermissionRequirementsToml → FilesystemConstraints
+            let constraints = value
+                .filesystem
+                .map(|fs_toml| fs_toml.into_constraints())
+                .unwrap_or_default();
+            Sourced::new(constraints, source)
+        });
         Ok(ConfigRequirements {
             approval_policy,
+            approvals_reviewer: ConstrainedWithSource::new(
+                Constrained::allow_any_from_default(),
+                None,
+            ),
+            permission_profile: Constrained::allow_any(
+                agiworkforce_protocol::models::PermissionProfile::default(),
+            ),
             sandbox_policy,
             web_search_mode,
             feature_requirements,
+            managed_hooks,
             mcp_servers,
+            plugins,
             exec_policy,
             enforce_residency,
             network,
+            filesystem,
+            guardian_policy_config_source: None,
         })
     }
+}
+
+use agiworkforce_protocol::models::PermissionProfile;
+
+/// TOML type for plugin requirements (stub for forward-compatibility).
+#[derive(serde::Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct PluginRequirementsToml {
+    #[serde(default)]
+    pub mcp_servers: Option<std::collections::BTreeMap<String, McpServerRequirement>>,
+}
+
+/// Returns the sandbox-mode requirement for the given permission profile.
+/// Currently always returns `None` (no additional constraint from the profile).
+pub fn sandbox_mode_requirement_for_permission_profile(
+    _profile: &PermissionProfile,
+) -> Option<SandboxModeRequirement> {
+    None
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Filesystem deny-read constraints
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// A deny-read pattern: either an absolute path or a glob string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FilesystemDenyReadPattern {
+    raw: String,
+    is_glob: bool,
+}
+
+impl FilesystemDenyReadPattern {
+    /// Parse a raw string, treating it as a glob if it contains `*` or `?`.
+    pub fn from_input(raw: &str) -> Option<Self> {
+        let raw = raw.trim().to_string();
+        if raw.is_empty() {
+            return None;
+        }
+        let is_glob = raw.contains('*') || raw.contains('?');
+        Some(Self { raw, is_glob })
+    }
+
+    /// Return the raw string representation.
+    pub fn as_str(&self) -> &str {
+        &self.raw
+    }
+
+    /// Return `true` if this pattern contains glob wildcards.
+    pub fn contains_glob(&self) -> bool {
+        self.is_glob
+    }
+}
+
+impl From<agiworkforce_utils_absolute_path::AbsolutePathBuf> for FilesystemDenyReadPattern {
+    fn from(path: agiworkforce_utils_absolute_path::AbsolutePathBuf) -> Self {
+        Self {
+            raw: path.to_string_lossy().into_owned(),
+            is_glob: false,
+        }
+    }
+}
+
+impl std::fmt::Display for FilesystemDenyReadPattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.raw.fmt(f)
+    }
+}
+
+/// Filesystem constraints derived from requirements.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FilesystemConstraints {
+    pub deny_read: Option<Vec<FilesystemDenyReadPattern>>,
+}
+
+/// Top-level permission requirements from `requirements.toml`.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+pub struct PermissionRequirementsToml {
+    pub filesystem: Option<FilesystemConstraintsToml>,
+}
+
+/// TOML representation of filesystem constraints.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+pub struct FilesystemConstraintsToml {
+    pub deny_read: Option<Vec<String>>,
+}
+
+impl FilesystemConstraintsToml {
+    pub fn into_constraints(self) -> FilesystemConstraints {
+        FilesystemConstraints {
+            deny_read: self.deny_read.map(|patterns| {
+                patterns
+                    .into_iter()
+                    .filter_map(|s| FilesystemDenyReadPattern::from_input(&s))
+                    .collect()
+            }),
+        }
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Extended ConfigRequirements / ConfigRequirementsToml fields
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Source of guardian policy config.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GuardianPolicyConfigSource {
+    pub value: String,
+    pub source: RequirementSource,
 }
 
 #[cfg(test)]

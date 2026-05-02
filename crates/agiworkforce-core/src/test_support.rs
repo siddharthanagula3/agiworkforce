@@ -7,25 +7,29 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use agiworkforce_exec_server::EnvironmentManager;
+use agiworkforce_login::AuthManager;
+use agiworkforce_login::AgiworkforceAuth;
+use agiworkforce_model_provider::create_model_provider;
+use agiworkforce_model_provider_info::ModelProviderInfo;
+use agiworkforce_models_manager::bundled_models_response;
+use agiworkforce_models_manager::collaboration_mode_presets;
+use agiworkforce_models_manager::manager::SharedModelsManager;
+use agiworkforce_models_manager::test_support::construct_model_info_offline_for_tests;
+use agiworkforce_models_manager::test_support::get_model_offline_for_tests;
 use agiworkforce_protocol::config_types::CollaborationModeMask;
 use agiworkforce_protocol::openai_models::ModelInfo;
 use agiworkforce_protocol::openai_models::ModelPreset;
-use agiworkforce_protocol::openai_models::ModelsResponse;
+use agiworkforce_thread_store::ThreadStore;
 use once_cell::sync::Lazy;
 
-use crate::AgiWorkforceAuth;
-use crate::AuthManager;
-use crate::ModelProviderInfo;
 use crate::ThreadManager;
 use crate::config::Config;
-use crate::models_manager::collaboration_mode_presets;
-use crate::models_manager::manager::ModelsManager;
 use crate::thread_manager;
 use crate::unified_exec;
 
 static TEST_MODEL_PRESETS: Lazy<Vec<ModelPreset>> = Lazy::new(|| {
-    let file_contents = include_str!("../models.json");
-    let mut response: ModelsResponse = serde_json::from_str(file_contents)
+    let mut response = bundled_models_response()
         .unwrap_or_else(|err| panic!("bundled models.json should parse: {err}"));
     response.models.sort_by(|a, b| a.priority.cmp(&b.priority));
     let mut presets: Vec<ModelPreset> = response.models.into_iter().map(Into::into).collect();
@@ -41,52 +45,58 @@ pub fn set_deterministic_process_ids(enabled: bool) {
     unified_exec::set_deterministic_process_ids_for_tests(enabled);
 }
 
-pub fn auth_manager_from_auth(auth: AgiWorkforceAuth) -> Arc<AuthManager> {
+pub fn auth_manager_from_auth(auth: AgiworkforceAuth) -> Arc<AuthManager> {
     AuthManager::from_auth_for_testing(auth)
 }
 
-pub fn auth_manager_from_auth_with_home(
-    auth: AgiWorkforceAuth,
-    agiworkforce_home: PathBuf,
-) -> Arc<AuthManager> {
+pub fn auth_manager_from_auth_with_home(auth: AgiworkforceAuth, agiworkforce_home: PathBuf) -> Arc<AuthManager> {
     AuthManager::from_auth_for_testing_with_home(auth, agiworkforce_home)
 }
 
 pub fn thread_manager_with_models_provider(
-    auth: AgiWorkforceAuth,
+    auth: AgiworkforceAuth,
     provider: ModelProviderInfo,
 ) -> ThreadManager {
     ThreadManager::with_models_provider_for_tests(auth, provider)
 }
 
 pub fn thread_manager_with_models_provider_and_home(
-    auth: AgiWorkforceAuth,
+    auth: AgiworkforceAuth,
     provider: ModelProviderInfo,
     agiworkforce_home: PathBuf,
+    environment_manager: Arc<EnvironmentManager>,
 ) -> ThreadManager {
-    ThreadManager::with_models_provider_and_home_for_tests(auth, provider, agiworkforce_home)
+    ThreadManager::with_models_provider_and_home_for_tests(
+        auth,
+        provider,
+        agiworkforce_home,
+        environment_manager,
+    )
 }
 
 pub async fn start_thread_with_user_shell_override(
     thread_manager: &ThreadManager,
     config: Config,
+    thread_store: Arc<dyn ThreadStore>,
     user_shell_override: crate::shell::Shell,
-) -> crate::error::Result<crate::NewThread> {
+) -> agiworkforce_protocol::error::Result<crate::NewThread> {
     thread_manager
-        .start_thread_with_user_shell_override_for_tests(config, user_shell_override)
+        .start_thread_with_user_shell_override_for_tests(config, thread_store, user_shell_override)
         .await
 }
 
 pub async fn resume_thread_from_rollout_with_user_shell_override(
     thread_manager: &ThreadManager,
     config: Config,
+    thread_store: Arc<dyn ThreadStore>,
     rollout_path: PathBuf,
     auth_manager: Arc<AuthManager>,
     user_shell_override: crate::shell::Shell,
-) -> crate::error::Result<crate::NewThread> {
+) -> agiworkforce_protocol::error::Result<crate::NewThread> {
     thread_manager
         .resume_thread_from_rollout_with_user_shell_override_for_tests(
             config,
+            thread_store,
             rollout_path,
             auth_manager,
             user_shell_override,
@@ -98,16 +108,17 @@ pub fn models_manager_with_provider(
     agiworkforce_home: PathBuf,
     auth_manager: Arc<AuthManager>,
     provider: ModelProviderInfo,
-) -> ModelsManager {
-    ModelsManager::with_provider_for_tests(agiworkforce_home, auth_manager, provider)
+) -> SharedModelsManager {
+    let provider = create_model_provider(provider, Some(auth_manager));
+    provider.models_manager(agiworkforce_home, /*config_model_catalog*/ None)
 }
 
 pub fn get_model_offline(model: Option<&str>) -> String {
-    ModelsManager::get_model_offline_for_tests(model)
+    get_model_offline_for_tests(model)
 }
 
 pub fn construct_model_info_offline(model: &str, config: &Config) -> ModelInfo {
-    ModelsManager::construct_model_info_offline_for_tests(model, config)
+    construct_model_info_offline_for_tests(model, &config.to_models_manager_config())
 }
 
 pub fn all_model_presets() -> &'static Vec<ModelPreset> {
@@ -115,7 +126,5 @@ pub fn all_model_presets() -> &'static Vec<ModelPreset> {
 }
 
 pub fn builtin_collaboration_mode_presets() -> Vec<CollaborationModeMask> {
-    collaboration_mode_presets::builtin_collaboration_mode_presets(
-        collaboration_mode_presets::CollaborationModesConfig::default(),
-    )
+    collaboration_mode_presets::builtin_collaboration_mode_presets()
 }

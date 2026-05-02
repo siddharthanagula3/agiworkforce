@@ -88,6 +88,56 @@ impl NetworkMode {
     }
 }
 
+impl NetworkProxySettings {
+    pub fn allowed_domains(&self) -> Option<&Vec<String>> {
+        if self.allowed_domains.is_empty() { None } else { Some(&self.allowed_domains) }
+    }
+
+    pub fn denied_domains(&self) -> Option<&Vec<String>> {
+        if self.denied_domains.is_empty() { None } else { Some(&self.denied_domains) }
+    }
+
+    pub fn set_allowed_domains(&mut self, domains: Vec<String>) {
+        self.allowed_domains = domains;
+    }
+
+    pub fn set_denied_domains(&mut self, domains: Vec<String>) {
+        self.denied_domains = domains;
+    }
+
+    pub fn set_allow_unix_sockets(&mut self, sockets: Vec<String>) {
+        self.allow_unix_sockets = sockets;
+    }
+
+    pub fn upsert_domain_permission<F>(&mut self, host: String, permission: NetworkDomainPermission, normalize: F)
+    where
+        F: Fn(&str) -> String,
+    {
+        let normalized = normalize(&host);
+        match permission {
+            NetworkDomainPermission::Allow => {
+                self.denied_domains.retain(|d| normalize(d) != normalized);
+                if !self.allowed_domains.iter().any(|d| normalize(d) == normalized) {
+                    self.allowed_domains.push(host);
+                }
+            }
+            NetworkDomainPermission::Deny => {
+                self.allowed_domains.retain(|d| normalize(d) != normalized);
+                if !self.denied_domains.iter().any(|d| normalize(d) == normalized) {
+                    self.denied_domains.push(host);
+                }
+            }
+        }
+    }
+}
+
+/// Permission type for network domain access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetworkDomainPermission {
+    Allow,
+    Deny,
+}
+
 fn default_proxy_url() -> String {
     "http://127.0.0.1:3128".to_string()
 }

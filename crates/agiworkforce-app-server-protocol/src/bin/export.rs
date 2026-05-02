@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(
-    about = "Generate TypeScript bindings and JSON Schemas for the Codex app-server protocol"
+    about = "Generate TypeScript bindings and JSON Schemas for the Agiworkforce app-server protocol"
 )]
 struct Args {
     /// Output directory where generated files will be written
@@ -30,8 +30,5 @@ fn main() -> Result<()> {
             ..agiworkforce_app_server_protocol::GenerateTsOptions::default()
         },
     )?;
-    agiworkforce_app_server_protocol::generate_json_with_experimental(
-        &args.out_dir,
-        args.experimental,
-    )
+    agiworkforce_app_server_protocol::generate_json_with_experimental(&args.out_dir, args.experimental)
 }

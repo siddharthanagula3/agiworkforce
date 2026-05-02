@@ -276,7 +276,7 @@ impl ResponsesWebsocketConnection {
             .instrument(current_span),
         );
 
-        Ok(ResponseStream { rx_event })
+        Ok(ResponseStream { rx_event, upstream_request_id: None })
     }
 }
 

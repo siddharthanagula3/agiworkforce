@@ -7,10 +7,16 @@
 mod cli;
 mod event_processor;
 mod event_processor_with_human_output;
-pub mod event_processor_with_jsonl_output;
-pub mod exec_events;
+pub(crate) mod event_processor_with_jsonl_output;
+pub(crate) mod exec_events;
 
+pub use cli::Cli;
+pub use cli::Command;
+pub use cli::ReviewArgs;
 use agiworkforce_app_server_client::DEFAULT_IN_PROCESS_CHANNEL_CAPACITY;
+use agiworkforce_app_server_client::EnvironmentManager;
+use agiworkforce_app_server_client::EnvironmentManagerArgs;
+use agiworkforce_app_server_client::ExecServerRuntimePaths;
 use agiworkforce_app_server_client::InProcessAppServerClient;
 use agiworkforce_app_server_client::InProcessClientStartArgs;
 use agiworkforce_app_server_client::InProcessServerEvent;
@@ -46,27 +52,31 @@ use agiworkforce_app_server_protocol::TurnStartResponse;
 use agiworkforce_app_server_protocol::TurnStartedNotification;
 use agiworkforce_arg0::Arg0DispatchPaths;
 use agiworkforce_cloud_requirements::cloud_requirements_loader_for_storage;
-use agiworkforce_core::LMSTUDIO_OSS_PROVIDER_ID;
-use agiworkforce_core::OLLAMA_OSS_PROVIDER_ID;
-use agiworkforce_core::auth::AuthConfig;
-use agiworkforce_core::auth::enforce_login_restrictions;
+use agiworkforce_config::ConfigLoadError;
+use agiworkforce_config::LoaderOverrides;
+use agiworkforce_config::format_config_error_with_source;
 use agiworkforce_core::check_execpolicy_for_warnings;
 use agiworkforce_core::config::Config;
 use agiworkforce_core::config::ConfigBuilder;
 use agiworkforce_core::config::ConfigOverrides;
 use agiworkforce_core::config::find_agiworkforce_home;
-use agiworkforce_core::config::load_config_as_toml_with_cli_overrides;
+use agiworkforce_core::config::load_config_as_toml_with_cli_and_loader_overrides;
 use agiworkforce_core::config::resolve_oss_provider;
-use agiworkforce_core::config_loader::ConfigLoadError;
-use agiworkforce_core::config_loader::LoaderOverrides;
-use agiworkforce_core::config_loader::format_config_error_with_source;
+use agiworkforce_core::find_thread_meta_by_name_str;
 use agiworkforce_core::format_exec_policy_error_with_source;
 use agiworkforce_core::path_utils;
-use agiworkforce_feedback::AgiWorkforceFeedback;
+use agiworkforce_feedback::AgiworkforceFeedback;
 use agiworkforce_git_utils::get_git_repo_root;
+use agiworkforce_login::AuthConfig;
+use agiworkforce_login::default_client::set_default_client_residency_requirement;
+use agiworkforce_login::default_client::set_default_originator;
+use agiworkforce_login::enforce_login_restrictions;
+use agiworkforce_model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
+use agiworkforce_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 use agiworkforce_otel::set_parent_from_context;
 use agiworkforce_otel::traceparent_context_from_env;
 use agiworkforce_protocol::config_types::SandboxMode;
+use agiworkforce_protocol::models::PermissionProfile;
 use agiworkforce_protocol::protocol::AskForApproval;
 use agiworkforce_protocol::protocol::ReviewRequest;
 use agiworkforce_protocol::protocol::ReviewTarget;
@@ -77,13 +87,47 @@ use agiworkforce_protocol::protocol::SessionConfiguredEvent;
 use agiworkforce_protocol::protocol::SessionSource;
 use agiworkforce_protocol::user_input::UserInput;
 use agiworkforce_utils_absolute_path::AbsolutePathBuf;
+use agiworkforce_utils_absolute_path::canonicalize_existing_preserving_symlinks;
+use agiworkforce_utils_cli::SharedCliOptions;
 use agiworkforce_utils_oss::ensure_oss_provider_ready;
 use agiworkforce_utils_oss::get_default_model_for_oss_provider;
-pub use cli::Cli;
-pub use cli::Command;
-pub use cli::ReviewArgs;
 use event_processor_with_human_output::EventProcessorWithHumanOutput;
-use event_processor_with_jsonl_output::EventProcessorWithJsonOutput;
+pub use event_processor_with_jsonl_output::AgiworkforceStatus;
+pub use event_processor_with_jsonl_output::CollectedThreadEvents;
+pub use event_processor_with_jsonl_output::EventProcessorWithJsonOutput;
+pub use exec_events::AgentMessageItem;
+pub use exec_events::CollabAgentState;
+pub use exec_events::CollabAgentStatus;
+pub use exec_events::CollabTool;
+pub use exec_events::CollabToolCallItem;
+pub use exec_events::CollabToolCallStatus;
+pub use exec_events::CommandExecutionItem;
+pub use exec_events::CommandExecutionStatus;
+pub use exec_events::ErrorItem;
+pub use exec_events::FileChangeItem;
+pub use exec_events::FileUpdateChange;
+pub use exec_events::ItemCompletedEvent;
+pub use exec_events::ItemStartedEvent;
+pub use exec_events::ItemUpdatedEvent;
+pub use exec_events::McpToolCallItem;
+pub use exec_events::McpToolCallItemError;
+pub use exec_events::McpToolCallItemResult;
+pub use exec_events::McpToolCallStatus;
+pub use exec_events::PatchApplyStatus;
+pub use exec_events::PatchChangeKind;
+pub use exec_events::ReasoningItem;
+pub use exec_events::ThreadErrorEvent;
+pub use exec_events::ThreadEvent;
+pub use exec_events::ThreadItem as ExecThreadItem;
+pub use exec_events::ThreadItemDetails;
+pub use exec_events::ThreadStartedEvent;
+pub use exec_events::TodoItem;
+pub use exec_events::TodoListItem;
+pub use exec_events::TurnCompletedEvent;
+pub use exec_events::TurnFailedEvent;
+pub use exec_events::TurnStartedEvent;
+pub use exec_events::Usage;
+pub use exec_events::WebSearchItem;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::io::IsTerminal;
@@ -103,10 +147,7 @@ use tracing_subscriber::prelude::*;
 use uuid::Uuid;
 
 use crate::cli::Command as ExecCommand;
-use crate::event_processor::AgiWorkforceStatus;
 use crate::event_processor::EventProcessor;
-use agiworkforce_core::default_client::set_default_client_residency_requirement;
-use agiworkforce_core::default_client::set_default_originator;
 
 const DEFAULT_ANALYTICS_ENABLED: bool = true;
 
@@ -118,6 +159,18 @@ enum InitialOperation {
     Review {
         review_request: ReviewRequest,
     },
+}
+
+enum StdinPromptBehavior {
+    /// Read stdin only when there is no positional prompt, which is the legacy
+    /// `codex exec` behavior for `codex exec` with piped input.
+    RequiredIfPiped,
+    /// Always treat stdin as the prompt, used for the explicit `codex exec -`
+    /// sentinel and similar forced-stdin call sites.
+    Forced,
+    /// If stdin is piped alongside a positional prompt, treat stdin as
+    /// additional context to append rather than as the primary prompt.
+    OptionalAppend,
 }
 
 struct RequestIdSequencer {
@@ -163,31 +216,42 @@ fn exec_root_span() -> tracing::Span {
 }
 
 pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
+    #[allow(clippy::print_stderr)]
+    if let Some(message) = cli.removed_full_auto_warning() {
+        eprintln!("{message}");
+    }
+
     if let Err(err) = set_default_originator("agiworkforce_exec".to_string()) {
         tracing::warn!(?err, "Failed to set codex exec originator override {err:?}");
     }
 
     let Cli {
         command,
+        shared,
+        skip_git_repo_check,
+        ephemeral,
+        ignore_user_config,
+        ignore_rules,
+        removed_full_auto,
+        color,
+        last_message_file,
+        json: json_mode,
+        prompt,
+        output_schema: output_schema_path,
+        config_overrides,
+    } = cli;
+    let shared = shared.into_inner();
+    let SharedCliOptions {
         images,
         model: model_cli_arg,
         oss,
         oss_provider,
         config_profile,
-        full_auto,
+        sandbox_mode: sandbox_mode_cli_arg,
         dangerously_bypass_approvals_and_sandbox,
         cwd,
-        skip_git_repo_check,
         add_dir,
-        ephemeral,
-        color,
-        last_message_file,
-        json: json_mode,
-        sandbox_mode: sandbox_mode_cli_arg,
-        prompt,
-        output_schema: output_schema_path,
-        config_overrides,
-    } = cli;
+    } = shared;
 
     let (_stdout_with_ansi, stderr_with_ansi) = match color {
         cli::Color::Always => (true, true),
@@ -210,7 +274,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         .with_writer(std::io::stderr)
         .with_filter(env_filter);
 
-    let sandbox_mode = if full_auto {
+    let sandbox_mode = if removed_full_auto {
         Some(SandboxMode::WorkspaceWrite)
     } else if dangerously_bypass_approvals_and_sandbox {
         Some(SandboxMode::DangerFullAccess)
@@ -230,7 +294,9 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
 
     let resolved_cwd = cwd.clone();
     let config_cwd = match resolved_cwd.as_deref() {
-        Some(path) => AbsolutePathBuf::from_absolute_path(path.canonicalize()?)?,
+        Some(path) => {
+            AbsolutePathBuf::from_absolute_path(canonicalize_existing_preserving_symlinks(path)?)?
+        }
         None => AbsolutePathBuf::current_dir()?,
     };
 
@@ -245,10 +311,17 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
     };
 
     #[allow(clippy::print_stderr)]
-    let config_toml = match load_config_as_toml_with_cli_overrides(
+    let loader_overrides = LoaderOverrides {
+        ignore_user_config,
+        ignore_user_and_project_exec_policy_rules: ignore_rules,
+        ..Default::default()
+    };
+
+    let config_toml = match load_config_as_toml_with_cli_and_loader_overrides(
         &agiworkforce_home,
-        &config_cwd,
+        Some(&config_cwd),
         cli_kv_overrides.clone(),
+        loader_overrides.clone(),
     )
     .await
     {
@@ -276,13 +349,14 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         .unwrap_or_else(|| "https://chatgpt.com/backend-api/".to_string());
     // TODO(gt): Make cloud requirements failures blocking once we can fail-closed.
     let cloud_requirements = cloud_requirements_loader_for_storage(
-        agiworkforce_home.clone(),
+        agiworkforce_home.to_path_buf(),
         /*enable_agiworkforce_api_key_env*/ false,
         config_toml.cli_auth_credentials_store.unwrap_or_default(),
         chatgpt_base_url,
-    );
+    )
+    .await;
     let run_cli_overrides = cli_kv_overrides.clone();
-    let run_loader_overrides = LoaderOverrides::default();
+    let run_loader_overrides = loader_overrides.clone();
     let run_cloud_requirements = cloud_requirements.clone();
 
     let model_provider = if oss {
@@ -324,13 +398,13 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         approval_policy: Some(AskForApproval::Never),
         approvals_reviewer: None,
         sandbox_mode,
+        permission_profile: None,
         cwd: resolved_cwd,
         model_provider: model_provider.clone(),
         service_tier: None,
+        agiworkforce_self_exe: arg0_paths.agiworkforce_self_exe.clone(),
         agiworkforce_linux_sandbox_exe: arg0_paths.agiworkforce_linux_sandbox_exe.clone(),
         main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
-        js_repl_node_path: None,
-        js_repl_node_module_dirs: None,
         zsh_path: None,
         base_instructions: None,
         developer_instructions: None,
@@ -346,6 +420,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
     let config = ConfigBuilder::default()
         .cli_overrides(cli_kv_overrides)
         .harness_overrides(overrides)
+        .loader_overrides(loader_overrides)
         .cloud_requirements(cloud_requirements)
         .build()
         .await?;
@@ -365,11 +440,14 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
     set_default_client_residency_requirement(config.enforce_residency.value());
 
     if let Err(err) = enforce_login_restrictions(&AuthConfig {
-        agiworkforce_home: config.agiworkforce_home.clone(),
+        agiworkforce_home: config.agiworkforce_home.to_path_buf(),
         auth_credentials_store_mode: config.cli_auth_credentials_store_mode,
         forced_login_method: config.forced_login_method,
         forced_chatgpt_workspace_id: config.forced_chatgpt_workspace_id.clone(),
-    }) {
+        chatgpt_base_url: Some(config.chatgpt_base_url.clone()),
+    })
+    .await
+    {
         eprintln!("{err}");
         std::process::exit(1);
     }
@@ -417,17 +495,25 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
             range: None,
         })
         .collect();
+    let local_runtime_paths = ExecServerRuntimePaths::from_optional_paths(
+        arg0_paths.agiworkforce_self_exe.clone(),
+        arg0_paths.agiworkforce_linux_sandbox_exe.clone(),
+    )?;
     let in_process_start_args = InProcessClientStartArgs {
         arg0_paths,
         config: std::sync::Arc::new(config.clone()),
         cli_overrides: run_cli_overrides,
         loader_overrides: run_loader_overrides,
         cloud_requirements: run_cloud_requirements,
-        feedback: AgiWorkforceFeedback::new(),
+        feedback: AgiworkforceFeedback::new(),
+        log_db: None,
+        environment_manager: std::sync::Arc::new(
+            EnvironmentManager::new(EnvironmentManagerArgs::new(local_runtime_paths)).await,
+        ),
         config_warnings,
         session_source: SessionSource::Exec,
         enable_agiworkforce_api_key_env: true,
-        client_name: "codex-exec".to_string(),
+        client_name: "agiworkforce_exec".to_string(),
         client_version: env!("CARGO_PKG_VERSION").to_string(),
         experimental_api: true,
         opt_out_notification_methods: Vec::new(),
@@ -498,8 +584,67 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
 
     let default_cwd = config.cwd.to_path_buf();
     let default_approval_policy = config.permissions.approval_policy.value();
-    let default_sandbox_policy = config.permissions.sandbox_policy.get();
     let default_effort = config.model_reasoning_effort;
+
+    let (initial_operation, prompt_summary) = match (command.as_ref(), prompt, images) {
+        (Some(ExecCommand::Review(review_cli)), _, _) => {
+            let review_request = build_review_request(review_cli)?;
+            let summary = agiworkforce_core::review_prompts::user_facing_hint(&review_request.target);
+            (InitialOperation::Review { review_request }, summary)
+        }
+        (Some(ExecCommand::Resume(args)), root_prompt, imgs) => {
+            let prompt_arg = args
+                .prompt
+                .clone()
+                .or_else(|| {
+                    if args.last {
+                        args.session_id.clone()
+                    } else {
+                        None
+                    }
+                })
+                .or(root_prompt);
+            let prompt_text = resolve_prompt(prompt_arg);
+            let mut items: Vec<UserInput> = imgs
+                .into_iter()
+                .chain(args.images.iter().cloned())
+                .map(|path| UserInput::LocalImage { path })
+                .collect();
+            items.push(UserInput::Text {
+                text: prompt_text.clone(),
+                // CLI input doesn't track UI element ranges, so none are available here.
+                text_elements: Vec::new(),
+            });
+            let output_schema = load_output_schema(output_schema_path.clone());
+            (
+                InitialOperation::UserTurn {
+                    items,
+                    output_schema,
+                },
+                prompt_text,
+            )
+        }
+        (None, root_prompt, imgs) => {
+            let prompt_text = resolve_root_prompt(root_prompt);
+            let mut items: Vec<UserInput> = imgs
+                .into_iter()
+                .map(|path| UserInput::LocalImage { path })
+                .collect();
+            items.push(UserInput::Text {
+                text: prompt_text.clone(),
+                // CLI input doesn't track UI element ranges, so none are available here.
+                text_elements: Vec::new(),
+            });
+            let output_schema = load_output_schema(output_schema_path);
+            (
+                InitialOperation::UserTurn {
+                    items,
+                    output_schema,
+                },
+                prompt_text,
+            )
+        }
+    };
 
     // When --yolo (dangerously_bypass_approvals_and_sandbox) is set, also skip the git repo check
     // since the user is explicitly running in an externally sandboxed environment.
@@ -575,75 +720,17 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
 
     exec_span.record("thread.id", primary_thread_id_for_span.as_str());
 
-    let (initial_operation, prompt_summary) = match (command.as_ref(), prompt, images) {
-        (Some(ExecCommand::Review(review_cli)), _, _) => {
-            let review_request = build_review_request(review_cli)?;
-            let summary =
-                agiworkforce_core::review_prompts::user_facing_hint(&review_request.target);
-            (InitialOperation::Review { review_request }, summary)
-        }
-        (Some(ExecCommand::Resume(args)), root_prompt, imgs) => {
-            let prompt_arg = args
-                .prompt
-                .clone()
-                .or_else(|| {
-                    if args.last {
-                        args.session_id.clone()
-                    } else {
-                        None
-                    }
-                })
-                .or(root_prompt);
-            let prompt_text = resolve_prompt(prompt_arg);
-            let mut items: Vec<UserInput> = imgs
-                .into_iter()
-                .chain(args.images.iter().cloned())
-                .map(|path| UserInput::LocalImage { path })
-                .collect();
-            items.push(UserInput::Text {
-                text: prompt_text.clone(),
-                // CLI input doesn't track UI element ranges, so none are available here.
-                text_elements: Vec::new(),
-            });
-            let output_schema = load_output_schema(output_schema_path.clone());
-            (
-                InitialOperation::UserTurn {
-                    items,
-                    output_schema,
-                },
-                prompt_text,
-            )
-        }
-        (None, root_prompt, imgs) => {
-            let prompt_text = resolve_prompt(root_prompt);
-            let mut items: Vec<UserInput> = imgs
-                .into_iter()
-                .map(|path| UserInput::LocalImage { path })
-                .collect();
-            items.push(UserInput::Text {
-                text: prompt_text.clone(),
-                // CLI input doesn't track UI element ranges, so none are available here.
-                text_elements: Vec::new(),
-            });
-            let output_schema = load_output_schema(output_schema_path);
-            (
-                InitialOperation::UserTurn {
-                    items,
-                    output_schema,
-                },
-                prompt_text,
-            )
-        }
-    };
-
-    // Print the effective configuration and initial request so users can see what Codex
+    // Print the effective configuration and initial request so users can see what Agiworkforce
     // is using.
     event_processor.print_config_summary(&config, &prompt_summary, &session_configured);
-    if !json_mode && let Some(message) = agiworkforce_core::config::system_bwrap_warning() {
+    if !json_mode
+        && let Some(message) =
+            agiworkforce_core::config::system_bwrap_warning(config.permissions.permission_profile.get())
+    {
         event_processor.process_warning(message);
     }
 
-    info!("Codex initialized with event: {session_configured:?}");
+    info!("Agiworkforce initialized with event: {session_configured:?}");
 
     let (interrupt_tx, mut interrupt_rx) = mpsc::unbounded_channel::<()>();
     tokio::spawn(async move {
@@ -658,6 +745,7 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
             items,
             output_schema,
         } => {
+            let permission_profile = Some(config.permissions.permission_profile().into());
             let response: TurnStartResponse = send_request_with_response(
                 &client,
                 ClientRequest::TurnStart {
@@ -665,10 +753,13 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
                     params: TurnStartParams {
                         thread_id: primary_thread_id_for_span.clone(),
                         input: items.into_iter().map(Into::into).collect(),
+                        responsesapi_client_metadata: None,
+                        environments: None,
                         cwd: Some(default_cwd),
                         approval_policy: Some(default_approval_policy.into()),
                         approvals_reviewer: None,
-                        sandbox_policy: Some(default_sandbox_policy.clone().into()),
+                        sandbox_policy: None,
+                        permission_profile,
                         model: None,
                         service_tier: None,
                         effort: default_effort,
@@ -775,8 +866,13 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
                     error_seen = true;
                 }
 
-                maybe_backfill_turn_completed_items(&client, &mut request_ids, &mut notification)
-                    .await;
+                maybe_backfill_turn_completed_items(
+                    config.ephemeral,
+                    &client,
+                    &mut request_ids,
+                    &mut notification,
+                )
+                .await;
 
                 if should_process_notification(
                     &notification,
@@ -784,8 +880,8 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
                     &task_id,
                 ) {
                     match event_processor.process_server_notification(notification) {
-                        AgiWorkforceStatus::Running => {}
-                        AgiWorkforceStatus::InitiateShutdown => {
+                        AgiworkforceStatus::Running => {}
+                        AgiworkforceStatus::InitiateShutdown => {
                             if let Err(err) = request_shutdown(
                                 &client,
                                 &mut request_ids,
@@ -819,23 +915,6 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn sandbox_mode_from_policy(
-    sandbox_policy: &agiworkforce_protocol::protocol::SandboxPolicy,
-) -> Option<agiworkforce_app_server_protocol::SandboxMode> {
-    match sandbox_policy {
-        agiworkforce_protocol::protocol::SandboxPolicy::DangerFullAccess => {
-            Some(agiworkforce_app_server_protocol::SandboxMode::DangerFullAccess)
-        }
-        agiworkforce_protocol::protocol::SandboxPolicy::ReadOnly { .. } => {
-            Some(agiworkforce_app_server_protocol::SandboxMode::ReadOnly)
-        }
-        agiworkforce_protocol::protocol::SandboxPolicy::WorkspaceWrite { .. } => {
-            Some(agiworkforce_app_server_protocol::SandboxMode::WorkspaceWrite)
-        }
-        agiworkforce_protocol::protocol::SandboxPolicy::ExternalSandbox { .. } => None,
-    }
-}
-
 fn thread_start_params_from_config(config: &Config) -> ThreadStartParams {
     ThreadStartParams {
         model: config.model.clone(),
@@ -843,7 +922,8 @@ fn thread_start_params_from_config(config: &Config) -> ThreadStartParams {
         cwd: Some(config.cwd.to_string_lossy().to_string()),
         approval_policy: Some(config.permissions.approval_policy.value().into()),
         approvals_reviewer: approvals_reviewer_override_from_config(config),
-        sandbox: sandbox_mode_from_policy(config.permissions.sandbox_policy.get()),
+        sandbox: None,
+        permission_profile: Some(config.permissions.permission_profile().into()),
         config: config_request_overrides_from_config(config),
         ephemeral: Some(config.ephemeral),
         ..ThreadStartParams::default()
@@ -858,7 +938,8 @@ fn thread_resume_params_from_config(config: &Config, thread_id: String) -> Threa
         cwd: Some(config.cwd.to_string_lossy().to_string()),
         approval_policy: Some(config.permissions.approval_policy.value().into()),
         approvals_reviewer: approvals_reviewer_override_from_config(config),
-        sandbox: sandbox_mode_from_policy(config.permissions.sandbox_policy.get()),
+        sandbox: None,
+        permission_profile: Some(config.permissions.permission_profile().into()),
         config: config_request_overrides_from_config(config),
         ..ThreadResumeParams::default()
     }
@@ -907,6 +988,7 @@ fn session_configured_from_thread_start_response(
         response.approval_policy.to_core(),
         response.approvals_reviewer.to_core(),
         response.sandbox.to_core(),
+        response.permission_profile.clone().map(Into::into),
         response.cwd.clone(),
         response.reasoning_effort,
     )
@@ -925,6 +1007,7 @@ fn session_configured_from_thread_resume_response(
         response.approval_policy.to_core(),
         response.approvals_reviewer.to_core(),
         response.sandbox.to_core(),
+        response.permission_profile.clone().map(Into::into),
         response.cwd.clone(),
         response.reasoning_effort,
     )
@@ -953,7 +1036,8 @@ fn session_configured_from_thread_response(
     approval_policy: AskForApproval,
     approvals_reviewer: agiworkforce_protocol::config_types::ApprovalsReviewer,
     sandbox_policy: SandboxPolicy,
-    cwd: PathBuf,
+    permission_profile: Option<PermissionProfile>,
+    cwd: AbsolutePathBuf,
     reasoning_effort: Option<agiworkforce_protocol::openai_models::ReasoningEffort>,
 ) -> Result<SessionConfiguredEvent, String> {
     let session_id = agiworkforce_protocol::ThreadId::from_string(thread_id)
@@ -968,7 +1052,9 @@ fn session_configured_from_thread_response(
         service_tier,
         approval_policy,
         approvals_reviewer,
-        sandbox_policy,
+        permission_profile: permission_profile.unwrap_or_else(|| {
+            PermissionProfile::from_legacy_sandbox_policy_for_cwd(&sandbox_policy, cwd.as_path())
+        }),
         cwd,
         reasoning_effort,
         history_log_id: 0,
@@ -1016,6 +1102,9 @@ fn should_process_notification(
         ServerNotification::ModelRerouted(notification) => {
             notification.thread_id == thread_id && notification.turn_id == turn_id
         }
+        ServerNotification::ModelVerification(notification) => {
+            notification.thread_id == thread_id && notification.turn_id == turn_id
+        }
         ServerNotification::ThreadTokenUsageUpdated(notification) => {
             notification.thread_id == thread_id && notification.turn_id == turn_id
         }
@@ -1036,6 +1125,7 @@ fn should_process_notification(
 }
 
 async fn maybe_backfill_turn_completed_items(
+    thread_ephemeral: bool,
     client: &InProcessAppServerClient,
     request_ids: &mut RequestIdSequencer,
     notification: &mut ServerNotification,
@@ -1044,12 +1134,13 @@ async fn maybe_backfill_turn_completed_items(
     // guaranteeing `turn/completed`. Because app-server currently emits that completion with an
     // empty `turn.items`, exec does one last `thread/read` here so human/json output can recover
     // the final message and reconcile any still-running items before shutdown.
+    if !should_backfill_turn_completed_items(thread_ephemeral, notification) {
+        return;
+    }
+
     let ServerNotification::TurnCompleted(payload) = notification else {
         return;
     };
-    if !payload.turn.items.is_empty() {
-        return;
-    }
 
     let response = send_request_with_response::<ThreadReadResponse>(
         client,
@@ -1074,6 +1165,19 @@ async fn maybe_backfill_turn_completed_items(
             warn!("thread/read failed while backfilling turn items for turn completion: {err}");
         }
     }
+}
+
+/// Returns true only when `exec` can safely recover missing turn items from
+/// rollout-backed thread history.
+fn should_backfill_turn_completed_items(
+    thread_ephemeral: bool,
+    notification: &ServerNotification,
+) -> bool {
+    let ServerNotification::TurnCompleted(payload) = notification else {
+        return false;
+    };
+
+    !thread_ephemeral && payload.turn.items.is_empty()
 }
 
 fn turn_items_for_thread(
@@ -1108,7 +1212,7 @@ async fn latest_thread_cwd(thread: &AppServerThread) -> PathBuf {
     {
         return cwd;
     }
-    thread.cwd.clone()
+    thread.cwd.to_path_buf()
 }
 
 async fn parse_latest_turn_context_cwd(path: &Path) -> Option<PathBuf> {
@@ -1129,13 +1233,7 @@ async fn parse_latest_turn_context_cwd(path: &Path) -> Option<PathBuf> {
 }
 
 fn cwds_match(current_cwd: &Path, session_cwd: &Path) -> bool {
-    match (
-        path_utils::normalize_for_path_comparison(current_cwd),
-        path_utils::normalize_for_path_comparison(session_cwd),
-    ) {
-        (Ok(current), Ok(session)) => current == session,
-        _ => current_cwd == session_cwd,
-    }
+    path_utils::paths_match_after_normalization(current_cwd, session_cwd)
 }
 
 async fn resolve_resume_thread_id(
@@ -1156,10 +1254,12 @@ async fn resolve_resume_thread_id(
                         cursor,
                         limit: Some(100),
                         sort_key: Some(ThreadSortKey::UpdatedAt),
+                        sort_direction: None,
                         model_providers: model_providers.clone(),
                         source_kinds: Some(all_thread_source_kinds()),
                         archived: Some(false),
                         cwd: None,
+                        use_state_db_only: false,
                         search_term: None,
                     },
                 },
@@ -1168,7 +1268,8 @@ async fn resolve_resume_thread_id(
             .await
             .map_err(anyhow::Error::msg)?;
             for thread in response.data {
-                if args.all || cwds_match(config.cwd.as_path(), &latest_thread_cwd(&thread).await) {
+                let latest_cwd = latest_thread_cwd(&thread).await;
+                if args.all || cwds_match(config.cwd.as_path(), latest_cwd.as_path()) {
                     return Ok(Some(thread.id));
                 }
             }
@@ -1185,6 +1286,27 @@ async fn resolve_resume_thread_id(
     if Uuid::parse_str(session_id).is_ok() {
         return Ok(Some(session_id.to_string()));
     }
+    if let Some(state_db) = agiworkforce_core::get_state_db(config).await {
+        let cwd = (!args.all).then_some(config.cwd.as_path());
+        let resolved = state_db
+            .find_thread_by_exact_title(
+                session_id,
+                &[],
+                /*model_providers*/ None,
+                /*archived_only*/ false,
+                cwd,
+            )
+            .await?;
+        if let Some(thread) = resolved {
+            return Ok(Some(thread.id.to_string()));
+        }
+        if let Some((_, session_meta)) =
+            find_thread_meta_by_name_str(&config.agiworkforce_home, session_id).await?
+            && (args.all || cwds_match(config.cwd.as_path(), &session_meta.meta.cwd))
+        {
+            return Ok(Some(session_meta.meta.id.to_string()));
+        }
+    }
 
     let mut cursor = None;
     loop {
@@ -1196,14 +1318,13 @@ async fn resolve_resume_thread_id(
                     cursor,
                     limit: Some(100),
                     sort_key: Some(ThreadSortKey::UpdatedAt),
+                    sort_direction: None,
                     model_providers: model_providers.clone(),
                     source_kinds: Some(all_thread_source_kinds()),
                     archived: Some(false),
                     cwd: None,
-                    // Thread names are attached separately from rollout titles, so name
-                    // resolution must scan the filtered list client-side instead of relying
-                    // on the backend `search_term` filter.
-                    search_term: None,
+                    use_state_db_only: false,
+                    search_term: Some(session_id.to_string()),
                 },
             },
             "thread/list",
@@ -1214,7 +1335,8 @@ async fn resolve_resume_thread_id(
             if thread.name.as_deref() != Some(session_id) {
                 continue;
             }
-            if args.all || cwds_match(config.cwd.as_path(), &latest_thread_cwd(&thread).await) {
+            let latest_cwd = latest_thread_cwd(&thread).await;
+            if args.all || cwds_match(config.cwd.as_path(), latest_cwd.as_path()) {
                 return Ok(Some(thread.id));
             }
         }
@@ -1528,43 +1650,89 @@ fn decode_utf16(
     String::from_utf16(&units).map_err(|_| PromptDecodeError::InvalidUtf16 { encoding })
 }
 
+fn read_prompt_from_stdin(behavior: StdinPromptBehavior) -> Option<String> {
+    let stdin_is_terminal = std::io::stdin().is_terminal();
+
+    match behavior {
+        StdinPromptBehavior::RequiredIfPiped if stdin_is_terminal => {
+            eprintln!(
+                "No prompt provided. Either specify one as an argument or pipe the prompt into stdin."
+            );
+            std::process::exit(1);
+        }
+        StdinPromptBehavior::RequiredIfPiped => {
+            eprintln!("Reading prompt from stdin...");
+        }
+        StdinPromptBehavior::Forced => {}
+        StdinPromptBehavior::OptionalAppend if stdin_is_terminal => return None,
+        StdinPromptBehavior::OptionalAppend => {
+            eprintln!("Reading additional input from stdin...");
+        }
+    }
+
+    let mut bytes = Vec::new();
+    if let Err(e) = std::io::stdin().read_to_end(&mut bytes) {
+        eprintln!("Failed to read prompt from stdin: {e}");
+        std::process::exit(1);
+    }
+
+    let buffer = match decode_prompt_bytes(&bytes) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Failed to read prompt from stdin: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    if buffer.trim().is_empty() {
+        match behavior {
+            StdinPromptBehavior::OptionalAppend => None,
+            StdinPromptBehavior::RequiredIfPiped | StdinPromptBehavior::Forced => {
+                eprintln!("No prompt provided via stdin.");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        Some(buffer)
+    }
+}
+
+fn prompt_with_stdin_context(prompt: &str, stdin_text: &str) -> String {
+    let mut combined = format!("{prompt}\n\n<stdin>\n{stdin_text}");
+    if !stdin_text.ends_with('\n') {
+        combined.push('\n');
+    }
+    combined.push_str("</stdin>");
+    combined
+}
+
 fn resolve_prompt(prompt_arg: Option<String>) -> String {
     match prompt_arg {
         Some(p) if p != "-" => p,
         maybe_dash => {
-            let force_stdin = matches!(maybe_dash.as_deref(), Some("-"));
-
-            if std::io::stdin().is_terminal() && !force_stdin {
-                eprintln!(
-                    "No prompt provided. Either specify one as an argument or pipe the prompt into stdin."
-                );
-                std::process::exit(1);
-            }
-
-            if !force_stdin {
-                eprintln!("Reading prompt from stdin...");
-            }
-
-            let mut bytes = Vec::new();
-            if let Err(e) = std::io::stdin().read_to_end(&mut bytes) {
-                eprintln!("Failed to read prompt from stdin: {e}");
-                std::process::exit(1);
-            }
-
-            let buffer = match decode_prompt_bytes(&bytes) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Failed to read prompt from stdin: {e}");
-                    std::process::exit(1);
-                }
+            let behavior = if matches!(maybe_dash.as_deref(), Some("-")) {
+                StdinPromptBehavior::Forced
+            } else {
+                StdinPromptBehavior::RequiredIfPiped
             };
-
-            if buffer.trim().is_empty() {
-                eprintln!("No prompt provided via stdin.");
-                std::process::exit(1);
-            }
-            buffer
+            let Some(prompt) = read_prompt_from_stdin(behavior) else {
+                unreachable!("required stdin prompt should produce content");
+            };
+            prompt
         }
+    }
+}
+
+fn resolve_root_prompt(prompt_arg: Option<String>) -> String {
+    match prompt_arg {
+        Some(prompt) if prompt != "-" => {
+            if let Some(stdin_text) = read_prompt_from_stdin(StdinPromptBehavior::OptionalAppend) {
+                prompt_with_stdin_context(&prompt, &stdin_text)
+            } else {
+                prompt
+            }
+        }
+        maybe_dash => resolve_prompt(maybe_dash),
     }
 }
 
@@ -1599,385 +1767,5 @@ fn build_review_request(args: &ReviewArgs) -> anyhow::Result<ReviewRequest> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use agiworkforce_otel::set_parent_from_w3c_trace_context;
-    use agiworkforce_protocol::config_types::ApprovalsReviewer;
-    use opentelemetry::trace::TraceContextExt;
-    use opentelemetry::trace::TraceId;
-    use opentelemetry::trace::TracerProvider as _;
-    use opentelemetry_sdk::trace::SdkTracerProvider;
-    use pretty_assertions::assert_eq;
-    use tempfile::tempdir;
-    use tracing_opentelemetry::OpenTelemetrySpanExt;
-
-    fn test_tracing_subscriber() -> impl tracing::Subscriber + Send + Sync {
-        let provider = SdkTracerProvider::builder().build();
-        let tracer = provider.tracer("codex-exec-tests");
-        tracing_subscriber::registry().with(tracing_opentelemetry::layer().with_tracer(tracer))
-    }
-
-    #[test]
-    fn exec_defaults_analytics_to_enabled() {
-        assert_eq!(DEFAULT_ANALYTICS_ENABLED, true);
-    }
-
-    #[test]
-    fn exec_root_span_can_be_parented_from_trace_context() {
-        let subscriber = test_tracing_subscriber();
-        let _guard = tracing::subscriber::set_default(subscriber);
-
-        let parent = agiworkforce_protocol::protocol::W3cTraceContext {
-            traceparent: Some("00-00000000000000000000000000000077-0000000000000088-01".into()),
-            tracestate: Some("vendor=value".into()),
-        };
-        let exec_span = exec_root_span();
-        assert!(set_parent_from_w3c_trace_context(&exec_span, &parent));
-
-        let trace_id = exec_span.context().span().span_context().trace_id();
-        assert_eq!(
-            trace_id,
-            TraceId::from_hex("00000000000000000000000000000077").expect("trace id")
-        );
-    }
-
-    #[test]
-    fn builds_uncommitted_review_request() {
-        let args = ReviewArgs {
-            uncommitted: true,
-            base: None,
-            commit: None,
-            commit_title: None,
-            prompt: None,
-        };
-        let request = build_review_request(&args).expect("builds uncommitted review request");
-
-        let expected = ReviewRequest {
-            target: ReviewTarget::UncommittedChanges,
-            user_facing_hint: None,
-        };
-
-        assert_eq!(request, expected);
-    }
-
-    #[test]
-    fn builds_commit_review_request_with_title() {
-        let args = ReviewArgs {
-            uncommitted: false,
-            base: None,
-            commit: Some("123456789".to_string()),
-            commit_title: Some("Add review command".to_string()),
-            prompt: None,
-        };
-        let request = build_review_request(&args).expect("builds commit review request");
-
-        let expected = ReviewRequest {
-            target: ReviewTarget::Commit {
-                sha: "123456789".to_string(),
-                title: Some("Add review command".to_string()),
-            },
-            user_facing_hint: None,
-        };
-
-        assert_eq!(request, expected);
-    }
-
-    #[test]
-    fn builds_custom_review_request_trims_prompt() {
-        let args = ReviewArgs {
-            uncommitted: false,
-            base: None,
-            commit: None,
-            commit_title: None,
-            prompt: Some("  custom review instructions  ".to_string()),
-        };
-        let request = build_review_request(&args).expect("builds custom review request");
-
-        let expected = ReviewRequest {
-            target: ReviewTarget::Custom {
-                instructions: "custom review instructions".to_string(),
-            },
-            user_facing_hint: None,
-        };
-
-        assert_eq!(request, expected);
-    }
-
-    #[test]
-    fn decode_prompt_bytes_strips_utf8_bom() {
-        let input = [0xEF, 0xBB, 0xBF, b'h', b'i', b'\n'];
-
-        let out = decode_prompt_bytes(&input).expect("decode utf-8 with BOM");
-
-        assert_eq!(out, "hi\n");
-    }
-
-    #[test]
-    fn decode_prompt_bytes_decodes_utf16le_bom() {
-        // UTF-16LE BOM + "hi\n"
-        let input = [0xFF, 0xFE, b'h', 0x00, b'i', 0x00, b'\n', 0x00];
-
-        let out = decode_prompt_bytes(&input).expect("decode utf-16le with BOM");
-
-        assert_eq!(out, "hi\n");
-    }
-
-    #[test]
-    fn decode_prompt_bytes_decodes_utf16be_bom() {
-        // UTF-16BE BOM + "hi\n"
-        let input = [0xFE, 0xFF, 0x00, b'h', 0x00, b'i', 0x00, b'\n'];
-
-        let out = decode_prompt_bytes(&input).expect("decode utf-16be with BOM");
-
-        assert_eq!(out, "hi\n");
-    }
-
-    #[test]
-    fn decode_prompt_bytes_rejects_utf32le_bom() {
-        // UTF-32LE BOM + "hi\n"
-        let input = [
-            0xFF, 0xFE, 0x00, 0x00, b'h', 0x00, 0x00, 0x00, b'i', 0x00, 0x00, 0x00, b'\n', 0x00,
-            0x00, 0x00,
-        ];
-
-        let err = decode_prompt_bytes(&input).expect_err("utf-32le should be rejected");
-
-        assert_eq!(
-            err,
-            PromptDecodeError::UnsupportedBom {
-                encoding: "UTF-32LE"
-            }
-        );
-    }
-
-    #[test]
-    fn decode_prompt_bytes_rejects_utf32be_bom() {
-        // UTF-32BE BOM + "hi\n"
-        let input = [
-            0x00, 0x00, 0xFE, 0xFF, 0x00, 0x00, 0x00, b'h', 0x00, 0x00, 0x00, b'i', 0x00, 0x00,
-            0x00, b'\n',
-        ];
-
-        let err = decode_prompt_bytes(&input).expect_err("utf-32be should be rejected");
-
-        assert_eq!(
-            err,
-            PromptDecodeError::UnsupportedBom {
-                encoding: "UTF-32BE"
-            }
-        );
-    }
-
-    #[test]
-    fn decode_prompt_bytes_rejects_invalid_utf8() {
-        // Invalid UTF-8 sequence: 0xC3 0x28
-        let input = [0xC3, 0x28];
-
-        let err = decode_prompt_bytes(&input).expect_err("invalid utf-8 should fail");
-
-        assert_eq!(err, PromptDecodeError::InvalidUtf8 { valid_up_to: 0 });
-    }
-
-    #[test]
-    fn lagged_event_warning_message_is_explicit() {
-        assert_eq!(
-            lagged_event_warning_message(7),
-            "in-process app-server event stream lagged; dropped 7 events".to_string()
-        );
-    }
-
-    #[tokio::test]
-    async fn resume_lookup_model_providers_filters_only_last_lookup() {
-        let agiworkforce_home = tempdir().expect("create temp codex home");
-        let cwd = tempdir().expect("create temp cwd");
-        let mut config = ConfigBuilder::default()
-            .agiworkforce_home(agiworkforce_home.path().to_path_buf())
-            .fallback_cwd(Some(cwd.path().to_path_buf()))
-            .build()
-            .await
-            .expect("build default config");
-        config.model_provider_id = "test-provider".to_string();
-
-        let last_args = crate::cli::ResumeArgs {
-            session_id: None,
-            last: true,
-            all: false,
-            images: vec![],
-            prompt: None,
-        };
-        let named_args = crate::cli::ResumeArgs {
-            session_id: Some("named-session".to_string()),
-            last: false,
-            all: false,
-            images: vec![],
-            prompt: None,
-        };
-
-        assert_eq!(
-            resume_lookup_model_providers(&config, &last_args),
-            Some(vec!["test-provider".to_string()])
-        );
-        assert_eq!(resume_lookup_model_providers(&config, &named_args), None);
-    }
-
-    #[test]
-    fn turn_items_for_thread_returns_matching_turn_items() {
-        let thread = AppServerThread {
-            id: "thread-1".to_string(),
-            preview: String::new(),
-            ephemeral: false,
-            model_provider: "openai".to_string(),
-            created_at: 0,
-            updated_at: 0,
-            status: agiworkforce_app_server_protocol::ThreadStatus::Idle,
-            path: None,
-            cwd: PathBuf::from("/tmp/project"),
-            cli_version: "0.0.0-test".to_string(),
-            source: agiworkforce_app_server_protocol::SessionSource::Exec,
-            agent_nickname: None,
-            agent_role: None,
-            git_info: None,
-            name: None,
-            turns: vec![
-                agiworkforce_app_server_protocol::Turn {
-                    id: "turn-1".to_string(),
-                    items: vec![AppServerThreadItem::AgentMessage {
-                        id: "msg-1".to_string(),
-                        text: "hello".to_string(),
-                        phase: None,
-                        memory_citation: None,
-                    }],
-                    status: agiworkforce_app_server_protocol::TurnStatus::Completed,
-                    error: None,
-                },
-                agiworkforce_app_server_protocol::Turn {
-                    id: "turn-2".to_string(),
-                    items: vec![AppServerThreadItem::Plan {
-                        id: "plan-1".to_string(),
-                        text: "ship it".to_string(),
-                    }],
-                    status: agiworkforce_app_server_protocol::TurnStatus::Completed,
-                    error: None,
-                },
-            ],
-        };
-
-        assert_eq!(
-            turn_items_for_thread(&thread, "turn-1"),
-            Some(vec![AppServerThreadItem::AgentMessage {
-                id: "msg-1".to_string(),
-                text: "hello".to_string(),
-                phase: None,
-                memory_citation: None,
-            }])
-        );
-        assert_eq!(turn_items_for_thread(&thread, "missing-turn"), None);
-    }
-
-    #[test]
-    fn canceled_mcp_server_elicitation_response_uses_cancel_action() {
-        let value = canceled_mcp_server_elicitation_response()
-            .expect("mcp elicitation cancel response should serialize");
-        let response: McpServerElicitationRequestResponse =
-            serde_json::from_value(value).expect("cancel response should deserialize");
-
-        assert_eq!(
-            response,
-            McpServerElicitationRequestResponse {
-                action: McpServerElicitationAction::Cancel,
-                content: None,
-                meta: None,
-            }
-        );
-    }
-
-    #[tokio::test]
-    async fn thread_start_params_include_review_policy_when_review_policy_is_manual_only() {
-        let agiworkforce_home = tempdir().expect("create temp codex home");
-        let cwd = tempdir().expect("create temp cwd");
-        let config = ConfigBuilder::default()
-            .agiworkforce_home(agiworkforce_home.path().to_path_buf())
-            .fallback_cwd(Some(cwd.path().to_path_buf()))
-            .build()
-            .await
-            .expect("build default config");
-
-        let params = thread_start_params_from_config(&config);
-
-        assert_eq!(
-            params.approvals_reviewer,
-            Some(agiworkforce_app_server_protocol::ApprovalsReviewer::User)
-        );
-    }
-
-    #[tokio::test]
-    async fn thread_start_params_include_review_policy_when_auto_review_is_enabled() {
-        let agiworkforce_home = tempdir().expect("create temp codex home");
-        let cwd = tempdir().expect("create temp cwd");
-        std::fs::write(
-            agiworkforce_home.path().join("config.toml"),
-            "approvals_reviewer = \"guardian_subagent\"\n",
-        )
-        .expect("write auto-review config");
-        let config = ConfigBuilder::default()
-            .agiworkforce_home(agiworkforce_home.path().to_path_buf())
-            .fallback_cwd(Some(cwd.path().to_path_buf()))
-            .build()
-            .await
-            .expect("build auto-review config");
-
-        let params = thread_start_params_from_config(&config);
-
-        assert_eq!(
-            params.approvals_reviewer,
-            Some(agiworkforce_app_server_protocol::ApprovalsReviewer::GuardianSubagent)
-        );
-    }
-
-    #[test]
-    fn session_configured_from_thread_response_uses_review_policy_from_response() {
-        let response = ThreadStartResponse {
-            thread: agiworkforce_app_server_protocol::Thread {
-                id: "67e55044-10b1-426f-9247-bb680e5fe0c8".to_string(),
-                preview: String::new(),
-                ephemeral: false,
-                model_provider: "openai".to_string(),
-                created_at: 0,
-                updated_at: 0,
-                status: agiworkforce_app_server_protocol::ThreadStatus::Idle,
-                path: Some(PathBuf::from("/tmp/rollout.jsonl")),
-                cwd: PathBuf::from("/tmp"),
-                cli_version: "0.0.0".to_string(),
-                source: agiworkforce_app_server_protocol::SessionSource::Cli,
-                agent_nickname: None,
-                agent_role: None,
-                git_info: None,
-                name: Some("thread".to_string()),
-                turns: vec![],
-            },
-            model: "gpt-5.4".to_string(),
-            model_provider: "openai".to_string(),
-            service_tier: None,
-            cwd: PathBuf::from("/tmp"),
-            approval_policy: agiworkforce_app_server_protocol::AskForApproval::OnRequest,
-            approvals_reviewer:
-                agiworkforce_app_server_protocol::ApprovalsReviewer::GuardianSubagent,
-            sandbox: agiworkforce_app_server_protocol::SandboxPolicy::WorkspaceWrite {
-                writable_roots: vec![],
-                read_only_access: agiworkforce_app_server_protocol::ReadOnlyAccess::FullAccess,
-                network_access: false,
-                exclude_tmpdir_env_var: false,
-                exclude_slash_tmp: false,
-            },
-            reasoning_effort: None,
-        };
-
-        let event = session_configured_from_thread_start_response(&response)
-            .expect("build bootstrap session configured event");
-
-        assert_eq!(
-            event.approvals_reviewer,
-            ApprovalsReviewer::GuardianSubagent
-        );
-    }
-}
+#[path = "lib_tests.rs"]
+mod tests;

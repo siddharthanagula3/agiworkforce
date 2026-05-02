@@ -21,12 +21,7 @@ agiworkforce-protocol = { path = "../agiworkforce-protocol" }
 agiworkforce-utils-cargo-bin = { path = "../agiworkforce-utils-cargo-bin" }
 serde = "1"
 serde_json = "1"
-tokio = { workspace = true, features = [
-    "io-std",
-    "macros",
-    "process",
-    "rt-multi-thread",
-] }
+tokio = { version = "1", features = [ "io-std", "macros", "process", "rt-multi-thread", ] }
 uuid = "1"
 wiremock = "0.6"
 core_test_support = { path = "../../../core/tests/common" }

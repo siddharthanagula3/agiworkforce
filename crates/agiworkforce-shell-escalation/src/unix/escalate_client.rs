@@ -3,8 +3,8 @@ use std::os::fd::AsFd;
 use std::os::fd::AsRawFd;
 use std::os::fd::OwnedFd;
 
-use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use anyhow::Context as _;
+use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 
 use crate::unix::escalate_protocol::ESCALATE_SOCKET_ENV_VAR;
 use crate::unix::escalate_protocol::EXEC_WRAPPER_ENV_VAR;

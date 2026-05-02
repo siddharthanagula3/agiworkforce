@@ -1,70 +1,39 @@
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 use agiworkforce_app_server_protocol::AppInfo;
-use agiworkforce_app_server_protocol::McpElicitationObjectType;
-use agiworkforce_app_server_protocol::McpElicitationSchema;
-use agiworkforce_app_server_protocol::McpServerElicitationRequest;
-use agiworkforce_app_server_protocol::McpServerElicitationRequestParams;
+use agiworkforce_config::types::ToolSuggestDisabledTool;
+use agiworkforce_mcp::AGIWORKFORCE_APPS_MCP_SERVER_NAME;
 use agiworkforce_rmcp_client::ElicitationAction;
-use async_trait::async_trait;
+use agiworkforce_rmcp_client::ElicitationResponse;
+use agiworkforce_tools::DiscoverableTool;
+use agiworkforce_tools::DiscoverableToolAction;
+use agiworkforce_tools::DiscoverableToolType;
+use agiworkforce_tools::TOOL_SUGGEST_PERSIST_ALWAYS_VALUE;
+use agiworkforce_tools::TOOL_SUGGEST_PERSIST_KEY;
+use agiworkforce_tools::TOOL_SUGGEST_TOOL_NAME;
+use agiworkforce_tools::ToolSuggestArgs;
+use agiworkforce_tools::ToolSuggestResult;
+use agiworkforce_tools::all_suggested_connectors_picked_up;
+use agiworkforce_tools::build_tool_suggestion_elicitation_request;
+use agiworkforce_tools::filter_tool_suggest_discoverable_tools_for_client;
+use agiworkforce_tools::verified_connector_suggestion_completed;
 use rmcp::model::RequestId;
-use serde::Deserialize;
-use serde::Serialize;
-use serde_json::json;
+use serde_json::Value;
 use tracing::warn;
 
+use crate::config::edit::ConfigEdit;
+use crate::config::edit::ConfigEditsBuilder;
 use crate::connectors;
 use crate::function_tool::FunctionCallError;
-use crate::mcp::CODEX_APPS_MCP_SERVER_NAME;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
-use crate::tools::discoverable::DiscoverableTool;
-use crate::tools::discoverable::DiscoverableToolAction;
-use crate::tools::discoverable::DiscoverableToolType;
-use crate::tools::discoverable::filter_tool_suggest_discoverable_tools_for_client;
 use crate::tools::handlers::parse_arguments;
 use crate::tools::registry::ToolHandler;
 use crate::tools::registry::ToolKind;
 
 pub struct ToolSuggestHandler;
 
-pub(crate) const TOOL_SUGGEST_TOOL_NAME: &str = "tool_suggest";
-const TOOL_SUGGEST_APPROVAL_KIND_VALUE: &str = "tool_suggestion";
-
-#[derive(Debug, Deserialize)]
-struct ToolSuggestArgs {
-    tool_type: DiscoverableToolType,
-    action_type: DiscoverableToolAction,
-    tool_id: String,
-    suggest_reason: String,
-}
-
-#[derive(Debug, Serialize, PartialEq, Eq)]
-struct ToolSuggestResult {
-    completed: bool,
-    user_confirmed: bool,
-    tool_type: DiscoverableToolType,
-    action_type: DiscoverableToolAction,
-    tool_id: String,
-    tool_name: String,
-    suggest_reason: String,
-}
-
-#[derive(Debug, Serialize, PartialEq, Eq)]
-struct ToolSuggestMeta<'a> {
-    codex_approval_kind: &'static str,
-    tool_type: DiscoverableToolType,
-    suggest_type: DiscoverableToolAction,
-    suggest_reason: &'a str,
-    tool_id: &'a str,
-    tool_name: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    install_url: Option<&'a str>,
-}
-
-#[async_trait]
 impl ToolHandler for ToolSuggestHandler {
     type Output = FunctionToolOutput;
 
@@ -72,6 +41,10 @@ impl ToolHandler for ToolSuggestHandler {
         ToolKind::Function
     }
 
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "tool suggestion discovery reads through the session-owned manager guard"
+    )]
     async fn handle(&self, invocation: ToolInvocation) -> Result<Self::Output, FunctionCallError> {
         let ToolInvocation {
             payload,
@@ -103,10 +76,10 @@ impl ToolHandler for ToolSuggestHandler {
             ));
         }
         if args.tool_type == DiscoverableToolType::Plugin
-            && turn.app_server_client_name.as_deref() == Some("codex-tui")
+            && turn.app_server_client_name.as_deref() == Some("agiworkforce-tui")
         {
             return Err(FunctionCallError::RespondToModel(
-                "plugin tool suggestions are not available in codex-tui yet".to_string(),
+                "plugin tool suggestions are not available in agiworkforce-tui yet".to_string(),
             ));
         }
 
@@ -147,6 +120,7 @@ impl ToolHandler for ToolSuggestHandler {
 
         let request_id = RequestId::String(format!("tool_suggestion_{call_id}").into());
         let params = build_tool_suggestion_elicitation_request(
+            AGIWORKFORCE_APPS_MCP_SERVER_NAME,
             session.conversation_id.to_string(),
             turn.sub_id.clone(),
             &args,
@@ -156,6 +130,9 @@ impl ToolHandler for ToolSuggestHandler {
         let response = session
             .request_mcp_server_elicitation(turn.as_ref(), request_id, params)
             .await;
+        if let Some(response) = response.as_ref() {
+            maybe_persist_tool_suggest_disable(&session, &turn, &tool, response).await;
+        }
         let user_confirmed = response
             .as_ref()
             .is_some_and(|response| response.action == ElicitationAction::Accept);
@@ -191,114 +168,147 @@ impl ToolHandler for ToolSuggestHandler {
     }
 }
 
-fn build_tool_suggestion_elicitation_request(
-    thread_id: String,
-    turn_id: String,
-    args: &ToolSuggestArgs,
-    suggest_reason: &str,
+async fn maybe_persist_tool_suggest_disable(
+    session: &crate::session::session::Session,
+    turn: &crate::session::turn_context::TurnContext,
     tool: &DiscoverableTool,
-) -> McpServerElicitationRequestParams {
-    let tool_name = tool.name().to_string();
-    let install_url = tool.install_url().map(ToString::to_string);
-    let message = suggest_reason.to_string();
-
-    McpServerElicitationRequestParams {
-        thread_id,
-        turn_id: Some(turn_id),
-        server_name: CODEX_APPS_MCP_SERVER_NAME.to_string(),
-        request: McpServerElicitationRequest::Form {
-            meta: Some(json!(build_tool_suggestion_meta(
-                args.tool_type,
-                args.action_type,
-                suggest_reason,
-                tool.id(),
-                tool_name.as_str(),
-                install_url.as_deref(),
-            ))),
-            message,
-            requested_schema: McpElicitationSchema {
-                schema_uri: None,
-                type_: McpElicitationObjectType::Object,
-                properties: BTreeMap::new(),
-                required: None,
-            },
-        },
+    response: &ElicitationResponse,
+) {
+    if !tool_suggest_response_requests_persistent_disable(response) {
+        return;
     }
+
+    if let Err(err) = persist_tool_suggest_disable(&turn.config.agiworkforce_home, tool).await {
+        warn!(
+            error = %err,
+            tool_id = tool.id(),
+            "failed to persist disabled tool suggestion"
+        );
+        return;
+    }
+
+    session.reload_user_config_layer().await;
 }
 
-fn build_tool_suggestion_meta<'a>(
-    tool_type: DiscoverableToolType,
-    action_type: DiscoverableToolAction,
-    suggest_reason: &'a str,
-    tool_id: &'a str,
-    tool_name: &'a str,
-    install_url: Option<&'a str>,
-) -> ToolSuggestMeta<'a> {
-    ToolSuggestMeta {
-        codex_approval_kind: TOOL_SUGGEST_APPROVAL_KIND_VALUE,
-        tool_type,
-        suggest_type: action_type,
-        suggest_reason,
-        tool_id,
-        tool_name,
-        install_url,
+fn tool_suggest_response_requests_persistent_disable(response: &ElicitationResponse) -> bool {
+    if response.action != ElicitationAction::Decline {
+        return false;
+    }
+
+    response
+        .meta
+        .as_ref()
+        .and_then(Value::as_object)
+        .and_then(|meta| meta.get(TOOL_SUGGEST_PERSIST_KEY))
+        .and_then(Value::as_str)
+        == Some(TOOL_SUGGEST_PERSIST_ALWAYS_VALUE)
+}
+
+async fn persist_tool_suggest_disable(
+    agiworkforce_home: &agiworkforce_utils_absolute_path::AbsolutePathBuf,
+    tool: &DiscoverableTool,
+) -> anyhow::Result<()> {
+    ConfigEditsBuilder::new(agiworkforce_home)
+        .with_edits([ConfigEdit::AddToolSuggestDisabledTool(
+            disabled_tool_suggestion(tool),
+        )])
+        .apply()
+        .await
+}
+
+fn disabled_tool_suggestion(tool: &DiscoverableTool) -> ToolSuggestDisabledTool {
+    match tool {
+        DiscoverableTool::Connector(connector) => {
+            ToolSuggestDisabledTool::connector(connector.id.as_str())
+        }
+        DiscoverableTool::Plugin(plugin) => ToolSuggestDisabledTool::plugin(plugin.id.as_str()),
     }
 }
 
 async fn verify_tool_suggestion_completed(
-    session: &crate::codex::Session,
-    turn: &crate::codex::TurnContext,
+    session: &crate::session::session::Session,
+    turn: &crate::session::turn_context::TurnContext,
     tool: &DiscoverableTool,
-    auth: Option<&crate::AgiWorkforceAuth>,
+    auth: Option<&agiworkforce_login::AgiworkforceAuth>,
 ) -> bool {
     match tool {
-        DiscoverableTool::Connector(connector) => {
-            let manager = session.services.mcp_connection_manager.read().await;
-            match manager.hard_refresh_codex_apps_tools_cache().await {
-                Ok(mcp_tools) => {
-                    let accessible_connectors = connectors::with_app_enabled_state(
-                        connectors::accessible_connectors_from_mcp_tools(&mcp_tools),
-                        &turn.config,
-                    );
-                    connectors::refresh_accessible_connectors_cache_from_mcp_tools(
-                        &turn.config,
-                        auth,
-                        &mcp_tools,
-                    );
-                    verified_connector_suggestion_completed(
-                        connector.id.as_str(),
-                        &accessible_connectors,
-                    )
-                }
-                Err(err) => {
-                    warn!(
-                        "failed to refresh codex apps tools cache after tool suggestion for {}: {err:#}",
-                        connector.id
-                    );
-                    false
-                }
-            }
-        }
+        DiscoverableTool::Connector(connector) => refresh_missing_suggested_connectors(
+            session,
+            turn,
+            auth,
+            std::slice::from_ref(&connector.id),
+            connector.id.as_str(),
+        )
+        .await
+        .is_some_and(|accessible_connectors| {
+            verified_connector_suggestion_completed(connector.id.as_str(), &accessible_connectors)
+        }),
         DiscoverableTool::Plugin(plugin) => {
             session.reload_user_config_layer().await;
             let config = session.get_config().await;
-            verified_plugin_suggestion_completed(
+            let completed = verified_plugin_suggestion_completed(
                 plugin.id.as_str(),
                 config.as_ref(),
                 session.services.plugins_manager.as_ref(),
+            );
+            let _ = refresh_missing_suggested_connectors(
+                session,
+                turn,
+                auth,
+                &plugin.app_connector_ids,
+                plugin.id.as_str(),
             )
+            .await;
+            completed
         }
     }
 }
 
-fn verified_connector_suggestion_completed(
+#[expect(
+    clippy::await_holding_invalid_type,
+    reason = "connector cache refresh reads through the session-owned manager guard"
+)]
+async fn refresh_missing_suggested_connectors(
+    session: &crate::session::session::Session,
+    turn: &crate::session::turn_context::TurnContext,
+    auth: Option<&agiworkforce_login::AgiworkforceAuth>,
+    expected_connector_ids: &[String],
     tool_id: &str,
-    accessible_connectors: &[AppInfo],
-) -> bool {
-    accessible_connectors
-        .iter()
-        .find(|connector| connector.id == tool_id)
-        .is_some_and(|connector| connector.is_accessible)
+) -> Option<Vec<AppInfo>> {
+    if expected_connector_ids.is_empty() {
+        return Some(Vec::new());
+    }
+
+    let manager = session.services.mcp_connection_manager.read().await;
+    let mcp_tools = manager.list_all_tools().await;
+    let accessible_connectors = connectors::with_app_enabled_state(
+        connectors::accessible_connectors_from_mcp_tools(&mcp_tools),
+        &turn.config,
+    );
+    if all_suggested_connectors_picked_up(expected_connector_ids, &accessible_connectors) {
+        return Some(accessible_connectors);
+    }
+
+    match manager.hard_refresh_agiworkforce_apps_tools_cache().await {
+        Ok(mcp_tools) => {
+            let accessible_connectors = connectors::with_app_enabled_state(
+                connectors::accessible_connectors_from_mcp_tools(&mcp_tools),
+                &turn.config,
+            );
+            connectors::refresh_accessible_connectors_cache_from_mcp_tools(
+                &turn.config,
+                auth,
+                &mcp_tools,
+            );
+            Some(accessible_connectors)
+        }
+        Err(err) => {
+            warn!(
+                "failed to refresh codex apps tools cache after tool suggestion for {tool_id}: {err:#}"
+            );
+            None
+        }
+    }
 }
 
 fn verified_plugin_suggestion_completed(

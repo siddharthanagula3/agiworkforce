@@ -447,7 +447,7 @@ fn configured_plugin_ids(
             Ok(plugin_id) => Some(plugin_id),
             Err(err) => {
                 warn!(
-                    plugin_key,
+                    plugin_key = plugin_key.as_str(),
                     error = %err,
                     "{invalid_plugin_key_message}"
                 );

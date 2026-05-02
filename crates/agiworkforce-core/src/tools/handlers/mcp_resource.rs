@@ -5,7 +5,6 @@ use std::time::Instant;
 
 use agiworkforce_protocol::mcp::CallToolResult;
 use agiworkforce_protocol::models::function_call_output_content_items_to_text;
-use async_trait::async_trait;
 use rmcp::model::ListResourceTemplatesResult;
 use rmcp::model::ListResourcesResult;
 use rmcp::model::PaginatedRequestParams;
@@ -18,18 +17,18 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use crate::codex::Session;
-use crate::codex::TurnContext;
 use crate::function_tool::FunctionCallError;
-use crate::protocol::EventMsg;
-use crate::protocol::McpInvocation;
-use crate::protocol::McpToolCallBeginEvent;
-use crate::protocol::McpToolCallEndEvent;
+use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
 use crate::tools::registry::ToolHandler;
 use crate::tools::registry::ToolKind;
+use agiworkforce_protocol::protocol::EventMsg;
+use agiworkforce_protocol::protocol::McpInvocation;
+use agiworkforce_protocol::protocol::McpToolCallBeginEvent;
+use agiworkforce_protocol::protocol::McpToolCallEndEvent;
 
 pub struct McpResourceHandler;
 
@@ -178,7 +177,6 @@ struct ReadResourcePayload {
     result: ReadResourceResult,
 }
 
-#[async_trait]
 impl ToolHandler for McpResourceHandler {
     type Output = FunctionToolOutput;
 
@@ -207,7 +205,7 @@ impl ToolHandler for McpResourceHandler {
 
         let arguments_value = parse_arguments(arguments.as_str())?;
 
-        match tool_name.as_str() {
+        match tool_name.name.as_str() {
             "list_mcp_resources" => {
                 handle_list_resources(
                     Arc::clone(&session),
@@ -242,6 +240,10 @@ impl ToolHandler for McpResourceHandler {
     }
 }
 
+#[expect(
+    clippy::await_holding_invalid_type,
+    reason = "MCP resource listing reads through the session-owned manager guard"
+)]
 async fn handle_list_resources(
     session: Arc<Session>,
     turn: Arc<TurnContext>,
@@ -254,7 +256,7 @@ async fn handle_list_resources(
     let cursor = normalize_optional_string(cursor);
 
     let invocation = McpInvocation {
-        server: server.clone().unwrap_or_else(|| "codex".to_string()),
+        server: server.clone().unwrap_or_else(|| "agiworkforce".to_string()),
         tool: "list_mcp_resources".to_string(),
         arguments: arguments.clone(),
     };
@@ -346,6 +348,10 @@ async fn handle_list_resources(
     }
 }
 
+#[expect(
+    clippy::await_holding_invalid_type,
+    reason = "MCP resource template listing reads through the session-owned manager guard"
+)]
 async fn handle_list_resource_templates(
     session: Arc<Session>,
     turn: Arc<TurnContext>,
@@ -358,7 +364,7 @@ async fn handle_list_resource_templates(
     let cursor = normalize_optional_string(cursor);
 
     let invocation = McpInvocation {
-        server: server.clone().unwrap_or_else(|| "codex".to_string()),
+        server: server.clone().unwrap_or_else(|| "agiworkforce".to_string()),
         tool: "list_mcp_resource_templates".to_string(),
         arguments: arguments.clone(),
     };
@@ -564,6 +570,7 @@ async fn emit_tool_call_begin(
             EventMsg::McpToolCallBegin(McpToolCallBeginEvent {
                 call_id: call_id.to_string(),
                 invocation,
+                mcp_app_resource_uri: None,
             }),
         )
         .await;
@@ -583,6 +590,7 @@ async fn emit_tool_call_end(
             EventMsg::McpToolCallEnd(McpToolCallEndEvent {
                 call_id: call_id.to_string(),
                 invocation,
+                mcp_app_resource_uri: None,
                 duration,
                 result,
             }),

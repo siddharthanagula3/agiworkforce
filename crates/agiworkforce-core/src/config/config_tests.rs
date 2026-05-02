@@ -1,32 +1,84 @@
+use crate::agents_md::DEFAULT_AGENTS_MD_FILENAME;
+use crate::agents_md::LOCAL_AGENTS_MD_FILENAME;
+use crate::config::ThreadStoreConfig;
 use crate::config::edit::ConfigEdit;
 use crate::config::edit::ConfigEditsBuilder;
 use crate::config::edit::apply_blocking;
-use crate::config::types::ApprovalsReviewer;
-use crate::config::types::BundledSkillsConfig;
-use crate::config::types::FeedbackConfigToml;
-use crate::config::types::HistoryPersistence;
-use crate::config::types::McpServerTransportConfig;
-use crate::config::types::MemoriesConfig;
-use crate::config::types::MemoriesToml;
-use crate::config::types::ModelAvailabilityNuxConfig;
-use crate::config::types::NotificationMethod;
-use crate::config::types::Notifications;
-use crate::config::types::ToolSuggestDiscoverableType;
-use crate::config_loader::RequirementSource;
+use crate::plugins::PluginsManager;
+use assert_matches::assert_matches;
 use agiworkforce_config::CONFIG_TOML_FILE;
+use agiworkforce_config::RequirementSource;
+use agiworkforce_config::config_toml::AgentRoleToml;
+use agiworkforce_config::config_toml::AgentsToml;
+use agiworkforce_config::config_toml::AutoReviewToml;
+use agiworkforce_config::config_toml::ConfigToml;
+use agiworkforce_config::config_toml::ProjectConfig;
+use agiworkforce_config::config_toml::RealtimeAudioConfig;
+use agiworkforce_config::config_toml::RealtimeConfig;
+use agiworkforce_config::config_toml::RealtimeToml;
+use agiworkforce_config::config_toml::RealtimeTransport;
+use agiworkforce_config::config_toml::RealtimeWsMode;
+use agiworkforce_config::config_toml::RealtimeWsVersion;
+use agiworkforce_config::config_toml::ToolsToml;
+use agiworkforce_config::loader::project_trust_key;
+use agiworkforce_config::permissions_toml::FilesystemPermissionToml;
+use agiworkforce_config::permissions_toml::FilesystemPermissionsToml;
+use agiworkforce_config::permissions_toml::NetworkDomainPermissionToml;
+use agiworkforce_config::permissions_toml::NetworkDomainPermissionsToml;
+use agiworkforce_config::permissions_toml::NetworkToml;
+use agiworkforce_config::permissions_toml::PermissionProfileToml;
+use agiworkforce_config::permissions_toml::PermissionsToml;
+use agiworkforce_config::profile_toml::ConfigProfile;
+use agiworkforce_config::types::AppToolApproval;
+use agiworkforce_config::types::ApprovalsReviewer;
+use agiworkforce_config::types::BundledSkillsConfig;
+use agiworkforce_config::types::FeedbackConfigToml;
+use agiworkforce_config::types::HistoryPersistence;
+use agiworkforce_config::types::McpServerEnvVar;
+use agiworkforce_config::types::McpServerToolConfig;
+use agiworkforce_config::types::McpServerTransportConfig;
+use agiworkforce_config::types::MemoriesConfig;
+use agiworkforce_config::types::MemoriesToml;
+use agiworkforce_config::types::ModelAvailabilityNuxConfig;
+use agiworkforce_config::types::Notice;
+use agiworkforce_config::types::NotificationCondition;
+use agiworkforce_config::types::NotificationMethod;
+use agiworkforce_config::types::Notifications;
+use agiworkforce_config::types::SandboxWorkspaceWrite;
+use agiworkforce_config::types::SkillsConfig;
+use agiworkforce_config::types::ToolSuggestDisabledTool;
+use agiworkforce_config::types::ToolSuggestDiscoverableType;
+use agiworkforce_config::types::Tui;
+use agiworkforce_config::types::TuiKeymap;
+use agiworkforce_config::types::TuiNotificationSettings;
+use agiworkforce_config::types::WindowsSandboxModeToml;
+use agiworkforce_config::types::WindowsToml;
+use agiworkforce_exec_server::LOCAL_FS;
 use agiworkforce_features::Feature;
 use agiworkforce_features::FeaturesToml;
+use agiworkforce_model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
+use agiworkforce_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
+use agiworkforce_model_provider_info::WireApi;
+use agiworkforce_models_manager::bundled_models_response;
+use agiworkforce_protocol::models::ManagedFileSystemPermissions;
+use agiworkforce_protocol::models::PermissionProfile;
+use agiworkforce_protocol::models::SandboxEnforcement;
 use agiworkforce_protocol::permissions::FileSystemAccessMode;
 use agiworkforce_protocol::permissions::FileSystemPath;
 use agiworkforce_protocol::permissions::FileSystemSandboxEntry;
 use agiworkforce_protocol::permissions::FileSystemSandboxPolicy;
 use agiworkforce_protocol::permissions::FileSystemSpecialPath;
 use agiworkforce_protocol::permissions::NetworkSandboxPolicy;
-use assert_matches::assert_matches;
+use agiworkforce_protocol::protocol::NetworkAccess;
+use agiworkforce_protocol::protocol::RealtimeVoice;
+use agiworkforce_protocol::protocol::SandboxPolicy;
 use serde::Deserialize;
 use tempfile::tempdir;
 
 use super::*;
+use core_test_support::PathBufExt;
+use core_test_support::PathExt;
+use core_test_support::TempDirExt;
 use core_test_support::test_absolute_path;
 use pretty_assertions::assert_eq;
 
@@ -45,15 +97,19 @@ fn stdio_mcp(command: &str) -> McpServerConfig {
             env_vars: Vec::new(),
             cwd: None,
         },
+        experimental_environment: None,
         enabled: true,
         required: false,
+        supports_parallel_tool_calls: false,
         disabled_reason: None,
         startup_timeout_sec: None,
         tool_timeout_sec: None,
+        default_tools_approval_mode: None,
         enabled_tools: None,
         disabled_tools: None,
         scopes: None,
         oauth_resource: None,
+        tools: HashMap::new(),
     }
 }
 
@@ -65,20 +121,116 @@ fn http_mcp(url: &str) -> McpServerConfig {
             http_headers: None,
             env_http_headers: None,
         },
+        experimental_environment: None,
         enabled: true,
         required: false,
+        supports_parallel_tool_calls: false,
         disabled_reason: None,
         startup_timeout_sec: None,
         tool_timeout_sec: None,
+        default_tools_approval_mode: None,
         enabled_tools: None,
         disabled_tools: None,
         scopes: None,
         oauth_resource: None,
+        tools: HashMap::new(),
     }
 }
 
-#[test]
-fn test_toml_parsing() {
+async fn derive_legacy_sandbox_policy_for_test(
+    cfg: &ConfigToml,
+    sandbox_mode_override: Option<SandboxMode>,
+    profile_sandbox_mode: Option<SandboxMode>,
+    windows_sandbox_level: WindowsSandboxLevel,
+    active_project: Option<&ProjectConfig>,
+    permission_profile_constraint: Option<&Constrained<PermissionProfile>>,
+) -> SandboxPolicy {
+    let permission_profile = cfg
+        .derive_permission_profile(
+            sandbox_mode_override,
+            profile_sandbox_mode,
+            windows_sandbox_level,
+            active_project,
+            permission_profile_constraint,
+        )
+        .await;
+    permission_profile
+        .to_legacy_sandbox_policy(Path::new("/"))
+        .unwrap_or_else(|err| {
+            tracing::warn!(
+                error = %err,
+                "derived permission profile cannot be represented as a legacy sandbox policy; falling back to read-only"
+            );
+            SandboxPolicy::new_read_only_policy()
+        })
+}
+
+#[tokio::test]
+async fn load_config_normalizes_relative_cwd_override() -> std::io::Result<()> {
+    let expected_cwd = AbsolutePathBuf::relative_to_current_dir("nested")?;
+    let agiworkforce_home = tempdir()?;
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides {
+            cwd: Some(PathBuf::from("nested")),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(config.cwd, expected_cwd);
+    Ok(())
+}
+
+#[tokio::test]
+async fn load_config_loads_global_agents_instructions() -> std::io::Result<()> {
+    let agiworkforce_home = tempdir()?;
+    std::fs::write(
+        agiworkforce_home.path().join(DEFAULT_AGENTS_MD_FILENAME),
+        "\n  global instructions  \n",
+    )?;
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides::default(),
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(
+        config.user_instructions.as_deref(),
+        Some("global instructions")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn load_config_prefers_global_agents_override_instructions() -> std::io::Result<()> {
+    let agiworkforce_home = tempdir()?;
+    std::fs::write(
+        agiworkforce_home.path().join(DEFAULT_AGENTS_MD_FILENAME),
+        "global instructions",
+    )?;
+    let global_agents_override_path = agiworkforce_home.path().join(LOCAL_AGENTS_MD_FILENAME);
+    std::fs::write(&global_agents_override_path, "local override instructions")?;
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides::default(),
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(
+        config.user_instructions.as_deref(),
+        Some("local override instructions")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_toml_parsing() {
     let history_with_persistence = r#"
 [history]
 persistence = "save-all"
@@ -110,7 +262,7 @@ persistence = "none"
 
     let memories = r#"
 [memories]
-no_memories_if_mcp_or_web_search = true
+disable_on_external_context = true
 generate_memories = false
 use_memories = false
 max_raw_memories_for_consolidation = 512
@@ -118,14 +270,15 @@ max_unused_days = 21
 max_rollout_age_days = 42
 max_rollouts_per_startup = 9
 min_rollout_idle_hours = 24
+min_rate_limit_remaining_percent = 12
 extract_model = "gpt-5-mini"
-consolidation_model = "gpt-5"
+consolidation_model = "gpt-5.2"
 "#;
     let memories_cfg =
         toml::from_str::<ConfigToml>(memories).expect("TOML deserialization should succeed");
     assert_eq!(
         Some(MemoriesToml {
-            no_memories_if_mcp_or_web_search: Some(true),
+            disable_on_external_context: Some(true),
             generate_memories: Some(false),
             use_memories: Some(false),
             max_raw_memories_for_consolidation: Some(512),
@@ -133,8 +286,9 @@ consolidation_model = "gpt-5"
             max_rollout_age_days: Some(42),
             max_rollouts_per_startup: Some(9),
             min_rollout_idle_hours: Some(24),
+            min_rate_limit_remaining_percent: Some(12),
             extract_model: Some("gpt-5-mini".to_string()),
-            consolidation_model: Some("gpt-5".to_string()),
+            consolidation_model: Some("gpt-5.2".to_string()),
         }),
         memories_cfg.memories
     );
@@ -142,13 +296,14 @@ consolidation_model = "gpt-5"
     let config = Config::load_from_base_config_with_overrides(
         memories_cfg,
         ConfigOverrides::default(),
-        tempdir().expect("tempdir").path().to_path_buf(),
+        tempdir().expect("tempdir").abs(),
     )
+    .await
     .expect("load config from memories settings");
     assert_eq!(
         config.memories,
         MemoriesConfig {
-            no_memories_if_mcp_or_web_search: true,
+            disable_on_external_context: true,
             generate_memories: false,
             use_memories: false,
             max_raw_memories_for_consolidation: 512,
@@ -156,9 +311,22 @@ consolidation_model = "gpt-5"
             max_rollout_age_days: 42,
             max_rollouts_per_startup: 9,
             min_rollout_idle_hours: 24,
+            min_rate_limit_remaining_percent: 12,
             extract_model: Some("gpt-5-mini".to_string()),
-            consolidation_model: Some("gpt-5".to_string()),
+            consolidation_model: Some("gpt-5.2".to_string()),
         }
+    );
+
+    let legacy_memories_cfg =
+        toml::from_str::<ConfigToml>("[memories]\nno_memories_if_mcp_or_web_search = true\n")
+            .expect("legacy memories TOML should deserialize");
+    assert!(
+        MemoriesConfig::from(
+            legacy_memories_cfg
+                .memories
+                .expect("legacy memories config")
+        )
+        .disable_on_external_context
     );
 }
 
@@ -166,6 +334,9 @@ consolidation_model = "gpt-5"
 fn parses_bundled_skills_config() {
     let cfg: ConfigToml = toml::from_str(
         r#"
+[skills]
+include_instructions = false
+
 [skills.bundled]
 enabled = false
 "#,
@@ -176,6 +347,7 @@ enabled = false
         cfg.skills,
         Some(SkillsConfig {
             bundled: Some(BundledSkillsConfig { enabled: false }),
+            include_instructions: Some(false),
             config: Vec::new(),
         })
     );
@@ -220,6 +392,146 @@ web_search = false
 }
 
 #[test]
+fn rejects_provider_auth_with_env_key() {
+    let err = toml::from_str::<ConfigToml>(
+        r#"
+[model_providers.corp]
+name = "Corp"
+env_key = "CORP_TOKEN"
+
+[model_providers.corp.auth]
+command = "print-token"
+"#,
+    )
+    .unwrap_err();
+
+    assert!(
+        err.to_string()
+            .contains("model_providers.corp: provider auth cannot be combined with env_key")
+    );
+}
+
+#[test]
+fn rejects_provider_aws_for_custom_provider() {
+    let err = toml::from_str::<ConfigToml>(
+        r#"
+[model_providers.custom]
+name = "Custom Provider"
+
+[model_providers.custom.aws]
+profile = "agiworkforce-bedrock"
+"#,
+    )
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains(
+            "model_providers.custom: provider aws is only supported for `amazon-bedrock`"
+        )
+    );
+}
+
+#[test]
+fn accepts_amazon_bedrock_aws_profile_override() {
+    let cfg = toml::from_str::<ConfigToml>(
+        r#"
+[model_providers.amazon-bedrock.aws]
+profile = "agiworkforce-bedrock"
+region = "us-west-2"
+"#,
+    )
+    .expect("Amazon Bedrock AWS overrides should deserialize");
+
+    assert_eq!(
+        cfg.model_providers
+            .get("amazon-bedrock")
+            .and_then(|provider| provider.aws.as_ref())
+            .and_then(|aws| aws.profile.as_deref()),
+        Some("agiworkforce-bedrock")
+    );
+    assert_eq!(
+        cfg.model_providers
+            .get("amazon-bedrock")
+            .and_then(|provider| provider.aws.as_ref())
+            .and_then(|aws| aws.region.as_deref()),
+        Some("us-west-2")
+    );
+}
+
+#[tokio::test]
+async fn load_config_applies_amazon_bedrock_aws_profile_override() {
+    let cfg = toml::from_str::<ConfigToml>(
+        r#"
+model_provider = "amazon-bedrock"
+
+[model_providers.amazon-bedrock.aws]
+profile = "agiworkforce-bedrock"
+region = "us-west-2"
+"#,
+    )
+    .expect("Amazon Bedrock AWS overrides should deserialize");
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .expect("load config");
+
+    assert_eq!(config.model_provider_id, "amazon-bedrock");
+    assert_eq!(
+        config
+            .model_provider
+            .aws
+            .as_ref()
+            .and_then(|aws| aws.profile.as_deref()),
+        Some("agiworkforce-bedrock")
+    );
+    assert_eq!(
+        config
+            .model_provider
+            .aws
+            .as_ref()
+            .and_then(|aws| aws.region.as_deref()),
+        Some("us-west-2")
+    );
+}
+
+#[tokio::test]
+async fn load_config_rejects_unsupported_amazon_bedrock_overrides() {
+    let cfg = toml::from_str::<ConfigToml>(
+        r#"
+model_provider = "amazon-bedrock"
+
+[model_providers.amazon-bedrock]
+name = "Custom Bedrock"
+base_url = "https://bedrock.example.com/v1"
+requires_openai_auth = true
+supports_websockets = true
+
+[model_providers.amazon-bedrock.aws]
+profile = "agiworkforce-bedrock"
+region = "us-west-2"
+"#,
+    )
+    .expect("Amazon Bedrock unsupported overrides should deserialize");
+
+    let err = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(err.to_string().contains(
+        "model_providers.amazon-bedrock only supports changing `aws.profile` and `aws.region`; other non-default provider fields are not supported"
+    ));
+}
+
+#[test]
 fn config_toml_deserializes_model_availability_nux() {
     let toml = r#"
 [tui.model_availability_nux]
@@ -232,31 +544,50 @@ fn config_toml_deserializes_model_availability_nux() {
     assert_eq!(
         cfg.tui.expect("tui config should deserialize"),
         Tui {
-            notifications: Notifications::default(),
-            notification_method: NotificationMethod::default(),
+            notification_settings: TuiNotificationSettings::default(),
             animations: true,
             show_tooltips: true,
             alternate_screen: AltScreenMode::default(),
             status_line: None,
             terminal_title: None,
             theme: None,
+            keymap: TuiKeymap::default(),
             model_availability_nux: ModelAvailabilityNuxConfig {
                 shown_count: HashMap::from([
                     ("gpt-bar".to_string(), 4),
                     ("gpt-foo".to_string(), 2),
                 ]),
             },
+            terminal_resize_reflow_max_rows: None,
         }
     );
 }
 
 #[test]
-fn runtime_config_defaults_model_availability_nux() {
+fn config_toml_deserializes_terminal_resize_reflow_config() {
+    let toml = r#"
+[tui]
+terminal_resize_reflow_max_rows = 9000
+"#;
+    let cfg: ConfigToml =
+        toml::from_str(toml).expect("TOML deserialization should succeed for resize reflow config");
+
+    assert_eq!(
+        cfg.tui
+            .expect("tui config should deserialize")
+            .terminal_resize_reflow_max_rows,
+        Some(9000)
+    );
+}
+
+#[tokio::test]
+async fn runtime_config_defaults_model_availability_nux() {
     let cfg = Config::load_from_base_config_with_overrides(
         ConfigToml::default(),
         ConfigOverrides::default(),
-        tempdir().expect("tempdir").path().to_path_buf(),
+        tempdir().expect("tempdir").abs(),
     )
+    .await
     .expect("load config");
 
     assert_eq!(
@@ -282,7 +613,9 @@ enabled = true
 proxy_url = "http://127.0.0.1:43128"
 enable_socks5 = false
 allow_upstream_proxy = false
-allowed_domains = ["openai.com"]
+
+[permissions.workspace.network.domains]
+"openai.com" = "allow"
 "#;
     let cfg: ConfigToml =
         toml::from_str(toml).expect("TOML deserialization should succeed for permissions profiles");
@@ -295,6 +628,7 @@ allowed_domains = ["openai.com"]
                 "workspace".to_string(),
                 PermissionProfileToml {
                     filesystem: Some(FilesystemPermissionsToml {
+                        glob_scan_max_depth: None,
                         entries: BTreeMap::from([
                             (
                                 ":minimal".to_string(),
@@ -319,9 +653,13 @@ allowed_domains = ["openai.com"]
                         dangerously_allow_non_loopback_proxy: None,
                         dangerously_allow_all_unix_sockets: None,
                         mode: None,
-                        allowed_domains: Some(vec!["openai.com".to_string()]),
-                        denied_domains: None,
-                        allow_unix_sockets: None,
+                        domains: Some(NetworkDomainPermissionsToml {
+                            entries: BTreeMap::from([(
+                                "openai.com".to_string(),
+                                NetworkDomainPermissionToml::Allow,
+                            )]),
+                        }),
+                        unix_sockets: None,
                         allow_local_binding: None,
                     }),
                 },
@@ -330,8 +668,9 @@ allowed_domains = ["openai.com"]
     );
 }
 
-#[test]
-fn permissions_profiles_network_populates_runtime_network_proxy_spec() -> std::io::Result<()> {
+#[tokio::test]
+async fn permissions_profiles_network_enabled_allows_runtime_network_without_proxy()
+-> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     std::fs::write(cwd.path().join(".git"), "gitdir: nowhere")?;
@@ -344,6 +683,54 @@ fn permissions_profiles_network_populates_runtime_network_proxy_spec() -> std::i
                     "workspace".to_string(),
                     PermissionProfileToml {
                         filesystem: Some(FilesystemPermissionsToml {
+                            glob_scan_max_depth: None,
+                            entries: BTreeMap::from([(
+                                ":minimal".to_string(),
+                                FilesystemPermissionToml::Access(FileSystemAccessMode::Read),
+                            )]),
+                        }),
+                        network: Some(NetworkToml {
+                            enabled: Some(true),
+                            ..Default::default()
+                        }),
+                    },
+                )]),
+            }),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+    assert_eq!(
+        config.permissions.network_sandbox_policy(),
+        NetworkSandboxPolicy::Enabled
+    );
+    assert!(
+        config.permissions.network.is_none(),
+        "bare profile network.enabled should not start the managed network proxy"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn permissions_profiles_proxy_policy_starts_managed_network_proxy() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    std::fs::write(cwd.path().join(".git"), "gitdir: nowhere")?;
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            default_permissions: Some("workspace".to_string()),
+            permissions: Some(PermissionsToml {
+                entries: BTreeMap::from([(
+                    "workspace".to_string(),
+                    PermissionProfileToml {
+                        filesystem: Some(FilesystemPermissionsToml {
+                            glob_scan_max_depth: None,
                             entries: BTreeMap::from([(
                                 ":minimal".to_string(),
                                 FilesystemPermissionToml::Access(FileSystemAccessMode::Read),
@@ -364,21 +751,29 @@ fn permissions_profiles_network_populates_runtime_network_proxy_spec() -> std::i
             cwd: Some(cwd.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
+    assert_eq!(
+        config.permissions.network_sandbox_policy(),
+        NetworkSandboxPolicy::Enabled
+    );
     let network = config
         .permissions
         .network
         .as_ref()
-        .expect("enabled profile network should produce a NetworkProxySpec");
-
+        .expect("profile proxy policy should start the managed network proxy");
     assert_eq!(network.proxy_host_and_port(), "127.0.0.1:43128");
-    assert!(!network.socks_enabled());
+    assert!(
+        !network.socks_enabled(),
+        "profile proxy policy should preserve SOCKS config"
+    );
     Ok(())
 }
 
-#[test]
-fn permissions_profiles_network_disabled_by_default_does_not_start_proxy() -> std::io::Result<()> {
+#[tokio::test]
+async fn permissions_profiles_network_disabled_by_default_does_not_start_proxy()
+-> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     std::fs::write(cwd.path().join(".git"), "gitdir: nowhere")?;
@@ -391,13 +786,19 @@ fn permissions_profiles_network_disabled_by_default_does_not_start_proxy() -> st
                     "workspace".to_string(),
                     PermissionProfileToml {
                         filesystem: Some(FilesystemPermissionsToml {
+                            glob_scan_max_depth: None,
                             entries: BTreeMap::from([(
                                 ":minimal".to_string(),
                                 FilesystemPermissionToml::Access(FileSystemAccessMode::Read),
                             )]),
                         }),
                         network: Some(NetworkToml {
-                            allowed_domains: Some(vec!["openai.com".to_string()]),
+                            domains: Some(NetworkDomainPermissionsToml {
+                                entries: BTreeMap::from([(
+                                    "openai.com".to_string(),
+                                    NetworkDomainPermissionToml::Allow,
+                                )]),
+                            }),
                             ..Default::default()
                         }),
                     },
@@ -409,15 +810,16 @@ fn permissions_profiles_network_disabled_by_default_does_not_start_proxy() -> st
             cwd: Some(cwd.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert!(config.permissions.network.is_none());
     Ok(())
 }
 
-#[test]
-fn default_permissions_profile_populates_runtime_sandbox_policy() -> std::io::Result<()> {
+#[tokio::test]
+async fn default_permissions_profile_populates_runtime_sandbox_policy() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     std::fs::create_dir_all(cwd.path().join("docs"))?;
@@ -430,6 +832,7 @@ fn default_permissions_profile_populates_runtime_sandbox_policy() -> std::io::Re
                 "workspace".to_string(),
                 PermissionProfileToml {
                     filesystem: Some(FilesystemPermissionsToml {
+                        glob_scan_max_depth: None,
                         entries: BTreeMap::from([
                             (
                                 ":minimal".to_string(),
@@ -457,13 +860,13 @@ fn default_permissions_profile_populates_runtime_sandbox_policy() -> std::io::Re
             cwd: Some(cwd.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
-    let memories_root =
-        AbsolutePathBuf::try_from(agiworkforce_home.path().join("memories")).unwrap();
+    let memories_root = agiworkforce_home.path().join("memories").abs();
     assert_eq!(
-        config.permissions.file_system_sandbox_policy,
+        config.permissions.file_system_sandbox_policy(),
         FileSystemSandboxPolicy::restricted(vec![
             FileSystemSandboxEntry {
                 path: FileSystemPath::Special {
@@ -473,7 +876,7 @@ fn default_permissions_profile_populates_runtime_sandbox_policy() -> std::io::Re
             },
             FileSystemSandboxEntry {
                 path: FileSystemPath::Special {
-                    value: FileSystemSpecialPath::project_roots(None),
+                    value: FileSystemSpecialPath::project_roots(/*subpath*/ None),
                 },
                 access: FileSystemAccessMode::Write,
             },
@@ -492,29 +895,318 @@ fn default_permissions_profile_populates_runtime_sandbox_policy() -> std::io::Re
         ]),
     );
     assert_eq!(
-        config.permissions.sandbox_policy.get(),
+        &config.legacy_sandbox_policy(),
         &SandboxPolicy::WorkspaceWrite {
             writable_roots: vec![memories_root],
-            read_only_access: ReadOnlyAccess::Restricted {
-                include_platform_defaults: true,
-                readable_roots: vec![
-                    AbsolutePathBuf::try_from(cwd.path().join("docs")).expect("absolute docs path"),
-                ],
-            },
             network_access: false,
             exclude_tmpdir_env_var: true,
             exclude_slash_tmp: true,
         }
     );
     assert_eq!(
-        config.permissions.network_sandbox_policy,
+        config.permissions.network_sandbox_policy(),
         NetworkSandboxPolicy::Restricted
     );
     Ok(())
 }
 
-#[test]
-fn permissions_profiles_require_default_permissions() -> std::io::Result<()> {
+#[tokio::test]
+async fn permission_profile_override_populates_runtime_permissions() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    let permission_profile = PermissionProfile::Disabled;
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            permission_profile: Some(permission_profile.clone()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(config.permissions.permission_profile(), permission_profile);
+    assert_eq!(
+        &config.legacy_sandbox_policy(),
+        &SandboxPolicy::DangerFullAccess
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn permission_profile_override_preserves_managed_unrestricted_filesystem()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    let permission_profile = PermissionProfile::Managed {
+        file_system: ManagedFileSystemPermissions::Unrestricted,
+        network: NetworkSandboxPolicy::Restricted,
+    };
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            permission_profile: Some(permission_profile.clone()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(config.permissions.permission_profile(), permission_profile);
+    assert_eq!(
+        &config.legacy_sandbox_policy(),
+        &SandboxPolicy::ExternalSandbox {
+            network_access: NetworkAccess::Restricted,
+        }
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn managed_unrestricted_permission_profile_still_enables_network_requirements()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    let permission_profile = PermissionProfile::Managed {
+        file_system: ManagedFileSystemPermissions::Unrestricted,
+        network: NetworkSandboxPolicy::Enabled,
+    };
+
+    let mut config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            permission_profile: Some(permission_profile),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+    assert_eq!(
+        &config.legacy_sandbox_policy(),
+        &SandboxPolicy::DangerFullAccess,
+        "the legacy projection is intentionally lossy for managed unrestricted profiles"
+    );
+
+    let layers = config
+        .config_layer_stack
+        .get_layers(
+            ConfigLayerStackOrdering::LowestPrecedenceFirst,
+            /*include_disabled*/ true,
+        )
+        .into_iter()
+        .cloned()
+        .collect();
+    let mut requirements = config.config_layer_stack.requirements().clone();
+    requirements.network = Some(Sourced::new(
+        agiworkforce_config::NetworkConstraints {
+            enabled: Some(true),
+            ..Default::default()
+        },
+        RequirementSource::CloudRequirements,
+    ));
+    let mut requirements_toml = config.config_layer_stack.requirements_toml().clone();
+    requirements_toml.network = Some(agiworkforce_config::NetworkRequirementsToml {
+        enabled: Some(true),
+        ..Default::default()
+    });
+    config.config_layer_stack = ConfigLayerStack::new(layers, requirements, requirements_toml)
+        .expect("config layer stack with network requirements");
+
+    assert!(config.managed_network_requirements_enabled());
+    Ok(())
+}
+
+#[tokio::test]
+async fn permission_profile_override_applies_runtime_roots_to_legacy_projection()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    let permission_profile = PermissionProfile::from_runtime_permissions(
+        &FileSystemSandboxPolicy::restricted(vec![
+            FileSystemSandboxEntry {
+                path: FileSystemPath::Special {
+                    value: FileSystemSpecialPath::Root,
+                },
+                access: FileSystemAccessMode::Read,
+            },
+            FileSystemSandboxEntry {
+                path: FileSystemPath::Special {
+                    value: FileSystemSpecialPath::project_roots(/*subpath*/ None),
+                },
+                access: FileSystemAccessMode::Write,
+            },
+        ]),
+        NetworkSandboxPolicy::Restricted,
+    );
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            permission_profile: Some(permission_profile),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    let memories_root = agiworkforce_home.path().join("memories").abs();
+    assert!(
+        config
+            .permissions
+            .file_system_sandbox_policy()
+            .can_write_path_with_cwd(memories_root.as_path(), cwd.path())
+    );
+    assert_eq!(
+        &config.legacy_sandbox_policy(),
+        &SandboxPolicy::WorkspaceWrite {
+            writable_roots: vec![memories_root],
+            network_access: false,
+            exclude_tmpdir_env_var: true,
+            exclude_slash_tmp: true,
+        }
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn permission_profile_override_preserves_configured_network_policy_without_starting_proxy()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    let permission_profile = PermissionProfile::Disabled;
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            default_permissions: Some("workspace".to_string()),
+            permissions: Some(PermissionsToml {
+                entries: BTreeMap::from([(
+                    "workspace".to_string(),
+                    PermissionProfileToml {
+                        filesystem: Some(FilesystemPermissionsToml {
+                            glob_scan_max_depth: None,
+                            entries: BTreeMap::from([(
+                                ":minimal".to_string(),
+                                FilesystemPermissionToml::Access(FileSystemAccessMode::Read),
+                            )]),
+                        }),
+                        network: Some(NetworkToml {
+                            enabled: Some(true),
+                            proxy_url: Some("http://127.0.0.1:43128".to_string()),
+                            enable_socks5: Some(false),
+                            allow_upstream_proxy: Some(false),
+                            domains: Some(NetworkDomainPermissionsToml {
+                                entries: BTreeMap::from([(
+                                    "openai.com".to_string(),
+                                    NetworkDomainPermissionToml::Allow,
+                                )]),
+                            }),
+                            ..Default::default()
+                        }),
+                    },
+                )]),
+            }),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            permission_profile: Some(permission_profile.clone()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+    assert!(
+        config.permissions.network.is_none(),
+        "profile network.enabled should not start the managed network proxy"
+    );
+    assert_eq!(config.permissions.permission_profile(), permission_profile);
+    Ok(())
+}
+
+#[tokio::test]
+async fn project_root_glob_none_compiles_to_filesystem_pattern_entry() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    tokio::fs::write(cwd.path().join(".git"), "gitdir: nowhere").await?;
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            default_permissions: Some("workspace".to_string()),
+            permissions: Some(PermissionsToml {
+                entries: BTreeMap::from([(
+                    "workspace".to_string(),
+                    PermissionProfileToml {
+                        filesystem: Some(FilesystemPermissionsToml {
+                            glob_scan_max_depth: Some(2),
+                            entries: BTreeMap::from([(
+                                ":project_roots".to_string(),
+                                FilesystemPermissionToml::Scoped(BTreeMap::from([
+                                    (".".to_string(), FileSystemAccessMode::Write),
+                                    ("**/*.env".to_string(), FileSystemAccessMode::None),
+                                ])),
+                            )]),
+                        }),
+                        network: None,
+                    },
+                )]),
+            }),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(
+        config
+            .permissions
+            .file_system_sandbox_policy()
+            .glob_scan_max_depth,
+        Some(2)
+    );
+    let expected_pattern = AbsolutePathBuf::resolve_path_against_base("**/*.env", cwd.path())
+        .to_string_lossy()
+        .into_owned();
+    assert!(
+        config
+            .permissions
+            .file_system_sandbox_policy()
+            .entries
+            .contains(&FileSystemSandboxEntry {
+                path: FileSystemPath::GlobPattern {
+                    pattern: expected_pattern,
+                },
+                access: FileSystemAccessMode::None,
+            })
+    );
+    assert!(
+        !config
+            .permissions
+            .file_system_sandbox_policy()
+            .entries
+            .iter()
+            .any(|entry| matches!(
+                &entry.path,
+                FileSystemPath::Special {
+                    value: FileSystemSpecialPath::ProjectRoots { subpath: Some(subpath) },
+                } if subpath == std::path::Path::new("**/*.env")
+            )),
+        "glob should compile to a filesystem pattern entry, not a literal filesystem entry"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn permissions_profiles_require_default_permissions() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     std::fs::write(cwd.path().join(".git"), "gitdir: nowhere")?;
@@ -526,6 +1218,7 @@ fn permissions_profiles_require_default_permissions() -> std::io::Result<()> {
                     "workspace".to_string(),
                     PermissionProfileToml {
                         filesystem: Some(FilesystemPermissionsToml {
+                            glob_scan_max_depth: None,
                             entries: BTreeMap::from([(
                                 ":minimal".to_string(),
                                 FilesystemPermissionToml::Access(FileSystemAccessMode::Read),
@@ -541,8 +1234,9 @@ fn permissions_profiles_require_default_permissions() -> std::io::Result<()> {
             cwd: Some(cwd.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
+        agiworkforce_home.abs(),
     )
+    .await
     .expect_err("missing default_permissions should be rejected");
 
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
@@ -553,14 +1247,317 @@ fn permissions_profiles_require_default_permissions() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn permissions_profiles_reject_writes_outside_workspace_root() -> std::io::Result<()> {
+#[tokio::test]
+async fn default_permissions_can_select_builtin_profile_without_permissions_table()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            default_permissions: Some(":workspace".to_string()),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    let policy = config.permissions.file_system_sandbox_policy();
+    assert!(
+        policy.can_write_path_with_cwd(cwd.path(), cwd.path()),
+        "expected :workspace to allow writing the project root, policy: {policy:?}"
+    );
+    assert!(
+        !policy.can_write_path_with_cwd(&cwd.path().join(".git"), cwd.path()),
+        "expected :workspace to protect project metadata, policy: {policy:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn empty_config_defaults_to_builtin_profile_for_trusted_project() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    let project_key = cwd.path().to_string_lossy().to_string();
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            projects: Some(HashMap::from([(
+                project_key,
+                ProjectConfig {
+                    trust_level: Some(TrustLevel::Trusted),
+                },
+            )])),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    let policy = config.permissions.file_system_sandbox_policy();
+    if cfg!(target_os = "windows") {
+        assert!(
+            !policy.can_write_path_with_cwd(cwd.path(), cwd.path()),
+            "expected trusted project fallback to stay read-only without Windows sandbox support, policy: {policy:?}"
+        );
+    } else {
+        assert!(
+            policy.can_write_path_with_cwd(cwd.path(), cwd.path()),
+            "expected trusted project fallback to use :workspace, policy: {policy:?}"
+        );
+        assert!(
+            !policy.can_write_path_with_cwd(&cwd.path().join(".codex"), cwd.path()),
+            "expected :workspace metadata carveouts, policy: {policy:?}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn implicit_builtin_workspace_profile_preserves_sandbox_workspace_write_settings()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    let extra_root = TempDir::new()?;
+    let extra_root = extra_root.path().abs();
+    let project_key = cwd.path().to_string_lossy().to_string();
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            projects: Some(HashMap::from([(
+                project_key,
+                ProjectConfig {
+                    trust_level: Some(TrustLevel::Trusted),
+                },
+            )])),
+            sandbox_workspace_write: Some(SandboxWorkspaceWrite {
+                writable_roots: vec![extra_root.clone()],
+                network_access: true,
+                exclude_tmpdir_env_var: true,
+                exclude_slash_tmp: false,
+            }),
+            windows: Some(WindowsToml {
+                sandbox: Some(WindowsSandboxModeToml::Elevated),
+                sandbox_private_desktop: None,
+            }),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    let policy = config.permissions.file_system_sandbox_policy();
+    assert!(
+        policy.can_write_path_with_cwd(extra_root.as_path(), cwd.path()),
+        "expected implicit :workspace to preserve sandbox_workspace_write.writable_roots, policy: {policy:?}"
+    );
+    assert_eq!(
+        config.permissions.network_sandbox_policy(),
+        NetworkSandboxPolicy::Enabled
+    );
+    match config.legacy_sandbox_policy() {
+        SandboxPolicy::WorkspaceWrite {
+            writable_roots,
+            network_access,
+            exclude_tmpdir_env_var,
+            exclude_slash_tmp,
+        } => {
+            assert!(writable_roots.contains(&extra_root));
+            assert!(network_access);
+            assert!(exclude_tmpdir_env_var);
+            assert!(!exclude_slash_tmp);
+        }
+        sandbox_policy => panic!("expected workspace-write projection, got {sandbox_policy:?}"),
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn implicit_builtin_workspace_profile_preserves_add_dir_metadata_carveouts()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+    let extra_root = TempDir::new()?;
+    for subpath in [".git", ".agents", ".codex"] {
+        std::fs::create_dir_all(extra_root.path().join(subpath))?;
+    }
+    let project_key = cwd.path().to_string_lossy().to_string();
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            projects: Some(HashMap::from([(
+                project_key,
+                ProjectConfig {
+                    trust_level: Some(TrustLevel::Trusted),
+                },
+            )])),
+            windows: Some(WindowsToml {
+                sandbox: Some(WindowsSandboxModeToml::Elevated),
+                sandbox_private_desktop: None,
+            }),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            additional_writable_roots: vec![extra_root.path().to_path_buf()],
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    let policy = config.permissions.file_system_sandbox_policy();
+    let extra_root = extra_root.path().abs();
+    assert!(
+        policy.can_write_path_with_cwd(extra_root.as_path(), cwd.path()),
+        "expected implicit :workspace to preserve additional writable roots, policy: {policy:?}"
+    );
+    for subpath in [".git", ".agents", ".codex"] {
+        assert!(
+            !policy.can_write_path_with_cwd(&extra_root.join(subpath), cwd.path()),
+            "expected implicit :workspace to preserve legacy metadata carveout for {subpath}, \
+             policy: {policy:?}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn empty_config_defaults_to_builtin_read_only_without_trust_decision() -> std::io::Result<()>
+{
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    let policy = config.permissions.file_system_sandbox_policy();
+    assert!(
+        policy.can_read_path_with_cwd(cwd.path(), cwd.path()),
+        "expected :read-only to allow reads, policy: {policy:?}"
+    );
+    assert!(
+        !policy.can_write_path_with_cwd(cwd.path(), cwd.path()),
+        "expected :read-only to deny writes, policy: {policy:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn default_permissions_can_select_builtin_no_sandbox_profile() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+
+    let config = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            default_permissions: Some(":danger-no-sandbox".to_string()),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(
+        config.permissions.permission_profile(),
+        PermissionProfile::Disabled
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn user_defined_permission_profile_names_cannot_use_builtin_prefix() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+
+    let err = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            default_permissions: Some(":custom".to_string()),
+            permissions: Some(PermissionsToml {
+                entries: BTreeMap::from([(
+                    ":custom".to_string(),
+                    PermissionProfileToml::default(),
+                )]),
+            }),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await
+    .expect_err("reserved profile name should be rejected");
+
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(
+        err.to_string(),
+        "permissions profile `:custom` uses a reserved built-in profile prefix"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn unknown_builtin_permission_profile_name_is_rejected() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = TempDir::new()?;
+
+    let err = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            default_permissions: Some(":unknown".to_string()),
+            ..Default::default()
+        },
+        ConfigOverrides {
+            cwd: Some(cwd.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await
+    .expect_err("unknown built-in profile name should be rejected");
+
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(
+        err.to_string(),
+        "default_permissions refers to unknown built-in profile `:unknown`"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn permissions_profiles_allow_direct_write_roots_outside_workspace_root()
+-> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     std::fs::write(cwd.path().join(".git"), "gitdir: nowhere")?;
-    let external_write_path = if cfg!(windows) { r"C:\temp" } else { "/tmp" };
+    let external_write_dir = TempDir::new()?;
+    let external_write_path =
+        AbsolutePathBuf::from_absolute_path(std::fs::canonicalize(external_write_dir.path())?)?;
 
-    let err = Config::load_from_base_config_with_overrides(
+    let config = Config::load_from_base_config_with_overrides(
         ConfigToml {
             default_permissions: Some("workspace".to_string()),
             permissions: Some(PermissionsToml {
@@ -568,8 +1565,9 @@ fn permissions_profiles_reject_writes_outside_workspace_root() -> std::io::Resul
                     "workspace".to_string(),
                     PermissionProfileToml {
                         filesystem: Some(FilesystemPermissionsToml {
+                            glob_scan_max_depth: None,
                             entries: BTreeMap::from([(
-                                external_write_path.to_string(),
+                                external_write_path.to_string_lossy().into_owned(),
                                 FilesystemPermissionToml::Access(FileSystemAccessMode::Write),
                             )]),
                         }),
@@ -583,21 +1581,33 @@ fn permissions_profiles_reject_writes_outside_workspace_root() -> std::io::Resul
             cwd: Some(cwd.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
+        agiworkforce_home.abs(),
     )
-    .expect_err("writes outside the workspace root should be rejected");
+    .await?;
 
-    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    let memories_root = AbsolutePathBuf::from_absolute_path(std::fs::canonicalize(
+        agiworkforce_home.path().join("memories"),
+    )?)?;
     assert!(
-        err.to_string()
-            .contains("filesystem writes outside the workspace root"),
-        "{err}"
+        config
+            .permissions
+            .file_system_sandbox_policy()
+            .can_write_path_with_cwd(external_write_path.as_path(), cwd.path())
+    );
+    assert_eq!(
+        &config.legacy_sandbox_policy(),
+        &SandboxPolicy::WorkspaceWrite {
+            writable_roots: vec![external_write_path, memories_root],
+            network_access: false,
+            exclude_tmpdir_env_var: true,
+            exclude_slash_tmp: true,
+        }
     );
     Ok(())
 }
 
-#[test]
-fn permissions_profiles_reject_nested_entries_for_non_project_roots() -> std::io::Result<()> {
+#[tokio::test]
+async fn permissions_profiles_reject_nested_entries_for_non_project_roots() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     std::fs::write(cwd.path().join(".git"), "gitdir: nowhere")?;
@@ -610,6 +1620,7 @@ fn permissions_profiles_reject_nested_entries_for_non_project_roots() -> std::io
                     "workspace".to_string(),
                     PermissionProfileToml {
                         filesystem: Some(FilesystemPermissionsToml {
+                            glob_scan_max_depth: None,
                             entries: BTreeMap::from([(
                                 ":minimal".to_string(),
                                 FilesystemPermissionToml::Scoped(BTreeMap::from([(
@@ -628,8 +1639,9 @@ fn permissions_profiles_reject_nested_entries_for_non_project_roots() -> std::io
             cwd: Some(cwd.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
+        agiworkforce_home.abs(),
     )
+    .await
     .expect_err("nested entries outside :project_roots should be rejected");
 
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
@@ -640,7 +1652,9 @@ fn permissions_profiles_reject_nested_entries_for_non_project_roots() -> std::io
     Ok(())
 }
 
-fn load_workspace_permission_profile(profile: PermissionProfileToml) -> std::io::Result<Config> {
+async fn load_workspace_permission_profile(
+    profile: PermissionProfileToml,
+) -> std::io::Result<Config> {
     let agiworkforce_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     std::fs::write(cwd.path().join(".git"), "gitdir: nowhere")?;
@@ -657,44 +1671,46 @@ fn load_workspace_permission_profile(profile: PermissionProfileToml) -> std::io:
             cwd: Some(cwd.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
+        agiworkforce_home.abs(),
     )
+    .await
 }
 
-#[test]
-fn permissions_profiles_allow_unknown_special_paths() -> std::io::Result<()> {
+#[tokio::test]
+async fn permissions_profiles_allow_unknown_special_paths() -> std::io::Result<()> {
     let config = load_workspace_permission_profile(PermissionProfileToml {
         filesystem: Some(FilesystemPermissionsToml {
+            glob_scan_max_depth: None,
             entries: BTreeMap::from([(
                 ":future_special_path".to_string(),
                 FilesystemPermissionToml::Access(FileSystemAccessMode::Read),
             )]),
         }),
         network: None,
-    })?;
+    })
+    .await?;
 
     assert_eq!(
-        config.permissions.file_system_sandbox_policy,
+        config.permissions.file_system_sandbox_policy(),
         FileSystemSandboxPolicy::restricted(vec![FileSystemSandboxEntry {
             path: FileSystemPath::Special {
-                value: FileSystemSpecialPath::unknown(":future_special_path", None),
+                value: FileSystemSpecialPath::unknown(
+                    ":future_special_path",
+                    /*subpath*/ None
+                ),
             },
             access: FileSystemAccessMode::Read,
         }]),
     );
     assert_eq!(
-        config.permissions.sandbox_policy.get(),
+        &config.legacy_sandbox_policy(),
         &SandboxPolicy::ReadOnly {
-            access: ReadOnlyAccess::Restricted {
-                include_platform_defaults: false,
-                readable_roots: Vec::new(),
-            },
             network_access: false,
         }
     );
     assert!(
         config.startup_warnings.iter().any(|warning| warning.contains(
-            "Configured filesystem path `:future_special_path` is not recognized by this version of Codex and will be ignored."
+            "Configured filesystem path `:future_special_path` is not recognized by this version of Agiworkforce and will be ignored."
         )),
         "{:?}",
         config.startup_warnings
@@ -702,10 +1718,12 @@ fn permissions_profiles_allow_unknown_special_paths() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn permissions_profiles_allow_unknown_special_paths_with_nested_entries() -> std::io::Result<()> {
+#[tokio::test]
+async fn permissions_profiles_allow_unknown_special_paths_with_nested_entries()
+-> std::io::Result<()> {
     let config = load_workspace_permission_profile(PermissionProfileToml {
         filesystem: Some(FilesystemPermissionsToml {
+            glob_scan_max_depth: None,
             entries: BTreeMap::from([(
                 ":future_special_path".to_string(),
                 FilesystemPermissionToml::Scoped(BTreeMap::from([(
@@ -715,10 +1733,11 @@ fn permissions_profiles_allow_unknown_special_paths_with_nested_entries() -> std
             )]),
         }),
         network: None,
-    })?;
+    })
+    .await?;
 
     assert_eq!(
-        config.permissions.file_system_sandbox_policy,
+        config.permissions.file_system_sandbox_policy(),
         FileSystemSandboxPolicy::restricted(vec![FileSystemSandboxEntry {
             path: FileSystemPath::Special {
                 value: FileSystemSpecialPath::unknown(":future_special_path", Some("docs".into())),
@@ -728,7 +1747,7 @@ fn permissions_profiles_allow_unknown_special_paths_with_nested_entries() -> std
     );
     assert!(
         config.startup_warnings.iter().any(|warning| warning.contains(
-            "Configured filesystem path `:future_special_path` with nested entry `docs` is not recognized by this version of Codex and will be ignored."
+            "Configured filesystem path `:future_special_path` with nested entry `docs` is not recognized by this version of Agiworkforce and will be ignored."
         )),
         "{:?}",
         config.startup_warnings
@@ -736,30 +1755,27 @@ fn permissions_profiles_allow_unknown_special_paths_with_nested_entries() -> std
     Ok(())
 }
 
-#[test]
-fn permissions_profiles_allow_missing_filesystem_with_warning() -> std::io::Result<()> {
+#[tokio::test]
+async fn permissions_profiles_allow_missing_filesystem_with_warning() -> std::io::Result<()> {
     let config = load_workspace_permission_profile(PermissionProfileToml {
         filesystem: None,
         network: None,
-    })?;
+    })
+    .await?;
 
     assert_eq!(
-        config.permissions.file_system_sandbox_policy,
+        config.permissions.file_system_sandbox_policy(),
         FileSystemSandboxPolicy::restricted(Vec::new())
     );
     assert_eq!(
-        config.permissions.sandbox_policy.get(),
+        &config.legacy_sandbox_policy(),
         &SandboxPolicy::ReadOnly {
-            access: ReadOnlyAccess::Restricted {
-                include_platform_defaults: false,
-                readable_roots: Vec::new(),
-            },
             network_access: false,
         }
     );
     assert!(
         config.startup_warnings.iter().any(|warning| warning.contains(
-            "Permissions profile `workspace` does not define any recognized filesystem entries for this version of Codex."
+            "Permissions profile `workspace` does not define any recognized filesystem entries for this version of Agiworkforce."
         )),
         "{:?}",
         config.startup_warnings
@@ -767,22 +1783,24 @@ fn permissions_profiles_allow_missing_filesystem_with_warning() -> std::io::Resu
     Ok(())
 }
 
-#[test]
-fn permissions_profiles_allow_empty_filesystem_with_warning() -> std::io::Result<()> {
+#[tokio::test]
+async fn permissions_profiles_allow_empty_filesystem_with_warning() -> std::io::Result<()> {
     let config = load_workspace_permission_profile(PermissionProfileToml {
         filesystem: Some(FilesystemPermissionsToml {
+            glob_scan_max_depth: None,
             entries: BTreeMap::new(),
         }),
         network: None,
-    })?;
+    })
+    .await?;
 
     assert_eq!(
-        config.permissions.file_system_sandbox_policy,
+        config.permissions.file_system_sandbox_policy(),
         FileSystemSandboxPolicy::restricted(Vec::new())
     );
     assert!(
         config.startup_warnings.iter().any(|warning| warning.contains(
-            "Permissions profile `workspace` does not define any recognized filesystem entries for this version of Codex."
+            "Permissions profile `workspace` does not define any recognized filesystem entries for this version of Agiworkforce."
         )),
         "{:?}",
         config.startup_warnings
@@ -790,8 +1808,8 @@ fn permissions_profiles_allow_empty_filesystem_with_warning() -> std::io::Result
     Ok(())
 }
 
-#[test]
-fn permissions_profiles_reject_project_root_parent_traversal() -> std::io::Result<()> {
+#[tokio::test]
+async fn permissions_profiles_reject_project_root_parent_traversal() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     std::fs::write(cwd.path().join(".git"), "gitdir: nowhere")?;
@@ -804,6 +1822,7 @@ fn permissions_profiles_reject_project_root_parent_traversal() -> std::io::Resul
                     "workspace".to_string(),
                     PermissionProfileToml {
                         filesystem: Some(FilesystemPermissionsToml {
+                            glob_scan_max_depth: None,
                             entries: BTreeMap::from([(
                                 ":project_roots".to_string(),
                                 FilesystemPermissionToml::Scoped(BTreeMap::from([(
@@ -822,8 +1841,9 @@ fn permissions_profiles_reject_project_root_parent_traversal() -> std::io::Resul
             cwd: Some(cwd.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
+        agiworkforce_home.abs(),
     )
+    .await
     .expect_err("parent traversal should be rejected for project root subpaths");
 
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
@@ -834,8 +1854,8 @@ fn permissions_profiles_reject_project_root_parent_traversal() -> std::io::Resul
     Ok(())
 }
 
-#[test]
-fn permissions_profiles_allow_network_enablement() -> std::io::Result<()> {
+#[tokio::test]
+async fn permissions_profiles_allow_network_enablement() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     std::fs::write(cwd.path().join(".git"), "gitdir: nowhere")?;
@@ -848,6 +1868,7 @@ fn permissions_profiles_allow_network_enablement() -> std::io::Result<()> {
                     "workspace".to_string(),
                     PermissionProfileToml {
                         filesystem: Some(FilesystemPermissionsToml {
+                            glob_scan_max_depth: None,
                             entries: BTreeMap::from([(
                                 ":minimal".to_string(),
                                 FilesystemPermissionToml::Access(FileSystemAccessMode::Read),
@@ -866,20 +1887,15 @@ fn permissions_profiles_allow_network_enablement() -> std::io::Result<()> {
             cwd: Some(cwd.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert!(
-        config.permissions.network_sandbox_policy.is_enabled(),
+        config.permissions.network_sandbox_policy().is_enabled(),
         "expected network sandbox policy to be enabled",
     );
-    assert!(
-        config
-            .permissions
-            .sandbox_policy
-            .get()
-            .has_full_network_access()
-    );
+    assert!(config.legacy_sandbox_policy().has_full_network_access());
     Ok(())
 }
 
@@ -918,21 +1934,80 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
     assert_eq!(
         tui,
         Tui {
-            notifications: Notifications::Enabled(true),
-            notification_method: NotificationMethod::Auto,
+            notification_settings: TuiNotificationSettings::default(),
             animations: true,
             show_tooltips: true,
             alternate_screen: AltScreenMode::Auto,
             status_line: None,
             terminal_title: None,
             theme: None,
+            keymap: TuiKeymap::default(),
             model_availability_nux: ModelAvailabilityNuxConfig::default(),
+            terminal_resize_reflow_max_rows: None,
         }
     );
 }
 
-#[test]
-fn test_sandbox_config_parsing() {
+#[tokio::test]
+async fn runtime_config_resolves_terminal_resize_reflow_defaults_and_overrides() {
+    let cfg = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .expect("load default config");
+
+    assert_eq!(
+        cfg.terminal_resize_reflow,
+        TerminalResizeReflowConfig::default()
+    );
+    assert_eq!(
+        cfg.terminal_resize_reflow.max_rows,
+        TerminalResizeReflowMaxRows::Auto
+    );
+
+    let cfg = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            tui: Some(Tui {
+                terminal_resize_reflow_max_rows: Some(9000),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .expect("load overridden config");
+
+    assert_eq!(
+        cfg.terminal_resize_reflow.max_rows,
+        TerminalResizeReflowMaxRows::Limit(9000)
+    );
+
+    let cfg = Config::load_from_base_config_with_overrides(
+        ConfigToml {
+            tui: Some(Tui {
+                terminal_resize_reflow_max_rows: Some(0),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        ConfigOverrides::default(),
+        tempdir().expect("tempdir").abs(),
+    )
+    .await
+    .expect("load config with disabled resize reflow limits");
+
+    assert_eq!(
+        cfg.terminal_resize_reflow.max_rows,
+        TerminalResizeReflowMaxRows::Disabled
+    );
+}
+
+#[tokio::test]
+async fn test_sandbox_config_parsing() {
     let sandbox_full_access = r#"
 sandbox_mode = "danger-full-access"
 
@@ -942,13 +2017,15 @@ network_access = false  # This should be ignored.
     let sandbox_full_access_cfg = toml::from_str::<ConfigToml>(sandbox_full_access)
         .expect("TOML deserialization should succeed");
     let sandbox_mode_override = None;
-    let resolution = sandbox_full_access_cfg.derive_sandbox_policy(
+    let resolution = derive_legacy_sandbox_policy_for_test(
+        &sandbox_full_access_cfg,
         sandbox_mode_override,
-        None,
+        /*profile_sandbox_mode*/ None,
         WindowsSandboxLevel::Disabled,
-        &PathBuf::from("/tmp/test"),
-        None,
-    );
+        /*active_project*/ None,
+        /*permission_profile_constraint*/ None,
+    )
+    .await;
     assert_eq!(resolution, SandboxPolicy::DangerFullAccess);
 
     let sandbox_read_only = r#"
@@ -961,55 +2038,18 @@ network_access = true  # This should be ignored.
     let sandbox_read_only_cfg = toml::from_str::<ConfigToml>(sandbox_read_only)
         .expect("TOML deserialization should succeed");
     let sandbox_mode_override = None;
-    let resolution = sandbox_read_only_cfg.derive_sandbox_policy(
+    let resolution = derive_legacy_sandbox_policy_for_test(
+        &sandbox_read_only_cfg,
         sandbox_mode_override,
-        None,
+        /*profile_sandbox_mode*/ None,
         WindowsSandboxLevel::Disabled,
-        &PathBuf::from("/tmp/test"),
-        None,
-    );
+        /*active_project*/ None,
+        /*permission_profile_constraint*/ None,
+    )
+    .await;
     assert_eq!(resolution, SandboxPolicy::new_read_only_policy());
 
     let writable_root = test_absolute_path("/my/workspace");
-    let sandbox_workspace_write = format!(
-        r#"
-sandbox_mode = "workspace-write"
-
-[sandbox_workspace_write]
-writable_roots = [
-    {},
-]
-exclude_tmpdir_env_var = true
-exclude_slash_tmp = true
-"#,
-        serde_json::json!(writable_root)
-    );
-
-    let sandbox_workspace_write_cfg = toml::from_str::<ConfigToml>(&sandbox_workspace_write)
-        .expect("TOML deserialization should succeed");
-    let sandbox_mode_override = None;
-    let resolution = sandbox_workspace_write_cfg.derive_sandbox_policy(
-        sandbox_mode_override,
-        None,
-        WindowsSandboxLevel::Disabled,
-        &PathBuf::from("/tmp/test"),
-        None,
-    );
-    if cfg!(target_os = "windows") {
-        assert_eq!(resolution, SandboxPolicy::new_read_only_policy());
-    } else {
-        assert_eq!(
-            resolution,
-            SandboxPolicy::WorkspaceWrite {
-                writable_roots: vec![writable_root.clone()],
-                read_only_access: ReadOnlyAccess::FullAccess,
-                network_access: false,
-                exclude_tmpdir_env_var: true,
-                exclude_slash_tmp: true,
-            }
-        );
-    }
-
     let sandbox_workspace_write = format!(
         r#"
 sandbox_mode = "workspace-write"
@@ -1030,13 +2070,55 @@ trust_level = "trusted"
     let sandbox_workspace_write_cfg = toml::from_str::<ConfigToml>(&sandbox_workspace_write)
         .expect("TOML deserialization should succeed");
     let sandbox_mode_override = None;
-    let resolution = sandbox_workspace_write_cfg.derive_sandbox_policy(
+    let resolution = derive_legacy_sandbox_policy_for_test(
+        &sandbox_workspace_write_cfg,
         sandbox_mode_override,
-        None,
+        /*profile_sandbox_mode*/ None,
         WindowsSandboxLevel::Disabled,
-        &PathBuf::from("/tmp/test"),
-        None,
+        /*active_project*/ None,
+        /*permission_profile_constraint*/ None,
+    )
+    .await;
+    if cfg!(target_os = "windows") {
+        assert_eq!(resolution, SandboxPolicy::new_read_only_policy());
+    } else {
+        assert_eq!(
+            resolution,
+            SandboxPolicy::WorkspaceWrite {
+                writable_roots: vec![writable_root.clone()],
+                network_access: false,
+                exclude_tmpdir_env_var: true,
+                exclude_slash_tmp: true,
+            }
+        );
+    }
+
+    let sandbox_workspace_write = format!(
+        r#"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+writable_roots = [
+    {},
+]
+exclude_tmpdir_env_var = true
+exclude_slash_tmp = true
+"#,
+        serde_json::json!(writable_root)
     );
+
+    let sandbox_workspace_write_cfg = toml::from_str::<ConfigToml>(&sandbox_workspace_write)
+        .expect("TOML deserialization should succeed");
+    let sandbox_mode_override = None;
+    let resolution = derive_legacy_sandbox_policy_for_test(
+        &sandbox_workspace_write_cfg,
+        sandbox_mode_override,
+        /*profile_sandbox_mode*/ None,
+        WindowsSandboxLevel::Disabled,
+        /*active_project*/ None,
+        /*permission_profile_constraint*/ None,
+    )
+    .await;
     if cfg!(target_os = "windows") {
         assert_eq!(resolution, SandboxPolicy::new_read_only_policy());
     } else {
@@ -1044,7 +2126,6 @@ trust_level = "trusted"
             resolution,
             SandboxPolicy::WorkspaceWrite {
                 writable_roots: vec![writable_root],
-                read_only_access: ReadOnlyAccess::FullAccess,
                 network_access: false,
                 exclude_tmpdir_env_var: true,
                 exclude_slash_tmp: true,
@@ -1053,8 +2134,8 @@ trust_level = "trusted"
     }
 }
 
-#[test]
-fn legacy_sandbox_mode_config_builds_split_policies_without_drift() -> std::io::Result<()> {
+#[tokio::test]
+async fn legacy_sandbox_mode_builds_profiles_with_compatible_projection() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cwd = TempDir::new()?;
     let extra_root = test_absolute_path("/tmp/legacy-extra-root");
@@ -1095,29 +2176,95 @@ exclude_slash_tmp = true
                 cwd: Some(cwd.path().to_path_buf()),
                 ..Default::default()
             },
-            agiworkforce_home.path().to_path_buf(),
-        )?;
+            agiworkforce_home.abs(),
+        )
+        .await?;
 
-        let sandbox_policy = config.permissions.sandbox_policy.get();
+        let sandbox_policy = config.legacy_sandbox_policy();
+        let file_system_policy = config.permissions.file_system_sandbox_policy();
+        let network_policy = config.permissions.network_sandbox_policy();
+
         assert_eq!(
-            config.permissions.file_system_sandbox_policy,
-            FileSystemSandboxPolicy::from_legacy_sandbox_policy(sandbox_policy, cwd.path()),
-            "case `{name}` should preserve filesystem semantics from legacy config"
-        );
-        assert_eq!(
-            config.permissions.network_sandbox_policy,
-            NetworkSandboxPolicy::from(sandbox_policy),
+            network_policy,
+            NetworkSandboxPolicy::from(&sandbox_policy),
             "case `{name}` should preserve network semantics from legacy config"
         );
         assert_eq!(
-            config
-                .permissions
-                .file_system_sandbox_policy
-                .to_legacy_sandbox_policy(config.permissions.network_sandbox_policy, cwd.path())
+            file_system_policy
+                .to_legacy_sandbox_policy(network_policy, cwd.path())
                 .unwrap_or_else(|err| panic!("case `{name}` should round-trip: {err}")),
-            sandbox_policy.clone(),
-            "case `{name}` should round-trip through split policies without drift"
+            sandbox_policy,
+            "case `{name}` should preserve its legacy compatibility projection"
         );
+
+        match name.as_str() {
+            "danger-full-access" | "read-only" => {
+                assert_eq!(
+                    file_system_policy,
+                    FileSystemSandboxPolicy::from_legacy_sandbox_policy_for_cwd(
+                        &sandbox_policy,
+                        cwd.path()
+                    ),
+                    "case `{name}` should match the legacy filesystem projection exactly"
+                );
+            }
+            "workspace-write" => {
+                if cfg!(target_os = "windows") {
+                    assert_eq!(
+                        sandbox_policy,
+                        SandboxPolicy::new_read_only_policy(),
+                        "legacy workspace-write should keep the existing Windows downgrade when \
+                         the experimental Windows sandbox is disabled"
+                    );
+                    assert_eq!(
+                        file_system_policy,
+                        FileSystemSandboxPolicy::from_legacy_sandbox_policy_for_cwd(
+                            &sandbox_policy,
+                            cwd.path()
+                        ),
+                        "downgraded workspace-write should match the legacy read-only projection"
+                    );
+                    continue;
+                }
+                assert!(
+                    file_system_policy
+                        .entries
+                        .contains(&FileSystemSandboxEntry {
+                            path: FileSystemPath::Special {
+                                value: FileSystemSpecialPath::project_roots(/*subpath*/ None),
+                            },
+                            access: FileSystemAccessMode::Write,
+                        })
+                );
+                assert!(
+                    file_system_policy
+                        .entries
+                        .contains(&FileSystemSandboxEntry {
+                            path: FileSystemPath::Path {
+                                path: extra_root.clone(),
+                            },
+                            access: FileSystemAccessMode::Write,
+                        })
+                );
+                for subpath in [".git", ".agents", ".codex"] {
+                    assert!(
+                        file_system_policy
+                            .entries
+                            .contains(&FileSystemSandboxEntry {
+                                path: FileSystemPath::Special {
+                                    value: FileSystemSpecialPath::project_roots(Some(
+                                        subpath.into()
+                                    )),
+                                },
+                                access: FileSystemAccessMode::Read,
+                            }),
+                        "case `{name}` should preserve `{subpath}` as a symbolic project-root \
+                         metadata carveout"
+                    );
+                }
+            }
+            _ => unreachable!("unexpected test case `{name}`"),
+        }
     }
 
     Ok(())
@@ -1213,7 +2360,7 @@ fn filter_mcp_servers_by_allowlist_allows_all_when_unset() {
         ("server-b".to_string(), http_mcp("https://example.com/b")),
     ]);
 
-    filter_mcp_servers_by_requirements(&mut servers, None);
+    filter_mcp_servers_by_requirements(&mut servers, /*mcp_requirements*/ None);
 
     assert_eq!(
         servers
@@ -1258,7 +2405,259 @@ fn filter_mcp_servers_by_allowlist_blocks_all_when_empty() {
 }
 
 #[test]
-fn add_dir_override_extends_workspace_writable_roots() -> std::io::Result<()> {
+fn filter_plugin_mcp_servers_by_allowlist_enforces_plugin_and_identity_rules() {
+    const MATCHED_SERVER: &str = "matched-should-allow";
+    const MISMATCHED_SERVER: &str = "mismatched-should-disable";
+    const UNLISTED_SERVER: &str = "unlisted-should-disable";
+    const GOOD_CMD: &str = "good-cmd";
+
+    let mut servers = HashMap::from([
+        (MATCHED_SERVER.to_string(), stdio_mcp(GOOD_CMD)),
+        (MISMATCHED_SERVER.to_string(), stdio_mcp("bad-cmd")),
+        (
+            UNLISTED_SERVER.to_string(),
+            http_mcp("https://example.com/mcp"),
+        ),
+    ]);
+    let source = RequirementSource::CloudRequirements;
+    let requirements = Sourced::new(
+        BTreeMap::from([(
+            "sample@test".to_string(),
+            agiworkforce_config::PluginRequirementsToml {
+                mcp_servers: Some(BTreeMap::from([
+                    (
+                        MATCHED_SERVER.to_string(),
+                        McpServerRequirement {
+                            identity: McpServerIdentity::Command {
+                                command: GOOD_CMD.to_string(),
+                            },
+                        },
+                    ),
+                    (
+                        MISMATCHED_SERVER.to_string(),
+                        McpServerRequirement {
+                            identity: McpServerIdentity::Command {
+                                command: GOOD_CMD.to_string(),
+                            },
+                        },
+                    ),
+                ])),
+            },
+        )]),
+        source.clone(),
+    );
+
+    filter_plugin_mcp_servers_by_requirements("sample@test", &mut servers, Some(&requirements));
+
+    let reason = Some(McpServerDisabledReason::Requirements { source });
+    assert_eq!(
+        servers
+            .iter()
+            .map(|(name, server)| (
+                name.clone(),
+                (server.enabled, server.disabled_reason.clone())
+            ))
+            .collect::<HashMap<String, (bool, Option<McpServerDisabledReason>)>>(),
+        HashMap::from([
+            (MATCHED_SERVER.to_string(), (true, None)),
+            (MISMATCHED_SERVER.to_string(), (false, reason.clone())),
+            (UNLISTED_SERVER.to_string(), (false, reason)),
+        ])
+    );
+}
+
+#[test]
+fn filter_plugin_mcp_servers_by_allowlist_blocks_unlisted_plugin() {
+    let mut servers = HashMap::from([("server-a".to_string(), stdio_mcp("cmd-a"))]);
+    let source = RequirementSource::CloudRequirements;
+    let requirements = Sourced::new(
+        BTreeMap::from([(
+            "other@test".to_string(),
+            agiworkforce_config::PluginRequirementsToml {
+                mcp_servers: Some(BTreeMap::from([(
+                    "server-a".to_string(),
+                    McpServerRequirement {
+                        identity: McpServerIdentity::Command {
+                            command: "cmd-a".to_string(),
+                        },
+                    },
+                )])),
+            },
+        )]),
+        source.clone(),
+    );
+
+    filter_plugin_mcp_servers_by_requirements("sample@test", &mut servers, Some(&requirements));
+
+    assert_eq!(
+        servers
+            .iter()
+            .map(|(name, server)| (
+                name.clone(),
+                (server.enabled, server.disabled_reason.clone())
+            ))
+            .collect::<HashMap<String, (bool, Option<McpServerDisabledReason>)>>(),
+        HashMap::from([(
+            "server-a".to_string(),
+            (
+                false,
+                Some(McpServerDisabledReason::Requirements { source })
+            )
+        )])
+    );
+}
+
+#[tokio::test]
+async fn to_mcp_config_applies_plugin_mcp_cloud_requirements() -> anyhow::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let plugin_root = agiworkforce_home
+        .path()
+        .join("plugins/cache")
+        .join("test/sample/local");
+    std::fs::create_dir_all(plugin_root.join(".agiworkforce-plugin"))?;
+    std::fs::write(
+        plugin_root.join(".agiworkforce-plugin/plugin.json"),
+        r#"{"name":"sample"}"#,
+    )?;
+    std::fs::write(
+        plugin_root.join(".mcp.json"),
+        r#"{
+  "mcpServers": {
+    "sample": {
+      "type": "http",
+      "url": "https://sample.example/mcp"
+    },
+    "unlisted": {
+      "type": "http",
+      "url": "https://unlisted.example/mcp"
+    }
+  }
+}"#,
+    )?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"
+[features]
+plugins = true
+
+[plugins."sample@test"]
+enabled = true
+"#,
+    )?;
+
+    let requirements = agiworkforce_config::ConfigRequirementsToml {
+        plugins: Some(BTreeMap::from([(
+            "sample@test".to_string(),
+            agiworkforce_config::PluginRequirementsToml {
+                mcp_servers: Some(BTreeMap::from([(
+                    "sample".to_string(),
+                    McpServerRequirement {
+                        identity: McpServerIdentity::Url {
+                            url: "https://sample.example/mcp".to_string(),
+                        },
+                    },
+                )])),
+            },
+        )])),
+        ..Default::default()
+    };
+    let config = ConfigBuilder::default()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .cloud_requirements(CloudRequirementsLoader::new(async move {
+            Ok(Some(requirements))
+        }))
+        .build()
+        .await?;
+    let plugins_manager = PluginsManager::new(agiworkforce_home.path().to_path_buf());
+    let mcp_config = config.to_mcp_config(&plugins_manager).await;
+
+    assert_eq!(
+        mcp_config
+            .configured_mcp_servers
+            .get("sample")
+            .map(|server| (server.enabled, server.disabled_reason.clone())),
+        Some((true, None))
+    );
+    assert_eq!(
+        mcp_config
+            .configured_mcp_servers
+            .get("unlisted")
+            .map(|server| (server.enabled, server.disabled_reason.clone())),
+        Some((
+            false,
+            Some(McpServerDisabledReason::Requirements {
+                source: RequirementSource::CloudRequirements,
+            })
+        ))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn to_mcp_config_empty_mcp_requirements_disable_plugin_mcps() -> anyhow::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let plugin_root = agiworkforce_home
+        .path()
+        .join("plugins/cache")
+        .join("test/sample/local");
+    std::fs::create_dir_all(plugin_root.join(".agiworkforce-plugin"))?;
+    std::fs::write(
+        plugin_root.join(".agiworkforce-plugin/plugin.json"),
+        r#"{"name":"sample"}"#,
+    )?;
+    std::fs::write(
+        plugin_root.join(".mcp.json"),
+        r#"{
+  "mcpServers": {
+    "sample": {
+      "type": "http",
+      "url": "https://sample.example/mcp"
+    }
+  }
+}"#,
+    )?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"
+[features]
+plugins = true
+
+[plugins."sample@test"]
+enabled = true
+"#,
+    )?;
+
+    let requirements = agiworkforce_config::ConfigRequirementsToml {
+        mcp_servers: Some(BTreeMap::new()),
+        ..Default::default()
+    };
+    let config = ConfigBuilder::default()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .cloud_requirements(CloudRequirementsLoader::new(async move {
+            Ok(Some(requirements))
+        }))
+        .build()
+        .await?;
+    let plugins_manager = PluginsManager::new(agiworkforce_home.path().to_path_buf());
+    let mcp_config = config.to_mcp_config(&plugins_manager).await;
+
+    assert_eq!(
+        mcp_config
+            .configured_mcp_servers
+            .get("sample")
+            .map(|server| (server.enabled, server.disabled_reason.clone())),
+        Some((
+            false,
+            Some(McpServerDisabledReason::Requirements {
+                source: RequirementSource::CloudRequirements,
+            })
+        ))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn add_dir_override_extends_workspace_writable_roots() -> std::io::Result<()> {
     let temp_dir = TempDir::new()?;
     let frontend = temp_dir.path().join("frontend");
     let backend = temp_dir.path().join("backend");
@@ -1275,17 +2674,18 @@ fn add_dir_override_extends_workspace_writable_roots() -> std::io::Result<()> {
     let config = Config::load_from_base_config_with_overrides(
         ConfigToml::default(),
         overrides,
-        temp_dir.path().to_path_buf(),
-    )?;
+        temp_dir.path().abs(),
+    )
+    .await?;
 
-    let expected_backend = AbsolutePathBuf::try_from(backend).unwrap();
+    let expected_backend = backend.abs();
     if cfg!(target_os = "windows") {
-        match config.permissions.sandbox_policy.get() {
+        match &config.legacy_sandbox_policy() {
             SandboxPolicy::ReadOnly { .. } => {}
             other => panic!("expected read-only policy on Windows, got {other:?}"),
         }
     } else {
-        match config.permissions.sandbox_policy.get() {
+        match &config.legacy_sandbox_policy() {
             SandboxPolicy::WorkspaceWrite { writable_roots, .. } => {
                 assert_eq!(
                     writable_roots
@@ -1304,8 +2704,8 @@ fn add_dir_override_extends_workspace_writable_roots() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn sqlite_home_defaults_to_agiworkforce_home_for_workspace_write() -> std::io::Result<()> {
+#[tokio::test]
+async fn sqlite_home_defaults_to_agiworkforce_home_for_workspace_write() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let config = Config::load_from_base_config_with_overrides(
         ConfigToml::default(),
@@ -1313,22 +2713,23 @@ fn sqlite_home_defaults_to_agiworkforce_home_for_workspace_write() -> std::io::R
             sandbox_mode: Some(SandboxMode::WorkspaceWrite),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(config.sqlite_home, agiworkforce_home.path().to_path_buf());
 
     Ok(())
 }
 
-#[test]
-fn workspace_write_always_includes_memories_root_once() -> std::io::Result<()> {
+#[tokio::test]
+async fn workspace_write_always_includes_memories_root_once() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let memories_root = agiworkforce_home.path().join("memories");
     let config = Config::load_from_base_config_with_overrides(
         ConfigToml {
             sandbox_workspace_write: Some(SandboxWorkspaceWrite {
-                writable_roots: vec![AbsolutePathBuf::from_absolute_path(&memories_root)?],
+                writable_roots: vec![memories_root.abs()],
                 ..Default::default()
             }),
             ..Default::default()
@@ -1337,11 +2738,12 @@ fn workspace_write_always_includes_memories_root_once() -> std::io::Result<()> {
             sandbox_mode: Some(SandboxMode::WorkspaceWrite),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     if cfg!(target_os = "windows") {
-        match config.permissions.sandbox_policy.get() {
+        match &config.legacy_sandbox_policy() {
             SandboxPolicy::ReadOnly { .. } => {}
             other => panic!("expected read-only policy on Windows, got {other:?}"),
         }
@@ -1351,8 +2753,8 @@ fn workspace_write_always_includes_memories_root_once() -> std::io::Result<()> {
             "expected memories root directory to exist at {}",
             memories_root.display()
         );
-        let expected_memories_root = AbsolutePathBuf::from_absolute_path(&memories_root)?;
-        match config.permissions.sandbox_policy.get() {
+        let expected_memories_root = memories_root.abs();
+        match &config.legacy_sandbox_policy() {
             SandboxPolicy::WorkspaceWrite { writable_roots, .. } => {
                 assert_eq!(
                     writable_roots
@@ -1371,16 +2773,17 @@ fn workspace_write_always_includes_memories_root_once() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn config_defaults_to_file_cli_auth_store_mode() -> std::io::Result<()> {
+#[tokio::test]
+async fn config_defaults_to_file_cli_auth_store_mode() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml::default();
 
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.cli_auth_credentials_store_mode,
@@ -1390,8 +2793,8 @@ fn config_defaults_to_file_cli_auth_store_mode() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn config_honors_explicit_keyring_auth_store_mode() -> std::io::Result<()> {
+#[tokio::test]
+async fn config_resolves_explicit_keyring_auth_store_mode() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml {
         cli_auth_credentials_store: Some(AuthCredentialsStoreMode::Keyring),
@@ -1401,38 +2804,97 @@ fn config_honors_explicit_keyring_auth_store_mode() -> std::io::Result<()> {
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.cli_auth_credentials_store_mode,
-        AuthCredentialsStoreMode::Keyring,
+        resolve_cli_auth_credentials_store_mode(
+            AuthCredentialsStoreMode::Keyring,
+            env!("CARGO_PKG_VERSION"),
+        ),
     );
 
     Ok(())
 }
 
-#[test]
-fn config_defaults_to_auto_oauth_store_mode() -> std::io::Result<()> {
+#[tokio::test]
+async fn config_resolves_default_oauth_store_mode() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml::default();
 
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.mcp_oauth_credentials_store_mode,
-        OAuthCredentialsStoreMode::Auto,
+        resolve_mcp_oauth_credentials_store_mode(
+            OAuthCredentialsStoreMode::Auto,
+            env!("CARGO_PKG_VERSION"),
+        ),
     );
 
     Ok(())
 }
 
 #[test]
-fn feedback_enabled_defaults_to_true() -> std::io::Result<()> {
+fn local_dev_builds_force_file_cli_auth_store_modes() {
+    assert_eq!(
+        resolve_cli_auth_credentials_store_mode(
+            AuthCredentialsStoreMode::Keyring,
+            LOCAL_DEV_BUILD_VERSION,
+        ),
+        AuthCredentialsStoreMode::File,
+    );
+    assert_eq!(
+        resolve_cli_auth_credentials_store_mode(
+            AuthCredentialsStoreMode::Auto,
+            LOCAL_DEV_BUILD_VERSION,
+        ),
+        AuthCredentialsStoreMode::File,
+    );
+    assert_eq!(
+        resolve_cli_auth_credentials_store_mode(
+            AuthCredentialsStoreMode::Ephemeral,
+            LOCAL_DEV_BUILD_VERSION,
+        ),
+        AuthCredentialsStoreMode::Ephemeral,
+    );
+    assert_eq!(
+        resolve_cli_auth_credentials_store_mode(AuthCredentialsStoreMode::Keyring, "1.2.3"),
+        AuthCredentialsStoreMode::Keyring,
+    );
+}
+
+#[test]
+fn local_dev_builds_force_file_mcp_oauth_store_modes() {
+    assert_eq!(
+        resolve_mcp_oauth_credentials_store_mode(
+            OAuthCredentialsStoreMode::Keyring,
+            LOCAL_DEV_BUILD_VERSION,
+        ),
+        OAuthCredentialsStoreMode::File,
+    );
+    assert_eq!(
+        resolve_mcp_oauth_credentials_store_mode(
+            OAuthCredentialsStoreMode::Auto,
+            LOCAL_DEV_BUILD_VERSION,
+        ),
+        OAuthCredentialsStoreMode::File,
+    );
+    assert_eq!(
+        resolve_mcp_oauth_credentials_store_mode(OAuthCredentialsStoreMode::Keyring, "1.2.3"),
+        OAuthCredentialsStoreMode::Keyring,
+    );
+}
+
+#[tokio::test]
+async fn feedback_enabled_defaults_to_true() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml {
         feedback: Some(FeedbackConfigToml::default()),
@@ -1442,8 +2904,9 @@ fn feedback_enabled_defaults_to_true() -> std::io::Result<()> {
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(config.feedback_enabled, true);
 
@@ -1494,24 +2957,25 @@ fn web_search_mode_disabled_overrides_legacy_request() {
 #[test]
 fn web_search_mode_for_turn_uses_preference_for_read_only() {
     let web_search_mode = Constrained::allow_any(WebSearchMode::Cached);
-    let mode =
-        resolve_web_search_mode_for_turn(&web_search_mode, &SandboxPolicy::new_read_only_policy());
+    let permission_profile =
+        PermissionProfile::from_legacy_sandbox_policy(&SandboxPolicy::new_read_only_policy());
+    let mode = resolve_web_search_mode_for_turn(&web_search_mode, &permission_profile);
 
     assert_eq!(mode, WebSearchMode::Cached);
 }
 
 #[test]
-fn web_search_mode_for_turn_prefers_live_for_danger_full_access() {
+fn web_search_mode_for_turn_prefers_live_for_disabled_permissions() {
     let web_search_mode = Constrained::allow_any(WebSearchMode::Cached);
-    let mode = resolve_web_search_mode_for_turn(&web_search_mode, &SandboxPolicy::DangerFullAccess);
+    let mode = resolve_web_search_mode_for_turn(&web_search_mode, &PermissionProfile::Disabled);
 
     assert_eq!(mode, WebSearchMode::Live);
 }
 
 #[test]
-fn web_search_mode_for_turn_respects_disabled_for_danger_full_access() {
+fn web_search_mode_for_turn_respects_disabled_for_disabled_permissions() {
     let web_search_mode = Constrained::allow_any(WebSearchMode::Disabled);
-    let mode = resolve_web_search_mode_for_turn(&web_search_mode, &SandboxPolicy::DangerFullAccess);
+    let mode = resolve_web_search_mode_for_turn(&web_search_mode, &PermissionProfile::Disabled);
 
     assert_eq!(mode, WebSearchMode::Disabled);
 }
@@ -1531,7 +2995,7 @@ fn web_search_mode_for_turn_falls_back_when_live_is_disallowed() -> anyhow::Resu
             })
         }
     })?;
-    let mode = resolve_web_search_mode_for_turn(&web_search_mode, &SandboxPolicy::DangerFullAccess);
+    let mode = resolve_web_search_mode_for_turn(&web_search_mode, &PermissionProfile::Disabled);
 
     assert_eq!(mode, WebSearchMode::Cached);
     Ok(())
@@ -1568,7 +3032,7 @@ profile = "project"
 "#,
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .harness_overrides(ConfigOverrides {
             cwd: Some(workspace.path().to_path_buf()),
@@ -1583,8 +3047,8 @@ profile = "project"
     Ok(())
 }
 
-#[test]
-fn profile_sandbox_mode_overrides_base() -> std::io::Result<()> {
+#[tokio::test]
+async fn profile_sandbox_mode_overrides_base() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let mut profiles = HashMap::new();
     profiles.insert(
@@ -1604,19 +3068,20 @@ fn profile_sandbox_mode_overrides_base() -> std::io::Result<()> {
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert!(matches!(
-        config.permissions.sandbox_policy.get(),
+        &config.legacy_sandbox_policy(),
         &SandboxPolicy::DangerFullAccess
     ));
 
     Ok(())
 }
 
-#[test]
-fn cli_override_takes_precedence_over_profile_sandbox_mode() -> std::io::Result<()> {
+#[tokio::test]
+async fn cli_override_takes_precedence_over_profile_sandbox_mode() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let mut profiles = HashMap::new();
     profiles.insert(
@@ -1637,20 +3102,17 @@ fn cli_override_takes_precedence_over_profile_sandbox_mode() -> std::io::Result<
         ..Default::default()
     };
 
-    let config = Config::load_from_base_config_with_overrides(
-        cfg,
-        overrides,
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+    let config =
+        Config::load_from_base_config_with_overrides(cfg, overrides, agiworkforce_home.abs()).await?;
 
     if cfg!(target_os = "windows") {
         assert!(matches!(
-            config.permissions.sandbox_policy.get(),
+            &config.legacy_sandbox_policy(),
             SandboxPolicy::ReadOnly { .. }
         ));
     } else {
         assert!(matches!(
-            config.permissions.sandbox_policy.get(),
+            &config.legacy_sandbox_policy(),
             SandboxPolicy::WorkspaceWrite { .. }
         ));
     }
@@ -1658,21 +3120,22 @@ fn cli_override_takes_precedence_over_profile_sandbox_mode() -> std::io::Result<
     Ok(())
 }
 
-#[test]
-fn feature_table_overrides_legacy_flags() -> std::io::Result<()> {
+#[tokio::test]
+async fn feature_table_overrides_legacy_flags() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let mut entries = BTreeMap::new();
     entries.insert("apply_patch_freeform".to_string(), false);
     let cfg = ConfigToml {
-        features: Some(FeaturesToml { entries }),
+        features: Some(FeaturesToml::from(entries)),
         ..Default::default()
     };
 
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert!(!config.features.enabled(Feature::ApplyPatchFreeform));
     assert!(!config.include_apply_patch_tool);
@@ -1680,8 +3143,8 @@ fn feature_table_overrides_legacy_flags() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn legacy_toggles_map_to_features() -> std::io::Result<()> {
+#[tokio::test]
+async fn legacy_toggles_map_to_features() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml {
         experimental_use_unified_exec_tool: Some(true),
@@ -1692,8 +3155,9 @@ fn legacy_toggles_map_to_features() -> std::io::Result<()> {
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert!(config.features.enabled(Feature::ApplyPatchFreeform));
     assert!(config.features.enabled(Feature::UnifiedExec));
@@ -1705,34 +3169,32 @@ fn legacy_toggles_map_to_features() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn responses_websocket_features_do_not_change_wire_api() -> std::io::Result<()> {
+#[tokio::test]
+async fn responses_websocket_features_do_not_change_wire_api() -> std::io::Result<()> {
     for feature_key in ["responses_websockets", "responses_websockets_v2"] {
         let agiworkforce_home = TempDir::new()?;
         let mut entries = BTreeMap::new();
         entries.insert(feature_key.to_string(), true);
         let cfg = ConfigToml {
-            features: Some(FeaturesToml { entries }),
+            features: Some(FeaturesToml::from(entries)),
             ..Default::default()
         };
 
         let config = Config::load_from_base_config_with_overrides(
             cfg,
             ConfigOverrides::default(),
-            agiworkforce_home.path().to_path_buf(),
-        )?;
+            agiworkforce_home.abs(),
+        )
+        .await?;
 
-        assert_eq!(
-            config.model_provider.wire_api,
-            crate::model_provider_info::WireApi::Responses
-        );
+        assert_eq!(config.model_provider.wire_api, WireApi::Responses);
     }
 
     Ok(())
 }
 
-#[test]
-fn config_honors_explicit_file_oauth_store_mode() -> std::io::Result<()> {
+#[tokio::test]
+async fn config_honors_explicit_file_oauth_store_mode() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml {
         mcp_oauth_credentials_store: Some(OAuthCredentialsStoreMode::File),
@@ -1742,8 +3204,9 @@ fn config_honors_explicit_file_oauth_store_mode() -> std::io::Result<()> {
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.mcp_oauth_credentials_store_mode,
@@ -1762,30 +3225,25 @@ async fn managed_config_overrides_oauth_store_mode() -> anyhow::Result<()> {
     std::fs::write(&config_path, "mcp_oauth_credentials_store = \"file\"\n")?;
     std::fs::write(&managed_path, "mcp_oauth_credentials_store = \"keyring\"\n")?;
 
-    let overrides = LoaderOverrides {
-        managed_config_path: Some(managed_path.clone()),
-        #[cfg(target_os = "macos")]
-        managed_preferences_base64: None,
-        macos_managed_config_requirements_base64: None,
-    };
+    let overrides = LoaderOverrides::with_managed_config_path_for_tests(managed_path.clone());
 
-    let cwd = AbsolutePathBuf::try_from(agiworkforce_home.path())?;
+    let cwd = agiworkforce_home.path().abs();
     let config_layer_stack = load_config_layers_state(
+        LOCAL_FS.as_ref(),
         agiworkforce_home.path(),
         Some(cwd),
         &Vec::new(),
         overrides,
         CloudRequirementsLoader::default(),
+        &agiworkforce_config::NoopThreadConfigLoader,
     )
     .await?;
-    let cfg = deserialize_config_toml_with_base(
-        config_layer_stack.effective_config(),
-        agiworkforce_home.path(),
-    )
-    .map_err(|e| {
-        tracing::error!("Failed to deserialize overridden config: {e}");
-        e
-    })?;
+    let cfg =
+        deserialize_config_toml_with_base(config_layer_stack.effective_config(), agiworkforce_home.path())
+            .map_err(|e| {
+                tracing::error!("Failed to deserialize overridden config: {e}");
+                e
+            })?;
     assert_eq!(
         cfg.mcp_oauth_credentials_store,
         Some(OAuthCredentialsStoreMode::Keyring),
@@ -1794,11 +3252,15 @@ async fn managed_config_overrides_oauth_store_mode() -> anyhow::Result<()> {
     let final_config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
     assert_eq!(
         final_config.mcp_oauth_credentials_store_mode,
-        OAuthCredentialsStoreMode::Keyring,
+        resolve_mcp_oauth_credentials_store_mode(
+            OAuthCredentialsStoreMode::Keyring,
+            env!("CARGO_PKG_VERSION"),
+        ),
     );
 
     Ok(())
@@ -1829,21 +3291,25 @@ async fn replace_mcp_servers_round_trips_entries() -> anyhow::Result<()> {
                 env_vars: Vec::new(),
                 cwd: None,
             },
+            experimental_environment: Some("remote".to_string()),
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: Some(Duration::from_secs(3)),
             tool_timeout_sec: Some(Duration::from_secs(5)),
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     );
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -1868,12 +3334,13 @@ async fn replace_mcp_servers_round_trips_entries() -> anyhow::Result<()> {
     }
     assert_eq!(docs.startup_timeout_sec, Some(Duration::from_secs(3)));
     assert_eq!(docs.tool_timeout_sec, Some(Duration::from_secs(5)));
+    assert_eq!(docs.experimental_environment.as_deref(), Some("remote"));
     assert!(docs.enabled);
 
     let empty = BTreeMap::new();
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(empty.clone())],
     )?;
     let loaded = load_global_mcp_servers(agiworkforce_home.path()).await?;
@@ -1893,31 +3360,26 @@ async fn managed_config_wins_over_cli_overrides() -> anyhow::Result<()> {
     )?;
     std::fs::write(&managed_path, "model = \"managed_config\"\n")?;
 
-    let overrides = LoaderOverrides {
-        managed_config_path: Some(managed_path),
-        #[cfg(target_os = "macos")]
-        managed_preferences_base64: None,
-        macos_managed_config_requirements_base64: None,
-    };
+    let overrides = LoaderOverrides::with_managed_config_path_for_tests(managed_path);
 
-    let cwd = AbsolutePathBuf::try_from(agiworkforce_home.path())?;
+    let cwd = agiworkforce_home.path().abs();
     let config_layer_stack = load_config_layers_state(
+        LOCAL_FS.as_ref(),
         agiworkforce_home.path(),
         Some(cwd),
         &[("model".to_string(), TomlValue::String("cli".to_string()))],
         overrides,
         CloudRequirementsLoader::default(),
+        &agiworkforce_config::NoopThreadConfigLoader,
     )
     .await?;
 
-    let cfg = deserialize_config_toml_with_base(
-        config_layer_stack.effective_config(),
-        agiworkforce_home.path(),
-    )
-    .map_err(|e| {
-        tracing::error!("Failed to deserialize overridden config: {e}");
-        e
-    })?;
+    let cfg =
+        deserialize_config_toml_with_base(config_layer_stack.effective_config(), agiworkforce_home.path())
+            .map_err(|e| {
+                tracing::error!("Failed to deserialize overridden config: {e}");
+                e
+            })?;
 
     assert_eq!(cfg.model.as_deref(), Some("managed_config"));
     Ok(())
@@ -1941,6 +3403,111 @@ startup_timeout_ms = 2500
     let servers = load_global_mcp_servers(agiworkforce_home.path()).await?;
     let docs = servers.get("docs").expect("docs entry");
     assert_eq!(docs.startup_timeout_sec, Some(Duration::from_millis(2500)));
+
+    Ok(())
+}
+
+#[test]
+fn mcp_servers_toml_parses_per_tool_approval_overrides() {
+    let config = toml::from_str::<ConfigToml>(
+        r#"
+[mcp_servers.docs]
+command = "docs-server"
+name = "Docs"
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.docs.tools.search]
+approval_mode = "approve"
+"#,
+    )
+    .expect("TOML deserialization should succeed");
+    let server = config
+        .mcp_servers
+        .get("docs")
+        .expect("docs server config exists");
+
+    assert_eq!(
+        server.default_tools_approval_mode,
+        Some(AppToolApproval::Prompt)
+    );
+
+    assert_eq!(
+        server.tools.get("search"),
+        Some(&McpServerToolConfig {
+            approval_mode: Some(AppToolApproval::Approve),
+        })
+    );
+}
+
+#[test]
+fn mcp_servers_toml_ignores_unknown_server_fields() {
+    let config = toml::from_str::<ConfigToml>(
+        r#"
+[mcp_servers.docs]
+command = "docs-server"
+trust_level = "trusted"
+"#,
+    )
+    .expect("unknown MCP server fields should be ignored");
+
+    assert_eq!(
+        config.mcp_servers.get("docs"),
+        Some(&stdio_mcp("docs-server"))
+    );
+}
+
+#[test]
+fn mcp_servers_toml_parses_tool_approval_override_for_reserved_name() {
+    let config = toml::from_str::<ConfigToml>(
+        r#"
+[mcp_servers.docs]
+command = "docs-server"
+
+[mcp_servers.docs.tools.command]
+approval_mode = "approve"
+"#,
+    )
+    .expect("TOML deserialization should succeed");
+    let tool = config
+        .mcp_servers
+        .get("docs")
+        .and_then(|server| server.tools.get("command"))
+        .expect("docs/command tool config exists");
+
+    assert_eq!(
+        tool,
+        &McpServerToolConfig {
+            approval_mode: Some(AppToolApproval::Approve),
+        }
+    );
+}
+
+#[tokio::test]
+async fn to_mcp_config_preserves_apps_feature_from_config() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let mut config = Config::load_from_base_config_with_overrides(
+        ConfigToml::default(),
+        ConfigOverrides::default(),
+        agiworkforce_home.abs(),
+    )
+    .await?;
+    let plugins_manager = PluginsManager::new(agiworkforce_home.path().to_path_buf());
+
+    config.apps_mcp_path_override = Some("/custom/mcp".to_string());
+    let mcp_config = config.to_mcp_config(&plugins_manager).await;
+    assert!(mcp_config.apps_enabled);
+    assert_eq!(
+        mcp_config.apps_mcp_path_override.as_deref(),
+        Some("/custom/mcp")
+    );
+
+    let _ = config.features.disable(Feature::Apps);
+    let mcp_config = config.to_mcp_config(&plugins_manager).await;
+    assert!(!mcp_config.apps_enabled);
+
+    let _ = config.features.enable(Feature::Apps);
+    let mcp_config = config.to_mcp_config(&plugins_manager).await;
+    assert!(mcp_config.apps_enabled);
 
     Ok(())
 }
@@ -1987,21 +3554,25 @@ async fn replace_mcp_servers_serializes_env_sorted() -> anyhow::Result<()> {
                 env_vars: Vec::new(),
                 cwd: None,
             },
+            experimental_environment: None,
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     )]);
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -2056,24 +3627,28 @@ async fn replace_mcp_servers_serializes_env_vars() -> anyhow::Result<()> {
                 command: "docs-server".to_string(),
                 args: Vec::new(),
                 env: None,
-                env_vars: vec!["ALPHA".to_string(), "BETA".to_string()],
+                env_vars: vec!["ALPHA".into(), "BETA".into()],
                 cwd: None,
             },
+            experimental_environment: None,
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     )]);
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -2088,7 +3663,7 @@ async fn replace_mcp_servers_serializes_env_vars() -> anyhow::Result<()> {
     let docs = loaded.get("docs").expect("docs entry");
     match &docs.transport {
         McpServerTransportConfig::Stdio { env_vars, .. } => {
-            assert_eq!(env_vars, &vec!["ALPHA".to_string(), "BETA".to_string()]);
+            assert_eq!(env_vars, &vec!["ALPHA".into(), "BETA".into()]);
         }
         other => panic!("unexpected transport {other:?}"),
     }
@@ -2097,10 +3672,66 @@ async fn replace_mcp_servers_serializes_env_vars() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn replace_mcp_servers_serializes_sourced_env_vars() -> anyhow::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+
+    let servers = BTreeMap::from([(
+        "docs".to_string(),
+        McpServerConfig {
+            transport: McpServerTransportConfig::Stdio {
+                command: "docs-server".to_string(),
+                args: Vec::new(),
+                env: None,
+                env_vars: vec![
+                    "LEGACY".into(),
+                    McpServerEnvVar::Config {
+                        name: "REMOTE_TOKEN".to_string(),
+                        source: Some("remote".to_string()),
+                    },
+                ],
+                cwd: None,
+            },
+            experimental_environment: None,
+            enabled: true,
+            required: false,
+            supports_parallel_tool_calls: false,
+            disabled_reason: None,
+            startup_timeout_sec: None,
+            tool_timeout_sec: None,
+            default_tools_approval_mode: None,
+            enabled_tools: None,
+            disabled_tools: None,
+            scopes: None,
+            oauth_resource: None,
+            tools: HashMap::new(),
+        },
+    )]);
+
+    apply_blocking(
+        agiworkforce_home.path(),
+        /*profile*/ None,
+        &[ConfigEdit::ReplaceMcpServers(servers.clone())],
+    )?;
+
+    let config_path = agiworkforce_home.path().join(CONFIG_TOML_FILE);
+    let serialized = std::fs::read_to_string(&config_path)?;
+    assert!(
+        serialized
+            .contains(r#"env_vars = ["LEGACY", { name = "REMOTE_TOKEN", source = "remote" }]"#),
+        "serialized config missing sourced env_vars field:\n{serialized}"
+    );
+
+    let loaded = load_global_mcp_servers(agiworkforce_home.path()).await?;
+    assert_eq!(loaded, servers);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn replace_mcp_servers_serializes_cwd() -> anyhow::Result<()> {
     let agiworkforce_home = TempDir::new()?;
 
-    let cwd_path = PathBuf::from("/tmp/codex-mcp");
+    let cwd_path = PathBuf::from("/tmp/agiworkforce-mcp");
     let servers = BTreeMap::from([(
         "docs".to_string(),
         McpServerConfig {
@@ -2111,28 +3742,32 @@ async fn replace_mcp_servers_serializes_cwd() -> anyhow::Result<()> {
                 env_vars: Vec::new(),
                 cwd: Some(cwd_path.clone()),
             },
+            experimental_environment: None,
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     )]);
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
     let config_path = agiworkforce_home.path().join(CONFIG_TOML_FILE);
     let serialized = std::fs::read_to_string(&config_path)?;
     assert!(
-        serialized.contains(r#"cwd = "/tmp/codex-mcp""#),
+        serialized.contains(r#"cwd = "/tmp/agiworkforce-mcp""#),
         "serialized config missing cwd field:\n{serialized}"
     );
 
@@ -2140,7 +3775,7 @@ async fn replace_mcp_servers_serializes_cwd() -> anyhow::Result<()> {
     let docs = loaded.get("docs").expect("docs entry");
     match &docs.transport {
         McpServerTransportConfig::Stdio { cwd, .. } => {
-            assert_eq!(cwd.as_deref(), Some(Path::new("/tmp/codex-mcp")));
+            assert_eq!(cwd.as_deref(), Some(Path::new("/tmp/agiworkforce-mcp")));
         }
         other => panic!("unexpected transport {other:?}"),
     }
@@ -2161,21 +3796,25 @@ async fn replace_mcp_servers_streamable_http_serializes_bearer_token() -> anyhow
                 http_headers: None,
                 env_http_headers: None,
             },
+            experimental_environment: None,
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: Some(Duration::from_secs(2)),
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     )]);
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -2227,20 +3866,24 @@ async fn replace_mcp_servers_streamable_http_serializes_custom_headers() -> anyh
                     "DOCS_AUTH".to_string(),
                 )])),
             },
+            experimental_environment: None,
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: Some(Duration::from_secs(2)),
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     )]);
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -2305,21 +3948,25 @@ async fn replace_mcp_servers_streamable_http_removes_optional_sections() -> anyh
                     "DOCS_AUTH".to_string(),
                 )])),
             },
+            experimental_environment: None,
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: Some(Duration::from_secs(2)),
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     )]);
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
     let serialized_with_optional = std::fs::read_to_string(&config_path)?;
@@ -2336,20 +3983,24 @@ async fn replace_mcp_servers_streamable_http_removes_optional_sections() -> anyh
                 http_headers: None,
                 env_http_headers: None,
             },
+            experimental_environment: None,
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     );
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -2402,15 +4053,19 @@ async fn replace_mcp_servers_streamable_http_isolates_headers_between_servers() 
                         "DOCS_AUTH".to_string(),
                     )])),
                 },
+                experimental_environment: None,
                 enabled: true,
                 required: false,
+                supports_parallel_tool_calls: false,
                 disabled_reason: None,
                 startup_timeout_sec: Some(Duration::from_secs(2)),
                 tool_timeout_sec: None,
+                default_tools_approval_mode: None,
                 enabled_tools: None,
                 disabled_tools: None,
                 scopes: None,
                 oauth_resource: None,
+                tools: HashMap::new(),
             },
         ),
         (
@@ -2423,22 +4078,26 @@ async fn replace_mcp_servers_streamable_http_isolates_headers_between_servers() 
                     env_vars: Vec::new(),
                     cwd: None,
                 },
+                experimental_environment: None,
                 enabled: true,
                 required: false,
+                supports_parallel_tool_calls: false,
                 disabled_reason: None,
                 startup_timeout_sec: None,
                 tool_timeout_sec: None,
+                default_tools_approval_mode: None,
                 enabled_tools: None,
                 disabled_tools: None,
                 scopes: None,
                 oauth_resource: None,
+                tools: HashMap::new(),
             },
         ),
     ]);
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -2507,21 +4166,25 @@ async fn replace_mcp_servers_serializes_disabled_flag() -> anyhow::Result<()> {
                 env_vars: Vec::new(),
                 cwd: None,
             },
+            experimental_environment: None,
             enabled: false,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     )]);
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -2553,21 +4216,25 @@ async fn replace_mcp_servers_serializes_required_flag() -> anyhow::Result<()> {
                 env_vars: Vec::new(),
                 cwd: None,
             },
+            experimental_environment: None,
             enabled: true,
             required: true,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     )]);
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -2599,21 +4266,25 @@ async fn replace_mcp_servers_serializes_tool_filters() -> anyhow::Result<()> {
                 env_vars: Vec::new(),
                 cwd: None,
             },
+            experimental_environment: None,
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: Some(vec!["allowed".to_string()]),
             disabled_tools: Some(vec!["blocked".to_string()]),
             scopes: None,
             oauth_resource: None,
+            tools: HashMap::new(),
         },
     )]);
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -2649,21 +4320,25 @@ async fn replace_mcp_servers_streamable_http_serializes_oauth_resource() -> anyh
                 http_headers: None,
                 env_http_headers: None,
             },
+            experimental_environment: None,
             enabled: true,
             required: false,
+            supports_parallel_tool_calls: false,
             disabled_reason: None,
             startup_timeout_sec: None,
             tool_timeout_sec: None,
+            default_tools_approval_mode: None,
             enabled_tools: None,
             disabled_tools: None,
             scopes: None,
             oauth_resource: Some("https://resource.example.com".to_string()),
+            tools: HashMap::new(),
         },
     )]);
 
     apply_blocking(
         agiworkforce_home.path(),
-        None,
+        /*profile*/ None,
         &[ConfigEdit::ReplaceMcpServers(servers.clone())],
     )?;
 
@@ -2686,15 +4361,14 @@ async fn set_model_updates_defaults() -> anyhow::Result<()> {
     let agiworkforce_home = TempDir::new()?;
 
     ConfigEditsBuilder::new(agiworkforce_home.path())
-        .set_model(Some("gpt-5.1-codex"), Some(ReasoningEffort::High))
+        .set_model(Some("gpt-5.4"), Some(ReasoningEffort::High))
         .apply()
         .await?;
 
-    let serialized =
-        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     let parsed: ConfigToml = toml::from_str(&serialized)?;
 
-    assert_eq!(parsed.model.as_deref(), Some("gpt-5.1-codex"));
+    assert_eq!(parsed.model.as_deref(), Some("gpt-5.4"));
     assert_eq!(parsed.model_reasoning_effort, Some(ReasoningEffort::High));
 
     Ok(())
@@ -2708,7 +4382,7 @@ async fn set_model_overwrites_existing_model() -> anyhow::Result<()> {
     tokio::fs::write(
         &config_path,
         r#"
-model = "gpt-5.1-codex"
+model = "gpt-5.4"
 model_reasoning_effort = "medium"
 
 [profiles.dev]
@@ -2744,19 +4418,18 @@ async fn set_model_updates_profile() -> anyhow::Result<()> {
 
     ConfigEditsBuilder::new(agiworkforce_home.path())
         .with_profile(Some("dev"))
-        .set_model(Some("gpt-5.1-codex"), Some(ReasoningEffort::Medium))
+        .set_model(Some("gpt-5.4"), Some(ReasoningEffort::Medium))
         .apply()
         .await?;
 
-    let serialized =
-        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     let parsed: ConfigToml = toml::from_str(&serialized)?;
     let profile = parsed
         .profiles
         .get("dev")
         .expect("profile should be created");
 
-    assert_eq!(profile.model.as_deref(), Some("gpt-5.1-codex"));
+    assert_eq!(profile.model.as_deref(), Some("gpt-5.4"));
     assert_eq!(
         profile.model_reasoning_effort,
         Some(ReasoningEffort::Medium)
@@ -2778,7 +4451,7 @@ model = "gpt-4"
 model_reasoning_effort = "medium"
 
 [profiles.prod]
-model = "gpt-5.1-codex"
+model = "gpt-5.4"
 "#,
     )
     .await?;
@@ -2807,7 +4480,7 @@ model = "gpt-5.1-codex"
             .profiles
             .get("prod")
             .and_then(|profile| profile.model.as_deref()),
-        Some("gpt-5.1-codex"),
+        Some("gpt-5.4"),
     );
 
     Ok(())
@@ -2819,12 +4492,11 @@ async fn set_feature_enabled_updates_profile() -> anyhow::Result<()> {
 
     ConfigEditsBuilder::new(agiworkforce_home.path())
         .with_profile(Some("dev"))
-        .set_feature_enabled("guardian_approval", true)
+        .set_feature_enabled("guardian_approval", /*enabled*/ true)
         .apply()
         .await?;
 
-    let serialized =
-        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     let parsed: ConfigToml = toml::from_str(&serialized)?;
     let profile = parsed
         .profiles
@@ -2835,14 +4507,14 @@ async fn set_feature_enabled_updates_profile() -> anyhow::Result<()> {
         profile
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
-        Some(&true),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
+        Some(true),
     );
     assert_eq!(
         parsed
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
         None,
     );
 
@@ -2850,24 +4522,22 @@ async fn set_feature_enabled_updates_profile() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn set_feature_enabled_persists_default_false_feature_disable_in_profile()
--> anyhow::Result<()> {
+async fn set_feature_enabled_persists_feature_disable_in_profile() -> anyhow::Result<()> {
     let agiworkforce_home = TempDir::new()?;
 
     ConfigEditsBuilder::new(agiworkforce_home.path())
         .with_profile(Some("dev"))
-        .set_feature_enabled("guardian_approval", true)
+        .set_feature_enabled("guardian_approval", /*enabled*/ true)
         .apply()
         .await?;
 
     ConfigEditsBuilder::new(agiworkforce_home.path())
         .with_profile(Some("dev"))
-        .set_feature_enabled("guardian_approval", false)
+        .set_feature_enabled("guardian_approval", /*enabled*/ false)
         .apply()
         .await?;
 
-    let serialized =
-        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     let parsed: ConfigToml = toml::from_str(&serialized)?;
     let profile = parsed
         .profiles
@@ -2878,14 +4548,14 @@ async fn set_feature_enabled_persists_default_false_feature_disable_in_profile()
         profile
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
-        Some(&false),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
+        Some(false),
     );
     assert_eq!(
         parsed
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
         None,
     );
 
@@ -2897,18 +4567,17 @@ async fn set_feature_enabled_profile_disable_overrides_root_enable() -> anyhow::
     let agiworkforce_home = TempDir::new()?;
 
     ConfigEditsBuilder::new(agiworkforce_home.path())
-        .set_feature_enabled("guardian_approval", true)
+        .set_feature_enabled("guardian_approval", /*enabled*/ true)
         .apply()
         .await?;
 
     ConfigEditsBuilder::new(agiworkforce_home.path())
         .with_profile(Some("dev"))
-        .set_feature_enabled("guardian_approval", false)
+        .set_feature_enabled("guardian_approval", /*enabled*/ false)
         .apply()
         .await?;
 
-    let serialized =
-        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     let parsed: ConfigToml = toml::from_str(&serialized)?;
     let profile = parsed
         .profiles
@@ -2919,15 +4588,15 @@ async fn set_feature_enabled_profile_disable_overrides_root_enable() -> anyhow::
         parsed
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
-        Some(&true),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
+        Some(true),
     );
     assert_eq!(
         profile
             .features
             .as_ref()
-            .and_then(|features| features.entries.get("guardian_approval")),
-        Some(&false),
+            .and_then(|features| features.entries().get("guardian_approval").copied()),
+        Some(false),
     );
 
     Ok(())
@@ -2943,17 +4612,21 @@ struct PrecedenceTestFixture {
 }
 
 impl PrecedenceTestFixture {
-    fn cwd(&self) -> PathBuf {
+    fn cwd(&self) -> AbsolutePathBuf {
+        self.cwd.abs()
+    }
+
+    fn cwd_path(&self) -> PathBuf {
         self.cwd.path().to_path_buf()
     }
 
-    fn agiworkforce_home(&self) -> PathBuf {
-        self.agiworkforce_home.path().to_path_buf()
+    fn agiworkforce_home(&self) -> AbsolutePathBuf {
+        self.agiworkforce_home.abs()
     }
 }
 
-#[test]
-fn cli_override_sets_compact_prompt() -> std::io::Result<()> {
+#[tokio::test]
+async fn cli_override_sets_compact_prompt() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let overrides = ConfigOverrides {
         compact_prompt: Some("Use the compact override".to_string()),
@@ -2963,8 +4636,9 @@ fn cli_override_sets_compact_prompt() -> std::io::Result<()> {
     let config = Config::load_from_base_config_with_overrides(
         ConfigToml::default(),
         overrides,
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.compact_prompt.as_deref(),
@@ -2974,8 +4648,8 @@ fn cli_override_sets_compact_prompt() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn loads_compact_prompt_from_file() -> std::io::Result<()> {
+#[tokio::test]
+async fn loads_compact_prompt_from_file() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let workspace = agiworkforce_home.path().join("workspace");
     std::fs::create_dir_all(&workspace)?;
@@ -2984,7 +4658,7 @@ fn loads_compact_prompt_from_file() -> std::io::Result<()> {
     std::fs::write(&prompt_path, "  summarize differently  ")?;
 
     let cfg = ConfigToml {
-        experimental_compact_prompt_file: Some(AbsolutePathBuf::from_absolute_path(prompt_path)?),
+        experimental_compact_prompt_file: Some(prompt_path.abs()),
         ..Default::default()
     };
 
@@ -2993,11 +4667,8 @@ fn loads_compact_prompt_from_file() -> std::io::Result<()> {
         ..Default::default()
     };
 
-    let config = Config::load_from_base_config_with_overrides(
-        cfg,
-        overrides,
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+    let config =
+        Config::load_from_base_config_with_overrides(cfg, overrides, agiworkforce_home.abs()).await?;
 
     assert_eq!(
         config.compact_prompt.as_deref(),
@@ -3007,14 +4678,14 @@ fn loads_compact_prompt_from_file() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn load_config_uses_requirements_guardian_developer_instructions() -> std::io::Result<()> {
+#[tokio::test]
+async fn load_config_uses_requirements_guardian_policy_config() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let config_layer_stack = ConfigLayerStack::new(
         Vec::new(),
         Default::default(),
-        crate::config_loader::ConfigRequirementsToml {
-            guardian_developer_instructions: Some(
+        agiworkforce_config::ConfigRequirementsToml {
+            guardian_policy_config: Some(
                 "  Use the workspace-managed guardian policy.  ".to_string(),
             ),
             ..Default::default()
@@ -3023,17 +4694,19 @@ fn load_config_uses_requirements_guardian_developer_instructions() -> std::io::R
     .map_err(std::io::Error::other)?;
 
     let config = Config::load_config_with_layer_stack(
+        LOCAL_FS.as_ref(),
         ConfigToml::default(),
         ConfigOverrides {
             cwd: Some(agiworkforce_home.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
+        agiworkforce_home.abs(),
         config_layer_stack,
-    )?;
+    )
+    .await?;
 
     assert_eq!(
-        config.guardian_developer_instructions.as_deref(),
+        config.guardian_policy_config.as_deref(),
         Some("Use the workspace-managed guardian policy.")
     );
 
@@ -3041,50 +4714,160 @@ fn load_config_uses_requirements_guardian_developer_instructions() -> std::io::R
 }
 
 #[test]
-fn load_config_ignores_empty_requirements_guardian_developer_instructions() -> std::io::Result<()> {
+fn config_toml_deserializes_auto_review_policy() {
+    let cfg = toml::from_str::<ConfigToml>(
+        r#"
+[auto_review]
+policy = "Use the user-configured guardian policy."
+"#,
+    )
+    .expect("TOML deserialization should succeed");
+
+    assert_eq!(
+        cfg.auto_review
+            .as_ref()
+            .and_then(|auto_review| auto_review.policy.as_deref()),
+        Some("Use the user-configured guardian policy.")
+    );
+}
+
+#[tokio::test]
+async fn load_config_uses_auto_review_guardian_policy_config() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cfg = ConfigToml {
+        auto_review: Some(AutoReviewToml {
+            policy: Some("  Use the user-configured guardian policy.  ".to_string()),
+        }),
+        ..Default::default()
+    };
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides {
+            cwd: Some(agiworkforce_home.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(
+        config.guardian_policy_config.as_deref(),
+        Some("Use the user-configured guardian policy.")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn requirements_guardian_policy_beats_auto_review() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let config_layer_stack = ConfigLayerStack::new(
         Vec::new(),
         Default::default(),
-        crate::config_loader::ConfigRequirementsToml {
-            guardian_developer_instructions: Some("   ".to_string()),
+        agiworkforce_config::ConfigRequirementsToml {
+            guardian_policy_config: Some("Use the managed guardian policy.".to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(std::io::Error::other)?;
+    let cfg = ConfigToml {
+        auto_review: Some(AutoReviewToml {
+            policy: Some("Use the user-configured guardian policy.".to_string()),
+        }),
+        ..Default::default()
+    };
+
+    let config = Config::load_config_with_layer_stack(
+        LOCAL_FS.as_ref(),
+        cfg,
+        ConfigOverrides {
+            cwd: Some(agiworkforce_home.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+        config_layer_stack,
+    )
+    .await?;
+
+    assert_eq!(
+        config.guardian_policy_config.as_deref(),
+        Some("Use the managed guardian policy.")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn load_config_ignores_empty_auto_review_guardian_policy_config() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cfg = ConfigToml {
+        auto_review: Some(AutoReviewToml {
+            policy: Some("   ".to_string()),
+        }),
+        ..Default::default()
+    };
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides {
+            cwd: Some(agiworkforce_home.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(config.guardian_policy_config, None);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn load_config_ignores_empty_requirements_guardian_policy_config() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let config_layer_stack = ConfigLayerStack::new(
+        Vec::new(),
+        Default::default(),
+        agiworkforce_config::ConfigRequirementsToml {
+            guardian_policy_config: Some("   ".to_string()),
             ..Default::default()
         },
     )
     .map_err(std::io::Error::other)?;
 
     let config = Config::load_config_with_layer_stack(
+        LOCAL_FS.as_ref(),
         ConfigToml::default(),
         ConfigOverrides {
             cwd: Some(agiworkforce_home.path().to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
+        agiworkforce_home.abs(),
         config_layer_stack,
-    )?;
+    )
+    .await?;
 
-    assert_eq!(config.guardian_developer_instructions, None);
+    assert_eq!(config.guardian_policy_config, None);
 
     Ok(())
 }
 
-#[test]
-fn load_config_rejects_missing_agent_role_config_file() -> std::io::Result<()> {
+#[tokio::test]
+async fn load_config_rejects_missing_agent_role_config_file() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
-    let missing_path = agiworkforce_home
-        .path()
-        .join("agents")
-        .join("researcher.toml");
+    let missing_path = agiworkforce_home.path().join("agents").join("researcher.toml");
     let cfg = ConfigToml {
         agents: Some(AgentsToml {
             max_threads: None,
             max_depth: None,
             job_max_runtime_seconds: None,
+            interrupt_message: None,
             roles: BTreeMap::from([(
                 "researcher".to_string(),
                 AgentRoleToml {
                     description: Some("Research role".to_string()),
-                    config_file: Some(AbsolutePathBuf::from_absolute_path(missing_path)?),
+                    config_file: Some(missing_path.abs()),
                     nickname_candidates: None,
                 },
             )]),
@@ -3095,8 +4878,9 @@ fn load_config_rejects_missing_agent_role_config_file() -> std::io::Result<()> {
     let result = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    );
+        agiworkforce_home.abs(),
+    )
+    .await;
     let err = result.expect_err("missing role config file should be rejected");
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     let message = err.to_string();
@@ -3109,10 +4893,7 @@ fn load_config_rejects_missing_agent_role_config_file() -> std::io::Result<()> {
 #[tokio::test]
 async fn agent_role_relative_config_file_resolves_against_config_toml() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
-    let role_config_path = agiworkforce_home
-        .path()
-        .join("agents")
-        .join("researcher.toml");
+    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
     tokio::fs::create_dir_all(
         role_config_path
             .parent()
@@ -3134,7 +4915,7 @@ nickname_candidates = ["Hypatia", "Noether"]
     )
     .await?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
@@ -3159,12 +4940,66 @@ nickname_candidates = ["Hypatia", "Noether"]
 }
 
 #[tokio::test]
+async fn agent_role_relative_config_file_resolves_from_config_layer() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
+    tokio::fs::create_dir_all(
+        role_config_path
+            .parent()
+            .expect("role config should have a parent directory"),
+    )
+    .await?;
+    tokio::fs::write(
+        &role_config_path,
+        "developer_instructions = \"Research carefully\"\nmodel = \"gpt-5\"",
+    )
+    .await?;
+    let layer_config = toml::from_str(
+        r#"[agents.researcher]
+description = "Research role"
+config_file = "./agents/researcher.toml"
+"#,
+    )
+    .expect("agent role layer config should parse");
+    let config_layer_stack = agiworkforce_config::ConfigLayerStack::new(
+        vec![agiworkforce_config::ConfigLayerEntry::new(
+            agiworkforce_app_server_protocol::ConfigLayerSource::User {
+                file: agiworkforce_home.path().join(CONFIG_TOML_FILE).abs(),
+            },
+            layer_config,
+        )],
+        Default::default(),
+        agiworkforce_config::ConfigRequirementsToml::default(),
+    )
+    .map_err(std::io::Error::other)?;
+
+    let config = Config::load_config_with_layer_stack(
+        LOCAL_FS.as_ref(),
+        ConfigToml::default(),
+        ConfigOverrides {
+            cwd: Some(agiworkforce_home.path().to_path_buf()),
+            ..Default::default()
+        },
+        agiworkforce_home.abs(),
+        config_layer_stack,
+    )
+    .await?;
+
+    assert_eq!(
+        config
+            .agent_roles
+            .get("researcher")
+            .and_then(|role| role.config_file.as_ref()),
+        Some(&role_config_path)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn agent_role_file_metadata_overrides_config_toml_metadata() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
-    let role_config_path = agiworkforce_home
-        .path()
-        .join("agents")
-        .join("researcher.toml");
+    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
     tokio::fs::create_dir_all(
         role_config_path
             .parent()
@@ -3177,7 +5012,7 @@ async fn agent_role_file_metadata_overrides_config_toml_metadata() -> std::io::R
 description = "Role metadata from file"
 nickname_candidates = ["Hypatia"]
 developer_instructions = "Research carefully"
-model = "gpt-5"
+model = "gpt-5.2"
 "#,
     )
     .await?;
@@ -3191,7 +5026,7 @@ nickname_candidates = ["Noether"]
     )
     .await?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
@@ -3239,7 +5074,7 @@ trust_level = "trusted"
         r#"
 name = "researcher"
 description = "Role metadata from file"
-model = "gpt-5"
+model = "gpt-5.2"
 "#,
     )
     .await?;
@@ -3249,12 +5084,12 @@ model = "gpt-5"
 name = "reviewer"
 description = "Review role"
 developer_instructions = "Review carefully"
-model = "gpt-5"
+model = "gpt-5.2"
 "#,
     )
     .await?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .harness_overrides(ConfigOverrides {
             cwd: Some(nested_cwd),
@@ -3284,10 +5119,7 @@ model = "gpt-5"
 async fn legacy_agent_role_config_file_allows_missing_developer_instructions() -> std::io::Result<()>
 {
     let agiworkforce_home = TempDir::new()?;
-    let role_config_path = agiworkforce_home
-        .path()
-        .join("agents")
-        .join("researcher.toml");
+    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
     tokio::fs::create_dir_all(
         role_config_path
             .parent()
@@ -3297,7 +5129,7 @@ async fn legacy_agent_role_config_file_allows_missing_developer_instructions() -
     tokio::fs::write(
         &role_config_path,
         r#"
-model = "gpt-5"
+model = "gpt-5.2"
 model_reasoning_effort = "high"
 "#,
     )
@@ -3311,7 +5143,7 @@ config_file = "./agents/researcher.toml"
     )
     .await?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
@@ -3338,10 +5170,7 @@ config_file = "./agents/researcher.toml"
 async fn agent_role_without_description_after_merge_is_dropped_with_warning() -> std::io::Result<()>
 {
     let agiworkforce_home = TempDir::new()?;
-    let role_config_path = agiworkforce_home
-        .path()
-        .join("agents")
-        .join("researcher.toml");
+    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
     tokio::fs::create_dir_all(
         role_config_path
             .parent()
@@ -3352,7 +5181,7 @@ async fn agent_role_without_description_after_merge_is_dropped_with_warning() ->
         &role_config_path,
         r#"
 developer_instructions = "Research carefully"
-model = "gpt-5"
+model = "gpt-5.2"
 "#,
     )
     .await?;
@@ -3367,7 +5196,7 @@ description = "Review role"
     )
     .await?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
@@ -3429,7 +5258,7 @@ developer_instructions = "Review carefully"
     )
     .await?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .harness_overrides(ConfigOverrides {
             cwd: Some(nested_cwd),
@@ -3458,10 +5287,7 @@ developer_instructions = "Review carefully"
 #[tokio::test]
 async fn agent_role_file_name_takes_precedence_over_config_key() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
-    let role_config_path = agiworkforce_home
-        .path()
-        .join("agents")
-        .join("researcher.toml");
+    let role_config_path = agiworkforce_home.path().join("agents").join("researcher.toml");
     tokio::fs::create_dir_all(
         role_config_path
             .parent()
@@ -3474,7 +5300,7 @@ async fn agent_role_file_name_takes_precedence_over_config_key() -> std::io::Res
 name = "archivist"
 description = "Role metadata from file"
 developer_instructions = "Research carefully"
-model = "gpt-5"
+model = "gpt-5.2"
 "#,
     )
     .await?;
@@ -3487,7 +5313,7 @@ config_file = "./agents/researcher.toml"
     )
     .await?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
@@ -3506,14 +5332,8 @@ config_file = "./agents/researcher.toml"
 #[tokio::test]
 async fn loads_legacy_split_agent_roles_from_config_toml() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
-    let researcher_path = agiworkforce_home
-        .path()
-        .join("agents")
-        .join("researcher.toml");
-    let reviewer_path = agiworkforce_home
-        .path()
-        .join("agents")
-        .join("reviewer.toml");
+    let researcher_path = agiworkforce_home.path().join("agents").join("researcher.toml");
+    let reviewer_path = agiworkforce_home.path().join("agents").join("reviewer.toml");
     tokio::fs::create_dir_all(
         researcher_path
             .parent()
@@ -3545,7 +5365,7 @@ nickname_candidates = ["Atlas"]
     )
     .await?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
@@ -3679,7 +5499,7 @@ developer_instructions = "Write carefully"
 "#,
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .harness_overrides(ConfigOverrides {
             cwd: Some(nested_cwd),
@@ -3765,7 +5585,7 @@ nickname_candidates = ["Ada"]
         home_agents_dir.join("researcher.toml"),
         r#"
 developer_instructions = "Research carefully"
-model = "gpt-5"
+model = "gpt-5.2"
 "#,
     )
     .await?;
@@ -3798,12 +5618,12 @@ name = "writer"
 description = "Writer role from file"
 nickname_candidates = ["Sagan"]
 developer_instructions = "Write carefully"
-model = "gpt-5"
+model = "gpt-5.2"
 "#,
     )
     .await?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .harness_overrides(ConfigOverrides {
             cwd: Some(nested_cwd),
@@ -3905,7 +5725,7 @@ config_file = "./agents/researcher.toml"
         home_agents_dir.join("researcher.toml"),
         r#"
 developer_instructions = "Research carefully"
-model = "gpt-5"
+model = "gpt-5.2"
 "#,
     )
     .await?;
@@ -3923,7 +5743,7 @@ model = "gpt-5-mini"
     )
     .await?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .harness_overrides(ConfigOverrides {
             cwd: Some(nested_cwd),
@@ -3958,14 +5778,38 @@ model = "gpt-5-mini"
     Ok(())
 }
 
-#[test]
-fn load_config_normalizes_agent_role_nickname_candidates() -> std::io::Result<()> {
+#[tokio::test]
+async fn load_config_resolves_agent_interrupt_message() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cfg = ConfigToml {
+        agents: Some(AgentsToml {
+            interrupt_message: Some(false),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert!(!config.agent_interrupt_message_enabled);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn load_config_normalizes_agent_role_nickname_candidates() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml {
         agents: Some(AgentsToml {
             max_threads: None,
             max_depth: None,
             job_max_runtime_seconds: None,
+            interrupt_message: None,
             roles: BTreeMap::from([(
                 "researcher".to_string(),
                 AgentRoleToml {
@@ -3984,8 +5828,9 @@ fn load_config_normalizes_agent_role_nickname_candidates() -> std::io::Result<()
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config
@@ -3999,14 +5844,15 @@ fn load_config_normalizes_agent_role_nickname_candidates() -> std::io::Result<()
     Ok(())
 }
 
-#[test]
-fn load_config_rejects_empty_agent_role_nickname_candidates() -> std::io::Result<()> {
+#[tokio::test]
+async fn load_config_rejects_empty_agent_role_nickname_candidates() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml {
         agents: Some(AgentsToml {
             max_threads: None,
             max_depth: None,
             job_max_runtime_seconds: None,
+            interrupt_message: None,
             roles: BTreeMap::from([(
                 "researcher".to_string(),
                 AgentRoleToml {
@@ -4022,8 +5868,9 @@ fn load_config_rejects_empty_agent_role_nickname_candidates() -> std::io::Result
     let result = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    );
+        agiworkforce_home.abs(),
+    )
+    .await;
     let err = result.expect_err("empty nickname candidates should be rejected");
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     assert!(
@@ -4034,14 +5881,15 @@ fn load_config_rejects_empty_agent_role_nickname_candidates() -> std::io::Result
     Ok(())
 }
 
-#[test]
-fn load_config_rejects_duplicate_agent_role_nickname_candidates() -> std::io::Result<()> {
+#[tokio::test]
+async fn load_config_rejects_duplicate_agent_role_nickname_candidates() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml {
         agents: Some(AgentsToml {
             max_threads: None,
             max_depth: None,
             job_max_runtime_seconds: None,
+            interrupt_message: None,
             roles: BTreeMap::from([(
                 "researcher".to_string(),
                 AgentRoleToml {
@@ -4057,8 +5905,9 @@ fn load_config_rejects_duplicate_agent_role_nickname_candidates() -> std::io::Re
     let result = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    );
+        agiworkforce_home.abs(),
+    )
+    .await;
     let err = result.expect_err("duplicate nickname candidates should be rejected");
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     assert!(
@@ -4069,14 +5918,15 @@ fn load_config_rejects_duplicate_agent_role_nickname_candidates() -> std::io::Re
     Ok(())
 }
 
-#[test]
-fn load_config_rejects_unsafe_agent_role_nickname_candidates() -> std::io::Result<()> {
+#[tokio::test]
+async fn load_config_rejects_unsafe_agent_role_nickname_candidates() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml {
         agents: Some(AgentsToml {
             max_threads: None,
             max_depth: None,
             job_max_runtime_seconds: None,
+            interrupt_message: None,
             roles: BTreeMap::from([(
                 "researcher".to_string(),
                 AgentRoleToml {
@@ -4092,8 +5942,9 @@ fn load_config_rejects_unsafe_agent_role_nickname_candidates() -> std::io::Resul
     let result = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    );
+        agiworkforce_home.abs(),
+    )
+    .await;
     let err = result.expect_err("unsafe nickname candidates should be rejected");
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     assert!(err.to_string().contains(
@@ -4103,12 +5954,12 @@ fn load_config_rejects_unsafe_agent_role_nickname_candidates() -> std::io::Resul
     Ok(())
 }
 
-#[test]
-fn model_catalog_json_loads_from_path() -> std::io::Result<()> {
+#[tokio::test]
+async fn model_catalog_json_loads_from_path() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let catalog_path = agiworkforce_home.path().join("catalog.json");
-    let mut catalog: ModelsResponse =
-        serde_json::from_str(include_str!("../../models.json")).expect("valid models.json");
+    let mut catalog = bundled_models_response()
+        .unwrap_or_else(|err| panic!("bundled models.json should parse: {err}"));
     catalog.models = catalog.models.into_iter().take(1).collect();
     std::fs::write(
         &catalog_path,
@@ -4116,36 +5967,38 @@ fn model_catalog_json_loads_from_path() -> std::io::Result<()> {
     )?;
 
     let cfg = ConfigToml {
-        model_catalog_json: Some(AbsolutePathBuf::from_absolute_path(catalog_path)?),
+        model_catalog_json: Some(catalog_path.abs()),
         ..Default::default()
     };
 
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(config.model_catalog, Some(catalog));
     Ok(())
 }
 
-#[test]
-fn model_catalog_json_rejects_empty_catalog() -> std::io::Result<()> {
+#[tokio::test]
+async fn model_catalog_json_rejects_empty_catalog() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let catalog_path = agiworkforce_home.path().join("catalog.json");
     std::fs::write(&catalog_path, r#"{"models":[]}"#)?;
 
     let cfg = ConfigToml {
-        model_catalog_json: Some(AbsolutePathBuf::from_absolute_path(catalog_path)?),
+        model_catalog_json: Some(catalog_path.abs()),
         ..Default::default()
     };
 
     let err = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
+        agiworkforce_home.abs(),
     )
+    .await
     .expect_err("empty custom catalog should fail config load");
 
     assert_eq!(err.kind(), ErrorKind::InvalidData);
@@ -4198,7 +6051,7 @@ approval_policy = "on-failure"
 enabled = false
 
 [profiles.gpt5]
-model = "gpt-5.1"
+model = "gpt-5.4"
 model_provider = "openai"
 approval_policy = "on-failure"
 model_reasoning_effort = "high"
@@ -4222,9 +6075,11 @@ model_verbosity = "high"
         name: "OpenAI custom".to_string(),
         base_url: Some("https://api.openai.com/v1".to_string()),
         env_key: Some("OPENAI_API_KEY".to_string()),
-        wire_api: crate::WireApi::Responses,
+        wire_api: WireApi::Responses,
         env_key_instructions: None,
         experimental_bearer_token: None,
+        auth: None,
+        aws: None,
         query_params: None,
         http_headers: None,
         env_http_headers: None,
@@ -4236,7 +6091,8 @@ model_verbosity = "high"
         supports_websockets: false,
     };
     let model_provider_map = {
-        let mut model_provider_map = built_in_model_providers(/* openai_base_url */ None);
+        let mut model_provider_map =
+            built_in_model_providers(/* openai_base_url */ /*openai_base_url*/ None);
         model_provider_map.insert("openai-custom".to_string(), openai_custom_provider.clone());
         model_provider_map
     };
@@ -4268,20 +6124,21 @@ model_verbosity = "high"
 ///
 /// Note that profiles are the recommended way to specify a group of
 /// configuration options together.
-#[test]
-fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
+#[tokio::test]
+async fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
     let fixture = create_test_fixture()?;
 
     let o3_profile_overrides = ConfigOverrides {
         config_profile: Some("o3".to_string()),
-        cwd: Some(fixture.cwd()),
+        cwd: Some(fixture.cwd_path()),
         ..Default::default()
     };
     let o3_profile_config: Config = Config::load_from_base_config_with_overrides(
         fixture.cfg.clone(),
         o3_profile_overrides,
         fixture.agiworkforce_home(),
-    )?;
+    )
+    .await?;
     assert_eq!(
         Config {
             model: Some("o3".to_string()),
@@ -4293,30 +6150,28 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             model_provider: fixture.openai_provider.clone(),
             permissions: Permissions {
                 approval_policy: Constrained::allow_any(AskForApproval::Never),
-                sandbox_policy: Constrained::allow_any(SandboxPolicy::new_read_only_policy()),
-                file_system_sandbox_policy: FileSystemSandboxPolicy::from(
-                    &SandboxPolicy::new_read_only_policy(),
-                ),
-                network_sandbox_policy: NetworkSandboxPolicy::Restricted,
+                permission_profile: Constrained::allow_any(PermissionProfile::read_only()),
                 network: None,
                 allow_login_shell: true,
                 shell_environment_policy: ShellEnvironmentPolicy::default(),
                 windows_sandbox_mode: None,
                 windows_sandbox_private_desktop: true,
-                macos_seatbelt_profile_extensions: None,
             },
             approvals_reviewer: ApprovalsReviewer::User,
-            enforce_residency: Constrained::allow_any(None),
+            enforce_residency: Constrained::allow_any(/*initial_value*/ None),
             user_instructions: None,
             notify: None,
             cwd: fixture.cwd(),
             cli_auth_credentials_store_mode: Default::default(),
             mcp_servers: Constrained::allow_any(HashMap::new()),
-            mcp_oauth_credentials_store_mode: Default::default(),
+            mcp_oauth_credentials_store_mode: resolve_mcp_oauth_credentials_store_mode(
+                Default::default(),
+                LOCAL_DEV_BUILD_VERSION,
+            ),
             mcp_oauth_callback_port: None,
             mcp_oauth_callback_url: None,
             model_providers: fixture.model_provider_map.clone(),
-            project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
+            project_doc_max_bytes: AGENTS_MD_MAX_BYTES,
             project_doc_fallback_filenames: Vec::new(),
             tool_output_token_limit: None,
             agent_max_threads: DEFAULT_AGENT_MAX_THREADS,
@@ -4324,18 +6179,18 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             agent_roles: BTreeMap::new(),
             memories: MemoriesConfig::default(),
             agent_job_max_runtime_seconds: DEFAULT_AGENT_JOB_MAX_RUNTIME_SECONDS,
+            agent_interrupt_message_enabled: true,
             agiworkforce_home: fixture.agiworkforce_home(),
-            sqlite_home: fixture.agiworkforce_home(),
-            log_dir: fixture.agiworkforce_home().join("log"),
+            sqlite_home: fixture.agiworkforce_home().to_path_buf(),
+            log_dir: fixture.agiworkforce_home().join("log").to_path_buf(),
             config_layer_stack: Default::default(),
             startup_warnings: Vec::new(),
             history: History::default(),
             ephemeral: false,
             file_opener: UriBasedFileOpener::VsCode,
+            agiworkforce_self_exe: None,
             agiworkforce_linux_sandbox_exe: None,
             main_execve_wrapper_exe: None,
-            js_repl_node_path: None,
-            js_repl_node_module_dirs: Vec::new(),
             zsh_path: None,
             hide_agent_reasoning: false,
             show_raw_agent_reasoning: false,
@@ -4347,7 +6202,7 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             model_verbosity: None,
             personality: Some(Personality::Pragmatic),
             chatgpt_base_url: "https://chatgpt.com/backend-api/".to_string(),
-            experimental_exec_server_url: None,
+            apps_mcp_path_override: None,
             realtime_audio: RealtimeAudioConfig::default(),
             experimental_realtime_start_instructions: None,
             experimental_realtime_ws_base_url: None,
@@ -4355,9 +6210,15 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             realtime: RealtimeConfig::default(),
             experimental_realtime_ws_backend_prompt: None,
             experimental_realtime_ws_startup_context: None,
+            experimental_thread_config_endpoint: None,
+            experimental_thread_store: ThreadStoreConfig::Local,
             base_instructions: None,
             developer_instructions: None,
-            guardian_developer_instructions: None,
+            guardian_policy_config: None,
+            include_permissions_instructions: true,
+            include_apps_instructions: true,
+            include_skill_instructions: true,
+            include_environment_context: true,
             compact_prompt: None,
             commit_attribution: None,
             forced_chatgpt_workspace_id: None,
@@ -4368,6 +6229,7 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             use_experimental_unified_exec_tool: !cfg!(windows),
             background_terminal_max_timeout: DEFAULT_MAX_BACKGROUND_TERMINAL_TIMEOUT_MS,
             ghost_snapshot: GhostSnapshotConfig::default(),
+            multi_agent_v2: MultiAgentV2Config::default(),
             features: Features::with_defaults().into(),
             suppress_unstable_features_warning: false,
             active_profile: Some("o3".to_string()),
@@ -4377,10 +6239,10 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             check_for_update_on_startup: true,
             disable_paste_burst: false,
             tui_notifications: Default::default(),
-            tui_notification_method: Default::default(),
             animations: true,
             show_tooltips: true,
             model_availability_nux: ModelAvailabilityNuxConfig::default(),
+            terminal_resize_reflow: TerminalResizeReflowConfig::default(),
             analytics_enabled: Some(true),
             feedback_enabled: true,
             tool_suggest: ToolSuggestConfig::default(),
@@ -4388,6 +6250,7 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             tui_status_line: None,
             tui_terminal_title: None,
             tui_theme: None,
+            tui_keymap: TuiKeymap::default(),
             otel: OtelConfig::default(),
         },
         o3_profile_config
@@ -4395,37 +6258,83 @@ fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn metrics_exporter_defaults_to_statsig_when_missing() -> std::io::Result<()> {
+#[tokio::test]
+async fn metrics_exporter_defaults_to_statsig_when_missing() -> std::io::Result<()> {
     let fixture = create_test_fixture()?;
 
     let config = Config::load_from_base_config_with_overrides(
         fixture.cfg.clone(),
         ConfigOverrides {
-            cwd: Some(fixture.cwd()),
+            cwd: Some(fixture.cwd_path()),
             ..Default::default()
         },
         fixture.agiworkforce_home(),
-    )?;
+    )
+    .await?;
 
     assert_eq!(config.otel.metrics_exporter, OtelExporterKind::Statsig);
     Ok(())
 }
 
-#[test]
-fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
+#[tokio::test]
+async fn explicit_null_service_tier_override_sets_fast_default_opt_out() -> std::io::Result<()> {
+    let fixture = create_test_fixture()?;
+
+    let config = Config::load_from_base_config_with_overrides(
+        fixture.cfg.clone(),
+        ConfigOverrides {
+            cwd: Some(fixture.cwd_path()),
+            service_tier: Some(None),
+            ..Default::default()
+        },
+        fixture.agiworkforce_home(),
+    )
+    .await?;
+
+    assert_eq!(config.service_tier, None);
+    assert_eq!(config.notices.fast_default_opt_out, Some(true));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fast_default_opt_out_notice_config_is_respected() -> std::io::Result<()> {
+    let fixture = create_test_fixture()?;
+    let mut cfg = fixture.cfg.clone();
+    cfg.notice = Some(Notice {
+        fast_default_opt_out: Some(true),
+        ..Default::default()
+    });
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides {
+            cwd: Some(fixture.cwd_path()),
+            ..Default::default()
+        },
+        fixture.agiworkforce_home(),
+    )
+    .await?;
+
+    assert_eq!(config.service_tier, None);
+    assert_eq!(config.notices.fast_default_opt_out, Some(true));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
     let fixture = create_test_fixture()?;
 
     let gpt3_profile_overrides = ConfigOverrides {
         config_profile: Some("gpt3".to_string()),
-        cwd: Some(fixture.cwd()),
+        cwd: Some(fixture.cwd_path()),
         ..Default::default()
     };
     let gpt3_profile_config = Config::load_from_base_config_with_overrides(
         fixture.cfg.clone(),
         gpt3_profile_overrides,
         fixture.agiworkforce_home(),
-    )?;
+    )
+    .await?;
     let expected_gpt3_profile_config = Config {
         model: Some("gpt-3.5-turbo".to_string()),
         review_model: None,
@@ -4436,30 +6345,28 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         model_provider: fixture.openai_custom_provider.clone(),
         permissions: Permissions {
             approval_policy: Constrained::allow_any(AskForApproval::UnlessTrusted),
-            sandbox_policy: Constrained::allow_any(SandboxPolicy::new_read_only_policy()),
-            file_system_sandbox_policy: FileSystemSandboxPolicy::from(
-                &SandboxPolicy::new_read_only_policy(),
-            ),
-            network_sandbox_policy: NetworkSandboxPolicy::Restricted,
+            permission_profile: Constrained::allow_any(PermissionProfile::read_only()),
             network: None,
             allow_login_shell: true,
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             windows_sandbox_mode: None,
             windows_sandbox_private_desktop: true,
-            macos_seatbelt_profile_extensions: None,
         },
         approvals_reviewer: ApprovalsReviewer::User,
-        enforce_residency: Constrained::allow_any(None),
+        enforce_residency: Constrained::allow_any(/*initial_value*/ None),
         user_instructions: None,
         notify: None,
         cwd: fixture.cwd(),
         cli_auth_credentials_store_mode: Default::default(),
         mcp_servers: Constrained::allow_any(HashMap::new()),
-        mcp_oauth_credentials_store_mode: Default::default(),
+        mcp_oauth_credentials_store_mode: resolve_mcp_oauth_credentials_store_mode(
+            Default::default(),
+            LOCAL_DEV_BUILD_VERSION,
+        ),
         mcp_oauth_callback_port: None,
         mcp_oauth_callback_url: None,
         model_providers: fixture.model_provider_map.clone(),
-        project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
+        project_doc_max_bytes: AGENTS_MD_MAX_BYTES,
         project_doc_fallback_filenames: Vec::new(),
         tool_output_token_limit: None,
         agent_max_threads: DEFAULT_AGENT_MAX_THREADS,
@@ -4467,18 +6374,18 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         agent_roles: BTreeMap::new(),
         memories: MemoriesConfig::default(),
         agent_job_max_runtime_seconds: DEFAULT_AGENT_JOB_MAX_RUNTIME_SECONDS,
+        agent_interrupt_message_enabled: true,
         agiworkforce_home: fixture.agiworkforce_home(),
-        sqlite_home: fixture.agiworkforce_home(),
-        log_dir: fixture.agiworkforce_home().join("log"),
+        sqlite_home: fixture.agiworkforce_home().to_path_buf(),
+        log_dir: fixture.agiworkforce_home().join("log").to_path_buf(),
         config_layer_stack: Default::default(),
         startup_warnings: Vec::new(),
         history: History::default(),
         ephemeral: false,
         file_opener: UriBasedFileOpener::VsCode,
+        agiworkforce_self_exe: None,
         agiworkforce_linux_sandbox_exe: None,
         main_execve_wrapper_exe: None,
-        js_repl_node_path: None,
-        js_repl_node_module_dirs: Vec::new(),
         zsh_path: None,
         hide_agent_reasoning: false,
         show_raw_agent_reasoning: false,
@@ -4490,7 +6397,7 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         model_verbosity: None,
         personality: Some(Personality::Pragmatic),
         chatgpt_base_url: "https://chatgpt.com/backend-api/".to_string(),
-        experimental_exec_server_url: None,
+        apps_mcp_path_override: None,
         realtime_audio: RealtimeAudioConfig::default(),
         experimental_realtime_start_instructions: None,
         experimental_realtime_ws_base_url: None,
@@ -4498,9 +6405,15 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         realtime: RealtimeConfig::default(),
         experimental_realtime_ws_backend_prompt: None,
         experimental_realtime_ws_startup_context: None,
+        experimental_thread_config_endpoint: None,
+        experimental_thread_store: ThreadStoreConfig::Local,
         base_instructions: None,
         developer_instructions: None,
-        guardian_developer_instructions: None,
+        guardian_policy_config: None,
+        include_permissions_instructions: true,
+        include_apps_instructions: true,
+        include_skill_instructions: true,
+        include_environment_context: true,
         compact_prompt: None,
         commit_attribution: None,
         forced_chatgpt_workspace_id: None,
@@ -4511,6 +6424,7 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         use_experimental_unified_exec_tool: !cfg!(windows),
         background_terminal_max_timeout: DEFAULT_MAX_BACKGROUND_TERMINAL_TIMEOUT_MS,
         ghost_snapshot: GhostSnapshotConfig::default(),
+        multi_agent_v2: MultiAgentV2Config::default(),
         features: Features::with_defaults().into(),
         suppress_unstable_features_warning: false,
         active_profile: Some("gpt3".to_string()),
@@ -4520,10 +6434,10 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         check_for_update_on_startup: true,
         disable_paste_burst: false,
         tui_notifications: Default::default(),
-        tui_notification_method: Default::default(),
         animations: true,
         show_tooltips: true,
         model_availability_nux: ModelAvailabilityNuxConfig::default(),
+        terminal_resize_reflow: TerminalResizeReflowConfig::default(),
         analytics_enabled: Some(true),
         feedback_enabled: true,
         tool_suggest: ToolSuggestConfig::default(),
@@ -4531,6 +6445,7 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         tui_status_line: None,
         tui_terminal_title: None,
         tui_theme: None,
+        tui_keymap: TuiKeymap::default(),
         otel: OtelConfig::default(),
     };
 
@@ -4539,7 +6454,7 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
     // Verify that loading without specifying a profile in ConfigOverrides
     // uses the default profile from the config file (which is "gpt3").
     let default_profile_overrides = ConfigOverrides {
-        cwd: Some(fixture.cwd()),
+        cwd: Some(fixture.cwd_path()),
         ..Default::default()
     };
 
@@ -4547,26 +6462,28 @@ fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         fixture.cfg.clone(),
         default_profile_overrides,
         fixture.agiworkforce_home(),
-    )?;
+    )
+    .await?;
 
     assert_eq!(expected_gpt3_profile_config, default_profile_config);
     Ok(())
 }
 
-#[test]
-fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
+#[tokio::test]
+async fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
     let fixture = create_test_fixture()?;
 
     let zdr_profile_overrides = ConfigOverrides {
         config_profile: Some("zdr".to_string()),
-        cwd: Some(fixture.cwd()),
+        cwd: Some(fixture.cwd_path()),
         ..Default::default()
     };
     let zdr_profile_config = Config::load_from_base_config_with_overrides(
         fixture.cfg.clone(),
         zdr_profile_overrides,
         fixture.agiworkforce_home(),
-    )?;
+    )
+    .await?;
     let expected_zdr_profile_config = Config {
         model: Some("o3".to_string()),
         review_model: None,
@@ -4577,30 +6494,28 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         model_provider: fixture.openai_provider.clone(),
         permissions: Permissions {
             approval_policy: Constrained::allow_any(AskForApproval::OnFailure),
-            sandbox_policy: Constrained::allow_any(SandboxPolicy::new_read_only_policy()),
-            file_system_sandbox_policy: FileSystemSandboxPolicy::from(
-                &SandboxPolicy::new_read_only_policy(),
-            ),
-            network_sandbox_policy: NetworkSandboxPolicy::Restricted,
+            permission_profile: Constrained::allow_any(PermissionProfile::read_only()),
             network: None,
             allow_login_shell: true,
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             windows_sandbox_mode: None,
             windows_sandbox_private_desktop: true,
-            macos_seatbelt_profile_extensions: None,
         },
         approvals_reviewer: ApprovalsReviewer::User,
-        enforce_residency: Constrained::allow_any(None),
+        enforce_residency: Constrained::allow_any(/*initial_value*/ None),
         user_instructions: None,
         notify: None,
         cwd: fixture.cwd(),
         cli_auth_credentials_store_mode: Default::default(),
         mcp_servers: Constrained::allow_any(HashMap::new()),
-        mcp_oauth_credentials_store_mode: Default::default(),
+        mcp_oauth_credentials_store_mode: resolve_mcp_oauth_credentials_store_mode(
+            Default::default(),
+            LOCAL_DEV_BUILD_VERSION,
+        ),
         mcp_oauth_callback_port: None,
         mcp_oauth_callback_url: None,
         model_providers: fixture.model_provider_map.clone(),
-        project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
+        project_doc_max_bytes: AGENTS_MD_MAX_BYTES,
         project_doc_fallback_filenames: Vec::new(),
         tool_output_token_limit: None,
         agent_max_threads: DEFAULT_AGENT_MAX_THREADS,
@@ -4608,18 +6523,18 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         agent_roles: BTreeMap::new(),
         memories: MemoriesConfig::default(),
         agent_job_max_runtime_seconds: DEFAULT_AGENT_JOB_MAX_RUNTIME_SECONDS,
+        agent_interrupt_message_enabled: true,
         agiworkforce_home: fixture.agiworkforce_home(),
-        sqlite_home: fixture.agiworkforce_home(),
-        log_dir: fixture.agiworkforce_home().join("log"),
+        sqlite_home: fixture.agiworkforce_home().to_path_buf(),
+        log_dir: fixture.agiworkforce_home().join("log").to_path_buf(),
         config_layer_stack: Default::default(),
         startup_warnings: Vec::new(),
         history: History::default(),
         ephemeral: false,
         file_opener: UriBasedFileOpener::VsCode,
+        agiworkforce_self_exe: None,
         agiworkforce_linux_sandbox_exe: None,
         main_execve_wrapper_exe: None,
-        js_repl_node_path: None,
-        js_repl_node_module_dirs: Vec::new(),
         zsh_path: None,
         hide_agent_reasoning: false,
         show_raw_agent_reasoning: false,
@@ -4631,7 +6546,7 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         model_verbosity: None,
         personality: Some(Personality::Pragmatic),
         chatgpt_base_url: "https://chatgpt.com/backend-api/".to_string(),
-        experimental_exec_server_url: None,
+        apps_mcp_path_override: None,
         realtime_audio: RealtimeAudioConfig::default(),
         experimental_realtime_start_instructions: None,
         experimental_realtime_ws_base_url: None,
@@ -4639,9 +6554,15 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         realtime: RealtimeConfig::default(),
         experimental_realtime_ws_backend_prompt: None,
         experimental_realtime_ws_startup_context: None,
+        experimental_thread_config_endpoint: None,
+        experimental_thread_store: ThreadStoreConfig::Local,
         base_instructions: None,
         developer_instructions: None,
-        guardian_developer_instructions: None,
+        guardian_policy_config: None,
+        include_permissions_instructions: true,
+        include_apps_instructions: true,
+        include_skill_instructions: true,
+        include_environment_context: true,
         compact_prompt: None,
         commit_attribution: None,
         forced_chatgpt_workspace_id: None,
@@ -4652,6 +6573,7 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         use_experimental_unified_exec_tool: !cfg!(windows),
         background_terminal_max_timeout: DEFAULT_MAX_BACKGROUND_TERMINAL_TIMEOUT_MS,
         ghost_snapshot: GhostSnapshotConfig::default(),
+        multi_agent_v2: MultiAgentV2Config::default(),
         features: Features::with_defaults().into(),
         suppress_unstable_features_warning: false,
         active_profile: Some("zdr".to_string()),
@@ -4661,10 +6583,10 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         check_for_update_on_startup: true,
         disable_paste_burst: false,
         tui_notifications: Default::default(),
-        tui_notification_method: Default::default(),
         animations: true,
         show_tooltips: true,
         model_availability_nux: ModelAvailabilityNuxConfig::default(),
+        terminal_resize_reflow: TerminalResizeReflowConfig::default(),
         analytics_enabled: Some(false),
         feedback_enabled: true,
         tool_suggest: ToolSuggestConfig::default(),
@@ -4672,6 +6594,7 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         tui_status_line: None,
         tui_terminal_title: None,
         tui_theme: None,
+        tui_keymap: TuiKeymap::default(),
         otel: OtelConfig::default(),
     };
 
@@ -4680,22 +6603,23 @@ fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
+#[tokio::test]
+async fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
     let fixture = create_test_fixture()?;
 
     let gpt5_profile_overrides = ConfigOverrides {
         config_profile: Some("gpt5".to_string()),
-        cwd: Some(fixture.cwd()),
+        cwd: Some(fixture.cwd_path()),
         ..Default::default()
     };
     let gpt5_profile_config = Config::load_from_base_config_with_overrides(
         fixture.cfg.clone(),
         gpt5_profile_overrides,
         fixture.agiworkforce_home(),
-    )?;
+    )
+    .await?;
     let expected_gpt5_profile_config = Config {
-        model: Some("gpt-5.1".to_string()),
+        model: Some("gpt-5.4".to_string()),
         review_model: None,
         model_context_window: None,
         model_auto_compact_token_limit: None,
@@ -4704,30 +6628,28 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         model_provider: fixture.openai_provider.clone(),
         permissions: Permissions {
             approval_policy: Constrained::allow_any(AskForApproval::OnFailure),
-            sandbox_policy: Constrained::allow_any(SandboxPolicy::new_read_only_policy()),
-            file_system_sandbox_policy: FileSystemSandboxPolicy::from(
-                &SandboxPolicy::new_read_only_policy(),
-            ),
-            network_sandbox_policy: NetworkSandboxPolicy::Restricted,
+            permission_profile: Constrained::allow_any(PermissionProfile::read_only()),
             network: None,
             allow_login_shell: true,
             shell_environment_policy: ShellEnvironmentPolicy::default(),
             windows_sandbox_mode: None,
             windows_sandbox_private_desktop: true,
-            macos_seatbelt_profile_extensions: None,
         },
         approvals_reviewer: ApprovalsReviewer::User,
-        enforce_residency: Constrained::allow_any(None),
+        enforce_residency: Constrained::allow_any(/*initial_value*/ None),
         user_instructions: None,
         notify: None,
         cwd: fixture.cwd(),
         cli_auth_credentials_store_mode: Default::default(),
         mcp_servers: Constrained::allow_any(HashMap::new()),
-        mcp_oauth_credentials_store_mode: Default::default(),
+        mcp_oauth_credentials_store_mode: resolve_mcp_oauth_credentials_store_mode(
+            Default::default(),
+            LOCAL_DEV_BUILD_VERSION,
+        ),
         mcp_oauth_callback_port: None,
         mcp_oauth_callback_url: None,
         model_providers: fixture.model_provider_map.clone(),
-        project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
+        project_doc_max_bytes: AGENTS_MD_MAX_BYTES,
         project_doc_fallback_filenames: Vec::new(),
         tool_output_token_limit: None,
         agent_max_threads: DEFAULT_AGENT_MAX_THREADS,
@@ -4735,18 +6657,18 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         agent_roles: BTreeMap::new(),
         memories: MemoriesConfig::default(),
         agent_job_max_runtime_seconds: DEFAULT_AGENT_JOB_MAX_RUNTIME_SECONDS,
+        agent_interrupt_message_enabled: true,
         agiworkforce_home: fixture.agiworkforce_home(),
-        sqlite_home: fixture.agiworkforce_home(),
-        log_dir: fixture.agiworkforce_home().join("log"),
+        sqlite_home: fixture.agiworkforce_home().to_path_buf(),
+        log_dir: fixture.agiworkforce_home().join("log").to_path_buf(),
         config_layer_stack: Default::default(),
         startup_warnings: Vec::new(),
         history: History::default(),
         ephemeral: false,
         file_opener: UriBasedFileOpener::VsCode,
+        agiworkforce_self_exe: None,
         agiworkforce_linux_sandbox_exe: None,
         main_execve_wrapper_exe: None,
-        js_repl_node_path: None,
-        js_repl_node_module_dirs: Vec::new(),
         zsh_path: None,
         hide_agent_reasoning: false,
         show_raw_agent_reasoning: false,
@@ -4758,7 +6680,7 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         model_verbosity: Some(Verbosity::High),
         personality: Some(Personality::Pragmatic),
         chatgpt_base_url: "https://chatgpt.com/backend-api/".to_string(),
-        experimental_exec_server_url: None,
+        apps_mcp_path_override: None,
         realtime_audio: RealtimeAudioConfig::default(),
         experimental_realtime_start_instructions: None,
         experimental_realtime_ws_base_url: None,
@@ -4766,9 +6688,15 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         realtime: RealtimeConfig::default(),
         experimental_realtime_ws_backend_prompt: None,
         experimental_realtime_ws_startup_context: None,
+        experimental_thread_config_endpoint: None,
+        experimental_thread_store: ThreadStoreConfig::Local,
         base_instructions: None,
         developer_instructions: None,
-        guardian_developer_instructions: None,
+        guardian_policy_config: None,
+        include_permissions_instructions: true,
+        include_apps_instructions: true,
+        include_skill_instructions: true,
+        include_environment_context: true,
         compact_prompt: None,
         commit_attribution: None,
         forced_chatgpt_workspace_id: None,
@@ -4779,6 +6707,7 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         use_experimental_unified_exec_tool: !cfg!(windows),
         background_terminal_max_timeout: DEFAULT_MAX_BACKGROUND_TERMINAL_TIMEOUT_MS,
         ghost_snapshot: GhostSnapshotConfig::default(),
+        multi_agent_v2: MultiAgentV2Config::default(),
         features: Features::with_defaults().into(),
         suppress_unstable_features_warning: false,
         active_profile: Some("gpt5".to_string()),
@@ -4788,10 +6717,10 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         check_for_update_on_startup: true,
         disable_paste_burst: false,
         tui_notifications: Default::default(),
-        tui_notification_method: Default::default(),
         animations: true,
         show_tooltips: true,
         model_availability_nux: ModelAvailabilityNuxConfig::default(),
+        terminal_resize_reflow: TerminalResizeReflowConfig::default(),
         analytics_enabled: Some(true),
         feedback_enabled: true,
         tool_suggest: ToolSuggestConfig::default(),
@@ -4799,6 +6728,7 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         tui_status_line: None,
         tui_terminal_title: None,
         tui_theme: None,
+        tui_keymap: TuiKeymap::default(),
         otel: OtelConfig::default(),
     };
 
@@ -4807,25 +6737,29 @@ fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_requirements_web_search_mode_allowlist_does_not_warn_when_unset() -> anyhow::Result<()> {
+#[tokio::test]
+async fn test_requirements_web_search_mode_allowlist_does_not_warn_when_unset() -> anyhow::Result<()>
+{
     let fixture = create_test_fixture()?;
 
-    let requirements_toml = crate::config_loader::ConfigRequirementsToml {
+    let requirements_toml = agiworkforce_config::ConfigRequirementsToml {
         allowed_approval_policies: None,
+        allowed_approvals_reviewers: None,
         allowed_sandbox_modes: None,
-        allowed_web_search_modes: Some(vec![
-            crate::config_loader::WebSearchModeRequirement::Cached,
-        ]),
+        remote_sandbox_config: None,
+        allowed_web_search_modes: Some(vec![agiworkforce_config::WebSearchModeRequirement::Cached]),
         feature_requirements: None,
+        hooks: None,
         mcp_servers: None,
+        plugins: None,
         apps: None,
         rules: None,
         enforce_residency: None,
         network: None,
-        guardian_developer_instructions: None,
+        permissions: None,
+        guardian_policy_config: None,
     };
-    let requirement_source = crate::config_loader::RequirementSource::Unknown;
+    let requirement_source = agiworkforce_config::RequirementSource::Unknown;
     let requirement_source_for_error = requirement_source.clone();
     let allowed = vec![WebSearchMode::Disabled, WebSearchMode::Cached];
     let constrained = Constrained::new(WebSearchMode::Cached, move |candidate| {
@@ -4840,26 +6774,28 @@ fn test_requirements_web_search_mode_allowlist_does_not_warn_when_unset() -> any
             })
         }
     })?;
-    let requirements = crate::config_loader::ConfigRequirements {
-        web_search_mode: crate::config_loader::ConstrainedWithSource::new(
+    let requirements = agiworkforce_config::ConfigRequirements {
+        web_search_mode: agiworkforce_config::ConstrainedWithSource::new(
             constrained,
             Some(requirement_source),
         ),
         ..Default::default()
     };
     let config_layer_stack =
-        crate::config_loader::ConfigLayerStack::new(Vec::new(), requirements, requirements_toml)
+        agiworkforce_config::ConfigLayerStack::new(Vec::new(), requirements, requirements_toml)
             .expect("config layer stack");
 
     let config = Config::load_config_with_layer_stack(
+        LOCAL_FS.as_ref(),
         fixture.cfg.clone(),
         ConfigOverrides {
-            cwd: Some(fixture.cwd()),
+            cwd: Some(fixture.cwd_path()),
             ..Default::default()
         },
         fixture.agiworkforce_home(),
         config_layer_stack,
-    )?;
+    )
+    .await?;
 
     assert!(
         !config
@@ -4951,7 +6887,9 @@ model = "foo""#;
 
     // Since we created the [projects] table as part of migration, it is kept implicit.
     // Expect explicit per-project tables, preserving prior entries and appending the new one.
-    let expected = r#"toplevel = "baz"
+    let new_project_key = project_trust_key(new_project);
+    let expected = format!(
+        r#"toplevel = "baz"
 model = "foo"
 
 [projects."/Users/mbolin/code/codex4"]
@@ -4961,10 +6899,38 @@ foo = "bar"
 [projects."/Users/mbolin/code/codex3"]
 trust_level = "trusted"
 
-[projects."/Users/mbolin/code/codex2"]
+[projects."{new_project_key}"]
 trust_level = "trusted"
-"#;
+"#
+    );
     assert_eq!(contents, expected);
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn active_project_does_not_match_configured_alias_for_canonical_cwd() -> anyhow::Result<()> {
+    let tmp = tempdir()?;
+    let project_root = tmp.path().join("project");
+    let alias_root = tmp.path().join("project_alias");
+    std::fs::create_dir_all(&project_root)?;
+    std::os::unix::fs::symlink(&project_root, &alias_root)?;
+
+    let config = ConfigToml {
+        projects: Some(HashMap::from([(
+            alias_root.to_string_lossy().to_string(),
+            ProjectConfig {
+                trust_level: Some(TrustLevel::Trusted),
+            },
+        )])),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.get_active_project(&project_root, /*repo_root*/ None),
+        None
+    );
 
     Ok(())
 }
@@ -5022,9 +6988,9 @@ fn test_set_default_oss_provider_rejects_legacy_ollama_chat_provider() -> std::i
     Ok(())
 }
 
-#[test]
-fn test_load_config_rejects_legacy_ollama_chat_provider_with_helpful_error() -> std::io::Result<()>
-{
+#[tokio::test]
+async fn test_load_config_rejects_legacy_ollama_chat_provider_with_helpful_error()
+-> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg = ConfigToml {
         model_provider: Some(LEGACY_OLLAMA_CHAT_PROVIDER_ID.to_string()),
@@ -5034,8 +7000,9 @@ fn test_load_config_rejects_legacy_ollama_chat_provider_with_helpful_error() -> 
     let result = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    );
+        agiworkforce_home.abs(),
+    )
+    .await;
     assert!(result.is_err());
     let error = result.unwrap_err();
     assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
@@ -5048,8 +7015,8 @@ fn test_load_config_rejects_legacy_ollama_chat_provider_with_helpful_error() -> 
     Ok(())
 }
 
-#[test]
-fn test_untrusted_project_gets_workspace_write_sandbox() -> anyhow::Result<()> {
+#[tokio::test]
+async fn test_untrusted_project_gets_workspace_write_sandbox() -> anyhow::Result<()> {
     let config_with_untrusted = r#"
 [projects."/tmp/test"]
 trust_level = "untrusted"
@@ -5057,14 +7024,19 @@ trust_level = "untrusted"
 
     let cfg = toml::from_str::<ConfigToml>(config_with_untrusted)
         .expect("TOML deserialization should succeed");
+    let active_project = ProjectConfig {
+        trust_level: Some(TrustLevel::Untrusted),
+    };
 
-    let resolution = cfg.derive_sandbox_policy(
-        None,
-        None,
+    let resolution = derive_legacy_sandbox_policy_for_test(
+        &cfg,
+        /*sandbox_mode_override*/ None,
+        /*profile_sandbox_mode*/ None,
         WindowsSandboxLevel::Disabled,
-        &PathBuf::from("/tmp/test"),
-        None,
-    );
+        Some(&active_project),
+        /*permission_profile_constraint*/ None,
+    )
+    .await;
 
     // Verify that untrusted projects get WorkspaceWrite (or ReadOnly on Windows due to downgrade)
     if cfg!(target_os = "windows") {
@@ -5082,8 +7054,8 @@ trust_level = "untrusted"
     Ok(())
 }
 
-#[test]
-fn derive_sandbox_policy_falls_back_to_constraint_value_for_implicit_defaults() -> anyhow::Result<()>
+#[tokio::test]
+async fn derive_sandbox_policy_falls_back_to_read_only_for_implicit_defaults() -> anyhow::Result<()>
 {
     let project_dir = TempDir::new()?;
     let project_path = project_dir.path().to_path_buf();
@@ -5097,34 +7069,39 @@ fn derive_sandbox_policy_falls_back_to_constraint_value_for_implicit_defaults() 
         )])),
         ..Default::default()
     };
-    let constrained = Constrained::new(SandboxPolicy::DangerFullAccess, |candidate| {
-        if matches!(candidate, SandboxPolicy::DangerFullAccess) {
+    let active_project = ProjectConfig {
+        trust_level: Some(TrustLevel::Trusted),
+    };
+    let constrained = Constrained::new(PermissionProfile::read_only(), |candidate| {
+        if candidate == &PermissionProfile::read_only() {
             Ok(())
         } else {
             Err(ConstraintError::InvalidValue {
                 field_name: "sandbox_mode",
                 candidate: format!("{candidate:?}"),
-                allowed: "[DangerFullAccess]".to_string(),
+                allowed: "[ReadOnly]".to_string(),
                 requirement_source: RequirementSource::Unknown,
             })
         }
     })?;
 
-    let resolution = cfg.derive_sandbox_policy(
-        None,
-        None,
+    let resolution = derive_legacy_sandbox_policy_for_test(
+        &cfg,
+        /*sandbox_mode_override*/ None,
+        /*profile_sandbox_mode*/ None,
         WindowsSandboxLevel::Disabled,
-        &project_path,
+        Some(&active_project),
         Some(&constrained),
-    );
+    )
+    .await;
 
-    assert_eq!(resolution, SandboxPolicy::DangerFullAccess);
+    assert_eq!(resolution, SandboxPolicy::new_read_only_policy());
     Ok(())
 }
 
-#[test]
-fn derive_sandbox_policy_preserves_windows_downgrade_for_unsupported_fallback() -> anyhow::Result<()>
-{
+#[tokio::test]
+async fn derive_sandbox_policy_preserves_windows_downgrade_for_unsupported_fallback()
+-> anyhow::Result<()> {
     let project_dir = TempDir::new()?;
     let project_path = project_dir.path().to_path_buf();
     let project_key = project_path.to_string_lossy().to_string();
@@ -5137,26 +7114,42 @@ fn derive_sandbox_policy_preserves_windows_downgrade_for_unsupported_fallback() 
         )])),
         ..Default::default()
     };
-    let constrained = Constrained::new(SandboxPolicy::new_workspace_write_policy(), |candidate| {
-        if matches!(candidate, SandboxPolicy::WorkspaceWrite { .. }) {
-            Ok(())
-        } else {
-            Err(ConstraintError::InvalidValue {
-                field_name: "sandbox_mode",
-                candidate: format!("{candidate:?}"),
-                allowed: "[WorkspaceWrite]".to_string(),
-                requirement_source: RequirementSource::Unknown,
-            })
-        }
-    })?;
+    let active_project = ProjectConfig {
+        trust_level: Some(TrustLevel::Trusted),
+    };
+    let constrained = Constrained::new(
+        PermissionProfile::from_legacy_sandbox_policy(&SandboxPolicy::new_workspace_write_policy()),
+        |candidate| {
+            if matches!(
+                candidate,
+                PermissionProfile::Managed {
+                    file_system: ManagedFileSystemPermissions::Restricted { entries, .. },
+                    ..
+                } if entries
+                        .iter()
+                        .any(|entry| entry.access.can_write())
+            ) {
+                Ok(())
+            } else {
+                Err(ConstraintError::InvalidValue {
+                    field_name: "sandbox_mode",
+                    candidate: format!("{candidate:?}"),
+                    allowed: "[WorkspaceWrite]".to_string(),
+                    requirement_source: RequirementSource::Unknown,
+                })
+            }
+        },
+    )?;
 
-    let resolution = cfg.derive_sandbox_policy(
-        None,
-        None,
+    let resolution = derive_legacy_sandbox_policy_for_test(
+        &cfg,
+        /*sandbox_mode_override*/ None,
+        /*profile_sandbox_mode*/ None,
         WindowsSandboxLevel::Disabled,
-        &project_path,
+        Some(&active_project),
         Some(&constrained),
-    );
+    )
+    .await;
 
     if cfg!(target_os = "windows") {
         assert_eq!(resolution, SandboxPolicy::new_read_only_policy());
@@ -5169,7 +7162,11 @@ fn derive_sandbox_policy_preserves_windows_downgrade_for_unsupported_fallback() 
 #[test]
 fn test_resolve_oss_provider_explicit_override() {
     let config_toml = ConfigToml::default();
-    let result = resolve_oss_provider(Some("custom-provider"), &config_toml, None);
+    let result = resolve_oss_provider(
+        Some("custom-provider"),
+        &config_toml,
+        /*config_profile*/ None,
+    );
     assert_eq!(result, Some("custom-provider".to_string()));
 }
 
@@ -5186,7 +7183,11 @@ fn test_resolve_oss_provider_from_profile() {
         ..Default::default()
     };
 
-    let result = resolve_oss_provider(None, &config_toml, Some("test-profile".to_string()));
+    let result = resolve_oss_provider(
+        /*explicit_provider*/ None,
+        &config_toml,
+        Some("test-profile".to_string()),
+    );
     assert_eq!(result, Some("profile-provider".to_string()));
 }
 
@@ -5197,7 +7198,11 @@ fn test_resolve_oss_provider_from_global_config() {
         ..Default::default()
     };
 
-    let result = resolve_oss_provider(None, &config_toml, None);
+    let result = resolve_oss_provider(
+        /*explicit_provider*/ None,
+        &config_toml,
+        /*config_profile*/ None,
+    );
     assert_eq!(result, Some("global-provider".to_string()));
 }
 
@@ -5212,14 +7217,22 @@ fn test_resolve_oss_provider_profile_fallback_to_global() {
         ..Default::default()
     };
 
-    let result = resolve_oss_provider(None, &config_toml, Some("test-profile".to_string()));
+    let result = resolve_oss_provider(
+        /*explicit_provider*/ None,
+        &config_toml,
+        Some("test-profile".to_string()),
+    );
     assert_eq!(result, Some("global-provider".to_string()));
 }
 
 #[test]
 fn test_resolve_oss_provider_none_when_not_configured() {
     let config_toml = ConfigToml::default();
-    let result = resolve_oss_provider(None, &config_toml, None);
+    let result = resolve_oss_provider(
+        /*explicit_provider*/ None,
+        &config_toml,
+        /*config_profile*/ None,
+    );
     assert_eq!(result, None);
 }
 
@@ -5264,11 +7277,11 @@ fn config_toml_deserializes_mcp_oauth_callback_url() {
     );
 }
 
-#[test]
-fn config_loads_mcp_oauth_callback_port_from_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn config_loads_mcp_oauth_callback_port_from_toml() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let toml = r#"
-model = "gpt-5.1"
+model = "gpt-5.4"
 mcp_oauth_callback_port = 5678
 "#;
     let cfg: ConfigToml =
@@ -5277,19 +7290,20 @@ mcp_oauth_callback_port = 5678
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(config.mcp_oauth_callback_port, Some(5678));
     Ok(())
 }
 
-#[test]
-fn config_loads_allow_login_shell_from_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn config_loads_allow_login_shell_from_toml() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let cfg: ConfigToml = toml::from_str(
         r#"
-model = "gpt-5.1"
+model = "gpt-5.4"
 allow_login_shell = false
 "#,
     )
@@ -5298,18 +7312,45 @@ allow_login_shell = false
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert!(!config.permissions.allow_login_shell);
     Ok(())
 }
 
-#[test]
-fn config_loads_mcp_oauth_callback_url_from_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn config_loads_apps_mcp_path_override_from_feature_config() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let toml = r#"
-model = "gpt-5.1"
+model = "gpt-5.4"
+
+[features.apps_mcp_path_override]
+path = "/custom/mcp"
+"#;
+    let cfg: ConfigToml =
+        toml::from_str(toml).expect("TOML deserialization should succeed for apps MCP feature");
+
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(
+        config.apps_mcp_path_override.as_deref(),
+        Some("/custom/mcp")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn config_loads_mcp_oauth_callback_url_from_toml() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let toml = r#"
+model = "gpt-5.4"
 mcp_oauth_callback_url = "https://example.com/callback"
 "#;
     let cfg: ConfigToml =
@@ -5318,8 +7359,9 @@ mcp_oauth_callback_url = "https://example.com/callback"
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.mcp_oauth_callback_url.as_deref(),
@@ -5328,8 +7370,8 @@ mcp_oauth_callback_url = "https://example.com/callback"
     Ok(())
 }
 
-#[test]
-fn test_untrusted_project_gets_unless_trusted_approval_policy() -> anyhow::Result<()> {
+#[tokio::test]
+async fn test_untrusted_project_gets_unless_trusted_approval_policy() -> anyhow::Result<()> {
     let agiworkforce_home = TempDir::new()?;
     let test_project_dir = TempDir::new()?;
     let test_path = test_project_dir.path();
@@ -5348,8 +7390,9 @@ fn test_untrusted_project_gets_unless_trusted_approval_policy() -> anyhow::Resul
             cwd: Some(test_path.to_path_buf()),
             ..Default::default()
         },
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     // Verify that untrusted projects get UnlessTrusted approval policy
     assert_eq!(
@@ -5362,7 +7405,7 @@ fn test_untrusted_project_gets_unless_trusted_approval_policy() -> anyhow::Resul
     if cfg!(target_os = "windows") {
         assert!(
             matches!(
-                config.permissions.sandbox_policy.get(),
+                &config.legacy_sandbox_policy(),
                 SandboxPolicy::ReadOnly { .. }
             ),
             "Expected ReadOnly on Windows"
@@ -5370,7 +7413,7 @@ fn test_untrusted_project_gets_unless_trusted_approval_policy() -> anyhow::Resul
     } else {
         assert!(
             matches!(
-                config.permissions.sandbox_policy.get(),
+                &config.legacy_sandbox_policy(),
                 SandboxPolicy::WorkspaceWrite { .. }
             ),
             "Expected WorkspaceWrite sandbox for untrusted project"
@@ -5385,20 +7428,18 @@ async fn requirements_disallowing_default_sandbox_falls_back_to_required_default
 -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .cloud_requirements(CloudRequirementsLoader::new(async {
-            Ok(Some(crate::config_loader::ConfigRequirementsToml {
-                allowed_sandbox_modes: Some(vec![
-                    crate::config_loader::SandboxModeRequirement::ReadOnly,
-                ]),
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                allowed_sandbox_modes: Some(vec![agiworkforce_config::SandboxModeRequirement::ReadOnly]),
                 ..Default::default()
             }))
         }))
         .build()
         .await?;
     assert_eq!(
-        *config.permissions.sandbox_policy.get(),
+        config.legacy_sandbox_policy(),
         SandboxPolicy::new_read_only_policy()
     );
     Ok(())
@@ -5413,20 +7454,25 @@ async fn explicit_sandbox_mode_falls_back_when_disallowed_by_requirements() -> s
 "#,
     )?;
 
-    let requirements = crate::config_loader::ConfigRequirementsToml {
+    let requirements = agiworkforce_config::ConfigRequirementsToml {
         allowed_approval_policies: None,
-        allowed_sandbox_modes: Some(vec![crate::config_loader::SandboxModeRequirement::ReadOnly]),
+        allowed_approvals_reviewers: None,
+        allowed_sandbox_modes: Some(vec![agiworkforce_config::SandboxModeRequirement::ReadOnly]),
+        remote_sandbox_config: None,
         allowed_web_search_modes: None,
         feature_requirements: None,
+        hooks: None,
         mcp_servers: None,
+        plugins: None,
         apps: None,
         rules: None,
         enforce_residency: None,
         network: None,
-        guardian_developer_instructions: None,
+        permissions: None,
+        guardian_policy_config: None,
     };
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .cloud_requirements(CloudRequirementsLoader::new(async move {
@@ -5435,8 +7481,95 @@ async fn explicit_sandbox_mode_falls_back_when_disallowed_by_requirements() -> s
         .build()
         .await?;
     assert_eq!(
-        *config.permissions.sandbox_policy.get(),
+        config.legacy_sandbox_policy(),
         SandboxPolicy::new_read_only_policy()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn permission_profile_override_falls_back_when_disallowed_by_requirements()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let requirements = agiworkforce_config::ConfigRequirementsToml {
+        allowed_sandbox_modes: Some(vec![agiworkforce_config::SandboxModeRequirement::ReadOnly]),
+        ..Default::default()
+    };
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .harness_overrides(ConfigOverrides {
+            permission_profile: Some(PermissionProfile::Disabled),
+            ..Default::default()
+        })
+        .cloud_requirements(CloudRequirementsLoader::new(async move {
+            Ok(Some(requirements))
+        }))
+        .build()
+        .await?;
+
+    let expected_sandbox_policy = SandboxPolicy::new_read_only_policy();
+    assert_eq!(config.legacy_sandbox_policy(), expected_sandbox_policy);
+    assert_eq!(
+        config.permissions.permission_profile(),
+        PermissionProfile::read_only()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn permission_profile_override_preserves_split_write_roots() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let cwd = agiworkforce_home.path().join("workspace");
+    let outside_root = agiworkforce_home.path().join("outside-write");
+    std::fs::create_dir_all(&cwd)?;
+    std::fs::create_dir_all(&outside_root)?;
+    let outside_root =
+        AbsolutePathBuf::from_absolute_path(outside_root).expect("outside root is absolute");
+    let file_system_sandbox_policy = FileSystemSandboxPolicy::restricted(vec![
+        FileSystemSandboxEntry {
+            path: FileSystemPath::Special {
+                value: FileSystemSpecialPath::Root,
+            },
+            access: FileSystemAccessMode::Read,
+        },
+        FileSystemSandboxEntry {
+            path: FileSystemPath::Path {
+                path: outside_root.clone(),
+            },
+            access: FileSystemAccessMode::Write,
+        },
+    ]);
+    let permission_profile = PermissionProfile::from_runtime_permissions_with_enforcement(
+        SandboxEnforcement::Managed,
+        &file_system_sandbox_policy,
+        NetworkSandboxPolicy::Restricted,
+    );
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(cwd))
+        .harness_overrides(ConfigOverrides {
+            permission_profile: Some(permission_profile),
+            ..Default::default()
+        })
+        .build()
+        .await?;
+
+    assert!(
+        config
+            .permissions
+            .file_system_sandbox_policy()
+            .can_write_path_with_cwd(outside_root.as_path(), config.cwd.as_path())
+    );
+    assert!(matches!(
+        &config.legacy_sandbox_policy(),
+        SandboxPolicy::WorkspaceWrite { .. }
+    ));
+    assert_eq!(
+        config.permissions.network_sandbox_policy(),
+        NetworkSandboxPolicy::Restricted
     );
     Ok(())
 }
@@ -5451,13 +7584,13 @@ async fn requirements_web_search_mode_overrides_danger_full_access_default() -> 
 "#,
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .cloud_requirements(CloudRequirementsLoader::new(async {
-            Ok(Some(crate::config_loader::ConfigRequirementsToml {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
                 allowed_web_search_modes: Some(vec![
-                    crate::config_loader::WebSearchModeRequirement::Cached,
+                    agiworkforce_config::WebSearchModeRequirement::Cached,
                 ]),
                 ..Default::default()
             }))
@@ -5469,7 +7602,7 @@ async fn requirements_web_search_mode_overrides_danger_full_access_default() -> 
     assert_eq!(
         resolve_web_search_mode_for_turn(
             &config.web_search_mode,
-            config.permissions.sandbox_policy.get(),
+            &config.permissions.permission_profile(),
         ),
         WebSearchMode::Cached,
     );
@@ -5492,11 +7625,11 @@ trust_level = "untrusted"
         ),
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(workspace.path().to_path_buf()))
         .cloud_requirements(CloudRequirementsLoader::new(async {
-            Ok(Some(crate::config_loader::ConfigRequirementsToml {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
                 allowed_approval_policies: Some(vec![AskForApproval::OnRequest]),
                 ..Default::default()
             }))
@@ -5521,11 +7654,11 @@ async fn explicit_approval_policy_falls_back_when_disallowed_by_requirements() -
 "#,
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .cloud_requirements(CloudRequirementsLoader::new(async {
-            Ok(Some(crate::config_loader::ConfigRequirementsToml {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
                 allowed_approval_policies: Some(vec![AskForApproval::OnRequest]),
                 ..Default::default()
             }))
@@ -5543,11 +7676,11 @@ async fn explicit_approval_policy_falls_back_when_disallowed_by_requirements() -
 async fn feature_requirements_normalize_effective_feature_values() -> std::io::Result<()> {
     let agiworkforce_home = TempDir::new()?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .cloud_requirements(CloudRequirementsLoader::new(async {
-            Ok(Some(crate::config_loader::ConfigRequirementsToml {
-                feature_requirements: Some(crate::config_loader::FeatureRequirementsToml {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                feature_requirements: Some(agiworkforce_config::FeatureRequirementsToml {
                     entries: BTreeMap::from([
                         ("personality".to_string(), true),
                         ("shell_tool".to_string(), false),
@@ -5569,6 +7702,54 @@ async fn feature_requirements_normalize_effective_feature_values() -> std::io::R
         "{:?}",
         config.startup_warnings
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn feature_requirements_auto_review_disables_guardian_approval() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .cloud_requirements(CloudRequirementsLoader::new(async {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                feature_requirements: Some(agiworkforce_config::FeatureRequirementsToml {
+                    entries: BTreeMap::from([("auto_review".to_string(), false)]),
+                }),
+                ..Default::default()
+            }))
+        }))
+        .build()
+        .await?;
+
+    assert!(!config.features.enabled(Feature::GuardianApproval));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn browser_feature_requirements_are_valid() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .cloud_requirements(CloudRequirementsLoader::new(async {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                feature_requirements: Some(agiworkforce_config::FeatureRequirementsToml {
+                    entries: BTreeMap::from([
+                        ("in_app_browser".to_string(), false),
+                        ("browser_use".to_string(), false),
+                    ]),
+                }),
+                ..Default::default()
+            }))
+        }))
+        .build()
+        .await?;
+
+    assert!(!config.features.enabled(Feature::InAppBrowser));
+    assert!(!config.features.enabled(Feature::BrowserUse));
 
     Ok(())
 }
@@ -5585,12 +7766,12 @@ shell_tool = true
 "#,
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .cloud_requirements(CloudRequirementsLoader::new(async {
-            Ok(Some(crate::config_loader::ConfigRequirementsToml {
-                feature_requirements: Some(crate::config_loader::FeatureRequirementsToml {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                feature_requirements: Some(agiworkforce_config::FeatureRequirementsToml {
                     entries: BTreeMap::from([
                         ("personality".to_string(), true),
                         ("shell_tool".to_string(), false),
@@ -5616,82 +7797,40 @@ shell_tool = true
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
-#[test]
-fn system_bwrap_warning_reports_missing_system_bwrap() {
-    let warning = system_bwrap_warning_for_path(Path::new("/definitely/not/a/bwrap"))
-        .expect("missing system bwrap should emit a warning");
-
-    assert!(warning.contains("could not find system bubblewrap"));
-}
-
-#[cfg(target_os = "linux")]
-#[test]
-fn system_bwrap_warning_reports_too_old_system_bwrap() {
-    let fake_bwrap = write_fake_bwrap(
-        r#"#!/bin/sh
-if [ "$1" = "--help" ]; then
-  echo 'usage: bwrap [OPTION...] COMMAND'
-  exit 0
-fi
-exit 1
-"#,
-    );
-    let fake_bwrap_path: &Path = fake_bwrap.as_ref();
-    let warning = system_bwrap_warning_for_path(fake_bwrap_path)
-        .expect("old system bwrap should emit a warning");
-
-    assert!(warning.contains("too old to support `--argv0`"));
-}
-
-#[cfg(target_os = "linux")]
-#[test]
-fn system_bwrap_warning_skips_supported_system_bwrap() {
-    let fake_bwrap = write_fake_bwrap(
-        r#"#!/bin/sh
-if [ "$1" = "--help" ]; then
-  echo '  --argv0 PROGRAM'
-  exit 0
-fi
-exit 1
-"#,
-    );
-    let fake_bwrap_path: &Path = fake_bwrap.as_ref();
-
-    assert_eq!(system_bwrap_warning_for_path(fake_bwrap_path), None);
-}
-
-#[cfg(not(target_os = "linux"))]
-#[test]
-fn system_bwrap_warning_is_disabled_off_linux() {
-    assert!(system_bwrap_warning().is_none());
-}
-
-#[cfg(target_os = "linux")]
-fn write_fake_bwrap(contents: &str) -> tempfile::TempPath {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
-    use tempfile::NamedTempFile;
-
-    // Bazel can mount the OS temp directory `noexec`, so prefer the current
-    // working directory for fake executables and fall back to the default temp
-    // dir outside that environment.
-    let temp_file = std::env::current_dir()
-        .ok()
-        .and_then(|dir| NamedTempFile::new_in(dir).ok())
-        .unwrap_or_else(|| NamedTempFile::new().expect("temp file"));
-    // Linux rejects exec-ing a file that is still open for writing.
-    let path = temp_file.into_temp_path();
-    fs::write(&path, contents).expect("write fake bwrap");
-    let permissions = fs::Permissions::from_mode(0o755);
-    fs::set_permissions(&path, permissions).expect("chmod fake bwrap");
-    path
-}
-
 #[tokio::test]
 async fn approvals_reviewer_defaults_to_manual_only_without_guardian_feature() -> std::io::Result<()>
 {
     let agiworkforce_home = TempDir::new()?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .build()
+        .await?;
+
+    assert_eq!(config.approvals_reviewer, ApprovalsReviewer::User);
+    Ok(())
+}
+
+#[tokio::test]
+async fn prompt_instruction_blocks_can_be_disabled_from_config_and_profiles() -> std::io::Result<()>
+{
+    let agiworkforce_home = TempDir::new()?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"include_permissions_instructions = false
+include_apps_instructions = false
+include_environment_context = false
+profile = "chatty"
+
+[skills]
+include_instructions = false
+
+[profiles.chatty]
+include_permissions_instructions = true
+include_environment_context = true
+"#,
+    )?;
 
     let config = ConfigBuilder::default()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
@@ -5699,7 +7838,10 @@ async fn approvals_reviewer_defaults_to_manual_only_without_guardian_feature() -
         .build()
         .await?;
 
-    assert_eq!(config.approvals_reviewer, ApprovalsReviewer::User);
+    assert!(config.include_permissions_instructions);
+    assert!(!config.include_apps_instructions);
+    assert!(!config.include_skill_instructions);
+    assert!(config.include_environment_context);
     Ok(())
 }
 
@@ -5714,7 +7856,7 @@ guardian_approval = true
 "#,
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
@@ -5734,7 +7876,7 @@ async fn approvals_reviewer_can_be_set_in_config_without_guardian_approval() -> 
 "#,
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
@@ -5757,15 +7899,132 @@ approvals_reviewer = "guardian_subagent"
 "#,
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
         .await?;
 
-    assert_eq!(
-        config.approvals_reviewer,
-        ApprovalsReviewer::GuardianSubagent
+    assert_eq!(config.approvals_reviewer, ApprovalsReviewer::AutoReview);
+    Ok(())
+}
+
+#[tokio::test]
+async fn requirements_disallowing_default_approvals_reviewer_falls_back_to_required_default()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .cloud_requirements(CloudRequirementsLoader::new(async {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                allowed_approvals_reviewers: Some(vec![ApprovalsReviewer::AutoReview]),
+                ..Default::default()
+            }))
+        }))
+        .build()
+        .await?;
+
+    assert_eq!(config.approvals_reviewer, ApprovalsReviewer::AutoReview);
+    Ok(())
+}
+
+#[tokio::test]
+async fn root_approvals_reviewer_falls_back_when_disallowed_by_requirements() -> std::io::Result<()>
+{
+    let agiworkforce_home = TempDir::new()?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"approvals_reviewer = "user"
+"#,
+    )?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .cloud_requirements(CloudRequirementsLoader::new(async {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                allowed_approvals_reviewers: Some(vec![ApprovalsReviewer::AutoReview]),
+                ..Default::default()
+            }))
+        }))
+        .build()
+        .await?;
+
+    assert_eq!(config.approvals_reviewer, ApprovalsReviewer::AutoReview);
+    assert!(
+        config.startup_warnings.iter().any(|warning| {
+            warning
+                .contains("Configured value for `approvals_reviewer` is disallowed by requirements")
+        }),
+        "{:?}",
+        config.startup_warnings
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn profile_approvals_reviewer_falls_back_when_disallowed_by_requirements()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"profile = "default"
+
+[profiles.default]
+approvals_reviewer = "user"
+"#,
+    )?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .cloud_requirements(CloudRequirementsLoader::new(async {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                allowed_approvals_reviewers: Some(vec![ApprovalsReviewer::AutoReview]),
+                ..Default::default()
+            }))
+        }))
+        .build()
+        .await?;
+
+    assert_eq!(config.approvals_reviewer, ApprovalsReviewer::AutoReview);
+    Ok(())
+}
+
+#[tokio::test]
+async fn approvals_reviewer_preserves_valid_user_choice_when_allowed_by_requirements()
+-> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"approvals_reviewer = "guardian_subagent"
+"#,
+    )?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .cloud_requirements(CloudRequirementsLoader::new(async {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                allowed_approvals_reviewers: Some(vec![
+                    ApprovalsReviewer::User,
+                    ApprovalsReviewer::AutoReview,
+                ]),
+                ..Default::default()
+            }))
+        }))
+        .build()
+        .await?;
+
+    assert_eq!(config.approvals_reviewer, ApprovalsReviewer::AutoReview);
+    assert!(
+        config
+            .startup_warnings
+            .iter()
+            .all(|warning| !warning.contains("approvals_reviewer")),
+        "{:?}",
+        config.startup_warnings
     );
     Ok(())
 }
@@ -5780,17 +8039,16 @@ smart_approvals = true
 "#,
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
         .await?;
 
-    assert!(!config.features.enabled(Feature::GuardianApproval));
+    assert!(config.features.enabled(Feature::GuardianApproval));
     assert_eq!(config.approvals_reviewer, ApprovalsReviewer::User);
 
-    let serialized =
-        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     assert!(serialized.contains("smart_approvals = true"));
     assert!(!serialized.contains("guardian_approval"));
     assert!(!serialized.contains("approvals_reviewer"));
@@ -5810,21 +8068,241 @@ smart_approvals = true
 "#,
     )?;
 
-    let config = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
         .build()
         .await?;
 
-    assert!(!config.features.enabled(Feature::GuardianApproval));
+    assert!(config.features.enabled(Feature::GuardianApproval));
     assert_eq!(config.approvals_reviewer, ApprovalsReviewer::User);
 
-    let serialized =
-        tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
+    let serialized = tokio::fs::read_to_string(agiworkforce_home.path().join(CONFIG_TOML_FILE)).await?;
     assert!(serialized.contains("[profiles.guardian.features]"));
     assert!(serialized.contains("smart_approvals = true"));
     assert!(!serialized.contains("guardian_approval"));
     assert!(!serialized.contains("approvals_reviewer"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn multi_agent_v2_config_from_feature_table() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"[features.multi_agent_v2]
+enabled = true
+max_concurrent_threads_per_session = 5
+min_wait_timeout_ms = 2500
+usage_hint_enabled = false
+usage_hint_text = "Custom delegation guidance."
+root_agent_usage_hint_text = "Root guidance."
+subagent_usage_hint_text = "Subagent guidance."
+hide_spawn_agent_metadata = true
+"#,
+    )?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .build()
+        .await?;
+
+    assert!(config.features.enabled(Feature::MultiAgentV2));
+    assert_eq!(config.multi_agent_v2.max_concurrent_threads_per_session, 5);
+    assert_eq!(config.multi_agent_v2.min_wait_timeout_ms, 2500);
+    assert_eq!(config.agent_max_threads, Some(4));
+    assert!(!config.multi_agent_v2.usage_hint_enabled);
+    assert_eq!(
+        config.multi_agent_v2.usage_hint_text.as_deref(),
+        Some("Custom delegation guidance.")
+    );
+    assert_eq!(
+        config.multi_agent_v2.root_agent_usage_hint_text.as_deref(),
+        Some("Root guidance.")
+    );
+    assert_eq!(
+        config.multi_agent_v2.subagent_usage_hint_text.as_deref(),
+        Some("Subagent guidance.")
+    );
+    assert!(config.multi_agent_v2.hide_spawn_agent_metadata);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn profile_multi_agent_v2_config_overrides_base() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"profile = "no_hint"
+
+[features.multi_agent_v2]
+max_concurrent_threads_per_session = 4
+min_wait_timeout_ms = 3000
+usage_hint_enabled = true
+usage_hint_text = "base hint"
+root_agent_usage_hint_text = "base root hint"
+subagent_usage_hint_text = "base subagent hint"
+hide_spawn_agent_metadata = true
+
+[profiles.no_hint.features.multi_agent_v2]
+max_concurrent_threads_per_session = 6
+min_wait_timeout_ms = 1500
+usage_hint_enabled = false
+usage_hint_text = "profile hint"
+root_agent_usage_hint_text = "profile root hint"
+subagent_usage_hint_text = "profile subagent hint"
+hide_spawn_agent_metadata = false
+"#,
+    )?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .build()
+        .await?;
+
+    assert_eq!(config.multi_agent_v2.max_concurrent_threads_per_session, 6);
+    assert_eq!(config.multi_agent_v2.min_wait_timeout_ms, 1500);
+    assert!(!config.multi_agent_v2.usage_hint_enabled);
+    assert_eq!(
+        config.multi_agent_v2.usage_hint_text.as_deref(),
+        Some("profile hint")
+    );
+    assert_eq!(
+        config.multi_agent_v2.root_agent_usage_hint_text.as_deref(),
+        Some("profile root hint")
+    );
+    assert_eq!(
+        config.multi_agent_v2.subagent_usage_hint_text.as_deref(),
+        Some("profile subagent hint")
+    );
+    assert!(!config.multi_agent_v2.hide_spawn_agent_metadata);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn multi_agent_v2_default_session_thread_cap_counts_root() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"[features.multi_agent_v2]
+enabled = true
+"#,
+    )?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .build()
+        .await?;
+
+    assert_eq!(config.multi_agent_v2.max_concurrent_threads_per_session, 4);
+    assert_eq!(config.multi_agent_v2.min_wait_timeout_ms, 10_000);
+    assert_eq!(config.agent_max_threads, Some(3));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn multi_agent_v2_rejects_agents_max_threads() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"[features.multi_agent_v2]
+enabled = true
+
+[agents]
+max_threads = 3
+"#,
+    )?;
+
+    let err = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .build()
+        .await
+        .expect_err("agents.max_threads should conflict with multi_agent_v2");
+
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(
+        err.to_string(),
+        "agents.max_threads cannot be set when multi_agent_v2 is enabled"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn multi_agent_v2_rejects_invalid_min_wait_timeout() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"[features.multi_agent_v2]
+enabled = true
+min_wait_timeout_ms = 0
+"#,
+    )?;
+
+    let err = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .build()
+        .await
+        .expect_err("zero min_wait_timeout_ms should be rejected");
+
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(
+        err.to_string(),
+        "features.multi_agent_v2.min_wait_timeout_ms must be at least 1"
+    );
+
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"[features.multi_agent_v2]
+enabled = true
+min_wait_timeout_ms = 3600001
+"#,
+    )?;
+
+    let err = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .build()
+        .await
+        .expect_err("too large min_wait_timeout_ms should be rejected");
+
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(
+        err.to_string(),
+        "features.multi_agent_v2.min_wait_timeout_ms must be at most 3600000"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn multi_agent_v2_session_thread_cap_one_disallows_subagents() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        r#"[features.multi_agent_v2]
+enabled = true
+max_concurrent_threads_per_session = 1
+"#,
+    )?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .fallback_cwd(Some(agiworkforce_home.path().to_path_buf()))
+        .build()
+        .await?;
+
+    assert_eq!(config.multi_agent_v2.max_concurrent_threads_per_session, 1);
+    assert_eq!(config.agent_max_threads, Some(0));
 
     Ok(())
 }
@@ -5836,8 +8314,8 @@ async fn feature_requirements_normalize_runtime_feature_mutations() -> std::io::
     let mut config = ConfigBuilder::default()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .cloud_requirements(CloudRequirementsLoader::new(async {
-            Ok(Some(crate::config_loader::ConfigRequirementsToml {
-                feature_requirements: Some(crate::config_loader::FeatureRequirementsToml {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                feature_requirements: Some(agiworkforce_config::FeatureRequirementsToml {
                     entries: BTreeMap::from([
                         ("personality".to_string(), true),
                         ("shell_tool".to_string(), false),
@@ -5866,33 +8344,67 @@ async fn feature_requirements_normalize_runtime_feature_mutations() -> std::io::
 }
 
 #[tokio::test]
-async fn feature_requirements_reject_collab_legacy_alias() {
-    let agiworkforce_home = TempDir::new().expect("tempdir");
+async fn feature_requirements_warn_on_collab_legacy_alias() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
 
-    let err = ConfigBuilder::default()
+    let config = ConfigBuilder::without_managed_config_for_tests()
         .agiworkforce_home(agiworkforce_home.path().to_path_buf())
         .cloud_requirements(CloudRequirementsLoader::new(async {
-            Ok(Some(crate::config_loader::ConfigRequirementsToml {
-                feature_requirements: Some(crate::config_loader::FeatureRequirementsToml {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                feature_requirements: Some(agiworkforce_config::FeatureRequirementsToml {
                     entries: BTreeMap::from([("collab".to_string(), true)]),
                 }),
                 ..Default::default()
             }))
         }))
         .build()
-        .await
-        .expect_err("legacy aliases should be rejected");
+        .await?;
 
-    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    assert!(config.features.enabled(Feature::Collab));
     assert!(
-        err.to_string()
-            .contains("use canonical feature key `multi_agent`"),
-        "{err}"
+        config.startup_warnings.iter().any(|warning| {
+            warning.contains("Using legacy `features` requirement `collab`")
+                && warning.contains("prefer canonical feature key `multi_agent`")
+        }),
+        "{:?}",
+        config.startup_warnings
     );
+
+    Ok(())
 }
 
-#[test]
-fn tool_suggest_discoverables_load_from_config_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn feature_requirements_warn_and_ignore_unknown_feature() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .cloud_requirements(CloudRequirementsLoader::new(async {
+            Ok(Some(agiworkforce_config::ConfigRequirementsToml {
+                feature_requirements: Some(agiworkforce_config::FeatureRequirementsToml {
+                    entries: BTreeMap::from([("made_up_feature".to_string(), true)]),
+                }),
+                ..Default::default()
+            }))
+        }))
+        .build()
+        .await?;
+
+    assert!(
+        config
+            .startup_warnings
+            .iter()
+            .any(|warning| warning
+                .contains("Ignoring unknown `features` requirement `made_up_feature`")),
+        "{:?}",
+        config.startup_warnings
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn tool_suggest_discoverables_load_from_config_toml() -> std::io::Result<()> {
     let cfg: ConfigToml = toml::from_str(
         r#"
 [tool_suggest]
@@ -5922,6 +8434,7 @@ discoverables = [
                     id: "   ".to_string(),
                 },
             ],
+            disabled_tools: Vec::new(),
         })
     );
 
@@ -5929,8 +8442,9 @@ discoverables = [
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.tool_suggest,
@@ -5945,13 +8459,120 @@ discoverables = [
                     id: "plugin_alpha@openai-curated".to_string(),
                 },
             ],
+            disabled_tools: Vec::new(),
         }
     );
     Ok(())
 }
 
-#[test]
-fn experimental_realtime_start_instructions_load_from_config_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn tool_suggest_disabled_tools_load_from_config_toml() -> std::io::Result<()> {
+    let cfg: ConfigToml = toml::from_str(
+        r#"
+[tool_suggest]
+disabled_tools = [
+  { type = "connector", id = " connector_calendar " },
+  { type = "connector", id = "connector_calendar" },
+  { type = "connector", id = "   " },
+  { type = "plugin", id = "slack@openai-curated" }
+]
+"#,
+    )
+    .expect("TOML deserialization should succeed");
+
+    assert_eq!(
+        cfg.tool_suggest,
+        Some(ToolSuggestConfig {
+            discoverables: Vec::new(),
+            disabled_tools: vec![
+                ToolSuggestDisabledTool::connector(" connector_calendar "),
+                ToolSuggestDisabledTool::connector("connector_calendar"),
+                ToolSuggestDisabledTool::connector("   "),
+                ToolSuggestDisabledTool::plugin("slack@openai-curated"),
+            ],
+        })
+    );
+
+    let agiworkforce_home = TempDir::new()?;
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(
+        config.tool_suggest,
+        ToolSuggestConfig {
+            discoverables: Vec::new(),
+            disabled_tools: vec![
+                ToolSuggestDisabledTool::connector("connector_calendar"),
+                ToolSuggestDisabledTool::plugin("slack@openai-curated"),
+            ],
+        }
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn tool_suggest_disabled_tools_merge_across_config_layers() -> std::io::Result<()> {
+    let agiworkforce_home = TempDir::new()?;
+    let workspace = TempDir::new()?;
+    let workspace_key = workspace.path().to_string_lossy().replace('\\', "\\\\");
+    std::fs::write(
+        agiworkforce_home.path().join(CONFIG_TOML_FILE),
+        format!(
+            r#"
+[projects."{workspace_key}"]
+trust_level = "trusted"
+
+[tool_suggest]
+disabled_tools = [
+  {{ type = "connector", id = " user_connector " }},
+  {{ type = "plugin", id = "shared_plugin" }},
+  {{ type = "connector", id = "project_connector" }},
+]
+"#
+        ),
+    )?;
+
+    let project_config_dir = workspace.path().join(".codex");
+    std::fs::create_dir_all(&project_config_dir)?;
+    std::fs::write(
+        project_config_dir.join(CONFIG_TOML_FILE),
+        r#"
+[tool_suggest]
+disabled_tools = [
+  { type = "connector", id = "project_connector" },
+  { type = "plugin", id = "project_plugin" },
+  { type = "plugin", id = "shared_plugin" },
+]
+"#,
+    )?;
+
+    let config = ConfigBuilder::without_managed_config_for_tests()
+        .agiworkforce_home(agiworkforce_home.path().to_path_buf())
+        .harness_overrides(ConfigOverrides {
+            cwd: Some(workspace.path().to_path_buf()),
+            ..Default::default()
+        })
+        .build()
+        .await?;
+
+    assert_eq!(
+        config.tool_suggest.disabled_tools,
+        vec![
+            ToolSuggestDisabledTool::connector("user_connector"),
+            ToolSuggestDisabledTool::plugin("shared_plugin"),
+            ToolSuggestDisabledTool::connector("project_connector"),
+            ToolSuggestDisabledTool::plugin("project_plugin"),
+        ]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn experimental_realtime_start_instructions_load_from_config_toml() -> std::io::Result<()> {
     let cfg: ConfigToml = toml::from_str(
         r#"
 experimental_realtime_start_instructions = "start instructions from config"
@@ -5968,8 +8589,9 @@ experimental_realtime_start_instructions = "start instructions from config"
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.experimental_realtime_start_instructions.as_deref(),
@@ -5978,36 +8600,37 @@ experimental_realtime_start_instructions = "start instructions from config"
     Ok(())
 }
 
-#[test]
-fn experimental_exec_server_url_loads_from_config_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn experimental_thread_config_endpoint_loads_from_config_toml() -> std::io::Result<()> {
     let cfg: ConfigToml = toml::from_str(
         r#"
-experimental_exec_server_url = "http://127.0.0.1:8080"
+experimental_thread_config_endpoint = "http://127.0.0.1:8061"
 "#,
     )
     .expect("TOML deserialization should succeed");
 
     assert_eq!(
-        cfg.experimental_exec_server_url.as_deref(),
-        Some("http://127.0.0.1:8080")
+        cfg.experimental_thread_config_endpoint.as_deref(),
+        Some("http://127.0.0.1:8061")
     );
 
     let agiworkforce_home = TempDir::new()?;
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
-        config.experimental_exec_server_url.as_deref(),
-        Some("http://127.0.0.1:8080")
+        config.experimental_thread_config_endpoint.as_deref(),
+        Some("http://127.0.0.1:8061")
     );
     Ok(())
 }
 
-#[test]
-fn experimental_realtime_ws_base_url_loads_from_config_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn experimental_realtime_ws_base_url_loads_from_config_toml() -> std::io::Result<()> {
     let cfg: ConfigToml = toml::from_str(
         r#"
 experimental_realtime_ws_base_url = "http://127.0.0.1:8011"
@@ -6024,8 +8647,9 @@ experimental_realtime_ws_base_url = "http://127.0.0.1:8011"
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.experimental_realtime_ws_base_url.as_deref(),
@@ -6034,8 +8658,8 @@ experimental_realtime_ws_base_url = "http://127.0.0.1:8011"
     Ok(())
 }
 
-#[test]
-fn experimental_realtime_ws_backend_prompt_loads_from_config_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn experimental_realtime_ws_backend_prompt_loads_from_config_toml() -> std::io::Result<()> {
     let cfg: ConfigToml = toml::from_str(
         r#"
 experimental_realtime_ws_backend_prompt = "prompt from config"
@@ -6052,8 +8676,9 @@ experimental_realtime_ws_backend_prompt = "prompt from config"
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.experimental_realtime_ws_backend_prompt.as_deref(),
@@ -6062,8 +8687,8 @@ experimental_realtime_ws_backend_prompt = "prompt from config"
     Ok(())
 }
 
-#[test]
-fn experimental_realtime_ws_startup_context_loads_from_config_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn experimental_realtime_ws_startup_context_loads_from_config_toml() -> std::io::Result<()> {
     let cfg: ConfigToml = toml::from_str(
         r#"
 experimental_realtime_ws_startup_context = "startup context from config"
@@ -6080,8 +8705,9 @@ experimental_realtime_ws_startup_context = "startup context from config"
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.experimental_realtime_ws_startup_context.as_deref(),
@@ -6090,8 +8716,8 @@ experimental_realtime_ws_startup_context = "startup context from config"
     Ok(())
 }
 
-#[test]
-fn experimental_realtime_ws_model_loads_from_config_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn experimental_realtime_ws_model_loads_from_config_toml() -> std::io::Result<()> {
     let cfg: ConfigToml = toml::from_str(
         r#"
 experimental_realtime_ws_model = "realtime-test-model"
@@ -6108,8 +8734,9 @@ experimental_realtime_ws_model = "realtime-test-model"
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.experimental_realtime_ws_model.as_deref(),
@@ -6118,13 +8745,43 @@ experimental_realtime_ws_model = "realtime-test-model"
     Ok(())
 }
 
-#[test]
-fn realtime_loads_from_config_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn realtime_config_partial_table_uses_realtime_defaults() -> std::io::Result<()> {
+    let cfg: ConfigToml = toml::from_str(
+        r#"
+[realtime]
+voice = "marin"
+"#,
+    )
+    .expect("TOML deserialization should succeed");
+
+    let agiworkforce_home = TempDir::new()?;
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        agiworkforce_home.abs(),
+    )
+    .await?;
+
+    assert_eq!(
+        config.realtime,
+        RealtimeConfig {
+            voice: Some(RealtimeVoice::Marin),
+            ..RealtimeConfig::default()
+        }
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn realtime_loads_from_config_toml() -> std::io::Result<()> {
     let cfg: ConfigToml = toml::from_str(
         r#"
 [realtime]
 version = "v2"
 type = "transcription"
+transport = "webrtc"
+voice = "cedar"
 "#,
     )
     .expect("TOML deserialization should succeed");
@@ -6134,6 +8791,8 @@ type = "transcription"
         Some(RealtimeToml {
             version: Some(RealtimeWsVersion::V2),
             session_type: Some(RealtimeWsMode::Transcription),
+            transport: Some(RealtimeTransport::WebRtc),
+            voice: Some(RealtimeVoice::Cedar),
         })
     );
 
@@ -6141,21 +8800,24 @@ type = "transcription"
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(
         config.realtime,
         RealtimeConfig {
             version: RealtimeWsVersion::V2,
             session_type: RealtimeWsMode::Transcription,
+            transport: RealtimeTransport::WebRtc,
+            voice: Some(RealtimeVoice::Cedar),
         }
     );
     Ok(())
 }
 
-#[test]
-fn realtime_audio_loads_from_config_toml() -> std::io::Result<()> {
+#[tokio::test]
+async fn realtime_audio_loads_from_config_toml() -> std::io::Result<()> {
     let cfg: ConfigToml = toml::from_str(
         r#"
 [audio]
@@ -6176,8 +8838,9 @@ speaker = "Desk Speakers"
     let config = Config::load_from_base_config_with_overrides(
         cfg,
         ConfigOverrides::default(),
-        agiworkforce_home.path().to_path_buf(),
-    )?;
+        agiworkforce_home.abs(),
+    )
+    .await?;
 
     assert_eq!(config.realtime_audio.microphone.as_deref(), Some("USB Mic"));
     assert_eq!(
@@ -6189,10 +8852,8 @@ speaker = "Desk Speakers"
 
 #[derive(Deserialize, Debug, PartialEq)]
 struct TuiTomlTest {
-    #[serde(default)]
-    notifications: Notifications,
-    #[serde(default)]
-    notification_method: NotificationMethod,
+    #[serde(default, flatten)]
+    notifications: TuiNotificationSettings,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -6207,7 +8868,10 @@ fn test_tui_notifications_true() {
             notifications = true
         "#;
     let parsed: RootTomlTest = toml::from_str(toml).expect("deserialize notifications=true");
-    assert_matches!(parsed.tui.notifications, Notifications::Enabled(true));
+    assert_matches!(
+        parsed.tui.notifications.notifications,
+        Notifications::Enabled(true)
+    );
 }
 
 #[test]
@@ -6218,7 +8882,7 @@ fn test_tui_notifications_custom_array() {
         "#;
     let parsed: RootTomlTest = toml::from_str(toml).expect("deserialize notifications=[\"foo\"]");
     assert_matches!(
-        parsed.tui.notifications,
+        parsed.tui.notifications.notifications,
         Notifications::Custom(ref v) if v == &vec!["foo".to_string()]
     );
 }
@@ -6231,5 +8895,48 @@ fn test_tui_notification_method() {
         "#;
     let parsed: RootTomlTest =
         toml::from_str(toml).expect("deserialize notification_method=\"bel\"");
-    assert_eq!(parsed.tui.notification_method, NotificationMethod::Bel);
+    assert_eq!(parsed.tui.notifications.method, NotificationMethod::Bel);
+}
+
+#[test]
+fn test_tui_notification_condition_defaults_to_unfocused() {
+    let toml = r#"
+            [tui]
+        "#;
+    let parsed: RootTomlTest =
+        toml::from_str(toml).expect("deserialize default notification condition");
+    assert_eq!(
+        parsed.tui.notifications.condition,
+        NotificationCondition::Unfocused
+    );
+}
+
+#[test]
+fn test_tui_notification_condition_always() {
+    let toml = r#"
+            [tui]
+            notification_condition = "always"
+        "#;
+    let parsed: RootTomlTest =
+        toml::from_str(toml).expect("deserialize notification_condition=\"always\"");
+    assert_eq!(
+        parsed.tui.notifications.condition,
+        NotificationCondition::Always
+    );
+}
+
+#[test]
+fn test_tui_notification_condition_rejects_unknown_value() {
+    let toml = r#"
+            [tui]
+            notification_condition = "background"
+        "#;
+    let err = toml::from_str::<RootTomlTest>(toml).expect_err("reject unknown condition");
+    let err = err.to_string();
+    assert!(
+        err.contains("unknown variant `background`")
+            && err.contains("unfocused")
+            && err.contains("always"),
+        "unexpected error: {err}"
+    );
 }

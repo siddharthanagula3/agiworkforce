@@ -1,10 +1,33 @@
 mod engine;
 pub mod events;
+
+/// All hook event names as they appear in configuration files.
+pub const HOOK_EVENT_NAMES: &[&str] = &[
+    "PreToolUse",
+    "PermissionRequest",
+    "PostToolUse",
+    "SessionStart",
+    "UserPromptSubmit",
+    "Stop",
+];
+
+/// Hook event names for events that support tool-name matchers.
+pub const HOOK_EVENT_NAMES_WITH_MATCHERS: &[&str] = &[
+    "PreToolUse",
+    "PermissionRequest",
+    "PostToolUse",
+    "SessionStart",
+];
 mod legacy_notify;
 mod registry;
 mod schema;
 mod types;
 
+pub use events::permission_request::PermissionRequestDecision;
+pub use events::permission_request::PermissionRequestOutcome;
+pub use events::permission_request::PermissionRequestRequest;
+pub use events::post_tool_use::PostToolUseOutcome;
+pub use events::post_tool_use::PostToolUseRequest;
 pub use events::pre_tool_use::PreToolUseOutcome;
 pub use events::pre_tool_use::PreToolUseRequest;
 pub use events::session_start::SessionStartOutcome;

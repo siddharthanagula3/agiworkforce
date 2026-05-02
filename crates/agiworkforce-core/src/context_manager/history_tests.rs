@@ -1,9 +1,11 @@
 use super::*;
-use agiworkforce_git_utils::GhostCommit;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use agiworkforce_protocol::AgentPath;
 use agiworkforce_protocol::config_types::ReasoningSummary;
 use agiworkforce_protocol::models::BaseInstructions;
 use agiworkforce_protocol::models::ContentItem;
+use agiworkforce_protocol::models::DEFAULT_IMAGE_DETAIL;
 use agiworkforce_protocol::models::FunctionCallOutputBody;
 use agiworkforce_protocol::models::FunctionCallOutputContentItem;
 use agiworkforce_protocol::models::FunctionCallOutputPayload;
@@ -21,10 +23,9 @@ use agiworkforce_protocol::protocol::SandboxPolicy;
 use agiworkforce_protocol::protocol::TurnContextItem;
 use agiworkforce_utils_output_truncation::TruncationPolicy;
 use agiworkforce_utils_output_truncation::truncate_text;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use image::ImageBuffer;
 use image::ImageFormat;
+use image::Luma;
 use image::Rgba;
 use pretty_assertions::assert_eq;
 use regex_lite::Regex;
@@ -40,7 +41,6 @@ fn assistant_msg(text: &str) -> ResponseItem {
         content: vec![ContentItem::OutputText {
             text: text.to_string(),
         }],
-        end_turn: None,
         phase: None,
     }
 }
@@ -51,7 +51,7 @@ fn inter_agent_assistant_msg(text: &str) -> ResponseItem {
         AgentPath::root().join("worker").unwrap(),
         Vec::new(),
         text.to_string(),
-        true,
+        /*trigger_turn*/ true,
     );
     ResponseItem::Message {
         id: None,
@@ -59,7 +59,6 @@ fn inter_agent_assistant_msg(text: &str) -> ResponseItem {
         content: vec![ContentItem::OutputText {
             text: serde_json::to_string(&communication).unwrap(),
         }],
-        end_turn: None,
         phase: None,
     }
 }
@@ -79,7 +78,6 @@ fn user_msg(text: &str) -> ResponseItem {
         content: vec![ContentItem::OutputText {
             text: text.to_string(),
         }],
-        end_turn: None,
         phase: None,
     }
 }
@@ -91,7 +89,6 @@ fn user_input_text_msg(text: &str) -> ResponseItem {
         content: vec![ContentItem::InputText {
             text: text.to_string(),
         }],
-        end_turn: None,
         phase: None,
     }
 }
@@ -103,7 +100,6 @@ fn developer_msg(text: &str) -> ResponseItem {
         content: vec![ContentItem::InputText {
             text: text.to_string(),
         }],
-        end_turn: None,
         phase: None,
     }
 }
@@ -118,7 +114,6 @@ fn developer_msg_with_fragments(texts: &[&str]) -> ResponseItem {
                 text: (*text).to_string(),
             })
             .collect(),
-        end_turn: None,
         phase: None,
     }
 }
@@ -132,7 +127,9 @@ fn reference_context_item() -> TurnContextItem {
         timezone: Some("America/Los_Angeles".to_string()),
         approval_policy: AskForApproval::OnRequest,
         sandbox_policy: SandboxPolicy::new_read_only_policy(),
+        permission_profile: None,
         network: None,
+        file_system_sandbox_policy: None,
         model: "gpt-test".to_string(),
         personality: None,
         collaboration_mode: None,
@@ -142,9 +139,7 @@ fn reference_context_item() -> TurnContextItem {
         user_instructions: None,
         developer_instructions: None,
         final_output_json_schema: None,
-        truncation_policy: Some(agiworkforce_protocol::protocol::TruncationPolicy::Tokens(
-            10_000,
-        )),
+        truncation_policy: Some(agiworkforce_protocol::protocol::TruncationPolicy::Tokens(10_000)),
     }
 }
 
@@ -199,7 +194,6 @@ fn filters_non_api_messages() {
         content: vec![ContentItem::OutputText {
             text: "ignored".to_string(),
         }],
-        end_turn: None,
         phase: None,
     };
     let reasoning = reasoning_msg("thinking...");
@@ -230,7 +224,6 @@ fn filters_non_api_messages() {
                 content: vec![ContentItem::OutputText {
                     text: "hi".to_string()
                 }],
-                end_turn: None,
                 phase: None,
             },
             ResponseItem::Message {
@@ -239,7 +232,6 @@ fn filters_non_api_messages() {
                 content: vec![ContentItem::OutputText {
                     text: "hello".to_string()
                 }],
-                end_turn: None,
                 phase: None,
             }
         ]
@@ -248,7 +240,8 @@ fn filters_non_api_messages() {
 
 #[test]
 fn non_last_reasoning_tokens_return_zero_when_no_user_messages() {
-    let history = create_history_with_items(vec![reasoning_with_encrypted_content(800)]);
+    let history =
+        create_history_with_items(vec![reasoning_with_encrypted_content(/*len*/ 800)]);
 
     assert_eq!(history.get_non_last_reasoning_items_tokens(), 0);
 }
@@ -256,11 +249,11 @@ fn non_last_reasoning_tokens_return_zero_when_no_user_messages() {
 #[test]
 fn non_last_reasoning_tokens_ignore_entries_after_last_user() {
     let history = create_history_with_items(vec![
-        reasoning_with_encrypted_content(900),
+        reasoning_with_encrypted_content(/*len*/ 900),
         user_msg("first"),
-        reasoning_with_encrypted_content(1_000),
+        reasoning_with_encrypted_content(/*len*/ 1_000),
         user_msg("second"),
-        reasoning_with_encrypted_content(2_000),
+        reasoning_with_encrypted_content(/*len*/ 2_000),
     ]);
     // first: (900 * 0.75 - 650) / 4 = 6.25 tokens
     // second: (1000 * 0.75 - 650) / 4 = 25 tokens
@@ -332,7 +325,7 @@ fn drop_last_n_user_turns_treats_inter_agent_assistant_messages_as_instruction_t
         inter_agent_reply,
     ]);
 
-    history.drop_last_n_user_turns(1);
+    history.drop_last_n_user_turns(/*num_turns*/ 1);
 
     assert_eq!(history.raw_items(), &vec![first_turn, first_reply]);
 }
@@ -354,7 +347,7 @@ fn total_token_usage_includes_all_items_after_last_model_generated_item() {
             total_tokens: 100,
             ..Default::default()
         },
-        None,
+        /*model_context_window*/ None,
     );
     let added_user = user_msg("new user message");
     let added_tool_output = custom_tool_call_output("tool-tail", "new tool output");
@@ -364,7 +357,7 @@ fn total_token_usage_includes_all_items_after_last_model_generated_item() {
     );
 
     assert_eq!(
-        history.get_total_token_usage(true),
+        history.get_total_token_usage(/*server_reasoning_included*/ true),
         100 + estimate_item_token_count(&added_user)
             + estimate_item_token_count(&added_tool_output)
     );
@@ -382,12 +375,12 @@ fn for_prompt_strips_images_when_model_does_not_support_images() {
                 },
                 ContentItem::InputImage {
                     image_url: "https://example.com/img.png".to_string(),
+                    detail: Some(DEFAULT_IMAGE_DETAIL),
                 },
                 ContentItem::InputText {
                     text: "caption".to_string(),
                 },
             ],
-            end_turn: None,
             phase: None,
         },
         ResponseItem::FunctionCall {
@@ -405,7 +398,7 @@ fn for_prompt_strips_images_when_model_does_not_support_images() {
                 },
                 FunctionCallOutputContentItem::InputImage {
                     image_url: "https://example.com/result.png".to_string(),
-                    detail: None,
+                    detail: Some(DEFAULT_IMAGE_DETAIL),
                 },
             ]),
         },
@@ -425,7 +418,7 @@ fn for_prompt_strips_images_when_model_does_not_support_images() {
                 },
                 FunctionCallOutputContentItem::InputImage {
                     image_url: "https://example.com/js-repl-result.png".to_string(),
-                    detail: None,
+                    detail: Some(DEFAULT_IMAGE_DETAIL),
                 },
             ]),
         },
@@ -450,7 +443,6 @@ fn for_prompt_strips_images_when_model_does_not_support_images() {
                     text: "caption".to_string(),
                 },
             ],
-            end_turn: None,
             phase: None,
         },
         ResponseItem::FunctionCall {
@@ -506,9 +498,9 @@ fn for_prompt_strips_images_when_model_does_not_support_images() {
             },
             ContentItem::InputImage {
                 image_url: "https://example.com/img.png".to_string(),
+                detail: Some(DEFAULT_IMAGE_DETAIL),
             },
         ],
-        end_turn: None,
         phase: None,
     }]);
     let preserved = with_images.for_prompt(&modalities);
@@ -536,7 +528,6 @@ fn for_prompt_preserves_image_generation_calls_when_images_are_supported() {
             content: vec![ContentItem::InputText {
                 text: "hi".to_string(),
             }],
-            end_turn: None,
             phase: None,
         },
     ]);
@@ -556,7 +547,6 @@ fn for_prompt_preserves_image_generation_calls_when_images_are_supported() {
                 content: vec![ContentItem::InputText {
                     text: "hi".to_string(),
                 }],
-                end_turn: None,
                 phase: None,
             }
         ]
@@ -572,7 +562,6 @@ fn for_prompt_clears_image_generation_result_when_images_are_unsupported() {
             content: vec![ContentItem::InputText {
                 text: "generate a lobster".to_string(),
             }],
-            end_turn: None,
             phase: None,
         },
         ResponseItem::ImageGenerationCall {
@@ -592,7 +581,6 @@ fn for_prompt_clears_image_generation_result_when_images_are_unsupported() {
                 content: vec![ContentItem::InputText {
                     text: "generate a lobster".to_string(),
                 }],
-                end_turn: None,
                 phase: None,
             },
             ResponseItem::ImageGenerationCall {
@@ -603,17 +591,6 @@ fn for_prompt_clears_image_generation_result_when_images_are_unsupported() {
             },
         ]
     );
-}
-
-#[test]
-fn get_history_for_prompt_drops_ghost_commits() {
-    let items = vec![ResponseItem::GhostSnapshot {
-        ghost_commit: GhostCommit::new("ghost-1".to_string(), None, Vec::new(), Vec::new()),
-    }];
-    let history = create_history_with_items(items);
-    let modalities = default_input_modalities();
-    let filtered = history.for_prompt(&modalities);
-    assert_eq!(filtered, vec![]);
 }
 
 #[test]
@@ -710,7 +687,7 @@ fn replace_last_turn_images_replaces_tool_output_images() {
                 body: FunctionCallOutputBody::ContentItems(vec![
                     FunctionCallOutputContentItem::InputImage {
                         image_url: "data:image/png;base64,AAA".to_string(),
-                        detail: None,
+                        detail: Some(DEFAULT_IMAGE_DETAIL),
                     },
                 ]),
                 success: Some(true),
@@ -747,8 +724,8 @@ fn replace_last_turn_images_does_not_touch_user_images() {
         role: "user".to_string(),
         content: vec![ContentItem::InputImage {
             image_url: "data:image/png;base64,AAA".to_string(),
+            detail: Some(DEFAULT_IMAGE_DETAIL),
         }],
-        end_turn: None,
         phase: None,
     }];
     let mut history = create_history_with_items(items.clone());
@@ -794,7 +771,7 @@ fn drop_last_n_user_turns_preserves_prefix() {
 
     let modalities = default_input_modalities();
     let mut history = create_history_with_items(items);
-    history.drop_last_n_user_turns(1);
+    history.drop_last_n_user_turns(/*num_turns*/ 1);
     assert_eq!(
         history.for_prompt(&modalities),
         vec![
@@ -811,7 +788,7 @@ fn drop_last_n_user_turns_preserves_prefix() {
         user_msg("u2"),
         assistant_msg("a2"),
     ]);
-    history.drop_last_n_user_turns(99);
+    history.drop_last_n_user_turns(/*num_turns*/ 99);
     assert_eq!(
         history.for_prompt(&modalities),
         vec![assistant_msg("session prefix item")]
@@ -840,7 +817,7 @@ fn drop_last_n_user_turns_ignores_session_prefix_user_messages() {
 
     let modalities = default_input_modalities();
     let mut history = create_history_with_items(items);
-    history.drop_last_n_user_turns(1);
+    history.drop_last_n_user_turns(/*num_turns*/ 1);
 
     let expected_prefix_and_first_turn = vec![
         user_input_text_msg("<environment_context>ctx</environment_context>"),
@@ -894,7 +871,7 @@ fn drop_last_n_user_turns_ignores_session_prefix_user_messages() {
         user_input_text_msg("turn 2 user"),
         assistant_msg("turn 2 assistant"),
     ]);
-    history.drop_last_n_user_turns(2);
+    history.drop_last_n_user_turns(/*num_turns*/ 2);
     assert_eq!(history.for_prompt(&modalities), expected_prefix_only);
 
     let mut history = create_history_with_items(vec![
@@ -914,7 +891,7 @@ fn drop_last_n_user_turns_ignores_session_prefix_user_messages() {
         user_input_text_msg("turn 2 user"),
         assistant_msg("turn 2 assistant"),
     ]);
-    history.drop_last_n_user_turns(3);
+    history.drop_last_n_user_turns(/*num_turns*/ 3);
     assert_eq!(history.for_prompt(&modalities), expected_prefix_only);
 }
 
@@ -937,7 +914,7 @@ fn drop_last_n_user_turns_trims_context_updates_above_rolled_back_turn() {
     let mut history = create_history_with_items(items);
     let reference_context_item = reference_context_item();
     history.set_reference_context_item(Some(reference_context_item.clone()));
-    history.drop_last_n_user_turns(1);
+    history.drop_last_n_user_turns(/*num_turns*/ 1);
 
     assert_eq!(
         history.clone().for_prompt(&modalities),
@@ -975,7 +952,7 @@ fn drop_last_n_user_turns_clears_reference_context_for_mixed_developer_context_b
     let modalities = default_input_modalities();
     let mut history = create_history_with_items(items);
     history.set_reference_context_item(Some(reference_context_item()));
-    history.drop_last_n_user_turns(1);
+    history.drop_last_n_user_turns(/*num_turns*/ 1);
 
     assert_eq!(
         history.clone().for_prompt(&modalities),
@@ -1167,7 +1144,7 @@ fn format_exec_output_truncates_large_error() {
 
     let truncated = truncate_exec_output(&large_error);
 
-    assert_truncated_message_matches(&truncated, line, 36250);
+    assert_truncated_message_matches(&truncated, line, /*expected_removed*/ 36250);
     assert_ne!(truncated, large_error);
 }
 
@@ -1176,7 +1153,7 @@ fn format_exec_output_marks_byte_truncation_without_omitted_lines() {
     let long_line = "a".repeat(EXEC_FORMAT_MAX_BYTES + 10000);
     let truncated = truncate_exec_output(&long_line);
     assert_ne!(truncated, long_line);
-    assert_truncated_message_matches(&truncated, "a", 2500);
+    assert_truncated_message_matches(&truncated, "a", /*expected_removed*/ 2500);
     assert!(
         !truncated.contains("omitted"),
         "line omission marker should not appear when no lines were dropped: {truncated}"
@@ -1198,7 +1175,7 @@ fn format_exec_output_reports_omitted_lines_and_keeps_head_and_tail() {
         .collect();
 
     let truncated = truncate_exec_output(&content);
-    assert_truncated_message_matches(&truncated, "line-0-", 34_723);
+    assert_truncated_message_matches(&truncated, "line-0-", /*expected_removed*/ 34_723);
     assert!(
         truncated.contains("line-0-"),
         "expected head line to remain: {truncated}"
@@ -1221,7 +1198,7 @@ fn format_exec_output_prefers_line_marker_when_both_limits_exceeded() {
 
     let truncated = truncate_exec_output(&content);
 
-    assert_truncated_message_matches(&truncated, "line-0-", 17_423);
+    assert_truncated_message_matches(&truncated, "line-0-", /*expected_removed*/ 17_423);
 }
 
 #[cfg(not(debug_assertions))]
@@ -1675,9 +1652,11 @@ fn image_data_url_payload_does_not_dominate_message_estimate() {
             ContentItem::InputText {
                 text: "Here is the screenshot".to_string(),
             },
-            ContentItem::InputImage { image_url },
+            ContentItem::InputImage {
+                image_url,
+                detail: Some(DEFAULT_IMAGE_DETAIL),
+            },
         ],
-        end_turn: None,
         phase: None,
     };
     let text_only_item = ResponseItem::Message {
@@ -1686,7 +1665,6 @@ fn image_data_url_payload_does_not_dominate_message_estimate() {
         content: vec![ContentItem::InputText {
             text: "Here is the screenshot".to_string(),
         }],
-        end_turn: None,
         phase: None,
     };
 
@@ -1712,7 +1690,7 @@ fn image_data_url_payload_does_not_dominate_function_call_output_estimate() {
             },
             FunctionCallOutputContentItem::InputImage {
                 image_url,
-                detail: None,
+                detail: Some(DEFAULT_IMAGE_DETAIL),
             },
         ]),
     };
@@ -1738,7 +1716,7 @@ fn image_data_url_payload_does_not_dominate_custom_tool_call_output_estimate() {
             },
             FunctionCallOutputContentItem::InputImage {
                 image_url,
-                detail: None,
+                detail: Some(DEFAULT_IMAGE_DETAIL),
             },
         ]),
     };
@@ -1758,8 +1736,8 @@ fn non_base64_image_urls_are_unchanged() {
         role: "user".to_string(),
         content: vec![ContentItem::InputImage {
             image_url: "https://example.com/foo.png".to_string(),
+            detail: Some(DEFAULT_IMAGE_DETAIL),
         }],
-        end_turn: None,
         phase: None,
     };
     let function_output_item = ResponseItem::FunctionCallOutput {
@@ -1767,7 +1745,7 @@ fn non_base64_image_urls_are_unchanged() {
         output: FunctionCallOutputPayload::from_content_items(vec![
             FunctionCallOutputContentItem::InputImage {
                 image_url: "file:///tmp/foo.png".to_string(),
-                detail: None,
+                detail: Some(DEFAULT_IMAGE_DETAIL),
             },
         ]),
     };
@@ -1789,8 +1767,8 @@ fn data_url_without_base64_marker_is_unchanged() {
         role: "user".to_string(),
         content: vec![ContentItem::InputImage {
             image_url: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>".to_string(),
+            detail: Some(DEFAULT_IMAGE_DETAIL),
         }],
-        end_turn: None,
         phase: None,
     };
 
@@ -1809,7 +1787,7 @@ fn non_image_base64_data_url_is_unchanged() {
         output: FunctionCallOutputPayload::from_content_items(vec![
             FunctionCallOutputContentItem::InputImage {
                 image_url,
-                detail: None,
+                detail: Some(DEFAULT_IMAGE_DETAIL),
             },
         ]),
     };
@@ -1827,8 +1805,10 @@ fn mixed_case_data_url_markers_are_adjusted() {
     let item = ResponseItem::Message {
         id: None,
         role: "user".to_string(),
-        content: vec![ContentItem::InputImage { image_url }],
-        end_turn: None,
+        content: vec![ContentItem::InputImage {
+            image_url,
+            detail: Some(DEFAULT_IMAGE_DETAIL),
+        }],
         phase: None,
     };
 
@@ -1854,12 +1834,13 @@ fn multiple_inline_images_apply_multiple_fixed_costs() {
             },
             ContentItem::InputImage {
                 image_url: image_url_one,
+                detail: Some(DEFAULT_IMAGE_DETAIL),
             },
             ContentItem::InputImage {
                 image_url: image_url_two,
+                detail: Some(DEFAULT_IMAGE_DETAIL),
             },
         ],
-        end_turn: None,
         phase: None,
     };
 
@@ -1904,6 +1885,38 @@ fn original_detail_images_scale_with_dimensions() {
 }
 
 #[test]
+fn original_detail_images_are_capped_at_max_patch_count() {
+    // 3201x3201 at 32px patches yields 101 * 101 = 10,201 patches,
+    // which exceeds the original-detail patch budget.
+    let width = 3201;
+    let height = 3201;
+    let image = ImageBuffer::from_pixel(width, height, Luma([12u8]));
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image
+        .write_to(&mut bytes, ImageFormat::Png)
+        .expect("encode png");
+    let payload = BASE64_STANDARD.encode(bytes.get_ref());
+    let image_url = format!("data:image/png;base64,{payload}");
+    let item = ResponseItem::FunctionCallOutput {
+        call_id: "call-original-capped".to_string(),
+        output: FunctionCallOutputPayload::from_content_items(vec![
+            FunctionCallOutputContentItem::InputImage {
+                image_url,
+                detail: Some(ImageDetail::Original),
+            },
+        ]),
+    };
+
+    let raw_len = serde_json::to_string(&item).unwrap().len() as i64;
+    let estimated = estimate_response_item_model_visible_bytes(&item);
+    let capped_original_detail_image_bytes =
+        i64::try_from(approx_bytes_for_tokens(ORIGINAL_IMAGE_MAX_PATCHES)).unwrap();
+    let expected = raw_len - payload.len() as i64 + capped_original_detail_image_bytes;
+
+    assert_eq!(estimated, expected);
+}
+
+#[test]
 fn original_detail_webp_images_scale_with_dimensions() {
     // Same dimensions as the PNG case above, so the patch-based replacement cost is the same.
     const EXPECTED_ORIGINAL_DETAIL_IMAGE_BYTES: i64 = 7_776;
@@ -1942,7 +1955,6 @@ fn text_only_items_unchanged() {
         content: vec![ContentItem::OutputText {
             text: "Hello world, this is a response.".to_string(),
         }],
-        end_turn: None,
         phase: None,
     };
 
