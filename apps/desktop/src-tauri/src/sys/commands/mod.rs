@@ -90,6 +90,7 @@ pub mod settings_v2;
 pub mod shortcuts;
 pub mod skills;
 pub mod subscription;
+pub mod supabase_token;
 pub mod task_persistence;
 pub mod teams;
 pub mod templates;
