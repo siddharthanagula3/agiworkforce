@@ -4292,6 +4292,7 @@ mod tests {
         assert!(!restricted.has_full_network_access());
 
         let enabled = SandboxPolicy::ReadOnly {
+            access: ReadOnlyAccess::FullAccess,
             network_access: true,
         };
         assert!(enabled.has_full_network_access());
@@ -4626,16 +4627,19 @@ mod tests {
                 network_access: NetworkAccess::Enabled,
             },
             SandboxPolicy::ReadOnly {
+                access: ReadOnlyAccess::FullAccess,
                 network_access: false,
             },
             SandboxPolicy::WorkspaceWrite {
                 writable_roots: vec![],
+                read_only_access: ReadOnlyAccess::FullAccess,
                 network_access: false,
                 exclude_tmpdir_env_var: true,
                 exclude_slash_tmp: true,
             },
             SandboxPolicy::WorkspaceWrite {
                 writable_roots: vec![writable_root],
+                read_only_access: ReadOnlyAccess::FullAccess,
                 network_access: true,
                 exclude_tmpdir_env_var: false,
                 exclude_slash_tmp: true,

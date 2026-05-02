@@ -202,6 +202,9 @@ pub enum Feature {
     UnavailableDummyTools,
     /// Enable git commit attribution guidance (lowercase alias).
     AgiworkforceGitCommit,
+    /// Enable the remote-control transport path (allows the app server to
+    /// authenticate inbound remote-control sessions and persist their state).
+    RemoteControl,
 }
 
 impl Feature {
@@ -983,6 +986,12 @@ pub const FEATURES: &[FeatureSpec] = &[
         id: Feature::AgiworkforceGitCommit,
         key: "agiworkforce_git_commit",
         stage: Stage::Stable,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::RemoteControl,
+        key: "remote_control",
+        stage: Stage::UnderDevelopment,
         default_enabled: false,
     },
 ];

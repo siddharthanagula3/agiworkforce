@@ -30,6 +30,10 @@ pub use request_tags::FeedbackRequestTags;
 pub use request_tags::emit_feedback_request_tags;
 pub use request_tags::emit_feedback_request_tags_with_auth_env;
 
+/// Backwards-compat alias for the legacy lowercase-w spelling that the rebrand
+/// left behind in `agiworkforce-tui` and `agiworkforce-exec`.
+pub type AgiworkforceFeedback = AgiWorkforceFeedback;
+
 const DEFAULT_MAX_BYTES: usize = 4 * 1024 * 1024; // 4 MiB
 const SENTRY_DSN: &str =
     "https://ae32ed50620d7a7792c1ce5df38b3e3e@o33249.ingest.us.sentry.io/4510195390611458";
@@ -248,15 +252,16 @@ impl FeedbackSnapshot {
     }
 
     /// Upload feedback to Sentry with optional attachments.
-    pub fn upload_feedback(
-        &self,
-        classification: &str,
-        reason: Option<&str>,
-        include_logs: bool,
-        extra_attachment_paths: &[PathBuf],
-        session_source: Option<SessionSource>,
-        logs_override: Option<Vec<u8>>,
-    ) -> Result<()> {
+    pub fn upload_feedback(&self, options: FeedbackUploadOptions<'_>) -> Result<()> {
+        let FeedbackUploadOptions {
+            classification,
+            reason,
+            tags: extra_tags,
+            include_logs,
+            extra_attachment_paths,
+            session_source,
+            logs_override,
+        } = options;
         use std::collections::BTreeMap;
         use std::str::FromStr;
         use std::sync::Arc;
@@ -297,6 +302,14 @@ impl FeedbackSnapshot {
             "session_source",
             "reason",
         ];
+        if let Some(extra_tags) = extra_tags {
+            for (key, value) in extra_tags {
+                if reserved.contains(&key.as_str()) {
+                    continue;
+                }
+                tags.insert(key.clone(), value.clone());
+            }
+        }
         for (key, value) in &self.tags {
             if reserved.contains(&key.as_str()) {
                 continue;
@@ -350,7 +363,7 @@ impl FeedbackSnapshot {
     fn feedback_attachments(
         &self,
         include_logs: bool,
-        extra_attachment_paths: &[PathBuf],
+        extra_attachment_paths: &[FeedbackAttachmentPath],
         logs_override: Option<Vec<u8>>,
     ) -> Vec<sentry::protocol::Attachment> {
         use sentry::protocol::Attachment;
@@ -375,21 +388,27 @@ impl FeedbackSnapshot {
             });
         }
 
-        for path in extra_attachment_paths {
-            let data = match fs::read(path) {
+        for entry in extra_attachment_paths {
+            let data = match fs::read(&entry.path) {
                 Ok(data) => data,
                 Err(err) => {
                     tracing::warn!(
-                        path = %path.display(),
+                        path = %entry.path.display(),
                         error = %err,
                         "failed to read log attachment; skipping"
                     );
                     continue;
                 }
             };
-            let filename = path
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
+            let filename = entry
+                .attachment_filename_override
+                .clone()
+                .or_else(|| {
+                    entry
+                        .path
+                        .file_name()
+                        .map(|s| s.to_string_lossy().to_string())
+                })
                 .unwrap_or_else(|| "extra-log.log".to_string());
             attachments.push(Attachment {
                 buffer: data,
@@ -401,6 +420,27 @@ impl FeedbackSnapshot {
 
         attachments
     }
+}
+
+/// Path to a log/diagnostic file the caller wants attached to the feedback
+/// upload, with an optional filename override (used to disambiguate sibling
+/// rollouts that share the same on-disk basename).
+#[derive(Clone, Debug)]
+pub struct FeedbackAttachmentPath {
+    pub path: PathBuf,
+    pub attachment_filename_override: Option<String>,
+}
+
+/// Options for [`FeedbackSnapshot::upload_feedback`]. Borrows where possible so
+/// the caller doesn't have to clone the per-upload tag map or path slice.
+pub struct FeedbackUploadOptions<'a> {
+    pub classification: &'a str,
+    pub reason: Option<&'a str>,
+    pub tags: Option<&'a BTreeMap<String, String>>,
+    pub include_logs: bool,
+    pub extra_attachment_paths: &'a [FeedbackAttachmentPath],
+    pub session_source: Option<SessionSource>,
+    pub logs_override: Option<Vec<u8>>,
 }
 
 fn display_classification(classification: &str) -> String {
@@ -533,9 +573,13 @@ mod tests {
                 details: vec!["OPENAI_BASE_URL = https://example.com/v1".to_string()],
             }]));
 
+        let extra_attachment = FeedbackAttachmentPath {
+            path: extra_path.clone(),
+            attachment_filename_override: None,
+        };
         let attachments_with_diagnostics = snapshot_with_diagnostics.feedback_attachments(
             true,
-            std::slice::from_ref(&extra_path),
+            std::slice::from_ref(&extra_attachment),
             Some(vec![1]),
         );
 

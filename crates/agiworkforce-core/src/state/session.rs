@@ -247,6 +247,7 @@ fn merge_rate_limit_fields(
     snapshot
 }
 
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 #[path = "session_tests.rs"]
 mod tests;

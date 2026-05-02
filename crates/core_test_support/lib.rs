@@ -28,6 +28,12 @@ pub mod responses;
 pub mod streaming_sse;
 pub mod test_agiworkforce;
 pub mod test_agiworkforce_exec;
+
+/// Backwards-compat module alias for the legacy `test_codex` path that
+/// downstream tests in `agiworkforce-memories-write` (and other ported
+/// callers) still import.
+pub use test_agiworkforce as test_codex;
+pub use test_agiworkforce_exec as test_codex_exec;
 pub mod tracing;
 pub mod zsh_fork;
 

@@ -143,7 +143,7 @@ use agiworkforce_protocol::request_permissions::RequestPermissionProfile as Core
 use agiworkforce_protocol::request_permissions::RequestPermissionsResponse as CoreRequestPermissionsResponse;
 use agiworkforce_protocol::request_user_input::RequestUserInputAnswer as CoreRequestUserInputAnswer;
 use agiworkforce_protocol::request_user_input::RequestUserInputResponse as CoreRequestUserInputResponse;
-use agiworkforce_sandboxing::policy_transforms::intersect_permission_profiles;
+use agiworkforce_sandboxing::policy_transforms::intersect_additional_permission_profiles;
 use agiworkforce_shell_command::parse_command::shlex_join;
 use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use std::collections::HashMap;
@@ -2759,7 +2759,12 @@ fn request_permissions_response_from_client_result(
     let permissions = if granted_permissions.is_empty() {
         CoreRequestPermissionProfile::default()
     } else {
-        intersect_permission_profiles(requested_permissions.into(), granted_permissions, cwd).into()
+        intersect_additional_permission_profiles(
+            requested_permissions.into(),
+            granted_permissions,
+            cwd,
+        )
+        .into()
     };
     Some(CoreRequestPermissionsResponse {
         permissions,

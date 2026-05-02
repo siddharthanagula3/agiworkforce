@@ -12,3 +12,6 @@ agiworkforce-protocol = { path = "../agiworkforce-protocol" }
 agiworkforce-utils-string = { path = "../agiworkforce-utils-string" }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+pretty_assertions = "1"

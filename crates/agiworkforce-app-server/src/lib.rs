@@ -52,7 +52,7 @@ use agiworkforce_core::check_execpolicy_for_warnings;
 use agiworkforce_core::config::find_agiworkforce_home;
 use agiworkforce_exec_server::EnvironmentManager;
 use agiworkforce_exec_server::ExecServerRuntimePaths;
-use agiworkforce_feedback::AgiworkforceFeedback;
+use agiworkforce_feedback::AgiWorkforceFeedback;
 use agiworkforce_protocol::protocol::SessionSource;
 use agiworkforce_state::log_db;
 use tokio::sync::mpsc;
@@ -117,10 +117,18 @@ enum LogFormat {
 type StderrLogLayer = Box<dyn Layer<Registry> + Send + Sync + 'static>;
 
 fn configured_thread_config_loader(config: &Config) -> Arc<dyn ThreadConfigLoader> {
-    match config.experimental_thread_config_endpoint.as_deref() {
-        Some(endpoint) => Arc::new(RemoteThreadConfigLoader::new(endpoint)),
-        None => Arc::new(NoopThreadConfigLoader),
+    if let Some(endpoint) = config.experimental_thread_config_endpoint.as_deref() {
+        // RemoteThreadConfigLoader is currently a wrapper that delegates to an inner loader;
+        // until the URL-fetching implementation lands here in agiworkforce-app-server, we log
+        // the configured endpoint and fall back to wrapping a NoopThreadConfigLoader so the
+        // type round-trips cleanly without silently losing the user's configuration.
+        warn!(
+            endpoint = %endpoint,
+            "experimental_thread_config_endpoint is configured but no remote loader is implemented; using NoopThreadConfigLoader"
+        );
+        return Arc::new(RemoteThreadConfigLoader::new(Arc::new(NoopThreadConfigLoader)));
     }
+    Arc::new(NoopThreadConfigLoader)
 }
 
 /// Control-plane messages from the processor/transport side to the outbound router task.
@@ -537,7 +545,7 @@ pub async fn run_main_with_transport_options(
         });
     }
 
-    let feedback = AgiworkforceFeedback::new();
+    let feedback = AgiWorkforceFeedback::new();
 
     let otel = agiworkforce_core::otel_init::build_provider(
         &config,

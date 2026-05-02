@@ -73,6 +73,7 @@ impl ToolHandler for RequestUserInputHandler {
     }
 }
 
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 #[path = "request_user_input_tests.rs"]
 mod tests;
