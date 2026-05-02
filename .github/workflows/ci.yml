@@ -134,9 +134,14 @@ jobs:
           RUSTFLAGS: ''
         run: xvfb-run --auto-servernum cargo test --workspace --lib
 
-      - name: Clippy (Rust workspace, default features)
-        # M28: -D warnings matches [lints] table in Cargo.toml; keeps CI and local linting consistent
-        run: cargo clippy --workspace --lib -- -D warnings -D unsafe-code
+      - name: Clippy (apps/desktop + apps/cli, default features)
+        # Scope clippy to the binaries we actually ship. The 100+ ported
+        # codex-rs crates under crates/* legitimately use unsafe (PTY,
+        # exec policy, etc.) and would fail `-D unsafe-code` even though
+        # they're well-vetted upstream. M28: -D warnings matches the
+        # apps/desktop/src-tauri/Cargo.toml [lints] table; keeps CI and
+        # local linting consistent for the surface that actually runs.
+        run: cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code
 
       - name: Tauri IPC wiring (FIX-023)
         # Catches two regressions:
