@@ -1,5 +1,32 @@
 mod truncate;
 
+/// Serialize a value to a JSON string, replacing any non-ASCII characters with
+/// Unicode escape sequences (`\uXXXX`) so the result is safe to embed in ASCII
+/// contexts (e.g. HTTP headers, log lines).
+///
+/// Returns an error if `value` cannot be serialized to JSON.
+pub fn to_ascii_json_string<T: serde::Serialize>(value: &T) -> Result<String, serde_json::Error> {
+    let json = serde_json::to_string(value)?;
+    let mut out = String::with_capacity(json.len());
+    for ch in json.chars() {
+        if ch.is_ascii() {
+            out.push(ch);
+        } else {
+            let code = ch as u32;
+            if code <= 0xFFFF {
+                out.push_str(&format!("\\u{code:04X}"));
+            } else {
+                // Encode as a surrogate pair for code points above U+FFFF.
+                let code = code - 0x10000;
+                let high = 0xD800 + (code >> 10);
+                let low = 0xDC00 + (code & 0x3FF);
+                out.push_str(&format!("\\u{high:04X}\\u{low:04X}"));
+            }
+        }
+    }
+    Ok(out)
+}
+
 pub use truncate::approx_bytes_for_tokens;
 pub use truncate::approx_token_count;
 pub use truncate::approx_tokens_from_byte_count;

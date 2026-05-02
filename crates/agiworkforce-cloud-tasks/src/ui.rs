@@ -18,12 +18,12 @@ use ratatui::widgets::Paragraph;
 use std::sync::OnceLock;
 use std::time::Instant;
 
-use crate::agiworkforce_tui::render_markdown_text;
 use crate::app::App;
 use crate::app::AttemptView;
 use crate::util::format_relative_time_now;
 use agiworkforce_cloud_tasks_client::AttemptStatus;
 use agiworkforce_cloud_tasks_client::TaskStatus;
+use agiworkforce_tui::render_markdown_text;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
@@ -785,10 +785,7 @@ fn style_diff_line(raw: &str) -> Line<'static> {
     Line::from(vec![Span::raw(raw.to_string())])
 }
 
-fn render_task_item(
-    _app: &App,
-    t: &agiworkforce_cloud_tasks_client::TaskSummary,
-) -> ListItem<'static> {
+fn render_task_item(_app: &App, t: &agiworkforce_cloud_tasks_client::TaskSummary) -> ListItem<'static> {
     let status = match t.status {
         TaskStatus::Ready => "READY".green(),
         TaskStatus::Pending => "PENDING".magenta(),

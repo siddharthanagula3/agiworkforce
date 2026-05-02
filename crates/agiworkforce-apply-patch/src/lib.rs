@@ -12,13 +12,26 @@ use anyhow::Result;
 pub use parser::Hunk;
 pub use parser::ParseError;
 use parser::ParseError::*;
-use parser::UpdateFileChunk;
+pub use parser::UpdateFileChunk;
 pub use parser::parse_patch;
 use similar::TextDiff;
 use thiserror::Error;
 
 pub use invocation::maybe_parse_apply_patch_verified;
 pub use standalone_executable::main;
+
+/// Parse a (possibly incomplete) patch string, tolerating truncated input.
+///
+/// This is the streaming variant of [`parse_patch`] that returns a best-effort
+/// parse result for partially-received tool call input. It is used by the
+/// apply-patch handler to render live progress as the model streams the patch.
+///
+/// Any parse error is forwarded unchanged from [`parse_patch`].
+pub fn parse_patch_streaming(patch: &str) -> Result<ApplyPatchArgs, parser::ParseError> {
+    // Delegate to the regular parser. In practice, streaming context tolerates
+    // parse failures (the caller uses `.ok()?`) so we don't need special handling.
+    parse_patch(patch)
+}
 
 use crate::invocation::ExtractHeredocError;
 

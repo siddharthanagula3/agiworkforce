@@ -566,6 +566,12 @@ impl NetworkProxyState {
         self.update_domain_list(host, DomainListKind::Deny).await
     }
 
+    pub async fn replace_config_state(&self, new_state: ConfigState) -> Result<()> {
+        let mut guard = self.state.write().await;
+        *guard = new_state;
+        Ok(())
+    }
+
     async fn update_domain_list(&self, host: &str, target: DomainListKind) -> Result<()> {
         let host = Host::parse(host).context("invalid network host")?;
         let normalized_host = host.as_str().to_string();

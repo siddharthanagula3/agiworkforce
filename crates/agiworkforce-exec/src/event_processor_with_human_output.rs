@@ -1,4 +1,5 @@
 use std::io::IsTerminal;
+use std::path::Path;
 use std::path::PathBuf;
 
 use agiworkforce_app_server_protocol::CommandExecutionStatus;
@@ -8,15 +9,17 @@ use agiworkforce_app_server_protocol::ServerNotification;
 use agiworkforce_app_server_protocol::ThreadItem;
 use agiworkforce_app_server_protocol::ThreadTokenUsage;
 use agiworkforce_app_server_protocol::TurnStatus;
-use agiworkforce_core::WireApi;
 use agiworkforce_core::config::Config;
+use agiworkforce_model_provider_info::WireApi;
+use agiworkforce_protocol::models::PermissionProfile;
 use agiworkforce_protocol::num_format::format_with_separators;
-use agiworkforce_protocol::protocol::SandboxPolicy;
+use agiworkforce_protocol::permissions::NetworkSandboxPolicy;
 use agiworkforce_protocol::protocol::SessionConfiguredEvent;
+use agiworkforce_utils_absolute_path::canonicalize_preserving_symlinks;
 use owo_colors::OwoColorize;
 use owo_colors::Style;
 
-use crate::event_processor::AgiWorkforceStatus;
+use crate::event_processor::AgiworkforceStatus;
 use crate::event_processor::EventProcessor;
 use crate::event_processor::handle_last_message;
 
@@ -100,7 +103,7 @@ impl EventProcessorWithHumanOutput {
             ThreadItem::AgentMessage { text, .. } => {
                 eprintln!(
                     "{}\n{}",
-                    "codex".style(self.italic).style(self.magenta),
+                    "agiworkforce".style(self.italic).style(self.magenta),
                     text
                 );
                 self.final_message = Some(text);
@@ -216,7 +219,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
         session_configured_event: &SessionConfiguredEvent,
     ) {
         const VERSION: &str = env!("CARGO_PKG_VERSION");
-        eprintln!("OpenAI Codex v{VERSION} (research preview)\n--------");
+        eprintln!("OpenAI Agiworkforce v{VERSION} (research preview)\n--------");
         for (key, value) in config_summary_entries(config, session_configured_event) {
             eprintln!("{} {}", format!("{key}:").style(self.bold), value);
         }
@@ -224,10 +227,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
         eprintln!("{}\n{}", "user".style(self.cyan), prompt);
     }
 
-    fn process_server_notification(
-        &mut self,
-        notification: ServerNotification,
-    ) -> AgiWorkforceStatus {
+    fn process_server_notification(&mut self, notification: ServerNotification) -> AgiworkforceStatus {
         match notification {
             ServerNotification::ConfigWarning(notification) => {
                 let details = notification
@@ -240,7 +240,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                     notification.summary,
                     details
                 );
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::Error(notification) => {
                 eprintln!(
@@ -248,7 +248,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                     "ERROR:".style(self.red).style(self.bold),
                     notification.error
                 );
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::DeprecationNotice(notification) => {
                 eprintln!(
@@ -259,7 +259,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                 if let Some(details) = notification.details {
                     eprintln!("{}", details.style(self.dimmed));
                 }
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::HookStarted(notification) => {
                 eprintln!(
@@ -267,7 +267,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                     "hook:".style(self.bold),
                     format!("{:?}", notification.run.event_name).style(self.dimmed)
                 );
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::HookCompleted(notification) => {
                 eprintln!(
@@ -276,15 +276,15 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                     format!("{:?}", notification.run.event_name).style(self.dimmed),
                     notification.run.status
                 );
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::ItemStarted(notification) => {
                 self.render_item_started(&notification.item);
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::ItemCompleted(notification) => {
                 self.render_item_completed(notification.item);
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::ModelRerouted(notification) => {
                 eprintln!(
@@ -293,11 +293,12 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                     notification.from_model,
                     notification.to_model
                 );
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
+            ServerNotification::ModelVerification(_) => AgiworkforceStatus::Running,
             ServerNotification::ThreadTokenUsageUpdated(notification) => {
                 self.last_total_token_usage = Some(notification.token_usage);
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::TurnCompleted(notification) => match notification.turn.status {
                 TurnStatus::Completed => {
@@ -313,7 +314,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                         self.final_message = Some(final_message);
                     }
                     self.emit_final_message_on_shutdown = true;
-                    AgiWorkforceStatus::InitiateShutdown
+                    AgiworkforceStatus::InitiateShutdown
                 }
                 TurnStatus::Failed => {
                     self.final_message = None;
@@ -322,22 +323,22 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                     if let Some(error) = notification.turn.error {
                         eprintln!("{} {}", "ERROR:".style(self.red).style(self.bold), error);
                     }
-                    AgiWorkforceStatus::InitiateShutdown
+                    AgiworkforceStatus::InitiateShutdown
                 }
                 TurnStatus::Interrupted => {
                     self.final_message = None;
                     self.final_message_rendered = false;
                     self.emit_final_message_on_shutdown = false;
                     eprintln!("{}", "turn interrupted".style(self.dimmed));
-                    AgiWorkforceStatus::InitiateShutdown
+                    AgiworkforceStatus::InitiateShutdown
                 }
-                TurnStatus::InProgress => AgiWorkforceStatus::Running,
+                TurnStatus::InProgress => AgiworkforceStatus::Running,
             },
             ServerNotification::TurnDiffUpdated(notification) => {
                 if !notification.diff.trim().is_empty() {
                     eprintln!("{}", notification.diff);
                 }
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
             ServerNotification::TurnPlanUpdated(notification) => {
                 if let Some(explanation) = notification.explanation {
@@ -360,19 +361,19 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                         }
                     }
                 }
-                AgiWorkforceStatus::Running
+                AgiworkforceStatus::Running
             }
-            ServerNotification::TurnStarted(_) => AgiWorkforceStatus::Running,
-            _ => AgiWorkforceStatus::Running,
+            ServerNotification::TurnStarted(_) => AgiworkforceStatus::Running,
+            _ => AgiworkforceStatus::Running,
         }
     }
 
-    fn process_warning(&mut self, message: String) -> AgiWorkforceStatus {
+    fn process_warning(&mut self, message: String) -> AgiworkforceStatus {
         eprintln!(
             "{} {message}",
             "warning:".style(self.yellow).style(self.bold)
         );
-        AgiWorkforceStatus::Running
+        AgiworkforceStatus::Running
     }
 
     fn print_final_output(&mut self) {
@@ -411,7 +412,7 @@ impl EventProcessor for EventProcessorWithHumanOutput {
         {
             eprintln!(
                 "{}\n{}",
-                "codex".style(self.italic).style(self.magenta),
+                "agiworkforce".style(self.italic).style(self.magenta),
                 message
             );
         }
@@ -435,7 +436,10 @@ fn config_summary_entries(
         ),
         (
             "sandbox",
-            summarize_sandbox_policy(config.permissions.sandbox_policy.get()),
+            summarize_permission_profile(
+                config.permissions.permission_profile.get(),
+                config.cwd.as_path(),
+            ),
         ),
     ];
     if config.model_provider.wire_api == WireApi::Responses {
@@ -461,53 +465,81 @@ fn config_summary_entries(
     entries
 }
 
-fn summarize_sandbox_policy(sandbox_policy: &SandboxPolicy) -> String {
-    match sandbox_policy {
-        SandboxPolicy::DangerFullAccess => "danger-full-access".to_string(),
-        SandboxPolicy::ReadOnly { network_access, .. } => {
-            let mut summary = "read-only".to_string();
-            if *network_access {
-                summary.push_str(" (network access enabled)");
-            }
-            summary
-        }
-        SandboxPolicy::ExternalSandbox { network_access } => {
+fn summarize_permission_profile(permission_profile: &PermissionProfile, cwd: &Path) -> String {
+    match permission_profile {
+        PermissionProfile::Disabled => "danger-full-access".to_string(),
+        PermissionProfile::External { network } => {
             let mut summary = "external-sandbox".to_string();
-            if matches!(
-                network_access,
-                agiworkforce_protocol::protocol::NetworkAccess::Enabled
-            ) {
-                summary.push_str(" (network access enabled)");
-            }
+            append_network_summary(&mut summary, *network);
             summary
         }
-        SandboxPolicy::WorkspaceWrite {
-            writable_roots,
-            network_access,
-            exclude_tmpdir_env_var,
-            exclude_slash_tmp,
-            read_only_access: _,
-        } => {
+        PermissionProfile::Managed { .. } => {
+            let file_system_policy = permission_profile.file_system_sandbox_policy();
+            let network_policy = permission_profile.network_sandbox_policy();
+            if file_system_policy.has_full_disk_write_access() {
+                let mut summary = "workspace-write [/]".to_string();
+                append_network_summary(&mut summary, network_policy);
+                return summary;
+            }
+
+            let writable_roots = file_system_policy.get_writable_roots_with_cwd(cwd);
+            if writable_roots.is_empty() {
+                let mut summary = "read-only".to_string();
+                append_network_summary(&mut summary, network_policy);
+                return summary;
+            }
+
             let mut summary = "workspace-write".to_string();
-            let mut writable_entries = vec!["workdir".to_string()];
-            if !*exclude_slash_tmp {
-                writable_entries.push("/tmp".to_string());
-            }
-            if !*exclude_tmpdir_env_var {
-                writable_entries.push("$TMPDIR".to_string());
-            }
-            writable_entries.extend(
-                writable_roots
-                    .iter()
-                    .map(|path| path.to_string_lossy().to_string()),
-            );
+            let writable_entries = writable_roots
+                .iter()
+                .map(|root| writable_root_label(root.root.as_path(), cwd))
+                .collect::<Vec<_>>();
             summary.push_str(&format!(" [{}]", writable_entries.join(", ")));
-            if *network_access {
-                summary.push_str(" (network access enabled)");
-            }
+            append_network_summary(&mut summary, network_policy);
             summary
         }
     }
+}
+
+fn append_network_summary(summary: &mut String, network_policy: NetworkSandboxPolicy) {
+    if network_policy.is_enabled() {
+        summary.push_str(" (network access enabled)");
+    }
+}
+
+fn writable_root_label(root: &Path, cwd: &Path) -> String {
+    if paths_match_after_canonicalization(root, cwd) {
+        return "workdir".to_string();
+    }
+    if paths_match_after_canonicalization(root, Path::new("/tmp")) {
+        return "/tmp".to_string();
+    }
+    if std::env::var_os("TMPDIR")
+        .filter(|tmpdir| !tmpdir.is_empty())
+        .is_some_and(|tmpdir| paths_match_after_canonicalization(root, Path::new(&tmpdir)))
+    {
+        return "$TMPDIR".to_string();
+    }
+    display_path_label(root)
+}
+
+fn paths_match_after_canonicalization(left: &Path, right: &Path) -> bool {
+    match (
+        canonicalize_preserving_symlinks(left),
+        canonicalize_preserving_symlinks(right),
+    ) {
+        (Ok(left), Ok(right)) if left == right => true,
+        _ => display_path_label(left) == display_path_label(right),
+    }
+}
+
+fn display_path_label(path: &Path) -> String {
+    path.strip_prefix("/private/tmp")
+        .ok()
+        .map(|suffix| Path::new("/tmp").join(suffix))
+        .unwrap_or_else(|| path.to_path_buf())
+        .to_string_lossy()
+        .to_string()
 }
 
 fn reasoning_text(
@@ -567,347 +599,5 @@ fn should_print_final_message_to_tty(
 }
 
 #[cfg(test)]
-mod tests {
-    use agiworkforce_app_server_protocol::ThreadItem;
-    use agiworkforce_app_server_protocol::Turn;
-    use agiworkforce_app_server_protocol::TurnStatus;
-    use owo_colors::Style;
-
-    use super::EventProcessorWithHumanOutput;
-    use super::final_message_from_turn_items;
-    use super::reasoning_text;
-    use super::should_print_final_message_to_stdout;
-    use super::should_print_final_message_to_tty;
-    use crate::event_processor::EventProcessor;
-    use agiworkforce_app_server_protocol::ServerNotification;
-
-    #[test]
-    fn suppresses_final_stdout_message_when_both_streams_are_terminals() {
-        assert!(!should_print_final_message_to_stdout(
-            Some("hello"),
-            true,
-            true
-        ));
-    }
-
-    #[test]
-    fn prints_final_stdout_message_when_stdout_is_not_terminal() {
-        assert!(should_print_final_message_to_stdout(
-            Some("hello"),
-            false,
-            true
-        ));
-    }
-
-    #[test]
-    fn prints_final_stdout_message_when_stderr_is_not_terminal() {
-        assert!(should_print_final_message_to_stdout(
-            Some("hello"),
-            true,
-            false
-        ));
-    }
-
-    #[test]
-    fn suppresses_final_stdout_message_when_missing() {
-        assert!(!should_print_final_message_to_stdout(None, false, false));
-    }
-
-    #[test]
-    fn prints_final_tty_message_when_not_yet_rendered() {
-        assert!(should_print_final_message_to_tty(
-            Some("hello"),
-            false,
-            true,
-            true
-        ));
-    }
-
-    #[test]
-    fn suppresses_final_tty_message_when_already_rendered() {
-        assert!(!should_print_final_message_to_tty(
-            Some("hello"),
-            true,
-            true,
-            true
-        ));
-    }
-
-    #[test]
-    fn reasoning_text_prefers_summary_when_raw_reasoning_is_hidden() {
-        let text = reasoning_text(
-            &["summary".to_string()],
-            &["raw".to_string()],
-            /*show_raw_agent_reasoning*/ false,
-        );
-
-        assert_eq!(text.as_deref(), Some("summary"));
-    }
-
-    #[test]
-    fn reasoning_text_uses_raw_content_when_enabled() {
-        let text = reasoning_text(
-            &["summary".to_string()],
-            &["raw".to_string()],
-            /*show_raw_agent_reasoning*/ true,
-        );
-
-        assert_eq!(text.as_deref(), Some("raw"));
-    }
-
-    #[test]
-    fn final_message_from_turn_items_uses_latest_agent_message() {
-        let message = final_message_from_turn_items(&[
-            ThreadItem::AgentMessage {
-                id: "msg-1".to_string(),
-                text: "first".to_string(),
-                phase: None,
-                memory_citation: None,
-            },
-            ThreadItem::Plan {
-                id: "plan-1".to_string(),
-                text: "plan".to_string(),
-            },
-            ThreadItem::AgentMessage {
-                id: "msg-2".to_string(),
-                text: "second".to_string(),
-                phase: None,
-                memory_citation: None,
-            },
-        ]);
-
-        assert_eq!(message.as_deref(), Some("second"));
-    }
-
-    #[test]
-    fn final_message_from_turn_items_falls_back_to_latest_plan() {
-        let message = final_message_from_turn_items(&[
-            ThreadItem::Reasoning {
-                id: "reasoning-1".to_string(),
-                summary: vec!["inspect".to_string()],
-                content: Vec::new(),
-            },
-            ThreadItem::Plan {
-                id: "plan-1".to_string(),
-                text: "first plan".to_string(),
-            },
-            ThreadItem::Plan {
-                id: "plan-2".to_string(),
-                text: "final plan".to_string(),
-            },
-        ]);
-
-        assert_eq!(message.as_deref(), Some("final plan"));
-    }
-
-    #[test]
-    fn turn_completed_recovers_final_message_from_turn_items() {
-        let mut processor = EventProcessorWithHumanOutput {
-            bold: Style::new(),
-            cyan: Style::new(),
-            dimmed: Style::new(),
-            green: Style::new(),
-            italic: Style::new(),
-            magenta: Style::new(),
-            red: Style::new(),
-            yellow: Style::new(),
-            show_agent_reasoning: true,
-            show_raw_agent_reasoning: false,
-            last_message_path: None,
-            final_message: None,
-            final_message_rendered: false,
-            emit_final_message_on_shutdown: false,
-            last_total_token_usage: None,
-        };
-
-        let status = processor.process_server_notification(ServerNotification::TurnCompleted(
-            agiworkforce_app_server_protocol::TurnCompletedNotification {
-                thread_id: "thread-1".to_string(),
-                turn: Turn {
-                    id: "turn-1".to_string(),
-                    items: vec![ThreadItem::AgentMessage {
-                        id: "msg-1".to_string(),
-                        text: "final answer".to_string(),
-                        phase: None,
-                        memory_citation: None,
-                    }],
-                    status: TurnStatus::Completed,
-                    error: None,
-                },
-            },
-        ));
-
-        assert_eq!(
-            status,
-            crate::event_processor::AgiWorkforceStatus::InitiateShutdown
-        );
-        assert_eq!(processor.final_message.as_deref(), Some("final answer"));
-    }
-
-    #[test]
-    fn turn_completed_overwrites_stale_final_message_from_turn_items() {
-        let mut processor = EventProcessorWithHumanOutput {
-            bold: Style::new(),
-            cyan: Style::new(),
-            dimmed: Style::new(),
-            green: Style::new(),
-            italic: Style::new(),
-            magenta: Style::new(),
-            red: Style::new(),
-            yellow: Style::new(),
-            show_agent_reasoning: true,
-            show_raw_agent_reasoning: false,
-            last_message_path: None,
-            final_message: Some("stale answer".to_string()),
-            final_message_rendered: true,
-            emit_final_message_on_shutdown: false,
-            last_total_token_usage: None,
-        };
-
-        let status = processor.process_server_notification(ServerNotification::TurnCompleted(
-            agiworkforce_app_server_protocol::TurnCompletedNotification {
-                thread_id: "thread-1".to_string(),
-                turn: Turn {
-                    id: "turn-1".to_string(),
-                    items: vec![ThreadItem::AgentMessage {
-                        id: "msg-1".to_string(),
-                        text: "final answer".to_string(),
-                        phase: None,
-                        memory_citation: None,
-                    }],
-                    status: TurnStatus::Completed,
-                    error: None,
-                },
-            },
-        ));
-
-        assert_eq!(
-            status,
-            crate::event_processor::AgiWorkforceStatus::InitiateShutdown
-        );
-        assert_eq!(processor.final_message.as_deref(), Some("final answer"));
-        assert!(!processor.final_message_rendered);
-    }
-
-    #[test]
-    fn turn_completed_preserves_streamed_final_message_when_turn_items_are_empty() {
-        let mut processor = EventProcessorWithHumanOutput {
-            bold: Style::new(),
-            cyan: Style::new(),
-            dimmed: Style::new(),
-            green: Style::new(),
-            italic: Style::new(),
-            magenta: Style::new(),
-            red: Style::new(),
-            yellow: Style::new(),
-            show_agent_reasoning: true,
-            show_raw_agent_reasoning: false,
-            last_message_path: None,
-            final_message: Some("streamed answer".to_string()),
-            final_message_rendered: false,
-            emit_final_message_on_shutdown: false,
-            last_total_token_usage: None,
-        };
-
-        let status = processor.process_server_notification(ServerNotification::TurnCompleted(
-            agiworkforce_app_server_protocol::TurnCompletedNotification {
-                thread_id: "thread-1".to_string(),
-                turn: Turn {
-                    id: "turn-1".to_string(),
-                    items: Vec::new(),
-                    status: TurnStatus::Completed,
-                    error: None,
-                },
-            },
-        ));
-
-        assert_eq!(
-            status,
-            crate::event_processor::AgiWorkforceStatus::InitiateShutdown
-        );
-        assert_eq!(processor.final_message.as_deref(), Some("streamed answer"));
-        assert!(processor.emit_final_message_on_shutdown);
-    }
-
-    #[test]
-    fn turn_failed_clears_stale_final_message() {
-        let mut processor = EventProcessorWithHumanOutput {
-            bold: Style::new(),
-            cyan: Style::new(),
-            dimmed: Style::new(),
-            green: Style::new(),
-            italic: Style::new(),
-            magenta: Style::new(),
-            red: Style::new(),
-            yellow: Style::new(),
-            show_agent_reasoning: true,
-            show_raw_agent_reasoning: false,
-            last_message_path: None,
-            final_message: Some("partial answer".to_string()),
-            final_message_rendered: true,
-            emit_final_message_on_shutdown: true,
-            last_total_token_usage: None,
-        };
-
-        let status = processor.process_server_notification(ServerNotification::TurnCompleted(
-            agiworkforce_app_server_protocol::TurnCompletedNotification {
-                thread_id: "thread-1".to_string(),
-                turn: Turn {
-                    id: "turn-1".to_string(),
-                    items: Vec::new(),
-                    status: TurnStatus::Failed,
-                    error: None,
-                },
-            },
-        ));
-
-        assert_eq!(
-            status,
-            crate::event_processor::AgiWorkforceStatus::InitiateShutdown
-        );
-        assert_eq!(processor.final_message, None);
-        assert!(!processor.final_message_rendered);
-        assert!(!processor.emit_final_message_on_shutdown);
-    }
-
-    #[test]
-    fn turn_interrupted_clears_stale_final_message() {
-        let mut processor = EventProcessorWithHumanOutput {
-            bold: Style::new(),
-            cyan: Style::new(),
-            dimmed: Style::new(),
-            green: Style::new(),
-            italic: Style::new(),
-            magenta: Style::new(),
-            red: Style::new(),
-            yellow: Style::new(),
-            show_agent_reasoning: true,
-            show_raw_agent_reasoning: false,
-            last_message_path: None,
-            final_message: Some("partial answer".to_string()),
-            final_message_rendered: true,
-            emit_final_message_on_shutdown: true,
-            last_total_token_usage: None,
-        };
-
-        let status = processor.process_server_notification(ServerNotification::TurnCompleted(
-            agiworkforce_app_server_protocol::TurnCompletedNotification {
-                thread_id: "thread-1".to_string(),
-                turn: Turn {
-                    id: "turn-1".to_string(),
-                    items: Vec::new(),
-                    status: TurnStatus::Interrupted,
-                    error: None,
-                },
-            },
-        ));
-
-        assert_eq!(
-            status,
-            crate::event_processor::AgiWorkforceStatus::InitiateShutdown
-        );
-        assert_eq!(processor.final_message, None);
-        assert!(!processor.final_message_rendered);
-        assert!(!processor.emit_final_message_on_shutdown);
-    }
-}
+#[path = "event_processor_with_human_output_tests.rs"]
+mod tests;

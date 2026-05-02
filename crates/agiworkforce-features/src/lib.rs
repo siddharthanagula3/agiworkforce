@@ -3,7 +3,7 @@
 //! This crate defines the feature registry plus the logic used to resolve an
 //! effective feature set from config-like inputs.
 
-use agiworkforce_login::AgiWorkforceAuth;
+use agiworkforce_login::AgiworkforceAuth;
 use agiworkforce_login::AuthManager;
 use agiworkforce_otel::SessionTelemetry;
 use agiworkforce_protocol::protocol::Event;
@@ -182,6 +182,26 @@ pub enum Feature {
     ResponsesWebsockets,
     /// Legacy rollout flag for Responses API WebSocket transport v2 experiments.
     ResponsesWebsocketsV2,
+    /// Enable goal-tracking tools.
+    Goals,
+    /// Enable the built-in search tool when supported by the model.
+    ToolSearch,
+    /// Override the MCP path for the AgiWorkforce Apps server.
+    AppsMcpPathOverride,
+    /// Allow remote plugin loading.
+    RemotePlugin,
+    /// Allow plugin-defined hooks.
+    PluginHooks,
+    /// Enable AgiWorkforce Claude-style lifecycle hooks (alias for AgiWorkforceHooks).
+    AgiworkforceHooks,
+    /// Enable streaming apply_patch events.
+    ApplyPatchStreamingEvents,
+    /// Always defer MCP tools in tool search.
+    ToolSearchAlwaysDeferMcpTools,
+    /// Expose unavailable dummy tool stubs to the model.
+    UnavailableDummyTools,
+    /// Enable git commit attribution guidance (lowercase alias).
+    AgiworkforceGitCommit,
 }
 
 impl Feature {
@@ -288,8 +308,8 @@ impl Features {
         self.apps_enabled_for_auth(auth.as_ref())
     }
 
-    pub fn apps_enabled_for_auth(&self, auth: Option<&AgiWorkforceAuth>) -> bool {
-        self.enabled(Feature::Apps) && auth.is_some_and(AgiWorkforceAuth::is_chatgpt_auth)
+    pub fn apps_enabled_for_auth(&self, auth: Option<&AgiworkforceAuth>) -> bool {
+        self.enabled(Feature::Apps) && auth.is_some_and(AgiworkforceAuth::is_chatgpt_auth)
     }
 
     pub fn use_legacy_landlock(&self) -> bool {
@@ -496,11 +516,61 @@ pub fn is_known_feature_key(key: &str) -> bool {
     feature_for_key(key).is_some()
 }
 
+/// A feature flag that can be either a simple on/off toggle or carry a typed
+/// configuration payload.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum FeatureToml<T> {
+    /// Simple boolean enable / disable.
+    Enabled(bool),
+    /// Structured configuration table for the feature.
+    Config(T),
+}
+
+/// Configuration for the `multi_agent_v2` typed feature.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct MultiAgentV2ConfigToml {
+    #[serde(default)]
+    pub max_concurrent_threads_per_session: Option<usize>,
+    #[serde(default)]
+    pub min_wait_timeout_ms: Option<i64>,
+    #[serde(default)]
+    pub usage_hint_enabled: Option<bool>,
+    #[serde(default)]
+    pub usage_hint_text: Option<String>,
+    #[serde(default)]
+    pub root_agent_usage_hint_text: Option<String>,
+    #[serde(default)]
+    pub subagent_usage_hint_text: Option<String>,
+    #[serde(default)]
+    pub hide_spawn_agent_metadata: Option<bool>,
+}
+
+/// Configuration for the `apps_mcp_path_override` typed feature.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct AppsMcpPathOverrideConfigToml {
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
 /// Deserializable features table for TOML.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, JsonSchema)]
 pub struct FeaturesToml {
     #[serde(flatten)]
     pub entries: BTreeMap<String, bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub multi_agent_v2: Option<FeatureToml<MultiAgentV2ConfigToml>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub apps_mcp_path_override: Option<FeatureToml<AppsMcpPathOverrideConfigToml>>,
+}
+
+impl FeaturesToml {
+    /// Return a reference to the raw feature entries map.
+    pub fn entries(&self) -> &BTreeMap<String, bool> {
+        &self.entries
+    }
 }
 
 /// Single, easy-to-read registry of all feature definitions.
@@ -853,6 +923,66 @@ pub const FEATURES: &[FeatureSpec] = &[
         id: Feature::ResponsesWebsocketsV2,
         key: "responses_websockets_v2",
         stage: Stage::Removed,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::Goals,
+        key: "goals",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::ToolSearch,
+        key: "tool_search",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::AppsMcpPathOverride,
+        key: "apps_mcp_path_override",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::RemotePlugin,
+        key: "remote_plugin",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::PluginHooks,
+        key: "plugin_hooks",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::AgiworkforceHooks,
+        key: "agiworkforce_hooks",
+        stage: Stage::Stable,
+        default_enabled: true,
+    },
+    FeatureSpec {
+        id: Feature::ApplyPatchStreamingEvents,
+        key: "apply_patch_streaming_events",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::ToolSearchAlwaysDeferMcpTools,
+        key: "tool_search_always_defer_mcp_tools",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::UnavailableDummyTools,
+        key: "unavailable_dummy_tools",
+        stage: Stage::UnderDevelopment,
+        default_enabled: false,
+    },
+    FeatureSpec {
+        id: Feature::AgiworkforceGitCommit,
+        key: "agiworkforce_git_commit",
+        stage: Stage::Stable,
         default_enabled: false,
     },
 ];

@@ -1,49 +1,67 @@
-use crate::AgiWorkforceAuth;
-use crate::AuthManager;
-use crate::ModelProviderInfo;
-use crate::OPENAI_PROVIDER_ID;
+use crate::SkillsManager;
 use crate::agent::AgentControl;
-use crate::codex::Codex;
-use crate::codex::CodexSpawnArgs;
-use crate::codex::CodexSpawnOk;
-use crate::codex::INITIAL_SUBMIT_ID;
-use crate::codex_thread::CodexThread;
+use crate::agiworkforce_thread::AgiworkforceThread;
 use crate::config::Config;
-use crate::error::CodexErr;
-use crate::error::Result as CodexResult;
+use crate::config::ThreadStoreConfig;
+use crate::environment_selection::default_thread_environment_selections;
+use crate::environment_selection::selected_primary_environment;
+use crate::environment_selection::validate_environment_selections;
 use crate::file_watcher::FileWatcher;
 use crate::mcp::McpManager;
-use crate::models_manager::collaboration_mode_presets::CollaborationModesConfig;
-use crate::models_manager::manager::ModelsManager;
 use crate::plugins::PluginsManager;
-use crate::protocol::Event;
-use crate::protocol::EventMsg;
-use crate::protocol::SessionConfiguredEvent;
 use crate::rollout::RolloutRecorder;
 use crate::rollout::truncation;
+use crate::session::Agiworkforce;
+use crate::session::AgiworkforceSpawnArgs;
+use crate::session::AgiworkforceSpawnOk;
+use crate::session::INITIAL_SUBMIT_ID;
 use crate::shell_snapshot::ShellSnapshot;
-use crate::skills::SkillsManager;
 use crate::skills_watcher::SkillsWatcher;
 use crate::skills_watcher::SkillsWatcherEvent;
+use crate::tasks::InterruptedTurnHistoryMarker;
 use crate::tasks::interrupted_turn_history_marker;
+use agiworkforce_analytics::AnalyticsEventsClient;
 use agiworkforce_app_server_protocol::ThreadHistoryBuilder;
 use agiworkforce_app_server_protocol::TurnStatus;
+use agiworkforce_exec_server::EnvironmentManager;
+use agiworkforce_login::AuthManager;
+use agiworkforce_login::AgiworkforceAuth;
+use agiworkforce_model_provider::create_model_provider;
+use agiworkforce_model_provider_info::ModelProviderInfo;
+use agiworkforce_models_manager::manager::RefreshStrategy;
+use agiworkforce_models_manager::manager::SharedModelsManager;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::config_types::CollaborationModeMask;
+use agiworkforce_protocol::error::AgiworkforceErr;
+use agiworkforce_protocol::error::Result as AgiworkforceResult;
 #[cfg(test)]
 use agiworkforce_protocol::models::ResponseItem;
 use agiworkforce_protocol::openai_models::ModelPreset;
+use agiworkforce_protocol::protocol::Event;
+use agiworkforce_protocol::protocol::EventMsg;
 use agiworkforce_protocol::protocol::InitialHistory;
 use agiworkforce_protocol::protocol::McpServerRefreshConfig;
 use agiworkforce_protocol::protocol::Op;
 use agiworkforce_protocol::protocol::RolloutItem;
+use agiworkforce_protocol::protocol::SessionConfiguredEvent;
 use agiworkforce_protocol::protocol::SessionSource;
+use agiworkforce_protocol::protocol::SubAgentSource;
 use agiworkforce_protocol::protocol::TurnAbortReason;
 use agiworkforce_protocol::protocol::TurnAbortedEvent;
+use agiworkforce_protocol::protocol::TurnEnvironmentSelection;
 use agiworkforce_protocol::protocol::W3cTraceContext;
+use agiworkforce_rollout::RolloutConfig;
+use agiworkforce_state::DirectionalThreadSpawnEdgeStatus;
+#[cfg(debug_assertions)]
+use agiworkforce_thread_store::InMemoryThreadStore;
+use agiworkforce_thread_store::LocalThreadStore;
+use agiworkforce_thread_store::RemoteThreadStore;
+use agiworkforce_thread_store::ThreadStore;
+use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -74,11 +92,11 @@ fn should_use_test_thread_manager_behavior() -> bool {
     FORCE_TEST_THREAD_MANAGER_BEHAVIOR.load(Ordering::Relaxed)
 }
 
-struct TempCodexHomeGuard {
+struct TempAgiworkforceHomeGuard {
     path: PathBuf,
 }
 
-impl Drop for TempCodexHomeGuard {
+impl Drop for TempAgiworkforceHomeGuard {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.path);
     }
@@ -125,11 +143,11 @@ fn build_skills_watcher(skills_manager: Arc<SkillsManager>) -> Arc<SkillsWatcher
     skills_watcher
 }
 
-/// Represents a newly created Codex thread (formerly called a conversation), including the first event
+/// Represents a newly created Agiworkforce thread (formerly called a conversation), including the first event
 /// (which is [`EventMsg::SessionConfigured`]).
 pub struct NewThread {
     pub thread_id: ThreadId,
-    pub thread: Arc<CodexThread>,
+    pub thread: Arc<AgiworkforceThread>,
     pub session_configured: SessionConfiguredEvent,
 }
 
@@ -189,24 +207,70 @@ enum ShutdownOutcome {
 /// them in memory.
 pub struct ThreadManager {
     state: Arc<ThreadManagerState>,
-    _test_agiworkforce_home_guard: Option<TempCodexHomeGuard>,
+    _test_agiworkforce_home_guard: Option<TempAgiworkforceHomeGuard>,
+}
+
+pub struct StartThreadOptions {
+    pub config: Config,
+    pub thread_store: Arc<dyn ThreadStore>,
+    pub initial_history: InitialHistory,
+    pub session_source: Option<SessionSource>,
+    pub dynamic_tools: Vec<agiworkforce_protocol::dynamic_tools::DynamicToolSpec>,
+    pub persist_extended_history: bool,
+    pub metrics_service_name: Option<String>,
+    pub parent_trace: Option<W3cTraceContext>,
+    pub environments: Vec<TurnEnvironmentSelection>,
+}
+
+pub(crate) struct ResumeThreadFromRolloutOptions {
+    pub(crate) config: Config,
+    pub(crate) thread_store: Arc<dyn ThreadStore>,
+    pub(crate) rollout_path: PathBuf,
+    pub(crate) agent_control: AgentControl,
+    pub(crate) session_source: SessionSource,
+    pub(crate) inherited_shell_snapshot: Option<Arc<ShellSnapshot>>,
+    pub(crate) inherited_exec_policy: Option<Arc<crate::exec_policy::ExecPolicyManager>>,
 }
 
 /// Shared, `Arc`-owned state for [`ThreadManager`]. This `Arc` is required to have a single
 /// `Arc` reference that can be downgraded to by `AgentControl` while preventing every single
 /// function to require an `Arc<&Self>`.
 pub(crate) struct ThreadManagerState {
-    threads: Arc<RwLock<HashMap<ThreadId, Arc<CodexThread>>>>,
+    threads: Arc<RwLock<HashMap<ThreadId, Arc<AgiworkforceThread>>>>,
     thread_created_tx: broadcast::Sender<ThreadId>,
     auth_manager: Arc<AuthManager>,
-    models_manager: Arc<ModelsManager>,
+    models_manager: SharedModelsManager,
+    environment_manager: Arc<EnvironmentManager>,
     skills_manager: Arc<SkillsManager>,
     plugins_manager: Arc<PluginsManager>,
     mcp_manager: Arc<McpManager>,
     skills_watcher: Arc<SkillsWatcher>,
     session_source: SessionSource,
+    analytics_events_client: Option<AnalyticsEventsClient>,
     // Captures submitted ops for testing purpose when test mode is enabled.
     ops_log: Option<SharedCapturedOps>,
+}
+
+pub fn build_models_manager(
+    config: &Config,
+    auth_manager: Arc<AuthManager>,
+) -> SharedModelsManager {
+    let provider = create_model_provider(config.model_provider.clone(), Some(auth_manager));
+    provider.models_manager(
+        config.agiworkforce_home.to_path_buf(),
+        config.model_catalog.clone(),
+    )
+}
+
+pub fn thread_store_from_config(config: &Config) -> Arc<dyn ThreadStore> {
+    match &config.experimental_thread_store {
+        ThreadStoreConfig::Local => {
+            Arc::new(LocalThreadStore::new(RolloutConfig::from_view(config)))
+        }
+        ThreadStoreConfig::Remote { endpoint } => Arc::new(RemoteThreadStore::new(endpoint)),
+        #[cfg(debug_assertions)]
+        ThreadStoreConfig::InMemory { id } => InMemoryThreadStore::for_id(id),
+    }
 }
 
 impl ThreadManager {
@@ -214,24 +278,19 @@ impl ThreadManager {
         config: &Config,
         auth_manager: Arc<AuthManager>,
         session_source: SessionSource,
-        collaboration_modes_config: CollaborationModesConfig,
+        environment_manager: Arc<EnvironmentManager>,
+        analytics_events_client: Option<AnalyticsEventsClient>,
     ) -> Self {
         let agiworkforce_home = config.agiworkforce_home.clone();
         let restriction_product = session_source.restriction_product();
-        let openai_models_provider = config
-            .model_providers
-            .get(OPENAI_PROVIDER_ID)
-            .cloned()
-            .unwrap_or_else(|| ModelProviderInfo::create_openai_provider(/*base_url*/ None));
         let (thread_created_tx, _) = broadcast::channel(THREAD_CREATED_CHANNEL_CAPACITY);
         let plugins_manager = Arc::new(PluginsManager::new_with_restriction_product(
-            agiworkforce_home.clone(),
+            agiworkforce_home.to_path_buf(),
             restriction_product,
         ));
         let mcp_manager = Arc::new(McpManager::new(Arc::clone(&plugins_manager)));
         let skills_manager = Arc::new(SkillsManager::new_with_restriction_product(
-            agiworkforce_home.clone(),
-            Arc::clone(&plugins_manager),
+            agiworkforce_home,
             config.bundled_skills_enabled(),
             restriction_product,
         ));
@@ -240,19 +299,15 @@ impl ThreadManager {
             state: Arc::new(ThreadManagerState {
                 threads: Arc::new(RwLock::new(HashMap::new())),
                 thread_created_tx,
-                models_manager: Arc::new(ModelsManager::new_with_provider(
-                    agiworkforce_home,
-                    auth_manager.clone(),
-                    config.model_catalog.clone(),
-                    collaboration_modes_config,
-                    openai_models_provider,
-                )),
+                models_manager: build_models_manager(config, auth_manager.clone()),
+                environment_manager,
                 skills_manager,
                 plugins_manager,
                 mcp_manager,
                 skills_watcher,
                 auth_manager,
                 session_source,
+                analytics_events_client,
                 ops_log: should_use_test_thread_manager_behavior()
                     .then(|| Arc::new(std::sync::Mutex::new(Vec::new()))),
             }),
@@ -260,15 +315,15 @@ impl ThreadManager {
         }
     }
 
-    /// Construct with a dummy AuthManager containing the provided AgiWorkforceAuth.
+    /// Construct with a dummy AuthManager containing the provided AgiworkforceAuth.
     /// Used for integration tests: should not be used by ordinary business logic.
     pub(crate) fn with_models_provider_for_tests(
-        auth: AgiWorkforceAuth,
+        auth: AgiworkforceAuth,
         provider: ModelProviderInfo,
     ) -> Self {
         set_thread_manager_test_mode_for_tests(/*enabled*/ true);
         let agiworkforce_home = std::env::temp_dir().join(format!(
-            "codex-thread-manager-test-{}",
+            "agiworkforce-thread-manager-test-{}",
             uuid::Uuid::new_v4()
         ));
         std::fs::create_dir_all(&agiworkforce_home)
@@ -277,22 +332,26 @@ impl ThreadManager {
             auth,
             provider,
             agiworkforce_home.clone(),
+            Arc::new(EnvironmentManager::default_for_tests()),
         );
-        manager._test_agiworkforce_home_guard = Some(TempCodexHomeGuard {
-            path: agiworkforce_home,
-        });
+        manager._test_agiworkforce_home_guard = Some(TempAgiworkforceHomeGuard { path: agiworkforce_home });
         manager
     }
 
-    /// Construct with a dummy AuthManager containing the provided AgiWorkforceAuth and codex home.
+    /// Construct with a dummy AuthManager containing the provided AgiworkforceAuth and codex home.
     /// Used for integration tests: should not be used by ordinary business logic.
     pub(crate) fn with_models_provider_and_home_for_tests(
-        auth: AgiWorkforceAuth,
+        auth: AgiworkforceAuth,
         provider: ModelProviderInfo,
         agiworkforce_home: PathBuf,
+        environment_manager: Arc<EnvironmentManager>,
     ) -> Self {
         set_thread_manager_test_mode_for_tests(/*enabled*/ true);
         let auth_manager = AuthManager::from_auth_for_testing(auth);
+        let skills_agiworkforce_home = match AbsolutePathBuf::from_absolute_path_checked(&agiworkforce_home) {
+            Ok(agiworkforce_home) => agiworkforce_home,
+            Err(err) => panic!("test agiworkforce_home should be absolute: {err}"),
+        };
         let (thread_created_tx, _) = broadcast::channel(THREAD_CREATED_CHANNEL_CAPACITY);
         let restriction_product = SessionSource::Exec.restriction_product();
         let plugins_manager = Arc::new(PluginsManager::new_with_restriction_product(
@@ -301,8 +360,7 @@ impl ThreadManager {
         ));
         let mcp_manager = Arc::new(McpManager::new(Arc::clone(&plugins_manager)));
         let skills_manager = Arc::new(SkillsManager::new_with_restriction_product(
-            agiworkforce_home.clone(),
-            Arc::clone(&plugins_manager),
+            skills_agiworkforce_home,
             /*bundled_skills_enabled*/ true,
             restriction_product,
         ));
@@ -311,17 +369,16 @@ impl ThreadManager {
             state: Arc::new(ThreadManagerState {
                 threads: Arc::new(RwLock::new(HashMap::new())),
                 thread_created_tx,
-                models_manager: Arc::new(ModelsManager::with_provider_for_tests(
-                    agiworkforce_home,
-                    auth_manager.clone(),
-                    provider,
-                )),
+                models_manager: create_model_provider(provider, Some(auth_manager.clone()))
+                    .models_manager(agiworkforce_home, /*config_model_catalog*/ None),
+                environment_manager,
                 skills_manager,
                 plugins_manager,
                 mcp_manager,
                 skills_watcher,
                 auth_manager,
                 session_source: SessionSource::Exec,
+                analytics_events_client: None,
                 ops_log: should_use_test_thread_manager_behavior()
                     .then(|| Arc::new(std::sync::Mutex::new(Vec::new()))),
             }),
@@ -349,14 +406,29 @@ impl ThreadManager {
         self.state.mcp_manager.clone()
     }
 
-    pub fn get_models_manager(&self) -> Arc<ModelsManager> {
+    pub fn environment_manager(&self) -> Arc<EnvironmentManager> {
+        self.state.environment_manager.clone()
+    }
+
+    pub fn default_environment_selections(
+        &self,
+        cwd: &AbsolutePathBuf,
+    ) -> Vec<TurnEnvironmentSelection> {
+        default_thread_environment_selections(self.state.environment_manager.as_ref(), cwd)
+    }
+
+    pub fn validate_environment_selections(
+        &self,
+        environments: &[TurnEnvironmentSelection],
+    ) -> AgiworkforceResult<()> {
+        validate_environment_selections(self.state.environment_manager.as_ref(), environments)
+    }
+
+    pub fn get_models_manager(&self) -> SharedModelsManager {
         self.state.models_manager.clone()
     }
 
-    pub async fn list_models(
-        &self,
-        refresh_strategy: crate::models_manager::manager::RefreshStrategy,
-    ) -> Vec<ModelPreset> {
+    pub async fn list_models(&self, refresh_strategy: RefreshStrategy) -> Vec<ModelPreset> {
         self.state
             .models_manager
             .list_models(refresh_strategy)
@@ -396,15 +468,67 @@ impl ThreadManager {
         self.state.thread_created_tx.subscribe()
     }
 
-    pub async fn get_thread(&self, thread_id: ThreadId) -> CodexResult<Arc<CodexThread>> {
+    pub async fn get_thread(&self, thread_id: ThreadId) -> AgiworkforceResult<Arc<AgiworkforceThread>> {
         self.state.get_thread(thread_id).await
     }
 
-    pub async fn start_thread(&self, config: Config) -> CodexResult<NewThread> {
+    /// List `thread_id` plus all known descendants in its spawn subtree.
+    pub async fn list_agent_subtree_thread_ids(
+        &self,
+        thread_id: ThreadId,
+    ) -> AgiworkforceResult<Vec<ThreadId>> {
+        let thread = self.state.get_thread(thread_id).await?;
+
+        let mut subtree_thread_ids = Vec::new();
+        let mut seen_thread_ids = HashSet::new();
+        subtree_thread_ids.push(thread_id);
+        seen_thread_ids.insert(thread_id);
+
+        if let Some(state_db_ctx) = thread.state_db() {
+            for status in [
+                DirectionalThreadSpawnEdgeStatus::Open,
+                DirectionalThreadSpawnEdgeStatus::Closed,
+            ] {
+                for descendant_id in state_db_ctx
+                    .list_thread_spawn_descendants_with_status(thread_id, status)
+                    .await
+                    .map_err(|err| {
+                        AgiworkforceErr::Fatal(format!("failed to load thread-spawn descendants: {err}"))
+                    })?
+                {
+                    if seen_thread_ids.insert(descendant_id) {
+                        subtree_thread_ids.push(descendant_id);
+                    }
+                }
+            }
+        }
+
+        for descendant_id in thread
+            .codex
+            .session
+            .services
+            .agent_control
+            .list_live_agent_subtree_thread_ids(thread_id)
+            .await?
+        {
+            if seen_thread_ids.insert(descendant_id) {
+                subtree_thread_ids.push(descendant_id);
+            }
+        }
+
+        Ok(subtree_thread_ids)
+    }
+
+    pub async fn start_thread(
+        &self,
+        config: Config,
+        thread_store: Arc<dyn ThreadStore>,
+    ) -> AgiworkforceResult<NewThread> {
         // Box delegated thread-spawn futures so these convenience wrappers do
         // not inline the full spawn path into every caller's async state.
         Box::pin(self.start_thread_with_tools(
             config,
+            thread_store,
             Vec::new(),
             /*persist_extended_history*/ false,
         ))
@@ -414,36 +538,49 @@ impl ThreadManager {
     pub async fn start_thread_with_tools(
         &self,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         dynamic_tools: Vec<agiworkforce_protocol::dynamic_tools::DynamicToolSpec>,
         persist_extended_history: bool,
-    ) -> CodexResult<NewThread> {
-        Box::pin(self.start_thread_with_tools_and_service_name(
+    ) -> AgiworkforceResult<NewThread> {
+        let environments = default_thread_environment_selections(
+            self.state.environment_manager.as_ref(),
+            &config.cwd,
+        );
+        Box::pin(self.start_thread_with_options(StartThreadOptions {
             config,
+            thread_store,
+            initial_history: InitialHistory::New,
+            session_source: None,
             dynamic_tools,
             persist_extended_history,
-            /*metrics_service_name*/ None,
-            /*parent_trace*/ None,
-        ))
+            metrics_service_name: None,
+            parent_trace: None,
+            environments,
+        }))
         .await
     }
 
-    pub async fn start_thread_with_tools_and_service_name(
+    pub async fn start_thread_with_options(
         &self,
-        config: Config,
-        dynamic_tools: Vec<agiworkforce_protocol::dynamic_tools::DynamicToolSpec>,
-        persist_extended_history: bool,
-        metrics_service_name: Option<String>,
-        parent_trace: Option<W3cTraceContext>,
-    ) -> CodexResult<NewThread> {
-        Box::pin(self.state.spawn_thread(
-            config,
-            InitialHistory::New,
+        options: StartThreadOptions,
+    ) -> AgiworkforceResult<NewThread> {
+        let session_source = options
+            .session_source
+            .unwrap_or_else(|| self.state.session_source.clone());
+        Box::pin(self.state.spawn_thread_with_source(
+            options.config,
+            options.thread_store,
+            options.initial_history,
             Arc::clone(&self.state.auth_manager),
             self.agent_control(),
-            dynamic_tools,
-            persist_extended_history,
-            metrics_service_name,
-            parent_trace,
+            session_source,
+            options.dynamic_tools,
+            options.persist_extended_history,
+            options.metrics_service_name,
+            /*inherited_shell_snapshot*/ None,
+            /*inherited_exec_policy*/ None,
+            options.parent_trace,
+            options.environments,
             /*user_shell_override*/ None,
         ))
         .await
@@ -452,13 +589,15 @@ impl ThreadManager {
     pub async fn resume_thread_from_rollout(
         &self,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         rollout_path: PathBuf,
         auth_manager: Arc<AuthManager>,
         parent_trace: Option<W3cTraceContext>,
-    ) -> CodexResult<NewThread> {
+    ) -> AgiworkforceResult<NewThread> {
         let initial_history = RolloutRecorder::get_rollout_history(&rollout_path).await?;
         Box::pin(self.resume_thread_with_history(
             config,
+            thread_store,
             initial_history,
             auth_manager,
             /*persist_extended_history*/ false,
@@ -470,13 +609,19 @@ impl ThreadManager {
     pub async fn resume_thread_with_history(
         &self,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         initial_history: InitialHistory,
         auth_manager: Arc<AuthManager>,
         persist_extended_history: bool,
         parent_trace: Option<W3cTraceContext>,
-    ) -> CodexResult<NewThread> {
+    ) -> AgiworkforceResult<NewThread> {
+        let environments = default_thread_environment_selections(
+            self.state.environment_manager.as_ref(),
+            &config.cwd,
+        );
         Box::pin(self.state.spawn_thread(
             config,
+            thread_store,
             initial_history,
             auth_manager,
             self.agent_control(),
@@ -484,6 +629,7 @@ impl ThreadManager {
             persist_extended_history,
             /*metrics_service_name*/ None,
             parent_trace,
+            environments,
             /*user_shell_override*/ None,
         ))
         .await
@@ -492,10 +638,16 @@ impl ThreadManager {
     pub(crate) async fn start_thread_with_user_shell_override_for_tests(
         &self,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         user_shell_override: crate::shell::Shell,
-    ) -> CodexResult<NewThread> {
+    ) -> AgiworkforceResult<NewThread> {
+        let environments = default_thread_environment_selections(
+            self.state.environment_manager.as_ref(),
+            &config.cwd,
+        );
         Box::pin(self.state.spawn_thread(
             config,
+            thread_store,
             InitialHistory::New,
             Arc::clone(&self.state.auth_manager),
             self.agent_control(),
@@ -503,6 +655,7 @@ impl ThreadManager {
             /*persist_extended_history*/ false,
             /*metrics_service_name*/ None,
             /*parent_trace*/ None,
+            environments,
             /*user_shell_override*/ Some(user_shell_override),
         ))
         .await
@@ -511,13 +664,19 @@ impl ThreadManager {
     pub(crate) async fn resume_thread_from_rollout_with_user_shell_override_for_tests(
         &self,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         rollout_path: PathBuf,
         auth_manager: Arc<AuthManager>,
         user_shell_override: crate::shell::Shell,
-    ) -> CodexResult<NewThread> {
+    ) -> AgiworkforceResult<NewThread> {
         let initial_history = RolloutRecorder::get_rollout_history(&rollout_path).await?;
+        let environments = default_thread_environment_selections(
+            self.state.environment_manager.as_ref(),
+            &config.cwd,
+        );
         Box::pin(self.state.spawn_thread(
             config,
+            thread_store,
             initial_history,
             auth_manager,
             self.agent_control(),
@@ -525,15 +684,16 @@ impl ThreadManager {
             /*persist_extended_history*/ false,
             /*metrics_service_name*/ None,
             /*parent_trace*/ None,
+            environments,
             /*user_shell_override*/ Some(user_shell_override),
         ))
         .await
     }
 
     /// Removes the thread from the manager's internal map, though the thread is stored
-    /// as `Arc<CodexThread>`, it is possible that other references to it exist elsewhere.
+    /// as `Arc<AgiworkforceThread>`, it is possible that other references to it exist elsewhere.
     /// Returns the thread if the thread was found and removed.
-    pub async fn remove_thread(&self, thread_id: &ThreadId) -> Option<Arc<CodexThread>> {
+    pub async fn remove_thread(&self, thread_id: &ThreadId) -> Option<Arc<AgiworkforceThread>> {
         self.state.threads.write().await.remove(thread_id)
     }
 
@@ -596,35 +756,69 @@ impl ThreadManager {
         &self,
         snapshot: S,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         path: PathBuf,
         persist_extended_history: bool,
         parent_trace: Option<W3cTraceContext>,
-    ) -> CodexResult<NewThread>
+    ) -> AgiworkforceResult<NewThread>
     where
         S: Into<ForkSnapshot>,
     {
         let snapshot = snapshot.into();
         let history = RolloutRecorder::get_rollout_history(&path).await?;
-        let snapshot_state = snapshot_turn_state(&history);
-        let history = match snapshot {
-            ForkSnapshot::TruncateBeforeNthUserMessage(nth_user_message) => {
-                truncate_before_nth_user_message(history, nth_user_message, &snapshot_state)
-            }
-            ForkSnapshot::Interrupted => {
-                let history = match history {
-                    InitialHistory::New => InitialHistory::New,
-                    InitialHistory::Forked(history) => InitialHistory::Forked(history),
-                    InitialHistory::Resumed(resumed) => InitialHistory::Forked(resumed.history),
-                };
-                if snapshot_state.ends_mid_turn {
-                    append_interrupted_boundary(history, snapshot_state.active_turn_id)
-                } else {
-                    history
-                }
-            }
-        };
+        self.fork_thread_from_history(
+            snapshot,
+            config,
+            thread_store,
+            history,
+            persist_extended_history,
+            parent_trace,
+        )
+        .await
+    }
+
+    /// Fork an existing thread from already-loaded store history.
+    pub async fn fork_thread_from_history<S>(
+        &self,
+        snapshot: S,
+        config: Config,
+        thread_store: Arc<dyn ThreadStore>,
+        history: InitialHistory,
+        persist_extended_history: bool,
+        parent_trace: Option<W3cTraceContext>,
+    ) -> AgiworkforceResult<NewThread>
+    where
+        S: Into<ForkSnapshot>,
+    {
+        self.fork_thread_with_initial_history(
+            snapshot.into(),
+            config,
+            thread_store,
+            history,
+            persist_extended_history,
+            parent_trace,
+        )
+        .await
+    }
+
+    async fn fork_thread_with_initial_history(
+        &self,
+        snapshot: ForkSnapshot,
+        config: Config,
+        thread_store: Arc<dyn ThreadStore>,
+        history: InitialHistory,
+        persist_extended_history: bool,
+        parent_trace: Option<W3cTraceContext>,
+    ) -> AgiworkforceResult<NewThread> {
+        let interrupted_marker = InterruptedTurnHistoryMarker::from_config(&config);
+        let history = fork_history_from_snapshot(snapshot, history, interrupted_marker);
+        let environments = default_thread_environment_selections(
+            self.state.environment_manager.as_ref(),
+            &config.cwd,
+        );
         Box::pin(self.state.spawn_thread(
             config,
+            thread_store,
             history,
             Arc::clone(&self.state.auth_manager),
             self.agent_control(),
@@ -632,6 +826,7 @@ impl ThreadManager {
             persist_extended_history,
             /*metrics_service_name*/ None,
             parent_trace,
+            environments,
             /*user_shell_override*/ None,
         ))
         .await
@@ -653,20 +848,27 @@ impl ThreadManager {
 
 impl ThreadManagerState {
     pub(crate) async fn list_thread_ids(&self) -> Vec<ThreadId> {
-        self.threads.read().await.keys().copied().collect()
+        self.threads
+            .read()
+            .await
+            .iter()
+            .filter_map(|(thread_id, thread)| {
+                (!thread.session_source.is_internal()).then_some(*thread_id)
+            })
+            .collect()
     }
 
     /// Fetch a thread by ID or return ThreadNotFound.
-    pub(crate) async fn get_thread(&self, thread_id: ThreadId) -> CodexResult<Arc<CodexThread>> {
+    pub(crate) async fn get_thread(&self, thread_id: ThreadId) -> AgiworkforceResult<Arc<AgiworkforceThread>> {
         let threads = self.threads.read().await;
-        threads
-            .get(&thread_id)
-            .cloned()
-            .ok_or_else(|| CodexErr::ThreadNotFound(thread_id))
+        match threads.get(&thread_id) {
+            Some(thread) if !thread.session_source.is_internal() => Ok(thread.clone()),
+            Some(_) | None => Err(AgiworkforceErr::ThreadNotFound(thread_id)),
+        }
     }
 
     /// Send an operation to a thread by ID.
-    pub(crate) async fn send_op(&self, thread_id: ThreadId, op: Op) -> CodexResult<String> {
+    pub(crate) async fn send_op(&self, thread_id: ThreadId, op: Op) -> AgiworkforceResult<String> {
         let thread = self.get_thread(thread_id).await?;
         if let Some(ops_log) = &self.ops_log
             && let Ok(mut log) = ops_log.lock()
@@ -682,13 +884,13 @@ impl ThreadManagerState {
         &self,
         thread_id: ThreadId,
         message: ResponseItem,
-    ) -> CodexResult<String> {
+    ) -> AgiworkforceResult<String> {
         let thread = self.get_thread(thread_id).await?;
         thread.append_message(message).await
     }
 
     /// Remove a thread from the manager by ID, returning it when present.
-    pub(crate) async fn remove_thread(&self, thread_id: &ThreadId) -> Option<Arc<CodexThread>> {
+    pub(crate) async fn remove_thread(&self, thread_id: &ThreadId) -> Option<Arc<AgiworkforceThread>> {
         self.threads.write().await.remove(thread_id)
     }
 
@@ -696,16 +898,19 @@ impl ThreadManagerState {
     pub(crate) async fn spawn_new_thread(
         &self,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         agent_control: AgentControl,
-    ) -> CodexResult<NewThread> {
+    ) -> AgiworkforceResult<NewThread> {
         Box::pin(self.spawn_new_thread_with_source(
             config,
+            thread_store,
             agent_control,
             self.session_source.clone(),
             /*persist_extended_history*/ false,
             /*metrics_service_name*/ None,
             /*inherited_shell_snapshot*/ None,
             /*inherited_exec_policy*/ None,
+            /*environments*/ None,
         ))
         .await
     }
@@ -714,15 +919,21 @@ impl ThreadManagerState {
     pub(crate) async fn spawn_new_thread_with_source(
         &self,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         agent_control: AgentControl,
         session_source: SessionSource,
         persist_extended_history: bool,
         metrics_service_name: Option<String>,
         inherited_shell_snapshot: Option<Arc<ShellSnapshot>>,
         inherited_exec_policy: Option<Arc<crate::exec_policy::ExecPolicyManager>>,
-    ) -> CodexResult<NewThread> {
+        environments: Option<Vec<TurnEnvironmentSelection>>,
+    ) -> AgiworkforceResult<NewThread> {
+        let environments = environments.unwrap_or_else(|| {
+            default_thread_environment_selections(self.environment_manager.as_ref(), &config.cwd)
+        });
         Box::pin(self.spawn_thread_with_source(
             config,
+            thread_store,
             InitialHistory::New,
             Arc::clone(&self.auth_manager),
             agent_control,
@@ -733,6 +944,7 @@ impl ThreadManagerState {
             inherited_shell_snapshot,
             inherited_exec_policy,
             /*parent_trace*/ None,
+            environments,
             /*user_shell_override*/ None,
         ))
         .await
@@ -740,16 +952,23 @@ impl ThreadManagerState {
 
     pub(crate) async fn resume_thread_from_rollout_with_source(
         &self,
-        config: Config,
-        rollout_path: PathBuf,
-        agent_control: AgentControl,
-        session_source: SessionSource,
-        inherited_shell_snapshot: Option<Arc<ShellSnapshot>>,
-        inherited_exec_policy: Option<Arc<crate::exec_policy::ExecPolicyManager>>,
-    ) -> CodexResult<NewThread> {
+        options: ResumeThreadFromRolloutOptions,
+    ) -> AgiworkforceResult<NewThread> {
+        let ResumeThreadFromRolloutOptions {
+            config,
+            thread_store,
+            rollout_path,
+            agent_control,
+            session_source,
+            inherited_shell_snapshot,
+            inherited_exec_policy,
+        } = options;
         let initial_history = RolloutRecorder::get_rollout_history(&rollout_path).await?;
+        let environments =
+            default_thread_environment_selections(self.environment_manager.as_ref(), &config.cwd);
         Box::pin(self.spawn_thread_with_source(
             config,
+            thread_store,
             initial_history,
             Arc::clone(&self.auth_manager),
             agent_control,
@@ -760,6 +979,7 @@ impl ThreadManagerState {
             inherited_shell_snapshot,
             inherited_exec_policy,
             /*parent_trace*/ None,
+            environments,
             /*user_shell_override*/ None,
         ))
         .await
@@ -769,15 +989,21 @@ impl ThreadManagerState {
     pub(crate) async fn fork_thread_with_source(
         &self,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         initial_history: InitialHistory,
         agent_control: AgentControl,
         session_source: SessionSource,
         persist_extended_history: bool,
         inherited_shell_snapshot: Option<Arc<ShellSnapshot>>,
         inherited_exec_policy: Option<Arc<crate::exec_policy::ExecPolicyManager>>,
-    ) -> CodexResult<NewThread> {
+        environments: Option<Vec<TurnEnvironmentSelection>>,
+    ) -> AgiworkforceResult<NewThread> {
+        let environments = environments.unwrap_or_else(|| {
+            default_thread_environment_selections(self.environment_manager.as_ref(), &config.cwd)
+        });
         Box::pin(self.spawn_thread_with_source(
             config,
+            thread_store,
             initial_history,
             Arc::clone(&self.auth_manager),
             agent_control,
@@ -788,6 +1014,7 @@ impl ThreadManagerState {
             inherited_shell_snapshot,
             inherited_exec_policy,
             /*parent_trace*/ None,
+            environments,
             /*user_shell_override*/ None,
         ))
         .await
@@ -798,6 +1025,7 @@ impl ThreadManagerState {
     pub(crate) async fn spawn_thread(
         &self,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         initial_history: InitialHistory,
         auth_manager: Arc<AuthManager>,
         agent_control: AgentControl,
@@ -805,10 +1033,12 @@ impl ThreadManagerState {
         persist_extended_history: bool,
         metrics_service_name: Option<String>,
         parent_trace: Option<W3cTraceContext>,
+        environments: Vec<TurnEnvironmentSelection>,
         user_shell_override: Option<crate::shell::Shell>,
-    ) -> CodexResult<NewThread> {
+    ) -> AgiworkforceResult<NewThread> {
         Box::pin(self.spawn_thread_with_source(
             config,
+            thread_store,
             initial_history,
             auth_manager,
             agent_control,
@@ -819,6 +1049,7 @@ impl ThreadManagerState {
             /*inherited_shell_snapshot*/ None,
             /*inherited_exec_policy*/ None,
             parent_trace,
+            environments,
             user_shell_override,
         ))
         .await
@@ -828,6 +1059,7 @@ impl ThreadManagerState {
     pub(crate) async fn spawn_thread_with_source(
         &self,
         config: Config,
+        thread_store: Arc<dyn ThreadStore>,
         initial_history: InitialHistory,
         auth_manager: Arc<AuthManager>,
         agent_control: AgentControl,
@@ -838,17 +1070,36 @@ impl ThreadManagerState {
         inherited_shell_snapshot: Option<Arc<ShellSnapshot>>,
         inherited_exec_policy: Option<Arc<crate::exec_policy::ExecPolicyManager>>,
         parent_trace: Option<W3cTraceContext>,
+        environments: Vec<TurnEnvironmentSelection>,
         user_shell_override: Option<crate::shell::Shell>,
-    ) -> CodexResult<NewThread> {
-        let watch_registration = self
-            .skills_watcher
-            .register_config(&config, self.skills_manager.as_ref());
-        let CodexSpawnOk {
+    ) -> AgiworkforceResult<NewThread> {
+        let is_resumed_thread = matches!(&initial_history, InitialHistory::Resumed(_));
+        let environment =
+            selected_primary_environment(self.environment_manager.as_ref(), &environments)?;
+        let watch_registration = match environment.as_ref() {
+            Some(environment) if !environment.is_remote() => {
+                self.skills_watcher
+                    .register_config(
+                        &config,
+                        self.skills_manager.as_ref(),
+                        self.plugins_manager.as_ref(),
+                        Some(environment.get_filesystem()),
+                    )
+                    .await
+            }
+            Some(_) | None => crate::file_watcher::WatchRegistration::default(),
+        };
+        let parent_rollout_thread_trace = self
+            .parent_rollout_thread_trace_for_source(&session_source, &initial_history)
+            .await;
+        let tracked_session_source = session_source.clone();
+        let AgiworkforceSpawnOk {
             codex, thread_id, ..
-        } = Codex::spawn(CodexSpawnArgs {
+        } = Agiworkforce::spawn(AgiworkforceSpawnArgs {
             config,
             auth_manager,
             models_manager: Arc::clone(&self.models_manager),
+            environment_manager: Arc::clone(&self.environment_manager),
             skills_manager: Arc::clone(&self.skills_manager),
             plugins_manager: Arc::clone(&self.plugins_manager),
             mcp_manager: Arc::clone(&self.mcp_manager),
@@ -861,20 +1112,32 @@ impl ThreadManagerState {
             metrics_service_name,
             inherited_shell_snapshot,
             inherited_exec_policy,
+            parent_rollout_thread_trace,
             user_shell_override,
             parent_trace,
+            environments,
+            analytics_events_client: self.analytics_events_client.clone(),
+            thread_store,
         })
         .await?;
-        self.finalize_thread_spawn(codex, thread_id, watch_registration)
-            .await
+        let new_thread = self
+            .finalize_thread_spawn(codex, thread_id, tracked_session_source, watch_registration)
+            .await?;
+        if is_resumed_thread
+            && let Err(err) = new_thread.thread.apply_goal_resume_runtime_effects().await
+        {
+            warn!("failed to apply goal resume runtime effects: {err}");
+        }
+        Ok(new_thread)
     }
 
     async fn finalize_thread_spawn(
         &self,
-        codex: Codex,
+        codex: Agiworkforce,
         thread_id: ThreadId,
+        session_source: SessionSource,
         watch_registration: crate::file_watcher::WatchRegistration,
-    ) -> CodexResult<NewThread> {
+    ) -> AgiworkforceResult<NewThread> {
         let event = codex.next_event().await?;
         let session_configured = match event {
             Event {
@@ -882,13 +1145,14 @@ impl ThreadManagerState {
                 msg: EventMsg::SessionConfigured(session_configured),
             } if id == INITIAL_SUBMIT_ID => session_configured,
             _ => {
-                return Err(CodexErr::SessionConfiguredNotFirstEvent);
+                return Err(AgiworkforceErr::SessionConfiguredNotFirstEvent);
             }
         };
 
-        let thread = Arc::new(CodexThread::new(
+        let thread = Arc::new(AgiworkforceThread::new(
             codex,
             session_configured.rollout_path.clone(),
+            session_source,
             watch_registration,
         ));
         let mut threads = self.threads.write().await;
@@ -903,6 +1167,36 @@ impl ThreadManagerState {
 
     pub(crate) fn notify_thread_created(&self, thread_id: ThreadId) {
         let _ = self.thread_created_tx.send(thread_id);
+    }
+
+    async fn parent_rollout_thread_trace_for_source(
+        &self,
+        session_source: &SessionSource,
+        initial_history: &InitialHistory,
+    ) -> agiworkforce_rollout_trace::ThreadTraceContext {
+        // A fresh v2 child belongs to the same rollout tree as its parent, so
+        // session startup derives its child trace from the parent's thread
+        // context. Resumed children already have a prior `ThreadStarted` event
+        // for this thread id; deriving a child trace during resume would write
+        // that start event again and make the bundle unreplayable.
+        let SessionSource::SubAgent(SubAgentSource::ThreadSpawn {
+            parent_thread_id, ..
+        }) = session_source
+        else {
+            return agiworkforce_rollout_trace::ThreadTraceContext::disabled();
+        };
+        if matches!(initial_history, InitialHistory::Resumed(_)) {
+            return agiworkforce_rollout_trace::ThreadTraceContext::disabled();
+        }
+        // Parent lookup can fail if the parent was closed or released between
+        // spawn preparation and session construction. Tracing is diagnostic, so
+        // that race should not block child creation; the child simply starts
+        // without a parent rollout trace.
+        self.get_thread(*parent_thread_id)
+            .await
+            .ok()
+            .map(|thread| thread.codex.session.services.rollout_thread_trace.clone())
+            .unwrap_or_else(agiworkforce_rollout_trace::ThreadTraceContext::disabled)
     }
 }
 
@@ -999,29 +1293,71 @@ fn snapshot_turn_state(history: &InitialHistory) -> SnapshotTurnState {
     }
 }
 
+fn fork_history_from_snapshot(
+    snapshot: ForkSnapshot,
+    history: InitialHistory,
+    interrupted_marker: InterruptedTurnHistoryMarker,
+) -> InitialHistory {
+    let snapshot_state = snapshot_turn_state(&history);
+    match snapshot {
+        ForkSnapshot::TruncateBeforeNthUserMessage(nth_user_message) => {
+            truncate_before_nth_user_message(history, nth_user_message, &snapshot_state)
+        }
+        ForkSnapshot::Interrupted => {
+            let history = match history {
+                InitialHistory::New => InitialHistory::New,
+                InitialHistory::Cleared => InitialHistory::Cleared,
+                InitialHistory::Forked(history) => InitialHistory::Forked(history),
+                InitialHistory::Resumed(resumed) => InitialHistory::Forked(resumed.history),
+            };
+            if snapshot_state.ends_mid_turn {
+                append_interrupted_boundary(
+                    history,
+                    snapshot_state.active_turn_id,
+                    interrupted_marker,
+                )
+            } else {
+                history
+            }
+        }
+    }
+}
+
 /// Append the same persisted interrupt boundary used by the live interrupt path
 /// to an existing fork snapshot after the source thread has been confirmed to
 /// be mid-turn.
-fn append_interrupted_boundary(history: InitialHistory, turn_id: Option<String>) -> InitialHistory {
+fn append_interrupted_boundary(
+    history: InitialHistory,
+    turn_id: Option<String>,
+    interrupted_marker: InterruptedTurnHistoryMarker,
+) -> InitialHistory {
     let aborted_event = RolloutItem::EventMsg(EventMsg::TurnAborted(TurnAbortedEvent {
         turn_id,
         reason: TurnAbortReason::Interrupted,
+        completed_at: None,
+        duration_ms: None,
     }));
 
     match history {
-        InitialHistory::New => InitialHistory::Forked(vec![
-            RolloutItem::ResponseItem(interrupted_turn_history_marker()),
-            aborted_event,
-        ]),
+        InitialHistory::New | InitialHistory::Cleared => {
+            let mut history = Vec::new();
+            if let Some(marker) = interrupted_turn_history_marker(interrupted_marker) {
+                history.push(RolloutItem::ResponseItem(marker));
+            }
+            history.push(aborted_event);
+            InitialHistory::Forked(history)
+        }
         InitialHistory::Forked(mut history) => {
-            history.push(RolloutItem::ResponseItem(interrupted_turn_history_marker()));
+            if let Some(marker) = interrupted_turn_history_marker(interrupted_marker) {
+                history.push(RolloutItem::ResponseItem(marker));
+            }
             history.push(aborted_event);
             InitialHistory::Forked(history)
         }
         InitialHistory::Resumed(mut resumed) => {
-            resumed
-                .history
-                .push(RolloutItem::ResponseItem(interrupted_turn_history_marker()));
+            if let Some(marker) = interrupted_turn_history_marker(interrupted_marker) {
+                resumed.history.push(RolloutItem::ResponseItem(marker));
+            }
             resumed.history.push(aborted_event);
             InitialHistory::Forked(resumed.history)
         }

@@ -6,8 +6,11 @@ edition = "2024"
 [dependencies]
 agiworkforce-app-server-protocol = { path = "../agiworkforce-app-server-protocol" }
 agiworkforce-execpolicy = { path = "../agiworkforce-execpolicy" }
+agiworkforce-file-system = { path = "../agiworkforce-file-system" }
+agiworkforce-network-proxy = { path = "../agiworkforce-network-proxy" }
 agiworkforce-protocol = { path = "../agiworkforce-protocol" }
 agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
+anyhow = "1"
 futures = { version = "0.3", default-features = false, features = ["alloc", "std"] }
 multimap = "0.10.0"
 serde = { version = "1", features = ["derive"] }

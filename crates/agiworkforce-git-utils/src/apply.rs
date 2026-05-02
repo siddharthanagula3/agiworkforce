@@ -622,11 +622,8 @@ mod tests {
         let root = dir.path();
         // git init and minimal identity
         let _ = run(root, &["git", "init"]);
-        let _ = run(
-            root,
-            &["git", "config", "user.email", "agiworkforce@example.com"],
-        );
-        let _ = run(root, &["git", "config", "user.name", "AGI Workforce"]);
+        let _ = run(root, &["git", "config", "user.email", "codex@example.com"]);
+        let _ = run(root, &["git", "config", "user.name", "Agiworkforce"]);
         dir
     }
 

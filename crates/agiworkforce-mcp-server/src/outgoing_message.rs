@@ -228,15 +228,16 @@ pub(crate) struct OutgoingError {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
 
+    use anyhow::Result;
     use agiworkforce_protocol::ThreadId;
+    use agiworkforce_protocol::models::PermissionProfile;
     use agiworkforce_protocol::openai_models::ReasoningEffort;
     use agiworkforce_protocol::protocol::AskForApproval;
     use agiworkforce_protocol::protocol::EventMsg;
-    use agiworkforce_protocol::protocol::SandboxPolicy;
     use agiworkforce_protocol::protocol::SessionConfiguredEvent;
-    use anyhow::Result;
+    use agiworkforce_utils_absolute_path::test_support::PathBufExt;
+    use agiworkforce_utils_absolute_path::test_support::test_path_buf;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use tempfile::NamedTempFile;
@@ -303,8 +304,8 @@ mod tests {
                 service_tier: None,
                 approval_policy: AskForApproval::Never,
                 approvals_reviewer: agiworkforce_protocol::config_types::ApprovalsReviewer::User,
-                sandbox_policy: SandboxPolicy::new_read_only_policy(),
-                cwd: PathBuf::from("/home/user/project"),
+                permission_profile: PermissionProfile::read_only(),
+                cwd: test_path_buf("/home/user/project").abs(),
                 reasoning_effort: Some(ReasoningEffort::default()),
                 history_log_id: 1,
                 history_entry_count: 1000,
@@ -315,7 +316,7 @@ mod tests {
         };
 
         outgoing_message_sender
-            .send_event_as_notification(&event, None)
+            .send_event_as_notification(&event, /*meta*/ None)
             .await;
 
         let result = outgoing_rx.recv().await.unwrap();
@@ -347,8 +348,8 @@ mod tests {
             service_tier: None,
             approval_policy: AskForApproval::Never,
             approvals_reviewer: agiworkforce_protocol::config_types::ApprovalsReviewer::User,
-            sandbox_policy: SandboxPolicy::new_read_only_policy(),
-            cwd: PathBuf::from("/home/user/project"),
+            permission_profile: PermissionProfile::read_only(),
+            cwd: test_path_buf("/home/user/project").abs(),
             reasoning_effort: Some(ReasoningEffort::default()),
             history_log_id: 1,
             history_entry_count: 1000,
@@ -386,10 +387,8 @@ mod tests {
                 "model_provider_id": "test-provider",
                 "approval_policy": "never",
                 "approvals_reviewer": "user",
-                "sandbox_policy": {
-                    "type": "read-only"
-                },
-                "cwd": "/home/user/project",
+                "permission_profile": session_configured_event.permission_profile,
+                "cwd": test_path_buf("/home/user/project"),
                 "reasoning_effort": session_configured_event.reasoning_effort,
                 "history_log_id": session_configured_event.history_log_id,
                 "history_entry_count": session_configured_event.history_entry_count,
@@ -416,8 +415,8 @@ mod tests {
             service_tier: None,
             approval_policy: AskForApproval::Never,
             approvals_reviewer: agiworkforce_protocol::config_types::ApprovalsReviewer::User,
-            sandbox_policy: SandboxPolicy::new_read_only_policy(),
-            cwd: PathBuf::from("/home/user/project"),
+            permission_profile: PermissionProfile::read_only(),
+            cwd: test_path_buf("/home/user/project").abs(),
             reasoning_effort: Some(ReasoningEffort::default()),
             history_log_id: 1,
             history_entry_count: 1000,
@@ -456,10 +455,8 @@ mod tests {
                 "model_provider_id": "test-provider",
                 "approval_policy": "never",
                 "approvals_reviewer": "user",
-                "sandbox_policy": {
-                    "type": "read-only"
-                },
-                "cwd": "/home/user/project",
+                "permission_profile": session_configured_event.permission_profile,
+                "cwd": test_path_buf("/home/user/project"),
                 "reasoning_effort": session_configured_event.reasoning_effort,
                 "history_log_id": session_configured_event.history_log_id,
                 "history_entry_count": session_configured_event.history_entry_count,

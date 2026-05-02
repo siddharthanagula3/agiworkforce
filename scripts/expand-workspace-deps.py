@@ -10,23 +10,44 @@ CODEX_WS = Path.home() / "Desktop/reference/codex-cli/codex-rs/Cargo.toml"
 AGI_CRATES = Path.home() / "Desktop/agiworkforce/crates"
 
 def parse_workspace_deps(ws_toml: str) -> dict:
-    """Return {dep_name: replacement_string} from [workspace.dependencies]."""
+    """Return {dep_name: single-line-value} from [workspace.dependencies].
+    Handles multi-line values by collecting until braces/brackets balance."""
     deps = {}
     in_section = False
-    for line in ws_toml.splitlines():
+    lines = ws_toml.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         if line.strip() == "[workspace.dependencies]":
             in_section = True
+            i += 1
             continue
         if in_section and line.startswith("[") and line.strip() != "[workspace.dependencies]":
             break
         if not in_section:
+            i += 1
             continue
-        # e.g.  anyhow = "1"   or   codex-core = { path = "core" }
+        # Match a dep name = value line
         m = re.match(r'^(\S+)\s*=\s*(.+)$', line.strip())
         if not m:
+            i += 1
             continue
         name, val = m.group(1), m.group(2).strip()
-        deps[name] = val
+        # Check if value is balanced (all { } [ ] closed)
+        depth_brace = val.count('{') - val.count('}')
+        depth_bracket = val.count('[') - val.count(']')
+        j = i + 1
+        collected = [val]
+        while (depth_brace > 0 or depth_bracket > 0) and j < len(lines):
+            next_line = lines[j].strip()
+            depth_brace += next_line.count('{') - next_line.count('}')
+            depth_bracket += next_line.count('[') - next_line.count(']')
+            collected.append(next_line)
+            j += 1
+        # Flatten to single line
+        flat = re.sub(r'\s+', ' ', ' '.join(collected))
+        deps[name] = flat
+        i = j
     return deps
 
 def codex_to_agi_name(codex_name: str) -> str:

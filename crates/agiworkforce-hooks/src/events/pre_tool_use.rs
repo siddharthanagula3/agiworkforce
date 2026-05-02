@@ -25,8 +25,10 @@ pub struct PreToolUseRequest {
     pub model: String,
     pub permission_mode: String,
     pub tool_name: String,
+    pub matcher_aliases: Vec<String>,
     pub tool_use_id: String,
     pub command: String,
+    pub tool_input: serde_json::Value,
 }
 
 #[derive(Debug)]

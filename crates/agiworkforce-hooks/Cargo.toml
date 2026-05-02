@@ -12,7 +12,9 @@ path = "src/lib.rs"
 anyhow = "1"
 chrono = { version = "0.4.43", features = ["serde"] }
 agiworkforce-config = { path = "../agiworkforce-config" }
+agiworkforce-plugin = { path = "../agiworkforce-plugin" }
 agiworkforce-protocol = { path = "../agiworkforce-protocol" }
+agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 regex = "1.12.3"
 schemars = "0.8.22"

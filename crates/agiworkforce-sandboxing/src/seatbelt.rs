@@ -360,7 +360,7 @@ fn create_seatbelt_command_args_with_extensions(
 ) -> Vec<String> {
     create_seatbelt_command_args_for_policies_with_extensions(
         command,
-        &FileSystemSandboxPolicy::from_legacy_sandbox_policy(sandbox_policy, sandbox_policy_cwd),
+        &FileSystemSandboxPolicy::from_legacy_sandbox_policy_for_cwd(sandbox_policy, sandbox_policy_cwd),
         NetworkSandboxPolicy::from(sandbox_policy),
         sandbox_policy_cwd,
         enforce_managed_network,

@@ -1,11 +1,12 @@
+use crate::agent::control::SpawnAgentOptions;
 use crate::agent::exceeds_thread_spawn_depth_limit;
 use crate::agent::next_thread_spawn_depth;
 use crate::agent::status::is_final;
-use crate::codex::Session;
-use crate::codex::TurnContext;
 use crate::config::Config;
-use crate::error::CodexErr;
 use crate::function_tool::FunctionCallError;
+use crate::session::session::Session;
+use crate::session::turn_context::TurnContext;
+use crate::session::turn_context::TurnEnvironment;
 use crate::tools::context::FunctionToolOutput;
 use crate::tools::context::ToolInvocation;
 use crate::tools::context::ToolPayload;
@@ -14,11 +15,12 @@ use crate::tools::handlers::parse_arguments;
 use crate::tools::registry::ToolHandler;
 use crate::tools::registry::ToolKind;
 use agiworkforce_protocol::ThreadId;
+use agiworkforce_protocol::error::AgiworkforceErr;
 use agiworkforce_protocol::protocol::AgentStatus;
 use agiworkforce_protocol::protocol::SessionSource;
 use agiworkforce_protocol::protocol::SubAgentSource;
 use agiworkforce_protocol::user_input::UserInput;
-use async_trait::async_trait;
+use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use serde::Deserialize;
@@ -26,7 +28,6 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::watch::Receiver;
@@ -178,7 +179,6 @@ impl JobProgressEmitter {
     }
 }
 
-#[async_trait]
 impl ToolHandler for BatchJobHandler {
     type Output = FunctionToolOutput;
 
@@ -208,7 +208,7 @@ impl ToolHandler for BatchJobHandler {
             }
         };
 
-        match tool_name.as_str() {
+        match tool_name.name.as_str() {
             "spawn_agents_on_csv" => spawn_agents_on_csv::handle(session, turn, arguments).await,
             "report_agent_job_result" => report_agent_job_result::handle(session, arguments).await,
             other => Err(FunctionCallError::RespondToModel(format!(
@@ -311,7 +311,7 @@ mod spawn_agents_on_csv {
 
         let job_id = Uuid::new_v4().to_string();
         let output_csv_path = args.output_csv_path.map_or_else(
-            || default_output_csv_path(input_path.as_path(), job_id.as_str()),
+            || default_output_csv_path(&input_path, job_id.as_str()),
             |path| turn.resolve_path(Some(path)),
         );
         let job_suffix = &job_id[..8];
@@ -534,6 +534,11 @@ async fn build_runner_options(
             "agent depth limit reached; this session cannot spawn more subagents".to_string(),
         ));
     }
+    if turn.config.agent_max_threads == Some(0) {
+        return Err(FunctionCallError::RespondToModel(
+            "agent thread limit reached; this session cannot spawn more subagents".to_string(),
+        ));
+    }
     let max_concurrency =
         normalize_concurrency(requested_concurrency, turn.config.agent_max_threads);
     let base_instructions = session.get_base_instructions().await;
@@ -631,17 +636,26 @@ async fn run_agent_job_loop(
                 let thread_id = match session
                     .services
                     .agent_control
-                    .spawn_agent(
+                    .spawn_agent_with_metadata(
                         options.spawn_config.clone(),
-                        items,
+                        items.into(),
                         Some(SessionSource::SubAgent(SubAgentSource::Other(format!(
                             "agent_job:{job_id}"
                         )))),
+                        SpawnAgentOptions {
+                            environments: Some(
+                                turn.environments
+                                    .iter()
+                                    .map(TurnEnvironment::selection)
+                                    .collect(),
+                            ),
+                            ..Default::default()
+                        },
                     )
                     .await
                 {
-                    Ok(thread_id) => thread_id,
-                    Err(CodexErr::AgentLimitReached { .. }) => {
+                    Ok(spawned_agent) => spawned_agent.thread_id,
+                    Err(AgiworkforceErr::AgentLimitReached { .. }) => {
                         db.mark_agent_job_item_pending(
                             job_id.as_str(),
                             item.item_id.as_str(),
@@ -1030,8 +1044,8 @@ After the tool call succeeds, stop.",
 }
 
 fn render_instruction_template(instruction: &str, row_json: &Value) -> String {
-    const OPEN_BRACE_SENTINEL: &str = "__CODEX_OPEN_BRACE__";
-    const CLOSE_BRACE_SENTINEL: &str = "__CODEX_CLOSE_BRACE__";
+    const OPEN_BRACE_SENTINEL: &str = "__AGIWORKFORCE_OPEN_BRACE__";
+    const CLOSE_BRACE_SENTINEL: &str = "__AGIWORKFORCE_CLOSE_BRACE__";
 
     let mut rendered = instruction
         .replace("{{", OPEN_BRACE_SENTINEL)
@@ -1091,13 +1105,17 @@ fn is_item_stale(item: &agiworkforce_state::AgentJobItem, runtime_timeout: Durat
     }
 }
 
-fn default_output_csv_path(input_csv_path: &Path, job_id: &str) -> PathBuf {
+fn default_output_csv_path(input_csv_path: &AbsolutePathBuf, job_id: &str) -> AbsolutePathBuf {
     let stem = input_csv_path
+        .as_path()
         .file_stem()
         .and_then(|stem| stem.to_str())
         .unwrap_or("agent_job_output");
     let job_suffix = &job_id[..8];
-    input_csv_path.with_file_name(format!("{stem}.agent-job-{job_suffix}.csv"))
+    let output_dir = input_csv_path
+        .parent()
+        .unwrap_or_else(|| input_csv_path.clone());
+    output_dir.join(format!("{stem}.agent-job-{job_suffix}.csv"))
 }
 
 fn parse_csv(content: &str) -> Result<(Vec<String>, Vec<Vec<String>>), String> {

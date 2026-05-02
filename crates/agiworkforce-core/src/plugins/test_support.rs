@@ -3,9 +3,10 @@ use crate::config::ConfigBuilder;
 use std::fs;
 use std::path::Path;
 
-use super::OPENAI_CURATED_MARKETPLACE_NAME;
+use agiworkforce_core_plugins::OPENAI_CURATED_MARKETPLACE_NAME;
 
 pub(crate) const TEST_CURATED_PLUGIN_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+pub(crate) const TEST_CURATED_PLUGIN_CACHE_VERSION: &str = "01234567";
 
 pub(crate) fn write_file(path: &Path, contents: &str) {
     fs::create_dir_all(path.parent().expect("file should have a parent")).unwrap();
@@ -15,7 +16,7 @@ pub(crate) fn write_file(path: &Path, contents: &str) {
 pub(crate) fn write_curated_plugin(root: &Path, plugin_name: &str) {
     let plugin_root = root.join("plugins").join(plugin_name);
     write_file(
-        &plugin_root.join(".codex-plugin/plugin.json"),
+        &plugin_root.join(".agiworkforce-plugin/plugin.json"),
         &format!(
             r#"{{
   "name": "{plugin_name}",
@@ -87,10 +88,7 @@ pub(crate) fn write_curated_plugin_sha(agiworkforce_home: &Path) {
 }
 
 pub(crate) fn write_curated_plugin_sha_with(agiworkforce_home: &Path, sha: &str) {
-    write_file(
-        &agiworkforce_home.join(".tmp/plugins.sha"),
-        &format!("{sha}\n"),
-    );
+    write_file(&agiworkforce_home.join(".tmp/plugins.sha"), &format!("{sha}\n"));
 }
 
 pub(crate) fn write_plugins_feature_config(agiworkforce_home: &Path) {

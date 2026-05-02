@@ -1,8 +1,13 @@
 use agiworkforce_config::ConfigLayerStack;
+use agiworkforce_plugin::PluginHookSource;
 use tokio::process::Command;
 
 use crate::engine::ClaudeHooksEngine;
 use crate::engine::CommandShell;
+use crate::events::permission_request::PermissionRequestOutcome;
+use crate::events::permission_request::PermissionRequestRequest;
+use crate::events::post_tool_use::PostToolUseOutcome;
+use crate::events::post_tool_use::PostToolUseRequest;
 use crate::events::pre_tool_use::PreToolUseOutcome;
 use crate::events::pre_tool_use::PreToolUseRequest;
 use crate::events::session_start::SessionStartOutcome;
@@ -21,6 +26,8 @@ pub struct HooksConfig {
     pub legacy_notify_argv: Option<Vec<String>>,
     pub feature_enabled: bool,
     pub config_layer_stack: Option<ConfigLayerStack>,
+    pub plugin_hook_sources: Vec<PluginHookSource>,
+    pub plugin_hook_load_warnings: Vec<String>,
     pub shell_program: Option<String>,
     pub shell_args: Vec<String>,
 }
@@ -136,6 +143,31 @@ impl Hooks {
 
     pub async fn run_stop(&self, request: StopRequest) -> StopOutcome {
         self.engine.run_stop(request).await
+    }
+
+    pub fn preview_permission_request(
+        &self,
+        request: &PermissionRequestRequest,
+    ) -> Vec<agiworkforce_protocol::protocol::HookRunSummary> {
+        self.engine.preview_permission_request(request)
+    }
+
+    pub async fn run_permission_request(
+        &self,
+        request: PermissionRequestRequest,
+    ) -> PermissionRequestOutcome {
+        self.engine.run_permission_request(request).await
+    }
+
+    pub fn preview_post_tool_use(
+        &self,
+        request: &PostToolUseRequest,
+    ) -> Vec<agiworkforce_protocol::protocol::HookRunSummary> {
+        self.engine.preview_post_tool_use(request)
+    }
+
+    pub async fn run_post_tool_use(&self, request: PostToolUseRequest) -> PostToolUseOutcome {
+        self.engine.run_post_tool_use(request).await
     }
 }
 

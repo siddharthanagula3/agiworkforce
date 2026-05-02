@@ -9,18 +9,18 @@ use tracing::info;
 use tracing::warn;
 
 use crate::client::ModelClientSession;
-use crate::codex::INITIAL_SUBMIT_ID;
-use crate::codex::Session;
-use crate::codex::build_prompt;
-use crate::codex::built_tools;
-use crate::error::Result as CodexResult;
+use crate::session::INITIAL_SUBMIT_ID;
+use crate::session::session::Session;
+use crate::session::turn::build_prompt;
+use crate::session::turn::built_tools;
+use agiworkforce_otel::STARTUP_PREWARM_AGE_AT_FIRST_TURN_METRIC;
+use agiworkforce_otel::STARTUP_PREWARM_DURATION_METRIC;
 use agiworkforce_otel::SessionTelemetry;
-use agiworkforce_otel::metrics::names::STARTUP_PREWARM_AGE_AT_FIRST_TURN_METRIC;
-use agiworkforce_otel::metrics::names::STARTUP_PREWARM_DURATION_METRIC;
+use agiworkforce_protocol::error::Result as AgiworkforceResult;
 use agiworkforce_protocol::models::BaseInstructions;
 
 pub(crate) struct SessionStartupPrewarmHandle {
-    task: JoinHandle<CodexResult<ModelClientSession>>,
+    task: JoinHandle<AgiworkforceResult<ModelClientSession>>,
     started_at: Instant,
     timeout: Duration,
 }
@@ -36,7 +36,7 @@ pub(crate) enum SessionStartupPrewarmResolution {
 
 impl SessionStartupPrewarmHandle {
     pub(crate) fn new(
-        task: JoinHandle<CodexResult<ModelClientSession>>,
+        task: JoinHandle<AgiworkforceResult<ModelClientSession>>,
         started_at: Instant,
         timeout: Duration,
     ) -> Self {
@@ -130,7 +130,7 @@ impl SessionStartupPrewarmHandle {
     }
 
     fn resolution_from_join_result(
-        result: std::result::Result<CodexResult<ModelClientSession>, tokio::task::JoinError>,
+        result: std::result::Result<AgiworkforceResult<ModelClientSession>, tokio::task::JoinError>,
         started_at: Instant,
     ) -> SessionStartupPrewarmResolution {
         match result {
@@ -199,7 +199,7 @@ impl Session {
 async fn schedule_startup_prewarm_inner(
     session: Arc<Session>,
     base_instructions: String,
-) -> CodexResult<ModelClientSession> {
+) -> AgiworkforceResult<ModelClientSession> {
     let startup_turn_context = session
         .new_default_turn_with_sub_id(INITIAL_SUBMIT_ID.to_owned())
         .await;

@@ -1,20 +1,20 @@
-//! Entry-point for the `codex-exec` binary.
+//! Entry-point for the `agiworkforce-exec` binary.
 //!
-//! When this CLI is invoked normally, it parses the standard `codex-exec` CLI
-//! options and launches the non-interactive Codex agent. However, if it is
-//! invoked with arg0 as `codex-linux-sandbox`, we instead treat the invocation
-//! as a request to run the logic for the standalone `codex-linux-sandbox`
+//! When this CLI is invoked normally, it parses the standard `agiworkforce-exec` CLI
+//! options and launches the non-interactive Agiworkforce agent. However, if it is
+//! invoked with arg0 as `agiworkforce-linux-sandbox`, we instead treat the invocation
+//! as a request to run the logic for the standalone `agiworkforce-linux-sandbox`
 //! executable (i.e., parse any -s args and then run a *sandboxed* command under
 //! Landlock + seccomp.
 //!
 //! This allows us to ship a completely separate set of functionality as part
-//! of the `codex-exec` binary.
+//! of the `agiworkforce-exec` binary.
+use clap::Parser;
 use agiworkforce_arg0::Arg0DispatchPaths;
 use agiworkforce_arg0::arg0_dispatch_or_else;
 use agiworkforce_exec::Cli;
 use agiworkforce_exec::run_main;
 use agiworkforce_utils_cli::CliConfigOverrides;
-use clap::Parser;
 
 #[derive(Parser, Debug)]
 struct TopCli {
@@ -41,42 +41,5 @@ fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use pretty_assertions::assert_eq;
-
-    #[test]
-    fn top_cli_parses_resume_prompt_after_config_flag() {
-        const PROMPT: &str = "echo resume-with-global-flags-after-subcommand";
-        let cli = TopCli::parse_from([
-            "codex-exec",
-            "resume",
-            "--last",
-            "--json",
-            "--model",
-            "gpt-5.2-codex",
-            "--config",
-            "reasoning_level=xhigh",
-            "--dangerously-bypass-approvals-and-sandbox",
-            "--skip-git-repo-check",
-            PROMPT,
-        ]);
-
-        let Some(agiworkforce_exec::Command::Resume(args)) = cli.inner.command else {
-            panic!("expected resume command");
-        };
-        let effective_prompt = args.prompt.clone().or_else(|| {
-            if args.last {
-                args.session_id.clone()
-            } else {
-                None
-            }
-        });
-        assert_eq!(effective_prompt.as_deref(), Some(PROMPT));
-        assert_eq!(cli.config_overrides.raw_overrides.len(), 1);
-        assert_eq!(
-            cli.config_overrides.raw_overrides[0],
-            "reasoning_level=xhigh"
-        );
-    }
-}
+#[path = "main_tests.rs"]
+mod tests;

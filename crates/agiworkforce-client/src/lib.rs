@@ -1,3 +1,5 @@
+mod chatgpt_cloudflare_cookies;
+mod chatgpt_hosts;
 mod custom_ca;
 mod default_client;
 mod error;
@@ -7,6 +9,8 @@ mod sse;
 mod telemetry;
 mod transport;
 
+pub use crate::chatgpt_cloudflare_cookies::with_chatgpt_cloudflare_cookie_store;
+pub use crate::chatgpt_hosts::is_allowed_chatgpt_host;
 pub use crate::custom_ca::BuildCustomCaTransportError;
 /// Test-only subprocess hook for custom CA coverage.
 ///
@@ -17,11 +21,13 @@ pub use crate::custom_ca::BuildCustomCaTransportError;
 pub use crate::custom_ca::build_reqwest_client_for_subprocess_tests;
 pub use crate::custom_ca::build_reqwest_client_with_custom_ca;
 pub use crate::custom_ca::maybe_build_rustls_client_config_with_custom_ca;
-pub use crate::default_client::AgiWorkforceHttpClient;
-pub use crate::default_client::AgiWorkforceRequestBuilder;
+pub use crate::default_client::AgiworkforceHttpClient;
+pub use crate::default_client::AgiworkforceRequestBuilder;
 pub use crate::error::StreamError;
 pub use crate::error::TransportError;
+pub use crate::request::PreparedRequestBody;
 pub use crate::request::Request;
+pub use crate::request::RequestBody;
 pub use crate::request::RequestCompression;
 pub use crate::request::Response;
 pub use crate::retry::RetryOn;

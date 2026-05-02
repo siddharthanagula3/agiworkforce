@@ -1,37 +1,18 @@
 use agiworkforce_execpolicy::Decision as ExecPolicyDecision;
 use agiworkforce_execpolicy::NetworkRuleProtocol as ExecPolicyNetworkRuleProtocol;
 use agiworkforce_network_proxy::BlockedRequest;
-use agiworkforce_network_proxy::NetworkDecisionSource;
 use agiworkforce_network_proxy::NetworkPolicyDecision;
 use agiworkforce_protocol::approvals::NetworkApprovalContext;
 use agiworkforce_protocol::approvals::NetworkApprovalProtocol;
 use agiworkforce_protocol::approvals::NetworkPolicyAmendment;
 use agiworkforce_protocol::approvals::NetworkPolicyRuleAction;
-use serde::Deserialize;
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct NetworkPolicyDecisionPayload {
-    pub decision: NetworkPolicyDecision,
-    pub source: NetworkDecisionSource,
-    #[serde(default)]
-    pub protocol: Option<NetworkApprovalProtocol>,
-    pub host: Option<String>,
-    pub reason: Option<String>,
-    pub port: Option<u16>,
-}
+use agiworkforce_protocol::network_policy::NetworkPolicyDecisionPayload;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ExecPolicyNetworkRuleAmendment {
     pub protocol: ExecPolicyNetworkRuleProtocol,
     pub decision: ExecPolicyDecision,
     pub justification: String,
-}
-
-impl NetworkPolicyDecisionPayload {
-    pub(crate) fn is_ask_from_decider(&self) -> bool {
-        self.decision == NetworkPolicyDecision::Ask && self.source == NetworkDecisionSource::Decider
-    }
 }
 
 fn parse_network_policy_decision(value: &str) -> Option<NetworkPolicyDecision> {
@@ -79,9 +60,9 @@ pub(crate) fn denied_network_policy_message(blocked: &BlockedRequest) -> Option<
     let detail = match blocked.reason.as_str() {
         "denied" => "domain is explicitly denied by policy and cannot be approved from this prompt",
         "not_allowed" => "domain is not on the allowlist for the current sandbox mode",
-        "not_allowed_local" => "local/private network addresses are blocked by policy",
+        "not_allowed_local" => "local/private network addresses are blocked by the sandbox policy",
         "method_not_allowed" => "request method is blocked by the current network mode",
-        "proxy_disabled" => "managed network proxy is disabled",
+        "proxy_disabled" => "network proxy is disabled",
         _ => "request is blocked by network policy",
     };
 

@@ -14,8 +14,9 @@ fn test_get_agiworkforce_user_agent() {
 #[test]
 fn is_first_party_originator_matches_known_values() {
     assert_eq!(is_first_party_originator(DEFAULT_ORIGINATOR), true);
+    assert_eq!(is_first_party_originator("agiworkforce-tui"), true);
     assert_eq!(is_first_party_originator("agiworkforce_vscode"), true);
-    assert_eq!(is_first_party_originator("Codex Something Else"), true);
+    assert_eq!(is_first_party_originator("Agiworkforce Something Else"), true);
     assert_eq!(is_first_party_originator("agiworkforce_cli"), false);
     assert_eq!(is_first_party_originator("Other"), false);
 }
@@ -73,7 +74,7 @@ async fn test_create_client_sets_default_headers() {
         .expect("originator header missing");
     assert_eq!(originator_header.to_str().unwrap(), originator().value);
 
-    // User-Agent matches the computed Codex UA for that originator
+    // User-Agent matches the computed Agiworkforce UA for that originator
     let expected_ua = get_agiworkforce_user_agent();
     let ua_header = headers
         .get("user-agent")
@@ -85,7 +86,7 @@ async fn test_create_client_sets_default_headers() {
         .expect("residency header missing");
     assert_eq!(residency_header.to_str().unwrap(), "us");
 
-    set_default_client_residency_requirement(None);
+    set_default_client_residency_requirement(/*enforce_residency*/ None);
 }
 
 #[test]

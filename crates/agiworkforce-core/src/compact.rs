@@ -1,32 +1,43 @@
 use std::sync::Arc;
+use std::time::Instant;
 
-use crate::ModelProviderInfo;
 use crate::Prompt;
 use crate::client::ModelClientSession;
 use crate::client_common::ResponseEvent;
 #[cfg(test)]
-use crate::codex::PreviousTurnSettings;
-use crate::codex::Session;
-use crate::codex::TurnContext;
-use crate::codex::get_last_assistant_message_from_turn;
-use crate::error::CodexErr;
-use crate::error::Result as CodexResult;
-use crate::protocol::CompactedItem;
-use crate::protocol::EventMsg;
-use crate::protocol::TurnStartedEvent;
-use crate::protocol::WarningEvent;
+use crate::session::PreviousTurnSettings;
+use crate::session::session::Session;
+use crate::session::turn::get_last_assistant_message_from_turn;
+use crate::session::turn_context::TurnContext;
 use crate::util::backoff;
+use agiworkforce_analytics::AgiworkforceCompactionEvent;
+use agiworkforce_analytics::CompactionImplementation;
+use agiworkforce_analytics::CompactionPhase;
+use agiworkforce_analytics::CompactionReason;
+use agiworkforce_analytics::CompactionStatus;
+use agiworkforce_analytics::CompactionStrategy;
+use agiworkforce_analytics::CompactionTrigger;
+use agiworkforce_analytics::now_unix_seconds;
+use agiworkforce_protocol::error::AgiworkforceErr;
+use agiworkforce_protocol::error::Result as AgiworkforceResult;
 use agiworkforce_protocol::items::ContextCompactionItem;
 use agiworkforce_protocol::items::TurnItem;
 use agiworkforce_protocol::models::ContentItem;
 use agiworkforce_protocol::models::ResponseInputItem;
 use agiworkforce_protocol::models::ResponseItem;
+use agiworkforce_protocol::protocol::CompactedItem;
+use agiworkforce_protocol::protocol::EventMsg;
+use agiworkforce_protocol::protocol::TurnStartedEvent;
+use agiworkforce_protocol::protocol::WarningEvent;
 use agiworkforce_protocol::user_input::UserInput;
+use agiworkforce_rollout_trace::InferenceTraceContext;
 use agiworkforce_utils_output_truncation::TruncationPolicy;
 use agiworkforce_utils_output_truncation::approx_token_count;
 use agiworkforce_utils_output_truncation::truncate_text;
 use futures::prelude::*;
 use tracing::error;
+
+use agiworkforce_model_provider_info::ModelProviderInfo;
 
 pub const SUMMARIZATION_PROMPT: &str = include_str!("../templates/compact/prompt.md");
 pub const SUMMARY_PREFIX: &str = include_str!("../templates/compact/summary_prefix.md");
@@ -48,14 +59,16 @@ pub(crate) enum InitialContextInjection {
 }
 
 pub(crate) fn should_use_remote_compact_task(provider: &ModelProviderInfo) -> bool {
-    provider.is_openai()
+    provider.supports_remote_compaction()
 }
 
 pub(crate) async fn run_inline_auto_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
     initial_context_injection: InitialContextInjection,
-) -> CodexResult<()> {
+    reason: CompactionReason,
+    phase: CompactionPhase,
+) -> AgiworkforceResult<()> {
     let prompt = turn_context.compact_prompt().to_string();
     let input = vec![UserInput::Text {
         text: prompt,
@@ -63,7 +76,16 @@ pub(crate) async fn run_inline_auto_compact_task(
         text_elements: Vec::new(),
     }];
 
-    run_compact_task_inner(sess, turn_context, input, initial_context_injection).await?;
+    run_compact_task_inner(
+        sess,
+        turn_context,
+        input,
+        initial_context_injection,
+        CompactionTrigger::Auto,
+        reason,
+        phase,
+    )
+    .await?;
     Ok(())
 }
 
@@ -71,9 +93,10 @@ pub(crate) async fn run_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
     input: Vec<UserInput>,
-) -> CodexResult<()> {
+) -> AgiworkforceResult<()> {
     let start_event = EventMsg::TurnStarted(TurnStartedEvent {
         turn_id: turn_context.sub_id.clone(),
+        started_at: turn_context.turn_timing_state.started_at_unix_secs().await,
         model_context_window: turn_context.model_context_window(),
         collaboration_mode_kind: turn_context.collaboration_mode.mode,
     });
@@ -83,6 +106,9 @@ pub(crate) async fn run_compact_task(
         turn_context,
         input,
         InitialContextInjection::DoNotInject,
+        CompactionTrigger::Manual,
+        CompactionReason::UserRequested,
+        CompactionPhase::StandaloneTurn,
     )
     .await
 }
@@ -92,7 +118,42 @@ async fn run_compact_task_inner(
     turn_context: Arc<TurnContext>,
     input: Vec<UserInput>,
     initial_context_injection: InitialContextInjection,
-) -> CodexResult<()> {
+    trigger: CompactionTrigger,
+    reason: CompactionReason,
+    phase: CompactionPhase,
+) -> AgiworkforceResult<()> {
+    let attempt = CompactionAnalyticsAttempt::begin(
+        sess.as_ref(),
+        turn_context.as_ref(),
+        trigger,
+        reason,
+        CompactionImplementation::Responses,
+        phase,
+    )
+    .await;
+    let result = run_compact_task_inner_impl(
+        Arc::clone(&sess),
+        Arc::clone(&turn_context),
+        input,
+        initial_context_injection,
+    )
+    .await;
+    attempt
+        .track(
+            sess.as_ref(),
+            compaction_status_from_result(&result),
+            result.as_ref().err().map(ToString::to_string),
+        )
+        .await;
+    result
+}
+
+async fn run_compact_task_inner_impl(
+    sess: Arc<Session>,
+    turn_context: Arc<TurnContext>,
+    input: Vec<UserInput>,
+    initial_context_injection: InitialContextInjection,
+) -> AgiworkforceResult<()> {
     let compaction_item = TurnItem::ContextCompaction(ContextCompactionItem::new());
     sess.emit_turn_item_started(&turn_context, &compaction_item)
         .await;
@@ -106,7 +167,7 @@ async fn run_compact_task_inner(
 
     let mut truncated_count = 0usize;
 
-    let max_retries = turn_context.provider.stream_max_retries();
+    let max_retries = turn_context.provider.info().stream_max_retries();
     let mut retries = 0;
     let mut client_session = sess.services.model_client.new_session();
     // Reuse one client session so turn-scoped state (sticky routing, websocket incremental
@@ -148,10 +209,10 @@ async fn run_compact_task_inner(
                 }
                 break;
             }
-            Err(CodexErr::Interrupted) => {
-                return Err(CodexErr::Interrupted);
+            Err(AgiworkforceErr::Interrupted) => {
+                return Err(AgiworkforceErr::Interrupted);
             }
-            Err(e @ CodexErr::ContextWindowExceeded) => {
+            Err(e @ AgiworkforceErr::ContextWindowExceeded) => {
                 if turn_input_len > 1 {
                     // Trim from the beginning to preserve cache (prefix-based) and keep recent messages intact.
                     error!(
@@ -204,12 +265,6 @@ async fn run_compact_task_inner(
         new_history =
             insert_initial_context_before_last_real_user_or_summary(new_history, initial_context);
     }
-    let ghost_snapshots: Vec<ResponseItem> = history_items
-        .iter()
-        .filter(|item| matches!(item, ResponseItem::GhostSnapshot { .. }))
-        .cloned()
-        .collect();
-    new_history.extend(ghost_snapshots);
     let reference_context_item = match initial_context_injection {
         InitialContextInjection::DoNotInject => None,
         InitialContextInjection::BeforeLastUserMessage => Some(turn_context.to_turn_context_item()),
@@ -220,6 +275,7 @@ async fn run_compact_task_inner(
     };
     sess.replace_compacted_history(new_history, reference_context_item, compacted_item)
         .await;
+    client_session.reset_websocket_session();
     sess.recompute_token_usage(&turn_context).await;
 
     sess.emit_turn_item_completed(&turn_context, compaction_item)
@@ -229,6 +285,79 @@ async fn run_compact_task_inner(
     });
     sess.send_event(&turn_context, warning).await;
     Ok(())
+}
+
+pub(crate) struct CompactionAnalyticsAttempt {
+    thread_id: String,
+    turn_id: String,
+    trigger: CompactionTrigger,
+    reason: CompactionReason,
+    implementation: CompactionImplementation,
+    phase: CompactionPhase,
+    active_context_tokens_before: i64,
+    started_at: u64,
+    start_instant: Instant,
+}
+
+impl CompactionAnalyticsAttempt {
+    pub(crate) async fn begin(
+        sess: &Session,
+        turn_context: &TurnContext,
+        trigger: CompactionTrigger,
+        reason: CompactionReason,
+        implementation: CompactionImplementation,
+        phase: CompactionPhase,
+    ) -> Self {
+        let active_context_tokens_before = sess.get_total_token_usage().await;
+        Self {
+            thread_id: sess.conversation_id.to_string(),
+            turn_id: turn_context.sub_id.clone(),
+            trigger,
+            reason,
+            implementation,
+            phase,
+            active_context_tokens_before,
+            started_at: now_unix_seconds(),
+            start_instant: Instant::now(),
+        }
+    }
+
+    pub(crate) async fn track(
+        self,
+        sess: &Session,
+        status: CompactionStatus,
+        error: Option<String>,
+    ) {
+        let active_context_tokens_after = sess.get_total_token_usage().await;
+        sess.services
+            .analytics_events_client
+            .track_compaction(AgiworkforceCompactionEvent {
+                thread_id: self.thread_id,
+                turn_id: self.turn_id,
+                trigger: self.trigger,
+                reason: self.reason,
+                implementation: self.implementation,
+                phase: self.phase,
+                strategy: CompactionStrategy::Memento,
+                status,
+                error,
+                active_context_tokens_before: self.active_context_tokens_before,
+                active_context_tokens_after,
+                started_at: self.started_at,
+                completed_at: now_unix_seconds(),
+                duration_ms: Some(
+                    u64::try_from(self.start_instant.elapsed().as_millis()).unwrap_or(u64::MAX),
+                ),
+            });
+    }
+}
+
+pub(crate) fn compaction_status_from_result<T>(result: &AgiworkforceResult<T>) -> CompactionStatus {
+    match result {
+        Ok(_) => CompactionStatus::Completed,
+        Err(AgiworkforceErr::Interrupted | AgiworkforceErr::TurnAborted) => CompactionStatus::Interrupted,
+        Err(_) => CompactionStatus::Failed,
+    }
 }
 
 pub fn content_items_to_text(content: &[ContentItem]) -> Option<String> {
@@ -367,7 +496,6 @@ fn build_compacted_history_with_limit(
             content: vec![ContentItem::InputText {
                 text: message.clone(),
             }],
-            end_turn: None,
             phase: None,
         });
     }
@@ -382,7 +510,6 @@ fn build_compacted_history_with_limit(
         id: None,
         role: "user".to_string(),
         content: vec![ContentItem::InputText { text: summary_text }],
-        end_turn: None,
         phase: None,
     });
 
@@ -395,7 +522,7 @@ async fn drain_to_completed(
     client_session: &mut ModelClientSession,
     turn_metadata_header: Option<&str>,
     prompt: &Prompt,
-) -> CodexResult<()> {
+) -> AgiworkforceResult<()> {
     let mut stream = client_session
         .stream(
             prompt,
@@ -405,12 +532,15 @@ async fn drain_to_completed(
             turn_context.reasoning_summary,
             turn_context.config.service_tier,
             turn_metadata_header,
+            // Rollout tracing currently models remote compaction only; local compaction streams
+            // are left untraced until the reducer has a first-class local compaction lifecycle.
+            &InferenceTraceContext::disabled(),
         )
         .await?;
     loop {
         let maybe_event = stream.next().await;
         let Some(event) = maybe_event else {
-            return Err(CodexErr::Stream(
+            return Err(AgiworkforceErr::Stream(
                 "stream closed before response.completed".into(),
                 None,
             ));
