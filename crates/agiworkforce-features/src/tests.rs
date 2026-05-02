@@ -202,12 +202,16 @@ fn from_sources_applies_base_profile_and_overrides() {
     base_entries.insert("plugins".to_string(), true);
     let base_features = FeaturesToml {
         entries: base_entries,
+        multi_agent_v2: None,
+        apps_mcp_path_override: None,
     };
 
     let mut profile_entries = BTreeMap::new();
     profile_entries.insert("code_mode_only".to_string(), true);
     let profile_features = FeaturesToml {
         entries: profile_entries,
+        multi_agent_v2: None,
+        apps_mcp_path_override: None,
     };
 
     let features = Features::from_sources(

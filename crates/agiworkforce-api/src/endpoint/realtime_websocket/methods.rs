@@ -7,8 +7,10 @@ use crate::endpoint::realtime_websocket::protocol::RealtimeAudioFrame;
 use crate::endpoint::realtime_websocket::protocol::RealtimeEvent;
 use crate::endpoint::realtime_websocket::protocol::RealtimeEventParser;
 use crate::endpoint::realtime_websocket::protocol::RealtimeOutboundMessage;
+use crate::endpoint::realtime_websocket::protocol::RealtimeOutputModality;
 use crate::endpoint::realtime_websocket::protocol::RealtimeSessionConfig;
 use crate::endpoint::realtime_websocket::protocol::RealtimeSessionMode;
+use crate::endpoint::realtime_websocket::protocol::RealtimeVoice;
 use crate::endpoint::realtime_websocket::protocol::RealtimeTranscriptDelta;
 use crate::endpoint::realtime_websocket::protocol::RealtimeTranscriptEntry;
 use crate::endpoint::realtime_websocket::protocol::parse_realtime_event;
@@ -1291,6 +1293,8 @@ mod tests {
                     session_id: Some("conv_1".to_string()),
                     event_parser: RealtimeEventParser::V1,
                     session_mode: RealtimeSessionMode::Conversational,
+                    output_modality: RealtimeOutputModality::Text,
+                    voice: RealtimeVoice::Alloy,
                 },
                 HeaderMap::new(),
                 HeaderMap::new(),
@@ -1564,6 +1568,8 @@ mod tests {
                     session_id: Some("conv_1".to_string()),
                     event_parser: RealtimeEventParser::RealtimeV2,
                     session_mode: RealtimeSessionMode::Conversational,
+                    output_modality: RealtimeOutputModality::Text,
+                    voice: RealtimeVoice::Alloy,
                 },
                 HeaderMap::new(),
                 HeaderMap::new(),
@@ -1668,6 +1674,8 @@ mod tests {
                     session_id: Some("conv_1".to_string()),
                     event_parser: RealtimeEventParser::RealtimeV2,
                     session_mode: RealtimeSessionMode::Transcription,
+                    output_modality: RealtimeOutputModality::Text,
+                    voice: RealtimeVoice::Alloy,
                 },
                 HeaderMap::new(),
                 HeaderMap::new(),
@@ -1770,6 +1778,8 @@ mod tests {
                     session_id: Some("conv_1".to_string()),
                     event_parser: RealtimeEventParser::V1,
                     session_mode: RealtimeSessionMode::Transcription,
+                    output_modality: RealtimeOutputModality::Text,
+                    voice: RealtimeVoice::Alloy,
                 },
                 HeaderMap::new(),
                 HeaderMap::new(),
@@ -1858,6 +1868,8 @@ mod tests {
                     session_id: Some("conv_1".to_string()),
                     event_parser: RealtimeEventParser::V1,
                     session_mode: RealtimeSessionMode::Conversational,
+                    output_modality: RealtimeOutputModality::Text,
+                    voice: RealtimeVoice::Alloy,
                 },
                 HeaderMap::new(),
                 HeaderMap::new(),

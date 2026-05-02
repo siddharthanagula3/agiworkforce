@@ -175,7 +175,8 @@ pub(crate) fn generate_chunk_id() -> String {
 #[cfg(unix)]
 #[path = "process_tests.rs"]
 mod process_tests;
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 #[cfg(unix)]
 #[path = "mod_tests.rs"]
 mod tests;

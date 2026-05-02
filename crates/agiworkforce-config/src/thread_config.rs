@@ -86,6 +86,17 @@ impl RemoteThreadConfigLoader {
     pub fn new(inner: Arc<dyn ThreadConfigLoader>) -> Self {
         Self { inner }
     }
+
+    /// Build a loader bound to an HTTP endpoint URL. Stub: the upstream codex-rs
+    /// crate hosts the real HTTP fetcher in `agiworkforce-app-server`; until that
+    /// port lands (see FIX-006a), the experimental endpoint silently degrades to
+    /// the no-op loader so the binary still wires up. The `_endpoint` is held for
+    /// future use once the real client is ported.
+    pub fn from_endpoint(_endpoint: &str) -> Self {
+        Self {
+            inner: Arc::new(NoopThreadConfigLoader),
+        }
+    }
 }
 
 impl ThreadConfigLoader for RemoteThreadConfigLoader {

@@ -263,3 +263,63 @@ pub struct SpawnedProcess {
     pub stderr_rx: mpsc::Receiver<Vec<u8>>,
     pub exit_rx: oneshot::Receiver<i32>,
 }
+
+/// Test-only bag of channels used by callers that want to construct a
+/// `SpawnedProcess` without spawning a real child. Mirrors the upstream
+/// codex-rs `ProcessDriver` shape so ported tests compile unchanged.
+/// All non-channel fields are accepted for API compat and ignored — the
+/// returned `SpawnedProcess` exposes a non-running [`ProcessHandle`] suitable
+/// for placeholder use only.
+pub struct ProcessDriver {
+    pub writer_tx: mpsc::Sender<Vec<u8>>,
+    pub stdout_rx: broadcast::Receiver<Vec<u8>>,
+    pub stderr_rx: Option<broadcast::Receiver<Vec<u8>>>,
+    pub exit_rx: oneshot::Receiver<i32>,
+    pub terminator: Option<Box<dyn Send + Sync>>,
+    pub writer_handle: Option<tokio::task::JoinHandle<()>>,
+    pub resizer: Option<Box<dyn Send + Sync>>,
+}
+
+/// Build a [`SpawnedProcess`] backed by the supplied driver channels. The
+/// returned value's `session` is a stub `ProcessHandle` whose tasks are
+/// already-completed no-ops; the broadcast receivers from the driver are
+/// dropped because [`SpawnedProcess`] currently exposes mpsc receivers. Test
+/// callers that only need `.session` get the placeholder they expect.
+pub fn spawn_from_driver(driver: ProcessDriver) -> SpawnedProcess {
+    struct NoopTerminator;
+    impl ChildTerminator for NoopTerminator {
+        fn kill(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    drop(driver.stdout_rx);
+    drop(driver.stderr_rx);
+    drop(driver.terminator);
+    drop(driver.resizer);
+
+    let writer_handle = driver
+        .writer_handle
+        .unwrap_or_else(|| tokio::spawn(async {}));
+    let session = ProcessHandle::new(
+        driver.writer_tx,
+        Box::new(NoopTerminator),
+        tokio::spawn(async {}),
+        Vec::new(),
+        writer_handle,
+        tokio::spawn(async {}),
+        Arc::new(AtomicBool::new(true)),
+        Arc::new(StdMutex::new(Some(0))),
+        None,
+    );
+
+    let (_unused_stdout_tx, stdout_rx) = mpsc::channel(1);
+    let (_unused_stderr_tx, stderr_rx) = mpsc::channel(1);
+
+    SpawnedProcess {
+        session,
+        stdout_rx,
+        stderr_rx,
+        exit_rx: driver.exit_rx,
+    }
+}

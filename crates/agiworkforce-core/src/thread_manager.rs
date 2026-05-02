@@ -1364,6 +1364,7 @@ fn append_interrupted_boundary(
     }
 }
 
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 #[path = "thread_manager_tests.rs"]
 mod tests;

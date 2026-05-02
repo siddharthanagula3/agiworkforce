@@ -21,6 +21,33 @@ pub struct LoaderOverrides {
     #[cfg(target_os = "macos")]
     pub managed_preferences_base64: Option<String>,
     pub macos_managed_config_requirements_base64: Option<String>,
+    /// When true, skip managed-configuration loading entirely. Used by integration
+    /// tests that need to ignore any system-installed MDM/profile config.
+    pub disable_managed_config: bool,
+    /// When true, skip loading `$AGIWORKFORCE_HOME/config.toml`.
+    pub ignore_user_config: bool,
+    /// When true, skip loading user/project execpolicy `.rules` files.
+    pub ignore_user_and_project_exec_policy_rules: bool,
+}
+
+impl LoaderOverrides {
+    /// Build overrides that disable managed-configuration loading. Test hook.
+    pub fn without_managed_config_for_tests() -> Self {
+        Self {
+            disable_managed_config: true,
+            ..Self::default()
+        }
+    }
+
+    /// Build overrides that point managed-configuration loading at a specific
+    /// file path. Test hook used by integration tests that ship a fixture
+    /// config alongside the binary.
+    pub fn with_managed_config_path_for_tests(path: PathBuf) -> Self {
+        Self {
+            managed_config_path: Some(path),
+            ..Self::default()
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
