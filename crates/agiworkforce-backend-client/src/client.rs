@@ -441,6 +441,7 @@ impl Client {
             secondary,
             credits: Self::map_credits(credits),
             plan_type,
+            rate_limit_reached_type: None,
         }
     }
 

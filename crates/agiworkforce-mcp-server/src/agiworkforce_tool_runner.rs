@@ -1,4 +1,4 @@
-//! Asynchronous worker that executes a **Codex** tool-call inside a spawned
+//! Asynchronous worker that executes a **Agiworkforce** tool-call inside a spawned
 //! Tokio task. Separated from `message_processor.rs` to keep that file small
 //! and to make future feature-growth easier to manage.
 
@@ -9,10 +9,11 @@ use crate::exec_approval::handle_exec_approval_request;
 use crate::outgoing_message::OutgoingMessageSender;
 use crate::outgoing_message::OutgoingNotificationMeta;
 use crate::patch_approval::handle_patch_approval_request;
-use agiworkforce_core::CodexThread;
+use agiworkforce_core::AgiworkforceThread;
 use agiworkforce_core::NewThread;
 use agiworkforce_core::ThreadManager;
-use agiworkforce_core::config::Config as AgiWorkforceConfig;
+use agiworkforce_core::config::Config as AgiworkforceConfig;
+use agiworkforce_core::thread_store_from_config;
 use agiworkforce_protocol::ThreadId;
 use agiworkforce_protocol::protocol::AgentMessageEvent;
 use agiworkforce_protocol::protocol::ApplyPatchApprovalRequestEvent;
@@ -29,7 +30,7 @@ use rmcp::model::RequestId;
 use serde_json::json;
 use tokio::sync::Mutex;
 
-/// To adhere to MCP `tools/call` response format, include the Codex
+/// To adhere to MCP `tools/call` response format, include the Agiworkforce
 /// `threadId` in the `structured_content` field of the response.
 /// Some MCP clients ignore `content` when `structuredContent` is present, so
 /// mirror the text there as well.
@@ -52,14 +53,14 @@ pub(crate) fn create_call_tool_result_with_thread_id(
     }
 }
 
-/// Run a complete Codex session and stream events back to the client.
+/// Run a complete Agiworkforce session and stream events back to the client.
 ///
 /// On completion (success or error) the function sends the appropriate
 /// `tools/call` response so the LLM can continue the conversation.
 pub async fn run_agiworkforce_tool_session(
     id: RequestId,
     initial_prompt: String,
-    config: AgiWorkforceConfig,
+    config: AgiworkforceConfig,
     outgoing: Arc<OutgoingMessageSender>,
     thread_manager: Arc<ThreadManager>,
     running_requests_id_to_agiworkforce_uuid: Arc<Mutex<HashMap<RequestId, ThreadId>>>,
@@ -68,11 +69,14 @@ pub async fn run_agiworkforce_tool_session(
         thread_id,
         thread,
         session_configured,
-    } = match thread_manager.start_thread(config).await {
+    } = match thread_manager
+        .start_thread(config.clone(), thread_store_from_config(&config))
+        .await
+    {
         Ok(res) => res,
         Err(e) => {
             let result = CallToolResult {
-                content: vec![Content::text(format!("Failed to start Codex session: {e}"))],
+                content: vec![Content::text(format!("Failed to start Agiworkforce session: {e}"))],
                 is_error: Some(true),
                 structured_content: None,
                 meta: None,
@@ -97,7 +101,7 @@ pub async fn run_agiworkforce_tool_session(
         )
         .await;
 
-    // Use the original MCP request ID as the `sub_id` for the Codex submission so that
+    // Use the original MCP request ID as the `sub_id` for the Agiworkforce submission so that
     // any events emitted for this tool-call can be correlated with the
     // originating `tools/call` request.
     let sub_id = id.to_string();
@@ -108,12 +112,14 @@ pub async fn run_agiworkforce_tool_session(
     let submission = Submission {
         id: sub_id.clone(),
         op: Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: initial_prompt.clone(),
                 // MCP tool prompts are plain text with no UI element ranges.
                 text_elements: Vec::new(),
             }],
             final_output_json_schema: None,
+            responsesapi_client_metadata: None,
         },
         trace: None,
     };
@@ -127,10 +133,7 @@ pub async fn run_agiworkforce_tool_session(
         );
         outgoing.send_response(id.clone(), result).await;
         // unregister the id so we don't keep it in the map
-        running_requests_id_to_agiworkforce_uuid
-            .lock()
-            .await
-            .remove(&id);
+        running_requests_id_to_agiworkforce_uuid.lock().await.remove(&id);
         return;
     }
 
@@ -146,7 +149,7 @@ pub async fn run_agiworkforce_tool_session(
 
 pub async fn run_agiworkforce_tool_session_reply(
     thread_id: ThreadId,
-    thread: Arc<CodexThread>,
+    thread: Arc<AgiworkforceThread>,
     outgoing: Arc<OutgoingMessageSender>,
     request_id: RequestId,
     prompt: String,
@@ -158,12 +161,14 @@ pub async fn run_agiworkforce_tool_session_reply(
         .insert(request_id.clone(), thread_id);
     if let Err(e) = thread
         .submit(Op::UserInput {
+            environments: None,
             items: vec![UserInput::Text {
                 text: prompt,
                 // MCP tool prompts are plain text with no UI element ranges.
                 text_elements: Vec::new(),
             }],
             final_output_json_schema: None,
+            responsesapi_client_metadata: None,
         })
         .await
     {
@@ -194,7 +199,7 @@ pub async fn run_agiworkforce_tool_session_reply(
 
 async fn run_agiworkforce_tool_session_inner(
     thread_id: ThreadId,
-    thread: Arc<CodexThread>,
+    thread: Arc<AgiworkforceThread>,
     outgoing: Arc<OutgoingMessageSender>,
     request_id: RequestId,
     running_requests_id_to_agiworkforce_uuid: Arc<Mutex<HashMap<RequestId, ThreadId>>>,
@@ -231,12 +236,11 @@ async fn run_agiworkforce_tool_session_inner(
                             parsed_cmd,
                             network_approval_context: _,
                             additional_permissions: _,
-                            skill_metadata: _,
                             available_decisions: _,
                         } = ev;
                         handle_exec_approval_request(
                             command,
-                            cwd,
+                            cwd.to_path_buf(),
                             outgoing.clone(),
                             thread.clone(),
                             request_id.clone(),
@@ -263,7 +267,9 @@ async fn run_agiworkforce_tool_session_inner(
                         outgoing.send_response(request_id.clone(), result).await;
                         break;
                     }
-                    EventMsg::Warning(_) => {
+                    EventMsg::Warning(_)
+                    | EventMsg::GuardianWarning(_)
+                    | EventMsg::ModelVerification(_) => {
                         continue;
                     }
                     EventMsg::GuardianAssessment(_) => {
@@ -319,6 +325,9 @@ async fn run_agiworkforce_tool_session_inner(
                     EventMsg::ThreadNameUpdated(_) => {
                         // Ignore session metadata updates in MCP tool runner.
                     }
+                    EventMsg::ThreadGoalUpdated(_) => {
+                        // Ignore thread goal metadata updates in MCP tool runner.
+                    }
                     EventMsg::AgentMessageDelta(_) => {
                         // TODO: think how we want to support this in the MCP
                     }
@@ -340,8 +349,8 @@ async fn run_agiworkforce_tool_session_inner(
                     | EventMsg::McpToolCallBegin(_)
                     | EventMsg::McpToolCallEnd(_)
                     | EventMsg::McpListToolsResponse(_)
-                    | EventMsg::ListCustomPromptsResponse(_)
                     | EventMsg::ListSkillsResponse(_)
+                    | EventMsg::RealtimeConversationListVoicesResponse(_)
                     | EventMsg::ExecCommandBegin(_)
                     | EventMsg::TerminalInteraction(_)
                     | EventMsg::ExecCommandOutputDelta(_)
@@ -349,6 +358,7 @@ async fn run_agiworkforce_tool_session_inner(
                     | EventMsg::BackgroundEvent(_)
                     | EventMsg::StreamError(_)
                     | EventMsg::PatchApplyBegin(_)
+                    | EventMsg::PatchApplyUpdated(_)
                     | EventMsg::PatchApplyEnd(_)
                     | EventMsg::TurnDiff(_)
                     | EventMsg::WebSearchBegin(_)
@@ -392,6 +402,7 @@ async fn run_agiworkforce_tool_session_inner(
                     | EventMsg::CollabResumeBegin(_)
                     | EventMsg::CollabResumeEnd(_)
                     | EventMsg::RealtimeConversationStarted(_)
+                    | EventMsg::RealtimeConversationSdp(_)
                     | EventMsg::RealtimeConversationRealtime(_)
                     | EventMsg::RealtimeConversationClosed(_)
                     | EventMsg::DeprecationNotice(_) => {
@@ -407,7 +418,7 @@ async fn run_agiworkforce_tool_session_inner(
             Err(e) => {
                 let result = create_call_tool_result_with_thread_id(
                     thread_id,
-                    format!("Codex runtime error: {e}"),
+                    format!("Agiworkforce runtime error: {e}"),
                     Some(true),
                 );
                 outgoing.send_response(request_id.clone(), result).await;
@@ -425,7 +436,11 @@ mod tests {
     #[test]
     fn call_tool_result_includes_thread_id_in_structured_content() {
         let thread_id = ThreadId::new();
-        let result = create_call_tool_result_with_thread_id(thread_id, "done".to_string(), None);
+        let result = create_call_tool_result_with_thread_id(
+            thread_id,
+            "done".to_string(),
+            /*is_error*/ None,
+        );
         assert_eq!(
             result.structured_content,
             Some(json!({

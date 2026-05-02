@@ -1,6 +1,6 @@
 //! Persistence layer for the global, append-only *message history* file.
 //!
-//! The history is stored at `~/.agiworkforce/history.jsonl` with **one JSON object per
+//! The history is stored at `~/.codex/history.jsonl` with **one JSON object per
 //! line** so that it can be efficiently appended to and parsed with standard
 //! JSON-Lines tooling. Each record has the following schema:
 //!
@@ -26,7 +26,6 @@ use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
 use std::path::Path;
-use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -36,7 +35,8 @@ use tokio::fs;
 use tokio::io::AsyncReadExt;
 
 use crate::config::Config;
-use crate::config::types::HistoryPersistence;
+use agiworkforce_config::types::HistoryPersistence;
+use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 
 use agiworkforce_protocol::ThreadId;
 #[cfg(unix)]
@@ -60,10 +60,8 @@ pub struct HistoryEntry {
     pub text: String,
 }
 
-fn history_filepath(config: &Config) -> PathBuf {
-    let mut path = config.agiworkforce_home.clone();
-    path.push(HISTORY_FILENAME);
-    path
+fn history_filepath(config: &Config) -> AbsolutePathBuf {
+    config.agiworkforce_home.join(HISTORY_FILENAME)
 }
 
 /// Append a `text` entry associated with `conversation_id` to the history file.
@@ -94,7 +92,7 @@ pub async fn append_entry(text: &str, conversation_id: &ThreadId, config: &Confi
 
     // TODO: check `text` for sensitive patterns
 
-    // Resolve `~/.agiworkforce/history.jsonl` and ensure the parent directory exists.
+    // Resolve `~/.codex/history.jsonl` and ensure the parent directory exists.
     let path = history_filepath(config);
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
@@ -144,7 +142,7 @@ pub async fn append_entry(text: &str, conversation_id: &ThreadId, config: &Confi
                     history_file.seek(SeekFrom::End(0))?;
                     history_file.write_all(line.as_bytes())?;
                     history_file.flush()?;
-                    enforce_history_limit(&mut history_file, history_max_bytes)?;
+                    enforce_history_limit(&mut history_file, history_max_bytes.map(|n| n as usize))?;
                     return Ok(());
                 }
                 Err(std::fs::TryLockError::WouldBlock) => {

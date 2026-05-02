@@ -1,180 +1,209 @@
-//! Root of the `codex-core` library.
+//! Root of the `agiworkforce-core` library.
 
 // Prevent accidental direct writes to stdout/stderr in library code. All
 // user-visible output must go through the appropriate abstraction (e.g.,
 // the TUI or the tracing stack).
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
-mod analytics_client;
-pub mod api_bridge;
+// Re-exports for downstream crates that historically imported these from
+// `agiworkforce-core` directly. They live in sibling crates now; we surface
+// them here to keep the public surface stable.
+pub use agiworkforce_login::AuthManager;
+pub use agiworkforce_login::auth;
+pub use agiworkforce_login::default_client;
+pub use agiworkforce_login::token_data;
+pub use agiworkforce_model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
+pub use agiworkforce_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
+pub use agiworkforce_model_provider_info::WireApi;
+
+/// Re-export of `agiworkforce_config` items previously surfaced under
+/// `agiworkforce_core::config_loader::*` for downstream crates.
+pub mod config_loader {
+    pub use agiworkforce_config::CloudRequirementsLoadError;
+    pub use agiworkforce_config::CloudRequirementsLoadErrorCode;
+    pub use agiworkforce_config::CloudRequirementsLoader;
+    pub use agiworkforce_config::ConfigRequirementsToml;
+}
+
 mod apply_patch;
 mod apps;
 mod arc_monitor;
-pub use agiworkforce_login as auth;
-mod auth_env_telemetry;
 mod client;
 mod client_common;
-pub mod codex;
 mod realtime_context;
 mod realtime_conversation;
-pub use codex::SteerInputError;
-mod codex_thread;
+mod realtime_prompt;
+pub(crate) mod session;
+pub use session::SteerInputError;
+mod agiworkforce_thread;
 mod compact_remote;
-pub use codex_thread::CodexThread;
-pub use codex_thread::ThreadConfigSnapshot;
+pub use agiworkforce_thread::AgiworkforceThread;
+pub use agiworkforce_thread::AgiworkforceThreadTurnContextOverrides;
+pub use agiworkforce_thread::ThreadConfigSnapshot;
 mod agent;
-mod codex_delegate;
+mod agiworkforce_delegate;
 mod command_canonicalization;
 mod commit_attribution;
 pub mod config;
-pub mod config_loader;
 pub mod connectors;
+pub mod context;
 mod context_manager;
-mod contextual_user_message;
-pub mod custom_prompts;
-pub use agiworkforce_utils_path::env;
-mod environment_context;
-pub mod error;
+mod environment_selection;
 pub mod exec;
 pub mod exec_env;
 mod exec_policy;
-pub mod external_agent_config;
 pub mod file_watcher;
 mod flags;
 #[cfg(test)]
 mod git_info_tests;
+mod goals;
 mod guardian;
 mod hook_runtime;
-pub mod instructions;
-pub mod landlock;
-pub mod mcp;
-mod mcp_connection_manager;
+mod installation_id;
+pub(crate) mod landlock;
+pub use landlock::spawn_command_under_linux_sandbox;
+pub(crate) mod mcp;
+mod mcp_skill_dependencies;
 mod mcp_tool_approval_templates;
-pub mod models_manager;
+mod mcp_tool_exposure;
 mod network_policy_decision;
-pub mod network_proxy_loader;
+pub(crate) mod network_proxy_loader;
+pub use mcp::McpManager;
+pub use network_proxy_loader::MtimeConfigReloader;
+pub use network_proxy_loader::build_network_proxy_state;
+pub use network_proxy_loader::build_network_proxy_state_and_reloader;
 mod original_image_detail;
-mod packages;
-pub use mcp_connection_manager::MCP_SANDBOX_STATE_CAPABILITY;
-pub use mcp_connection_manager::MCP_SANDBOX_STATE_METHOD;
-pub use mcp_connection_manager::SandboxState;
-pub use text_encoding::bytes_to_string_smart;
+pub use agiworkforce_mcp::SandboxState;
+mod mcp_openai_file;
 mod mcp_tool_call;
-mod memories;
-pub mod mention_syntax;
-mod mentions;
-pub mod message_history;
-mod model_provider_info;
-pub mod utils;
+pub(crate) mod mention_syntax;
+pub(crate) mod message_history;
+pub(crate) mod utils;
+pub use mention_syntax::PLUGIN_TEXT_MENTION_SIGIL;
+pub use mention_syntax::TOOL_MENTION_SIGIL;
+pub use message_history::HistoryEntry as MessageHistoryEntry;
+pub use message_history::append_entry as append_message_history_entry;
+pub use message_history::history_metadata as message_history_metadata;
+pub use message_history::lookup as lookup_message_history_entry;
 pub use utils::path_utils;
 pub mod personality_migration;
 pub mod plugins;
+#[doc(hidden)]
+pub(crate) mod prompt_debug;
+#[doc(hidden)]
+pub use prompt_debug::build_prompt_input;
+pub(crate) mod mentions {
+    pub(crate) use crate::plugins::build_connector_slug_counts;
+    pub(crate) use crate::plugins::build_skill_name_counts;
+    pub(crate) use crate::plugins::collect_explicit_app_ids;
+    pub(crate) use crate::plugins::collect_explicit_plugin_mentions;
+    pub(crate) use crate::plugins::collect_tool_mentions_from_messages;
+}
 mod sandbox_tags;
 pub mod sandboxing;
 mod session_prefix;
 mod session_startup_prewarm;
 mod shell_detect;
+pub mod skills;
+pub(crate) use skills::SkillError;
+pub(crate) use skills::SkillInjections;
+pub(crate) use skills::SkillLoadOutcome;
+pub(crate) use skills::SkillMetadata;
+pub(crate) use skills::SkillsLoadInput;
+pub(crate) use skills::SkillsManager;
+pub(crate) use skills::build_available_skills;
+pub(crate) use skills::build_skill_injections;
+pub(crate) use skills::build_skill_name_counts;
+pub(crate) use skills::collect_env_var_dependencies;
+pub(crate) use skills::collect_explicit_skill_mentions;
+pub(crate) use skills::default_skill_metadata_budget;
+pub(crate) use skills::injection;
+pub(crate) use skills::manager;
+pub(crate) use skills::maybe_emit_implicit_skill_invocation;
+pub(crate) use skills::resolve_skill_dependencies_for_turn;
+pub(crate) use skills::skills_load_input_from_config;
 mod skills_watcher;
 mod stream_events_utils;
 pub mod test_support;
-mod text_encoding;
-pub use agiworkforce_login::token_data;
 mod unified_exec;
 pub mod windows_sandbox;
 pub use client::X_RESPONSESAPI_INCLUDE_TIMING_METRICS_HEADER;
-pub use model_provider_info::DEFAULT_LMSTUDIO_PORT;
-pub use model_provider_info::DEFAULT_OLLAMA_PORT;
-pub use model_provider_info::LMSTUDIO_OSS_PROVIDER_ID;
-pub use model_provider_info::ModelProviderInfo;
-pub use model_provider_info::OLLAMA_OSS_PROVIDER_ID;
-pub use model_provider_info::OPENAI_PROVIDER_ID;
-pub use model_provider_info::WireApi;
-pub use model_provider_info::built_in_model_providers;
-pub use model_provider_info::create_oss_provider_with_base_url;
+pub use agiworkforce_protocol::config_types::ModelProviderAuthInfo;
 mod event_mapping;
-mod response_debug_context;
 pub mod review_format;
 pub mod review_prompts;
 mod thread_manager;
-pub mod web_search;
-pub mod windows_sandbox_read_grants;
+pub(crate) mod web_search;
+pub(crate) mod windows_sandbox_read_grants;
 pub use thread_manager::ForkSnapshot;
 pub use thread_manager::NewThread;
+pub use thread_manager::StartThreadOptions;
 pub use thread_manager::ThreadManager;
+pub use thread_manager::ThreadShutdownReport;
+pub use thread_manager::build_models_manager;
+pub use thread_manager::thread_store_from_config;
+pub use web_search::web_search_action_detail;
+pub use web_search::web_search_detail;
+pub use windows_sandbox_read_grants::grant_read_root_non_elevated;
 #[deprecated(note = "use ThreadManager")]
 pub type ConversationManager = ThreadManager;
 #[deprecated(note = "use NewThread")]
 pub type NewConversation = NewThread;
-#[deprecated(note = "use CodexThread")]
-pub type CodexConversation = CodexThread;
-// Re-export common auth types for workspace consumers
-pub use analytics_client::AnalyticsEventsClient;
-pub use auth::AgiWorkforceAuth;
-pub use auth::AuthManager;
-mod default_client_forwarding;
-
-/// Default Codex HTTP client headers and reqwest construction.
-///
-/// Implemented in [`agiworkforce_login::default_client`]; this module re-exports that API for crates
-/// that import `agiworkforce_core::default_client`.
-pub mod default_client {
-    pub use super::default_client_forwarding::*;
-}
-pub mod project_doc;
+#[deprecated(note = "use AgiworkforceThread")]
+pub type AgiworkforceConversation = AgiworkforceThread;
+pub(crate) mod agents_md;
+pub use agents_md::AgentsMdManager;
+pub use agents_md::DEFAULT_AGENTS_MD_FILENAME;
+pub use agents_md::LOCAL_AGENTS_MD_FILENAME;
 mod rollout;
 pub(crate) mod safety;
-pub mod seatbelt;
 mod session_rollout_init_error;
 pub mod shell;
-pub mod shell_snapshot;
-pub mod skills;
+pub(crate) mod shell_snapshot;
 pub mod spawn;
-pub mod state_db_bridge;
-pub use agiworkforce_rollout::state_db;
+pub(crate) mod state_db_bridge;
+pub use state_db_bridge::StateDbHandle;
+pub use state_db_bridge::get_state_db;
 mod thread_rollout_truncation;
 mod tools;
-pub mod turn_diff_tracker;
+pub(crate) mod turn_diff_tracker;
 mod turn_metadata;
 mod turn_timing;
+mod unavailable_tool;
 pub use rollout::ARCHIVED_SESSIONS_SUBDIR;
+pub use rollout::Cursor;
+pub use rollout::EventPersistenceMode;
 pub use rollout::INTERACTIVE_SESSION_SOURCES;
 pub use rollout::RolloutRecorder;
 pub use rollout::RolloutRecorderParams;
 pub use rollout::SESSIONS_SUBDIR;
 pub use rollout::SessionMeta;
+pub use rollout::SortDirection;
+pub use rollout::ThreadItem;
+pub use rollout::ThreadSortKey;
+pub use rollout::ThreadsPage;
 pub use rollout::append_thread_name;
 pub use rollout::find_archived_thread_path_by_id_str;
 #[deprecated(note = "use find_thread_path_by_id_str")]
 pub use rollout::find_conversation_path_by_id_str;
+pub use rollout::find_thread_meta_by_name_str;
 pub use rollout::find_thread_name_by_id;
+pub use rollout::find_thread_names_by_ids;
 pub use rollout::find_thread_path_by_id_str;
-pub use rollout::find_thread_path_by_name_str;
-pub use rollout::list::Cursor;
-pub use rollout::list::ThreadItem;
-pub use rollout::list::ThreadSortKey;
-pub use rollout::list::ThreadsPage;
-pub use rollout::list::parse_cursor;
-pub use rollout::list::read_head_for_summary;
-pub use rollout::list::read_session_meta_line;
-pub use rollout::policy::EventPersistenceMode;
+pub use rollout::parse_cursor;
+pub use rollout::read_head_for_summary;
+pub use rollout::read_session_meta_line;
 pub use rollout::rollout_date_parts;
-pub use rollout::session_index::find_thread_names_by_ids;
 mod function_tool;
 mod state;
 mod tasks;
 mod user_shell_command;
 pub mod util;
-pub(crate) use agiworkforce_protocol::protocol;
-pub(crate) use agiworkforce_shell_command::bash;
-pub(crate) use agiworkforce_shell_command::is_dangerous_command;
-pub(crate) use agiworkforce_shell_command::is_safe_command;
-pub(crate) use agiworkforce_shell_command::parse_command;
-pub(crate) use agiworkforce_shell_command::powershell;
 
-pub use agiworkforce_sandboxing::get_platform_sandbox;
 pub use client::ModelClient;
 pub use client::ModelClientSession;
-pub use client::X_CODEX_TURN_METADATA_HEADER;
+pub use client::X_AGIWORKFORCE_INSTALLATION_ID_HEADER;
+pub use client::X_AGIWORKFORCE_TURN_METADATA_HEADER;
 pub use client_common::Prompt;
 pub use client_common::REVIEW_PROMPT;
 pub use client_common::ResponseEvent;
@@ -186,8 +215,8 @@ pub use exec_policy::check_execpolicy_for_warnings;
 pub use exec_policy::format_exec_policy_error_with_source;
 pub use exec_policy::load_exec_policy;
 pub use file_watcher::FileWatcherEvent;
-pub use tools::spec::parse_tool_input_schema;
+pub use installation_id::resolve_installation_id;
 pub use turn_metadata::build_turn_metadata_header;
 pub mod compact;
-pub mod memory_trace;
+mod memory_usage;
 pub mod otel_init;
