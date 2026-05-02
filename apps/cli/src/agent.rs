@@ -66,7 +66,13 @@ pub struct AgentSession {
     pub provider: Provider,
     pub total_input_tokens: u32,
     pub total_output_tokens: u32,
+    pub total_cache_read_tokens: u32,
+    pub total_cache_creation_tokens: u32,
     pub turn_count: u32,
+    /// Optional ordered list of fallback model IDs. If set and a turn fails
+    /// with a transient error, the next model is tried before surfacing the
+    /// failure. See `crate::routing::fallback`.
+    pub fallback_chain: Option<crate::routing::fallback::FallbackChain>,
     /// Recent tool calls for loop detection (name + args hash).
     recent_tool_calls: Vec<u64>,
     /// Number of loop detections (tool or content) in this session.
@@ -213,7 +219,10 @@ impl AgentSession {
             provider,
             total_input_tokens: 0,
             total_output_tokens: 0,
+            total_cache_read_tokens: 0,
+            total_cache_creation_tokens: 0,
             turn_count: 0,
+            fallback_chain: None,
             recent_tool_calls: Vec::new(),
             loop_strike_count: 0,
             hooks_config,
@@ -618,8 +627,10 @@ impl AgentSession {
         {
             Ok(r) => r,
             Err(e) => {
-                // Retry once if the error is retryable
-                if let Some(cli_err) = e.downcast_ref::<CliError>() {
+                // First: in-place retry if the error self-classifies as retryable.
+                let mut last_err = e;
+                let mut recovered: Option<_> = None;
+                if let Some(cli_err) = last_err.downcast_ref::<CliError>() {
                     if cli_err.is_retryable() {
                         let delay = cli_err.retry_delay();
                         eprintln!(
@@ -627,7 +638,7 @@ impl AgentSession {
                             format!("Retrying in {}s: {}", delay.as_secs(), cli_err).yellow()
                         );
                         tokio::time::sleep(delay).await;
-                        models::stream_completion(
+                        match models::stream_completion(
                             config,
                             &self.provider,
                             &self.model,
@@ -636,12 +647,58 @@ impl AgentSession {
                             Some(&tool_defs),
                             Box::new(|chunk| print!("{}", chunk)),
                         )
-                        .await?
-                    } else {
-                        return Err(e);
+                        .await
+                        {
+                            Ok(r) => recovered = Some(r),
+                            Err(retry_err) => last_err = retry_err,
+                        }
                     }
-                } else {
-                    return Err(e);
+                }
+                // Second: walk the fallback chain. We mutate `self.model` so
+                // downstream HUD/events reflect the model that actually
+                // answered.
+                if recovered.is_none() {
+                    if let Some(chain) = self.fallback_chain.clone() {
+                        let cli_err_kind = last_err
+                            .downcast_ref::<CliError>()
+                            .map(|c| (c.kind(), chain.should_rotate(c)));
+                        if let Some((kind, true)) = cli_err_kind {
+                            for fallback_model in chain.tail() {
+                                let prev_model = self.model.clone();
+                                self.model = fallback_model.clone();
+                                self.provider = crate::models::detect_provider(fallback_model);
+                                eprintln!(
+                                    "  {}",
+                                    format!(
+                                        "↘ Falling back: {} → {} ({})",
+                                        prev_model, fallback_model, kind
+                                    )
+                                    .yellow()
+                                );
+                                match models::stream_completion(
+                                    config,
+                                    &self.provider,
+                                    &self.model,
+                                    &self.messages,
+                                    max_tokens,
+                                    Some(&tool_defs),
+                                    Box::new(|chunk| print!("{}", chunk)),
+                                )
+                                .await
+                                {
+                                    Ok(r) => {
+                                        recovered = Some(r);
+                                        break;
+                                    }
+                                    Err(rotate_err) => last_err = rotate_err,
+                                }
+                            }
+                        }
+                    }
+                }
+                match recovered {
+                    Some(r) => r,
+                    None => return Err(last_err),
                 }
             }
         };

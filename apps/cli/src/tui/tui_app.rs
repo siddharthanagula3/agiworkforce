@@ -251,6 +251,19 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
         render_input(frame, chunks[2], app);
         render_status_bar(frame, chunks[3], app);
 
+        // Live cost HUD anchored to the top-right; sits on top of the header
+        // border so it never steals real-estate from the chat area.
+        let hud = super::cost_hud::CostHud {
+            in_tokens: app.total_input_tokens,
+            out_tokens: app.total_output_tokens,
+            cache_read: app.session.total_cache_read_tokens,
+            cache_creation: app.session.total_cache_creation_tokens,
+            context_used: app.total_input_tokens as u64
+                + app.total_output_tokens as u64,
+            context_window: crate::model_catalog::context_window(&app.model_name) as u64,
+        };
+        super::cost_hud::render(frame, area, &hud, &app.model_name);
+
         // Popups (only one visible at a time)
         if app.show_model_picker {
             render_model_picker(frame, chunks[1], app);

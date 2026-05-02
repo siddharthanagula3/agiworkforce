@@ -3,6 +3,7 @@
 
 #[allow(dead_code, unused_imports)]
 mod color;
+mod cost_hud;
 #[allow(dead_code, unused_imports)]
 mod shimmer;
 #[allow(dead_code, unused_imports)]
