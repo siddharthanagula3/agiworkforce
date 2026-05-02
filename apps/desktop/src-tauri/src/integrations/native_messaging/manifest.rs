@@ -576,9 +576,9 @@ mod tests {
     #[test]
     fn test_normalize_macos_home_for_native_host_paths_from_sandbox_home() {
         let sandbox_home =
-            PathBuf::from("/Users/siddhartha/Library/Containers/com.agiworkforce.desktop/Data");
+            PathBuf::from("/Users/testuser/Library/Containers/com.agiworkforce.desktop/Data");
         let normalized = normalize_macos_home_for_native_host_paths(&sandbox_home);
-        assert_eq!(normalized, PathBuf::from("/Users/siddhartha"));
+        assert_eq!(normalized, PathBuf::from("/Users/testuser"));
     }
 
     #[cfg(target_os = "macos")]
