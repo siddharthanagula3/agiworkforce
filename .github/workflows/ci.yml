@@ -118,6 +118,13 @@ jobs:
         # set up at the CI step level, so they can run. If a specific test
         # genuinely needs a real DE, mark it `#[ignore]` at the test level
         # rather than blanket-skipping with `--skip <substring>`.
+        env:
+          # agiworkforce-linux-sandbox/build.rs panics if vendored
+          # bubblewrap source isn't checked out. CI doesn't ship the
+          # vendor/ tree, and runtime sandboxing uses the system bwrap
+          # binary (not the compile-time-vendored one), so unit tests
+          # don't need it. The build.rs already honours this opt-out.
+          AGIWORKFORCE_SKIP_VENDORED_BWRAP: '1'
         run: xvfb-run --auto-servernum cargo test --workspace --lib
 
       - name: Clippy (Rust workspace, default features)
