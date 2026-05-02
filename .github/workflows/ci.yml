@@ -112,7 +112,13 @@ jobs:
           CARGO_HOME: ~/.cargo
 
       - name: Test (Rust workspace, default features)
-        run: xvfb-run --auto-servernum cargo test --workspace --lib -- --skip enigo --skip AutomationService --skip automation
+        # FIX-039 (Sprint 4): the previous form skipped enigo /
+        # AutomationService / automation suites. They were silenced under
+        # the assumption that they need DISPLAY — but xvfb-run is already
+        # set up at the CI step level, so they can run. If a specific test
+        # genuinely needs a real DE, mark it `#[ignore]` at the test level
+        # rather than blanket-skipping with `--skip <substring>`.
+        run: xvfb-run --auto-servernum cargo test --workspace --lib
 
       - name: Clippy (Rust workspace, default features)
         # M28: -D warnings matches [lints] table in Cargo.toml; keeps CI and local linting consistent

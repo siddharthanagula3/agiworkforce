@@ -224,6 +224,33 @@ jobs:
           - target: x86_64-apple-darwin
             arch: x86_64
     steps:
+      # FIX-011 (Sprint 4): refuse to start a macOS build job when any
+      # of the signing secrets is missing. Without these the bundle ships
+      # unsigned (gatekeeper-rejected on user machines) but the workflow
+      # still uploads it as "release" — exactly the failure mode that
+      # produced an unsigned v0.1.0 release-desktop run on 2026-05-02.
+      - name: Verify macOS signing secrets are configured
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=()
+          for var in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            value="${!var}"
+            if [ -z "$value" ]; then
+              missing+=("$var")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::macOS signing secrets missing: ${missing[*]}"
+            echo "::error::Refusing to ship an unsigned bundle. Configure all six APPLE_* secrets in repo settings or skip this job."
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v6
 
