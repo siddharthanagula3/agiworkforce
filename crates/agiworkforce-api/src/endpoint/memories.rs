@@ -213,6 +213,7 @@ mod tests {
             "https://example.com/api/codex/memories/trace_summarize"
         );
         let body = request.body.expect("request body should be present");
+        let body = body.json().expect("request body should be JSON");
         assert_eq!(body["model"], "gpt-test");
         assert_eq!(body["traces"][0]["id"], "trace-1");
         assert_eq!(

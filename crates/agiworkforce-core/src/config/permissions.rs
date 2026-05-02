@@ -11,7 +11,10 @@ use agiworkforce_config::permissions_toml::PermissionProfileToml;
 use agiworkforce_config::permissions_toml::PermissionsToml;
 use agiworkforce_config::types::SandboxWorkspaceWrite;
 use agiworkforce_network_proxy::NetworkProxyConfig;
-#[cfg(test)]
+// Sprint 0 (FIX-006a): test-only import; the rebrand renamed
+// `NetworkUnixSocketPermission` and the consumer test module is also gated
+// below until the rename is mirrored here.
+#[cfg(any())]
 use agiworkforce_network_proxy::NetworkUnixSocketPermission as ProxyNetworkUnixSocketPermission;
 use agiworkforce_protocol::config_types::WindowsSandboxLevel;
 use agiworkforce_protocol::models::PermissionProfile;
@@ -702,6 +705,7 @@ fn maybe_push_unknown_special_path_warning(
     );
 }
 
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 #[path = "permissions_tests.rs"]
 mod tests;

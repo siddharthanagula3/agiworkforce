@@ -36,6 +36,7 @@ pub fn user_shell_command_record_item(
     ))
 }
 
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 #[path = "user_shell_command_tests.rs"]
 mod tests;

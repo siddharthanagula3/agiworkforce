@@ -499,7 +499,9 @@ impl AgiworkforceMessageProcessor {
         plugin_id: &str,
         plugin_apps: &[agiworkforce_core::plugins::AppConnectorId],
     ) -> Vec<AppSummary> {
-        if plugin_apps.is_empty() || !config.features.apps_enabled_for_auth(is_chatgpt_auth) {
+        if plugin_apps.is_empty()
+            || !(config.features.enabled(Feature::Apps) && is_chatgpt_auth)
+        {
             return Vec::new();
         }
 

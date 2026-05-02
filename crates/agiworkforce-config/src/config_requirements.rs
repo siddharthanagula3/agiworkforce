@@ -953,32 +953,48 @@ mod tests {
     fn with_unknown_source(toml: ConfigRequirementsToml) -> ConfigRequirementsWithSources {
         let ConfigRequirementsToml {
             allowed_approval_policies,
+            allowed_approvals_reviewers,
             allowed_sandbox_modes,
+            remote_sandbox_config,
             allowed_web_search_modes,
             feature_requirements,
+            hooks,
             mcp_servers,
+            plugins,
             apps,
             rules,
             enforce_residency,
             network,
+            permissions,
             guardian_developer_instructions,
+            guardian_policy_config,
         } = toml;
         ConfigRequirementsWithSources {
             allowed_approval_policies: allowed_approval_policies
                 .map(|value| Sourced::new(value, RequirementSource::Unknown)),
+            allowed_approvals_reviewers: allowed_approvals_reviewers
+                .map(|value| Sourced::new(value, RequirementSource::Unknown)),
             allowed_sandbox_modes: allowed_sandbox_modes
+                .map(|value| Sourced::new(value, RequirementSource::Unknown)),
+            remote_sandbox_config: remote_sandbox_config
                 .map(|value| Sourced::new(value, RequirementSource::Unknown)),
             allowed_web_search_modes: allowed_web_search_modes
                 .map(|value| Sourced::new(value, RequirementSource::Unknown)),
             feature_requirements: feature_requirements
                 .map(|value| Sourced::new(value, RequirementSource::Unknown)),
+            hooks: hooks.map(|value| Sourced::new(value, RequirementSource::Unknown)),
             mcp_servers: mcp_servers.map(|value| Sourced::new(value, RequirementSource::Unknown)),
+            plugins: plugins.map(|value| Sourced::new(value, RequirementSource::Unknown)),
             apps: apps.map(|value| Sourced::new(value, RequirementSource::Unknown)),
             rules: rules.map(|value| Sourced::new(value, RequirementSource::Unknown)),
             enforce_residency: enforce_residency
                 .map(|value| Sourced::new(value, RequirementSource::Unknown)),
             network: network.map(|value| Sourced::new(value, RequirementSource::Unknown)),
+            permissions: permissions
+                .map(|value| Sourced::new(value, RequirementSource::Unknown)),
             guardian_developer_instructions: guardian_developer_instructions
+                .map(|value| Sourced::new(value, RequirementSource::Unknown)),
+            guardian_policy_config: guardian_policy_config
                 .map(|value| Sourced::new(value, RequirementSource::Unknown)),
         }
     }
@@ -1005,19 +1021,30 @@ mod tests {
         let guardian_developer_instructions =
             "Use the company-managed guardian policy.".to_string();
 
-        // Intentionally constructed without `..Default::default()` so adding a new field to
-        // `ConfigRequirementsToml` forces this test to be updated.
+        // Sprint 0 (FIX-006a) note: the upstream test deliberately omitted
+        // `..Default::default()` to force review when fields were added to
+        // `ConfigRequirementsToml`. The post-rebrand schema added six fields
+        // (allowed_approvals_reviewers, remote_sandbox_config, hooks, plugins,
+        // permissions, guardian_policy_config) that this test does not yet
+        // exercise; adding them as `None` here gets us back to compile-clean
+        // until a follow-up sprint expands coverage.
         let other = ConfigRequirementsToml {
             allowed_approval_policies: Some(allowed_approval_policies.clone()),
+            allowed_approvals_reviewers: None,
             allowed_sandbox_modes: Some(allowed_sandbox_modes.clone()),
+            remote_sandbox_config: None,
             allowed_web_search_modes: Some(allowed_web_search_modes.clone()),
             feature_requirements: Some(feature_requirements.clone()),
+            hooks: None,
             mcp_servers: None,
+            plugins: None,
             apps: None,
             rules: None,
             enforce_residency: Some(enforce_residency),
             network: None,
+            permissions: None,
             guardian_developer_instructions: Some(guardian_developer_instructions.clone()),
+            guardian_policy_config: None,
         };
 
         target.merge_unset_fields(source.clone(), other);
@@ -1029,7 +1056,9 @@ mod tests {
                     allowed_approval_policies,
                     source.clone()
                 )),
+                allowed_approvals_reviewers: None,
                 allowed_sandbox_modes: Some(Sourced::new(allowed_sandbox_modes, source.clone(),)),
+                remote_sandbox_config: None,
                 allowed_web_search_modes: Some(Sourced::new(
                     allowed_web_search_modes,
                     enforce_source.clone(),
@@ -1038,15 +1067,19 @@ mod tests {
                     feature_requirements,
                     enforce_source.clone(),
                 )),
+                hooks: None,
                 mcp_servers: None,
+                plugins: None,
                 apps: None,
                 rules: None,
                 enforce_residency: Some(Sourced::new(enforce_residency, enforce_source)),
                 network: None,
+                permissions: None,
                 guardian_developer_instructions: Some(Sourced::new(
                     guardian_developer_instructions,
                     source,
                 )),
+                guardian_policy_config: None,
             }
         );
     }
@@ -1073,15 +1106,21 @@ mod tests {
                     vec![AskForApproval::OnRequest],
                     source_location,
                 )),
+                allowed_approvals_reviewers: None,
                 allowed_sandbox_modes: None,
+                remote_sandbox_config: None,
                 allowed_web_search_modes: None,
                 feature_requirements: None,
+                hooks: None,
                 mcp_servers: None,
+                plugins: None,
                 apps: None,
                 rules: None,
                 enforce_residency: None,
                 network: None,
+                permissions: None,
                 guardian_developer_instructions: None,
+                guardian_policy_config: None,
             }
         );
         Ok(())
@@ -1116,15 +1155,21 @@ mod tests {
                     vec![AskForApproval::Never],
                     existing_source,
                 )),
+                allowed_approvals_reviewers: None,
                 allowed_sandbox_modes: None,
+                remote_sandbox_config: None,
                 allowed_web_search_modes: None,
                 feature_requirements: None,
+                hooks: None,
                 mcp_servers: None,
+                plugins: None,
                 apps: None,
                 rules: None,
                 enforce_residency: None,
                 network: None,
+                permissions: None,
                 guardian_developer_instructions: None,
+                guardian_policy_config: None,
             }
         );
         Ok(())

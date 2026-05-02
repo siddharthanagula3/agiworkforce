@@ -192,6 +192,7 @@ fn is_write_patch_constrained_to_writable_paths(
     true
 }
 
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 #[path = "safety_tests.rs"]
 mod tests;

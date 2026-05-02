@@ -67,7 +67,7 @@ use agiworkforce_core::ThreadManager;
 use agiworkforce_core::config::Config;
 use agiworkforce_exec_server::EnvironmentManager;
 use agiworkforce_features::Feature;
-use agiworkforce_feedback::AgiworkforceFeedback;
+use agiworkforce_feedback::AgiWorkforceFeedback;
 use agiworkforce_login::AuthManager;
 use agiworkforce_login::auth::ExternalAuth;
 use agiworkforce_login::auth::ExternalAuthRefreshContext;
@@ -252,7 +252,7 @@ pub(crate) struct MessageProcessorArgs {
     pub(crate) config: Arc<Config>,
     pub(crate) config_manager: ConfigManager,
     pub(crate) environment_manager: Arc<EnvironmentManager>,
-    pub(crate) feedback: AgiworkforceFeedback,
+    pub(crate) feedback: AgiWorkforceFeedback,
     pub(crate) log_db: Option<LogDbLayer>,
     pub(crate) config_warnings: Vec<ConfigWarningNotification>,
     pub(crate) session_source: SessionSource,
@@ -1044,10 +1044,7 @@ impl MessageProcessor {
             }
         };
         let auth = self.auth_manager.auth().await;
-        if !config.features.apps_enabled_for_auth(
-            auth.as_ref()
-                .is_some_and(agiworkforce_login::AgiworkforceAuth::uses_agiworkforce_backend),
-        ) {
+        if !config.features.apps_enabled_for_auth(auth.as_ref()) {
             return;
         }
 
