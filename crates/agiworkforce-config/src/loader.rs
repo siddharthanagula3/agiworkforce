@@ -22,7 +22,12 @@ pub async fn load_config_layers_state(
     _cloud_requirements_loader: CloudRequirementsLoader,
     _thread_config_loader: &dyn ThreadConfigLoader,
 ) -> std::io::Result<ConfigLayerStack> {
-    todo!("load_config_layers_state: stub – real implementation lives in agiworkforce-core")
+    // Stub — the real implementation lives in agiworkforce-core. Returning
+    // an empty layer stack here lets callers (and their tests) proceed with
+    // a "no project config loaded" view of the world rather than panicking
+    // with todo!() inside the dep graph. Callers that need the real
+    // loader still call into agiworkforce-core directly.
+    Ok(ConfigLayerStack::default())
 }
 
 /// Load and merge requirements from a `requirements.toml` file into `target`.
@@ -34,7 +39,8 @@ pub async fn load_requirements_toml(
     _target: &mut ConfigRequirementsWithSources,
     _requirements_file: &AbsolutePathBuf,
 ) -> anyhow::Result<()> {
-    todo!("load_requirements_toml: stub – real implementation lives in agiworkforce-core")
+    // Stub — same reasoning as load_config_layers_state above.
+    Ok(())
 }
 
 /// Return the key used to store the trust level for `project_path` in
