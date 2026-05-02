@@ -1767,6 +1767,7 @@ mod tests {
         assert_eq!(
             sandbox_policy,
             SandboxPolicy::ReadOnly {
+                access: ReadOnlyAccess::FullAccess,
                 network_access: false,
             }
         );
@@ -1804,6 +1805,7 @@ mod tests {
     fn legacy_workspace_write_projection_preserves_symbolic_project_root() {
         let policy = SandboxPolicy::WorkspaceWrite {
             writable_roots: Vec::new(),
+            read_only_access: ReadOnlyAccess::FullAccess,
             network_access: false,
             exclude_tmpdir_env_var: true,
             exclude_slash_tmp: true,
@@ -1960,6 +1962,7 @@ mod tests {
         .expect("absolute root");
         let policy = SandboxPolicy::WorkspaceWrite {
             writable_roots: vec![],
+            read_only_access: ReadOnlyAccess::FullAccess,
             network_access: false,
             exclude_tmpdir_env_var: true,
             exclude_slash_tmp: true,
@@ -2476,6 +2479,7 @@ mod tests {
         let cwd = TempDir::new().expect("tempdir");
         let legacy_policy = SandboxPolicy::WorkspaceWrite {
             writable_roots: Vec::new(),
+            read_only_access: ReadOnlyAccess::FullAccess,
             network_access: false,
             exclude_tmpdir_env_var: true,
             exclude_slash_tmp: true,
@@ -2503,6 +2507,7 @@ mod tests {
         let cwd = TempDir::new().expect("tempdir");
         let legacy_policy = SandboxPolicy::WorkspaceWrite {
             writable_roots: Vec::new(),
+            read_only_access: ReadOnlyAccess::FullAccess,
             network_access: false,
             exclude_tmpdir_env_var: true,
             exclude_slash_tmp: true,

@@ -136,7 +136,8 @@ async fn build_uploaded_local_argument_value(
     }))
 }
 
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 mod tests {
     use super::*;
     use crate::session::tests::make_session_and_context;

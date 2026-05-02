@@ -359,6 +359,32 @@ impl Client {
             .map_err(RequestError::from)
     }
 
+    /// Notify the workspace owner that the current user wants more credits / a higher
+    /// usage limit. POSTs to `/wham/account/add_credits_nudge` (ChatGPT path style) or
+    /// `/api/codex/account/add_credits_nudge` (AgiWorkforce path style). Returns
+    /// `RequestError::UnexpectedStatus` with status 429 when the per-user cooldown is
+    /// active so callers can map that to `AddCreditsNudgeEmailStatus::CooldownActive`.
+    pub async fn send_add_credits_nudge_email(
+        &self,
+        credit_type: AddCreditsNudgeCreditType,
+    ) -> std::result::Result<(), RequestError> {
+        let url = match self.path_style {
+            PathStyle::AgiWorkforceApi => {
+                format!("{}/api/codex/account/add_credits_nudge", self.base_url)
+            }
+            PathStyle::ChatGptApi => format!("{}/wham/account/add_credits_nudge", self.base_url),
+        };
+        let body = serde_json::json!({ "credit_type": credit_type.as_str() });
+        let req = self
+            .http
+            .post(&url)
+            .headers(self.headers())
+            .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+            .json(&body);
+        self.exec_request_detailed(req, "POST", &url).await?;
+        Ok(())
+    }
+
     /// Create a new task (user turn) by POSTing to the appropriate backend path
     /// based on `path_style`. Returns the created task id.
     pub async fn create_task(&self, request_body: serde_json::Value) -> Result<String> {
@@ -497,6 +523,25 @@ impl Client {
     }
 }
 
+/// Credit-class the workspace owner is being asked to top up. Mirrors
+/// `agiworkforce_app_server_protocol::AddCreditsNudgeCreditType` but lives in this
+/// crate so the HTTP layer doesn't depend on the higher-level protocol crate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AddCreditsNudgeCreditType {
+    Credits,
+    UsageLimit,
+}
+
+impl AddCreditsNudgeCreditType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Credits => "credits",
+            Self::UsageLimit => "usage_limit",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -618,6 +663,7 @@ mod tests {
                 secondary: None,
                 credits: None,
                 plan_type: Some(AccountPlanType::Pro),
+                rate_limit_reached_type: None,
             },
             RateLimitSnapshot {
                 limit_id: Some("codex".to_string()),
@@ -630,6 +676,7 @@ mod tests {
                 secondary: None,
                 credits: None,
                 plan_type: Some(AccountPlanType::Pro),
+                rate_limit_reached_type: None,
             },
         ];
 

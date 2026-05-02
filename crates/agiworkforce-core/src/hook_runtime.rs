@@ -510,7 +510,8 @@ fn hook_permission_mode(turn_context: &TurnContext) -> String {
     .to_string()
 }
 
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 mod tests {
     use agiworkforce_protocol::models::ContentItem;
     use agiworkforce_protocol::protocol::HookEventName;

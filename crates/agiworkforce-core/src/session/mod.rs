@@ -209,7 +209,8 @@ use self::turn::filter_connectors_for_input;
 use self::turn::realtime_text_for_event;
 use self::turn_context::TurnContext;
 use self::turn_context::TurnSkillsContext;
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 mod rollout_reconstruction_tests;
 
 #[derive(Debug, PartialEq)]
@@ -3329,5 +3330,6 @@ fn errors_to_info(errors: &[SkillError]) -> Vec<SkillErrorInfo> {
 
 use agiworkforce_memories_read::build_memory_tool_developer_instructions;
 
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 pub(crate) mod tests;

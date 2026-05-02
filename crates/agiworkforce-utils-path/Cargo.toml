@@ -10,3 +10,6 @@ agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path
 anyhow = "1"
 dunce = "1.0.4"
 tempfile = "3"
+
+[dev-dependencies]
+pretty_assertions = "1"
