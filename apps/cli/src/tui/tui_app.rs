@@ -124,7 +124,23 @@ struct TuiApp {
     // Git branch
     git_branch: Option<String>,
     command_registry: CommandRegistry,
+    // Fallback rotation banner — shared with the agent send loop. The banner
+    // self-clears after FALLBACK_BANNER_TTL seconds.
+    fallback_banner: Arc<std::sync::Mutex<Option<FallbackBanner>>>,
 }
+
+/// Short-lived banner shown across the top of the chat area when the
+/// fallback chain rotates models. Holds a snapshot at the moment of
+/// rotation; the renderer is responsible for hiding it once stale.
+#[derive(Clone)]
+struct FallbackBanner {
+    from: String,
+    to: String,
+    reason: String,
+    shown_at: Instant,
+}
+
+const FALLBACK_BANNER_TTL: Duration = Duration::from_secs(5);
 
 impl TuiApp {
     fn new(session: AgentSession, config: CliConfig) -> Self {
@@ -172,7 +188,38 @@ impl TuiApp {
                 &crate::skills::discover_skills(),
                 &[],
             ),
+            fallback_banner: Arc::new(std::sync::Mutex::new(None)),
         }
+    }
+
+    /// Install the fallback banner sink on the underlying session. Idempotent
+    /// — calling twice replaces the previous sink.
+    fn wire_fallback_banner(&mut self) {
+        let banner = Arc::clone(&self.fallback_banner);
+        self.session.on_fallback = Some(crate::agent::FallbackSink(Box::new(
+            move |from, to, reason| {
+                if let Ok(mut slot) = banner.lock() {
+                    *slot = Some(FallbackBanner {
+                        from: from.to_string(),
+                        to: to.to_string(),
+                        reason: reason.to_string(),
+                        shown_at: Instant::now(),
+                    });
+                }
+            },
+        )));
+    }
+
+    /// Returns the current banner if it hasn't expired; otherwise clears it.
+    fn current_fallback_banner(&self) -> Option<FallbackBanner> {
+        let mut slot = self.fallback_banner.lock().ok()?;
+        if let Some(b) = slot.as_ref() {
+            if b.shown_at.elapsed() <= FALLBACK_BANNER_TTL {
+                return Some(b.clone());
+            }
+            *slot = None;
+        }
+        None
     }
 
     fn sync_stats(&mut self) {
@@ -250,6 +297,7 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
         render_chat(frame, chunks[1], app);
         render_input(frame, chunks[2], app);
         render_status_bar(frame, chunks[3], app);
+        render_fallback_banner(frame, chunks[1], app);
 
         // Live cost HUD anchored to the top-right; sits on top of the header
         // border so it never steals real-estate from the chat area.
@@ -557,6 +605,34 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         let cursor_y = area.y + 1;
         frame.set_cursor_position((cursor_x, cursor_y));
     }
+}
+
+fn render_fallback_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp) {
+    let Some(banner) = app.current_fallback_banner() else {
+        return;
+    };
+    let text = format!(
+        " ↘ Falling back: {} → {} ({})  ",
+        banner.from, banner.to, banner.reason
+    );
+    let width = (text.chars().count() as u16).min(chat_area.width.saturating_sub(2));
+    if width == 0 {
+        return;
+    }
+    let area = Rect {
+        x: chat_area.x + (chat_area.width.saturating_sub(width)) / 2,
+        y: chat_area.y,
+        width,
+        height: 1,
+    };
+    let banner_widget = Paragraph::new(Line::from(Span::styled(
+        text,
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )));
+    frame.render_widget(banner_widget, area);
 }
 
 fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
@@ -1559,6 +1635,7 @@ pub async fn run(
     .await;
 
     let mut app = TuiApp::new(session, config.clone());
+    app.wire_fallback_banner();
     let mut terminal = setup_terminal()?;
 
     let result = run_event_loop(&mut terminal, &mut app).await;
