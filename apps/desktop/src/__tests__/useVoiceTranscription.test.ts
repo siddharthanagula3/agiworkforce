@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../lib/tauri-mock', () => ({
   invoke: vi.fn().mockResolvedValue([]),
+  isTauri: false,
+  isTauriContext: () => false,
 }));
 
 vi.mock('../services/supabaseAuth', () => ({

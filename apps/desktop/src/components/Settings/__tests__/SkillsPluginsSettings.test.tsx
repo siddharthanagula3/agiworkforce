@@ -37,6 +37,7 @@ vi.mock('@tauri-apps/api/path', () => ({
 }));
 
 vi.mock('@/lib/tauri-mock', () => ({
+  isTauri: false,
   isTauriContext: () => mockIsTauriContext(),
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
