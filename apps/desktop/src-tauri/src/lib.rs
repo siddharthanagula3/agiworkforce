@@ -2677,6 +2677,34 @@ pub fn run() {
             // ============================================================
             crate::sys::billing::stripe_attach_payment_method,
             crate::sys::billing::stripe_set_default_payment_method,
+
+            // ============================================================
+            // FIX-023 (Sprint 5): commands previously defined with
+            // #[tauri::command] but missing from this list — found by
+            // apps/desktop/check-wiring.sh. Wiring them up so the
+            // frontend can actually call them when the matching UI lands.
+            // ============================================================
+
+            // Error recovery (sys/error/commands.rs)
+            crate::sys::error::commands::abort_execution,
+            crate::sys::error::commands::clear_error_contexts,
+            crate::sys::error::commands::get_all_error_contexts,
+            crate::sys::error::commands::get_error_context,
+            crate::sys::error::commands::get_recovery_suggestion,
+            crate::sys::error::commands::retry_failed_step,
+            crate::sys::error::commands::skip_failed_step,
+
+            // Codebase indexing (core/codebase/mod.rs)
+            crate::core::codebase::get_file_symbols,
+            crate::core::codebase::get_index_stats,
+            crate::core::codebase::index_workspace_file,
+            crate::core::codebase::search_symbols,
+
+            // Billing — payment methods + invoice email + setup intent
+            crate::sys::billing::send_invoice_email,
+            crate::sys::billing::stripe_create_setup_intent,
+            crate::sys::billing::stripe_delete_payment_method,
+            crate::sys::billing::stripe_get_payment_methods,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
