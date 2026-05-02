@@ -246,17 +246,33 @@ fn install_network_seccomp_filter_on_current_thread(
         }
     }
 
+    // FIX-027 (Sprint 3): the seccomp backend only knows how to encode
+    // syscall filters for x86_64 and aarch64. On other Linux architectures
+    // (riscv64, ppc64le, …) the upstream code panicked via `unimplemented!()`
+    // before any sandbox could be installed. Refuse the install with a clear
+    // log instead so the caller can fall back to a reduced-protection mode
+    // rather than crashing the parent process.
+    let target_arch = if cfg!(target_arch = "x86_64") {
+        TargetArch::x86_64
+    } else if cfg!(target_arch = "aarch64") {
+        TargetArch::aarch64
+    } else {
+        let arch = std::env::consts::ARCH;
+        // landlock.rs has no tracing dep; stderr is fine for sandbox setup
+        // diagnostics that also surface in the host log.
+        eprintln!(
+            "agiworkforce-linux-sandbox: network seccomp filter is not \
+             supported on architecture {arch}; refusing to install partial \
+             sandbox. Run on x86_64 or aarch64 for full enforcement."
+        );
+        return Err(SandboxErr::LandlockRestrict);
+    };
+
     let filter = SeccompFilter::new(
         rules,
         SeccompAction::Allow,                     // default – allow
         SeccompAction::Errno(libc::EPERM as u32), // when rule matches – return EPERM
-        if cfg!(target_arch = "x86_64") {
-            TargetArch::x86_64
-        } else if cfg!(target_arch = "aarch64") {
-            TargetArch::aarch64
-        } else {
-            unimplemented!("unsupported architecture for seccomp filter");
-        },
+        target_arch,
     )?;
 
     let prog: BpfProgram = filter.try_into()?;
