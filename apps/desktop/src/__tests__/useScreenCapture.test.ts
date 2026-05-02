@@ -3,6 +3,8 @@ import { renderHook, act } from '@testing-library/react';
 
 vi.mock('../lib/tauri-mock', () => ({
   invoke: vi.fn(),
+  isTauri: false,
+  isTauriContext: () => false,
 }));
 
 import { useScreenCapture } from '../hooks/useScreenCapture';

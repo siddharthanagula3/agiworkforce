@@ -13,6 +13,8 @@ const invokeMock = vi.fn();
 
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
+  isTauri: false,
+  isTauriContext: () => false,
 }));
 
 const baseMessage: EmailMessage = {
