@@ -19,6 +19,7 @@ mod mcp;
 mod memory;
 mod models;
 mod output;
+mod output_styles;
 mod permissions;
 mod provider;
 mod repl;
