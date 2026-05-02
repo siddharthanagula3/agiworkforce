@@ -15,6 +15,8 @@ const linkConversationIdMock = vi.fn();
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: invokeMock,
   listen: listenMock,
+  isTauri: false,
+  isTauriContext: () => false,
 }));
 
 vi.mock('../../stores/auth', () => ({
