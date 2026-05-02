@@ -3,8 +3,10 @@ use crate::endpoint::realtime_websocket::protocol_v2::parse_realtime_event_v2;
 pub use agiworkforce_protocol::protocol::RealtimeAudioFrame;
 pub use agiworkforce_protocol::protocol::RealtimeEvent;
 pub use agiworkforce_protocol::protocol::RealtimeHandoffRequested;
+pub use agiworkforce_protocol::protocol::RealtimeOutputModality;
 pub use agiworkforce_protocol::protocol::RealtimeTranscriptDelta;
 pub use agiworkforce_protocol::protocol::RealtimeTranscriptEntry;
+pub use agiworkforce_protocol::protocol::RealtimeVoice;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -27,6 +29,8 @@ pub struct RealtimeSessionConfig {
     pub session_id: Option<String>,
     pub event_parser: RealtimeEventParser,
     pub session_mode: RealtimeSessionMode,
+    pub output_modality: RealtimeOutputModality,
+    pub voice: RealtimeVoice,
 }
 
 #[derive(Debug, Clone, Serialize)]

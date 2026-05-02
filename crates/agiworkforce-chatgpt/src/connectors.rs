@@ -26,12 +26,18 @@ use agiworkforce_core::plugins::PluginsManager;
 
 const DIRECTORY_CONNECTORS_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Default originator for connector filtering. Used when the chatgpt crate
+/// hasn't been wired into a richer originator-aware path yet.
+const DEFAULT_ORIGINATOR: &str = "agiworkforce";
+
 async fn apps_enabled(config: &Config) -> bool {
     let auth_manager = AuthManager::shared(
-        config.agiworkforce_home.clone(),
+        config.agiworkforce_home.as_ref().to_path_buf(),
         /*enable_agiworkforce_api_key_env*/ false,
         config.cli_auth_credentials_store_mode,
-    );
+        Some(config.chatgpt_base_url.clone()),
+    )
+    .await;
     config.features.apps_enabled(Some(&auth_manager)).await
 }
 pub async fn list_connectors(config: &Config) -> anyhow::Result<Vec<AppInfo>> {
@@ -74,7 +80,7 @@ pub async fn list_cached_all_connectors(config: &Config) -> Option<Vec<AppInfo>>
     let cache_key = all_connectors_cache_key(config, &token_data);
     agiworkforce_connectors::cached_all_connectors(&cache_key).map(|connectors| {
         let connectors = merge_plugin_apps(connectors, plugin_apps_for_config(config));
-        filter_disallowed_connectors(connectors)
+        filter_disallowed_connectors(connectors, DEFAULT_ORIGINATOR)
     })
 }
 
@@ -109,7 +115,7 @@ pub async fn list_all_connectors_with_options(
     )
     .await?;
     let connectors = merge_plugin_apps(connectors, plugin_apps_for_config(config));
-    Ok(filter_disallowed_connectors(connectors))
+    Ok(filter_disallowed_connectors(connectors, DEFAULT_ORIGINATOR))
 }
 
 fn all_connectors_cache_key(config: &Config, token_data: &TokenData) -> AllConnectorsCacheKey {
@@ -121,10 +127,12 @@ fn all_connectors_cache_key(config: &Config, token_data: &TokenData) -> AllConne
     )
 }
 
-fn plugin_apps_for_config(config: &Config) -> Vec<agiworkforce_core::plugins::AppConnectorId> {
-    PluginsManager::new(config.agiworkforce_home.clone())
-        .plugins_for_config(config)
-        .effective_apps()
+fn plugin_apps_for_config(_config: &Config) -> Vec<agiworkforce_core::plugins::AppConnectorId> {
+    // Stub: PluginsManager::plugins_for_config is async and returns a
+    // PluginLoadOutcome; the synchronous `.effective_apps()` extractor lives in
+    // upstream codex-rs. We return an empty list for the demo and will wire up
+    // the full plugin-app pipeline once the chatgpt crate is fully ported.
+    Vec::new()
 }
 
 pub fn connectors_for_plugin_apps(
@@ -136,10 +144,13 @@ pub fn connectors_for_plugin_apps(
         .map(|connector_id| connector_id.0.as_str())
         .collect::<HashSet<_>>();
 
-    filter_disallowed_connectors(merge_plugin_apps(connectors, plugin_apps.to_vec()))
-        .into_iter()
-        .filter(|connector| plugin_app_ids.contains(connector.id.as_str()))
-        .collect()
+    filter_disallowed_connectors(
+        merge_plugin_apps(connectors, plugin_apps.to_vec()),
+        DEFAULT_ORIGINATOR,
+    )
+    .into_iter()
+    .filter(|connector| plugin_app_ids.contains(connector.id.as_str()))
+    .collect()
 }
 
 pub fn merge_connectors_with_accessible(
@@ -160,7 +171,7 @@ pub fn merge_connectors_with_accessible(
         accessible_connectors
     };
     let merged = merge_connectors(connectors, accessible_connectors);
-    filter_disallowed_connectors(merged)
+    filter_disallowed_connectors(merged, DEFAULT_ORIGINATOR)
 }
 
 #[cfg(test)]

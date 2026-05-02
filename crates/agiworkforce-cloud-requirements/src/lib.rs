@@ -722,7 +722,7 @@ pub fn cloud_requirements_loader(
     })
 }
 
-pub fn cloud_requirements_loader_for_storage(
+pub async fn cloud_requirements_loader_for_storage(
     agiworkforce_home: PathBuf,
     enable_agiworkforce_api_key_env: bool,
     credentials_store_mode: AuthCredentialsStoreMode,
@@ -732,7 +732,9 @@ pub fn cloud_requirements_loader_for_storage(
         agiworkforce_home.clone(),
         enable_agiworkforce_api_key_env,
         credentials_store_mode,
-    );
+        Some(chatgpt_base_url.clone()),
+    )
+    .await;
     cloud_requirements_loader(auth_manager, chatgpt_base_url, agiworkforce_home)
 }
 

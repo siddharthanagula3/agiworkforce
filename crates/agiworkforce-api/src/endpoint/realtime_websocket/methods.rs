@@ -294,6 +294,17 @@ impl RealtimeWebsocketWriter {
         .await
     }
 
+    /// Stub: function-call output emission for realtime sessions.
+    /// Real implementation lives in upstream `codex-api`; we emit a
+    /// `ConversationItemCreate` instead so the realtime path stays connected.
+    pub async fn send_conversation_function_call_output(
+        &self,
+        _call_id: String,
+        output_text: String,
+    ) -> Result<(), ApiError> {
+        self.send_conversation_item_create(output_text).await
+    }
+
     pub async fn send_response_create(&self) -> Result<(), ApiError> {
         self.send_json(&RealtimeOutboundMessage::ResponseCreate)
             .await
@@ -417,7 +428,11 @@ impl RealtimeWebsocketEvents {
             | RealtimeEvent::ResponseCancelled(_)
             | RealtimeEvent::ConversationItemAdded(_)
             | RealtimeEvent::ConversationItemDone { .. }
-            | RealtimeEvent::Error(_) => {}
+            | RealtimeEvent::Error(_)
+            | RealtimeEvent::InputTranscriptDone(_)
+            | RealtimeEvent::OutputTranscriptDone(_)
+            | RealtimeEvent::ResponseCreated(_)
+            | _ => {}
         }
     }
 }
@@ -447,6 +462,19 @@ pub struct RealtimeWebsocketClient {
 impl RealtimeWebsocketClient {
     pub fn new(provider: Provider) -> Self {
         Self { provider }
+    }
+
+    /// Stub: WebRTC sideband join. Real implementation lives in upstream
+    /// `codex-api`; on this build we forward to the standard websocket
+    /// connect path so realtime stays usable in non-WebRTC mode.
+    pub async fn connect_webrtc_sideband(
+        &self,
+        config: RealtimeSessionConfig,
+        _call_id: &str,
+        extra_headers: HeaderMap,
+        default_headers: HeaderMap,
+    ) -> Result<RealtimeWebsocketConnection, ApiError> {
+        self.connect(config, extra_headers, default_headers).await
     }
 
     pub async fn connect(

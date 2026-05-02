@@ -320,6 +320,7 @@ mod agent {
         // The consolidation agent only needs local memory-root write access and no network.
         let consolidation_sandbox_policy = SandboxPolicy::WorkspaceWrite {
             writable_roots,
+            read_only_access: agiworkforce_protocol::protocol::ReadOnlyAccess::default(),
             network_access: false,
             exclude_tmpdir_env_var: true,
             exclude_slash_tmp: true,

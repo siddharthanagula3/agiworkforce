@@ -11,6 +11,7 @@ use std::thread;
 use serde_json::Value as JsonValue;
 use tokio::sync::mpsc;
 
+use agiworkforce_protocol::ToolName;
 use crate::description::EnabledToolMetadata;
 use crate::description::ToolDefinition;
 use crate::description::enabled_tool_metadata;
@@ -23,6 +24,10 @@ const EXIT_SENTINEL: &str = "__agiworkforce_code_mode_exit__";
 
 #[derive(Clone, Debug)]
 pub struct ExecuteRequest {
+    /// Runtime cell id for this execution. Allocated by the host via
+    /// `CodeModeService::allocate_cell_id` so nested tool calls can refer to
+    /// this cell as soon as the runtime starts.
+    pub cell_id: String,
     pub tool_call_id: String,
     pub enabled_tools: Vec<ToolDefinition>,
     pub source: String,
@@ -38,7 +43,7 @@ pub struct WaitRequest {
     pub terminate: bool,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, serde::Serialize)]
 pub enum RuntimeResponse {
     Yielded {
         cell_id: String,
@@ -54,6 +59,32 @@ pub enum RuntimeResponse {
         stored_values: HashMap<String, JsonValue>,
         error_text: Option<String>,
     },
+}
+
+/// Outcome of a `wait` call on the code mode service.
+#[derive(Debug, PartialEq, serde::Serialize)]
+pub enum WaitOutcome {
+    /// The cell exists and produced a response.
+    LiveCell(RuntimeResponse),
+    /// The cell was not found (or closed) and a synthetic response is returned.
+    NotFound(RuntimeResponse),
+}
+
+impl From<WaitOutcome> for RuntimeResponse {
+    fn from(outcome: WaitOutcome) -> Self {
+        match outcome {
+            WaitOutcome::LiveCell(r) | WaitOutcome::NotFound(r) => r,
+        }
+    }
+}
+
+/// A tool call issued by the code-mode runtime to the host.
+#[derive(Debug, Clone)]
+pub struct CodeModeNestedToolCall {
+    pub cell_id: String,
+    pub runtime_tool_call_id: String,
+    pub tool_name: ToolName,
+    pub input: JsonValue,
 }
 
 #[derive(Debug)]

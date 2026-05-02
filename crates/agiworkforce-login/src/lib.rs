@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod auth_env_telemetry;
 pub mod token_data;
 
 mod device_code_auth;
@@ -6,6 +7,7 @@ mod pkce;
 mod server;
 
 pub use agiworkforce_client::BuildCustomCaTransportError as BuildLoginHttpClientError;
+pub use agiworkforce_config::types::AuthCredentialsStoreMode;
 pub use device_code_auth::DeviceCode;
 pub use device_code_auth::complete_device_code_login;
 pub use device_code_auth::request_device_code;
@@ -15,23 +17,37 @@ pub use server::ServerOptions;
 pub use server::ShutdownHandle;
 pub use server::run_login_server;
 
-pub use agiworkforce_app_server_protocol::AuthMode;
-pub use auth::AGIWORKFORCE_API_KEY_ENV_VAR;
-pub use auth::AgiWorkforceAuth;
 pub use auth::AuthConfig;
-pub use auth::AuthCredentialsStoreMode;
 pub use auth::AuthDotJson;
 pub use auth::AuthManager;
+pub use auth::AuthManagerConfig;
 pub use auth::CLIENT_ID;
+pub use auth::AGIWORKFORCE_AGENT_IDENTITY_ENV_VAR;
+pub use auth::AGIWORKFORCE_API_KEY_ENV_VAR;
+pub use auth::AgiworkforceAuth;
+/// Backwards-compat alias: some downstream crates spell this with a capital
+/// `W`. Both names refer to the same type.
+pub type AgiWorkforceAuth = AgiworkforceAuth;
+pub use auth::ExternalAuth;
+pub use auth::ExternalAuthChatgptMetadata;
+pub use auth::ExternalAuthRefreshContext;
+pub use auth::ExternalAuthRefreshReason;
+pub use auth::ExternalAuthTokens;
 pub use auth::OPENAI_API_KEY_ENV_VAR;
 pub use auth::REFRESH_TOKEN_URL_OVERRIDE_ENV_VAR;
+pub use auth::REVOKE_TOKEN_URL_OVERRIDE_ENV_VAR;
 pub use auth::RefreshTokenError;
 pub use auth::UnauthorizedRecovery;
 pub use auth::default_client;
 pub use auth::enforce_login_restrictions;
 pub use auth::load_auth_dot_json;
+pub use auth::login_with_agent_identity;
 pub use auth::login_with_api_key;
 pub use auth::logout;
+pub use auth::logout_with_revoke;
+pub use auth::read_agiworkforce_agent_identity_from_env;
 pub use auth::read_openai_api_key_from_env;
 pub use auth::save_auth;
+pub use auth_env_telemetry::AuthEnvTelemetry;
+pub use auth_env_telemetry::collect_auth_env_telemetry;
 pub use token_data::TokenData;
