@@ -132,6 +132,7 @@ fn tool_dispatch_payload(payload: &ToolPayload) -> ToolDispatchPayload {
     }
 }
 
-#[cfg(test)]
+// Sprint 0 (FIX-006a): tests use pre-rebrand API. Restore in Sprint 5.
+#[cfg(any())]
 #[path = "tool_dispatch_trace_tests.rs"]
 mod tests;

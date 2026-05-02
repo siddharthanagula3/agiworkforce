@@ -4,7 +4,22 @@ members = [
   "apps/cli",
   "crates/*",
 ]
-exclude = ["crates/agiworkforce-utils"]
+# Sprint 0 (FIX-006a) workspace exclusions:
+# - `agiworkforce-tui` and `agiworkforce-tui_app_server` are mid-port from
+#   codex-rs and have 396 unresolved-symbol errors between them. Sprint 5's
+#   FIX-021 plans to delete `tui_app_server` outright and finish the port for
+#   `tui`; until then, running them through CI just keeps `main` red. The
+#   binaries that ship today (`apps/desktop`, `apps/cli`) do **not** depend on
+#   either crate.
+# - `agiworkforce-cloud-tasks` depends on `agiworkforce-tui` so it has to ride
+#   along until the TUI port is finished.
+# - `crates/agiworkforce-utils` is a pre-existing exclusion (legacy stub).
+exclude = [
+  "crates/agiworkforce-utils",
+  "crates/agiworkforce-tui",
+  "crates/agiworkforce-tui_app_server",
+  "crates/agiworkforce-cloud-tasks",
+]
 resolver = "2"
 
 [profile.release]

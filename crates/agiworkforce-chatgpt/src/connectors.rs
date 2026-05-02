@@ -17,6 +17,7 @@ use agiworkforce_core::connectors::filter_disallowed_connectors;
 pub use agiworkforce_core::connectors::list_accessible_connectors_from_mcp_tools;
 pub use agiworkforce_core::connectors::list_accessible_connectors_from_mcp_tools_with_options;
 pub use agiworkforce_core::connectors::list_accessible_connectors_from_mcp_tools_with_options_and_status;
+pub use agiworkforce_core::connectors::list_accessible_connectors_from_mcp_tools_with_environment_manager;
 pub use agiworkforce_core::connectors::list_cached_accessible_connectors_from_mcp_tools;
 use agiworkforce_core::connectors::merge_connectors;
 use agiworkforce_core::connectors::merge_plugin_apps;
@@ -201,16 +202,20 @@ mod tests {
 
     #[test]
     fn allows_asdk_connectors() {
-        let filtered = filter_disallowed_connectors(vec![app("asdk_app_hidden"), app("alpha")]);
+        let filtered =
+            filter_disallowed_connectors(vec![app("asdk_app_hidden"), app("alpha")], "");
         assert_eq!(filtered, vec![app("asdk_app_hidden"), app("alpha")]);
     }
 
     #[test]
     fn allows_whitelisted_asdk_connectors() {
-        let filtered = filter_disallowed_connectors(vec![
-            app("asdk_app_69781557cc1481919cf5e9824fa2e792"),
-            app("beta"),
-        ]);
+        let filtered = filter_disallowed_connectors(
+            vec![
+                app("asdk_app_69781557cc1481919cf5e9824fa2e792"),
+                app("beta"),
+            ],
+            "",
+        );
         assert_eq!(
             filtered,
             vec![
@@ -222,20 +227,26 @@ mod tests {
 
     #[test]
     fn filters_openai_prefixed_connectors() {
-        let filtered = filter_disallowed_connectors(vec![
-            app("connector_openai_foo"),
-            app("connector_openai_bar"),
-            app("gamma"),
-        ]);
+        let filtered = filter_disallowed_connectors(
+            vec![
+                app("connector_openai_foo"),
+                app("connector_openai_bar"),
+                app("gamma"),
+            ],
+            "",
+        );
         assert_eq!(filtered, vec![app("gamma")]);
     }
 
     #[test]
     fn filters_disallowed_connector_ids() {
-        let filtered = filter_disallowed_connectors(vec![
-            app("asdk_app_6938a94a61d881918ef32cb999ff937c"),
-            app("delta"),
-        ]);
+        let filtered = filter_disallowed_connectors(
+            vec![
+                app("asdk_app_6938a94a61d881918ef32cb999ff937c"),
+                app("delta"),
+            ],
+            "",
+        );
         assert_eq!(filtered, vec![app("delta")]);
     }
 

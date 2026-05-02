@@ -58,6 +58,23 @@ impl HookEventsToml {
             && self.user_prompt_submit.is_empty()
             && self.stop.is_empty()
     }
+
+    /// Total number of `HookHandlerConfig` entries across every event bucket.
+    pub fn handler_count(&self) -> usize {
+        let buckets = [
+            &self.pre_tool_use,
+            &self.permission_request,
+            &self.post_tool_use,
+            &self.session_start,
+            &self.user_prompt_submit,
+            &self.stop,
+        ];
+        buckets
+            .into_iter()
+            .flat_map(|bucket| bucket.iter())
+            .map(|group| group.hooks.len())
+            .sum()
+    }
 }
 
 /// Top-level hooks configuration file (JSON format).
