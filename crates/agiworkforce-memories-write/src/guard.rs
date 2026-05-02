@@ -33,7 +33,7 @@ async fn rate_limits_check(auth_manager: &AuthManager, config: &Config) -> Optio
         .find(|s| s.limit_id.as_deref() == Some(crate::guard_limits::AGIWORKFORCE_LIMIT_ID))
         .or_else(|| snapshots.first())?;
 
-    let min_remaining_percent = config.memories.min_rate_limit_remaining_percent;
+    let min_remaining_percent = config.memories.min_rate_limit_remaining_percent as i64;
     let allowed = snapshot_allows_startup(snapshot, min_remaining_percent);
 
     if !allowed {
