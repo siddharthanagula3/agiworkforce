@@ -224,14 +224,8 @@ export const AIEmployeeChat: React.FC<AIEmployeeChatProps> = ({ employee, userId
             <div className="rounded-lg bg-muted px-4 py-2 text-foreground">
               <div className="flex items-center space-x-1">
                 <div className="h-2 w-2 animate-bounce rounded-full bg-current"></div>
-                <div
-                  className="h-2 w-2 animate-bounce rounded-full bg-current"
-                  style={{ animationDelay: '0.1s' }}
-                ></div>
-                <div
-                  className="h-2 w-2 animate-bounce rounded-full bg-current"
-                  style={{ animationDelay: '0.2s' }}
-                ></div>
+                <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:0.1s]"></div>
+                <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:0.2s]"></div>
                 <span className="ml-2 text-sm">Thinking...</span>
               </div>
             </div>
