@@ -18,6 +18,7 @@ interface ApiMessage {
   content: string;
   created_at: string;
   model?: string;
+  metadata?: { reaction?: 'thumbsUp' | 'thumbsDown' | null; [key: string]: unknown };
 }
 
 interface UseConversationsReturn {
@@ -168,6 +169,7 @@ export function useConversations(): UseConversationsReturn {
           content: m.content,
           createdAt: m.created_at,
           model: m.model,
+          metadata: m.metadata?.reaction != null ? { reaction: m.metadata.reaction } : undefined,
         }));
 
         // Atomically set active conversation and messages to avoid race conditions
