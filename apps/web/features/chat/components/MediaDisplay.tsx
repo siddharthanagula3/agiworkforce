@@ -55,12 +55,7 @@ function GeneratingSkeleton({ prompt }: { prompt?: string }) {
 
         {/* Shimmer animation */}
         <div className="absolute inset-0 overflow-hidden">
-          <div
-            className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent"
-            style={{
-              animationTimingFunction: 'ease-in-out',
-            }}
-          />
+          <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] [animation-timing-function:ease-in-out] bg-gradient-to-r from-transparent via-white/5 to-transparent" />
         </div>
       </div>
 
@@ -153,8 +148,7 @@ function MediaDisplayComponent({
           <img
             src={src}
             alt={alt}
-            className="w-full object-contain"
-            style={{ maxHeight: '512px' }}
+            className="w-full max-h-[512px] object-contain"
             draggable={false}
           />
 
