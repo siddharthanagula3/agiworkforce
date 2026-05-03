@@ -78,7 +78,7 @@ function main() {
       console.error(`\nInstall options:`);
       console.error(`  curl -fsSL https://agiworkforce.com/install.sh | bash`);
       console.error(
-        `  cargo install --git https://github.com/siddharthanagula3/agiworkforce-desktop-app agiworkforce-cli`,
+        `  cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli`,
       );
       process.exit(1);
     }
