@@ -151,16 +151,12 @@ pub async fn submit_feedback(
     // before the user is authenticated (e.g., from the login screen). The `feedback` table
     // MUST have an RLS policy that only allows INSERT for anon and restricts SELECT/UPDATE/DELETE
     // to service_role. If authenticated-only feedback is desired, accept a user JWT parameter instead.
-    let supabase_url = std::env::var("VITE_SUPABASE_URL")
-        .or_else(|_| std::env::var("SUPABASE_URL"))
-        .unwrap_or_default();
-    let supabase_key = std::env::var("VITE_SUPABASE_ANON_KEY")
-        .or_else(|_| std::env::var("SUPABASE_ANON_KEY"))
-        .unwrap_or_default();
-
-    if supabase_url.is_empty() || supabase_key.is_empty() {
-        return Err("Missing Supabase configuration".to_string());
-    }
+    let supabase_url = crate::sys::account::get_supabase_url()
+        .filter(|s| !s.is_empty())
+        .ok_or("Missing Supabase configuration")?;
+    let supabase_key = crate::sys::account::get_supabase_anon_key()
+        .filter(|s| !s.is_empty())
+        .ok_or("Missing Supabase configuration")?;
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
