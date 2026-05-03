@@ -63,6 +63,7 @@ export function useChatStream(): UseChatStreamReturn {
   const addMessage = useChatStore((state) => state.addMessage);
   const updateMessage = useChatStore((state) => state.updateMessage);
   const appendToMessage = useChatStore((state) => state.appendToMessage);
+  const appendToThinking = useChatStore((state) => state.appendToThinking);
   const startStreaming = useChatStore((state) => state.startStreaming);
   const stopStreaming = useChatStore((state) => state.stopStreaming);
   const setLoading = useChatStore((state) => state.setLoading);
@@ -199,6 +200,8 @@ export function useChatStream(): UseChatStreamReturn {
         const decoder = new TextDecoder();
         let buffer = '';
         let fullAssistantContent = '';
+        // Extended-thinking state: tracks whether we're currently inside a <thinking> block
+        let inThinkingBlock = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -215,7 +218,16 @@ export function useChatStream(): UseChatStreamReturn {
 
             const data = trimmedLine.slice(6);
             if (data === '[DONE]') {
-              // Save the complete assistant message to database
+              // Close any dangling thinking block
+              if (inThinkingBlock) {
+                updateMessage(assistantMessageId, {
+                  metadata: {
+                    isThinkingStreaming: false,
+                    thinkingCompletedAt: new Date().toISOString(),
+                  },
+                });
+                inThinkingBlock = false;
+              }
               if (fullAssistantContent) {
                 saveMessageToDb(
                   conversationId,
@@ -233,28 +245,46 @@ export function useChatStream(): UseChatStreamReturn {
             try {
               const parsed = JSON.parse(data);
 
-              // Handle OpenAI-compatible format
-              if (parsed.choices?.[0]?.delta?.content) {
-                const chunk = parsed.choices[0].delta.content;
-                fullAssistantContent += chunk;
-                appendToMessage(assistantMessageId, chunk);
+              // Resolve content chunk from OpenAI-compatible or raw Anthropic format
+              let chunk: string | null = null;
+              if (parsed.choices?.[0]?.delta?.content != null) {
+                chunk = parsed.choices[0].delta.content;
+              } else if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+                chunk = parsed.delta.text;
               }
 
-              // Handle Anthropic format
-              if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-                const chunk = parsed.delta.text;
-                fullAssistantContent += chunk;
-                appendToMessage(assistantMessageId, chunk);
+              if (chunk !== null) {
+                if (chunk === '<thinking>') {
+                  // Server signals the start of an extended thinking block
+                  inThinkingBlock = true;
+                  updateMessage(assistantMessageId, {
+                    metadata: {
+                      isThinkingStreaming: true,
+                      thinkingStartedAt: new Date().toISOString(),
+                    },
+                  });
+                } else if (chunk === '</thinking>') {
+                  // Server signals the end of an extended thinking block
+                  inThinkingBlock = false;
+                  updateMessage(assistantMessageId, {
+                    metadata: {
+                      isThinkingStreaming: false,
+                      thinkingCompletedAt: new Date().toISOString(),
+                    },
+                  });
+                } else if (inThinkingBlock) {
+                  appendToThinking(assistantMessageId, chunk);
+                } else {
+                  fullAssistantContent += chunk;
+                  appendToMessage(assistantMessageId, chunk);
+                }
               }
 
               // Handle finish reason
-              // Note: We keep the originally selected model name for display consistency.
-              // The API may return a different model name (e.g., due to fallback, version
-              // differences, or auto-model resolution), but users should see what they selected.
+              // We keep the originally selected model name for display consistency — the API
+              // may return a different model name due to fallback or version differences.
               if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
-                updateMessage(assistantMessageId, {
-                  isStreaming: false,
-                });
+                updateMessage(assistantMessageId, { isStreaming: false });
               }
             } catch {
               // Ignore parse errors for incomplete chunks
@@ -301,6 +331,7 @@ export function useChatStream(): UseChatStreamReturn {
       addMessage,
       updateMessage,
       appendToMessage,
+      appendToThinking,
       startStreaming,
       stopStreaming,
       setLoading,
