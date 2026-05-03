@@ -68,6 +68,10 @@ export interface ChatMessage {
     thinkingDurationSeconds?: number;
     /** Multi-segment thinking blocks (interleaved reasoning) */
     thinkingSegments?: ThinkingSegment[];
+    /** True while a server-managed web search is in progress */
+    isSearching?: boolean;
+    /** Web search results from server-managed tools */
+    searchResults?: Array<{ url: string; title: string; snippet: string }>;
   };
 }
 
