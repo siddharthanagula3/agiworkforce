@@ -27,6 +27,7 @@ import { ReasoningAccordion } from './ReasoningAccordion';
 import { ToolTimeline } from './ToolTimeline';
 import { SearchingIndicator, CompactSearchResults } from '../search/SearchResults';
 import { CitationFooter, type Citation } from './InlineCitation';
+import { CodeExecutionBlock } from './CodeExecutionBlock';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -364,6 +365,15 @@ const MessageItemComponent = ({
               </div>
             )}
 
+          {/* Code execution block — shown while executing or after result arrives */}
+          {!isUser &&
+            (message.metadata?.isExecutingCode || message.metadata?.codeExecutionResult) && (
+              <CodeExecutionBlock
+                isExecuting={message.metadata?.isExecutingCode}
+                result={message.metadata?.codeExecutionResult}
+              />
+            )}
+
           {/* User message bubble or assistant prose */}
           {isUser ? (
             <div className="inline-block rounded-2xl rounded-tr-sm bg-primary/10 px-4 py-3 text-[15px] text-foreground text-left">
@@ -371,7 +381,10 @@ const MessageItemComponent = ({
             </div>
           ) : (
             <div className="prose prose-sm dark:prose-invert max-w-none text-[15px]">
-              {message.isStreaming && !message.content.trim() && !message.metadata?.isSearching ? (
+              {message.isStreaming &&
+              !message.content.trim() &&
+              !message.metadata?.isSearching &&
+              !message.metadata?.isExecutingCode ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
                   <span className="text-sm">Thinking...</span>
