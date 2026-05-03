@@ -441,10 +441,10 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
               'focus-visible:ring-0 focus-visible:outline-none',
               'placeholder:text-muted-foreground/60',
               'disabled:opacity-50 disabled:cursor-not-allowed',
+              'min-h-[52px] max-h-[200px]',
             )}
             rows={1}
             aria-label="Message input"
-            style={{ minHeight: '52px', maxHeight: '200px' }}
           />
         </div>
 
