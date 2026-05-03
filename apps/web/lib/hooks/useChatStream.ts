@@ -9,6 +9,7 @@ interface SendMessageOptions {
   maxTokens?: number;
   attachments?: Attachment[];
   conversationId?: string;
+  webSearch?: boolean;
 }
 
 interface UseChatStreamReturn {
@@ -184,6 +185,7 @@ export function useChatStream(): UseChatStreamReturn {
             stream: true,
             temperature: options.temperature,
             max_tokens: options.maxTokens,
+            web_search: options.webSearch || undefined,
           }),
           signal: abortControllerRef.current.signal,
         });
