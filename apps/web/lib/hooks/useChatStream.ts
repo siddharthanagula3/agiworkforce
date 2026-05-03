@@ -194,6 +194,7 @@ export function useChatStream(): UseChatStreamReturn {
             web_fetch: options.webFetch || undefined,
             code_execution: options.codeExecution || undefined,
             thinking_mode: options.thinkingEnabled || undefined,
+            use_prompt_cache: true,
           }),
           signal: abortControllerRef.current.signal,
         });
@@ -297,7 +298,7 @@ export function useChatStream(): UseChatStreamReturn {
 
               // Handle server-managed tool status indicators
               const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
-              if (toolStatus?.status === 'searching') {
+              if (toolStatus?.status === 'searching' || toolStatus?.status === 'fetching') {
                 setSearching(assistantMessageId, true);
               } else if (toolStatus?.status === 'executing') {
                 setExecutingCode(assistantMessageId, true);
