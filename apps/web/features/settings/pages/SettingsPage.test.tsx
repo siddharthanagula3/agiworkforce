@@ -235,7 +235,7 @@ describe('SettingsPage', () => {
     expect(screen.getAllByText('Appearance').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Chat').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Models').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Account').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Privacy & Data').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders Appearance tab content', () => {
@@ -255,8 +255,8 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Models')).toBeDefined();
   });
 
-  it('renders Account tab content', () => {
+  it('renders Privacy & Data tab content', () => {
     render(<SettingsPage />);
-    expect(screen.getByText('Account')).toBeDefined();
+    expect(screen.getByText('Privacy & Data')).toBeDefined();
   });
 });
