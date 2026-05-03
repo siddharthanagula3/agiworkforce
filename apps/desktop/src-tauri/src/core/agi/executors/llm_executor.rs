@@ -602,15 +602,15 @@ mod tests {
 
         assert_eq!(
             executor.default_model_for_provider(Provider::Anthropic),
-            "gpt-5.4-nano"
+            "gpt-5.4-mini"
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::OpenAI),
-            "gpt-5.4-nano"
+            "gpt-5.4-mini"
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::Google),
-            "gpt-5.4-nano"
+            "gpt-5.4-mini"
         );
     }
 

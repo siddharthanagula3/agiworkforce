@@ -123,23 +123,28 @@ mod h13_resolve_model_for_strategy {
     }
 
     #[test]
-    fn auto_economy_medium_tokens_selects_deepseek() {
+    fn auto_economy_medium_tokens_selects_managed_chat_model() {
+        // 1000 ≤ tokens < 8000 → ManagedCloud "chat" task → models.json picks
+        // the current managed-chat default (gpt-5.4-mini in this catalog).
         let model = LLMRouter::resolve_model_for_strategy(
             RoutingStrategy::AutoEconomy,
             2000,
             "fallback-model",
         );
-        assert_eq!(model, "deepseek-chat");
+        assert_eq!(model, "gpt-5.4-mini");
     }
 
     #[test]
     fn auto_economy_large_tokens_uses_long_context_catalog_model() {
+        // 8000 ≤ tokens → ManagedCloud "long_context" task → models.json
+        // picks the current long-context default (Gemini for the 1M-token
+        // window).
         let model = LLMRouter::resolve_model_for_strategy(
             RoutingStrategy::AutoEconomy,
             10000,
             "fallback-model",
         );
-        assert_eq!(model, "deepseek-chat");
+        assert_eq!(model, "gemini-3.1-pro-preview");
     }
 
     #[test]
@@ -226,9 +231,10 @@ mod h13_resolve_model_for_strategy {
     #[test]
     fn auto_economy_boundary_at_1000() {
         // token_count == 1000 should NOT pick the fast OpenAI economy model (< 1000)
+        // Crosses into ManagedCloud "chat" task — current catalog default.
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 1000, "fallback");
-        assert_eq!(model, "deepseek-chat");
+        assert_eq!(model, "gpt-5.4-mini");
     }
 
     #[test]
@@ -236,7 +242,7 @@ mod h13_resolve_model_for_strategy {
         // token_count == 8000 should switch to the long-context catalog default.
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 8000, "fallback");
-        assert_eq!(model, "deepseek-chat");
+        assert_eq!(model, "gemini-3.1-pro-preview");
     }
 
     #[test]
