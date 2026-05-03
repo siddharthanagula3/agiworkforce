@@ -65,9 +65,33 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.target }}
 
+      # Linux-only: install ALSA + udev dev headers so cpal (voice) and any
+      # other linux-system-lib crate can compile. Required because the cli
+      # binary statically links cpal regardless of feature flags.
+      - name: Install linux system deps (libasound2-dev, libudev-dev)
+        if: runner.os == 'Linux' && !matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+
       - name: Install cross (for aarch64 linux)
         if: matrix.cross
         run: cargo install cross --locked
+
+      # Cross runs builds in a Docker container — system deps need to be
+      # installed inside the container via Cross.toml's pre-build hook.
+      # Generate it on the fly (kept out of git so the file doesn't apply
+      # to local cargo invocations).
+      - name: Configure cross with linux deps
+        if: matrix.cross
+        run: |
+          cat > Cross.toml <<'EOF'
+          [target.aarch64-unknown-linux-gnu]
+          pre-build = [
+              "dpkg --add-architecture $CROSS_DEB_ARCH",
+              "apt-get update && apt-get install -y libasound2-dev:$CROSS_DEB_ARCH libudev-dev:$CROSS_DEB_ARCH pkg-config",
+          ]
+          EOF
 
       - name: Build (cross)
         if: matrix.cross
