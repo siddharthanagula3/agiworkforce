@@ -1,21 +1,30 @@
 //! MCP (Model Context Protocol) client.
 //!
-//! Two transports supported today:
+//! Three transports supported today:
 //!   * `stdio` — child process speaking JSON-RPC over stdin/stdout (legacy).
 //!   * `sse`   — long-lived Server-Sent Events stream + POST for outbound
 //!               requests. Sprint B1.
+//!   * `http`  — Streamable HTTP per the MCP 2025-06-18 spec: POST per
+//!               request, body returned as JSON or SSE-upgrade response,
+//!               sticky `Mcp-Session-Id`, optional GET to subscribe to
+//!               server-pushed notifications. Sprint B2.
 //!
 //! Servers are configured in ~/.agiworkforce/config.toml or .mcp.json.
-//! Sprint B2 will add Streamable HTTP and B3 will add OAuth.
+//! Sprint B3 will add OAuth on top of the `http` transport.
 
 use anyhow::{bail, Context, Result};
-use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
+
+mod http;
+mod sse;
+
+use http::{connect_http, send_request_http};
+use sse::connect_sse;
 
 // ---------------------------------------------------------------------------
 // Config types
@@ -26,14 +35,15 @@ use tokio::sync::mpsc;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum McpServerConfig {
-    /// New explicit-transport shape (`transport = "stdio" | "sse"`).
+    /// New explicit-transport shape (`transport = "stdio" | "sse" | "http"`).
     Tagged(McpTransport),
     /// Legacy shape: `{command, args, env}` at top level → `Stdio`.
     Legacy(LegacyStdioConfig),
 }
 
-/// Discriminated transport union. Future B2 / B3 sprints add `Http` and
-/// `Oauth` variants here.
+/// Discriminated transport union. The `Http` variant carries an `auth`
+/// placeholder slot that Sprint B3 will replace with an `McpOAuthConfig`
+/// (PKCE flow + token storage).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "transport", rename_all = "lowercase")]
 pub enum McpTransport {
@@ -49,7 +59,16 @@ pub enum McpTransport {
         #[serde(default)]
         headers: HashMap<String, String>,
     },
-    // Http and Oauth come in B2 / B3.
+    Http {
+        url: String,
+        #[serde(default)]
+        headers: HashMap<String, String>,
+        /// OAuth configuration slot — present so configs round-trip even
+        /// before B3 lands. B3 will swap `serde_json::Value` for a typed
+        /// `McpOAuthConfig`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        auth: Option<serde_json::Value>,
+    },
 }
 
 /// Legacy {command, args, env} shape with no `transport` field. Collapses
@@ -102,12 +121,22 @@ impl McpServerConfig {
         })
     }
 
+    /// Convenience constructor for Streamable HTTP configs.
+    pub fn http(url: impl Into<String>, headers: HashMap<String, String>) -> Self {
+        McpServerConfig::Tagged(McpTransport::Http {
+            url: url.into(),
+            headers,
+            auth: None,
+        })
+    }
+
     /// Short string for logging.
     #[allow(dead_code)]
     pub fn transport_kind(&self) -> &'static str {
         match self.as_transport() {
             McpTransport::Stdio { .. } => "stdio",
             McpTransport::Sse { .. } => "sse",
+            McpTransport::Http { .. } => "http",
         }
     }
 }
@@ -183,12 +212,12 @@ impl McpTimeouts {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
-struct JsonRpcRequest {
-    jsonrpc: String,
-    id: u64,
-    method: String,
+pub(super) struct JsonRpcRequest {
+    pub(super) jsonrpc: String,
+    pub(super) id: u64,
+    pub(super) method: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    params: Option<serde_json::Value>,
+    pub(super) params: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -270,18 +299,18 @@ fn kill_process_gracefully_sync(child: &mut Child) {
 // ---------------------------------------------------------------------------
 
 /// A running MCP server connection. Wraps either a child process (stdio) or
-/// a long-lived SSE stream + reqwest client (sse).
+/// a long-lived SSE/HTTP transport.
 pub struct McpConnection {
-    server_name: String,
-    config: McpServerConfig,
-    inner: McpTransportConn,
-    request_id: u64,
-    timeouts: McpTimeouts,
+    pub(super) server_name: String,
+    pub(super) config: McpServerConfig,
+    pub(super) inner: McpTransportConn,
+    pub(super) request_id: u64,
+    pub(super) timeouts: McpTimeouts,
 }
 
 /// Transport-specific connection state. Per-variant data is held inline
 /// here; shared JSON-RPC bookkeeping lives on `McpConnection`.
-enum McpTransportConn {
+pub(super) enum McpTransportConn {
     Stdio {
         child: Child,
     },
@@ -298,6 +327,22 @@ enum McpTransportConn {
         rx: mpsc::Receiver<serde_json::Value>,
         /// Optional session id from `Mcp-Session-Id` header. Forwarded on
         /// outbound POSTs for sticky session routing.
+        session_id: Option<String>,
+    },
+    Http {
+        /// Endpoint URL — used as both POST target and (optional) GET
+        /// target for the server-push notification stream.
+        url: String,
+        headers: HashMap<String, String>,
+        client: reqwest::Client,
+        /// Receiver for server-pushed notifications (only populated if the
+        /// server returned `text/event-stream` on the GET). `None` means
+        /// pure request/response mode (POST + JSON body or POST +
+        /// SSE-upgrade body).
+        #[allow(dead_code)]
+        notification_rx: Option<mpsc::Receiver<serde_json::Value>>,
+        /// Sticky session id from `Mcp-Session-Id` header — captured on
+        /// every response and echoed on every subsequent request.
         session_id: Option<String>,
     },
 }
@@ -332,6 +377,9 @@ impl McpConnection {
             McpTransport::Sse { url, headers } => {
                 connect_sse(name, &url, &headers, timeouts, config.clone()).await
             }
+            McpTransport::Http { url, headers, .. } => {
+                connect_http(name, &url, &headers, timeouts, config.clone()).await
+            }
         }
     }
 
@@ -361,7 +409,7 @@ impl McpConnection {
     }
 
     /// Send the MCP initialize handshake.
-    async fn initialize(&mut self) -> Result<()> {
+    pub(super) async fn initialize(&mut self) -> Result<()> {
         let timeout = self.timeouts.initialize;
         let response = self
             .send_request(
@@ -547,6 +595,19 @@ impl McpConnection {
                 // (closing the prior SSE channel / killing the prior child).
                 Ok(())
             }
+            McpTransport::Http { url, headers, .. } => {
+                let mut fresh = connect_http(
+                    &self.server_name,
+                    &url,
+                    &headers,
+                    self.timeouts.clone(),
+                    self.config.clone(),
+                )
+                .await?;
+                std::mem::swap(&mut self.inner, &mut fresh.inner);
+                self.request_id = 0;
+                Ok(())
+            }
         }
     }
 
@@ -562,6 +623,15 @@ impl McpConnection {
             || msg.contains("SSE channel closed")
             || msg.contains("SSE: POST")
             || msg.contains("SSE GET failed")
+            // HTTP transport patterns:
+            || msg.contains("[mcp http] POST timeout")
+            || msg.contains("[mcp http] sse-upgrade idle timeout")
+            || msg.contains("[mcp http] sse-upgrade read error")
+            || msg.contains("[mcp http] sse-upgrade closed before response")
+            || msg.contains("Connection refused")
+            || msg.contains("non-success response 502")
+            || msg.contains("non-success response 503")
+            || msg.contains("non-success response 504")
     }
 
     /// Send a JSON-RPC request and wait for response. Dispatches on transport.
@@ -722,6 +792,25 @@ impl McpConnection {
                     )),
                 }
             }
+            McpTransportConn::Http {
+                url,
+                headers,
+                client,
+                session_id,
+                ..
+            } => {
+                send_request_http(
+                    url,
+                    headers,
+                    client,
+                    session_id,
+                    &request,
+                    timeout,
+                    &server_name,
+                    &method_name,
+                )
+                .await
+            }
         }
     }
 
@@ -775,15 +864,40 @@ impl McpConnection {
                     );
                 }
             }
+            McpTransportConn::Http {
+                url,
+                headers,
+                client,
+                session_id,
+                ..
+            } => {
+                let mut req_builder = client
+                    .post(url.as_str())
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json, text/event-stream")
+                    .json(&notification);
+                for (k, v) in headers.iter() {
+                    req_builder = req_builder.header(k, v);
+                }
+                if let Some(sid) = session_id.as_deref() {
+                    req_builder = req_builder.header("Mcp-Session-Id", sid);
+                }
+                if let Err(e) = req_builder.send().await {
+                    eprintln!(
+                        "[{}] HTTP: notification '{}' POST failed: {}",
+                        self.server_name, method, e
+                    );
+                }
+            }
         }
 
         Ok(())
     }
 
     /// Tear down the current transport. For stdio, kill the child process.
-    /// For SSE, dropping the connection is enough — the background task
-    /// exits when its mpsc sender is dropped (and the bytes_stream is
-    /// dropped along with the response handle).
+    /// For SSE/HTTP, dropping the connection is enough — background tasks
+    /// exit when their mpsc senders are dropped (and bytes_streams are
+    /// dropped along with their response handles).
     async fn kill_transport(&mut self) {
         match &mut self.inner {
             McpTransportConn::Stdio { child } => {
@@ -799,6 +913,11 @@ impl McpConnection {
                 // No explicit cleanup — the SSE forwarding task exits when
                 // its mpsc sender is dropped (which happens when this
                 // McpConnection is dropped or `inner` is overwritten).
+            }
+            McpTransportConn::Http { .. } => {
+                // Same as SSE: the optional notification forwarding task
+                // (if any) exits when its mpsc sender is dropped. There's
+                // no long-lived process or socket to tear down.
             }
         }
     }
@@ -838,6 +957,10 @@ impl Drop for McpConnection {
                 // SSE forwarding task exits naturally when the receiver is
                 // dropped here.
             }
+            McpTransportConn::Http { .. } => {
+                // Same as SSE — the (optional) notification forwarding task
+                // exits when its sender is dropped along with this conn.
+            }
         }
     }
 }
@@ -846,7 +969,7 @@ impl Drop for McpConnection {
 /// or an array of responses, extract the one matching `expected_id`.
 /// Returns `Ok(Some(result))` if matched, `Ok(None)` if not in this frame,
 /// or `Err(...)` if the matched response carries a JSON-RPC error.
-fn extract_matching_response(
+pub(super) fn extract_matching_response(
     frame: &serde_json::Value,
     expected_id: u64,
     server_name: &str,
@@ -873,164 +996,12 @@ fn extract_matching_response(
 }
 
 // ---------------------------------------------------------------------------
-// SSE transport bringup
+// Shared helpers (used by sse.rs and http.rs)
 // ---------------------------------------------------------------------------
 
-/// Connect to an SSE-based MCP server.
-///
-/// Opens a long-lived GET request to `url` with `Accept: text/event-stream`,
-/// spawns a background task that parses SSE frames and forwards JSON-RPC
-/// payloads through an mpsc channel, then runs the standard `initialize`
-/// handshake.
-///
-/// SSE protocol detail: the official MCP "everything" server (and most
-/// reference implementations) emit an `event: endpoint` message early in
-/// the stream that carries the URL to POST outbound requests to. We honor
-/// that hint when present; otherwise we POST back to the same URL.
-async fn connect_sse(
-    name: &str,
-    url: &str,
-    headers: &HashMap<String, String>,
-    timeouts: McpTimeouts,
-    config: McpServerConfig,
-) -> Result<McpConnection> {
-    // Build the long-lived reqwest client. Do NOT set `.timeout()` here —
-    // the SSE GET stays open indefinitely and any per-request cap kills it.
-    // Per-call timeouts are applied via `tokio::time::timeout` in send_request.
-    let client = reqwest::Client::builder()
-        .build()
-        .context("build reqwest client")?;
-
-    let mut req = client.get(url);
-    for (k, v) in headers {
-        req = req.header(k, v);
-    }
-    req = req.header("Accept", "text/event-stream");
-
-    let resp = req
-        .send()
-        .await
-        .context(format!("[{}] SSE GET failed", name))?;
-    if !resp.status().is_success() {
-        bail!("[{}] SSE server returned {}", name, resp.status());
-    }
-
-    let session_id = resp
-        .headers()
-        .get("Mcp-Session-Id")
-        .and_then(|v| v.to_str().ok())
-        .map(String::from);
-
-    // Spawn a task that owns the stream and forwards parsed JSON-RPC frames
-    // (and endpoint hints) through channels.
-    let (tx, rx) = mpsc::channel::<serde_json::Value>(64);
-    let (endpoint_tx, mut endpoint_rx) = mpsc::channel::<String>(1);
-    let mut stream = resp.bytes_stream();
-    let server_name = name.to_string();
-    let base_url = url.to_string();
-    tokio::spawn(async move {
-        let mut buf: Vec<u8> = Vec::new();
-        let mut current_event: Option<String> = None;
-        while let Some(chunk) = stream.next().await {
-            let chunk = match chunk {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("[{}] SSE stream error: {}", server_name, e);
-                    break;
-                }
-            };
-            buf.extend_from_slice(&chunk);
-            // SSE frames are separated by "\n\n"; data lines start with "data: ".
-            while let Some(pos) = find_subsequence(&buf, b"\n\n") {
-                let frame = buf.drain(..pos + 2).collect::<Vec<u8>>();
-                let frame_str = String::from_utf8_lossy(&frame);
-                let mut data_buf = String::new();
-                for line in frame_str.lines() {
-                    if let Some(rest) = line.strip_prefix("event:") {
-                        current_event = Some(rest.trim().to_string());
-                    } else if let Some(rest) = line.strip_prefix("data:") {
-                        // SSE allows data fields to be split across multiple
-                        // `data:` lines — concatenate with newlines per spec.
-                        if !data_buf.is_empty() {
-                            data_buf.push('\n');
-                        }
-                        data_buf.push_str(rest.strip_prefix(' ').unwrap_or(rest));
-                    }
-                    // id:, retry:, comments (`:`-prefixed) are ignored.
-                }
-                if data_buf.is_empty() {
-                    current_event = None;
-                    continue;
-                }
-                // Handle endpoint hints from the server (MCP "everything"
-                // server pattern: `event: endpoint\ndata: /messages?...`).
-                if current_event.as_deref() == Some("endpoint") {
-                    let endpoint = resolve_endpoint(&base_url, data_buf.trim());
-                    let _ = endpoint_tx.try_send(endpoint);
-                    current_event = None;
-                    continue;
-                }
-                match serde_json::from_str::<serde_json::Value>(&data_buf) {
-                    Ok(v) => {
-                        if tx.send(v).await.is_err() {
-                            // Receiver dropped — connection closed.
-                            return;
-                        }
-                    }
-                    Err(e) => eprintln!(
-                        "[{}] SSE: invalid JSON in data frame: {} (payload: {})",
-                        server_name, e, data_buf
-                    ),
-                }
-                current_event = None;
-            }
-        }
-    });
-
-    // Wait briefly for an endpoint hint. Most MCP SSE servers emit it
-    // within a few hundred ms; if we time out, fall back to the original
-    // URL for outbound POSTs.
-    let post_url = match tokio::time::timeout(Duration::from_millis(500), endpoint_rx.recv()).await
-    {
-        Ok(Some(ep)) => ep,
-        _ => url.to_string(),
-    };
-
-    let mut conn = McpConnection {
-        server_name: name.to_string(),
-        config,
-        inner: McpTransportConn::Sse {
-            post_url,
-            headers: headers.clone(),
-            client,
-            rx,
-            session_id,
-        },
-        request_id: 0,
-        timeouts,
-    };
-
-    conn.initialize().await?;
-    Ok(conn)
-}
-
-/// Resolve the SSE-supplied endpoint hint against the original SSE URL.
-/// Hints may be absolute (`https://...`) or relative paths (`/messages?id=…`).
-fn resolve_endpoint(base_url: &str, hint: &str) -> String {
-    if hint.starts_with("http://") || hint.starts_with("https://") {
-        return hint.to_string();
-    }
-    // Relative — resolve against base URL's origin.
-    if let Ok(base) = reqwest::Url::parse(base_url) {
-        if let Ok(joined) = base.join(hint) {
-            return joined.into();
-        }
-    }
-    // Fallback: return hint as-is. Server will reject if malformed.
-    hint.to_string()
-}
-
-fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+/// Locate the first occurrence of `needle` in `haystack`.
+/// Used by SSE-frame splitters (b"\n\n" boundary detection).
+pub(super) fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|w| w == needle)
 }
 
