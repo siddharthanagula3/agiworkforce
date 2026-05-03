@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { AgentMode } from '@/components/UnifiedAgenticChat/AgentModeSwitcher';
+import type { AgentMode } from '@/features/chat/types/agentMode';
 
 interface ChatPreferencesState {
   agentMode: AgentMode;

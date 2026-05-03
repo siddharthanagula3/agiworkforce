@@ -27,7 +27,7 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 
 **Backend:** `services/api-gateway/` (Express v5.2, 14 routes, Fly.io ready) + `services/signaling-server/` (WebRTC, deployed Fly.io) + `supabase/` (17 migrations, us-east-2).
 **Shared TS packages:** `packages/chat` (canonical chat component), `packages/api`, `packages/types`, `packages/runtime`, `packages/utils`.
-**Active Rust crates:** 11 (down from 113 — see commit `ac59e09e`).
+**Active Rust crates:** 12 (down from 113 — see commit `ac59e09e`). Specifically: `agiworkforce-protocol`, `agiworkforce-sandbox-policy`, plus 10 transitive path-deps needed by protocol (`async-utils`, `execpolicy`, `network-proxy`, `utils-{absolute-path,cache,home-dir,image,rustls-provider,string,template}`).
 
 ## Pricing model (locked 2026-05-03)
 
