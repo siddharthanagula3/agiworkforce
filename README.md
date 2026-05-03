@@ -1,7 +1,13 @@
 # AGI Workforce
 
+[![CLI Release](https://img.shields.io/github/v/release/siddharthanagula3/agiworkforce?filter=v-cli-*&label=cli&color=blue)](https://github.com/siddharthanagula3/agiworkforce/releases)
+[![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
+[![Homebrew](https://img.shields.io/badge/brew-siddharthanagula3%2Ftap%2Fagiworkforce-orange)](https://github.com/siddharthanagula3/homebrew-tap)
+
 Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.js web at agiworkforce.com/chat, one Expo mobile companion, one Rust CLI, plus VS Code and Chrome extensions — all wired into the same chat layer with **25 LLM providers**, MCP, browser automation, and computer-use.
 
+> **CLI v1.0 SHIPPED** (2026-05-03). Install: `brew install siddharthanagula3/tap/agiworkforce` or see [Quick start](#quick-start) below.
+>
 > **For contributors and AI agents:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the single source of truth.
 > **For builds and deployment:** [BUILD.md](BUILD.md).
 > **For PR conventions:** [CONTRIBUTING.md](CONTRIBUTING.md).
