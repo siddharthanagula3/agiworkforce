@@ -22,14 +22,22 @@ if [ ! -d "$TAP_DIR" ]; then
 fi
 
 echo "→ Computing sha256 for each platform binary..."
-declare -A SHAS
-for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
-  url="$RELEASE_BASE/agiworkforce-$platform.tar.gz"
-  echo "  fetching $url"
-  sha=$(curl -fsSL "$url" | sha256sum | cut -d' ' -f1)
-  SHAS[$platform]="$sha"
-  echo "    sha256: $sha"
-done
+# Use plain variables instead of `declare -A` — macOS ships bash 3.2 which
+# lacks associative arrays. linux-arm64 was dropped from the v1.0 matrix
+# (cross-compile openssl issue); add it back here when v1.1 ships.
+fetch_sha() {
+  local platform="$1"
+  local url="$RELEASE_BASE/agiworkforce-$platform.tar.gz"
+  echo "  fetching $url" >&2
+  curl -fsSL "$url" | shasum -a 256 | cut -d' ' -f1
+}
+
+SHA_DARWIN_ARM64=$(fetch_sha darwin-arm64)
+echo "    darwin-arm64: $SHA_DARWIN_ARM64"
+SHA_DARWIN_X64=$(fetch_sha darwin-x64)
+echo "    darwin-x64:   $SHA_DARWIN_X64"
+SHA_LINUX_X64=$(fetch_sha linux-x64)
+echo "    linux-x64:    $SHA_LINUX_X64"
 
 echo ""
 echo "→ Generating $TAP_DIR/Formula/agiworkforce.rb..."
@@ -47,21 +55,19 @@ class Agiworkforce < Formula
   on_macos do
     if Hardware::CPU.arm?
       url "$RELEASE_BASE/agiworkforce-darwin-arm64.tar.gz"
-      sha256 "${SHAS[darwin-arm64]}"
+      sha256 "$SHA_DARWIN_ARM64"
     else
       url "$RELEASE_BASE/agiworkforce-darwin-x64.tar.gz"
-      sha256 "${SHAS[darwin-x64]}"
+      sha256 "$SHA_DARWIN_X64"
     end
   end
 
+  # linux-arm64 omitted in v1.0 (cross-compile openssl-sys not yet wired —
+  # users on arm64 Linux can run: cargo install --git
+  # https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli)
   on_linux do
-    if Hardware::CPU.arm?
-      url "$RELEASE_BASE/agiworkforce-linux-arm64.tar.gz"
-      sha256 "${SHAS[linux-arm64]}"
-    else
-      url "$RELEASE_BASE/agiworkforce-linux-x64.tar.gz"
-      sha256 "${SHAS[linux-x64]}"
-    end
+    url "$RELEASE_BASE/agiworkforce-linux-x64.tar.gz"
+    sha256 "$SHA_LINUX_X64"
   end
 
   def install
