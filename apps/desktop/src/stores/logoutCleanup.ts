@@ -30,20 +30,14 @@ import { useProjectStore } from './projectStore';
 import { useSettingsStore } from './settingsStore';
 import { useTerminalStore } from './terminalStore';
 import { useUnifiedChatStore } from './unifiedChatStore';
-import { useAutomationStore } from './automationStore';
-import { useOnboardingStore } from './onboardingStore';
-import { useSettingsV2Store } from './settingsV2Store';
-import { useChatMemoryStore } from './chatMemoryStore';
-import { useCheckpointStore } from './checkpointStore';
+// Removed 2026-05-03: stores deleted as dead code (no external consumers).
+// If a future feature re-introduces them, re-add the cleanup hook here.
+//   automationStore, onboardingStore, settingsV2Store, chatMemoryStore,
+//   checkpointStore, gitStore, hooksStore, intentStore, knowledgeStore,
+//   llmConfigStore, visionStore
 import { useCodingCheckpointStore } from './codingCheckpointStore';
-import { useGitStore } from './gitStore';
-import { useHooksStore } from './hooksStore';
-import { useIntentStore } from './intentStore';
-import { useKnowledgeStore } from './knowledgeStore';
-import { useLLMConfigStore } from './llmConfigStore';
 import { useProjectMemoryStore } from './projectMemoryStore';
 import { useSecurityStore } from './securityStore';
-import { useVisionStore } from './visionStore';
 
 /**
  * Clears all store state on logout.
@@ -64,9 +58,7 @@ export function cleanupAllStoresOnLogout(): void {
     const terminalStore = useTerminalStore.getState();
     terminalStore.reset();
 
-    // Automation store has state that should be reset
-    const automationStore = useAutomationStore.getState();
-    automationStore.reset();
+    // (automation store removed 2026-05-03 — was dead code)
 
     // HIGH-001/HIGH-002: Connectors store — clear OAuth timers and state
     const connectorsStore = useConnectorsStore.getState();
@@ -164,34 +156,17 @@ export function cleanupAllStoresOnLogout(): void {
       error: null,
     });
 
-    // Onboarding store - clear session-specific state on logout
-    useOnboardingStore.setState({
-      session: null,
-      firstRunSession: null,
-      error: null,
-    });
-
-    // Settings V2 store - clear cached settings (will reload from DB on next login)
-    useSettingsV2Store.setState({
-      settings: {},
-      appSettings: null,
-      error: null,
-    });
+    // (onboardingStore + settingsV2Store removed 2026-05-03 — were dead code)
 
     // 4. Clean up feature stores — use safe setState to initial values.
     // These stores may not expose a reset() method, so we set state directly.
+    // Note: 8 of the original 11 feature stores (chatMemory, checkpoint, git,
+    // hooks, intent, knowledge, llmConfig, vision) were deleted as dead code
+    // on 2026-05-03; only the 3 still-active stores remain in the cleanup list.
     const featureStores = [
-      useChatMemoryStore,
-      useCheckpointStore,
       useCodingCheckpointStore,
-      useGitStore,
-      useHooksStore,
-      useIntentStore,
-      useKnowledgeStore,
-      useLLMConfigStore,
       useProjectMemoryStore,
       useSecurityStore,
-      useVisionStore,
     ] as const;
 
     for (const store of featureStores) {
