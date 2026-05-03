@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
-import { Palette, MessageSquare, Server, Shield, Activity } from 'lucide-react';
+import { Palette, MessageSquare, Server, Shield, Activity, Database } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { AppearanceSettings } from '@/components/settings/AppearanceSettings';
 import { ChatSettings } from '@/components/settings/ChatSettings';
@@ -301,6 +301,54 @@ function AccountTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Privacy & Data Tab — FIX-042 data residency + GDPR rights (FIX-041)
+// ---------------------------------------------------------------------------
+
+function PrivacyDataTab() {
+  return (
+    <div className="space-y-4">
+      {/* Data Residency */}
+      <Card className="border-white/[0.06] bg-white/[0.03] backdrop-blur-xl">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Database className="h-5 w-5 text-muted-foreground" />
+            Data Residency
+          </CardTitle>
+          <CardDescription>Where your data is stored</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <div className="rounded-lg border border-border/50 p-3 space-y-2">
+            <p>
+              <span className="font-medium text-foreground">Cloud Mode:</span> Conversations and
+              settings are stored in{' '}
+              <span className="font-medium text-foreground">
+                Supabase (AWS us-east-2 · Ohio, USA)
+              </span>
+              .
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Local Mode:</span> All data stays on
+              your device. Nothing is transmitted to our servers.
+            </p>
+          </div>
+          <p className="text-xs">
+            <span className="font-medium text-amber-400">EU Residents:</span> We do not currently
+            offer EU-region data storage. If you require data to remain within the EEA, use Local
+            Mode until an EU region is available.{' '}
+            <a href="/privacy#7" className="text-blue-400 hover:underline">
+              Learn more in our Privacy Policy.
+            </a>
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* GDPR / CCPA rights + Export + Delete */}
+      <AccountTab />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Tab config
 // ---------------------------------------------------------------------------
 
@@ -308,7 +356,7 @@ const TABS = [
   { value: 'appearance', label: 'Appearance', icon: Palette },
   { value: 'chat', label: 'Chat', icon: MessageSquare },
   { value: 'models', label: 'Models', icon: Server },
-  { value: 'account', label: 'Account', icon: Shield },
+  { value: 'privacy', label: 'Privacy & Data', icon: Shield },
 ] as const;
 
 type TabValue = (typeof TABS)[number]['value'];
@@ -342,7 +390,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-4 text-xs sm:text-sm">
           {TABS.map(({ value, label, icon: Icon }) => (
             <TabsTrigger
               key={value}
@@ -367,8 +415,8 @@ export default function SettingsPage() {
           <ModelsTab />
         </TabsContent>
 
-        <TabsContent value="account" className="mt-6">
-          <AccountTab />
+        <TabsContent value="privacy" className="mt-6">
+          <PrivacyDataTab />
         </TabsContent>
       </Tabs>
     </div>
