@@ -24,6 +24,7 @@ import type { Components } from 'react-markdown';
 import { ReasoningAccordion } from './ReasoningAccordion';
 import { ToolTimeline } from './ToolTimeline';
 import { SearchingIndicator, CompactSearchResults } from '../search/SearchResults';
+import { CitationFooter, type Citation } from './InlineCitation';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -384,6 +385,23 @@ const MessageItemComponent = ({
               )}
             </div>
           )}
+
+          {/* Citation footer — shown after content when web search results are available */}
+          {!isUser &&
+            !message.isStreaming &&
+            message.metadata?.searchResults &&
+            message.metadata.searchResults.length > 0 && (
+              <CitationFooter
+                citations={message.metadata.searchResults.map(
+                  (r, i): Citation => ({
+                    index: i + 1,
+                    url: r.url,
+                    title: r.title,
+                    snippet: r.snippet || undefined,
+                  }),
+                )}
+              />
+            )}
 
           {/* Tool timeline — shown after content for assistant messages */}
           {!isUser &&
