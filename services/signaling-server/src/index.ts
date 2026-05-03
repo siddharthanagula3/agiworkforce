@@ -713,13 +713,44 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 // =============================================================================
 
 wss.on('connection', (socket, request) => {
-  // SECURITY: Validate WebSocket Origin header to prevent cross-site WebSocket hijacking
+  // SECURITY: Validate WebSocket Origin header to prevent cross-site WebSocket hijacking.
+  //
+  // SIG-1 (audit 2026-05-03): the previous implementation allowed
+  // connections with no Origin header unconditionally, on the
+  // assumption that "non-browser clients (desktop app) don't send
+  // one." That assumption is too generous — any SSRF vector or
+  // misconfigured mobile HTTP library can omit Origin to skip the
+  // check. We now require either:
+  //   1. A valid (allowlisted) Origin header, OR
+  //   2. A no-Origin connection that presents the server-side
+  //      `x-signaling-internal-secret` header equal to
+  //      SIGNALING_INTERNAL_SECRET. The desktop and mobile native
+  //      clients can send this; arbitrary attackers cannot.
+  // If allowedOrigins is empty (dev), Origin checking is skipped
+  // entirely as before.
   const origin = request.headers['origin'];
-  // Allow connections with no origin (non-browser clients like desktop app)
-  if (origin && allowedOrigins.length > 0 && !allowedOrigins.includes(origin)) {
-    socket.close(1008, 'forbidden_origin');
-    logger.warn({ origin }, 'WebSocket connection rejected: forbidden origin');
-    return;
+  if (allowedOrigins.length > 0) {
+    if (origin) {
+      if (!allowedOrigins.includes(origin)) {
+        socket.close(1008, 'forbidden_origin');
+        logger.warn({ origin }, 'WebSocket connection rejected: forbidden origin');
+        return;
+      }
+    } else {
+      const internalSecret = request.headers['x-signaling-internal-secret'];
+      if (
+        !SIGNALING_SECRET ||
+        typeof internalSecret !== 'string' ||
+        internalSecret !== SIGNALING_SECRET
+      ) {
+        socket.close(1008, 'origin_required');
+        logger.warn(
+          { ip: request.socket.remoteAddress },
+          'WebSocket no-Origin connection rejected: missing internal secret',
+        );
+        return;
+      }
+    }
   }
 
   // Reject connections during shutdown
@@ -1320,11 +1351,34 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
 
   logger.debug({ correlationId, kind: message.kind, from: client.role }, 'Forwarding signal');
 
+  // SIG-2 (audit 2026-05-03): for `control` signals we re-parse the
+  // payload through the strict zod schema before forwarding so the
+  // peer only ever sees a payload of the schema-permitted shape.
+  // SDP / ICE payloads are forwarded through `validateSignalPayload`
+  // earlier in the message-handling pipeline (which only checks
+  // structural validity, not the exact field set), so the
+  // additional re-parse here closes the gap where a structurally
+  // valid but semantically dangerous control object could pass
+  // through to the peer.
+  let payloadToForward: unknown = message.payload;
+  if (message.kind === 'control') {
+    const reparsed = controlPayloadSchema.safeParse(message.payload);
+    if (!reparsed.success) {
+      socket.send(JSON.stringify({ type: 'error', error: 'invalid_control_payload' }));
+      logger.warn(
+        { correlationId, issues: reparsed.error.issues },
+        'Refusing to forward malformed control payload',
+      );
+      return;
+    }
+    payloadToForward = reparsed.data;
+  }
+
   notifyParticipant(peer, {
     type: 'signal',
     from: client.role,
     kind: message.kind,
-    payload: message.payload,
+    payload: payloadToForward,
   });
 }
 
