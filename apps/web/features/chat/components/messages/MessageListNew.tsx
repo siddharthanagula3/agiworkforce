@@ -159,10 +159,7 @@ function CodeBlock({ className, children }: { className?: string; children: Reac
               }
               return (
                 <div key={idx} className={cn('flex', color)} style={{ backgroundColor: bg }}>
-                  <span
-                    className="select-none pr-4 text-right text-zinc-600"
-                    style={{ minWidth: '2.5em' }}
-                  >
+                  <span className="min-w-[2.5em] select-none pr-4 text-right text-zinc-600">
                     {idx + 1}
                   </span>
                   <span className="flex-1 whitespace-pre">{line}</span>
