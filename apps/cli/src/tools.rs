@@ -218,6 +218,21 @@ async fn execute_read_file(args: &HashMap<String, String>) -> Result<ToolResult>
         }
     };
 
+    // CLI-1 (audit 2026-05-03): without this gate the LLM could read
+    // arbitrary files reachable by the process — `~/.ssh/id_rsa`,
+    // `~/.agiworkforce/auth.json`, `/etc/shadow`. Match the same
+    // project-root containment that `execute_write_file` already enforces.
+    let validated_path = match validate_file_path(path) {
+        Ok(p) => p,
+        Err(e) => {
+            return Ok(ToolResult {
+                tool_name: "read_file".to_string(),
+                success: false,
+                output: format!("Refusing to read outside project: {}", e),
+            });
+        }
+    };
+
     let start_line: Option<usize> = args.get("start_line").and_then(|s| s.parse().ok());
     let end_line: Option<usize> = args.get("end_line").and_then(|s| s.parse().ok());
 
@@ -229,7 +244,7 @@ async fn execute_read_file(args: &HashMap<String, String>) -> Result<ToolResult>
     };
     print_tool_status("read_file", &range_label);
 
-    let file_path = Path::new(path);
+    let file_path = validated_path.as_path();
     if !file_path.exists() {
         return Ok(ToolResult {
             tool_name: "read_file".to_string(),
@@ -637,9 +652,24 @@ async fn execute_search_files(args: &HashMap<String, String>) -> Result<ToolResu
 
     let path = args.get("path").map(|s| s.as_str()).unwrap_or(".");
 
+    // CLI-2 (audit 2026-05-03): without path validation, an LLM-supplied
+    // `path = ../../` searches outside the project root.
+    let validated_path = match validate_file_path(path) {
+        Ok(p) => p,
+        Err(e) => {
+            return Ok(ToolResult {
+                tool_name: "search_files".to_string(),
+                success: false,
+                output: format!("Refusing to search outside project: {}", e),
+            });
+        }
+    };
+
     print_tool_status("search_files", &format!("Search({}, {})", pattern, path));
 
-    // Use grep -rn for recursive search
+    // Use grep -rn for recursive search.
+    // CLI-2: pass `--` before the pattern so grep can't interpret an
+    // attacker-supplied "-e ..." or "--exec=..." as a grep flag.
     let result = tokio::time::timeout(
         COMMAND_TIMEOUT,
         Command::new("grep")
@@ -647,8 +677,9 @@ async fn execute_search_files(args: &HashMap<String, String>) -> Result<ToolResu
             .arg("--include=*")
             .arg("-m")
             .arg("200") // limit matches per file
+            .arg("--")
             .arg(pattern)
-            .arg(path)
+            .arg(&validated_path)
             .output(),
     )
     .await;
@@ -1980,6 +2011,21 @@ async fn execute_grep_files(args: &HashMap<String, String>, quiet: bool) -> Resu
         }
     };
     let path = args.get("path").map(|s| s.as_str()).unwrap_or(".");
+
+    // CLI-2 (audit 2026-05-03): same project-root containment as
+    // execute_search_files. Without this, an LLM-supplied
+    // `path = ../../` lets grep walk outside the project.
+    let validated_path = match validate_file_path(path) {
+        Ok(p) => p,
+        Err(e) => {
+            return Ok(ToolResult {
+                tool_name: "grep_files".into(),
+                success: false,
+                output: format!("Refusing to grep outside project: {}", e),
+            });
+        }
+    };
+
     let include = args.get("include");
     if !quiet {
         print_tool_status("grep_files", &format!("/{}/{}", pattern, path));
@@ -1992,7 +2038,8 @@ async fn execute_grep_files(args: &HashMap<String, String>, quiet: bool) -> Resu
     if let Some(g) = include {
         cmd.arg("--glob").arg(g);
     }
-    cmd.arg(pattern).arg(path);
+    // CLI-2: `--` separator prevents flag-injection via crafted patterns.
+    cmd.arg("--").arg(pattern).arg(&validated_path);
     match tokio::time::timeout(COMMAND_TIMEOUT, cmd.output()).await {
         Ok(Ok(o)) => {
             let stdout = String::from_utf8_lossy(&o.stdout).to_string();
@@ -2015,7 +2062,11 @@ async fn execute_grep_files(args: &HashMap<String, String>, quiet: bool) -> Resu
         }
         Ok(Err(_)) => {
             let mut fb = Command::new("grep");
-            fb.arg("-rn").arg("--max-count=100").arg(pattern).arg(path);
+            fb.arg("-rn")
+                .arg("--max-count=100")
+                .arg("--")
+                .arg(pattern)
+                .arg(&validated_path);
             match fb.output().await {
                 Ok(o) => Ok(ToolResult {
                     tool_name: "grep_files".into(),
