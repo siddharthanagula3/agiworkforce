@@ -2,10 +2,10 @@
 
 import dynamic from 'next/dynamic';
 
-const ChatPage = dynamic(() => import('@features/chat/pages/ChatInterface'), {
+const WebChatPage = dynamic(() => import('@features/chat/pages/WebChatPage'), {
   ssr: false,
 });
 
 export default function Page() {
-  return <ChatPage />;
+  return <WebChatPage />;
 }
