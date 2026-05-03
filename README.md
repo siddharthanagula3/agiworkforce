@@ -1,7 +1,7 @@
 # AGI Workforce
 
 [![CLI Release](https://img.shields.io/github/v/release/siddharthanagula3/agiworkforce?filter=v-cli-*&label=cli&color=blue)](https://github.com/siddharthanagula3/agiworkforce/releases)
-[![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Homebrew](https://img.shields.io/badge/brew-siddharthanagula3%2Ftap%2Fagiworkforce-orange)](https://github.com/siddharthanagula3/homebrew-tap)
 
 Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.js web at agiworkforce.com/chat, one Expo mobile companion, one Rust CLI, plus VS Code and Chrome extensions — all wired into the same chat layer with **25 LLM providers**, MCP, browser automation, and computer-use.
@@ -108,7 +108,8 @@ cargo run -p agiworkforce-cli -- exec "hello"
 
 ## License
 
-PROPRIETARY. See [LICENSE](LICENSE).
+The CLI (`apps/cli`) is licensed under [Apache-2.0](LICENSE).
+Other surfaces (desktop, web, mobile, extensions) remain proprietary at this time. Per-surface license headers will be added as each surface stabilizes.
 
 ## Status
 
