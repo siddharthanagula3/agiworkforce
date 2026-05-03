@@ -1,0 +1,170 @@
+name: Release CLI
+
+# Triggers on tags starting with v-cli- (e.g. v-cli-1.0.0).
+# Builds 6 platform binaries, publishes 7 npm packages, creates a GitHub release.
+#
+# Required GitHub Secrets:
+#   NPM_TOKEN       — npm automation token (npmjs.com → access tokens → automation)
+#
+# Existing secrets reused:
+#   GITHUB_TOKEN    — auto-provided by GitHub Actions
+
+on:
+  push:
+    tags:
+      - 'v-cli-*'
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  RUST_VERSION: '1.94.0'
+  NODE_VERSION: '22'
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            platform: darwin-arm64
+            archive: tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            platform: darwin-x64
+            archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            platform: linux-arm64
+            archive: tar.gz
+            cross: true
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            platform: linux-x64
+            archive: tar.gz
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            platform: win32-arm64
+            archive: zip
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            platform: win32-x64
+            archive: zip
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.target }}
+
+      - name: Install cross (for aarch64 linux)
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      - name: Build (cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }} -p agiworkforce-cli
+
+      - name: Build (cargo)
+        if: '!matrix.cross'
+        run: cargo build --release --target ${{ matrix.target }} -p agiworkforce-cli
+
+      - name: Stage binary
+        shell: bash
+        run: |
+          mkdir -p dist/cli/${{ matrix.platform }}/bin
+          if [[ "${{ matrix.os }}" == windows-* ]]; then
+            cp target/${{ matrix.target }}/release/agiworkforce.exe dist/cli/${{ matrix.platform }}/bin/
+          else
+            cp target/${{ matrix.target }}/release/agiworkforce dist/cli/${{ matrix.platform }}/bin/
+            chmod +x dist/cli/${{ matrix.platform }}/bin/agiworkforce
+          fi
+
+      - name: Archive (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        run: tar -czf agiworkforce-${{ matrix.platform }}.tar.gz -C dist/cli/${{ matrix.platform }}/bin .
+
+      - name: Archive (zip)
+        if: matrix.archive == 'zip'
+        run: |
+          cd dist/cli/${{ matrix.platform }}/bin
+          7z a ../../../../agiworkforce-${{ matrix.platform }}.zip *
+
+      - name: Upload binary artifact (npm)
+        uses: actions/upload-artifact@v5
+        with:
+          name: cli-${{ matrix.platform }}
+          path: dist/cli/${{ matrix.platform }}/
+
+      - name: Upload archive artifact (gh release)
+        uses: actions/upload-artifact@v5
+        with:
+          name: archive-${{ matrix.platform }}
+          path: agiworkforce-${{ matrix.platform }}.${{ matrix.archive }}
+
+  publish-npm:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: dist/cli
+          pattern: cli-*
+          merge-multiple: false
+
+      - name: Reorganize artifacts (cli-darwin-arm64 -> dist/cli/darwin-arm64)
+        run: |
+          for d in dist/cli/cli-*; do
+            mv "$d" "dist/cli/$(basename $d | sed 's/^cli-//')"
+          done
+          ls -R dist/cli/
+
+      - name: Publish all packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: ./scripts/publish-cli.sh --yes
+
+  github-release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download archives
+        uses: actions/download-artifact@v6
+        with:
+          path: archives
+          pattern: archive-*
+          merge-multiple: true
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v-cli-}" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 'AGI Workforce CLI v${{ steps.version.outputs.VERSION }}'
+          body_path: CHANGELOG.md
+          files: archives/*
+          draft: false
+          prerelease: false

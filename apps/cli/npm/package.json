@@ -1,7 +1,7 @@
 {
   "name": "@agiworkforce/cli",
-  "version": "0.1.0",
-  "description": "AGI Workforce CLI — multi-model AI agent for your terminal. BYOK, 24 providers, desktop automation, voice mode.",
+  "version": "1.0.0",
+  "description": "AGI Workforce CLI — multi-model AI agent for your terminal. BYOK, 25 providers including local Ollama, MCP support, computer use.",
   "license": "Proprietary",
   "bin": {
     "agiworkforce": "bin/agiworkforce.js"
@@ -23,24 +23,33 @@
     "gpt",
     "claude",
     "gemini",
+    "ollama",
     "terminal",
+    "tui",
     "coding",
     "byok",
     "multi-model",
-    "desktop-automation"
+    "multi-provider",
+    "anthropic",
+    "openai",
+    "mcp",
+    "computer-use"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/siddharthanagula3/agiworkforce-desktop-app.git",
+    "url": "git+https://github.com/siddharthanagula3/agiworkforce.git",
     "directory": "apps/cli"
   },
   "homepage": "https://agiworkforce.com",
+  "bugs": {
+    "url": "https://github.com/siddharthanagula3/agiworkforce/issues"
+  },
   "optionalDependencies": {
-    "@agiworkforce/cli-darwin-arm64": "0.1.0",
-    "@agiworkforce/cli-darwin-x64": "0.1.0",
-    "@agiworkforce/cli-linux-arm64": "0.1.0",
-    "@agiworkforce/cli-linux-x64": "0.1.0",
-    "@agiworkforce/cli-win32-arm64": "0.1.0",
-    "@agiworkforce/cli-win32-x64": "0.1.0"
+    "@agiworkforce/cli-darwin-arm64": "1.0.0",
+    "@agiworkforce/cli-darwin-x64": "1.0.0",
+    "@agiworkforce/cli-linux-arm64": "1.0.0",
+    "@agiworkforce/cli-linux-x64": "1.0.0",
+    "@agiworkforce/cli-win32-arm64": "1.0.0",
+    "@agiworkforce/cli-win32-x64": "1.0.0"
   }
 }
