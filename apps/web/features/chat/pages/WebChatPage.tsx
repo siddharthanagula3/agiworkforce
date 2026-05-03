@@ -34,6 +34,7 @@ function toChatMessage(m: Message, conversationId: string): ChatMessage {
             searchResults: m.metadata?.searchResults,
             isExecutingCode: m.metadata?.isExecutingCode,
             codeExecutionResult: m.metadata?.codeExecutionResult,
+            reaction: m.metadata?.reaction,
           }
         : undefined,
   };

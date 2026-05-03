@@ -27,7 +27,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'chat-message-patch');
+  const rateLimitResponse = await withRateLimit(request, 'chat-message');
   if (rateLimitResponse) return rateLimitResponse;
 
   const user = await getAuthenticatedUser(request);
@@ -52,13 +52,24 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     auth: { persistSession: false },
   });
 
+  // Verify conversation ownership (web_messages has no user_id column)
+  const { data: conv, error: convError } = await client
+    .from('web_conversations')
+    .select('id')
+    .eq('id', conversationId)
+    .eq('user_id', user.id)
+    .single();
+
+  if (convError || !conv) {
+    throw createError.notFound('Conversation not found');
+  }
+
   // Fetch current metadata so we can merge (preserves existing fields)
   const { data: row, error: fetchError } = await client
-    .from('messages')
+    .from('web_messages')
     .select('metadata')
     .eq('id', messageId)
     .eq('conversation_id', conversationId)
-    .eq('user_id', user.id)
     .single();
 
   if (fetchError || !row) {
@@ -68,11 +79,10 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   const merged = { ...(row.metadata ?? {}), ...patch };
 
   const { error: updateError } = await client
-    .from('messages')
+    .from('web_messages')
     .update({ metadata: merged })
     .eq('id', messageId)
-    .eq('conversation_id', conversationId)
-    .eq('user_id', user.id);
+    .eq('conversation_id', conversationId);
 
   if (updateError) {
     throw createError.internal('Failed to update message');
