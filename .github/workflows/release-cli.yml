@@ -38,11 +38,12 @@ jobs:
             os: macos-latest
             platform: darwin-x64
             archive: tar.gz
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            platform: linux-arm64
-            archive: tar.gz
-            cross: true
+          # linux-arm64 dropped from v1.0 matrix: openssl-sys cross-compile
+          # needs libssl-dev:arm64 + correct linker setup which cross's
+          # default docker image doesn't ship. Users on linux-arm64 can run:
+          #   cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli
+          # which builds natively. v1.1 to add this back via either rustls
+          # migration (no openssl) or self-hosted arm64 runner.
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             platform: linux-x64
