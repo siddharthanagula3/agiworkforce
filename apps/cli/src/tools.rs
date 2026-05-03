@@ -1812,7 +1812,9 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_start_line() {
         // Create a temp file with known content
-        let tmp = tempfile::NamedTempFile::new().unwrap();
+        // Tempfile must live inside cwd because validate_file_path (CLI-1
+        // audit fix) refuses to read paths outside the project root.
+        let tmp = tempfile::NamedTempFile::new_in(".").unwrap();
         let content = (1..=10)
             .map(|i| format!("line {}", i))
             .collect::<Vec<_>>()
@@ -1834,7 +1836,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_file_end_line() {
-        let tmp = tempfile::NamedTempFile::new().unwrap();
+        // Tempfile must live inside cwd because validate_file_path (CLI-1
+        // audit fix) refuses to read paths outside the project root.
+        let tmp = tempfile::NamedTempFile::new_in(".").unwrap();
         let content = (1..=10)
             .map(|i| format!("line {}", i))
             .collect::<Vec<_>>()
@@ -1855,7 +1859,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_file_start_and_end_line() {
-        let tmp = tempfile::NamedTempFile::new().unwrap();
+        // Tempfile must live inside cwd because validate_file_path (CLI-1
+        // audit fix) refuses to read paths outside the project root.
+        let tmp = tempfile::NamedTempFile::new_in(".").unwrap();
         let content = (1..=20)
             .map(|i| format!("line {}", i))
             .collect::<Vec<_>>()
@@ -1880,7 +1886,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_file_empty_range() {
-        let tmp = tempfile::NamedTempFile::new().unwrap();
+        // Tempfile must live inside cwd because validate_file_path (CLI-1
+        // audit fix) refuses to read paths outside the project root.
+        let tmp = tempfile::NamedTempFile::new_in(".").unwrap();
         let content = "line 1\nline 2\nline 3";
         std::fs::write(tmp.path(), content).unwrap();
 
