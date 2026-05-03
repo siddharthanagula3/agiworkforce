@@ -169,10 +169,7 @@ export function ThinkingBlock({
         />
 
         {/* "Reasoning" small-caps label */}
-        <span
-          className="text-[10px] tracking-widest text-slate-400"
-          style={{ fontVariant: 'small-caps' }}
-        >
+        <span className="text-[10px] tracking-widest text-slate-400 [font-variant:small-caps]">
           Reasoning
         </span>
 
@@ -227,11 +224,7 @@ export function ThinkingBlock({
         <div className="border-t border-zinc-700/30">
           <div
             ref={bodyRef}
-            className="max-h-96 overflow-y-auto px-4 py-3"
-            style={{
-              scrollbarWidth: 'thin',
-              scrollbarColor: 'rgba(113,113,122,0.4) transparent',
-            }}
+            className="max-h-96 overflow-y-auto px-4 py-3 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.4)_transparent]"
           >
             <p className="text-xs text-slate-400/80 font-mono italic leading-relaxed whitespace-pre-wrap">
               {content}

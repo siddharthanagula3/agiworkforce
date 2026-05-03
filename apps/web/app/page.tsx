@@ -140,13 +140,7 @@ export default function Home() {
           {/* ── HERO ── */}
           <section className="relative overflow-hidden pt-36 pb-24 md:pt-48 md:pb-36">
             {/* Dot grid */}
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
-                backgroundSize: '28px 28px',
-              }}
-            />
+            <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:28px_28px]" />
             {/* Warm amber glow */}
             <div className="pointer-events-none absolute left-1/2 top-[38%] h-[500px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c8892a]/[0.07] blur-[140px]" />
             {/* Secondary accent glow */}
