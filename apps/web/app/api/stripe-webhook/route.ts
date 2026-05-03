@@ -1684,7 +1684,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return new NextResponse(JSON.stringify({ error: `Webhook handler failed: ${errorMessage}` }), {
+    // WEB-7 (audit 2026-05-03): return a generic body. The previous
+    // `errorMessage` interpolation leaked internal details (Supabase
+    // column names, SQL constraint names, stack traces) to anyone able
+    // to forge a webhook signature, AND surfaced the same string in
+    // Stripe's dashboard on retries. Server-side `logger.error` above
+    // already captured the full error.
+    return new NextResponse(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
     });
   }
