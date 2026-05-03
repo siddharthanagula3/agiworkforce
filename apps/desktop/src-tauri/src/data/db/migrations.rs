@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 61;
+const CURRENT_VERSION: i32 = 62;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -579,6 +579,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 61 {
         run_migration_in_transaction(conn, 61, apply_migration_v61)?;
+    }
+
+    if current_version < 62 {
+        run_migration_in_transaction(conn, 62, apply_migration_v62)?;
     }
 
     Ok(())
@@ -5273,6 +5277,17 @@ fn apply_migration_v61(conn: &Connection) -> Result<()> {
         "archived INTEGER NOT NULL DEFAULT 0",
     )?;
 
+    Ok(())
+}
+
+fn apply_migration_v62(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS remembered_tool_choices (
+            tool_name   TEXT PRIMARY KEY NOT NULL,
+            approved    INTEGER NOT NULL,
+            updated_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );",
+    )?;
     Ok(())
 }
 
