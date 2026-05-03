@@ -86,8 +86,21 @@ export class TerminalProvider implements vscode.Disposable {
   /**
    * Send a command string to the AGI Workforce terminal.
    * Creates the terminal if it does not exist.
+   *
+   * EXTV-3 (audit 2026-05-03): refuse silently in untrusted workspaces.
+   * The integrated terminal inherits the workspace shell config — an
+   * untrusted workspace's `terminal.integrated.shellArgs` or
+   * `package.json` script can contain shell metacharacters that
+   * execute when sendText runs. Force the user to trust the
+   * workspace first.
    */
   runCommand(command: string): void {
+    if (!vscode.workspace.isTrusted) {
+      vscode.window.showWarningMessage(
+        'AGI Workforce: command execution is disabled in untrusted workspaces. Trust the workspace to run terminal commands.',
+      );
+      return;
+    }
     const terminal = this.getOrCreateTerminal();
     terminal.show(/* preserveFocus */ false);
     terminal.sendText(command);
