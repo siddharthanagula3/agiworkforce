@@ -687,6 +687,11 @@ impl McpManager {
     }
 
     /// Convert MCP tools to ToolDefinitions for the LLM.
+    ///
+    /// Concurrency flags default to false (safe, sequential) for MCP tools —
+    /// the MCP protocol exposes `annotations.readOnlyHint` and similar but
+    /// we don't plumb those through yet. Operators can opt in once we trust
+    /// upstream servers' annotations.
     pub fn tool_definitions(&self) -> Vec<crate::models::ToolDefinition> {
         self.tools
             .iter()
@@ -694,6 +699,9 @@ impl McpManager {
                 name: t.namespaced_name.clone(),
                 description: format!("[MCP:{}] {}", t.server_name, t.description),
                 input_schema: t.input_schema.clone(),
+                is_read_only: false,
+                is_concurrency_safe: false,
+                max_result_size_chars: None,
             })
             .collect()
     }

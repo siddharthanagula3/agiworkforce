@@ -52,11 +52,34 @@ pub enum ContentBlock {
 }
 
 /// A tool definition to send to the API.
+///
+/// Note: only `name`, `description`, and `input_schema` are forwarded to the
+/// model. The remaining fields are LOCAL metadata for the executor —
+/// concurrency hints (Phase 6) and per-tool size caps (Phase 8). Each provider
+/// stream function explicitly picks the API-bound fields by name, so these
+/// extra fields stay client-side.
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolDefinition {
     pub name: String,
     pub description: String,
     pub input_schema: serde_json::Value,
+    /// Tool only reads filesystem / network state; never mutates. Read-only
+    /// tools are safe to batch concurrently (Phase 7).
+    #[serde(skip)]
+    #[serde(default)]
+    pub is_read_only: bool,
+    /// Tool can run concurrently with other concurrency-safe tools without
+    /// races. Defaults to false; only set true after auditing the tool for
+    /// shared mutable state.
+    #[serde(skip)]
+    #[serde(default)]
+    pub is_concurrency_safe: bool,
+    /// Per-tool override for output truncation in chars. None falls back to
+    /// the global `MAX_OUTPUT_BYTES` (50 KB). Larger for `web_fetch`,
+    /// smaller for status-only tools (Phase 8).
+    #[serde(skip)]
+    #[serde(default)]
+    pub max_result_size_chars: Option<usize>,
 }
 
 /// A tool call parsed from the API response.
@@ -124,6 +147,14 @@ pub struct CompletionResult {
     pub tool_calls: Vec<ToolCallResponse>,
     pub input_tokens: u32,
     pub output_tokens: u32,
+    /// Tokens read from prompt cache (Anthropic only). Billed at ~10% of
+    /// regular input rate. 0 when no cache hit or provider doesn't support
+    /// caching.
+    pub cache_read_input_tokens: u32,
+    /// Tokens written to prompt cache (Anthropic only). Billed at full input
+    /// rate (some providers add a 25% premium). 0 when no cache write or
+    /// provider doesn't support caching.
+    pub cache_creation_input_tokens: u32,
     /// True when the request was routed through a subscription (Copilot, ChatGPT Plus).
     /// Cost display should show $0.00 when this is set.
     pub via_subscription: bool,
@@ -594,27 +625,78 @@ async fn stream_anthropic(
         .map(|m| m.text_content())
         .unwrap_or_default();
 
+    // Build a system prompt with a cache breakpoint just before the volatile
+    // <environment> block (see agent.rs::build_system_prompt — the env block
+    // is always last). When the prefix is non-empty we send the system field
+    // as an array of two text blocks; cache_control on the first block makes
+    // everything above the env block cacheable. This typically halves the
+    // billed input tokens on the second-and-later turn of a session.
+    //
+    // The split is robust: if the marker isn't present (e.g. sysprompt was
+    // overridden via --system-prompt with no env block), we fall back to a
+    // single cached block. If the system text is empty, omit the system
+    // field entirely.
+    let system_value: Option<Value> = if system_text.is_empty() {
+        None
+    } else if let Some(env_pos) = system_text.rfind("<environment>") {
+        let (head, tail) = system_text.split_at(env_pos);
+        let head_trimmed = head.trim_end();
+        if head_trimmed.is_empty() {
+            // No stable prefix — single non-cached block.
+            Some(serde_json::json!(system_text))
+        } else {
+            Some(serde_json::json!([
+                {
+                    "type": "text",
+                    "text": head_trimmed,
+                    "cache_control": {"type": "ephemeral"}
+                },
+                {"type": "text", "text": tail}
+            ]))
+        }
+    } else {
+        // No env marker — cache the whole system prompt (rare path: custom
+        // prompt with no environment injection).
+        Some(serde_json::json!([
+            {
+                "type": "text",
+                "text": system_text,
+                "cache_control": {"type": "ephemeral"}
+            }
+        ]))
+    };
+
     let mut body = serde_json::json!({
         "model": model,
         "max_tokens": max_tokens,
         "stream": true,
-        "system": system_text,
         "messages": api_messages,
     });
+    if let Some(sys) = system_value {
+        body["system"] = sys;
+    }
 
     if let Some(temp) = temperature {
         body["temperature"] = serde_json::json!(temp);
     }
 
     if let Some(tool_defs) = tools {
+        // Mark the last tool with cache_control so the entire tools array is
+        // cacheable. Tools rarely change mid-session, so this is pure win.
+        let last_idx = tool_defs.len().saturating_sub(1);
         let tools_json: Vec<Value> = tool_defs
             .iter()
-            .map(|t| {
-                serde_json::json!({
+            .enumerate()
+            .map(|(i, t)| {
+                let mut entry = serde_json::json!({
                     "name": t.name,
                     "description": t.description,
                     "input_schema": t.input_schema,
-                })
+                });
+                if i == last_idx && !tool_defs.is_empty() {
+                    entry["cache_control"] = serde_json::json!({"type": "ephemeral"});
+                }
+                entry
             })
             .collect();
         body["tools"] = serde_json::json!(tools_json);
@@ -644,6 +726,8 @@ async fn stream_anthropic(
     let mut full_text = String::new();
     let mut input_tokens: u32 = 0;
     let mut output_tokens: u32 = 0;
+    let mut cache_read_input_tokens: u32 = 0;
+    let mut cache_creation_input_tokens: u32 = 0;
     let mut stream = resp.bytes_stream();
     let mut buffer = String::new();
 
@@ -741,6 +825,20 @@ async fn stream_anthropic(
                                     .and_then(|v| v.as_u64())
                                     .unwrap_or(0)
                                     as u32;
+                                // Anthropic returns cache stats inline with the
+                                // initial usage object on message_start. Capture
+                                // them here so callers see cache hits even when
+                                // the rest of the message is streamed slowly.
+                                cache_read_input_tokens = usage
+                                    .get("cache_read_input_tokens")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0)
+                                    as u32;
+                                cache_creation_input_tokens = usage
+                                    .get("cache_creation_input_tokens")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0)
+                                    as u32;
                             }
                         }
                         "message_delta" => {
@@ -757,6 +855,26 @@ async fn stream_anthropic(
                                     .and_then(|v| v.as_u64())
                                     .unwrap_or(0)
                                     as u32;
+                                // Some Anthropic responses populate cache stats
+                                // on message_delta instead of (or in addition
+                                // to) message_start. Prefer the larger value so
+                                // we don't lose accuracy if both fire.
+                                let delta_cache_read = usage
+                                    .get("cache_read_input_tokens")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0)
+                                    as u32;
+                                if delta_cache_read > cache_read_input_tokens {
+                                    cache_read_input_tokens = delta_cache_read;
+                                }
+                                let delta_cache_creation = usage
+                                    .get("cache_creation_input_tokens")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0)
+                                    as u32;
+                                if delta_cache_creation > cache_creation_input_tokens {
+                                    cache_creation_input_tokens = delta_cache_creation;
+                                }
                             }
                         }
                         _ => {}
@@ -771,6 +889,8 @@ async fn stream_anthropic(
         tool_calls,
         input_tokens,
         output_tokens,
+        cache_read_input_tokens,
+        cache_creation_input_tokens,
         via_subscription: false,
         stop_reason,
     })
@@ -1064,6 +1184,8 @@ async fn stream_google(
         tool_calls,
         input_tokens,
         output_tokens,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
         via_subscription: false,
         stop_reason,
     })
@@ -1283,6 +1405,8 @@ async fn stream_ollama(
         tool_calls,
         input_tokens,
         output_tokens,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
         via_subscription: false,
         stop_reason,
     })
@@ -1579,6 +1703,8 @@ async fn parse_openai_sse_stream(
         tool_calls,
         input_tokens,
         output_tokens,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
         via_subscription: false,
         stop_reason,
     })

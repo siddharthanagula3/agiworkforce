@@ -352,6 +352,12 @@ struct Cli {
     /// that pre-allocate ids.
     #[arg(long = "session-id", value_name = "UUID")]
     session_id_override: Option<String>,
+
+    /// Print the assembled system prompt to stdout and exit. No API call is
+    /// made. Useful for inspecting `<environment>`, memory injection, and
+    /// project instructions before running a session.
+    #[arg(long = "dump-system-prompt")]
+    dump_system_prompt: bool,
 }
 
 /// Effort level presets that bundle max_turns + max_tokens + temperature.
@@ -818,9 +824,12 @@ async fn main() -> Result<()> {
             eprintln!("Warning: failed to initialize home directory: {}", e);
         }
 
-        // First-run onboarding wizard (only if interactive terminal and no subcommand)
+        // First-run onboarding wizard (only if interactive terminal and no subcommand).
+        // Skipped when the user is running a non-interactive read-only flag like
+        // `--dump-system-prompt` — those should never block on a TTY prompt.
         if cli.command.is_none()
             && cli.prompt.is_none()
+            && !cli.dump_system_prompt
             && io::stdin().is_terminal()
             && !onboarding::is_setup_complete()
         {
@@ -936,8 +945,8 @@ async fn main() -> Result<()> {
                                 session_id: session_id.clone(),
                                 in_tokens: turn.input_tokens as u32,
                                 out_tokens: turn.output_tokens as u32,
-                                cache_read: 0,
-                                cache_creation: 0,
+                                cache_read: turn.cache_read_tokens,
+                                cache_creation: turn.cache_creation_tokens,
                                 cumulative_dollars: 0.0,
                             }
                             .emit_stdout();
@@ -1704,6 +1713,15 @@ async fn main() -> Result<()> {
         (None, Some(append)) => Some(append.clone()),
         (None, None) => None,
     };
+
+    // --dump-system-prompt: assemble the system prompt the way AgentSession::new
+    // would, print it to stdout, and exit. No API call. Useful for debugging.
+    if cli.dump_system_prompt {
+        let prompt =
+            agent::assemble_system_prompt(&sys_context, effective_system_prompt.as_deref());
+        println!("{}", prompt);
+        return Ok(());
+    }
 
     let oneshot_output_mode = resolve_oneshot_output_mode(cli.json, cli.raw, cli.print, cli.output);
     let effective_skip_permissions =
