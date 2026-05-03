@@ -1140,7 +1140,20 @@ async fn main() -> Result<()> {
                             } else {
                                 "disabled".red()
                             };
-                            println!("  {} [{}] {}", p.config_name, st, p.root.display());
+                            // Sprint B6: surface manifest format origin so users can
+                            // tell at a glance whether a plugin is using the AGI,
+                            // Claude, Codex, or legacy schema.
+                            let fmt_tag = match p.format {
+                                Some(fmt) => format!("[{}]", fmt.short_tag()),
+                                None => "[no-manifest]".to_string(),
+                            };
+                            println!(
+                                "  {} {} [{}] {}",
+                                p.config_name,
+                                fmt_tag,
+                                st,
+                                p.root.display()
+                            );
                         }
                         Ok(())
                     }
@@ -1160,8 +1173,12 @@ async fn main() -> Result<()> {
                             source: psrc,
                             name: pname,
                         }) {
-                            plugins::PluginInstallOutcome::Installed { path } => {
-                                println!("Installed to {}", path.display())
+                            plugins::PluginInstallOutcome::Installed { path, format } => {
+                                let fmt_tag = match format {
+                                    Some(fmt) => format!(" ({} manifest)", fmt.short_tag()),
+                                    None => String::new(),
+                                };
+                                println!("Installed to {}{}", path.display(), fmt_tag)
                             }
                             plugins::PluginInstallOutcome::AlreadyInstalled { path } => {
                                 println!("Already at {}", path.display())
