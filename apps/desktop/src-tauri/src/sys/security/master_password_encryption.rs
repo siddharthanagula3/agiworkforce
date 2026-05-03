@@ -138,11 +138,20 @@ mod tests {
 
     use super::*;
 
+    /// Test-only fixture password used by `unlocked_helper` and
+    /// `locked_helper`. Building this from runtime randomness would
+    /// make the tests non-deterministic; intentional hard-code per
+    /// CodeQL false-positive suppression below.
+    /// codeql[rust/hard-coded-cryptographic-value]: test fixture only,
+    /// never reachable from production paths.
+    #[allow(dead_code)]
+    const TEST_FIXTURE_PASSPHRASE: &str = "alpha-beta-unique-phrase"; // gitleaks:allow
+
     fn unlocked_helper() -> MasterPasswordEncryption {
         let conn = Connection::open_in_memory().unwrap();
         let manager = MasterPasswordManager::new(Arc::new(Mutex::new(conn)));
         manager.init_table().unwrap();
-        manager.setup("alpha-beta-unique-phrase").unwrap(); // gitleaks:allow
+        manager.setup(TEST_FIXTURE_PASSPHRASE).unwrap();
         MasterPasswordEncryption::new(Arc::new(Mutex::new(manager)))
     }
 
@@ -150,7 +159,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         let manager = MasterPasswordManager::new(Arc::new(Mutex::new(conn)));
         manager.init_table().unwrap();
-        manager.setup("alpha-beta-unique-phrase").unwrap(); // gitleaks:allow
+        manager.setup(TEST_FIXTURE_PASSPHRASE).unwrap();
         manager.lock();
         MasterPasswordEncryption::new(Arc::new(Mutex::new(manager)))
     }
