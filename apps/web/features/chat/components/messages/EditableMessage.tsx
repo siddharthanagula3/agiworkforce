@@ -119,8 +119,8 @@ export function EditableMessage({
           'focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50',
           'border-border transition-all duration-200',
           'disabled:opacity-50 disabled:cursor-not-allowed',
+          'min-h-[60px] max-h-[400px]',
         )}
-        style={{ minHeight: '60px', maxHeight: '400px' }}
       />
 
       {/* Footer: hints and action buttons */}
