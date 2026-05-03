@@ -11,9 +11,10 @@
 //! Skill mentions: Use `$skill-name` or `@skill-name` in a query to explicitly
 //! request a skill by name (scored at 0.9).
 
-// Skills API surface is intentionally broad: scoring, matching, categorization,
-// and formatting functions are all needed by the /skills REPL command and will be
-// wired into automatic skill injection in the system prompt builder.
+// Skills API surface mixes live items (discover_skills, Skill, format_skills_for_prompt
+// — used in agent.rs, repl.rs, command_registry.rs, tui_app.rs) with auxiliary
+// helpers (match_skills, format_skills_by_category, scoring helpers) reserved for
+// future automatic-skill-injection wiring. File-level allow stays until that lands.
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
