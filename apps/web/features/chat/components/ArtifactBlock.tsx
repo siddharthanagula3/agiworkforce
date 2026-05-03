@@ -143,7 +143,7 @@ function HtmlBlock({ code }: { code: string }) {
           <CopyButton text={code} />
         </div>
       </div>
-      <div className="bg-white" style={{ height: '340px' }}>
+      <div className="h-[340px] bg-white">
         <iframe
           ref={iframeRef}
           title="HTML preview"

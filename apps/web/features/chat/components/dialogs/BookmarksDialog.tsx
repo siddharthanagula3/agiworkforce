@@ -205,7 +205,7 @@ export function BookmarksDialog({ open, onOpenChange }: BookmarksDialogProps) {
         </div>
 
         {/* Bookmarks List */}
-        <ScrollArea className="flex-1 px-6 py-4" style={{ maxHeight: '500px' }}>
+        <ScrollArea className="flex-1 max-h-[500px] px-6 py-4">
           {filteredBookmarks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Bookmark className="mb-3 h-12 w-12 text-muted-foreground opacity-30" />
