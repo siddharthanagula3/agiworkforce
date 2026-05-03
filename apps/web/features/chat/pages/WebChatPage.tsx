@@ -32,6 +32,8 @@ function toChatMessage(m: Message, conversationId: string): ChatMessage {
             isThinkingStreaming: m.metadata?.isThinkingStreaming,
             isSearching: m.metadata?.isSearching,
             searchResults: m.metadata?.searchResults,
+            isExecutingCode: m.metadata?.isExecutingCode,
+            codeExecutionResult: m.metadata?.codeExecutionResult,
           }
         : undefined,
   };
@@ -188,6 +190,9 @@ export default function WebChatPage() {
 
   // Auto-title: when the second message arrives (first assistant reply), derive title
   // from the first user message content if the conversation is still named "New Chat".
+  // Intentionally only re-runs on messages.length, not the full messages array, to
+  // avoid re-running on every streaming chunk.
+
   useEffect(() => {
     if (!activeConversationId || messages.length !== 2) return;
     const convo = conversations.find((c) => c.id === activeConversationId);
