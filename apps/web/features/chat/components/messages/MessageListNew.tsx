@@ -17,6 +17,8 @@ import {
   FileCode,
   Plus,
   Minus,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { ChatMessage } from '../../stores/chat-store';
@@ -265,6 +267,7 @@ const MessageItemComponent = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
   const isUser = message.role === 'user';
   const actionsRef = useRef<HTMLDivElement>(null);
 
@@ -437,6 +440,37 @@ const MessageItemComponent = ({
               >
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
+
+              {!isUser && (
+                <>
+                  <button
+                    onClick={() => setReaction(reaction === 'up' ? null : 'up')}
+                    className={cn(
+                      'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted/60',
+                      reaction === 'up'
+                        ? 'text-emerald-500 hover:text-emerald-400'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                    aria-label="Good response"
+                    aria-pressed={reaction === 'up'}
+                  >
+                    <ThumbsUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setReaction(reaction === 'down' ? null : 'down')}
+                    className={cn(
+                      'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted/60',
+                      reaction === 'down'
+                        ? 'text-red-500 hover:text-red-400'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                    aria-label="Bad response"
+                    aria-pressed={reaction === 'down'}
+                  >
+                    <ThumbsDown className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
 
               {!isUser && (
                 <div className="relative" ref={actionsRef}>
