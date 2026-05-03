@@ -21,6 +21,7 @@ use crate::skills;
 use crate::subagent;
 use crate::teams;
 use crate::tools;
+use futures_util::future::join_all;
 
 // ---------------------------------------------------------------------------
 // Tool definitions (native API JSON Schema)
@@ -152,6 +153,14 @@ pub struct TurnResult {
     pub response: String,
     pub input_tokens: u32,
     pub output_tokens: u32,
+    /// Tokens read from prompt cache during this turn (Anthropic only).
+    /// Already counted inside `input_tokens` for billing — surface separately
+    /// for telemetry and the cost HUD.
+    pub cache_read_tokens: u32,
+    /// Tokens written to prompt cache during this turn (Anthropic only).
+    /// Already counted inside `input_tokens` for billing — surface separately
+    /// for telemetry and the cost HUD.
+    pub cache_creation_tokens: u32,
     /// True when the request was routed through a subscription (Copilot, ChatGPT Plus).
     pub via_subscription: bool,
 }
@@ -778,6 +787,8 @@ impl AgentSession {
                                         tool_calls: vec![],
                                         input_tokens: 0,
                                         output_tokens: 0,
+                                        cache_read_input_tokens: 0,
+                                        cache_creation_input_tokens: 0,
                                         via_subscription: true,
                                         stop_reason: Some("end_turn".to_string()),
                                     })
@@ -817,6 +828,8 @@ impl AgentSession {
 
         let mut total_input = result.input_tokens;
         let mut total_output = result.output_tokens;
+        let mut total_cache_read = result.cache_read_input_tokens;
+        let mut total_cache_creation = result.cache_creation_input_tokens;
         let via_subscription = result.via_subscription;
         let mut final_response = result.text;
         let mut current_tool_calls = result.tool_calls;
@@ -901,9 +914,44 @@ impl AgentSession {
             let hcfg = self.hooks_config.clone();
             let mut result_blocks = Vec::new();
 
-            // Partition tool calls: task tools run concurrently, others sequentially
-            let (task_calls, other_calls): (Vec<_>, Vec<_>) =
-                current_tool_calls.iter().partition(|tc| tc.name == "task");
+            // Phase 6/7: classify tools for the concurrent batch.
+            // A tool is eligible for the concurrent built-in batch when:
+            //   1. It's a built-in tool (not MCP, not team — those need
+            //      access to shared mutable session state).
+            //   2. Its `ToolDefinition.is_concurrency_safe` is true (currently
+            //      the read-only built-ins: read_file, search_files,
+            //      list_directory, web_search, web_fetch, grep_files, tool_search).
+            //   3. The session is in non-prompting mode (`skip_permissions`).
+            //      Otherwise the dialoguer confirmation prompts would
+            //      interleave on the terminal.
+            let concurrency_safe_names: std::collections::HashSet<String> = tool_defs
+                .iter()
+                .filter(|t| t.is_concurrency_safe)
+                .map(|t| t.name.clone())
+                .collect();
+            let concurrent_eligible = |name: &str| -> bool {
+                self.skip_permissions
+                    && concurrency_safe_names.contains(name)
+                    && !is_team_tool(name)
+                    && !name.starts_with("mcp_")
+                    && name != "task"
+            };
+
+            // Three-way partition: task tools (concurrent via SubagentManager),
+            // concurrent built-ins (parallel via join_all), everything else
+            // (sequential).
+            let task_calls: Vec<_> = current_tool_calls
+                .iter()
+                .filter(|tc| tc.name == "task")
+                .collect();
+            let concurrent_calls: Vec<_> = current_tool_calls
+                .iter()
+                .filter(|tc| tc.name != "task" && concurrent_eligible(&tc.name))
+                .collect();
+            let other_calls: Vec<_> = current_tool_calls
+                .iter()
+                .filter(|tc| tc.name != "task" && !concurrent_eligible(&tc.name))
+                .collect();
 
             // Spawn all task tool calls concurrently via subagent manager
             let mut task_spawn_results = Vec::new();
@@ -1070,6 +1118,141 @@ Files modified:
                 });
             }
 
+            // Phase 7: execute the concurrent batch via join_all. Each tool
+            // runs its BeforeToolUse hook → exec → AfterToolUse hook in its
+            // own future; results come back in arbitrary order, then we
+            // append them to result_blocks. The original tool_call ordering
+            // is preserved by `result_blocks` insertion order — the API
+            // accepts tool_results in any order as long as tool_use_ids
+            // match.
+            if !concurrent_calls.is_empty() {
+                if !self.quiet {
+                    eprintln!(
+                        "  {} ({})",
+                        format!("running {} read-only tools in parallel", concurrent_calls.len())
+                            .dimmed(),
+                        concurrent_calls
+                            .iter()
+                            .map(|tc| tc.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+
+                // Skip unavailable tools first (they don't get a future).
+                let mut runnable: Vec<&ToolCallResponse> = Vec::new();
+                for tc in &concurrent_calls {
+                    if !available_tool_names.contains(tc.name.as_str()) {
+                        result_blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: tc.id.clone(),
+                            content: format!(
+                                "Tool '{}' is not available in this session.",
+                                tc.name
+                            ),
+                            is_error: true,
+                        });
+                        continue;
+                    }
+                    runnable.push(tc);
+                }
+
+                // BeforeToolUse hooks run serially to preserve hook stdout
+                // ordering. They're typically fast (subprocess startup is the
+                // dominant cost) so the gain from parallelizing them is
+                // small relative to the risk of interleaved log output.
+                for tc in &runnable {
+                    hooks::run_hooks(
+                        &hcfg,
+                        hooks::HookEvent::BeforeToolUse,
+                        &hooks::HookInput {
+                            event: "BeforeToolUse".to_string(),
+                            session_id: None,
+                            model: Some(self.model.clone()),
+                            tool_name: Some(tc.name.clone()),
+                            tool_args: Some(tc.arguments.clone()),
+                            tool_output: None,
+                            message: None,
+                            tool_execution: None,
+                        },
+                    )
+                    .await;
+                }
+
+                // The actual concurrent batch: read-only built-in tools.
+                let exec_opts = tools::ToolExecOptions {
+                    require_confirmation: !self.skip_permissions,
+                    auto_approve_safe: self.auto_approve_safe,
+                    quiet: self.quiet,
+                };
+                let futures = runnable.iter().map(|tc| {
+                    let legacy = tool_call_to_legacy(tc);
+                    let opts = exec_opts.clone();
+                    let id = tc.id.clone();
+                    let name = tc.name.clone();
+                    let args = tc.arguments.clone();
+                    async move {
+                        let result = tools::execute_tool_with_opts(&legacy, &opts).await;
+                        (id, name, args, result)
+                    }
+                });
+                let outcomes = join_all(futures).await;
+
+                // AfterToolUse hooks + result_blocks insertion (serial, to
+                // keep stdout ordering deterministic).
+                for (tool_use_id, tool_name, tool_args, exec_result) in outcomes {
+                    let tool_result = match exec_result {
+                        Ok(r) => r,
+                        Err(e) => tools::ToolResult {
+                            tool_name: tool_name.clone(),
+                            success: false,
+                            output: format!("tool error: {:#}", e),
+                        },
+                    };
+
+                    if !self.quiet {
+                        let status = if tool_result.success {
+                            "success".green().to_string()
+                        } else {
+                            "failed".red().to_string()
+                        };
+                        eprintln!(
+                            "  {} {} [{}]",
+                            "->".dimmed(),
+                            tool_name.bold(),
+                            status
+                        );
+                    }
+
+                    hooks::run_hooks(
+                        &hcfg,
+                        hooks::HookEvent::AfterToolUse,
+                        &hooks::HookInput {
+                            event: "AfterToolUse".to_string(),
+                            session_id: None,
+                            model: Some(self.model.clone()),
+                            tool_name: Some(tool_name),
+                            tool_args: Some(tool_args),
+                            tool_output: Some(tool_result.output.clone()),
+                            message: None,
+                            tool_execution: None,
+                        },
+                    )
+                    .await;
+
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id,
+                        content: tool_result.output,
+                        is_error: !tool_result.success,
+                    });
+                }
+            }
+
+            // Phase 10: collect additional_context messages emitted by
+            // AfterToolUse hooks across this iteration. They're injected as a
+            // single system message after all tool results, before the next
+            // LLM call, so the model sees redaction notes etc. in order.
+            let mut hook_additional_contexts: Vec<String> = Vec::new();
+
             // Execute non-task tool calls sequentially (as before)
             for tc in &other_calls {
                 if !available_tool_names.contains(tc.name.as_str()) {
@@ -1081,7 +1264,10 @@ Files modified:
                     continue;
                 }
 
-                hooks::run_hooks(
+                // Phase 10: BeforeToolUse hooks may return updated_input to
+                // rewrite tool args before exec. Last hook in the chain wins
+                // (see aggregate_transformers).
+                let pre_results = hooks::run_hooks(
                     &hcfg,
                     hooks::HookEvent::BeforeToolUse,
                     &hooks::HookInput {
@@ -1096,13 +1282,18 @@ Files modified:
                     },
                 )
                 .await;
+                let pre_t = hooks::aggregate_transformers(&pre_results);
+                let effective_args = pre_t.updated_input.clone().unwrap_or_else(|| tc.arguments.clone());
 
                 // Route: team tools -> MCP tools (mcp_*) -> built-in tools
-                let legacy = tool_call_to_legacy(tc);
+                let legacy = ToolCall {
+                    name: tc.name.clone(),
+                    args: value_to_legacy_args(&effective_args),
+                };
                 let tool_result = if is_team_tool(&tc.name) {
                     execute_team_tool(&self.team_manager, &tc.name, &legacy.args).await?
                 } else if tc.name.starts_with("mcp_") {
-                    execute_mcp_tool(&mut self.mcp_manager, &tc.name, tc.arguments.clone()).await?
+                    execute_mcp_tool(&mut self.mcp_manager, &tc.name, effective_args.clone()).await?
                 } else {
                     let opts = tools::ToolExecOptions {
                         require_confirmation: !self.skip_permissions,
@@ -1121,7 +1312,7 @@ Files modified:
                     eprintln!("  {} {} [{}]", "->".dimmed(), tc.name.bold(), status);
                 }
 
-                hooks::run_hooks(
+                let post_results = hooks::run_hooks(
                     &hcfg,
                     hooks::HookEvent::AfterToolUse,
                     &hooks::HookInput {
@@ -1129,7 +1320,7 @@ Files modified:
                         session_id: None,
                         model: Some(self.model.clone()),
                         tool_name: Some(tc.name.clone()),
-                        tool_args: Some(tc.arguments.clone()),
+                        tool_args: Some(effective_args.clone()),
                         tool_output: Some(tool_result.output.clone()),
                         message: None,
                         tool_execution: None,
@@ -1137,15 +1328,31 @@ Files modified:
                 )
                 .await;
 
+                // Phase 10: AfterToolUse may rewrite the tool's output and
+                // append context messages. Last writer wins on the output
+                // override; additional_context accumulates.
+                let post_t = hooks::aggregate_transformers(&post_results);
+                let final_output = post_t.updated_mcp_tool_output.unwrap_or(tool_result.output);
+                if let Some(ctx) = post_t.additional_context {
+                    hook_additional_contexts.push(ctx);
+                }
+
                 result_blocks.push(ContentBlock::ToolResult {
                     tool_use_id: tc.id.clone(),
-                    content: tool_result.output,
+                    content: final_output,
                     is_error: !tool_result.success,
                 });
             }
 
             // Send tool results as a structured user message
             self.messages.push(Message::blocks("user", result_blocks));
+
+            // Phase 10: hook-injected advisory messages ride along after
+            // the tool results so the model sees them before its next reply.
+            if !hook_additional_contexts.is_empty() {
+                let merged = hook_additional_contexts.join("\n\n");
+                self.messages.push(Message::text("system", merged));
+            }
 
             // Re-send to LLM with tool results
             eprintln!();
@@ -1195,6 +1402,8 @@ Files modified:
 
             total_input += continuation.input_tokens;
             total_output += continuation.output_tokens;
+            total_cache_read += continuation.cache_read_input_tokens;
+            total_cache_creation += continuation.cache_creation_input_tokens;
             final_response = continuation.text;
             current_tool_calls = continuation.tool_calls;
 
@@ -1235,6 +1444,8 @@ Files modified:
         // Update session counters
         self.total_input_tokens += total_input;
         self.total_output_tokens += total_output;
+        self.total_cache_read_tokens += total_cache_read;
+        self.total_cache_creation_tokens += total_cache_creation;
         self.turn_count += 1;
 
         // --- Post-turn: memory extraction + skill learning (best-effort, non-blocking) ---
@@ -1304,6 +1515,8 @@ Files modified:
             response: final_response,
             input_tokens: total_input,
             output_tokens: total_output,
+            cache_read_tokens: total_cache_read,
+            cache_creation_tokens: total_cache_creation,
             via_subscription,
         })
     }
@@ -1415,10 +1628,22 @@ fn build_assistant_message(text: &str, tool_calls: &[ToolCallResponse]) -> Messa
 /// Convert a ToolCallResponse (from native API) to the legacy ToolCall
 /// struct used by tools::execute_tool.
 fn tool_call_to_legacy(tc: &ToolCallResponse) -> ToolCall {
-    let mut args = std::collections::HashMap::new();
-    if let Some(obj) = tc.arguments.as_object() {
+    ToolCall {
+        name: tc.name.clone(),
+        args: value_to_legacy_args(&tc.arguments),
+    }
+}
+
+/// Phase 10: convert a JSON args object into the flat HashMap<String, String>
+/// shape that `tools::execute_tool_with_opts` expects. Strings pass through
+/// verbatim; non-strings are JSON-stringified to preserve fidelity. Used by
+/// both the original `tool_call_to_legacy` and the BeforeToolUse hook
+/// transformer path that may rewrite args.
+fn value_to_legacy_args(args: &serde_json::Value) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    if let Some(obj) = args.as_object() {
         for (k, v) in obj {
-            args.insert(
+            out.insert(
                 k.clone(),
                 match v {
                     serde_json::Value::String(s) => s.clone(),
@@ -1427,10 +1652,7 @@ fn tool_call_to_legacy(tc: &ToolCallResponse) -> ToolCall {
             );
         }
     }
-    ToolCall {
-        name: tc.name.clone(),
-        args,
-    }
+    out
 }
 
 /// Execute an MCP tool via the manager, returning a ToolResult.
@@ -1511,6 +1733,68 @@ async fn execute_team_tool(
 // System prompt
 // ---------------------------------------------------------------------------
 
+/// Assemble the full system prompt the way `AgentSession::new` does — loading
+/// memory, instructions, skills, and rules from disk — but with no
+/// side-effects (no shell_snapshot capture, no session-id allocation). Used by
+/// `--dump-system-prompt` and any tooling that wants to inspect what the model
+/// will see without instantiating a session.
+pub fn assemble_system_prompt(
+    sys_context: &SystemContext,
+    custom_system_prompt: Option<&str>,
+) -> String {
+    // Load project instruction files (AGENTS.md, CLAUDE.md, etc.)
+    let instructions = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| compaction::load_instructions(&cwd));
+
+    // Load hierarchical memory (global -> project -> local)
+    let memory_context = std::env::current_dir()
+        .ok()
+        .map(|cwd| {
+            let mgr = MemoryManager::new(&cwd);
+            mgr.get_context_prompt()
+        })
+        .unwrap_or_default();
+
+    // Load persistent memory from the memory pipeline
+    let persistent_memory = crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|home| crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home))
+        .unwrap_or_default();
+
+    // Discover and format skills for system prompt injection
+    let discovered = skills::discover_skills();
+    let skill_refs: Vec<&skills::Skill> = discovered.iter().collect();
+    let skills_content = skills::format_skills_for_prompt(&skill_refs);
+
+    // Load glob-matched rules (.agiworkforce/rules/*.md) — always-active subset
+    let rules = std::env::current_dir()
+        .ok()
+        .map(|cwd| memory::load_rules(&cwd))
+        .unwrap_or_default();
+    let rules_context = if rules.is_empty() {
+        String::new()
+    } else {
+        memory::rules_context_prompt(&rules, &[])
+    };
+
+    // Combine memory context with persistent memory from the pipeline
+    let combined_memory = if persistent_memory.is_empty() {
+        memory_context
+    } else {
+        format!("{}\n{}", memory_context, persistent_memory)
+    };
+
+    build_system_prompt(
+        sys_context,
+        custom_system_prompt,
+        instructions.as_deref(),
+        &skills_content,
+        &combined_memory,
+        &rules_context,
+    )
+}
+
 fn build_system_prompt(
     sys_context: &SystemContext,
     custom_system_prompt: Option<&str>,
@@ -1519,6 +1803,12 @@ fn build_system_prompt(
     memory_context: &str,
     rules_context: &str,
 ) -> String {
+    // Cache-friendly ordering: STABLE content first (base instructions, memory,
+    // project instructions, rules, skills), VOLATILE content (cwd, git status,
+    // OS, shell, current time) wrapped in `<environment>` last. The Anthropic
+    // prompt cache (Phase 5) marks the boundary just before `<environment>`,
+    // so re-running the agent in the same project hits the cache for
+    // everything above and only re-evaluates the env block.
     let base = custom_system_prompt.unwrap_or(
         "You are AGI Workforce CLI, a powerful AI assistant running in the user's terminal.\n\
          You help users with coding, system administration, writing, analysis, and general tasks.\n\
@@ -1526,47 +1816,53 @@ fn build_system_prompt(
          You are direct, concise, and precise. When showing code, use fenced code blocks with the language specified.",
     );
 
-    let mut prompt = format!(
-        r#"{}
-
-{}
-
-Important guidelines:
-- Be concise. Terminal users prefer short, actionable answers.
-- When asked to modify files or run commands, explain briefly what you'll do first.
-- If a task is ambiguous, ask a clarifying question.
-- Format output for terminal readability (not web).
-- You have access to tools for reading/writing files, running commands, and searching. Use them when needed.
-"#,
-        base, sys_context
+    let mut prompt = String::with_capacity(2048);
+    prompt.push_str(base);
+    prompt.push_str(
+        "\n\nImportant guidelines:\n\
+         - Be concise. Terminal users prefer short, actionable answers.\n\
+         - When asked to modify files or run commands, explain briefly what you'll do first.\n\
+         - If a task is ambiguous, ask a clarifying question.\n\
+         - Format output for terminal readability (not web).\n\
+         - You have access to tools for reading/writing files, running commands, and searching. Use them when needed.\n",
     );
 
-    // Hierarchical memory (global -> project -> local) — injected before
-    // project instructions so instructions can override memory defaults.
+    // Hierarchical memory (global -> project -> local) — stable across the session.
     if !memory_context.is_empty() {
         prompt.push('\n');
         prompt.push_str(memory_context);
         prompt.push('\n');
     }
 
+    // Project instructions — stable across the session.
     if let Some(instr) = instructions {
         prompt.push_str("\n<project-instructions>\n");
         prompt.push_str(instr);
         prompt.push_str("\n</project-instructions>\n");
     }
 
-    // Glob-matched rules (.agiworkforce/rules/*.md) — injected after
-    // instructions so rules have highest specificity.
+    // Glob-matched rules (.agiworkforce/rules/*.md) — stable. Rules have higher
+    // specificity than instructions because they're applied after.
     if !rules_context.is_empty() {
         prompt.push('\n');
         prompt.push_str(rules_context);
         prompt.push('\n');
     }
 
+    // Skills — stable.
     if !skills_content.is_empty() {
         prompt.push('\n');
         prompt.push_str(skills_content);
+        prompt.push('\n');
     }
+
+    // VOLATILE: environment block (cwd, git status, OS, shell). Goes LAST
+    // because it changes per-invocation; everything above is cacheable.
+    // SystemContext's Display impl already wraps the body in <environment>
+    // tags, so we just append it directly.
+    prompt.push('\n');
+    prompt.push_str(&sys_context.to_string());
+    prompt.push('\n');
 
     prompt
 }
