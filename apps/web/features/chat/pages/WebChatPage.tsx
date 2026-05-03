@@ -250,14 +250,41 @@ export default function WebChatPage() {
 
       {/* Main area */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Message list */}
+        {/* Message list or welcome state */}
         <div className="flex-1 overflow-hidden">
-          <MessageListNew
-            messages={chatMessages}
-            isLoading={isLoading && !isStreaming}
-            onRegenerate={handleRegenerateMessage}
-            onDelete={handleDeleteMessage}
-          />
+          {chatMessages.length === 0 && !isLoading ? (
+            <div className="flex h-full flex-col items-center justify-center gap-6 px-4">
+              <div className="text-center">
+                <h1 className="text-2xl font-semibold text-foreground">What can I help with?</h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Ask anything — I support 25+ models including Claude, GPT, Gemini, and local LLMs.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 w-full max-w-lg">
+                {[
+                  'Explain a complex concept',
+                  'Help me write code',
+                  'Summarize a document',
+                  'Brainstorm ideas',
+                ].map((prompt) => (
+                  <button
+                    key={prompt}
+                    onClick={() => handleSend(prompt)}
+                    className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <MessageListNew
+              messages={chatMessages}
+              isLoading={isLoading && !isStreaming}
+              onRegenerate={handleRegenerateMessage}
+              onDelete={handleDeleteMessage}
+            />
+          )}
         </div>
 
         {/* Composer */}
