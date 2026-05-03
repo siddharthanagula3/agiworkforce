@@ -67,6 +67,8 @@ export function useChatStream(): UseChatStreamReturn {
   const appendToThinking = useChatStore((state) => state.appendToThinking);
   const setSearching = useChatStore((state) => state.setSearching);
   const setSearchResults = useChatStore((state) => state.setSearchResults);
+  const setExecutingCode = useChatStore((state) => state.setExecutingCode);
+  const setCodeExecutionResult = useChatStore((state) => state.setCodeExecutionResult);
   const startStreaming = useChatStore((state) => state.startStreaming);
   const stopStreaming = useChatStore((state) => state.stopStreaming);
   const setLoading = useChatStore((state) => state.setLoading);
@@ -232,8 +234,9 @@ export function useChatStream(): UseChatStreamReturn {
                 });
                 inThinkingBlock = false;
               }
-              // Clear any lingering search indicator
+              // Clear any lingering tool indicators
               setSearching(assistantMessageId, false);
+              setExecutingCode(assistantMessageId, false);
               if (fullAssistantContent) {
                 saveMessageToDb(
                   conversationId,
@@ -286,10 +289,47 @@ export function useChatStream(): UseChatStreamReturn {
                 }
               }
 
-              // Handle web search status indicator (server-managed tool starting)
+              // Handle server-managed tool status indicators
               const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
               if (toolStatus?.status === 'searching') {
                 setSearching(assistantMessageId, true);
+              } else if (toolStatus?.status === 'executing') {
+                setExecutingCode(assistantMessageId, true);
+              }
+
+              // Handle code execution result
+              const codeResultBlock = parsed.choices?.[0]?.delta?.x_code_result;
+              if (codeResultBlock) {
+                const content = Array.isArray(codeResultBlock.content)
+                  ? (codeResultBlock.content as Record<string, unknown>[])
+                  : [];
+                const textItem = content.find((c) => c['type'] === 'text');
+                const rawText = (textItem?.['text'] as string) || '';
+                const images = content
+                  .filter((c) => c['type'] === 'image')
+                  .map((c) => {
+                    const src = c['source'] as Record<string, unknown> | undefined;
+                    return {
+                      mediaType: (src?.['media_type'] as string) || 'image/png',
+                      data: (src?.['data'] as string) || '',
+                    };
+                  })
+                  .filter((img) => img.data);
+
+                // Parse stdout/stderr/return_code from the text block.
+                // Anthropic formats this as: <stdout>...</stdout><stderr>...</stderr><return_code>N</return_code>
+                const stdout = rawText.match(/<stdout>([\s\S]*?)<\/stdout>/)?.[1] ?? rawText;
+                const stderr = rawText.match(/<stderr>([\s\S]*?)<\/stderr>/)?.[1] ?? '';
+                const returnCode = parseInt(
+                  rawText.match(/<return_code>(\d+)<\/return_code>/)?.[1] ?? '0',
+                  10,
+                );
+                setCodeExecutionResult(assistantMessageId, {
+                  stdout,
+                  stderr,
+                  returnCode,
+                  images: images.length > 0 ? images : undefined,
+                });
               }
 
               // Handle web search results (server-managed tool completed)
@@ -361,6 +401,8 @@ export function useChatStream(): UseChatStreamReturn {
       appendToThinking,
       setSearching,
       setSearchResults,
+      setExecutingCode,
+      setCodeExecutionResult,
       startStreaming,
       stopStreaming,
       setLoading,
