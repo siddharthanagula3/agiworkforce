@@ -177,21 +177,21 @@ impl AutonomousAgent {
 
             // Per-iteration budget check: compare cumulative cost against session cap.
             let cumulative_cost = self.router.read().await.get_cumulative_cost();
-            if cumulative_cost > self.config.max_session_cost {
+            if cumulative_cost > self.config.effective_session_cap_usd() {
                 tracing::warn!(
                     "[Agent] Session budget exceeded (${:.2} > ${:.2}), stopping autonomous loop",
                     cumulative_cost,
-                    self.config.max_session_cost
+                    self.config.effective_session_cap_usd()
                 );
                 if let Some(ref handle) = self.app_handle {
                     if let Err(e) = handle.emit(
                         "agent:budget-exceeded",
                         json!({
                             "cumulativeCost": cumulative_cost,
-                            "sessionLimit": self.config.max_session_cost,
+                            "sessionLimit": self.config.effective_session_cap_usd(),
                             "message": format!(
                                 "Budget exceeded: ${:.2} spent of ${:.2} limit",
-                                cumulative_cost, self.config.max_session_cost
+                                cumulative_cost, self.config.effective_session_cap_usd()
                             )
                         }),
                     ) {
@@ -203,26 +203,26 @@ impl AutonomousAgent {
 
             // Emit a one-time warning when approaching the budget threshold.
             if !budget_warning_emitted
-                && cumulative_cost > self.config.max_session_cost * BUDGET_WARNING_THRESHOLD
+                && cumulative_cost > self.config.effective_session_cap_usd() * BUDGET_WARNING_THRESHOLD
             {
                 budget_warning_emitted = true;
-                let pct = (cumulative_cost / self.config.max_session_cost * 100.0) as u32;
+                let pct = (cumulative_cost / self.config.effective_session_cap_usd() * 100.0) as u32;
                 tracing::warn!(
                     "[Agent] Budget warning: ${:.2} spent ({}% of ${:.2} limit)",
                     cumulative_cost,
                     pct,
-                    self.config.max_session_cost
+                    self.config.effective_session_cap_usd()
                 );
                 if let Some(ref handle) = self.app_handle {
                     if let Err(e) = handle.emit(
                         "agent:budget-warning",
                         json!({
                             "cumulativeCost": cumulative_cost,
-                            "sessionLimit": self.config.max_session_cost,
+                            "sessionLimit": self.config.effective_session_cap_usd(),
                             "percentUsed": pct,
                             "message": format!(
                                 "Budget warning: {}% of session limit used (${:.2} of ${:.2})",
-                                pct, cumulative_cost, self.config.max_session_cost
+                                pct, cumulative_cost, self.config.effective_session_cap_usd()
                             )
                         }),
                     ) {
@@ -332,11 +332,11 @@ impl AutonomousAgent {
             // Enforce cumulative cost cap (same as run_autonomous_loop)
             if let Ok(router) = self.router.try_read() {
                 let cost = router.get_cumulative_cost();
-                if cost > self.config.max_session_cost {
+                if cost > self.config.effective_session_cap_usd() {
                     return Err(anyhow!(
                         "run_goal exceeded session cost cap (${:.2} > ${:.2})",
                         cost,
-                        self.config.max_session_cost
+                        self.config.effective_session_cap_usd()
                     ));
                 }
             }
@@ -764,16 +764,16 @@ impl AutonomousAgent {
                 );
                 break;
             }
-            if pre_step_cost > self.config.max_session_cost {
+            if pre_step_cost > self.config.effective_session_cap_usd() {
                 task.status = TaskStatus::Failed(format!(
                     "Session cost cap exceeded before step {}: ${:.2} > ${:.2} limit",
-                    step_index, pre_step_cost, self.config.max_session_cost
+                    step_index, pre_step_cost, self.config.effective_session_cap_usd()
                 ));
                 tracing::warn!(
                     "[Agent] Task {} budget gate: session cost ${:.2} exceeds cap ${:.2} before step {}",
                     task_id,
                     pre_step_cost,
-                    self.config.max_session_cost,
+                    self.config.effective_session_cap_usd(),
                     step_index
                 );
                 break;
@@ -1048,16 +1048,16 @@ impl AutonomousAgent {
                     );
                     break;
                 }
-                if current_cost > self.config.max_session_cost {
+                if current_cost > self.config.effective_session_cap_usd() {
                     task.status = TaskStatus::Failed(format!(
                         "Session cost cap exceeded: ${:.2} > ${:.2} limit",
-                        current_cost, self.config.max_session_cost
+                        current_cost, self.config.effective_session_cap_usd()
                     ));
                     tracing::warn!(
                         "[Agent] Task {} aborted: session cost ${:.2} exceeds cap ${:.2}",
                         task_id,
                         current_cost,
-                        self.config.max_session_cost
+                        self.config.effective_session_cap_usd()
                     );
                     break;
                 }
