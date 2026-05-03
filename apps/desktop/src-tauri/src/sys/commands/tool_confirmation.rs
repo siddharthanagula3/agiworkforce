@@ -6,12 +6,13 @@
 use crate::sys::security::tool_guard::RiskLevel;
 use crate::sys::security::{ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard};
 use parking_lot::Mutex;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{Emitter, State};
 use tokio::sync::oneshot;
 use tracing::{debug, info, warn};
@@ -50,9 +51,13 @@ pub struct ToolConfirmationState {
     /// Session-scoped tool approvals — tools approved for the current session only.
     /// Cleared when session ends or user explicitly resets.
     pub session_approved_tools: Arc<Mutex<HashSet<String>>>,
+    /// SQLite connection for persisting remembered choices across restarts.
+    /// None in test builds / when no DB is available.
+    db_conn: Option<Arc<StdMutex<Connection>>>,
 }
 
 impl ToolConfirmationState {
+    /// Create with no persistence (used by tests and Default impl).
     pub fn new() -> Self {
         Self {
             pending_confirmations: Arc::new(Mutex::new(HashMap::new())),
@@ -61,7 +66,66 @@ impl ToolConfirmationState {
             auto_approve_all: Arc::new(AtomicBool::new(false)),
             agent_mode: Arc::new(Mutex::new(AgentMode::default())),
             session_approved_tools: Arc::new(Mutex::new(HashSet::new())),
+            db_conn: None,
         }
+    }
+
+    /// Create with SQLite persistence. Loads previously remembered choices on startup.
+    pub fn new_with_db(db_conn: Arc<StdMutex<Connection>>) -> Self {
+        let state = Self {
+            pending_confirmations: Arc::new(Mutex::new(HashMap::new())),
+            remembered_choices: Arc::new(Mutex::new(HashMap::new())),
+            tool_guard: Arc::new(ToolExecutionGuard::new()),
+            auto_approve_all: Arc::new(AtomicBool::new(false)),
+            agent_mode: Arc::new(Mutex::new(AgentMode::default())),
+            session_approved_tools: Arc::new(Mutex::new(HashSet::new())),
+            db_conn: Some(db_conn.clone()),
+        };
+        state.load_choices_from_db(&db_conn);
+        state
+    }
+
+    fn load_choices_from_db(&self, db_conn: &Arc<StdMutex<Connection>>) {
+        let Ok(conn) = db_conn.lock() else { return };
+        let Ok(mut stmt) = conn.prepare(
+            "SELECT tool_name, approved FROM remembered_tool_choices",
+        ) else { return };
+        let rows = stmt.query_map([], |row| {
+            let name: String = row.get(0)?;
+            let approved: i32 = row.get(1)?;
+            Ok((name, approved != 0))
+        });
+        if let Ok(iter) = rows {
+            let mut map = self.remembered_choices.lock();
+            for row in iter.flatten() {
+                map.insert(row.0, row.1);
+            }
+        }
+    }
+
+    fn db_persist_choice(&self, tool_name: &str, approved: bool) {
+        let Some(ref db) = self.db_conn else { return };
+        let Ok(conn) = db.lock() else { return };
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO remembered_tool_choices (tool_name, approved, updated_at) \
+             VALUES (?1, ?2, CURRENT_TIMESTAMP)",
+            rusqlite::params![tool_name, approved as i32],
+        );
+    }
+
+    fn db_delete_choice(&self, tool_name: &str) {
+        let Some(ref db) = self.db_conn else { return };
+        let Ok(conn) = db.lock() else { return };
+        let _ = conn.execute(
+            "DELETE FROM remembered_tool_choices WHERE tool_name = ?1",
+            [tool_name],
+        );
+    }
+
+    fn db_clear_choices(&self) {
+        let Some(ref db) = self.db_conn else { return };
+        let Ok(conn) = db.lock() else { return };
+        let _ = conn.execute("DELETE FROM remembered_tool_choices", []);
     }
 
     /// Set the global auto-approve flag
@@ -188,16 +252,24 @@ impl ToolConfirmationState {
         self.remembered_choices.lock().get(tool_name).copied()
     }
 
-    /// Store a remembered choice for a tool
+    /// Store a remembered choice for a tool (in-memory + persisted to SQLite).
     pub fn remember_choice(&self, tool_name: &str, approved: bool) {
         self.remembered_choices
             .lock()
             .insert(tool_name.to_string(), approved);
+        self.db_persist_choice(tool_name, approved);
     }
 
-    /// Clear all remembered choices
+    /// Remove a single remembered choice (in-memory + persisted to SQLite).
+    pub fn forget_choice(&self, tool_name: &str) {
+        self.remembered_choices.lock().remove(tool_name);
+        self.db_delete_choice(tool_name);
+    }
+
+    /// Clear all remembered choices (in-memory + persisted to SQLite).
     pub fn clear_remembered_choices(&self) {
         self.remembered_choices.lock().clear();
+        self.db_clear_choices();
     }
 
     /// Get the tool guard for policy lookups
@@ -435,7 +507,7 @@ pub fn clear_remembered_tool_choice(
     tool_name: String,
     state: State<'_, ToolConfirmationState>,
 ) -> Result<(), String> {
-    state.remembered_choices.lock().remove(&tool_name);
+    state.forget_choice(&tool_name);
     info!(
         "[ToolConfirmation] Cleared remembered choice for tool: {}",
         tool_name
@@ -598,7 +670,7 @@ pub fn set_tool_approval_policy(
             );
         }
         "ask" => {
-            state.remembered_choices.lock().remove(&tool_name);
+            state.forget_choice(&tool_name);
             info!(
                 "[ToolConfirmation] Set policy for '{}': ask (cleared remembered choice)",
                 tool_name
