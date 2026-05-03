@@ -355,8 +355,37 @@ impl PluginsManager {
                             }
                         };
                         let headers = extract_string_headers(&cfg.extra);
-                        // B3 will read `auth` here and convert to McpOAuthConfig.
-                        out.insert(name.clone(), crate::mcp::McpServerConfig::http(url, headers));
+                        // B3: parse the manifest's `auth` block into a typed
+                        // McpOAuthConfig so the HTTP transport runs the PKCE
+                        // dance on first 401. Missing/invalid `auth` falls
+                        // back to "no OAuth" (server must accept anonymous).
+                        let auth = cfg
+                            .extra
+                            .get("auth")
+                            .and_then(|v| {
+                                serde_json::from_value::<crate::mcp::McpOAuthConfig>(
+                                    v.clone(),
+                                )
+                                .map_err(|e| {
+                                    eprintln!(
+                                        "[plugins] MCP server '{}' has invalid `auth` \
+                                         block ({}); ignoring",
+                                        name, e
+                                    );
+                                    e
+                                })
+                                .ok()
+                            });
+                        out.insert(
+                            name.clone(),
+                            crate::mcp::McpServerConfig::Tagged(
+                                crate::mcp::McpTransport::Http {
+                                    url,
+                                    headers,
+                                    auth,
+                                },
+                            ),
+                        );
                     }
                     Some("stdio") | None => {
                         if cfg.command.is_empty() {

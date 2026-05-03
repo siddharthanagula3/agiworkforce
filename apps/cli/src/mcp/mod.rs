@@ -21,10 +21,16 @@ use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
 
 mod http;
+mod oauth_flow;
+mod oauth_store;
 mod sse;
 
 use http::{connect_http, send_request_http};
 use sse::connect_sse;
+
+pub use oauth_store::McpOAuthStore;
+#[allow(unused_imports)]
+pub use oauth_store::McpOAuthToken;
 
 // ---------------------------------------------------------------------------
 // Config types
@@ -41,9 +47,38 @@ pub enum McpServerConfig {
     Legacy(LegacyStdioConfig),
 }
 
-/// Discriminated transport union. The `Http` variant carries an `auth`
-/// placeholder slot that Sprint B3 will replace with an `McpOAuthConfig`
-/// (PKCE flow + token storage).
+/// OAuth configuration for an MCP HTTP transport (Sprint B3).
+///
+/// All fields optional — when absent we run RFC 9728 → RFC 8414 discovery
+/// on first 401. When `client_id` is also absent we attempt RFC 7591
+/// dynamic client registration against the discovered AS.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct McpOAuthConfig {
+    /// Override RFC 9728/8414 discovery for the authorize endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authorize_url: Option<String>,
+    /// Override the discovered token endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_url: Option<String>,
+    /// Space-separated scopes requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    /// Pre-registered client id. If unset, attempt RFC 7591 dynamic registration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+    /// Pre-registered client secret (confidential clients only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_secret: Option<String>,
+    /// Override redirect URI; defaults to `http://127.0.0.1:<random>/callback`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redirect_uri: Option<String>,
+}
+
+/// Discriminated transport union. The `Http` variant carries an optional
+/// typed `McpOAuthConfig`; when present, the HTTP layer transparently runs
+/// the PKCE flow on first 401 and persists tokens to
+/// `~/.agiworkforce/mcp-oauth.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "transport", rename_all = "lowercase")]
 pub enum McpTransport {
@@ -63,11 +98,9 @@ pub enum McpTransport {
         url: String,
         #[serde(default)]
         headers: HashMap<String, String>,
-        /// OAuth configuration slot — present so configs round-trip even
-        /// before B3 lands. B3 will swap `serde_json::Value` for a typed
-        /// `McpOAuthConfig`.
+        /// OAuth (PKCE) configuration. Sprint B3.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        auth: Option<serde_json::Value>,
+        auth: Option<McpOAuthConfig>,
     },
 }
 
@@ -121,7 +154,10 @@ impl McpServerConfig {
         })
     }
 
-    /// Convenience constructor for Streamable HTTP configs.
+    /// Convenience constructor for Streamable HTTP configs (no OAuth).
+    /// Plugins.rs constructs the OAuth-enabled variant directly via the
+    /// `McpTransport::Http` enum — see `mcp_configs()`.
+    #[allow(dead_code)]
     pub fn http(url: impl Into<String>, headers: HashMap<String, String>) -> Self {
         McpServerConfig::Tagged(McpTransport::Http {
             url: url.into(),
@@ -344,6 +380,11 @@ pub(super) enum McpTransportConn {
         /// Sticky session id from `Mcp-Session-Id` header — captured on
         /// every response and echoed on every subsequent request.
         session_id: Option<String>,
+        /// OAuth (PKCE) configuration if the transport opted into it
+        /// (B3). When `Some`, send_request_http checks the token store
+        /// before each request, attaches `Authorization: Bearer ...`,
+        /// and runs the OAuth dance on 401.
+        oauth: Option<McpOAuthConfig>,
     },
 }
 
@@ -377,8 +418,8 @@ impl McpConnection {
             McpTransport::Sse { url, headers } => {
                 connect_sse(name, &url, &headers, timeouts, config.clone()).await
             }
-            McpTransport::Http { url, headers, .. } => {
-                connect_http(name, &url, &headers, timeouts, config.clone()).await
+            McpTransport::Http { url, headers, auth } => {
+                connect_http(name, &url, &headers, auth.as_ref(), timeouts, config.clone()).await
             }
         }
     }
@@ -595,11 +636,12 @@ impl McpConnection {
                 // (closing the prior SSE channel / killing the prior child).
                 Ok(())
             }
-            McpTransport::Http { url, headers, .. } => {
+            McpTransport::Http { url, headers, auth } => {
                 let mut fresh = connect_http(
                     &self.server_name,
                     &url,
                     &headers,
+                    auth.as_ref(),
                     self.timeouts.clone(),
                     self.config.clone(),
                 )
@@ -797,6 +839,7 @@ impl McpConnection {
                 headers,
                 client,
                 session_id,
+                oauth,
                 ..
             } => {
                 send_request_http(
@@ -804,6 +847,7 @@ impl McpConnection {
                     headers,
                     client,
                     session_id,
+                    oauth.as_ref(),
                     &request,
                     timeout,
                     &server_name,
@@ -869,6 +913,7 @@ impl McpConnection {
                 headers,
                 client,
                 session_id,
+                oauth,
                 ..
             } => {
                 let mut req_builder = client
@@ -881,6 +926,21 @@ impl McpConnection {
                 }
                 if let Some(sid) = session_id.as_deref() {
                     req_builder = req_builder.header("Mcp-Session-Id", sid);
+                }
+                // Attach OAuth bearer if we have a cached token. Notifications
+                // are fire-and-forget so we don't bother triggering the OAuth
+                // dance on 401 here — that happens on the next request.
+                if oauth.is_some() {
+                    if let Ok(store) = McpOAuthStore::load() {
+                        if let Some(tok) = store.get(url.as_str()) {
+                            if !tok.is_expiring_soon(60) {
+                                req_builder = req_builder.header(
+                                    "Authorization",
+                                    format!("Bearer {}", tok.access_token),
+                                );
+                            }
+                        }
+                    }
                 }
                 if let Err(e) = req_builder.send().await {
                     eprintln!(
