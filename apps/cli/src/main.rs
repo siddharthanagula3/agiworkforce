@@ -1,6 +1,4 @@
 // Active modules — core CLI functionality
-#[allow(dead_code)]
-mod a2a;
 mod agent;
 mod agent_events;
 mod agents;
@@ -30,53 +28,65 @@ mod subagent;
 mod teams;
 mod tools;
 mod tui;
-#[allow(dead_code)]
-mod tui_basic;
 mod voice;
-// Extended CLI modules
+
+// Extended CLI modules — used by subcommand handlers
 mod app_server;
 mod apply_patch;
 mod cloud;
 mod exec_policy;
 mod model_catalog;
 mod plugins;
-#[allow(dead_code)]
-mod policy;
-#[allow(dead_code)]
-mod project_scope;
 mod review;
-#[allow(dead_code)]
-mod routing;
 mod runtime;
 mod sandbox;
-#[allow(dead_code)]
-mod sdk_io;
 mod tool_search;
-// In-progress modules — compiled and partially wired. Public APIs available for future integration.
+
+// Modules with internal items not yet fully consumed. dead_code allow is
+// scoped: enables future wiring without churn. Each is referenced by main.rs
+// for at least one call site (see ARCHITECTURE.md §11–14 for details).
 #[allow(dead_code)]
 mod ecosystem;
-#[allow(dead_code)]
-mod history;
 #[allow(dead_code)]
 mod init;
 #[allow(dead_code)]
 mod marketplace;
 #[allow(dead_code)]
-mod memory_pipeline;
-#[allow(dead_code)]
-mod models_cache;
-#[allow(dead_code)]
 mod oauth;
 #[allow(dead_code)]
 mod onboarding;
 #[allow(dead_code)]
+mod policy;
+#[allow(dead_code)]
 mod project_registry;
+#[allow(dead_code)]
+mod project_scope;
+#[allow(dead_code)]
+mod routing;
+#[allow(dead_code)]
+mod sdk_io;
+#[allow(dead_code)]
+mod sync;
+
+// Truly-parked modules — zero call sites in main.rs. Kept compiled so the
+// public API stays valid as helpers; will be wired up in v1.1+ or removed.
+// a2a: Agent-to-Agent protocol (1337 LOC). tui_basic: alternative simpler TUI.
+// history: stub. memory_pipeline: auto-consolidation. models_cache: stub.
+// shell_snapshot: stub. skill_learner: auto-skill generation.
+#[allow(dead_code)]
+mod a2a;
+#[allow(dead_code)]
+mod history;
+#[allow(dead_code)]
+mod memory_pipeline;
+#[allow(dead_code)]
+mod models_cache;
 #[allow(dead_code)]
 mod shell_snapshot;
 #[allow(dead_code)]
 mod skill_learner;
 #[allow(dead_code)]
-mod sync;
+mod tui_basic;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};

@@ -558,6 +558,14 @@ impl CliConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Tests that mutate process environment variables must hold this mutex.
+    /// Cargo runs tests in parallel by default, and AGIWORKFORCE_* env vars
+    /// are process-global — without serialization, set/remove from one test
+    /// can race the assertions in another. (Was producing intermittent
+    /// failures in test_merge_env_no_vars_keeps_defaults.)
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_default_config_is_valid() {
@@ -787,6 +795,7 @@ mod tests {
 
     #[test]
     fn test_merge_env_model_override() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
         std::env::set_var("AGIWORKFORCE_MODEL", "gpt-4o");
         config.merge_env_overrides();
@@ -796,6 +805,7 @@ mod tests {
 
     #[test]
     fn test_merge_env_provider_override() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
         std::env::set_var("AGIWORKFORCE_PROVIDER", "openai");
         config.merge_env_overrides();
@@ -805,6 +815,7 @@ mod tests {
 
     #[test]
     fn test_merge_env_max_tokens_override() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
         std::env::set_var("AGIWORKFORCE_MAX_TOKENS", "16384");
         config.merge_env_overrides();
@@ -814,6 +825,7 @@ mod tests {
 
     #[test]
     fn test_merge_env_ignores_empty_values() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
         let original_model = config.default.model.clone();
         let original_provider = config.default.provider.clone();
@@ -830,6 +842,7 @@ mod tests {
 
     #[test]
     fn test_merge_env_ignores_invalid_max_tokens() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
         std::env::set_var("AGIWORKFORCE_MAX_TOKENS", "not_a_number");
         config.merge_env_overrides();
@@ -840,6 +853,7 @@ mod tests {
 
     #[test]
     fn test_merge_env_no_vars_keeps_defaults() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         // Ensure vars are unset
         std::env::remove_var("AGIWORKFORCE_MODEL");
         std::env::remove_var("AGIWORKFORCE_PROVIDER");
@@ -1028,6 +1042,7 @@ max_tokens = 2048
 
     #[test]
     fn test_env_overrides_tracked_in_source() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
         std::env::set_var("AGIWORKFORCE_MODEL", "gpt-4o");
         std::env::set_var("AGIWORKFORCE_PROVIDER", "openai");
@@ -1049,6 +1064,7 @@ max_tokens = 2048
 
     #[test]
     fn test_empty_env_not_tracked() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
         std::env::set_var("AGIWORKFORCE_MODEL", "");
         config.merge_env_overrides();
@@ -1059,6 +1075,7 @@ max_tokens = 2048
 
     #[test]
     fn test_invalid_max_tokens_not_tracked() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
         std::env::set_var("AGIWORKFORCE_MAX_TOKENS", "bad");
         config.merge_env_overrides();
