@@ -95,7 +95,13 @@ export default function WebChatPage() {
       content: string,
       attachments?: File[],
       _skillId?: string,
-      meta?: { agentMode?: string; folderId?: string | null; webSearchEnabled?: boolean },
+      meta?: {
+        agentMode?: string;
+        folderId?: string | null;
+        webSearchEnabled?: boolean;
+        thinkingEnabled?: boolean;
+        codeExecutionEnabled?: boolean;
+      },
     ) => {
       const convId =
         urlConversationId ||
@@ -140,6 +146,8 @@ export default function WebChatPage() {
         conversationId: convId,
         attachments: resolvedAttachments,
         webSearch: meta?.webSearchEnabled,
+        thinkingEnabled: meta?.thinkingEnabled,
+        codeExecution: meta?.codeExecutionEnabled,
       });
     },
     [
