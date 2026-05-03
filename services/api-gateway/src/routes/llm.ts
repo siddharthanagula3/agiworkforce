@@ -318,6 +318,15 @@ function googleToOpenAI(
 // UPSTREAM REQUEST EXECUTION
 // =============================================================================
 
+// GW-2 (audit 2026-05-03): SECURITY GUARDRAIL — every fetch() call in
+// this file constructs a fresh `headers` object literal with explicit
+// fields. NEVER copy `req.headers` into the upstream fetch — doing so
+// would forward the user's `Authorization: Bearer <jwt>` to the
+// upstream LLM provider, leaking the user's session token. If a future
+// pattern needs to forward headers selectively, add an explicit
+// allowlist (e.g. only `x-request-id`) — anything else is a security
+// review blocker.
+
 async function callUpstream(
   provider: Provider,
   apiKey: string,
