@@ -4,6 +4,19 @@ import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 
 // Types
+export interface MessageMetadata {
+  /** Raw extended thinking text rendered by ThinkingBlock */
+  thinkingContent?: string;
+  /** True while thinking content is still streaming */
+  isThinkingStreaming?: boolean;
+  /** ISO timestamp when thinking started */
+  thinkingStartedAt?: string;
+  /** ISO timestamp when thinking completed */
+  thinkingCompletedAt?: string;
+  /** Web search citations from server-managed tools */
+  citations?: Array<{ url?: string; title?: string; cited_text?: string; type?: string }>;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -13,7 +26,8 @@ export interface Message {
   isStreaming?: boolean;
   attachments?: Attachment[];
   reactions?: { type: 'thumbsUp' | 'thumbsDown'; userId: string }[];
-  error?: boolean; // Indicates if this message contains an error
+  error?: boolean;
+  metadata?: MessageMetadata;
 }
 
 export interface Attachment {
@@ -111,6 +125,7 @@ interface ChatState {
   addMessage: (message: Message) => void;
   updateMessage: (id: string, updates: Partial<Message>) => void;
   appendToMessage: (id: string, content: string) => void;
+  appendToThinking: (id: string, thinking: string) => void;
   deleteMessage: (id: string) => void;
   clearMessages: () => void;
 
@@ -237,6 +252,25 @@ export const useChatStore = create<ChatState>()(
             }),
             undefined,
             'chat/appendToMessage',
+          ),
+
+        appendToThinking: (id, thinking) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id
+                  ? {
+                      ...m,
+                      metadata: {
+                        ...m.metadata,
+                        thinkingContent: (m.metadata?.thinkingContent ?? '') + thinking,
+                      },
+                    }
+                  : m,
+              ),
+            }),
+            undefined,
+            'chat/appendToThinking',
           ),
 
         deleteMessage: (id) =>
