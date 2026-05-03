@@ -340,19 +340,23 @@ impl PluginsManager {
                                 continue;
                             }
                         };
-                        let headers: HashMap<String, String> = cfg
-                            .extra
-                            .get("headers")
-                            .and_then(|v| v.as_object())
-                            .map(|obj| {
-                                obj.iter()
-                                    .filter_map(|(k, v)| {
-                                        v.as_str().map(|s| (k.clone(), s.to_string()))
-                                    })
-                                    .collect()
-                            })
-                            .unwrap_or_default();
+                        let headers = extract_string_headers(&cfg.extra);
                         out.insert(name.clone(), crate::mcp::McpServerConfig::sse(url, headers));
+                    }
+                    Some("http") => {
+                        let url = match cfg.extra.get("url").and_then(|v| v.as_str()) {
+                            Some(u) => u.to_string(),
+                            None => {
+                                eprintln!(
+                                    "[plugins] MCP server '{}' declares transport=http but has no `url` — skipping",
+                                    name
+                                );
+                                continue;
+                            }
+                        };
+                        let headers = extract_string_headers(&cfg.extra);
+                        // B3 will read `auth` here and convert to McpOAuthConfig.
+                        out.insert(name.clone(), crate::mcp::McpServerConfig::http(url, headers));
                     }
                     Some("stdio") | None => {
                         if cfg.command.is_empty() {
@@ -369,10 +373,9 @@ impl PluginsManager {
                         );
                     }
                     Some(other) => {
-                        // Future B2/B3 transports (http, oauth) will be wired
-                        // here. For now, skip with a notice.
+                        // B3 will add "oauth" here. Anything else is unknown.
                         eprintln!(
-                            "[plugins] MCP server '{}' uses unsupported transport '{}' — skipping (B2/B3 wiring pending)",
+                            "[plugins] MCP server '{}' uses unsupported transport '{}' — skipping (B3 wiring pending)",
                             name, other
                         );
                     }
@@ -502,6 +505,22 @@ impl PluginsManager {
             }
         }
     }
+}
+
+/// Pull `headers = { ... }` out of an MCP server config's catch-all `extra`
+/// map into a flat `HashMap<String, String>`. Non-string values are dropped.
+fn extract_string_headers(
+    extra: &serde_json::Map<String, serde_json::Value>,
+) -> HashMap<String, String> {
+    extra
+        .get("headers")
+        .and_then(|v| v.as_object())
+        .map(|obj| {
+            obj.iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Probe a plugin root for any of the supported manifest paths and
