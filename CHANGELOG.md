@@ -7,21 +7,44 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 ### Wave 2 (in progress)
 
 - Pixel-close Claude Desktop UI for Tauri app
-- Migrate apps/web `UnifiedAgenticChat` (141 files) to canonical `packages/chat`
-- Windows code signing (EV cert) for desktop installer
-- Privacy Policy rewrite + GDPR Settings → Data section
+- Triage 84 desktop component dirs → ~25 active (in-flight: 9 dirs / 3,430 LOC removed; ~50 still reachable via DynamicSidecar lazy loader)
+- Windows code signing (EV cert) for desktop installer (needs $300/yr cert)
+- Privacy Policy rewrite + GDPR Settings → Data section (needs counsel sign-off)
+- IPC inventory proc-macro replacement of `generate_handler!` (FIX-023 already wired check-wiring.sh into ci.yml at line 154; proc-macro is the v1.1 follow-up)
+
+### Wave 2 — DONE
+
+- ✅ `apps/web/components/UnifiedAgenticChat/` deleted (141 files / 36,086 LOC of dead code; real /chat surface is the desktop Vite SPA per vercel.json rewrite)
+- ✅ WEB-4 Stripe webhook body-read: middleware exclusion + nodejs runtime pinned
 
 ### Wave 3 (planned)
 
-- iOS App Store + Google Play submissions for mobile companion
-- Chrome Web Store submission for browser extension
-- VS Code Marketplace submission
-- Hobby tier ($5/mo) launch
-- Pro / Max waitlist page
+- iOS App Store + Google Play submissions for mobile companion (needs Apple/Google dev accounts)
+- Chrome Web Store submission for browser extension (needs $5 dev account)
+- VS Code Marketplace submission (free, but needs Microsoft account)
+- Hobby tier ($5/mo) launch (needs Stripe price + frontend wire-up)
+- Pro / Max waitlist UI (API at `/api/waitlist` already exists; pricing page already calls it)
+
+### Wave 0 — SHIPPED 2026-05-03
+
+Massive cleanup pass. -1.04M LOC total across 19 commits. See git log for detail.
 
 ---
 
-## [1.0.0] — 2026-05-XX (CLI v1.0 launch)
+## [1.0.0] — 2026-05-03 (CLI v1.0 — SHIPPED)
+
+**Live install paths**:
+
+```bash
+brew install siddharthanagula3/tap/agiworkforce        # ✅ live
+curl -fsSL https://raw.githubusercontent.com/siddharthanagula3/agiworkforce/main/scripts/install.sh | bash  # ✅ live
+cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli  # ✅ live
+# Direct: https://github.com/siddharthanagula3/agiworkforce/releases/tag/v-cli-1.0.0  # ✅ live
+npm install -g @agiworkforce/cli                        # ⏳ pending NPM_TOKEN secret (user action)
+```
+
+**Platforms shipped**: macOS arm64, macOS x64, Linux x64, Windows arm64, Windows x64.
+**Linux arm64**: deferred to v1.1 (cross-compile openssl-sys not yet wired). Workaround: `cargo install --git ...` (builds natively).
 
 ### Added
 
