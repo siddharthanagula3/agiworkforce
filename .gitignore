@@ -210,3 +210,4 @@ apps/web/public/chat
 CLAUDE.local.md
 .claude/settings.local.json
 .claude/*.local.*
+Cross.toml
