@@ -61,6 +61,8 @@ interface ChatComposerProps {
   onDroppedFilesConsumed?: () => void;
   /** Fires when the input transitions between empty and non-empty (debounced 500ms on clear). */
   onTypingChange?: (isTyping: boolean) => void;
+  /** Called when the user clicks the stop button. Overrides the default ChatAIService.stopGeneration(). */
+  onStop?: () => void;
 }
 
 const TOOLS = [
@@ -98,6 +100,7 @@ const ChatComposerNewComponent = ({
   droppedFiles,
   onDroppedFilesConsumed,
   onTypingChange,
+  onStop,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const {
@@ -365,8 +368,12 @@ const ChatComposerNewComponent = ({
   }, []);
 
   const handleStop = useCallback(() => {
-    ChatAIService.stopGeneration();
-  }, []);
+    if (onStop) {
+      onStop();
+    } else {
+      ChatAIService.stopGeneration();
+    }
+  }, [onStop]);
 
   const handleSubmit = useCallback(() => {
     if (!message.trim() && attachments.length === 0) return;
