@@ -203,7 +203,15 @@ export async function validateCsrfFromRequest(
     return true; // GET requests don't need CSRF protection
   }
 
-  // Bearer token requests are not vulnerable to CSRF — skip validation.
+  // CSRF does not apply to Bearer-token requests. Threat model:
+  //   - CSRF requires the browser to silently attach credentials (cookies).
+  //   - This SPA stores JWTs in memory / localStorage, not cookies.
+  //   - SOP prevents a cross-origin attacker from reading localStorage or
+  //     injecting a custom Authorization header via fetch/XHR.
+  //   - Therefore a cross-origin page cannot forge a valid Bearer request,
+  //     and the CSRF check would provide no additional protection here.
+  // If this app ever migrates to HttpOnly cookie auth, this bypass MUST be
+  // removed and SameSite=Strict set on the session cookie instead.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     return true;
