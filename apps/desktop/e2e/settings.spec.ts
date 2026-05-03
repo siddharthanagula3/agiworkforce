@@ -85,17 +85,13 @@ test.describe('Settings and Configuration', () => {
     const cpuInput = page.getByLabel(/cpu/i).or(page.getByTestId('cpu-limit')).first();
     const cpuVisible = await cpuInput.isVisible({ timeout: 2000 }).catch(() => false);
 
-    if (cpuVisible) {
-      await settingsPage.setResourceLimit('cpu', '75');
-      await settingsPage.setResourceLimit('memory', '85');
-      await settingsPage.saveSettings();
+    test.skip(!cpuVisible, 'Resource limits UI not present in current build');
+    await settingsPage.setResourceLimit('cpu', '75');
+    await settingsPage.setResourceLimit('memory', '85');
+    await settingsPage.saveSettings();
 
-      const saved = await settingsPage.isSettingsSaved();
-      expect(saved).toBe(true);
-    } else {
-      // Resource limits UI not present in current app version - test passes
-      expect(true).toBe(true);
-    }
+    const saved = await settingsPage.isSettingsSaved();
+    expect(saved).toBe(true);
   });
 
   test('should toggle autonomous mode', async ({ page, settingsPage }) => {
@@ -108,16 +104,12 @@ test.describe('Settings and Configuration', () => {
       .first();
     const toggleVisible = await autonomousToggle.isVisible({ timeout: 2000 }).catch(() => false);
 
-    if (toggleVisible) {
-      await settingsPage.toggleAutonomousMode(true);
-      await settingsPage.saveSettings();
+    test.skip(!toggleVisible, 'Autonomous mode toggle not present in current build');
+    await settingsPage.toggleAutonomousMode(true);
+    await settingsPage.saveSettings();
 
-      const saved = await settingsPage.isSettingsSaved();
-      expect(saved).toBe(true);
-    } else {
-      // Autonomous mode toggle not present in current app version - test passes
-      expect(true).toBe(true);
-    }
+    const saved = await settingsPage.isSettingsSaved();
+    expect(saved).toBe(true);
   });
 
   test('should configure auto-approval settings', async ({ page, settingsPage }) => {
@@ -132,16 +124,12 @@ test.describe('Settings and Configuration', () => {
       .isVisible({ timeout: 2000 })
       .catch(() => false);
 
-    if (checkboxVisible) {
-      await settingsPage.toggleAutoApproval(true);
-      await settingsPage.saveSettings();
+    test.skip(!checkboxVisible, 'Auto-approval checkbox not present in current build');
+    await settingsPage.toggleAutoApproval(true);
+    await settingsPage.saveSettings();
 
-      const saved = await settingsPage.isSettingsSaved();
-      expect(saved).toBe(true);
-    } else {
-      // Auto-approval checkbox not present in current app version - test passes
-      expect(true).toBe(true);
-    }
+    const saved = await settingsPage.isSettingsSaved();
+    expect(saved).toBe(true);
   });
 
   test('should reset settings to defaults', async ({ page, settingsPage }) => {
@@ -152,20 +140,17 @@ test.describe('Settings and Configuration', () => {
       .isVisible({ timeout: 2000 })
       .catch(() => false);
 
-    if (resetButtonVisible) {
-      if (await errorHandler.isElementVisible(settingsPage.themeSelect, 2000)) {
-        await settingsPage.changeTheme('dark');
-        await settingsPage.saveSettings();
-      }
+    test.skip(!resetButtonVisible, 'Reset button not present in current build');
 
-      await settingsPage.resetSettings();
-
-      const saved = await settingsPage.isSettingsSaved();
-      expect(saved).toBe(true);
-    } else {
-      // Reset button not present in current app version - test passes
-      expect(true).toBe(true);
+    if (await errorHandler.isElementVisible(settingsPage.themeSelect, 2000)) {
+      await settingsPage.changeTheme('dark');
+      await settingsPage.saveSettings();
     }
+
+    await settingsPage.resetSettings();
+
+    const saved = await settingsPage.isSettingsSaved();
+    expect(saved).toBe(true);
   });
 
   test('should display keyboard shortcuts', async ({ page, settingsPage }) => {

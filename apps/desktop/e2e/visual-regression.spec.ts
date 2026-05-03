@@ -156,29 +156,32 @@ test.describe('Visual Regression Tests', () => {
   test('should match modal dialogs', async ({ page, screenshotHelper, chatPage }) => {
     await chatPage.goto();
 
-    if (await chatPage.newChatButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await chatPage.newChatButton.click();
+    const newChatVisible = await chatPage.newChatButton
+      .isVisible({ timeout: 2000 })
+      .catch(() => false);
+    test.skip(!newChatVisible, 'New chat button not available');
 
-      const modal = page.locator('[role="dialog"], .modal').first();
-      // Wait for modal to appear before checking visibility
-      await modal.waitFor({ state: 'attached', timeout: 2000 }).catch(() => {});
-      if (await modal.isVisible({ timeout: 2000 }).catch(() => false)) {
-        const currentPath = await screenshotHelper.captureElement(
-          '[role="dialog"], .modal',
-          'new-chat-modal',
-        );
+    await chatPage.newChatButton.click();
 
-        try {
-          const comparison = await screenshotHelper.compareVisual('new-chat-modal', currentPath);
-          expect(comparison.match).toBeTruthy();
-          expect(comparison.similarity).toBeGreaterThanOrEqual(85);
-        } catch (error) {
-          if ((error as Error).message.includes('Baseline screenshot not found')) {
-            await screenshotHelper.createBaseline('new-chat-modal');
-          } else {
-            throw error;
-          }
-        }
+    const modal = page.locator('[role="dialog"], .modal').first();
+    await modal.waitFor({ state: 'attached', timeout: 2000 }).catch(() => {});
+    const modalVisible = await modal.isVisible({ timeout: 2000 }).catch(() => false);
+    test.skip(!modalVisible, 'Modal dialog did not appear after clicking new chat');
+
+    const currentPath = await screenshotHelper.captureElement(
+      '[role="dialog"], .modal',
+      'new-chat-modal',
+    );
+
+    try {
+      const comparison = await screenshotHelper.compareVisual('new-chat-modal', currentPath);
+      expect(comparison.match).toBeTruthy();
+      expect(comparison.similarity).toBeGreaterThanOrEqual(85);
+    } catch (error) {
+      if ((error as Error).message.includes('Baseline screenshot not found')) {
+        await screenshotHelper.createBaseline('new-chat-modal');
+      } else {
+        throw error;
       }
     }
   });
@@ -241,23 +244,25 @@ test.describe('Visual Regression Tests', () => {
 
     await chatPage.goto();
 
-    if (await chatPage.chatInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await chatPage.sendMessage('trigger error test');
-      // Wait for error state to appear in the UI
-      const errorIndicator = page.locator('[role="alert"], .error, [data-error]').first();
-      await errorIndicator.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
+    const chatInputVisible = await chatPage.chatInput
+      .isVisible({ timeout: 2000 })
+      .catch(() => false);
+    test.skip(!chatInputVisible, 'Chat input not available');
 
-      const currentPath = await screenshotHelper.captureFullPage('error-state');
+    await chatPage.sendMessage('trigger error test');
+    const errorIndicator = page.locator('[role="alert"], .error, [data-error]').first();
+    await errorIndicator.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
 
-      try {
-        const comparison = await screenshotHelper.compareVisual('error-state', currentPath);
-        expect(comparison.similarity).toBeGreaterThanOrEqual(85);
-      } catch (error) {
-        if ((error as Error).message.includes('Baseline screenshot not found')) {
-          await screenshotHelper.createBaseline('error-state');
-        } else {
-          throw error;
-        }
+    const currentPath = await screenshotHelper.captureFullPage('error-state');
+
+    try {
+      const comparison = await screenshotHelper.compareVisual('error-state', currentPath);
+      expect(comparison.similarity).toBeGreaterThanOrEqual(85);
+    } catch (error) {
+      if ((error as Error).message.includes('Baseline screenshot not found')) {
+        await screenshotHelper.createBaseline('error-state');
+      } else {
+        throw error;
       }
     }
   });
@@ -265,25 +270,27 @@ test.describe('Visual Regression Tests', () => {
   test('should capture loading states', async ({ page, screenshotHelper, agiPage }) => {
     await agiPage.navigateToAGI();
 
-    if (await agiPage.goalInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await agiPage.submitGoal('Test loading state');
+    const goalInputVisible = await agiPage.goalInput
+      .isVisible({ timeout: 2000 })
+      .catch(() => false);
+    test.skip(!goalInputVisible, 'AGI goal input not available');
 
-      // Wait for loading indicator to appear
-      const loadingIndicator = page
-        .locator('[data-loading], .loading, .spinner, [aria-busy="true"]')
-        .first();
-      await loadingIndicator.waitFor({ state: 'attached', timeout: 2000 }).catch(() => {});
-      const currentPath = await screenshotHelper.captureFullPage('loading-state');
+    await agiPage.submitGoal('Test loading state');
 
-      try {
-        const comparison = await screenshotHelper.compareVisual('loading-state', currentPath);
-        expect(comparison.similarity).toBeGreaterThanOrEqual(85);
-      } catch (error) {
-        if ((error as Error).message.includes('Baseline screenshot not found')) {
-          await screenshotHelper.createBaseline('loading-state');
-        } else {
-          throw error;
-        }
+    const loadingIndicator = page
+      .locator('[data-loading], .loading, .spinner, [aria-busy="true"]')
+      .first();
+    await loadingIndicator.waitFor({ state: 'attached', timeout: 2000 }).catch(() => {});
+    const currentPath = await screenshotHelper.captureFullPage('loading-state');
+
+    try {
+      const comparison = await screenshotHelper.compareVisual('loading-state', currentPath);
+      expect(comparison.similarity).toBeGreaterThanOrEqual(85);
+    } catch (error) {
+      if ((error as Error).message.includes('Baseline screenshot not found')) {
+        await screenshotHelper.createBaseline('loading-state');
+      } else {
+        throw error;
       }
     }
   });

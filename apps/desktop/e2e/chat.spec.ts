@@ -7,164 +7,129 @@ test.describe('Chat Workflow', () => {
   });
 
   test('should create a new conversation', async ({ page }) => {
-    // Prefer semantic role-based locator, fall back to testid for custom components
     const newChatButton = page.getByRole('button', { name: /new chat/i });
+    test.skip(!(await newChatButton.isVisible()), 'New chat button not available');
 
-    if (await newChatButton.isVisible()) {
-      await newChatButton.click();
-
-      await expect(page.getByTestId('conversation-list').locator('li').first()).toBeVisible();
-    }
+    await newChatButton.click();
+    await expect(page.getByTestId('conversation-list').locator('li').first()).toBeVisible();
   });
 
   test('should send a message and receive response', async ({ page }) => {
-    // Use role-based locator for textarea (textbox role)
     const chatInput = page.getByRole('textbox', { name: /message/i });
+    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
 
-    if (await chatInput.isVisible()) {
-      await chatInput.fill('Hello, how are you?');
+    await chatInput.fill('Hello, how are you?');
+    const sendButton = page.getByRole('button', { name: /send/i });
+    await sendButton.click();
 
-      const sendButton = page.getByRole('button', { name: /send/i });
-      await sendButton.click();
-
-      await expect(page.locator('[data-role="user"]').last()).toContainText('Hello');
-
-      await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
-    }
+    await expect(page.locator('[data-role="user"]').last()).toContainText('Hello');
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
   });
 
   test('should display conversation history', async ({ page }) => {
     const conversationsList = page.getByTestId('conversation-list');
+    test.skip(!(await conversationsList.isVisible()), 'Conversation list not available');
 
-    if (await conversationsList.isVisible()) {
-      const conversationItems = conversationsList.getByTestId('conversation-item');
-      const count = await conversationItems.count();
-
-      expect(count).toBeGreaterThanOrEqual(0);
-    }
+    await expect(conversationsList).toBeVisible();
   });
 
   test('should pin/unpin conversations', async ({ page }) => {
     const conversationItem = page.getByTestId('conversation-item').first();
+    test.skip(!(await conversationItem.isVisible()), 'No conversation items available');
 
-    if (await conversationItem.isVisible()) {
-      const pinButton = conversationItem.getByRole('button', { name: /pin/i });
+    const pinButton = conversationItem.getByRole('button', { name: /pin/i });
+    test.skip(!(await pinButton.isVisible()), 'Pin button not present');
 
-      if (await pinButton.isVisible()) {
-        await pinButton.click();
-
-        await expect(pinButton).toHaveAttribute('aria-label', /Unpin/i);
-      }
-    }
+    await pinButton.click();
+    await expect(pinButton).toHaveAttribute('aria-label', /Unpin/i);
   });
 
   test('should delete a conversation', async ({ page }) => {
     const conversationItem = page.getByTestId('conversation-item').first();
+    test.skip(!(await conversationItem.isVisible()), 'No conversation items available');
 
-    if (await conversationItem.isVisible()) {
-      const initialCount = await page.getByTestId('conversation-item').count();
+    const initialCount = await page.getByTestId('conversation-item').count();
+    const deleteButton = conversationItem.getByRole('button', { name: /delete/i });
+    test.skip(!(await deleteButton.isVisible()), 'Delete button not present');
 
-      const deleteButton = conversationItem.getByRole('button', { name: /delete/i });
+    await deleteButton.click();
 
-      if (await deleteButton.isVisible()) {
-        await deleteButton.click();
-
-        // Look for confirmation dialog button
-        const confirmButton = page.getByRole('button', { name: /delete|confirm/i });
-        if (await confirmButton.isVisible()) {
-          await confirmButton.click();
-        }
-
-        const newCount = await page.getByTestId('conversation-item').count();
-        expect(newCount).toBeLessThan(initialCount);
-      }
+    const confirmButton = page.getByRole('button', { name: /delete|confirm/i });
+    if (await confirmButton.isVisible()) {
+      await confirmButton.click();
     }
+
+    const newCount = await page.getByTestId('conversation-item').count();
+    expect(newCount).toBeLessThan(initialCount);
   });
 
   test('should search conversations', async ({ page }) => {
-    // Use role-based locator for search input
     const searchInput = page.getByRole('searchbox', { name: /search/i });
+    test.skip(!(await searchInput.isVisible()), 'Search input not available');
 
-    if (await searchInput.isVisible()) {
-      await searchInput.fill('test');
+    await searchInput.fill('test');
+    await page.waitForTimeout(500);
 
-      await page.waitForTimeout(500);
-
-      const visibleConversations = page.getByTestId('conversation-item').filter({ hasNotText: '' });
-      const count = await visibleConversations.count();
-
-      expect(count).toBeGreaterThanOrEqual(0);
-    }
+    // Search renders a filtered list — the list itself should be visible
+    await expect(page.getByTestId('conversation-list')).toBeVisible();
   });
 
   test('should display streaming response', async ({ page }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
+    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
 
-    if (await chatInput.isVisible()) {
-      await chatInput.fill('Tell me a long story');
+    await chatInput.fill('Tell me a long story');
+    const sendButton = page.getByRole('button', { name: /send/i });
+    await sendButton.click();
 
-      const sendButton = page.getByRole('button', { name: /send/i });
-      await sendButton.click();
-
-      const streamingIndicator = page.locator('[data-streaming="true"]').first();
-      await expect(streamingIndicator).toBeVisible({ timeout: 5000 });
-
-      await expect(streamingIndicator).not.toBeVisible({ timeout: 30000 });
-    }
+    const streamingIndicator = page.locator('[data-streaming="true"]').first();
+    await expect(streamingIndicator).toBeVisible({ timeout: 5000 });
+    await expect(streamingIndicator).not.toBeVisible({ timeout: 30000 });
   });
 
   test('should edit a message', async ({ page }) => {
     const messageItem = page.getByTestId('message-item').last();
+    test.skip(!(await messageItem.isVisible()), 'No messages available to edit');
 
-    if (await messageItem.isVisible()) {
-      await messageItem.hover();
+    await messageItem.hover();
+    const editButton = messageItem.getByRole('button', { name: /edit/i });
+    test.skip(!(await editButton.isVisible()), 'Edit button not present');
 
-      const editButton = messageItem.getByRole('button', { name: /edit/i });
+    await editButton.click();
 
-      if (await editButton.isVisible()) {
-        await editButton.click();
+    const editInput = page.locator('textarea[data-editing="true"]').first();
+    await editInput.clear();
+    await editInput.fill('Edited message content');
 
-        // Editing textarea - use data attribute for specific editing state
-        const editInput = page.locator('textarea[data-editing="true"]').first();
-        await editInput.clear();
-        await editInput.fill('Edited message content');
+    const saveButton = page.getByRole('button', { name: /save/i });
+    await saveButton.click();
 
-        const saveButton = page.getByRole('button', { name: /save/i });
-        await saveButton.click();
-
-        await expect(messageItem).toContainText('Edited message content');
-      }
-    }
+    await expect(messageItem).toContainText('Edited message content');
   });
 
   test('should display message statistics', async ({ page }) => {
     const statsButton = page.getByRole('button', { name: /stats/i });
+    test.skip(!(await statsButton.isVisible()), 'Stats button not available');
 
-    if (await statsButton.isVisible()) {
-      await statsButton.click();
+    await statsButton.click();
 
-      const statsPanel = page.getByTestId('stats-panel');
-      await expect(statsPanel).toBeVisible();
-
-      await expect(statsPanel).toContainText(/tokens|cost/i);
-    }
+    const statsPanel = page.getByTestId('stats-panel');
+    await expect(statsPanel).toBeVisible();
+    await expect(statsPanel).toContainText(/tokens|cost/i);
   });
 
   test('should handle offline state gracefully', async ({ page, context }) => {
-    await context.setOffline(true);
-
     const chatInput = page.getByRole('textbox', { name: /message/i });
+    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
 
-    if (await chatInput.isVisible()) {
-      await chatInput.fill('This should fail');
+    await context.setOffline(true);
+    await chatInput.fill('This should fail');
 
-      const sendButton = page.getByRole('button', { name: /send/i });
-      await sendButton.click();
+    const sendButton = page.getByRole('button', { name: /send/i });
+    await sendButton.click();
 
-      // Use role-based alert locator for error messages
-      const errorMessage = page.getByRole('alert');
-      await expect(errorMessage).toBeVisible({ timeout: 10000 });
-    }
+    const errorMessage = page.getByRole('alert');
+    await expect(errorMessage).toBeVisible({ timeout: 10000 });
 
     await context.setOffline(false);
   });
@@ -172,21 +137,15 @@ test.describe('Chat Workflow', () => {
   test('should complete entire flow: send query and receive answer without errors', async ({
     page,
   }) => {
-    // Increase timeout for this comprehensive test
     test.setTimeout(60000);
 
-    // Step 1: Verify chat interface is loaded - use semantic textbox role
-    const chatInput = page.getByRole('textbox', { name: /message/i });
-
-    // Wait for page to fully load first
     await page.waitForLoadState('domcontentloaded');
     await page.waitForLoadState('networkidle', { timeout: 30000 });
 
-    // Check if chat input is available
-    const chatInputVisible = await chatInput.isVisible({ timeout: 5000 }).catch(() => false);
+    const chatInput = page.getByRole('textbox', { name: /message/i });
 
-    if (!chatInputVisible) {
-      // Try clicking on a "New Chat" button if visible
+    // Try revealing the input via the new-chat button if it isn't visible yet
+    if (!(await chatInput.isVisible({ timeout: 5000 }).catch(() => false))) {
       const newChatButton = page.getByRole('button', { name: /new chat|new/i });
       if (await newChatButton.isVisible({ timeout: 2000 }).catch(() => false)) {
         await newChatButton.click();
@@ -194,51 +153,40 @@ test.describe('Chat Workflow', () => {
       }
     }
 
-    // Now check if chat input is visible
-    if (await chatInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-      // Step 2: Fill the input with a query
-      const testQuery = 'What is the capital of France?';
-      await chatInput.fill(testQuery);
+    test.skip(
+      !(await chatInput.isVisible({ timeout: 5000 }).catch(() => false)),
+      'Chat input not available',
+    );
 
-      // Step 3: Verify input is filled correctly
-      const inputValue = await chatInput.inputValue();
-      expect(inputValue).toBe(testQuery);
+    const testQuery = 'What is the capital of France?';
+    await chatInput.fill(testQuery);
+    expect(await chatInput.inputValue()).toBe(testQuery);
 
-      // Step 4: Click send button
-      const sendButton = page.getByRole('button', { name: /send/i });
+    const sendButton = page.getByRole('button', { name: /send/i });
+    test.skip(
+      !(await sendButton.isVisible({ timeout: 2000 }).catch(() => false)),
+      'Send button not available',
+    );
 
-      if (await sendButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await sendButton.click();
+    await sendButton.click();
 
-        // Step 5: Verify user message appears in chat
-        const userMessage = page.locator('[data-role="user"]').last();
-        await expect(userMessage).toContainText(testQuery, { timeout: 10000 });
+    const userMessage = page.locator('[data-role="user"]').last();
+    await expect(userMessage).toContainText(testQuery, { timeout: 10000 });
 
-        // Step 6: Check for streaming indicator (if present)
-        const streamingIndicator = page.locator('[data-streaming="true"]').first();
-        const streamingExists = await streamingIndicator
-          .isVisible({ timeout: 2000 })
-          .catch(() => false);
-
-        if (streamingExists) {
-          // Wait for streaming to complete (max 30 seconds)
-          await expect(streamingIndicator).toBeHidden({ timeout: 30000 });
-        }
-
-        // Step 7: Verify assistant response appears
-        const assistantMessage = page.locator('[data-role="assistant"]').last();
-        await expect(assistantMessage).toBeVisible({ timeout: 30000 });
-
-        // Step 8: Verify response is not empty
-        const responseText = await assistantMessage.textContent();
-        expect(responseText?.trim().length).toBeGreaterThan(0);
-
-        // Step 9: Check for error states - no error message should be visible
-        const errorIndicators = page.getByRole('alert');
-        const errorCount = await errorIndicators.count();
-        expect(errorCount).toBe(0);
-      }
+    // Wait for streaming to finish if the indicator appears
+    const streamingIndicator = page.locator('[data-streaming="true"]').first();
+    if (await streamingIndicator.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await expect(streamingIndicator).toBeHidden({ timeout: 30000 });
     }
+
+    const assistantMessage = page.locator('[data-role="assistant"]').last();
+    await expect(assistantMessage).toBeVisible({ timeout: 30000 });
+
+    const responseText = await assistantMessage.textContent();
+    expect(responseText?.trim().length).toBeGreaterThan(0);
+
+    const errorCount = await page.getByRole('alert').count();
+    expect(errorCount).toBe(0);
   });
 });
 
@@ -250,32 +198,27 @@ test.describe('Chat AGI Integration', () => {
 
   test('should detect and submit goal-like messages', async ({ page }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
+    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
 
-    if (await chatInput.isVisible()) {
-      await chatInput.fill('Create a React component for user authentication');
+    await chatInput.fill('Create a React component for user authentication');
+    const sendButton = page.getByRole('button', { name: /send/i });
+    await sendButton.click();
 
-      const sendButton = page.getByRole('button', { name: /send/i });
-      await sendButton.click();
-
-      const agiIndicator = page.getByTestId('agi-submitted');
-
-      if (await agiIndicator.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await expect(agiIndicator).toBeVisible();
-      }
-    }
+    const agiIndicator = page.getByTestId('agi-submitted');
+    const agiVisible = await agiIndicator.isVisible({ timeout: 3000 }).catch(() => false);
+    test.skip(!agiVisible, 'AGI submission indicator not implemented');
+    await expect(agiIndicator).toBeVisible();
   });
 
   test('should not submit non-goal messages to AGI', async ({ page }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
+    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
 
-    if (await chatInput.isVisible()) {
-      await chatInput.fill('Hello');
+    await chatInput.fill('Hello');
+    const sendButton = page.getByRole('button', { name: /send/i });
+    await sendButton.click();
 
-      const sendButton = page.getByRole('button', { name: /send/i });
-      await sendButton.click();
-
-      const agiIndicator = page.getByTestId('agi-submitted');
-      await expect(agiIndicator).not.toBeVisible({ timeout: 3000 });
-    }
+    const agiIndicator = page.getByTestId('agi-submitted');
+    await expect(agiIndicator).not.toBeVisible({ timeout: 3000 });
   });
 });
