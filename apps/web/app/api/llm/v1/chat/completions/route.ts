@@ -635,6 +635,11 @@ async function handleChatCompletions(request: NextRequest) {
     }
   }
 
+  // Resolve thinking config: boolean shorthand → Anthropic thinking object
+  const thinkingConfig =
+    chatRequest.thinking ??
+    (chatRequest.thinking_mode ? { type: 'enabled', budget_tokens: 10000 } : undefined);
+
   const llmRequest = {
     model: chatRequest.model,
     messages: internalMessages,
@@ -644,7 +649,7 @@ async function handleChatCompletions(request: NextRequest) {
     tools: resolvedTools,
     tool_choice: chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
-    thinking: chatRequest.thinking,
+    thinking: thinkingConfig,
     effort: chatRequest.effort,
     usePromptCache: chatRequest.use_prompt_cache,
   };
