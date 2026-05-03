@@ -34,7 +34,7 @@ vi.mock('@shared/stores/model-store', () => ({
 }));
 
 // BudgetTrackerDisplay — lightweight stub
-vi.mock('@/components/UnifiedAgenticChat/BudgetTrackerDisplay', () => ({
+vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
   BudgetTrackerDisplay: () => <div data-testid="budget-tracker-display" />,
 }));
 
