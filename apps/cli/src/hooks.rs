@@ -272,7 +272,7 @@ pub struct HookInput {
 
 /// Result from running a single hook.
 /// Fields are populated by run_hooks and consumed by aggregate_results for control flow.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[allow(dead_code)]
 pub struct HookResult {
     pub hook_command: String,
@@ -286,6 +286,18 @@ pub struct HookResult {
     pub reason: Option<String>,
     /// `true` if the hook's JSON output contained `{"continue": false}`.
     pub should_stop: bool,
+    /// Phase 10: hook returned `{"updated_input": {...}}` to rewrite the
+    /// tool's arguments before execution. `None` if the hook didn't ask
+    /// to mutate the input.
+    pub updated_input: Option<serde_json::Value>,
+    /// Phase 10: hook returned `{"additional_context": "..."}` to inject a
+    /// system message into the conversation after the tool runs. Useful for
+    /// "I redacted PII from this output" advisory messages.
+    pub additional_context: Option<String>,
+    /// Phase 10: hook returned `{"updated_mcp_tool_output": "..."}` to
+    /// replace the tool's stdout before it's appended to the message
+    /// history. Used for output sanitization / redaction.
+    pub updated_mcp_tool_output: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -416,22 +428,41 @@ fn hook_matches(hook: &Hook, event_name: &str, input: &HookInput) -> bool {
 // JSON output parsing
 // ---------------------------------------------------------------------------
 
-/// Parse hook stdout as JSON to extract control-flow signals.
+/// Phase 10: parsed signals from hook stdout. Replaces the prior tuple
+/// return so transformer fields can ride alongside control-flow signals.
+#[derive(Debug, Default)]
+struct HookOutputSignals {
+    blocked: bool,
+    reason: Option<String>,
+    should_stop: bool,
+    updated_input: Option<serde_json::Value>,
+    additional_context: Option<String>,
+    updated_mcp_tool_output: Option<String>,
+}
+
+/// Cap the size of `additional_context` injected into the conversation. A
+/// runaway hook shouldn't be able to flood the message history.
+const MAX_ADDITIONAL_CONTEXT_BYTES: usize = 4 * 1024;
+
+/// Parse hook stdout as JSON to extract control-flow + transformer signals.
 ///
-/// Recognised shapes:
-/// - `{"decision": "block", "reason": "..."}` → (blocked=true, reason, should_stop=false)
-/// - `{"continue": false}` → (blocked=false, None, should_stop=true)
+/// Recognised shapes (any subset can appear together):
+/// - `{"decision": "block", "reason": "..."}` → blocked=true, reason
+/// - `{"continue": false}` → should_stop=true
+/// - `{"updated_input": {...}}` → rewrite tool args (BeforeToolUse only)
+/// - `{"additional_context": "..."}` → inject system message (capped 4KB)
+/// - `{"updated_mcp_tool_output": "..."}` → rewrite tool output
 ///
-/// Any other output (including non-JSON) is ignored → all flags false/None.
-fn parse_hook_output(stdout: &str) -> (bool, Option<String>, bool) {
+/// Any other output (including non-JSON) is ignored → all signals default.
+fn parse_hook_output(stdout: &str) -> HookOutputSignals {
     let trimmed = stdout.trim();
     if trimmed.is_empty() {
-        return (false, None, false);
+        return HookOutputSignals::default();
     }
 
     let parsed: serde_json::Value = match serde_json::from_str(trimmed) {
         Ok(v) => v,
-        Err(_) => return (false, None, false),
+        Err(_) => return HookOutputSignals::default(),
     };
 
     let blocked = parsed
@@ -453,7 +484,73 @@ fn parse_hook_output(stdout: &str) -> (bool, Option<String>, bool) {
         .and_then(|v| v.as_bool())
         .is_some_and(|c| !c);
 
-    (blocked, reason, should_stop)
+    // Phase 10: transformer fields. Each is optional and independently
+    // applied. updated_input is taken verbatim; additional_context is
+    // size-capped; updated_mcp_tool_output must be a string (not arbitrary
+    // JSON) so the conversation history stays well-formed.
+    let updated_input = parsed.get("updated_input").cloned().filter(|v| !v.is_null());
+
+    let additional_context = parsed
+        .get("additional_context")
+        .and_then(|v| v.as_str())
+        .map(|s| {
+            if s.len() > MAX_ADDITIONAL_CONTEXT_BYTES {
+                let mut truncated = s[..MAX_ADDITIONAL_CONTEXT_BYTES].to_string();
+                truncated.push_str("\n[additional_context truncated]");
+                truncated
+            } else {
+                s.to_string()
+            }
+        });
+
+    let updated_mcp_tool_output = parsed
+        .get("updated_mcp_tool_output")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    HookOutputSignals {
+        blocked,
+        reason,
+        should_stop,
+        updated_input,
+        additional_context,
+        updated_mcp_tool_output,
+    }
+}
+
+/// Phase 10: aggregated transformer signals after running multiple hooks.
+/// Last-writer-wins for `updated_input` and `updated_mcp_tool_output`;
+/// `additional_context` from all hooks is concatenated newline-separated.
+#[derive(Debug, Default)]
+pub struct HookTransformers {
+    pub updated_input: Option<serde_json::Value>,
+    pub additional_context: Option<String>,
+    pub updated_mcp_tool_output: Option<String>,
+}
+
+/// Aggregate transformer fields across hook results. Caller decides how to
+/// apply the result — typically:
+///   - `updated_input` mutates the tool args before exec (BeforeToolUse)
+///   - `updated_mcp_tool_output` replaces the tool result (AfterToolUse)
+///   - `additional_context` is appended as a system message
+pub fn aggregate_transformers(results: &[HookResult]) -> HookTransformers {
+    let mut t = HookTransformers::default();
+    let mut ctx_chunks: Vec<&str> = Vec::new();
+    for r in results {
+        if let Some(input) = &r.updated_input {
+            t.updated_input = Some(input.clone());
+        }
+        if let Some(out) = &r.updated_mcp_tool_output {
+            t.updated_mcp_tool_output = Some(out.clone());
+        }
+        if let Some(ctx) = &r.additional_context {
+            ctx_chunks.push(ctx.as_str());
+        }
+    }
+    if !ctx_chunks.is_empty() {
+        t.additional_context = Some(ctx_chunks.join("\n"));
+    }
+    t
 }
 
 // ---------------------------------------------------------------------------
@@ -526,16 +623,19 @@ async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
     match result {
         Ok(Ok(output)) => {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let (blocked, reason, should_stop) = parse_hook_output(&stdout);
+            let signals = parse_hook_output(&stdout);
             HookResult {
                 hook_command: hook.command.clone(),
                 success: output.status.success(),
                 stdout,
                 stderr: String::from_utf8_lossy(&output.stderr).to_string(),
                 duration_ms,
-                blocked,
-                reason,
-                should_stop,
+                blocked: signals.blocked,
+                reason: signals.reason,
+                should_stop: signals.should_stop,
+                updated_input: signals.updated_input,
+                additional_context: signals.additional_context,
+                updated_mcp_tool_output: signals.updated_mcp_tool_output,
             }
         }
         Ok(Err(e)) => HookResult {
@@ -547,6 +647,9 @@ async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
             blocked: false,
             reason: None,
             should_stop: false,
+            updated_input: None,
+            additional_context: None,
+            updated_mcp_tool_output: None,
         },
         Err(_) => HookResult {
             hook_command: hook.command.clone(),
@@ -557,6 +660,9 @@ async fn run_single_hook(hook: &Hook, input_json: &str) -> HookResult {
             blocked: false,
             reason: None,
             should_stop: false,
+            updated_input: None,
+            additional_context: None,
+            updated_mcp_tool_output: None,
         },
     }
 }
@@ -886,61 +992,139 @@ mod tests {
 
     #[test]
     fn test_parse_hook_output_empty() {
-        let (blocked, reason, stop) = parse_hook_output("");
-        assert!(!blocked);
-        assert!(reason.is_none());
-        assert!(!stop);
+        let s = parse_hook_output("");
+        assert!(!s.blocked);
+        assert!(s.reason.is_none());
+        assert!(!s.should_stop);
+        assert!(s.updated_input.is_none());
+        assert!(s.additional_context.is_none());
+        assert!(s.updated_mcp_tool_output.is_none());
     }
 
     #[test]
     fn test_parse_hook_output_non_json() {
-        let (blocked, reason, stop) = parse_hook_output("just some text\n");
-        assert!(!blocked);
-        assert!(reason.is_none());
-        assert!(!stop);
+        let s = parse_hook_output("just some text\n");
+        assert!(!s.blocked);
+        assert!(s.reason.is_none());
+        assert!(!s.should_stop);
     }
 
     #[test]
     fn test_parse_hook_output_block_decision() {
         let stdout = r#"{"decision": "block", "reason": "unsafe command detected"}"#;
-        let (blocked, reason, stop) = parse_hook_output(stdout);
-        assert!(blocked);
-        assert_eq!(reason.unwrap(), "unsafe command detected");
-        assert!(!stop);
+        let s = parse_hook_output(stdout);
+        assert!(s.blocked);
+        assert_eq!(s.reason.unwrap(), "unsafe command detected");
+        assert!(!s.should_stop);
     }
 
     #[test]
     fn test_parse_hook_output_block_without_reason() {
         let stdout = r#"{"decision": "block"}"#;
-        let (blocked, reason, _stop) = parse_hook_output(stdout);
-        assert!(blocked);
-        assert!(reason.is_none());
+        let s = parse_hook_output(stdout);
+        assert!(s.blocked);
+        assert!(s.reason.is_none());
     }
 
     #[test]
     fn test_parse_hook_output_continue_false() {
         let stdout = r#"{"continue": false}"#;
-        let (blocked, reason, stop) = parse_hook_output(stdout);
-        assert!(!blocked);
-        assert!(reason.is_none());
-        assert!(stop);
+        let s = parse_hook_output(stdout);
+        assert!(!s.blocked);
+        assert!(s.reason.is_none());
+        assert!(s.should_stop);
     }
 
     #[test]
     fn test_parse_hook_output_continue_true() {
         let stdout = r#"{"continue": true}"#;
-        let (blocked, _reason, stop) = parse_hook_output(stdout);
-        assert!(!blocked);
-        assert!(!stop);
+        let s = parse_hook_output(stdout);
+        assert!(!s.blocked);
+        assert!(!s.should_stop);
+    }
+
+    #[test]
+    fn test_parse_hook_output_updated_input() {
+        // Phase 10: hook returns updated_input → caller mutates tool args.
+        let stdout = r#"{"updated_input": {"path": "/redacted"}}"#;
+        let s = parse_hook_output(stdout);
+        let updated = s.updated_input.expect("updated_input should be present");
+        assert_eq!(updated.get("path").and_then(|v| v.as_str()), Some("/redacted"));
+    }
+
+    #[test]
+    fn test_parse_hook_output_additional_context() {
+        // Phase 10: short additional_context passes through verbatim.
+        let stdout = r#"{"additional_context": "PII redacted from output."}"#;
+        let s = parse_hook_output(stdout);
+        assert_eq!(
+            s.additional_context.as_deref(),
+            Some("PII redacted from output.")
+        );
+    }
+
+    #[test]
+    fn test_parse_hook_output_additional_context_truncated() {
+        // Phase 10: oversized additional_context is capped at 4KB.
+        let big = "a".repeat(8 * 1024);
+        let payload = format!(r#"{{"additional_context": "{}"}}"#, big);
+        let s = parse_hook_output(&payload);
+        let ctx = s.additional_context.expect("ctx present");
+        assert!(ctx.len() < 8 * 1024);
+        assert!(ctx.contains("[additional_context truncated]"));
+    }
+
+    #[test]
+    fn test_parse_hook_output_updated_mcp_tool_output() {
+        // Phase 10: updated_mcp_tool_output replaces the tool's stdout.
+        let stdout = r#"{"updated_mcp_tool_output": "sanitized!"}"#;
+        let s = parse_hook_output(stdout);
+        assert_eq!(s.updated_mcp_tool_output.as_deref(), Some("sanitized!"));
+    }
+
+    #[test]
+    fn test_parse_hook_output_updated_mcp_tool_output_must_be_string() {
+        // Phase 10: non-string updated_mcp_tool_output is rejected so the
+        // conversation history stays well-formed.
+        let stdout = r#"{"updated_mcp_tool_output": {"not": "a string"}}"#;
+        let s = parse_hook_output(stdout);
+        assert!(s.updated_mcp_tool_output.is_none());
+    }
+
+    #[test]
+    fn test_aggregate_transformers_last_writer_wins() {
+        // Phase 10: when multiple hooks update the same field, last hook
+        // wins. Additional contexts are concatenated newline-separated.
+        let make = |idx: usize| HookResult {
+            hook_command: format!("hook{}", idx),
+            success: true,
+            stdout: String::new(),
+            stderr: String::new(),
+            duration_ms: 0,
+            blocked: false,
+            reason: None,
+            should_stop: false,
+            updated_input: Some(serde_json::json!({"v": idx})),
+            additional_context: Some(format!("ctx{}", idx)),
+            updated_mcp_tool_output: Some(format!("out{}", idx)),
+        };
+        let results = vec![make(1), make(2), make(3)];
+        let t = aggregate_transformers(&results);
+        assert_eq!(
+            t.updated_input.as_ref().and_then(|v| v.get("v")).and_then(|v| v.as_u64()),
+            Some(3)
+        );
+        assert_eq!(t.updated_mcp_tool_output.as_deref(), Some("out3"));
+        assert_eq!(t.additional_context.as_deref(), Some("ctx1\nctx2\nctx3"));
     }
 
     #[test]
     fn test_parse_hook_output_irrelevant_json() {
         let stdout = r#"{"status": "ok", "count": 42}"#;
-        let (blocked, reason, stop) = parse_hook_output(stdout);
-        assert!(!blocked);
-        assert!(reason.is_none());
-        assert!(!stop);
+        let s = parse_hook_output(stdout);
+        assert!(!s.blocked);
+        assert!(s.reason.is_none());
+        assert!(!s.should_stop);
     }
 
     #[tokio::test]
@@ -988,6 +1172,7 @@ mod tests {
                 blocked: false,
                 reason: None,
                 should_stop: false,
+                ..Default::default()
             },
             HookResult {
                 hook_command: "b".to_string(),
@@ -998,6 +1183,7 @@ mod tests {
                 blocked: false,
                 reason: None,
                 should_stop: false,
+                ..Default::default()
             },
         ];
         assert_eq!(aggregate_results(&results), HookAggregateOutcome::Continue);
@@ -1015,6 +1201,7 @@ mod tests {
                 blocked: true,
                 reason: Some("policy violation".to_string()),
                 should_stop: false,
+                ..Default::default()
             },
             HookResult {
                 hook_command: "b".to_string(),
@@ -1025,6 +1212,7 @@ mod tests {
                 blocked: false,
                 reason: None,
                 should_stop: false,
+                ..Default::default()
             },
         ];
         let outcome = aggregate_results(&results);
@@ -1047,6 +1235,7 @@ mod tests {
             blocked: true,
             reason: None,
             should_stop: false,
+            ..Default::default()
         }];
         let outcome = aggregate_results(&results);
         match outcome {
@@ -1069,6 +1258,7 @@ mod tests {
             blocked: false,
             reason: None,
             should_stop: true,
+            ..Default::default()
         }];
         assert_eq!(aggregate_results(&results), HookAggregateOutcome::Stop);
     }
@@ -1085,6 +1275,7 @@ mod tests {
                 blocked: true,
                 reason: Some("blocked reason".to_string()),
                 should_stop: false,
+                ..Default::default()
             },
             HookResult {
                 hook_command: "stopper".to_string(),
@@ -1095,6 +1286,7 @@ mod tests {
                 blocked: false,
                 reason: None,
                 should_stop: true,
+                ..Default::default()
             },
         ];
         let outcome = aggregate_results(&results);
@@ -1123,6 +1315,7 @@ mod tests {
                 blocked: true,
                 reason: Some("reason A".to_string()),
                 should_stop: false,
+                ..Default::default()
             },
             HookResult {
                 hook_command: "b".to_string(),
@@ -1133,6 +1326,7 @@ mod tests {
                 blocked: true,
                 reason: Some("reason B".to_string()),
                 should_stop: false,
+                ..Default::default()
             },
         ];
         let outcome = aggregate_results(&results);
