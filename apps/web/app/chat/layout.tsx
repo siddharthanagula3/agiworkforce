@@ -1,0 +1,18 @@
+import { redirect } from 'next/navigation';
+import { createSupabaseServerClient } from '../../services/supabase-server';
+import type { ReactNode } from 'react';
+
+export const dynamic = 'force-dynamic';
+
+export default async function ChatLayout({ children }: { children: ReactNode }) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    redirect('/login?next=/chat');
+  }
+
+  return <>{children}</>;
+}
