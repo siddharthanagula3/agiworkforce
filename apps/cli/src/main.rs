@@ -864,6 +864,7 @@ async fn main() -> Result<()> {
                     session.fallback_chain = Some(chain);
                 }
                 session.demo_force_rate_limit = cli.demo;
+                session.demo_mode = cli.demo;
                 if *full_auto {
                     session.skip_permissions = true;
                     session.auto_approve_safe = true;
