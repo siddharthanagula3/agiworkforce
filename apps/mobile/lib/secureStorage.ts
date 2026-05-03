@@ -18,25 +18,46 @@ function sanitizeKey(key: string): string {
   return key.replace(/[^A-Za-z0-9._-]/g, '_');
 }
 
+/**
+ * MOB-3 (audit 2026-05-03): the previous setItem was fire-and-forget,
+ * silently logging SecureStore failures. Zustand's persist middleware
+ * relies on the returned promise resolving; without that, a failed
+ * auth-token write (quota exceeded, keychain locked at first-boot
+ * race) is dropped on the floor. On next cold start `getItem`
+ * returns null, the user is signed out, and any pending agentic
+ * tasks are interrupted. Worse, a failure during a token-refresh
+ * cycle silently downgrades the persisted token to the prior
+ * (possibly expired) value. We now return the promise so Zustand can
+ * propagate the rejection, AND wrap getItem/removeItem the same way.
+ */
 export const secureStorage: StateStorage = {
-  getItem: (name: string): string | null => {
-    // SecureStore.getItemAsync is async; Zustand's persist middleware accepts
-    // both sync and async getItem. Return the promise directly.
-    return SecureStore.getItemAsync(sanitizeKey(name)) as unknown as string | null;
+  getItem: async (name: string): Promise<string | null> => {
+    try {
+      return await SecureStore.getItemAsync(sanitizeKey(name));
+    } catch (err) {
+      // MOB-4 (audit 2026-05-03): on iOS the keychain is unavailable
+      // in the Before-First-Unlock state (immediately after reboot
+      // before PIN entry). Returning null treats this as "no
+      // session" — better than throwing, which would crash the
+      // persist hydration. Surface a console warning so a
+      // device-unlock prompt can be wired in a follow-up.
+      console.warn('[secureStorage] read failed (likely Before-First-Unlock):', err);
+      return null;
+    }
   },
-  setItem: (name: string, value: string): void => {
-    // Fire-and-forget — errors are logged but don't crash the store.
+  setItem: async (name: string, value: string): Promise<void> => {
     // WHEN_UNLOCKED_THIS_DEVICE_ONLY: value is never transferred to iCloud
     // backup and is only accessible while the device is unlocked.
-    SecureStore.setItemAsync(sanitizeKey(name), value, {
+    await SecureStore.setItemAsync(sanitizeKey(name), value, {
       keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-    }).catch((err) => {
-      console.error('[secureStorage] Failed to persist to secure store:', err);
     });
   },
-  removeItem: (name: string): void => {
-    SecureStore.deleteItemAsync(sanitizeKey(name)).catch((err) => {
-      console.error('[secureStorage] Failed to remove from secure store:', err);
-    });
+  removeItem: async (name: string): Promise<void> => {
+    try {
+      await SecureStore.deleteItemAsync(sanitizeKey(name));
+    } catch (err) {
+      // Removal failures aren't security-critical — log and continue.
+      console.warn('[secureStorage] remove failed:', err);
+    }
   },
 };

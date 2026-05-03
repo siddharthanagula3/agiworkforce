@@ -56,8 +56,17 @@ export default function RootLayout() {
   }, []);
 
   // Push notifications — register + listeners
+  //
+  // MOB-1 (audit 2026-05-03): wait for `isInitialized` (MMKV-encryption
+  // init + Supabase session resolve) before calling
+  // registerForPushNotifications. The previous version fired as soon
+  // as `session` was truthy, which could race ahead of the
+  // getAuthHeaders() → supabase.auth.getSession() chain returning a
+  // valid token. The push token would then be POST'd to the backend
+  // with no Authorization header, registering an unauthenticated
+  // device record on the user's account.
   useEffect(() => {
-    if (!session) return;
+    if (!session || !isInitialized) return;
 
     registerForPushNotifications();
     const removeListeners = setupNotificationListeners();
@@ -66,7 +75,7 @@ export default function RootLayout() {
     handleInitialNotification();
 
     return removeListeners;
-  }, [session]);
+  }, [session, isInitialized]);
 
   // Background fetch — register agent status polling on login
   useEffect(() => {
@@ -192,24 +201,40 @@ export default function RootLayout() {
 
   // C1: Deep linking — handles agiworkforce://pair/CODE and agiworkforce://pair?code=CODE
   // Required for QR desktop pairing when app is backgrounded or closed
+  //
+  // MOB-2 (audit 2026-05-03): the previous check validated the pairing
+  // code regex but allowed ANY URL whose path matched. On Android any
+  // app can register a custom scheme — `myapp://pair/XXXXXXXX` would
+  // satisfy the test. Universal links over `https://` were not gated at
+  // all. We now require either:
+  //   1. scheme = `agiworkforce` AND hostname = exactly `pair`, OR
+  //   2. scheme = `https` AND hostname = `agiworkforce.com` (universal
+  //      link path), with the pair route as the leading segment.
   useEffect(() => {
     if (!url || !session || !isInitialized) return;
 
     const parsed = Linking.parse(url);
-    const isPairRoute = parsed.hostname === 'pair' || parsed.path?.startsWith('pair');
+    const scheme = (parsed.scheme ?? '').toLowerCase();
+    const hostname = (parsed.hostname ?? '').toLowerCase();
+    const path = parsed.path ?? '';
+    const segments = path.split('/').filter(Boolean);
 
-    if (isPairRoute) {
-      const code =
-        (parsed.queryParams?.code as string | undefined) ??
-        parsed.path?.split('/').filter(Boolean).pop();
+    const isCustomSchemePair = scheme === 'agiworkforce' && hostname === 'pair';
+    const isUniversalLinkPair =
+      scheme === 'https' && hostname === 'agiworkforce.com' && segments[0] === 'pair';
 
-      if (code) {
-        const PAIRING_CODE_RE = /^[A-Za-z0-9]{8}$/;
-        if (!PAIRING_CODE_RE.test(code)) {
-          return;
-        }
-        router.push(`/(app)/companion?pairingCode=${encodeURIComponent(code)}`);
+    if (!isCustomSchemePair && !isUniversalLinkPair) return;
+
+    const code =
+      (parsed.queryParams?.code as string | undefined) ??
+      (isCustomSchemePair ? segments[0] : segments[1]);
+
+    if (code) {
+      const PAIRING_CODE_RE = /^[A-Za-z0-9]{8}$/;
+      if (!PAIRING_CODE_RE.test(code)) {
+        return;
       }
+      router.push(`/(app)/companion?pairingCode=${encodeURIComponent(code)}`);
     }
   }, [url, session, isInitialized, router]);
 
