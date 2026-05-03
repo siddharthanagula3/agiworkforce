@@ -640,8 +640,9 @@ export const useVoiceModeStore = create<VoiceModeState>()(
               } else {
                 await voiceTtsSpeak(aiText);
               }
-            } catch {
+            } catch (ttsErr) {
               // TTS failed -- still show the response, just don't speak
+              console.warn('[voiceMode] TTS speak failed', ttsErr);
             }
 
             // After speaking completes, return to idle -- but only if still in
@@ -680,8 +681,9 @@ export const useVoiceModeStore = create<VoiceModeState>()(
           // Stop backend TTS playback
           try {
             await voiceTtsStop();
-          } catch {
-            // Fallback: just update local state
+          } catch (stopErr) {
+            // Fallback: just update local state; TTS may already be gone
+            console.warn('[voiceMode] voiceTtsStop on reset failed', stopErr);
           }
           set({
             phase: 'idle',
