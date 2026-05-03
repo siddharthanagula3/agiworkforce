@@ -48,6 +48,7 @@ export default function WebChatPage() {
   const { sendMessage, stopGeneration, isStreaming } = useChatStream();
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const deleteMessage = useChatStore((s) => s.deleteMessage);
   const isLoading = useChatStore((s) => s.isLoading);
 
   // Model from the model store (kept in sync by ComposerFooter)
@@ -161,6 +162,49 @@ export default function WebChatPage() {
     [updateConversation],
   );
 
+  // Auto-title: when the second message arrives (first assistant reply), derive title
+  // from the first user message content if the conversation is still named "New Chat".
+  useEffect(() => {
+    if (!activeConversationId || messages.length !== 2) return;
+    const convo = conversations.find((c) => c.id === activeConversationId);
+    if (!convo || convo.title !== 'New Chat') return;
+    const firstUser = messages[0];
+    if (!firstUser || firstUser.role !== 'user') return;
+    const title = firstUser.content.trim().slice(0, 60).replace(/\n/g, ' ') || 'New Chat';
+    updateConversation(activeConversationId, { title });
+  }, [messages.length, activeConversationId, conversations, updateConversation]);
+
+  const handleDeleteMessage = useCallback(
+    (id: string) => {
+      deleteMessage(id);
+    },
+    [deleteMessage],
+  );
+
+  const handleRegenerateMessage = useCallback(
+    (id: string) => {
+      if (!activeConversationId || isStreaming) return;
+      const idx = messages.findIndex((m) => m.id === id);
+      if (idx <= 0) return;
+      // Find the user message just before this one
+      let userMsg: (typeof messages)[0] | undefined;
+      for (let i = idx - 1; i >= 0; i--) {
+        if (messages[i]?.role === 'user') {
+          userMsg = messages[i];
+          break;
+        }
+      }
+      if (!userMsg) return;
+      // Remove the assistant message being regenerated, then resend
+      deleteMessage(id);
+      sendMessage(userMsg.content, {
+        model: selectedModelId,
+        conversationId: activeConversationId,
+      });
+    },
+    [activeConversationId, messages, isStreaming, deleteMessage, sendMessage, selectedModelId],
+  );
+
   const chatMessages = useMemo(
     () => messages.map((m) => toChatMessage(m, activeConversationId ?? '')),
     [messages, activeConversationId],
@@ -184,7 +228,12 @@ export default function WebChatPage() {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Message list */}
         <div className="flex-1 overflow-hidden">
-          <MessageListNew messages={chatMessages} isLoading={isLoading && !isStreaming} />
+          <MessageListNew
+            messages={chatMessages}
+            isLoading={isLoading && !isStreaming}
+            onRegenerate={handleRegenerateMessage}
+            onDelete={handleDeleteMessage}
+          />
         </div>
 
         {/* Composer */}
