@@ -123,6 +123,28 @@ export class LLMProviderFactory {
     }
   }
 
+  /** WEB-2 (audit 2026-05-03): SSRF allowlist. We honour `*_BASE_URL`
+   *  overrides (used by ai-gateway test fixtures, on-prem proxies),
+   *  but only if they resolve to a hostname we explicitly recognise.
+   *  An attacker who compromises a Vercel preview env var can no
+   *  longer redirect LLM traffic — including the user's prompts — to
+   *  an arbitrary attacker-controlled host. */
+  private static readonly ALLOWED_BASE_HOSTS: ReadonlySet<string> = new Set([
+    'api.openai.com',
+    'api.anthropic.com',
+    'generativelanguage.googleapis.com',
+    'api.x.ai',
+    'dashscope.aliyuncs.com',
+    'api.moonshot.cn',
+    'api.deepseek.com',
+    'api.perplexity.ai',
+    'open.bigmodel.cn',
+    'api.groq.com',
+    'gateway.ai.cloudflare.com',
+    'localhost',
+    '127.0.0.1',
+  ]);
+
   private static getProviderBaseUrl(provider: string): string | undefined {
     const envKeyMap: Record<string, string> = {
       qwen: 'QWEN_BASE_URL',
@@ -141,7 +163,34 @@ export class LLMProviderFactory {
       return undefined;
     }
 
-    return getOptionalEnv(envKey);
+    const raw = getOptionalEnv(envKey);
+    if (!raw) {
+      return undefined;
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      logger.warn({ provider, envKey }, 'Invalid *_BASE_URL — ignoring');
+      return undefined;
+    }
+    if (
+      parsed.protocol !== 'https:' &&
+      parsed.hostname !== 'localhost' &&
+      parsed.hostname !== '127.0.0.1'
+    ) {
+      logger.warn({ provider, envKey }, 'Refusing non-https *_BASE_URL override');
+      return undefined;
+    }
+    if (!LLMProviderFactory.ALLOWED_BASE_HOSTS.has(parsed.hostname)) {
+      logger.warn(
+        { provider, envKey, host: parsed.hostname },
+        'Refusing *_BASE_URL override pointing to non-allowlisted host (potential SSRF)',
+      );
+      return undefined;
+    }
+    return raw;
   }
 
   private static getEnvKeyForProvider(provider: string): string | undefined {
