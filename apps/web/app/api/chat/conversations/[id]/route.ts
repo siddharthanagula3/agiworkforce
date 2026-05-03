@@ -47,7 +47,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const { data: messages, error: msgError } = await supabase
     .from('web_messages')
     .select(
-      'id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at',
+      'id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata',
     )
     .eq('conversation_id', id)
     .order('created_at', { ascending: true });

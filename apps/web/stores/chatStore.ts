@@ -26,6 +26,8 @@ export interface MessageMetadata {
     returnCode: number;
     images?: Array<{ mediaType: string; data: string }>;
   };
+  /** Persisted user reaction (stored in Supabase messages.metadata) */
+  reaction?: 'thumbsUp' | 'thumbsDown' | null;
 }
 
 export interface Message {

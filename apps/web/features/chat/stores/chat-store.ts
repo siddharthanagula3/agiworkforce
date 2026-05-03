@@ -81,6 +81,8 @@ export interface ChatMessage {
       returnCode: number;
       images?: Array<{ mediaType: string; data: string }>;
     };
+    /** Persisted user reaction (loaded from Supabase messages.metadata on conversation load) */
+    reaction?: 'thumbsUp' | 'thumbsDown' | null;
   };
 }
 
