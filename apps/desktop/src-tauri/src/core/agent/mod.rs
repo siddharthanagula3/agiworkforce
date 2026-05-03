@@ -284,6 +284,26 @@ pub struct AgentConfig {
     pub max_loop_iterations: usize,
 }
 
+/// Default session cost cap when an `AgentConfig` is loaded with
+/// `max_session_cost` <= 0 (e.g. zero-initialized first launch with no
+/// persisted settings, or a corrupt settings row).
+const DEFAULT_SESSION_CAP_USD: f64 = 5.0;
+
+impl AgentConfig {
+    /// DESK-7 (audit 2026-05-03): the raw `max_session_cost` field is
+    /// trusted from the settings DB and could be `0.0` on first launch,
+    /// which would silently halt every autonomous loop on the first
+    /// non-free LLM call. Use this getter at every comparison site so
+    /// `0.0` falls back to a safe default rather than blocking outright.
+    pub fn effective_session_cap_usd(&self) -> f64 {
+        if self.max_session_cost > 0.0 {
+            self.max_session_cost
+        } else {
+            DEFAULT_SESSION_CAP_USD
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ScreenshotQuality {

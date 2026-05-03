@@ -44,23 +44,13 @@ fn method_not_allowed_message() -> &'static str {
     }
 }
 
-impl Default for ManagedCloudProvider {
-    /// FIX-007 (Sprint 3): the previous implementation silently fell back
-    /// to `Client::new()` (no connect timeout, no request timeout, no
-    /// pool config) whenever `Self::new()`'s timeout-respecting builder
-    /// failed. That meant every long-tail request inherited an
-    /// open-ended waiting period — exactly the failure mode the timeouts
-    /// were added to prevent. Production callers must use
-    /// [`Self::new`] and handle the error explicitly; the only
-    /// historical caller of `Default` was a unit test, which now uses
-    /// `Self::new().expect(...)`.
-    fn default() -> Self {
-        Self::new().expect(
-            "ManagedCloudProvider::default — Client::builder rejected the required timeouts; \
-             use ManagedCloudProvider::new() and propagate the error instead",
-        )
-    }
-}
+// DESK-10 (audit 2026-05-03): the FIX-007 `impl Default` was an
+// `expect(...)` that panicked on TLS-builder failure (Alpine CI,
+// minimal Windows installs without the Visual C++ Redistributable,
+// sandboxed environments). `Default` is invoked in test harnesses and
+// `#[derive(Default)]` containers, giving the panic a wide blast
+// radius. Removed entirely — every caller now uses
+// `ManagedCloudProvider::new().map_err(...)` and propagates errors.
 
 impl ManagedCloudProvider {
     fn canonicalize_cloud_model(model: &str) -> String {
