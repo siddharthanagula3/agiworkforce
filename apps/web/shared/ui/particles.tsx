@@ -104,11 +104,5 @@ export const Particles: React.FC<ParticlesProps> = ({
     };
   }, [quantity, staticity, ease, refresh]);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className={`absolute inset-0 ${className}`}
-      style={{ width: '100%', height: '100%' }}
-    />
-  );
+  return <canvas ref={canvasRef} className={`absolute inset-0 h-full w-full ${className}`} />;
 };
