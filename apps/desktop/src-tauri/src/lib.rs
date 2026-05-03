@@ -696,7 +696,7 @@ pub fn run() {
             tracing::info!("Diagnostics state initialized");
 
             // Tool Confirmation state for safety tier confirmation dialogs
-            app.manage(ToolConfirmationState::new());
+            app.manage(ToolConfirmationState::new_with_db(db_conn_arc.clone()));
             tracing::info!("Tool confirmation state initialized");
 
             // Capability state for frontend feature toggles enforcement
