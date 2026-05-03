@@ -3,8 +3,12 @@ name = "agiworkforce-cli"
 version = "1.0.0"
 edition = "2021"
 authors = ["AGI Automation LLC"]
-description = "AGI Workforce CLI — multi-model AI agent in your terminal"
-license = "Proprietary"
+description = "Multi-provider agentic CLI — Anthropic, OpenAI, Google, Ollama, Mistral, XAI, DeepSeek, Copilot in one terminal"
+license = "Apache-2.0"
+repository = "https://github.com/siddharthanagula3/agiworkforce"
+readme = "README.md"
+keywords = ["ai", "agent", "cli", "mcp", "llm"]
+categories = ["command-line-utilities", "development-tools"]
 default-run = "agiworkforce"
 
 [[bin]]

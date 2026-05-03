@@ -5,7 +5,7 @@ The terminal-native AI coding agent that doesn't surprise you.
 ```
 $ agiworkforce
                     ┌──────────────────── ▮ in 1.2k · out 0 · $0.011 · ctx 4% ┐
- AGI Workforce v0.1.0 │ claude-sonnet-4-6 │ anthropic │  main │ 4% ctx
+ AGI Workforce v1.0.0 │ claude-sonnet-4-6 │ anthropic │  main │ 4% ctx
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -14,15 +14,22 @@ ship CI/CD with AI in the loop.
 
 ## Why?
 
-Claude Code and OpenAI Codex CLI dominate mindshare, but they leave four big
-gaps on the table. We close all four:
+Claude Code, OpenAI Codex CLI, OpenCode, and Gemini CLI are the four serious
+competitors. We close gaps none of them close, and meet them on parity where
+the ecosystem expects it.
 
-| Feature                              | Claude Code | Codex CLI | **AGI Workforce**  |
-| ------------------------------------ | :---------: | :-------: | :----------------: |
-| Live cost HUD (tokens + $ + ctx %)   |     ❌      |    ❌     |         ✅         |
-| Machine-readable agent events for CI |     ❌      |    ❌     | ✅ `--json-events` |
-| Multi-model fallback chain           |     ❌      |    ❌     |   ✅ `-m a,b,c`    |
-| Session replay / fork from any turn  |     ❌      |    ❌     | ✅ `session fork`  |
+| Feature                                        |     Claude Code      |    Codex CLI     |        OpenCode        |   Gemini CLI   |                  **AGI Workforce**                   |
+| ---------------------------------------------- | :------------------: | :--------------: | :--------------------: | :------------: | :--------------------------------------------------: |
+| Multi-provider in one session, mid-turn switch |  ❌ Anthropic only   |  ❌ OpenAI only  | ✅ ~10 (Vercel AI SDK) | ❌ Google only |                   ✅ 8 + `/model`                    |
+| Live cost HUD (tokens + $ + ctx %)             |          ❌          |        ❌        |           ❌           |       ❌       |                          ✅                          |
+| Machine-readable agent events for CI           |          ❌          |        ❌        |           ❌           |       ❌       |                  ✅ `--json-events`                  |
+| Multi-model fallback chain                     |          ❌          |        ❌        |           ❌           |       ❌       |                    ✅ `-m a,b,c`                     |
+| Session fork from any turn                     |    ✅ resume only    |  ✅ basic fork   |           ✅           |       ❌       |                   ✅ `--at-turn N`                   |
+| Native Rust binary                             |          ✅          |        ✅        |         ❌ Bun         |       ❌       |                          ✅                          |
+| OSS license                                    |      ❌ Closed       |  ✅ Apache-2.0   |         ✅ MIT         | ✅ Apache-2.0  |                    ✅ Apache-2.0                     |
+| MCP support (transports)                       | stdio+SSE+HTTP+OAuth | stdio+HTTP+OAuth |  stdio+SSE+HTTP+OAuth  |    (varies)    |          stdio (SSE/HTTP/OAuth in Phase 1)           |
+| Hook events                                    |          27          |        6         |           ✓            |    (varies)    |                          23                          |
+| Plan mode (model writes plan → user approves)  |          ✅          | ✅ `update_plan` |           ✓            |       ❌       | ⚠️ tool-allowlist toggle (real plan mode in Phase 1) |
 
 ## Install
 
@@ -43,7 +50,7 @@ agiworkforce auth-status  # confirm
 
 Top-right of the TUI shows running tokens-in / out / cache / `$` and context %.
 Color-shifts grey → orange (≥70 % ctx) → red (≥90 % ctx). Pricing comes from
-`models.json` (era-correct: GPT-5.4, Claude 4.7, Gemini 3.1, Grok 4) — never
+`models.json` (era-correct: GPT-5.4, Claude 4.6, Gemini 3.1, Grok 4) — never
 hardcoded.
 
 ```bash
@@ -138,20 +145,40 @@ agiworkforce session fork <id> --at-turn 0 --as refactor-alt
 agiworkforce help
 ```
 
-Lists all 19 subcommands: `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
-`app-server`, `resume`, `fork`, `session`, `cloud`, `plugin`, `features`,
-`execpolicy`, `ecosystem`, `history`, `sync`, `login`, `logout`,
-`auth-status`, `marketplace`, `init`, `onboarding`.
+Lists all 22 subcommands: `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
+`app-server`, `resume`, `fork`, `session`, `history`, `login`, `logout`,
+`auth-status`, `init`, `onboarding`, `features`, `execpolicy`, plus
+deferred-to-Phase-2 surfaces (`cloud`, `plugin`, `sync`, `marketplace`,
+`ecosystem`) currently dispatched to gated stubs — these surfaces will be
+wired or removed per `~/.claude/plans/cli-competitive-floor.md` Sprint A2.
 
 ## Architecture
 
-- Pure Rust workspace (~95 crates), `cargo build -p agiworkforce-cli` in <10 s.
-- TUI: ratatui + crossterm. ~1.8 k LOC entry point + 100+ supporting modules.
-- Sandboxing: Linux (bubblewrap), macOS (Seatbelt), Windows (Win32 sandbox).
-- MCP server + client baked in.
-- Models loaded from `crates/agiworkforce-models-manager/models.json`
-  (no hardcoded model IDs anywhere).
+- Pure Rust workspace (12 utility crates + `apps/cli` + `apps/desktop/src-tauri`).
+  `cargo build --release -p agiworkforce-cli` produces a 5.7 MB binary.
+- TUI: ratatui + crossterm. 192 source files; 125 TUI files (~155 K LOC incl.
+  snapshot tests). 2,161 `#[test]` / `#[tokio::test]` cases.
+- Sandboxing: Linux (bubblewrap), macOS (Seatbelt) shipped; Windows + Linux
+  Landlock are enum stubs (Phase 2).
+- MCP: stdio transport shipped today; SSE + Streamable HTTP + OAuth coming in
+  Phase 1 per the floor plan.
+- Hooks: 23 events shipped (`apps/cli/src/hooks.rs`); Claude-Code-aligned
+  vocabulary coming in Phase 1.
+- 8 providers wired with mid-conversation switch: Anthropic, OpenAI, Google,
+  Ollama, Mistral, XAI, DeepSeek, Copilot. (Web/desktop platform = 25.)
+- Models loaded from `models.json` (no hardcoded model IDs anywhere).
+
+## Roadmap
+
+- **Phase 0 (Sprint A, in progress)** — Decommission dead modules, license
+  Apache-2.0, ship real `init`. See `~/.claude/plans/cli-competitive-floor.md`.
+- **Phase 1 (Sprint B)** — MCP SSE + HTTP + OAuth, real plan mode (`update_plan`
+  model tool), hook event renaming for Claude Code interop, plugin manifest
+  discovery (`.agiworkforce-plugin/`, `.claude-plugin/`, `.codex-plugin/`).
+- **Phase 2 (after B)** — Routing strategy resurrection (the differentiator),
+  LMStudio integration, hot reload, `--from-pr`, OS keychain (sprint1-vault-rewire),
+  Linux Landlock + Windows sandbox, OpenTelemetry minimal.
 
 ## License
 
-Proprietary. © AGI Automation LLC.
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](../../NOTICE).
