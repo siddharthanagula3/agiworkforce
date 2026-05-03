@@ -269,6 +269,24 @@ const MessageItemComponent = ({
   const [copied, setCopied] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
+
+  const persistReaction = useCallback(
+    async (next: 'up' | 'down' | null) => {
+      if (!message.sessionId) return;
+      try {
+        await fetch(`/api/chat/conversations/${message.sessionId}/messages/${message.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reaction: next === 'up' ? 'thumbsUp' : next === 'down' ? 'thumbsDown' : null,
+          }),
+        });
+      } catch {
+        // Best-effort — local state is already updated
+      }
+    },
+    [message.id, message.sessionId],
+  );
   const isUser = message.role === 'user';
   const actionsRef = useRef<HTMLDivElement>(null);
 
@@ -457,7 +475,11 @@ const MessageItemComponent = ({
               {!isUser && (
                 <>
                   <button
-                    onClick={() => setReaction(reaction === 'up' ? null : 'up')}
+                    onClick={() => {
+                      const next = reaction === 'up' ? null : 'up';
+                      setReaction(next);
+                      void persistReaction(next);
+                    }}
                     className={cn(
                       'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted/60',
                       reaction === 'up'
@@ -470,7 +492,11 @@ const MessageItemComponent = ({
                     <ThumbsUp className="h-3.5 w-3.5" />
                   </button>
                   <button
-                    onClick={() => setReaction(reaction === 'down' ? null : 'down')}
+                    onClick={() => {
+                      const next = reaction === 'down' ? null : 'down';
+                      setReaction(next);
+                      void persistReaction(next);
+                    }}
                     className={cn(
                       'flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted/60',
                       reaction === 'down'
