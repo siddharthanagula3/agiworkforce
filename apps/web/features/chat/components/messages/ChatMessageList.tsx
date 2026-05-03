@@ -128,7 +128,9 @@ const MessageGroupRow = memo(
                 content: message.content,
                 timestamp: message.createdAt,
                 isStreaming: message.isStreaming,
-                metadata: message.metadata,
+                metadata: message.metadata as Parameters<
+                  typeof MessageBubble
+                >[0]['message']['metadata'],
               }}
               showAvatar={isFirst}
               showTimestamp={isFirst}
