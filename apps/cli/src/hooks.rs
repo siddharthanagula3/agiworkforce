@@ -11,6 +11,9 @@
 //! - `{"continue": false}` → signals the caller to stop
 
 use anyhow::{Context, Result};
+// Only used inside the #[cfg(unix)] permission-check block at the bottom of
+// load_hooks_config() — gating the import keeps `unused = "deny"` on windows.
+#[cfg(unix)]
 use colored::Colorize;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
