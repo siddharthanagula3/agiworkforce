@@ -52,8 +52,13 @@ export default function WebChatPage() {
   const selectedModelId = useModelStore((s) => s.selectedModelId);
 
   // Conversation CRUD
-  const { conversations, createConversation, loadConversation, deleteConversation } =
-    useConversations();
+  const {
+    conversations,
+    createConversation,
+    loadConversation,
+    deleteConversation,
+    updateConversation,
+  } = useConversations();
 
   // Session creation guard
   const creationPending = React.useRef(false);
@@ -147,9 +152,12 @@ export default function WebChatPage() {
     [deleteConversation, activeConversationId, router],
   );
 
-  const handleRenameSession = useCallback((_id: string, _title: string) => {
-    // updateConversation is async — fire and forget
-  }, []);
+  const handleRenameSession = useCallback(
+    (id: string, title: string) => {
+      updateConversation(id, { title });
+    },
+    [updateConversation],
+  );
 
   const chatMessages = useMemo(
     () => messages.map((m) => toChatMessage(m, activeConversationId ?? '')),
