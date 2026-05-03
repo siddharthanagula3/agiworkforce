@@ -901,6 +901,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // ── agi.test.run ─────────────────────────────────────────────────────────
     vscode.commands.registerCommand('agi.test.run', async () => {
+      // EXTV-3 (audit 2026-05-03): refuse in untrusted workspaces.
+      // The detected test command is read from workspace files
+      // (package.json scripts, etc.) which an untrusted repo controls.
+      if (!vscode.workspace.isTrusted) {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: test execution is disabled in untrusted workspaces. Trust the workspace to run tests.',
+        );
+        return;
+      }
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) {
         vscode.window.showErrorMessage('No workspace open');
@@ -1060,7 +1069,18 @@ async function runInlineCommand(
   const lang = editor.document.languageId;
   const config = vscode.workspace.getConfiguration('agiWorkforce');
   const planModeEnabled = config.get<boolean>('agent.planMode') ?? false;
-  const autoApplyFixes = config.get<boolean>('autoApplyFixes') ?? false;
+  // EXTV-1 (audit 2026-05-03): autoApplyFixes is a workspace-level
+  // setting. An untrusted workspace (cloned repo) could enable it via
+  // .vscode/settings.json and have LLM-generated code auto-applied
+  // with no diff preview. Force `false` whenever the workspace is not
+  // explicitly trusted by the user — preserves the diff-preview path.
+  const rawAutoApplyFixes = config.get<boolean>('autoApplyFixes') ?? false;
+  const autoApplyFixes = vscode.workspace.isTrusted ? rawAutoApplyFixes : false;
+  if (rawAutoApplyFixes && !vscode.workspace.isTrusted) {
+    vscode.window.showInformationMessage(
+      'AGI Workforce: autoApplyFixes is disabled in this untrusted workspace. Trust the workspace to enable.',
+    );
+  }
 
   if (planModeEnabled && command !== 'explain') {
     const choice = await vscode.window.showInformationMessage(
