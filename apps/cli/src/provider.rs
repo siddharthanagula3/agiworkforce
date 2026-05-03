@@ -3,9 +3,10 @@
 //! Each provider normalizes messages, tool definitions, and streaming responses
 //! into a common format. Provider-specific quirks are handled here.
 
-// Model catalog API surface is intentionally broad: find_model, models_for_provider,
-// supports_tool_use, etc. are used by --list-models and will be wired into model
-// selection heuristics, deprecation warnings, and the /models REPL command.
+// Provider catalog mixes live helpers (find_model, format_model_list, ModelInfo
+// — used by output.rs, repl.rs, --list-models) with reserved-for-deprecation-
+// warnings/heuristics helpers (models_for_provider, supports_tool_use, …).
+// File-level allow stays until those secondary surfaces are wired.
 #![allow(dead_code)]
 
 use crate::model_catalog;
