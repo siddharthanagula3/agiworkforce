@@ -18,6 +18,11 @@ use tokio::time::sleep;
 /// Removes double quotes, backslashes, single quotes, null bytes, and newlines
 /// (`\n`, `\r`) that could break out of AppleScript string literals or inject
 /// arbitrary commands. Trims to max 200 chars.
+///
+/// Only called from macOS code paths in this module — suppress dead_code on
+/// other platforms so CI's `-D dead-code` (set by setup-rust-toolchain
+/// via RUSTFLAGS=-D warnings) doesn't flag the Linux build.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn sanitize_applescript_string(input: &str) -> String {
     input
         .chars()
