@@ -443,12 +443,9 @@ function ExtensionMockup() {
 /* ─── Mobile Mockup ───────────────────────────────────────────────── */
 function MobileMockup() {
   return (
-    <div className="relative mx-auto" style={{ width: 180 }}>
+    <div className="relative mx-auto w-[180px]">
       {/* Phone frame */}
-      <div
-        className="rounded-[36px] border-[3px] border-zinc-700 bg-[#0e0e0e] p-1.5 shadow-2xl"
-        style={{ aspectRatio: '9 / 19.5' }}
-      >
+      <div className="aspect-[9/19.5] rounded-[36px] border-[3px] border-zinc-700 bg-[#0e0e0e] p-1.5 shadow-2xl">
         {/* Dynamic Island */}
         <div className="mx-auto mb-1 h-5 w-20 rounded-b-2xl bg-black" />
         {/* Status bar */}
