@@ -261,7 +261,51 @@ impl MemoryManager {
 // Glob-matched rules (.agiworkforce/rules/*.md)
 // ---------------------------------------------------------------------------
 
-/// A rule loaded from a `.md` file with optional YAML frontmatter `globs`.
+/// Phase 9: semantic type of a memory or rule entry. Different kinds decay
+/// differently — feedback should never be silently removed, project memories
+/// age out, reference is stable. Optional on each rule; entries without an
+/// explicit kind are routed to `<untyped>` for back-compat.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MemoryKind {
+    /// User-specific preferences. Survives across projects. Private to the user.
+    User,
+    /// Direct guidance from the user — never violate without explicit permission.
+    /// Memory pipeline must never silently drop feedback entries.
+    Feedback,
+    /// Project state, ongoing initiatives, current decisions. Decays naturally.
+    Project,
+    /// Reference material: architectural notes, API patterns. Long-lived.
+    Reference,
+}
+
+impl MemoryKind {
+    /// Human-readable XML tag used to wrap entries of this kind in the
+    /// system prompt's `<memory-hierarchy>` block.
+    pub fn xml_tag(&self) -> &'static str {
+        match self {
+            MemoryKind::User => "user-preferences",
+            MemoryKind::Feedback => "feedback",
+            MemoryKind::Project => "project-context",
+            MemoryKind::Reference => "reference",
+        }
+    }
+
+    /// Parse a `kind:` value from YAML frontmatter, accepting any
+    /// case variation (`user`, `User`, `USER`).
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw.trim().to_lowercase().as_str() {
+            "user" => Some(MemoryKind::User),
+            "feedback" => Some(MemoryKind::Feedback),
+            "project" => Some(MemoryKind::Project),
+            "reference" => Some(MemoryKind::Reference),
+            _ => None,
+        }
+    }
+}
+
+/// A rule loaded from a `.md` file with optional YAML frontmatter `globs`
+/// and `kind`.
 #[derive(Debug, Clone)]
 pub struct Rule {
     /// Glob patterns from YAML frontmatter (empty = always active).
@@ -270,6 +314,8 @@ pub struct Rule {
     pub body: String,
     /// Source file path.
     pub source: PathBuf,
+    /// Phase 9: optional semantic type. None = legacy untyped rule.
+    pub kind: Option<MemoryKind>,
 }
 
 /// Loads rules from `.agiworkforce/rules/` (project) and `~/.agiworkforce/rules/`.
@@ -317,7 +363,7 @@ fn load_rules_from_dir(dir: &Path, rules: &mut Vec<Rule>) {
     }
 }
 
-/// Parse a single `.md` rule file, extracting YAML frontmatter globs.
+/// Parse a single `.md` rule file, extracting YAML frontmatter globs and kind.
 fn parse_rule_file(path: &Path) -> Option<Rule> {
     let content = std::fs::read_to_string(path).ok()?;
     if content.trim().is_empty() {
@@ -331,6 +377,7 @@ fn parse_rule_file(path: &Path) -> Option<Rule> {
             globs: Vec::new(),
             body: content,
             source: path.to_path_buf(),
+            kind: None,
         });
     }
 
@@ -346,11 +393,30 @@ fn parse_rule_file(path: &Path) -> Option<Rule> {
     }
 
     let globs = parse_globs_field(frontmatter_str);
+    let kind = parse_kind_field(frontmatter_str);
     Some(Rule {
         globs,
         body,
         source: path.to_path_buf(),
+        kind,
     })
+}
+
+/// Phase 9: extract the `kind:` field from YAML frontmatter. Returns `None`
+/// if the field is missing, malformed, or names an unknown kind.
+fn parse_kind_field(frontmatter: &str) -> Option<MemoryKind> {
+    for line in frontmatter.lines() {
+        let trimmed = line.trim();
+        if let Some(value) = trimmed.strip_prefix("kind:") {
+            // Strip surrounding quotes if any.
+            let cleaned = value
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'');
+            return MemoryKind::parse(cleaned);
+        }
+    }
+    None
 }
 
 /// Extract the `globs` field from YAML frontmatter.
@@ -430,13 +496,56 @@ pub fn rules_context_prompt(rules: &[Rule], active_files: &[&str]) -> String {
         return String::new();
     }
 
-    let mut prompt = String::from("<rules>\n");
+    // Phase 9: group matched rules by kind. Typed rules go into kind-specific
+    // sub-blocks (`<feedback>`, `<user-preferences>`, `<project-context>`,
+    // `<reference>`); untyped rules fall through to a generic `<rules>`
+    // block at the end. The order is feedback → user → project → reference
+    // → untyped to surface the most authoritative guidance first.
+    let mut feedback = Vec::new();
+    let mut user = Vec::new();
+    let mut project = Vec::new();
+    let mut reference = Vec::new();
+    let mut untyped = Vec::new();
     for rule in &matched {
-        prompt.push_str(&format!(
-            "\n## Rule ({})\n\n{}\n",
-            rule.source.display(),
-            rule.body.trim(),
-        ));
+        match rule.kind {
+            Some(MemoryKind::Feedback) => feedback.push(*rule),
+            Some(MemoryKind::User) => user.push(*rule),
+            Some(MemoryKind::Project) => project.push(*rule),
+            Some(MemoryKind::Reference) => reference.push(*rule),
+            None => untyped.push(*rule),
+        }
+    }
+
+    fn emit_block(prompt: &mut String, tag: &str, rules: &[&Rule]) {
+        if rules.is_empty() {
+            return;
+        }
+        prompt.push_str(&format!("\n<{}>", tag));
+        for rule in rules {
+            prompt.push_str(&format!(
+                "\n## Rule ({})\n\n{}\n",
+                rule.source.display(),
+                rule.body.trim(),
+            ));
+        }
+        prompt.push_str(&format!("\n</{}>\n", tag));
+    }
+
+    let mut prompt = String::from("<rules>\n");
+    emit_block(&mut prompt, MemoryKind::Feedback.xml_tag(), &feedback);
+    emit_block(&mut prompt, MemoryKind::User.xml_tag(), &user);
+    emit_block(&mut prompt, MemoryKind::Project.xml_tag(), &project);
+    emit_block(&mut prompt, MemoryKind::Reference.xml_tag(), &reference);
+    if !untyped.is_empty() {
+        prompt.push_str("\n<untyped>\n");
+        for rule in &untyped {
+            prompt.push_str(&format!(
+                "\n## Rule ({})\n\n{}\n",
+                rule.source.display(),
+                rule.body.trim(),
+            ));
+        }
+        prompt.push_str("\n</untyped>\n");
     }
     prompt.push_str("\n</rules>");
     prompt
@@ -536,6 +645,81 @@ mod tests {
         assert_eq!(format!("{}", MemoryTier::Global), "Global");
         assert_eq!(format!("{}", MemoryTier::Project), "Project");
         assert_eq!(format!("{}", MemoryTier::Local), "Local");
+    }
+
+    /// Phase 9: each MemoryKind round-trips through parse() and emits a
+    /// stable XML tag.
+    #[test]
+    fn test_memory_kind_parse_and_xml_tag() {
+        assert_eq!(MemoryKind::parse("user"), Some(MemoryKind::User));
+        assert_eq!(MemoryKind::parse("FEEDBACK"), Some(MemoryKind::Feedback));
+        assert_eq!(MemoryKind::parse(" Project "), Some(MemoryKind::Project));
+        assert_eq!(MemoryKind::parse("reference"), Some(MemoryKind::Reference));
+        assert_eq!(MemoryKind::parse("unknown"), None);
+
+        assert_eq!(MemoryKind::User.xml_tag(), "user-preferences");
+        assert_eq!(MemoryKind::Feedback.xml_tag(), "feedback");
+        assert_eq!(MemoryKind::Project.xml_tag(), "project-context");
+        assert_eq!(MemoryKind::Reference.xml_tag(), "reference");
+    }
+
+    /// Phase 9: parse_rule_file extracts both globs and kind from
+    /// frontmatter; rules without kind round-trip with `None`.
+    #[test]
+    fn test_parse_rule_with_kind_frontmatter() {
+        let (_d, dir) = tmp_dir();
+        let path = dir.join("rule.md");
+        fs::write(
+            &path,
+            "---\nkind: feedback\nglobs: [\"*.rs\"]\n---\nNever use sudo.",
+        )
+        .unwrap();
+        let rule = parse_rule_file(&path).expect("rule should parse");
+        assert_eq!(rule.kind, Some(MemoryKind::Feedback));
+        assert_eq!(rule.globs, vec!["*.rs".to_string()]);
+        assert!(rule.body.contains("Never use sudo"));
+    }
+
+    #[test]
+    fn test_parse_rule_without_kind_keeps_none() {
+        let (_d, dir) = tmp_dir();
+        let path = dir.join("rule.md");
+        fs::write(&path, "---\nglobs: [\"*.rs\"]\n---\nUse cargo fmt.").unwrap();
+        let rule = parse_rule_file(&path).expect("rule should parse");
+        assert_eq!(rule.kind, None);
+    }
+
+    /// Phase 9: rules_context_prompt groups by kind and emits the
+    /// authoritative-first ordering (feedback → user → project → reference
+    /// → untyped).
+    #[test]
+    fn test_rules_context_prompt_groups_by_kind() {
+        let rule_with = |kind: Option<MemoryKind>, body: &str| Rule {
+            globs: Vec::new(),
+            body: body.to_string(),
+            source: PathBuf::from("/test/rule.md"),
+            kind,
+        };
+        let rules = vec![
+            rule_with(Some(MemoryKind::Project), "project body"),
+            rule_with(Some(MemoryKind::Feedback), "feedback body"),
+            rule_with(None, "untyped body"),
+            rule_with(Some(MemoryKind::User), "user body"),
+        ];
+        let out = rules_context_prompt(&rules, &[]);
+        // feedback emits first, then user, then project, then untyped.
+        let feedback_pos = out.find("feedback body").unwrap();
+        let user_pos = out.find("user body").unwrap();
+        let project_pos = out.find("project body").unwrap();
+        let untyped_pos = out.find("untyped body").unwrap();
+        assert!(feedback_pos < user_pos);
+        assert!(user_pos < project_pos);
+        assert!(project_pos < untyped_pos);
+        // XML tags present:
+        assert!(out.contains("<feedback>"));
+        assert!(out.contains("<user-preferences>"));
+        assert!(out.contains("<project-context>"));
+        assert!(out.contains("<untyped>"));
     }
 
     #[test]
