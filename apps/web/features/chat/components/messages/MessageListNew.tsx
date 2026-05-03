@@ -268,7 +268,10 @@ const MessageItemComponent = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [showActions, setShowActions] = useState(false);
-  const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
+  const storedReaction = message.metadata?.reaction;
+  const [reaction, setReaction] = useState<'up' | 'down' | null>(
+    storedReaction === 'thumbsUp' ? 'up' : storedReaction === 'thumbsDown' ? 'down' : null,
+  );
 
   const persistReaction = useCallback(
     async (next: 'up' | 'down' | null) => {
