@@ -23,7 +23,11 @@ import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
+// CodeQL js/missing-rate-limiting (audit 2026-05-03): pairing flow is
+// auth-required but the underlying signaling-server pairing-code search
+// is not free, so apply baseline rate-limiting after auth.
 router.use(authenticateToken);
+router.use(createRateLimiter('default'));
 
 const SIGNALING_HTTP_URL = process.env['SIGNALING_HTTP_URL'] ?? 'http://localhost:4000';
 
