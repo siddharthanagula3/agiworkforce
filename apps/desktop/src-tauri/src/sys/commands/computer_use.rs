@@ -218,6 +218,78 @@ async fn require_confirmation(
     Ok(())
 }
 
+// DESK-9 (audit 2026-05-03): the previous implementation had
+// `computer_use_execute_tool` calling other `#[tauri::command]` fns
+// directly in Rust. That's unsupported Tauri API misuse — those
+// functions are wrapped by the IPC layer and not meant to be invoked
+// without going through `invoke()`. Refactor: move the OS-interaction
+// + record-action logic into private `perform_*_inner` helpers, and
+// have BOTH the IPC command and execute_tool call those.
+
+async fn click_inner(
+    x: i32,
+    y: i32,
+    state: &Arc<Mutex<ComputerUseState>>,
+) -> Result<(), String> {
+    tracing::info!("Clicking at ({}, {})", x, y);
+    perform_click(x, y).map_err(|e| format!("Failed to click: {}", e))?;
+    let computer_state = state.lock().await;
+    record_action(
+        &computer_state,
+        ComputerAction {
+            action_type: ActionType::Click,
+            coordinates: Some((x, y)),
+            text: None,
+            key: None,
+        },
+    )
+    .await;
+    Ok(())
+}
+
+async fn move_mouse_inner(
+    x: i32,
+    y: i32,
+    state: &Arc<Mutex<ComputerUseState>>,
+) -> Result<(), String> {
+    tracing::info!("Moving mouse to ({}, {})", x, y);
+    perform_move(x, y).map_err(|e| format!("Failed to move mouse: {}", e))?;
+    let computer_state = state.lock().await;
+    record_action(
+        &computer_state,
+        ComputerAction {
+            action_type: ActionType::MoveMouse,
+            coordinates: Some((x, y)),
+            text: None,
+            key: None,
+        },
+    )
+    .await;
+    Ok(())
+}
+
+async fn type_text_inner(
+    text: String,
+    state: &Arc<Mutex<ComputerUseState>>,
+) -> Result<(), String> {
+    // FIX-003: replaced `tracing::info!("Typing text: {}", text)` — the
+    // previous form spilled raw passwords into the log pipeline.
+    tracing::info!("Typing {} chars", text.chars().count());
+    perform_type(&text).map_err(|e| format!("Failed to type text: {}", e))?;
+    let computer_state = state.lock().await;
+    record_action(
+        &computer_state,
+        ComputerAction {
+            action_type: ActionType::Type,
+            coordinates: None,
+            text: Some(text),
+            key: None,
+        },
+    )
+    .await;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn computer_use_click(
     x: i32,
@@ -231,23 +303,7 @@ pub async fn computer_use_click(
         serde_json::json!({ "x": x, "y": y }),
     )
     .await?;
-    tracing::info!("Clicking at ({}, {})", x, y);
-
-    perform_click(x, y).map_err(|e| format!("Failed to click: {}", e))?;
-
-    let computer_state = state.lock().await;
-    record_action(
-        &computer_state,
-        ComputerAction {
-            action_type: ActionType::Click,
-            coordinates: Some((x, y)),
-            text: None,
-            key: None,
-        },
-    )
-    .await;
-
-    Ok(())
+    click_inner(x, y, state.inner()).await
 }
 
 #[tauri::command]
@@ -263,23 +319,7 @@ pub async fn computer_use_move_mouse(
         serde_json::json!({ "x": x, "y": y }),
     )
     .await?;
-    tracing::info!("Moving mouse to ({}, {})", x, y);
-
-    perform_move(x, y).map_err(|e| format!("Failed to move mouse: {}", e))?;
-
-    let computer_state = state.lock().await;
-    record_action(
-        &computer_state,
-        ComputerAction {
-            action_type: ActionType::MoveMouse,
-            coordinates: Some((x, y)),
-            text: None,
-            key: None,
-        },
-    )
-    .await;
-
-    Ok(())
+    move_mouse_inner(x, y, state.inner()).await
 }
 
 #[tauri::command]
@@ -297,25 +337,7 @@ pub async fn computer_use_type_text(
         serde_json::json!({ "chars": text.chars().count() }),
     )
     .await?;
-    // FIX-003: replaced `tracing::info!("Typing text: {}", text)` — the
-    // previous form spilled raw passwords into the log pipeline.
-    tracing::info!("Typing {} chars", text.chars().count());
-
-    perform_type(&text).map_err(|e| format!("Failed to type text: {}", e))?;
-
-    let computer_state = state.lock().await;
-    record_action(
-        &computer_state,
-        ComputerAction {
-            action_type: ActionType::Type,
-            coordinates: None,
-            text: Some(text),
-            key: None,
-        },
-    )
-    .await;
-
-    Ok(())
+    type_text_inner(text, state.inner()).await
 }
 
 #[tauri::command]
@@ -391,18 +413,19 @@ pub async fn computer_use_execute_tool(
         "click" => {
             let x = args["x"].as_i64().ok_or("Missing x coordinate")? as i32;
             let y = args["y"].as_i64().ok_or("Missing y coordinate")? as i32;
-            computer_use_click(x, y, state, app_handle).await?;
+            // DESK-9: call the helper directly instead of a Tauri command.
+            click_inner(x, y, state.inner()).await?;
             Ok(serde_json::json!({"success": true}))
         }
         "type" => {
             let text = args["text"].as_str().ok_or("Missing text")?;
-            computer_use_type_text(text.to_string(), state, app_handle).await?;
+            type_text_inner(text.to_string(), state.inner()).await?;
             Ok(serde_json::json!({"success": true}))
         }
         "move_mouse" => {
             let x = args["x"].as_i64().ok_or("Missing x coordinate")? as i32;
             let y = args["y"].as_i64().ok_or("Missing y coordinate")? as i32;
-            computer_use_move_mouse(x, y, state, app_handle).await?;
+            move_mouse_inner(x, y, state.inner()).await?;
             Ok(serde_json::json!({"success": true}))
         }
         "zoom" => {
