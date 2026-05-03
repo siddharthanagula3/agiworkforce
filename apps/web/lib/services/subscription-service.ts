@@ -317,21 +317,32 @@ export class SubscriptionService {
 
         const customer = customers.data[0]!;
 
-        // SECURITY: Verify the Stripe customer actually belongs to this user.
-        // Email matched but the customer may have been created for a different
-        // Supabase user — reject to prevent IDOR via email-based fallback.
-        if (
-          customer.metadata?.['supabase_user_id'] &&
-          customer.metadata['supabase_user_id'] !== userId
-        ) {
+        // WEB-8 (audit 2026-05-03): tightened IDOR check.
+        //
+        // The previous logic only blocked when
+        //   `customer.metadata.supabase_user_id !== userId`.
+        // It accepted the customer if the metadata field was MISSING —
+        // which is exactly the case for legacy customers created before
+        // metadata was attached. Combined with the email-fallback path,
+        // a user who changed their Supabase email to one that previously
+        // belonged to someone else's Stripe customer would inherit that
+        // customer's billing record.
+        //
+        // We now REQUIRE the metadata field to exist AND match. Customers
+        // with no metadata are treated as "ownership unknown" and
+        // refused — operators can run a one-time backfill to attach
+        // metadata to legacy customers, after which the email fallback
+        // becomes safe.
+        const recordedUserId = customer.metadata?.['supabase_user_id'];
+        if (!recordedUserId || recordedUserId !== userId) {
           logger.warn(
             {
               email,
               customerId: customer.id,
               expectedUserId: userId,
-              actualUserId: customer.metadata['supabase_user_id'],
+              actualUserId: recordedUserId ?? '<missing>',
             },
-            'IDOR blocked: Stripe customer email matched but belongs to a different user',
+            'IDOR blocked: Stripe customer email matched but ownership cannot be verified',
           );
           return null;
         }

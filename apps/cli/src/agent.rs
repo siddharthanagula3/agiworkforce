@@ -86,6 +86,12 @@ pub struct AgentSession {
     /// `CliError::RateLimited` instead of hitting the network. Cleared after
     /// it fires once so the fallback path executes normally afterwards.
     pub demo_force_rate_limit: bool,
+    /// CLI-4 (audit 2026-05-03): when `true`, every fallback call is also
+    /// mocked instead of hitting the real upstream — guarantees `--demo`
+    /// never burns a real billable call even when API keys are configured.
+    /// Set whenever `demo_force_rate_limit` is set; persists for the full
+    /// session so subsequent turns also synthesize.
+    pub demo_mode: bool,
     /// Active output style name (`default`, `explanatory`, `learning`, or a
     /// user-defined entry from `~/.agiworkforce/output-styles/`).
     #[allow(dead_code)]
@@ -246,6 +252,7 @@ impl AgentSession {
             turn_count: 0,
             fallback_chain: None,
             demo_force_rate_limit: false,
+            demo_mode: false,
             on_fallback: None,
             output_style: "default".to_string(),
             recent_tool_calls: Vec::new(),
@@ -753,17 +760,40 @@ impl AgentSession {
                                 if let Some(sink) = self.on_fallback.as_ref() {
                                     (sink.0)(&prev_model, fallback_model, kind);
                                 }
-                                match models::stream_completion(
-                                    config,
-                                    &self.provider,
-                                    &self.model,
-                                    &self.messages,
-                                    max_tokens,
-                                    Some(&tool_defs),
-                                    Box::new(|chunk| print!("{}", chunk)),
-                                )
-                                .await
-                                {
+                                // CLI-4 (audit 2026-05-03): in demo mode,
+                                // synthesize the fallback response instead of
+                                // hitting the real upstream. This guarantees
+                                // `--demo` never burns a real billable call
+                                // even when API keys are configured.
+                                let fallback_call = if self.demo_mode {
+                                    let demo_text = format!(
+                                        "[DEMO MODE] Synthesized response from `{}` — no real \
+                                         API call was made. The fallback chain is exercised but \
+                                         the upstream provider was not contacted.",
+                                        fallback_model
+                                    );
+                                    print!("{}", demo_text);
+                                    Ok(crate::models::CompletionResult {
+                                        text: demo_text,
+                                        tool_calls: vec![],
+                                        input_tokens: 0,
+                                        output_tokens: 0,
+                                        via_subscription: true,
+                                        stop_reason: Some("end_turn".to_string()),
+                                    })
+                                } else {
+                                    models::stream_completion(
+                                        config,
+                                        &self.provider,
+                                        &self.model,
+                                        &self.messages,
+                                        max_tokens,
+                                        Some(&tool_defs),
+                                        Box::new(|chunk| print!("{}", chunk)),
+                                    )
+                                    .await
+                                };
+                                match fallback_call {
                                     Ok(r) => {
                                         recovered = Some(r);
                                         break;
