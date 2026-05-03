@@ -946,14 +946,22 @@ async fn stream_google(
         format!("models/{}", model)
     };
 
+    // CodeQL rust/cleartext-transmission (audit 2026-05-03): pass the
+    // API key via `x-goog-api-key` header instead of the `?key=` query
+    // parameter. URL query strings are routinely logged in proxy logs,
+    // browser histories, and reverse-proxy access logs — putting the
+    // key in the header keeps it out of those byways. The transmission
+    // itself was already HTTPS-encrypted but the key would still
+    // appear in upstream log middleware records.
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/{}:streamGenerateContent?alt=sse&key={}",
-        model_path, api_key
+        "https://generativelanguage.googleapis.com/v1beta/{}:streamGenerateContent?alt=sse",
+        model_path
     );
 
     let resp = client
         .post(&url)
         .header("content-type", "application/json")
+        .header("x-goog-api-key", api_key)
         .json(&body)
         .send()
         .await
