@@ -101,8 +101,17 @@ const tauriStorage = {
       localStorage.removeItem(key);
       return plaintext;
     } catch (err) {
-      console.warn('[supabase] vault migration write failed; leaving legacy value in place', err);
-      return plaintext;
+      // DESK-11 (audit 2026-05-03): if the vault write fails (locked /
+      // not yet configured / IPC error), DO NOT return the bare
+      // plaintext token. The previous implementation kept returning the
+      // localStorage value indefinitely — the token never migrated and
+      // continued to live unencrypted on disk. Return null so Supabase
+      // treats it as "no session" and triggers a fresh sign-in flow,
+      // which lets the user unlock the vault first. Wipe the legacy
+      // entry too so we don't dangle plaintext forever.
+      console.warn('[supabase] vault migration write failed; clearing legacy plaintext', err);
+      localStorage.removeItem(key);
+      return null;
     }
   },
   setItem: async (key: string, value: string): Promise<void> => {
