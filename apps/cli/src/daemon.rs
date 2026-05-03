@@ -856,15 +856,19 @@ async fn execute_trigger(
         Err(e) => ("error".to_string(), format!("{:#}", e)),
     };
 
+    // CLI-3 (audit 2026-05-03): redact well-known secret patterns before
+    // persisting prompt + response to disk. Webhook trigger payloads can
+    // legitimately contain API keys / signing secrets / PII that must
+    // not survive in `~/.agiworkforce/daemon-logs/` as plaintext JSON.
     let log_entry = serde_json::json!({
         "trigger_id": event.trigger_id,
         "trigger_type": format!("{:?}", event.trigger_type).to_lowercase(),
         "timestamp": Local::now().to_rfc3339(),
         "model": model,
-        "prompt": event.prompt,
-        "context": event.context,
+        "prompt": redact_secrets(&event.prompt),
+        "context": event.context.as_ref().map(|c| redact_secrets(c)),
         "status": status,
-        "response": response_text,
+        "response": redact_secrets(&response_text),
         "duration_ms": duration.as_millis() as u64,
     });
 
@@ -941,6 +945,58 @@ async fn wait_for_shutdown_signal() {
 }
 
 // ---------------------------------------------------------------------------
+// CLI-3 (audit 2026-05-03): minimal secret redactor used before writing
+// trigger prompts + responses to log files on disk. Same pattern set as
+// `apps/desktop/src-tauri/src/sys/security/log_redaction.rs` and
+// `packages/utils/src/logger.ts`. Kept inline so daemon.rs has no
+// cross-crate dep on agiworkforce-secrets (which is workspace-excluded).
+// ---------------------------------------------------------------------------
+
+fn redact_secrets(input: &str) -> String {
+    use std::sync::OnceLock;
+    static PATTERNS: OnceLock<Vec<(regex::Regex, &'static str)>> = OnceLock::new();
+    let patterns = PATTERNS.get_or_init(|| {
+        vec![
+            // Order matters — more specific patterns first.
+            (regex::Regex::new(r"sk-ant-[a-zA-Z0-9_-]{20,}").unwrap(), "[REDACTED_ANTHROPIC_KEY]"),
+            (regex::Regex::new(r"sk-[a-zA-Z0-9_-]{20,}").unwrap(), "[REDACTED_API_KEY]"),
+            (regex::Regex::new(r"AIzaSy[a-zA-Z0-9_-]{33}").unwrap(), "[REDACTED_GOOGLE_KEY]"),
+            (regex::Regex::new(r"gsk_[a-zA-Z0-9]{48,}").unwrap(), "[REDACTED_GROQ_KEY]"),
+            (
+                regex::Regex::new(r"(?:sk|pk|rk)_(?:test|live)_[a-zA-Z0-9]{24,}").unwrap(),
+                "[REDACTED_STRIPE_KEY]",
+            ),
+            (regex::Regex::new(r"AKIA[A-Z0-9]{16}").unwrap(), "[REDACTED_AWS_KEY]"),
+            (regex::Regex::new(r"gh[ps]_[a-zA-Z0-9]{36,}").unwrap(), "[REDACTED_GITHUB_TOKEN]"),
+            (
+                regex::Regex::new(r"github_pat_[a-zA-Z0-9_]{22,}").unwrap(),
+                "[REDACTED_GITHUB_TOKEN]",
+            ),
+            (regex::Regex::new(r"xai-[a-zA-Z0-9]{20,}").unwrap(), "[REDACTED_XAI_KEY]"),
+            (
+                regex::Regex::new(r"(?i)bearer\s+[a-zA-Z0-9._\-/+=]{20,}").unwrap(),
+                "Bearer [REDACTED_TOKEN]",
+            ),
+            (
+                regex::Regex::new(
+                    r#"(?i)(api[_-]?key|apikey|secret[_-]?key|access[_-]?token|auth[_-]?token)\s*[=:]\s*['"]?[a-zA-Z0-9_\-/.+=]{16,}['"]?"#,
+                ).unwrap(),
+                "$1=[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"(?i)(postgres|mysql|mongodb|redis)://[^:]+:[^@]+@").unwrap(),
+                "$1://[CREDENTIALS_REDACTED]@",
+            ),
+        ]
+    });
+    let mut text = input.to_string();
+    for (pattern, replacement) in patterns {
+        text = pattern.replace_all(&text, *replacement).into_owned();
+    }
+    text
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -948,6 +1004,25 @@ async fn wait_for_shutdown_signal() {
 mod tests {
     use super::*;
     use crate::hooks::{TriggerConfig, TriggerType, TriggersConfig};
+
+    #[test]
+    fn redact_strips_well_known_secret_patterns() {
+        let raw =
+            "Bearer sk-ant-AAA12345678901234567890 and sk_test_abcdefghij1234567890123456";
+        let out = redact_secrets(raw);
+        assert!(!out.contains("sk-ant-"));
+        assert!(!out.contains("sk_test_abcdefghij"));
+        assert!(out.contains("[REDACTED_ANTHROPIC_KEY]"));
+        assert!(out.contains("[REDACTED_STRIPE_KEY]"));
+    }
+
+    #[test]
+    fn redact_handles_postgres_credential_url() {
+        let raw = "postgres://alice:hunter2@db.example.com:5432/app";
+        let out = redact_secrets(raw);
+        assert!(!out.contains("hunter2"));
+        assert!(out.contains("[CREDENTIALS_REDACTED]"));
+    }
 
     #[test]
     fn test_validate_cron_trigger_valid() {
