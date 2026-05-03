@@ -68,19 +68,14 @@ impl SupabaseSyncClient {
     /// Checks `SUPABASE_URL` / `SUPABASE_ANON_KEY` first (correct for the Rust
     /// backend), then falls back to the Vite-prefixed variants for dev parity.
     pub fn new() -> Option<Self> {
-        let supabase_url = std::env::var("SUPABASE_URL")
-            .or_else(|_| std::env::var("NEXT_PUBLIC_SUPABASE_URL"))
-            .or_else(|_| std::env::var("VITE_SUPABASE_URL"))
-            .unwrap_or_default();
-        let supabase_anon_key = std::env::var("SUPABASE_ANON_KEY")
-            .or_else(|_| std::env::var("NEXT_PUBLIC_SUPABASE_ANON_KEY"))
-            .or_else(|_| std::env::var("VITE_SUPABASE_ANON_KEY"))
-            .unwrap_or_default();
-
-        if supabase_url.is_empty() || supabase_anon_key.is_empty() {
-            debug!("Supabase sync disabled: missing URL or anon key");
-            return None;
-        }
+        let supabase_url = match crate::sys::account::get_supabase_url() {
+            Some(u) if !u.is_empty() => u,
+            _ => {
+                debug!("Supabase sync disabled: credentials not configured");
+                return None;
+            }
+        };
+        let supabase_anon_key = crate::sys::account::get_supabase_anon_key().unwrap_or_default();
 
         let http_client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))

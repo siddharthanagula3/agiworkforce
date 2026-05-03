@@ -60,20 +60,16 @@ fn build_client() -> Result<Client, String> {
         .map_err(|e| format!("Failed to build HTTP client: {e}"))
 }
 
-/// Resolve Supabase URL from env vars (same priority as `supabase_sync.rs`).
 fn supabase_url() -> Result<String, String> {
-    std::env::var("SUPABASE_URL")
-        .or_else(|_| std::env::var("NEXT_PUBLIC_SUPABASE_URL"))
-        .or_else(|_| std::env::var("VITE_SUPABASE_URL"))
-        .map_err(|_| "SUPABASE_URL is not configured".to_string())
+    crate::sys::account::get_supabase_url()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "SUPABASE_URL is not configured".to_string())
 }
 
-/// Resolve Supabase anon key from env vars.
 fn supabase_anon_key() -> Result<String, String> {
-    std::env::var("SUPABASE_ANON_KEY")
-        .or_else(|_| std::env::var("NEXT_PUBLIC_SUPABASE_ANON_KEY"))
-        .or_else(|_| std::env::var("VITE_SUPABASE_ANON_KEY"))
-        .map_err(|_| "SUPABASE_ANON_KEY is not configured".to_string())
+    crate::sys::account::get_supabase_anon_key()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "SUPABASE_ANON_KEY is not configured".to_string())
 }
 
 /// Get the stored JWT and extract the user UUID from the `sub` claim.

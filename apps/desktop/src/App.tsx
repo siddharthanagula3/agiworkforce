@@ -480,6 +480,13 @@ const DesktopShell = () => {
           await runStartupStep(
             'Managed cloud credential sync',
             async () => {
+              // Forward Supabase credentials so Rust can call Supabase directly.
+              // VITE_SUPABASE_* are baked into the JS bundle but never appear in
+              // the Rust process environment in a bundled Tauri app.
+              await invoke('set_supabase_credentials', {
+                url: import.meta.env['VITE_SUPABASE_URL'] ?? '',
+                anonKey: import.meta.env['VITE_SUPABASE_ANON_KEY'] ?? '',
+              }).catch(() => {});
               // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
               await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
               if (disposed) return;
