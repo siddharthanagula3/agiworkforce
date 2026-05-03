@@ -33,9 +33,9 @@
     "dompurify": "^3.3.3"
   },
   "devDependencies": {
-    "@types/chrome": "^0.1.38",
+    "@types/chrome": "^0.1.40",
     "jsdom": "^27.4.0",
-    "terser": "^5.46.1",
+    "terser": "^5.46.2",
     "typescript": "5.9.3",
     "vite": "^7.3.1",
     "vite-plugin-static-copy": "^3.4.0",
