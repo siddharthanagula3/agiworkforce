@@ -13,22 +13,42 @@ const MAX_RESULT_LIMIT: usize = 10_000;
 /// so a wide tree with no matches can't pin a thread indefinitely.
 const MAX_ENTRIES_VISITED: usize = 100_000;
 
+/// DESK-12 (audit 2026-05-03): the previous implementation rooted the
+/// walk at `std::env::current_dir()`, which on a Tauri app launched from
+/// the macOS dock or Finder is `/`. That walked tens of thousands of
+/// system files (returning paths from `/etc`, `~/.ssh`, etc. that are
+/// not "hidden" by the dotfile filter) and pinned a thread for several
+/// seconds. Use the user's `HOME` directory as the safe default
+/// workspace root — bounded, predictable, and never `/`.
+fn search_root() -> Result<PathBuf, String> {
+    if let Ok(cwd) = std::env::current_dir() {
+        // Trust cwd only if it isn't the filesystem root.
+        if cwd.parent().is_some() && cwd != PathBuf::from("/") {
+            return Ok(cwd);
+        }
+    }
+    if let Some(home) = dirs::home_dir() {
+        return Ok(home);
+    }
+    Err("No usable workspace root: cwd is filesystem root and HOME is unset".to_string())
+}
+
 #[tauri::command]
 pub async fn fs_search_files(query: String, limit: usize) -> Result<Vec<String>, String> {
-    let cwd = std::env::current_dir().map_err(|e| format!("Failed to get cwd: {}", e))?;
+    let root = search_root()?;
     let limit = limit.min(MAX_RESULT_LIMIT);
 
-    tokio::task::spawn_blocking(move || search_files_blocking(&cwd, &query, limit))
+    tokio::task::spawn_blocking(move || search_files_blocking(&root, &query, limit))
         .await
         .map_err(|e| format!("Search task failed: {}", e))?
 }
 
 #[tauri::command]
 pub async fn fs_search_folders(query: String, limit: usize) -> Result<Vec<String>, String> {
-    let cwd = std::env::current_dir().map_err(|e| format!("Failed to get cwd: {}", e))?;
+    let root = search_root()?;
     let limit = limit.min(MAX_RESULT_LIMIT);
 
-    tokio::task::spawn_blocking(move || search_folders_blocking(&cwd, &query, limit))
+    tokio::task::spawn_blocking(move || search_folders_blocking(&root, &query, limit))
         .await
         .map_err(|e| format!("Search task failed: {}", e))?
 }
