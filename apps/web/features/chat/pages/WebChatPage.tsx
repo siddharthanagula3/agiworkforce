@@ -43,7 +43,7 @@ export default function WebChatPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Streaming send + store state
-  const { sendMessage, stopGeneration, isStreaming } = useChatStream();
+  const { sendMessage, isStreaming } = useChatStream();
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const isLoading = useChatStore((s) => s.isLoading);
@@ -52,13 +52,8 @@ export default function WebChatPage() {
   const selectedModelId = useModelStore((s) => s.selectedModelId);
 
   // Conversation CRUD
-  const {
-    conversations,
-    createConversation,
-    loadConversation,
-    deleteConversation,
-    setActiveConversation,
-  } = useConversations();
+  const { conversations, createConversation, loadConversation, deleteConversation } =
+    useConversations();
 
   // Session creation guard
   const creationPending = React.useRef(false);
