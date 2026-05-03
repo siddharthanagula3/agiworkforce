@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code)] // PHASE2: composable router not yet wired into AgentSession; planned to replace the manual FallbackChain as the differentiating routing layer.
 //! Composable routing strategies for model selection.
 //!
 //! Architecture: Chain-of-responsibility. Each strategy returns `Some(decision)`

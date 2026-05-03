@@ -34,59 +34,42 @@ mod voice;
 mod app_server;
 mod apply_patch;
 mod cloud;
+mod ecosystem;
 mod exec_policy;
+mod init;
 mod model_catalog;
+mod models_cache;
+mod oauth;
+mod onboarding;
 mod plugins;
+mod project_registry;
+mod project_scope;
 mod review;
+mod routing;
 mod runtime;
 mod sandbox;
+mod shell_snapshot;
+mod sync;
 mod tool_search;
 
-// Modules with internal items not yet fully consumed. dead_code allow is
-// scoped: enables future wiring without churn. Each is referenced by main.rs
-// for at least one call site (see ARCHITECTURE.md §11–14 for details).
-#[allow(dead_code)]
-mod ecosystem;
-#[allow(dead_code)]
-mod init;
-#[allow(dead_code)]
+// Phase-2 candidates — implementations exist but the user-facing surface is
+// not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
+#[allow(dead_code)] // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 mod marketplace;
-#[allow(dead_code)]
-mod oauth;
-#[allow(dead_code)]
-mod onboarding;
-#[allow(dead_code)]
+#[allow(dead_code)] // PHASE2: Gemini-style declarative TOML tool-rule eval not yet wired into agent
 mod policy;
-#[allow(dead_code)]
-mod project_registry;
-#[allow(dead_code)]
-mod project_scope;
-#[allow(dead_code)]
-mod routing;
-#[allow(dead_code)]
+#[allow(dead_code)] // PHASE2: SDK stdin-reader surface (StdinReader, ControlRequest, etc.) ships in Sprint B (headless mode hardening)
 mod sdk_io;
-#[allow(dead_code)]
-mod sync;
 
-// Truly-parked modules — zero call sites in main.rs. Kept compiled so the
-// public API stays valid as helpers; will be wired up in v1.1+ or removed.
-// a2a: Agent-to-Agent protocol (1337 LOC). tui_basic: alternative simpler TUI.
-// history: stub. memory_pipeline: auto-consolidation. models_cache: stub.
-// shell_snapshot: stub. skill_learner: auto-skill generation.
-#[allow(dead_code)]
+// Phase-2 candidates — implementations exist with no current call sites.
+// PHASE2 markers in each module describe what wires them up.
+// Removed 2026-05-03 (dead): history, models_cache, shell_snapshot, tui_basic.
+#[allow(dead_code)] // PHASE2: expose `agiworkforce a2a serve/discover/delegate`
 mod a2a;
-#[allow(dead_code)]
-mod history;
-#[allow(dead_code)]
+#[allow(dead_code)] // PHASE2: hook into session-end lifecycle in daemon.rs
 mod memory_pipeline;
-#[allow(dead_code)]
-mod models_cache;
-#[allow(dead_code)]
-mod shell_snapshot;
-#[allow(dead_code)]
+#[allow(dead_code)] // PHASE2: wire into daemon background tick
 mod skill_learner;
-#[allow(dead_code)]
-mod tui_basic;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
