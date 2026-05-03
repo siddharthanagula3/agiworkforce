@@ -12,6 +12,7 @@ import {
   Sparkles,
   Brain,
   BookOpen,
+  Code2,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -41,6 +42,7 @@ interface ChatComposerProps {
       folderId: string | null;
       webSearchEnabled?: boolean;
       thinkingEnabled?: boolean;
+      codeExecutionEnabled?: boolean;
     },
   ) => void;
   isLoading?: boolean;
@@ -75,6 +77,7 @@ const TOOLS = [
   { id: 'video', label: 'Generate Video', icon: Video, color: 'text-pink-400' },
   { id: 'document', label: 'Create Document', icon: FileText, color: 'text-blue-400' },
   { id: 'search', label: 'Web Search', icon: Globe, color: 'text-emerald-400' },
+  { id: 'code-execution', label: 'Run Code (Python)', icon: Code2, color: 'text-violet-400' },
 ];
 
 const FOCUS_MODE_TAGS: Record<NonNullable<FocusMode>, ModeTag[]> = {
@@ -389,6 +392,7 @@ const ChatComposerNewComponent = ({
       folderId: selectedFolderId,
       webSearchEnabled,
       thinkingEnabled,
+      codeExecutionEnabled: selectedTools.includes('code-execution'),
     });
 
     setMessage('');
