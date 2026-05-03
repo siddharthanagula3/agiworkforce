@@ -313,23 +313,70 @@ impl PluginsManager {
 
     /// Collect MCP server configs from all loaded plugins, converted to
     /// `crate::mcp::McpServerConfig` so callers can pass them to `McpManager`.
+    ///
+    /// Branches on `extra.get("transport")`: an explicit `"sse"` produces
+    /// an `McpServerConfig::sse(url, headers)` config; anything else falls
+    /// back to the legacy stdio shape using `command`/`args`/`env`. Plugins
+    /// with neither a command nor an SSE transport are skipped.
     pub fn mcp_configs(&self) -> HashMap<String, crate::mcp::McpServerConfig> {
         let mut out = HashMap::new();
         for p in &self.plugins {
             for (name, cfg) in &p.mcp_servers {
-                if cfg.command.is_empty() {
-                    // HTTP/SSE entries land here once the McpServerConfig
-                    // shape supports `url`/`transport`. Skip until then.
-                    continue;
+                let transport_kind = cfg
+                    .extra
+                    .get("transport")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_ascii_lowercase());
+
+                match transport_kind.as_deref() {
+                    Some("sse") => {
+                        let url = match cfg.extra.get("url").and_then(|v| v.as_str()) {
+                            Some(u) => u.to_string(),
+                            None => {
+                                eprintln!(
+                                    "[plugins] MCP server '{}' declares transport=sse but has no `url` — skipping",
+                                    name
+                                );
+                                continue;
+                            }
+                        };
+                        let headers: HashMap<String, String> = cfg
+                            .extra
+                            .get("headers")
+                            .and_then(|v| v.as_object())
+                            .map(|obj| {
+                                obj.iter()
+                                    .filter_map(|(k, v)| {
+                                        v.as_str().map(|s| (k.clone(), s.to_string()))
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        out.insert(name.clone(), crate::mcp::McpServerConfig::sse(url, headers));
+                    }
+                    Some("stdio") | None => {
+                        if cfg.command.is_empty() {
+                            // No command + no recognized transport — skip.
+                            continue;
+                        }
+                        out.insert(
+                            name.clone(),
+                            crate::mcp::McpServerConfig::stdio(
+                                cfg.command.clone(),
+                                cfg.args.clone(),
+                                cfg.env.clone(),
+                            ),
+                        );
+                    }
+                    Some(other) => {
+                        // Future B2/B3 transports (http, oauth) will be wired
+                        // here. For now, skip with a notice.
+                        eprintln!(
+                            "[plugins] MCP server '{}' uses unsupported transport '{}' — skipping (B2/B3 wiring pending)",
+                            name, other
+                        );
+                    }
                 }
-                out.insert(
-                    name.clone(),
-                    crate::mcp::McpServerConfig {
-                        command: cfg.command.clone(),
-                        args: cfg.args.clone(),
-                        env: cfg.env.clone(),
-                    },
-                );
             }
         }
         out
