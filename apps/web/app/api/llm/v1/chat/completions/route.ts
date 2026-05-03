@@ -807,7 +807,9 @@ async function handleChatCompletions(request: NextRequest) {
                         ? 'executing'
                         : toolName === 'web_search'
                           ? 'searching'
-                          : 'running';
+                          : toolName === 'web_fetch'
+                            ? 'fetching'
+                            : 'running';
                     transformedEvent = {
                       choices: [
                         {
