@@ -511,7 +511,47 @@ async function handleLLMCompletion(request: NextRequest) {
 
       const reconciledStream = stream.pipeThrough(transformStream);
 
-      return new NextResponse(reconciledStream, {
+      // WEB-3 (audit 2026-05-03): cap the time the upstream stream can
+      // sit idle without producing bytes. Without this, a stalled
+      // upstream pins the edge function for the full function-timeout
+      // (Vercel default: 5 min), starving capacity. We measure
+      // inactivity, not total runtime — long completions are fine as
+      // long as bytes keep arriving. After 60s of silence we abort and
+      // the existing catch-block refund path runs.
+      const STREAM_IDLE_TIMEOUT_MS = 60_000;
+      const guardedStream = new ReadableStream({
+        async start(controller) {
+          const reader = reconciledStream.getReader();
+          let watchdog: ReturnType<typeof setTimeout> | null = null;
+          const resetWatchdog = () => {
+            if (watchdog) clearTimeout(watchdog);
+            watchdog = setTimeout(() => {
+              logger.warn(
+                { userId: user.id, model: llmRequest.model },
+                'Streaming response idle for >60s — aborting and refunding',
+              );
+              reader.cancel('idle-timeout').catch(() => {});
+              controller.error(new Error('upstream stream idle timeout'));
+            }, STREAM_IDLE_TIMEOUT_MS);
+          };
+          resetWatchdog();
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              resetWatchdog();
+              controller.enqueue(value);
+            }
+            controller.close();
+          } catch (err) {
+            controller.error(err);
+          } finally {
+            if (watchdog) clearTimeout(watchdog);
+          }
+        },
+      });
+
+      return new NextResponse(guardedStream, {
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
