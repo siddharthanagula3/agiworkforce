@@ -594,10 +594,11 @@ async function handleChatCompletions(request: NextRequest) {
     return handleCreditError(reserveResult);
   }
 
-  // Convert messages to internal format
+  // Convert messages to internal format; preserve multimodal parts (images) separately
   const internalMessages = chatRequest.messages.map((msg) => ({
     role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
     content: extractTextContent(msg.content),
+    multimodal_content: Array.isArray(msg.content) ? msg.content : undefined,
     tool_calls: msg.tool_calls,
     tool_call_id: msg.tool_call_id,
   }));
