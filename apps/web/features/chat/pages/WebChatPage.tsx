@@ -30,6 +30,8 @@ function toChatMessage(m: Message, conversationId: string): ChatMessage {
             model: m.model,
             thinkingSteps,
             isThinkingStreaming: m.metadata?.isThinkingStreaming,
+            isSearching: m.metadata?.isSearching,
+            searchResults: m.metadata?.searchResults,
           }
         : undefined,
   };
