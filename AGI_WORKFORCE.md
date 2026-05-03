@@ -48,11 +48,12 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 
 ## MVP plan (3 waves, parallel where possible)
 
-| Wave       | Timeline  | What ships                                                                                                      | Status            |
-| ---------- | --------- | --------------------------------------------------------------------------------------------------------------- | ----------------- |
-| **Wave 1** | Week 1    | CLI v1.0 — npm + Homebrew + GitHub releases                                                                     | Pending Wave 1 GO |
-| **Wave 2** | Weeks 1-4 | Desktop v1.0 — pixel-close Claude Desktop UI, Windows EV cert, web UnifiedAgenticChat → packages/chat migration | Pending           |
-| **Wave 3** | Weeks 5-8 | Mobile (App Store + Play) + Chrome ext (Web Store) + VS Code ext (Marketplace) + Hobby tier launch              | Pending           |
+| Wave       | Timeline   | What ships                                                                                              | Status      |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------- | ----------- |
+| **Wave 0** | 2026-05-03 | Cleanup: -1.04M LOC, SSOT created, audit P0/P1 mostly closed                                            | ✅ SHIPPED  |
+| **Wave 1** | 2026-05-03 | CLI v1.0 — Homebrew + install.sh + cargo + GitHub Release (5 platforms) live; npm pending NPM_TOKEN     | ✅ SHIPPED  |
+| **Wave 2** | Weeks 2-5  | Desktop v1.0 — pixel-close Claude Desktop UI, Windows EV cert, web UnifiedAgenticChat done, IPC pruning | In progress |
+| **Wave 3** | Weeks 6-9  | Mobile (App Store + Play) + Chrome ext (Web Store) + VS Code ext (Marketplace) + Hobby tier launch      | Pending     |
 
 Active sprint plan: [docs/plans/sprint1-vault-rewire.md](docs/plans/sprint1-vault-rewire.md). Master remediation: [docs/plans/master-remediation.md](docs/plans/master-remediation.md).
 
@@ -89,13 +90,31 @@ pnpm lint                     # not re-run
 - Remaining P0: CLI-5 (auth.json plaintext, mitigated by 0o600).
 - Remaining P1: DESK-5 (Vite env vars in Rust process env), DESK-8 (in-RAM remembered choices), WEB-4 (Stripe webhook body-read), WEB-5 (CSRF for Bearer), WEB-11 (CSP unsafe-inline style).
 
-## What was just cleaned up (2026-05-03)
+## What shipped on 2026-05-03 (19 commits, -1.04M LOC net)
 
-| Commit        | What                                       | Impact                           |
-| ------------- | ------------------------------------------ | -------------------------------- |
-| `61ca9205`    | Removed 5 root-level debris files          | -89 LOC                          |
-| `ac59e09e`    | Deleted 102 codex-rs port crates           | **-995K LOC across 4,624 files** |
-| (this commit) | Created SSOT structure (this file + docs/) | +N LOC docs                      |
+| Commit     | What                                             | Impact        |
+| ---------- | ------------------------------------------------ | ------------- |
+| `61ca9205` | Root-level debris cleanup                        | -89 LOC       |
+| `ac59e09e` | Deleted 102 codex-rs port crates                 | **-995K LOC** |
+| `9bed1b68` | SSOT structure (this file + docs/)               | +1.2K         |
+| `c45422f8` | 10-phase CLI parity work + Cargo.lock regen      | +3.9K / -9.5K |
+| `fe9162c9` | apps/cli/ARCHITECTURE.md                         | +569          |
+| `be78874f` | dead_code reorg + 898/898 test fixes             | +60           |
+| `699a2ccd` | Wave 1 prep: npm + Homebrew + CI + launch drafts | +1.2K         |
+| `361a2522` | Wave 2/3 plans                                   | +353          |
+| `5db614d2` | Desktop dir triage batch 1                       | -1.5K         |
+| `5f7d21cc` | WEB-4 Stripe webhook fix                         | +22 / -3      |
+| `76883138` | Web UnifiedAgenticChat deleted                   | **-36K**      |
+| `a26bdaf8` | Desktop+web batch 2 (21 dirs)                    | -7.5K         |
+| `61d9058d` | launch-readiness-check.sh                        | +147          |
+| `b409fe55` | install.sh fixes                                 | +17 / -7      |
+| `c0e0ae01` | release-cli.yml linux deps                       | +25           |
+| `b71ce74d` | hooks.rs windows cfg(unix) fix                   | +3            |
+| `a8650d61` | Drop linux-arm64 from matrix                     | +6 / -5       |
+| `7df13513` | update-homebrew-tap.sh bash 3.2 compat           | +23 / -17     |
+| `8d5c8758` | 28 dead store/hook/service/lib files             | **-9.4K**     |
+
+**v-cli-1.0.0 LIVE**: Tag `v-cli-1.0.0` triggered release-cli.yml after 3 iterations. GitHub Release with 5 platform binaries published. Homebrew tap formula auto-generated and pushed to `siddharthanagula3/homebrew-tap`. install.sh tested. Run `./scripts/launch-readiness-check.sh` anytime to verify state.
 
 Original codex-cli source preserved at `~/Desktop/reference/codex-cli/` for future re-port if needed.
 
