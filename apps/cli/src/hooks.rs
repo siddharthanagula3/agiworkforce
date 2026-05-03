@@ -548,39 +548,82 @@ pub fn aggregate_results(results: &[HookResult]) -> HookAggregateOutcome {
 // Hook loading
 // ---------------------------------------------------------------------------
 
-/// Load hooks configuration from ~/.agiworkforce/hooks.json.
+/// Load hooks configuration from ~/.agiworkforce/hooks.json, then merge
+/// plugin-declared hooks on top.
+///
+/// Merge order (Sprint B6): user `~/.agiworkforce/hooks.json` first, then each
+/// installed plugin's `hooks:` section appended after the user's hooks for
+/// the same event. This means user hooks run first; plugin hooks run after.
+/// Plugin authors who want a guaranteed pre-user position should use
+/// `matcher`/`if_condition` to scope their hook narrowly.
+///
 /// Verifies file permissions on Unix (rejects group/other-readable files).
 pub fn load_hooks() -> Result<HooksConfig> {
     let path = crate::config::CliConfig::config_dir()?.join("hooks.json");
 
-    if !path.exists() {
-        return Ok(HooksConfig::default());
-    }
+    let mut config: HooksConfig = if !path.exists() {
+        HooksConfig::default()
+    } else {
+        // Security: verify hooks.json is not group/other-writable (prevents tampering)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(meta) = std::fs::metadata(&path) {
+                let mode = meta.permissions().mode();
+                if mode & 0o022 != 0 {
+                    eprintln!(
+                        "{} hooks.json is group/other-writable (mode {:o}). \
+                         Fix with: chmod 600 {}",
+                        "security warning:".red().bold(),
+                        mode & 0o777,
+                        path.display()
+                    );
+                }
+            }
+        }
 
-    // Security: verify hooks.json is not group/other-writable (prevents tampering)
-    #[cfg(unix)]
+        let contents = std::fs::read_to_string(&path).context("Failed to read hooks.json")?;
+        serde_json::from_str(&contents).context("Failed to parse hooks.json")?
+    };
+
+    merge_plugin_hooks(&mut config);
+    Ok(config)
+}
+
+/// Sprint B6: merge plugin-declared hooks into the loaded HooksConfig.
+///
+/// Each plugin's `manifest_hooks` field is parsed via
+/// `PluginsManager::hook_configs()`, which returns a flattened
+/// `event_name -> [hook_value, ...]` map. Each hook_value is then
+/// deserialized as a `Hook` and appended to that event's existing slot.
+/// Hooks that fail to deserialize are skipped with a stderr warning.
+fn merge_plugin_hooks(config: &mut HooksConfig) {
+    let mut plugins_mgr = crate::plugins::PluginsManager::new();
+    if plugins_mgr
+        .load_all(std::env::current_dir().ok().as_deref())
+        .is_err()
     {
-        use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = std::fs::metadata(&path) {
-            let mode = meta.permissions().mode();
-            if mode & 0o022 != 0 {
-                eprintln!(
-                    "{} hooks.json is group/other-writable (mode {:o}). \
-                     Fix with: chmod 600 {}",
-                    "security warning:".red().bold(),
-                    mode & 0o777,
-                    path.display()
-                );
+        return;
+    }
+    for (event_name, hook_values) in plugins_mgr.hook_configs() {
+        for value in hook_values {
+            match serde_json::from_value::<Hook>(value.clone()) {
+                Ok(hook) => {
+                    config
+                        .hooks
+                        .entry(event_name.clone())
+                        .or_default()
+                        .push(hook);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[plugins] failed to load hook for event {}: {} (raw: {})",
+                        event_name, e, value
+                    );
+                }
             }
         }
     }
-
-    let contents = std::fs::read_to_string(&path).context("Failed to read hooks.json")?;
-
-    let config: HooksConfig =
-        serde_json::from_str(&contents).context("Failed to parse hooks.json")?;
-
-    Ok(config)
 }
 
 // ---------------------------------------------------------------------------

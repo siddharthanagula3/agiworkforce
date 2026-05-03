@@ -395,7 +395,7 @@ pub(crate) fn registry_from_builtins_skills_and_prompts(
     prompts: &[agiworkforce_protocol::custom_prompts::CustomPrompt],
 ) -> CommandRegistry {
     let mut registry = registry_from_builtins_and_skills(skills);
-    let reserved_names: std::collections::HashSet<String> = registry
+    let mut reserved_names: std::collections::HashSet<String> = registry
         .commands()
         .iter()
         .map(|command| command.name.clone())
@@ -407,8 +407,90 @@ pub(crate) fn registry_from_builtins_skills_and_prompts(
         .map(|prompt| RegistryCommand::from_custom_prompt(prompt, CommandSource::Project))
         .collect();
     prompt_commands.sort_by(|left, right| left.name.cmp(&right.name));
+    for cmd in &prompt_commands {
+        reserved_names.insert(cmd.name.clone());
+    }
     registry.extend(prompt_commands);
+
+    // Sprint B6: surface plugin-declared commands. Each plugin's manifest
+    // lists `commands:` paths (relative to plugin root) — typically markdown
+    // files whose filename becomes the slash command name. Built-in /
+    // skill / prompt names take precedence; conflicts are dropped silently.
+    let mut plugin_commands: Vec<RegistryCommand> =
+        plugin_command_registry_entries(&reserved_names);
+    plugin_commands.sort_by(|left, right| left.name.cmp(&right.name));
+    registry.extend(plugin_commands);
+
     registry
+}
+
+/// Sprint B6: discover commands from installed plugins.
+///
+/// Each plugin manifest's `commands:` field is a list of paths (relative to
+/// plugin root). For each path:
+///   - If it's a `.md` file, the filename stem becomes the command name.
+///   - If it's a directory, every `.md` file inside it is enumerated.
+///
+/// Names already in `reserved_names` (built-ins, skills, custom prompts)
+/// are skipped to avoid shadowing.
+fn plugin_command_registry_entries(
+    reserved_names: &std::collections::HashSet<String>,
+) -> Vec<RegistryCommand> {
+    let mut out: Vec<RegistryCommand> = Vec::new();
+    let mut plugins_mgr = crate::plugins::PluginsManager::new();
+    if plugins_mgr
+        .load_all(std::env::current_dir().ok().as_deref())
+        .is_err()
+    {
+        return out;
+    }
+    for command_path in plugins_mgr.command_paths() {
+        if command_path.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(&command_path) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.is_file()
+                        && p.extension().and_then(|e| e.to_str()) == Some("md")
+                    {
+                        push_plugin_command(&p, reserved_names, &mut out);
+                    }
+                }
+            }
+        } else if command_path.is_file() {
+            push_plugin_command(&command_path, reserved_names, &mut out);
+        }
+    }
+    out
+}
+
+fn push_plugin_command(
+    path: &std::path::Path,
+    reserved_names: &std::collections::HashSet<String>,
+    out: &mut Vec<RegistryCommand>,
+) {
+    let name = match path.file_stem().and_then(|s| s.to_str()) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => return,
+    };
+    if reserved_names.contains(&name) {
+        return;
+    }
+    // Description: use first non-empty line of the file as a fallback.
+    let description = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|c| {
+            c.lines()
+                .find(|l| !l.trim().is_empty() && !l.trim().starts_with("---"))
+                .map(|l| l.trim().to_string())
+        })
+        .unwrap_or_else(|| format!("Plugin command: {}", name));
+    let loaded_from = path.to_string_lossy().to_string();
+    out.push(RegistryCommand::prompt(
+        name,
+        description,
+        CommandSource::Plugin,
+        Some(&loaded_from),
+    ));
 }
 
 #[cfg(test)]
