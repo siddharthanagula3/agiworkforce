@@ -4,13 +4,32 @@
 
 ## Current state
 
-- **Wave 0 (cleanup) — DONE 2026-05-03**: 102 dead crates deleted (995K LOC), 5 root debris files removed, 6 stale plans/memory files removed, MEMORY.md refreshed, SSOT structure created.
-- **Active sprint**: Sprint 1 — vault rewire (master password integration). See [docs/plans/sprint1-vault-rewire.md](plans/sprint1-vault-rewire.md).
-- **Audit status**: P0 13/14 closed, P1 20/25 closed.
+- **Wave 0 (cleanup) — SHIPPED 2026-05-03**: 102 dead crates deleted (995K LOC), 5 root debris files removed, 6 stale plans/memory files removed, MEMORY.md refreshed, SSOT structure created. Web `UnifiedAgenticChat` 36K-LOC monolith deleted. Desktop dead-component-dir + dead-store/hook/service/lib triage (~12K LOC). Total session: -1.04M LOC.
+- **Wave 1 (CLI v1.0) — SHIPPED 2026-05-03**: tagged `v-cli-1.0.0`, GitHub Release published with 5 platform binaries (macOS arm64+x64, Linux x64, Windows arm64+x64), Homebrew tap formula live at `siddharthanagula3/homebrew-tap`, install.sh + cargo install paths verified. **NPM publish pending NPM_TOKEN secret (user action only)**.
+- **Active sprint**: Wave 2 (Desktop v1.0) — see [docs/plans/wave2-desktop-v1.md](plans/wave2-desktop-v1.md). Task 1.1 (web UnifiedAgenticChat migration) done. Task 1.2 (84 desktop dirs) partially done (9 dirs / 3,430 LOC removed, more to come).
+- **Audit status**: P0 13/14 closed, P1 21/25 closed (WEB-4 closed today).
 
 ## MVP plan — 3 waves
 
-### Wave 1 — CLI v1.0 (Week 1)
+### Wave 1 — CLI v1.0 — SHIPPED 2026-05-03
+
+Tagged `v-cli-1.0.0` after 3 CI iterations:
+
+- Iter 1: linux missing libasound2-dev; windows unused import in cfg(unix) block
+- Iter 2: linux-arm64 cross-compile failed on openssl-sys
+- Iter 3: dropped linux-arm64 from matrix → 5/5 builds green, GitHub Release published
+
+**Live install paths** (4 of 5 — npm pending NPM_TOKEN):
+
+- `brew install siddharthanagula3/tap/agiworkforce` ✅
+- `curl -fsSL .../install.sh | bash` ✅
+- `cargo install --git ...` ✅
+- Direct binary download from [release page](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v-cli-1.0.0) ✅
+- `npm install -g @agiworkforce/cli` ⏳ (re-run publish-npm job after setting NPM_TOKEN secret)
+
+---
+
+### Wave 1 (original plan, now historical) — CLI v1.0 (Week 1)
 
 Ship the multi-provider CLI to the public via npm + Homebrew + GitHub releases.
 

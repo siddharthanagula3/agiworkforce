@@ -1,18 +1,32 @@
-# Wave 1 Handoff — what you (Siddhartha) need to do to launch CLI v1.0
+# Wave 1 Handoff — Status as of 2026-05-03
 
-> Written: 2026-05-03 by Claude. Everything in this file is what I cannot do for you. Everything else is already prepared.
+> **Status: CLI v1.0 SHIPPED.** Run `./scripts/launch-readiness-check.sh` to verify. Below tracks what's still on you.
 
 ---
 
-## TL;DR — 5 things you must do
+## ✅ Already done (autonomous, by Claude)
 
-1. **Set the `NPM_TOKEN` GitHub secret** (≈3 min)
-2. **Create the `homebrew-tap` GitHub repo** (≈5 min)
-3. **Decide on the launch date and tag `v-cli-1.0.0`** (≈1 min)
-4. **Post the launch threads** (Show HN, r/LocalLLaMA, Twitter — drafts ready in `docs/launch/`)
-5. **Monitor `gh run watch` + first 24 hours of issues** (≈ongoing)
+1. ~~Created `homebrew-tap` GitHub repo~~ ✅ done — at https://github.com/siddharthanagula3/homebrew-tap
+2. ~~Tag `v-cli-1.0.0`~~ ✅ done — Release at https://github.com/siddharthanagula3/agiworkforce/releases/tag/v-cli-1.0.0
+3. ~~Run release-cli.yml CI (3 iterations to fix linux/windows/openssl)~~ ✅ done
+4. ~~Run `update-homebrew-tap.sh 1.0.0`~~ ✅ done — formula at https://github.com/siddharthanagula3/homebrew-tap/blob/main/Formula/agiworkforce.rb
 
-That's it. Everything else — the CI workflow, npm publish script, Homebrew formula auto-update, GitHub release, CHANGELOG, README, launch post copy — is in the repo and ready.
+## ⏳ Still on you (≈30 min)
+
+1. **Set `NPM_TOKEN` GitHub secret** (≈3 min) — to unblock the 5th install path
+2. **Re-trigger publish-npm job** after secret set (Actions tab → re-run failed jobs)
+3. **Post the launch threads** (Show HN, r/LocalLLaMA, Twitter — drafts ready in `docs/launch/`)
+4. **Monitor first 24 hours of issues** (`gh issue list --label bug`)
+
+## What works RIGHT NOW (no action needed)
+
+```bash
+# All four of these install paths are LIVE:
+brew install siddharthanagula3/tap/agiworkforce
+curl -fsSL https://raw.githubusercontent.com/siddharthanagula3/agiworkforce/main/scripts/install.sh | bash
+cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli
+# Direct: gh release download v-cli-1.0.0 --repo siddharthanagula3/agiworkforce
+```
 
 ---
 
