@@ -370,6 +370,19 @@ pub async fn computer_use_execute_tool(
         ));
     }
 
+    // DESK-1 (audit 2026-05-03): require_confirmation at the dispatch
+    // entry point so EVERY branch is gated, including `zoom` and
+    // `zoom_at_point` which previously fell through to functions that
+    // didn't gate themselves. Zoom/zoom_at_point are screen-capture
+    // primitives and an indirect prompt-injection that maps screen
+    // contents must be visible to the user.
+    require_confirmation(
+        &app_handle,
+        "computer_use_execute_tool",
+        serde_json::json!({ "tool": tool_name, "args": args }),
+    )
+    .await?;
+
     match tool_name.as_str() {
         "screenshot" => {
             let capture = computer_use_capture_screen(state).await?;
