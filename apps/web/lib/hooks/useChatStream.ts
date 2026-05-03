@@ -64,6 +64,8 @@ export function useChatStream(): UseChatStreamReturn {
   const updateMessage = useChatStore((state) => state.updateMessage);
   const appendToMessage = useChatStore((state) => state.appendToMessage);
   const appendToThinking = useChatStore((state) => state.appendToThinking);
+  const setSearching = useChatStore((state) => state.setSearching);
+  const setSearchResults = useChatStore((state) => state.setSearchResults);
   const startStreaming = useChatStore((state) => state.startStreaming);
   const stopStreaming = useChatStore((state) => state.stopStreaming);
   const setLoading = useChatStore((state) => state.setLoading);
@@ -228,6 +230,8 @@ export function useChatStream(): UseChatStreamReturn {
                 });
                 inThinkingBlock = false;
               }
+              // Clear any lingering search indicator
+              setSearching(assistantMessageId, false);
               if (fullAssistantContent) {
                 saveMessageToDb(
                   conversationId,
@@ -277,6 +281,27 @@ export function useChatStream(): UseChatStreamReturn {
                 } else {
                   fullAssistantContent += chunk;
                   appendToMessage(assistantMessageId, chunk);
+                }
+              }
+
+              // Handle web search status indicator (server-managed tool starting)
+              const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
+              if (toolStatus?.status === 'searching') {
+                setSearching(assistantMessageId, true);
+              }
+
+              // Handle web search results (server-managed tool completed)
+              const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
+              if (searchResultsBlock?.content && Array.isArray(searchResultsBlock.content)) {
+                const results = (searchResultsBlock.content as Record<string, unknown>[])
+                  .filter((r) => r['type'] === 'web_search_result' && r['url'])
+                  .map((r) => ({
+                    url: r['url'] as string,
+                    title: (r['title'] as string) || (r['url'] as string),
+                    snippet: (r['encrypted_content'] as string) || '',
+                  }));
+                if (results.length > 0) {
+                  setSearchResults(assistantMessageId, results);
                 }
               }
 
@@ -332,6 +357,8 @@ export function useChatStream(): UseChatStreamReturn {
       updateMessage,
       appendToMessage,
       appendToThinking,
+      setSearching,
+      setSearchResults,
       startStreaming,
       stopStreaming,
       setLoading,

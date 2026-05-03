@@ -13,8 +13,10 @@ export interface MessageMetadata {
   thinkingStartedAt?: string;
   /** ISO timestamp when thinking completed */
   thinkingCompletedAt?: string;
-  /** Web search citations from server-managed tools */
-  citations?: Array<{ url?: string; title?: string; cited_text?: string; type?: string }>;
+  /** True while a server-managed web search is in progress */
+  isSearching?: boolean;
+  /** Web search results from server-managed tools */
+  searchResults?: Array<{ url: string; title: string; snippet: string }>;
 }
 
 export interface Message {
@@ -126,6 +128,11 @@ interface ChatState {
   updateMessage: (id: string, updates: Partial<Message>) => void;
   appendToMessage: (id: string, content: string) => void;
   appendToThinking: (id: string, thinking: string) => void;
+  setSearching: (id: string, isSearching: boolean) => void;
+  setSearchResults: (
+    id: string,
+    results: Array<{ url: string; title: string; snippet: string }>,
+  ) => void;
   deleteMessage: (id: string) => void;
   clearMessages: () => void;
 
@@ -271,6 +278,33 @@ export const useChatStore = create<ChatState>()(
             }),
             undefined,
             'chat/appendToThinking',
+          ),
+
+        setSearching: (id, isSearching) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id ? { ...m, metadata: { ...m.metadata, isSearching } } : m,
+              ),
+            }),
+            undefined,
+            'chat/setSearching',
+          ),
+
+        setSearchResults: (id, results) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id
+                  ? {
+                      ...m,
+                      metadata: { ...m.metadata, searchResults: results, isSearching: false },
+                    }
+                  : m,
+              ),
+            }),
+            undefined,
+            'chat/setSearchResults',
           ),
 
         deleteMessage: (id) =>
