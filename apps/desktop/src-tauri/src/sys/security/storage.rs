@@ -201,9 +201,17 @@ impl SecureStorage {
 
     /// Store API key in database (encrypted)
     pub fn store_api_key(&self, provider: &str, api_key: &str) -> Result<(), String> {
-        // Initialize with machine key if not already unlocked
+        // DESK-3 (audit 2026-05-03): refuse the write if the vault is
+        // locked. The previous machine-key fallback silently degraded
+        // to public-derivable encryption, defeating the FIX-001 vault
+        // gate at the storage layer (any caller bypassing the IPC
+        // command layer would store with machine-only keys). Callers
+        // must explicitly unlock first.
         if !self.is_unlocked() {
-            self.init_with_machine_key()?;
+            return Err(
+                "Vault is locked — unlock with master password before storing credentials"
+                    .to_string(),
+            );
         }
 
         let encrypted = self.encrypt(api_key.as_bytes())?;
@@ -226,9 +234,13 @@ impl SecureStorage {
 
     /// Retrieve API key from database (decrypted)
     pub fn retrieve_api_key(&self, provider: &str) -> Result<String, String> {
-        // Initialize with machine key if not already unlocked
+        // DESK-3 (audit 2026-05-03): see store_api_key — refuse to
+        // initialize a fallback machine-key when the vault is locked.
         if !self.is_unlocked() {
-            self.init_with_machine_key()?;
+            return Err(
+                "Vault is locked — unlock with master password before reading credentials"
+                    .to_string(),
+            );
         }
 
         let encrypted_json = if let Some(ref db) = self.db_conn {
