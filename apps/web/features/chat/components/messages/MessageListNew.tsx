@@ -23,6 +23,7 @@ import type { ChatMessage } from '../../stores/chat-store';
 import type { Components } from 'react-markdown';
 import { ReasoningAccordion } from './ReasoningAccordion';
 import { ToolTimeline } from './ToolTimeline';
+import { SearchingIndicator, CompactSearchResults } from '../search/SearchResults';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -337,6 +338,28 @@ const MessageItemComponent = ({
             </div>
           )}
 
+          {/* Web search indicator — shown while server-side search is running */}
+          {!isUser && message.metadata?.isSearching && (
+            <div className="mb-3">
+              <SearchingIndicator />
+            </div>
+          )}
+
+          {/* Web search results — shown after search completes */}
+          {!isUser &&
+            message.metadata?.searchResults &&
+            message.metadata.searchResults.length > 0 && (
+              <div className="mb-3">
+                <CompactSearchResults
+                  searchResponse={{
+                    query: '',
+                    results: message.metadata.searchResults,
+                    timestamp: new Date(),
+                  }}
+                />
+              </div>
+            )}
+
           {/* User message bubble or assistant prose */}
           {isUser ? (
             <div className="inline-block rounded-2xl rounded-tr-sm bg-primary/10 px-4 py-3 text-[15px] text-foreground text-left">
@@ -344,7 +367,7 @@ const MessageItemComponent = ({
             </div>
           ) : (
             <div className="prose prose-sm dark:prose-invert max-w-none text-[15px]">
-              {message.isStreaming && !message.content.trim() ? (
+              {message.isStreaming && !message.content.trim() && !message.metadata?.isSearching ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
                   <span className="text-sm">Thinking...</span>
