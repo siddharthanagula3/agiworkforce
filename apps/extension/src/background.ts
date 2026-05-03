@@ -673,6 +673,76 @@ async function restoreScheduledTaskAlarms(): Promise<void> {
   }
 }
 
+// EXT-1, EXT-2 (audit 2026-05-03): allowlist-based sender validation.
+//
+// The previous implementation accepted any tab as a valid sender. Combined
+// with the content-script `<all_urls>` match, every web page the user
+// visits could fire privileged background commands. This meant any XSS
+// on any visited page = full extension takeover.
+//
+// We now gate by an explicit user-managed origin allowlist stored under
+// `chrome.storage.local.agi_site_allowlist`. Extension pages (popup,
+// side panel, options) remain trusted; tab-originated messages are
+// trusted only if the tab's origin is on the list.
+const DISCOVERY_MESSAGE_TYPES = new Set<string>(['PING', 'GET_AGI_BRIDGE_URL']);
+let siteAllowlistCache = new Set<string>();
+chrome.storage.local
+  .get('agi_site_allowlist')
+  .then((res) => {
+    const list = res['agi_site_allowlist'];
+    if (Array.isArray(list)) {
+      siteAllowlistCache = new Set(list as string[]);
+    }
+  })
+  .catch(() => {});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes['agi_site_allowlist']) return;
+  const next = changes['agi_site_allowlist'].newValue;
+  siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
+});
+
+function isAllowlistedSender(
+  sender: chrome.runtime.MessageSender,
+  messageType: string | undefined,
+): boolean {
+  // Extension pages (popup, side panel, options) are always trusted.
+  if (sender.id === chrome.runtime.id && !sender.tab) return true;
+
+  // Reject anything without tab info.
+  if (!sender.tab || !sender.tab.url) return false;
+
+  // Discovery messages don't expose any privileged capability.
+  if (messageType && DISCOVERY_MESSAGE_TYPES.has(messageType)) return true;
+
+  let origin: string;
+  try {
+    origin = new URL(sender.tab.url).origin;
+  } catch {
+    return false;
+  }
+  return siteAllowlistCache.has(origin);
+}
+
+// EXT-3 (audit 2026-05-03): same-tab restriction for DOM-mutation
+// commands. Even with an allowlisted origin, a malicious page must
+// not be able to drive DOM mutation in a different tab.
+const DOM_MUTATION_MESSAGE_TYPES = new Set<string>([
+  'TYPE',
+  'CLICK',
+  'SET_LOCAL_STORAGE',
+  'CLEAR_LOCAL_STORAGE',
+  'SUBMIT_FORM',
+  'EVALUATE_SCRIPT',
+]);
+
+function senderTabAllowedToMutate(
+  sender: chrome.runtime.MessageSender,
+  targetTabId: number | undefined,
+): boolean {
+  if (typeof targetTabId !== 'number') return true; // no target = sender's own tab
+  return sender?.tab?.id === targetTabId;
+}
+
 function handleMessage(
   message: unknown,
   sender: chrome.runtime.MessageSender,
@@ -684,6 +754,36 @@ function handleMessage(
     logger.warn('Invalid message received', message);
     sendResponse({ success: false, error: 'Invalid message format' } as ExtensionResponse);
     return false;
+  }
+
+  // EXT-1/2: gate by user-managed allowlist.
+  if (!isAllowlistedSender(sender, msg.type)) {
+    logger.warn('Rejected message from non-allowlisted sender', {
+      url: sender?.tab?.url,
+      type: msg.type,
+    });
+    sendResponse({
+      success: false,
+      error:
+        'This site is not on your AGI Workforce allowlist. Add it from the extension popup to enable automation here.',
+    } as ExtensionResponse);
+    return false;
+  }
+
+  // EXT-3: block cross-tab DOM mutation.
+  if (DOM_MUTATION_MESSAGE_TYPES.has(msg.type)) {
+    if (!senderTabAllowedToMutate(sender, msg.tabId)) {
+      logger.warn('Rejected cross-tab DOM mutation', {
+        senderTab: sender?.tab?.id,
+        targetTab: msg.tabId,
+        type: msg.type,
+      });
+      sendResponse({
+        success: false,
+        error: 'Cross-tab DOM mutation is not allowed.',
+      } as ExtensionResponse);
+      return false;
+    }
   }
 
   handleMessageAsync(msg, sender)
