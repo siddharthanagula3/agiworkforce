@@ -967,9 +967,9 @@ impl AgentSession {
 
                 hooks::run_hooks(
                     &hcfg,
-                    hooks::HookEvent::BeforeToolUse,
+                    hooks::HookEvent::PreToolUse,
                     &hooks::HookInput {
-                        event: "BeforeToolUse".to_string(),
+                        event: "PreToolUse".to_string(),
                         session_id: None,
                         model: Some(self.model.clone()),
                         tool_name: Some(tc.name.clone()),
@@ -1097,9 +1097,9 @@ Files modified:
 
                 hooks::run_hooks(
                     &hcfg,
-                    hooks::HookEvent::AfterToolUse,
+                    hooks::HookEvent::PostToolUse,
                     &hooks::HookInput {
-                        event: "AfterToolUse".to_string(),
+                        event: "PostToolUse".to_string(),
                         session_id: None,
                         model: Some(self.model.clone()),
                         tool_name: Some(tool_name),
@@ -1163,9 +1163,9 @@ Files modified:
                 for tc in &runnable {
                     hooks::run_hooks(
                         &hcfg,
-                        hooks::HookEvent::BeforeToolUse,
+                        hooks::HookEvent::PreToolUse,
                         &hooks::HookInput {
-                            event: "BeforeToolUse".to_string(),
+                            event: "PreToolUse".to_string(),
                             session_id: None,
                             model: Some(self.model.clone()),
                             tool_name: Some(tc.name.clone()),
@@ -1225,9 +1225,9 @@ Files modified:
 
                     hooks::run_hooks(
                         &hcfg,
-                        hooks::HookEvent::AfterToolUse,
+                        hooks::HookEvent::PostToolUse,
                         &hooks::HookInput {
-                            event: "AfterToolUse".to_string(),
+                            event: "PostToolUse".to_string(),
                             session_id: None,
                             model: Some(self.model.clone()),
                             tool_name: Some(tool_name),
@@ -1269,9 +1269,9 @@ Files modified:
                 // (see aggregate_transformers).
                 let pre_results = hooks::run_hooks(
                     &hcfg,
-                    hooks::HookEvent::BeforeToolUse,
+                    hooks::HookEvent::PreToolUse,
                     &hooks::HookInput {
-                        event: "BeforeToolUse".to_string(),
+                        event: "PreToolUse".to_string(),
                         session_id: None,
                         model: Some(self.model.clone()),
                         tool_name: Some(tc.name.clone()),
@@ -1314,9 +1314,9 @@ Files modified:
 
                 let post_results = hooks::run_hooks(
                     &hcfg,
-                    hooks::HookEvent::AfterToolUse,
+                    hooks::HookEvent::PostToolUse,
                     &hooks::HookInput {
-                        event: "AfterToolUse".to_string(),
+                        event: "PostToolUse".to_string(),
                         session_id: None,
                         model: Some(self.model.clone()),
                         tool_name: Some(tc.name.clone()),
