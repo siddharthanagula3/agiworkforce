@@ -783,16 +783,46 @@ async function handleChatCompletions(request: NextRequest) {
                     if (event.index !== undefined) {
                       activeBlockTypes.set(event.index, 'server_tool_use');
                     }
-                    // Emit a status indicator so the client can show "Searching the web..."
+                    // Emit a status indicator for any server-managed tool.
+                    // Use tool-appropriate status label: web_search → 'searching',
+                    // code_execution → 'executing', anything else → 'running'.
+                    const toolName: string = event.content_block.name || 'web_search';
+                    const toolStatus =
+                      toolName === 'code_execution'
+                        ? 'executing'
+                        : toolName === 'web_search'
+                          ? 'searching'
+                          : 'running';
                     transformedEvent = {
                       choices: [
                         {
                           delta: {
                             x_tool_status: {
                               type: 'server_tool_use',
-                              name: event.content_block.name || 'web_search',
-                              status: 'searching',
+                              name: toolName,
+                              status: toolStatus,
                             },
+                          },
+                          index: 0,
+                        },
+                      ],
+                      model: responseModelName,
+                    };
+                  } else if (
+                    event.type === 'content_block_start' &&
+                    event.content_block?.type === 'code_execution_tool_result'
+                  ) {
+                    // Anthropic code execution result — contains stdout, stderr, and
+                    // optional image outputs (e.g., matplotlib plots as base64 PNGs).
+                    if (event.index !== undefined) {
+                      activeBlockTypes.set(event.index, 'code_execution_tool_result');
+                    }
+                    // Forward the result block as x_code_result for the client to render
+                    transformedEvent = {
+                      choices: [
+                        {
+                          delta: {
+                            x_code_result: event.content_block,
                           },
                           index: 0,
                         },
