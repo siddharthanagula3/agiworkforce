@@ -1303,11 +1303,29 @@ fn is_dangerous_command(command: &str) -> bool {
     false
 }
 
+/// Per-tool maximum output size in chars. Mirrors the
+/// `max_result_size_chars` field on `ToolDefinition` (Phase 8). Tools not
+/// listed here fall back to the global `MAX_OUTPUT_BYTES`.
+fn tool_size_cap(tool_name: &str) -> usize {
+    match tool_name {
+        "read_file" | "web_search" => 100_000,
+        "web_fetch" => 200_000,
+        "search_files" | "grep_files" | "run_command" => 50_000,
+        "list_directory" | "tool_search" => 20_000,
+        "write_file" | "edit_file" | "apply_patch" => 5_000,
+        _ => MAX_OUTPUT_BYTES,
+    }
+}
+
 /// Truncate output and save full content to disk for later retrieval.
-/// Accepts a tool name to label the saved file.
+/// Accepts a tool name to label the saved file. Phase 8: uses a per-tool
+/// size cap (see `tool_size_cap`) instead of the global `MAX_OUTPUT_BYTES`,
+/// so `web_fetch` can return up to 200K chars while `write_file`'s
+/// confirmation message is capped at 5K.
 fn truncate_output_with_save(tool_name: &str, output: String) -> String {
     let lines: Vec<&str> = output.lines().collect();
-    let needs_truncation = output.len() > MAX_OUTPUT_BYTES || lines.len() > MAX_OUTPUT_LINES;
+    let max_bytes = tool_size_cap(tool_name);
+    let needs_truncation = output.len() > max_bytes || lines.len() > MAX_OUTPUT_LINES;
 
     if !needs_truncation {
         return output;
@@ -1509,6 +1527,51 @@ async fn execute_web_fetch_with_opts(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_tool_size_cap_per_tool() {
+        // Phase 8: per-tool caps differ from the global default.
+        assert_eq!(tool_size_cap("read_file"), 100_000);
+        assert_eq!(tool_size_cap("web_fetch"), 200_000);
+        assert_eq!(tool_size_cap("web_search"), 100_000);
+        assert_eq!(tool_size_cap("run_command"), 50_000);
+        assert_eq!(tool_size_cap("list_directory"), 20_000);
+        assert_eq!(tool_size_cap("write_file"), 5_000);
+        // Unknown tools fall back to the global default.
+        assert_eq!(tool_size_cap("unknown_tool"), MAX_OUTPUT_BYTES);
+    }
+
+    #[test]
+    fn test_truncate_respects_per_tool_cap() {
+        // Build a multi-line output above run_command's 50K cap but below
+        // web_fetch's 200K cap. truncate_output_with_save's line-based
+        // truncator only kicks in for inputs with > HEAD+TAIL lines, so we
+        // generate 1000 lines of "x"*70 = ~70_000 chars total.
+        let big_output: String = (0..1000)
+            .map(|i| format!("line {} {}", i, "x".repeat(70)))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(big_output.len() > 50_000 && big_output.len() < 100_000);
+
+        // run_command (50K cap) should truncate.
+        let truncated = truncate_output_with_save("run_command", big_output.clone());
+        assert!(
+            truncated.len() < big_output.len(),
+            "run_command should truncate {}-byte output (cap=50K), got {} bytes back",
+            big_output.len(),
+            truncated.len()
+        );
+
+        // web_fetch (200K cap) should NOT truncate (output is below the cap
+        // and below MAX_OUTPUT_LINES of 2000).
+        let unchanged = truncate_output_with_save("web_fetch", big_output.clone());
+        assert_eq!(
+            unchanged.len(),
+            big_output.len(),
+            "web_fetch should not truncate {}-byte output (cap=200K)",
+            big_output.len()
+        );
+    }
 
     #[test]
     fn test_is_dangerous_command() {
