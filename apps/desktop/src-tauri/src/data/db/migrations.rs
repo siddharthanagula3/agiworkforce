@@ -259,11 +259,28 @@ fn validate_table_name(table: &str) -> Result<()> {
 
 /// Run a migration within a transaction for atomicity.
 /// If the migration fails, the transaction is rolled back and the database remains unchanged.
+///
+/// DESK-6 (audit 2026-05-03): the previous implementation used
+/// `format!("SAVEPOINT migration_v{version}")` and the matching ROLLBACK
+/// TO / RELEASE statements with raw string interpolation. While `version`
+/// is hard-coded today, the pattern is unsafe by construction — if any
+/// future caller passed a value derived from a corrupt DB read or user
+/// input the format! would produce a SQL fragment with no quoting.
+/// We sanity-check the version is a positive integer (which all current
+/// callers satisfy) and assert it explicitly so any future drift will
+/// trip in dev rather than producing an injection vector.
 fn run_migration_in_transaction<F>(conn: &Connection, version: i32, migration_fn: F) -> Result<()>
 where
     F: FnOnce(&Connection) -> Result<()>,
 {
-    // SQLite doesn't support nested transactions, so we use SAVEPOINT for safety
+    // Defence in depth: only allow positive integer versions. SAVEPOINT
+    // identifier rules don't accept negative numbers anyway, but we
+    // assert here so a bug surface to the caller rather than silently
+    // forming a malformed identifier.
+    assert!(
+        (1..=10_000).contains(&version),
+        "migration version {version} out of expected range — refusing to build SAVEPOINT name",
+    );
     let savepoint_name = format!("migration_v{}", version);
     conn.execute(&format!("SAVEPOINT {}", savepoint_name), [])?;
 

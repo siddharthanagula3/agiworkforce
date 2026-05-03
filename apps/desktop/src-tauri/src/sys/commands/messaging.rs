@@ -16,16 +16,24 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// FIX-002 (Sprint 1): encrypt the per-platform credentials JSON blob
-/// with the master-password key when configured. When the user hasn't
-/// set up a master password yet we leave the value as the original JSON
-/// so the legacy decrypt path keeps working — that bridge is removed
-/// once the migration command runs.
+/// with the master-password key when configured.
+///
+/// DESK-4 (audit 2026-05-03): the previous implementation left the
+/// JSON in plaintext when no master password was configured. Every
+/// brand-new user falls into this branch the first time they
+/// connect a messaging platform, which means raw Slack/WhatsApp
+/// tokens were committed to the local SQLite as plaintext for
+/// anyone with disk access. Refuse the connect operation instead —
+/// the unlock UI handles the master-password setup flow.
 fn encrypt_messaging_credentials(
     helper: &MasterPasswordEncryption,
     credentials_json: &str,
 ) -> Result<String, String> {
     if !helper.is_configured() {
-        return Ok(credentials_json.to_string());
+        return Err(
+            "Set up a master password before connecting messaging platforms — \
+             credentials must be encrypted at rest.".to_string(),
+        );
     }
     helper
         .encrypt(KeyPurpose::Messaging, credentials_json)
