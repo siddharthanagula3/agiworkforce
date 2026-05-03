@@ -18,9 +18,12 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-GITHUB_REPO="siddharthanagula3/agiworkforce-desktop-app"
+GITHUB_REPO="siddharthanagula3/agiworkforce"
 BINARY_NAME="agiworkforce"
 DEFAULT_INSTALL_DIR="$HOME/.agiworkforce/bin"
+# CLI release tags use the v-cli-X.Y.Z scheme (separate from desktop's v-desktop-*).
+# Override via --tag-prefix if a future channel uses a different scheme.
+TAG_PREFIX="v-cli-"
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
 VERSION=""
@@ -79,15 +82,20 @@ resolve_version() {
     return
   fi
 
-  echo -e "${BLUE}Fetching latest version...${NC}" >&2
+  echo -e "${BLUE}Fetching latest CLI version...${NC}" >&2
 
+  # CLI releases use v-cli-X.Y.Z tag scheme. /releases/latest returns the
+  # newest release across ALL channels (CLI + desktop), so filter by prefix.
   local latest
-  latest=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null \
-    | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+  latest=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=20" 2>/dev/null \
+    | grep '"tag_name"' \
+    | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' \
+    | grep "^${TAG_PREFIX}" \
+    | head -1)
 
   if [ -z "$latest" ]; then
-    echo -e "${YELLOW}Could not fetch latest version. Using v0.1.0${NC}" >&2
-    echo "v0.1.0"
+    echo -e "${YELLOW}Could not fetch latest CLI version. Defaulting to ${TAG_PREFIX}1.0.0${NC}" >&2
+    echo "${TAG_PREFIX}1.0.0"
     return
   fi
 
@@ -104,7 +112,9 @@ download_binary() {
     ext="zip"
   fi
 
-  local filename="${BINARY_NAME}-${version}-${platform}.${ext}"
+  # release-cli.yml produces archives named agiworkforce-{platform}.{ext}
+  # (no version in filename — version is in the tag/path). Match that.
+  local filename="${BINARY_NAME}-${platform}.${ext}"
   local url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${filename}"
   local tmpdir
   tmpdir=$(mktemp -d)
