@@ -5,7 +5,7 @@ import { ChevronDown } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
 import { Command, CommandList, CommandItem, CommandGroup, CommandInput } from '@shared/ui/command';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
-import { BudgetTrackerDisplay } from '@/components/UnifiedAgenticChat/BudgetTrackerDisplay';
+import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
 import { StyleSelector } from './StyleSelector';
 
 const PROVIDER_COLORS: Record<string, string> = {
