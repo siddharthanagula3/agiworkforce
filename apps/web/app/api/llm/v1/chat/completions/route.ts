@@ -88,6 +88,7 @@ const ChatCompletionRequestSchema = z.object({
   seed: z.number().int().optional(),
   // Extended parameters for AGI Workforce
   web_search: z.boolean().optional(),
+  web_fetch: z.boolean().optional(),
   code_execution: z.boolean().optional(),
   thinking_mode: z.boolean().optional(),
   thinking: z
@@ -619,6 +620,14 @@ async function handleChatCompletions(request: NextRequest) {
     } else if (providerLower === 'openai') {
       resolvedTools = [...(resolvedTools ?? []), { type: 'web_search_preview' }];
     }
+  }
+
+  // Web Fetch — Anthropic's URL content reading tool
+  if (chatRequest.web_fetch && providerLower === 'anthropic') {
+    resolvedTools = [
+      ...(resolvedTools ?? []),
+      { type: 'web_fetch_20260209', name: 'web_fetch', allowed_callers: ['direct'] },
+    ];
   }
 
   // Code Execution — sandboxed Python/code execution
