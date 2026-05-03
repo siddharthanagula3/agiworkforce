@@ -75,7 +75,7 @@ pub fn generate_pkce() -> PkceCodes {
     }
 }
 
-fn generate_random_string(len: usize) -> String {
+pub fn generate_random_string(len: usize) -> String {
     let chars = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
     let mut result = String::with_capacity(len);
     let mut remaining = len;
