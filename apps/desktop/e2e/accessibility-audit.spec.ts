@@ -170,62 +170,51 @@ test.describe('Accessibility Audit - WCAG 2.1 AA Compliance', () => {
     });
 
     test('Escape key should close menus/modals', async ({ page }) => {
-      // Try to find and open a menu
       const menuTrigger = page.locator('button[aria-haspopup="menu"]').first();
+      test.skip(!(await menuTrigger.count()), 'No menu triggers found');
 
-      if ((await menuTrigger.count()) > 0) {
-        await menuTrigger.click();
-        await page.waitForTimeout(200);
+      await menuTrigger.click();
+      await page.waitForTimeout(200);
 
-        // Menu should be visible
-        const menu = page.locator('[role="menu"]');
-        const isOpenBefore = await menu.isVisible().catch(() => false);
+      const menu = page.locator('[role="menu"]');
+      const isOpenBefore = await menu.isVisible().catch(() => false);
+      test.skip(!isOpenBefore, 'Menu did not open after clicking trigger');
 
-        // Press Escape
-        await page.keyboard.press('Escape');
+      await page.keyboard.press('Escape');
 
-        // Menu should be closed
-        const isOpenAfter = await menu.isVisible().catch(() => false);
-
-        if (isOpenBefore) {
-          expect(isOpenAfter).toBe(false);
-        }
-      }
+      const isOpenAfter = await menu.isVisible().catch(() => false);
+      expect(isOpenAfter).toBe(false);
     });
 
     test('Arrow keys should navigate list items', async ({ page }) => {
       const selectElement = page.locator('select').first();
+      test.skip(!(await selectElement.count()), 'No select elements found');
 
-      if ((await selectElement.count()) > 0) {
-        await selectElement.focus();
+      await selectElement.focus();
+      const initialValue = await selectElement.inputValue();
 
-        // Get initial value
-        const initialValue = await selectElement.inputValue();
+      await page.keyboard.press('ArrowDown');
+      const newValue = await selectElement.inputValue();
 
-        // Press Down arrow
-        await page.keyboard.press('ArrowDown');
-
-        // Value might change (implementation-dependent)
-        const newValue = await selectElement.inputValue();
-
-        expect(initialValue || newValue).toBeTruthy();
+      // After ArrowDown on a select, value should differ (or stay if only one option)
+      expect(typeof newValue).toBe('string');
+      // If there are multiple options the value must have changed
+      const optionCount = await selectElement.locator('option').count();
+      if (optionCount > 1) {
+        expect(newValue).not.toBe(initialValue);
       }
     });
 
     test('Form controls should be keyboard accessible', async ({ page }) => {
       const inputs = page.locator('input[type="text"], textarea');
+      test.skip(!(await inputs.count()), 'No text inputs or textareas found');
 
-      if ((await inputs.count()) > 0) {
-        const input = inputs.first();
-        await input.focus();
+      const input = inputs.first();
+      await input.focus();
+      await page.keyboard.type('test input');
 
-        // Type in focused input
-        await page.keyboard.type('test input');
-
-        // Verify typing worked
-        const value = await input.inputValue();
-        expect(value).toContain('test');
-      }
+      const value = await input.inputValue();
+      expect(value).toContain('test');
     });
   });
 
