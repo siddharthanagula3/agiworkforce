@@ -1,1 +1,0 @@
-export { SimpleModeToggle } from './SimpleModeToggle';
