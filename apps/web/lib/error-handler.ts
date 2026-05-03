@@ -3,6 +3,47 @@ import { AppError, createError } from './errors';
 import { logger } from './logger';
 
 /**
+ * WEB-10 (audit 2026-05-03): generic user-facing fallbacks per
+ * status-code class. Several call sites construct AppError instances
+ * by passing raw Supabase error messages (table names, constraint
+ * violations, PGRST codes) which would otherwise propagate to the
+ * client response body. We log the original message + details
+ * server-side and return a safe summary to the caller.
+ */
+const GENERIC_MESSAGES: Record<number, string> = {
+  400: 'Bad request',
+  401: 'Authentication required',
+  403: 'Access denied',
+  404: 'Not found',
+  408: 'Request timed out',
+  409: 'Conflict',
+  422: 'Validation failed',
+  429: 'Too many requests',
+  500: 'Internal server error',
+  502: 'Upstream service error',
+  503: 'Service temporarily unavailable',
+};
+
+/** A small set of error codes that are safe to render verbatim — these
+ *  are app-defined (not service-leak vectors) and the UI uses them to
+ *  drive recovery flows (e.g. credit_required → upgrade prompt). */
+const SAFE_TO_EXPOSE_CODES = new Set<string>([
+  'CREDIT_REQUIRED',
+  'SUBSCRIPTION_REQUIRED',
+  'RATE_LIMITED',
+  'VALIDATION_ERROR',
+  'INVALID_MODEL',
+  'CSRF_REQUIRED',
+]);
+
+function safeErrorMessage(error: AppError): string {
+  if (SAFE_TO_EXPOSE_CODES.has(error.code)) {
+    return error.message;
+  }
+  return GENERIC_MESSAGES[error.statusCode] ?? 'Request failed';
+}
+
+/**
  * Error handler middleware for API routes
  */
 export function handleError(error: unknown, requestId?: string): NextResponse {
@@ -25,8 +66,12 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
       {
         error: {
           code: error.code,
-          message: error.message,
-          ...(error.details ? { details: error.details } : {}),
+          message: safeErrorMessage(error),
+          // WEB-10: only forward `details` when the code is safe to
+          // expose — Supabase / SQL details are otherwise dropped.
+          ...(error.details && SAFE_TO_EXPOSE_CODES.has(error.code)
+            ? { details: error.details }
+            : {}),
         },
         requestId,
       },
