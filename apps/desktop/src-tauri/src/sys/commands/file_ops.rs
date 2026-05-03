@@ -228,27 +228,38 @@ pub(crate) fn is_blacklisted_path(path: &str) -> bool {
 
     let path_str = path.to_string_lossy();
     let path_str_for_prefix = path_str.as_ref();
-    if BLOCKED_PREFIXES.iter().any(|p| {
-        path_str_for_prefix == *p || path_str_for_prefix.starts_with(&format!("{p}/"))
-    }) {
+    // Match the prefix as either `prefix`, `prefix/...`, or `prefix\...`
+    // — the Windows backslash form is needed for paths like
+    // `C:\Windows\System32\kernel32.dll`, which would otherwise slip
+    // past a `/`-only separator check on Linux/macOS callers.
+    let starts_with_prefix = |hay: &str, prefix: &str| {
+        hay == prefix
+            || hay.starts_with(&format!("{prefix}/"))
+            || hay.starts_with(&format!("{prefix}\\"))
+    };
+    if BLOCKED_PREFIXES
+        .iter()
+        .any(|p| starts_with_prefix(path_str_for_prefix, p))
+    {
         return true;
     }
 
     let path_lower = path_str.to_lowercase();
-    if BLOCKED_PREFIXES.iter().any(|p| {
-        let lower = p.to_lowercase();
-        path_lower == lower || path_lower.starts_with(&format!("{lower}/"))
-    }) {
+    if BLOCKED_PREFIXES
+        .iter()
+        .any(|p| starts_with_prefix(&path_lower, &p.to_lowercase()))
+    {
         return true;
     }
 
-    for component in path.components() {
-        let segment = component.as_os_str().to_string_lossy();
-        let segment_lower = segment.to_lowercase();
-        if BLOCKED_BASENAMES
-            .iter()
-            .any(|b| segment_lower == *b)
-        {
+    // path.components() on Linux/macOS does not recognise `\` as a path
+    // separator, so a Windows-style input like `C:\\Users\\user\\.env`
+    // would come through as a single Normal component and we'd miss the
+    // `.env` basename. Split manually on both separators so the check
+    // works the same on every host where the test runs.
+    for raw_segment in path_str.split(['/', '\\']) {
+        let segment_lower = raw_segment.to_lowercase();
+        if BLOCKED_BASENAMES.iter().any(|b| segment_lower == *b) {
             return true;
         }
     }
