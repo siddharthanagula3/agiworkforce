@@ -141,6 +141,9 @@ pub fn run() {
         }
     }
 
+    // Seed Supabase credentials from env vars (no-op in production; frontend overwrites via set_supabase_credentials).
+    crate::sys::account::init_supabase_from_env();
+
     let _telemetry_guard = match telemetry::init() {
         Ok(guard) => Some(guard),
         Err(e) => {
@@ -1479,6 +1482,7 @@ pub fn run() {
             crate::sys::account::oauth_refresh,
             crate::sys::account::fetch_credit_balance,
             crate::sys::account::report_llm_usage,
+            crate::sys::account::set_supabase_credentials,
             crate::sys::account::account_store_api_base_url,
             crate::sys::account::account_store_access_token,
             crate::sys::account::account_store_refresh_token,
