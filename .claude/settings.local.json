@@ -2,17 +2,23 @@
   "permissions": {
     "allow": [
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(rm -v \"/Users/siddhartha/.claude/plans/even-if-it-is-bubbly-octopus.md\" \"/Users/siddhartha/.claude/plans/in-what-aspects-desktop-refrernce-src-abstract-tome.md\" \"/Users/siddhartha/.claude/plans/luminous-sniffing-beaver.md\")",
+      "Read(//Users/siddhartha/.claude/plans/**)",
+      "Bash(cp /Users/siddhartha/.claude/plans/make-a-plan-to-purrfect-papert.md docs/plans/master-remediation.md)",
+      "Bash(cp /Users/siddhartha/.claude/plans/sprint1-vault-rewire.md docs/plans/sprint1-vault-rewire.md)",
+      "Bash(git mv *)",
+      "Bash(git add *)"
     ],
     "deny": [],
     "ask": []
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "supabase",
     "context7",
     "filesystem",
     "github",
     "vercel"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }
