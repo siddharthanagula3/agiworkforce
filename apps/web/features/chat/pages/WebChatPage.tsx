@@ -88,7 +88,12 @@ export default function WebChatPage() {
   }, [urlConversationId]);
 
   const handleSend = useCallback(
-    async (content: string, attachments?: File[]) => {
+    async (
+      content: string,
+      attachments?: File[],
+      _skillId?: string,
+      meta?: { agentMode?: string; folderId?: string | null; webSearchEnabled?: boolean },
+    ) => {
       const convId =
         urlConversationId ||
         activeConversationId ||
@@ -102,17 +107,36 @@ export default function WebChatPage() {
 
       if (!convId) return;
 
+      // Read image files as base64 data URLs so the LLM can process them
+      const resolvedAttachments = attachments
+        ? await Promise.all(
+            attachments.map(async (f) => {
+              let base64Content: string | undefined;
+              if (f.type.startsWith('image/')) {
+                base64Content = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.readAsDataURL(f);
+                  reader.onload = () => resolve(reader.result as string);
+                  reader.onerror = reject;
+                });
+              }
+              return {
+                id: crypto.randomUUID(),
+                type: f.type.startsWith('image/') ? ('image' as const) : ('file' as const),
+                name: f.name,
+                size: f.size,
+                mimeType: f.type,
+                content: base64Content,
+              };
+            }),
+          )
+        : undefined;
+
       await sendMessage(content, {
         model: selectedModelId,
         conversationId: convId,
-        attachments: attachments?.map((f) => ({
-          id: crypto.randomUUID(),
-          type: f.type.startsWith('image/') ? ('image' as const) : ('file' as const),
-          name: f.name,
-          size: f.size,
-          mimeType: f.type,
-          content: undefined,
-        })),
+        attachments: resolvedAttachments,
+        webSearch: meta?.webSearchEnabled,
       });
     },
     [
