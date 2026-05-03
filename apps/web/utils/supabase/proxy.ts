@@ -28,10 +28,15 @@ export async function updateSession(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet: CookieToSet[]) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        supabaseResponse = NextResponse.next({
-          request,
-        });
+        // WEB-12 (audit 2026-05-03): drop the request-side mutation.
+        // The previous `request.cookies.set(name, value)` (no options)
+        // stripped Secure / HttpOnly / SameSite flags from the
+        // request-side cookie store, creating a mismatch with the
+        // response-side `cookies.set(name, value, options)` below
+        // that's the authoritative write. The request-side mutation
+        // wasn't needed — Supabase's session-refresh handshake reads
+        // the response cookies on the next round-trip.
+        supabaseResponse = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) =>
           supabaseResponse.cookies.set(name, value, options),
         );
