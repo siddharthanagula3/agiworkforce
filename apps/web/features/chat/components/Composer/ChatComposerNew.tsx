@@ -36,7 +36,12 @@ interface ChatComposerProps {
     content: string,
     attachments?: File[],
     skillId?: string,
-    meta?: { agentMode: ChatMode; folderId: string | null },
+    meta?: {
+      agentMode: ChatMode;
+      folderId: string | null;
+      webSearchEnabled?: boolean;
+      thinkingEnabled?: boolean;
+    },
   ) => void;
   isLoading?: boolean;
   /**
@@ -382,6 +387,8 @@ const ChatComposerNewComponent = ({
     onSend(message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id, {
       agentMode,
       folderId: selectedFolderId,
+      webSearchEnabled,
+      thinkingEnabled,
     });
 
     setMessage('');
