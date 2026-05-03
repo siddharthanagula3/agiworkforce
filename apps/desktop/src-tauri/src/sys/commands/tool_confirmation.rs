@@ -517,11 +517,40 @@ pub fn get_auto_approve_all(state: State<'_, ToolConfirmationState>) -> Result<b
 }
 
 /// Set the agent execution mode (Safe / Build / Autopilot).
+///
+/// DESK-2 (audit 2026-05-03): transitioning into `Autopilot` requires a
+/// user confirmation through the same dialog used by every gated tool.
+/// The mode change is logged to tracing with the previous and new mode
+/// so audit log analysis can spot a hostile flip via XSS / prompt
+/// injection. Safe and Build are still no-confirmation transitions
+/// because they only ever raise the confirmation bar, never lower it.
 #[tauri::command]
-pub fn set_agent_mode(
+pub async fn set_agent_mode(
     mode: AgentMode,
     state: State<'_, ToolConfirmationState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
+    let previous = state.get_agent_mode();
+    if matches!(mode, AgentMode::Autopilot) && !matches!(previous, AgentMode::Autopilot) {
+        let approved = request_confirmation_simple(
+            &app_handle,
+            "set_agent_mode:autopilot",
+            &serde_json::json!({
+                "previous_mode": format!("{:?}", previous),
+                "new_mode": "Autopilot",
+                "warning": "Autopilot bypasses ALL tool confirmation dialogs. Only enable for trusted, scoped tasks."
+            }),
+        )
+        .await?;
+        if !approved {
+            return Err("Autopilot mode change denied by user".to_string());
+        }
+    }
+    tracing::warn!(
+        previous_mode = ?previous,
+        new_mode = ?mode,
+        "agent_mode_change",
+    );
     state.set_agent_mode(mode);
     Ok(())
 }
