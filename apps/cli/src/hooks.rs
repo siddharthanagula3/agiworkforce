@@ -16,8 +16,9 @@ use anyhow::{Context, Result};
 #[cfg(unix)]
 use colored::Colorize;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tokio::process::Command;
 
@@ -47,6 +48,15 @@ pub struct Hook {
     /// name or the `tool_name` from the input payload.
     #[serde(default)]
     pub matcher: Option<String>,
+
+    /// Optional permission-rule-style filter (e.g. `Bash(git *)`, `Edit(*.rs)`).
+    /// Hook only fires when the tool call matches this pattern.
+    /// Format: `ToolName(arg-glob)`. ToolName matches `tool_name`; the
+    /// arg-glob is matched against the first string-valued tool argument
+    /// (typically `command`/`path`) using shell-style `*` and `?` wildcards.
+    /// `if:` and `matcher` are AND-ed when both are set.
+    #[serde(default, rename = "if")]
+    pub if_condition: Option<String>,
 }
 
 fn default_timeout() -> u64 {
@@ -56,44 +66,54 @@ fn default_blocking() -> bool {
     true
 }
 
-/// Hook events — matches Claude Code's 12+ event lifecycle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Hook events — canonical names match Claude Code's 19-event vocabulary
+/// for free interop with `~/.claude/hooks.json` configs. Old AGI-specific
+/// names (`BeforeToolUse`, `PreEdit`, …) still load via custom Deserialize
+/// with a one-time stderr deprecation warning per alias per session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum HookEvent {
     SessionStart,
     SessionEnd,
-    BeforeToolUse,
-    AfterToolUse,
-    BeforeMessage,
+    /// Fires before any tool call. Replaces the legacy `BeforeToolUse`,
+    /// `PreEdit`, `PreCommand` events — use the `if:` field on the hook to
+    /// filter to a specific tool (e.g. `if: "Bash(git *)"`).
+    PreToolUse,
+    /// Fires after any tool call completes. Replaces `AfterToolUse`,
+    /// `PostEdit`, `PostCommand`.
+    PostToolUse,
+    /// Fires when the user submits a prompt. Renamed from `BeforeMessage`
+    /// to match Claude Code vocabulary.
+    UserPromptSubmit,
+    /// AGI-specific: fires after the assistant produces a message. No
+    /// equivalent in Claude Code; kept as-is.
     AfterMessage,
-    /// Fires before a file edit (write_file or edit_file tool).
-    PreEdit,
-    /// Fires after a file edit with the modified file path.
-    PostEdit,
-    /// Fires before a shell command execution.
-    PreCommand,
-    /// Fires after a shell command completes.
-    PostCommand,
-    /// Fires when the agent enters/exits plan mode.
+    /// AGI-specific: fires when the agent enters/exits plan mode.
     PlanModeChanged,
-    /// Fires when context compaction runs.
-    ContextCompacted,
-    /// Fires when a subagent is spawned.
-    SubagentSpawned,
-    /// Fires when a subagent completes.
-    SubagentCompleted,
+    /// Fires before context compaction starts. Paired with `PostCompact`.
+    PreCompact,
+    /// Fires after context compaction completes. Renamed from
+    /// `ContextCompacted` to match Claude Code vocabulary.
+    PostCompact,
+    /// Fires when a subagent starts. Renamed from `SubagentSpawned`.
+    SubagentStart,
+    /// Fires when a subagent stops. Renamed from `SubagentCompleted`.
+    SubagentStop,
+    /// Fires before a permission prompt is shown to the user. New in B5;
+    /// matches Claude Code's `PermissionRequest` event.
+    PermissionRequest,
     /// Fires on notification events (warnings, errors shown to user).
     Notification,
     /// Fires when the user stops the agentic loop (Ctrl-C or loop detection).
     Stop,
-    /// Fires when a cron trigger fires in daemon mode.
+    /// AGI-specific: fires when a cron trigger fires in daemon mode.
     CronTriggered,
-    /// Fires when a webhook trigger is received in daemon mode.
+    /// AGI-specific: fires when a webhook trigger is received in daemon mode.
     WebhookReceived,
     /// Fires when a watched file changes in daemon mode.
     FileChanged,
-    /// Fires when the daemon process starts.
+    /// AGI-specific: fires when the daemon process starts.
     DaemonStarted,
-    /// Fires when the daemon process stops.
+    /// AGI-specific: fires when the daemon process stops.
     DaemonStopped,
 }
 
@@ -102,18 +122,16 @@ impl std::fmt::Display for HookEvent {
         match self {
             Self::SessionStart => write!(f, "SessionStart"),
             Self::SessionEnd => write!(f, "SessionEnd"),
-            Self::BeforeToolUse => write!(f, "BeforeToolUse"),
-            Self::AfterToolUse => write!(f, "AfterToolUse"),
-            Self::BeforeMessage => write!(f, "BeforeMessage"),
+            Self::PreToolUse => write!(f, "PreToolUse"),
+            Self::PostToolUse => write!(f, "PostToolUse"),
+            Self::UserPromptSubmit => write!(f, "UserPromptSubmit"),
             Self::AfterMessage => write!(f, "AfterMessage"),
-            Self::PreEdit => write!(f, "PreEdit"),
-            Self::PostEdit => write!(f, "PostEdit"),
-            Self::PreCommand => write!(f, "PreCommand"),
-            Self::PostCommand => write!(f, "PostCommand"),
             Self::PlanModeChanged => write!(f, "PlanModeChanged"),
-            Self::ContextCompacted => write!(f, "ContextCompacted"),
-            Self::SubagentSpawned => write!(f, "SubagentSpawned"),
-            Self::SubagentCompleted => write!(f, "SubagentCompleted"),
+            Self::PreCompact => write!(f, "PreCompact"),
+            Self::PostCompact => write!(f, "PostCompact"),
+            Self::SubagentStart => write!(f, "SubagentStart"),
+            Self::SubagentStop => write!(f, "SubagentStop"),
+            Self::PermissionRequest => write!(f, "PermissionRequest"),
             Self::Notification => write!(f, "Notification"),
             Self::Stop => write!(f, "Stop"),
             Self::CronTriggered => write!(f, "CronTriggered"),
@@ -123,6 +141,180 @@ impl std::fmt::Display for HookEvent {
             Self::DaemonStopped => write!(f, "DaemonStopped"),
         }
     }
+}
+
+/// Tracks which deprecated event aliases have already emitted a stderr
+/// warning this session. Keyed by old alias name. Once an alias has been
+/// warned about, subsequent loads in the same process stay silent.
+fn deprecation_seen() -> &'static Mutex<HashSet<String>> {
+    static SEEN: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    SEEN.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// Resolve an event name string (canonical or legacy alias) to its
+/// canonical `HookEvent`. Emits a one-time stderr deprecation warning the
+/// first time a given legacy alias is seen this session.
+fn resolve_event_name(name: &str) -> Option<HookEvent> {
+    // Canonical names — no warning, no alias table.
+    let canonical = match name {
+        "SessionStart" => Some(HookEvent::SessionStart),
+        "SessionEnd" => Some(HookEvent::SessionEnd),
+        "PreToolUse" => Some(HookEvent::PreToolUse),
+        "PostToolUse" => Some(HookEvent::PostToolUse),
+        "UserPromptSubmit" => Some(HookEvent::UserPromptSubmit),
+        "AfterMessage" => Some(HookEvent::AfterMessage),
+        "PlanModeChanged" => Some(HookEvent::PlanModeChanged),
+        "PreCompact" => Some(HookEvent::PreCompact),
+        "PostCompact" => Some(HookEvent::PostCompact),
+        "SubagentStart" => Some(HookEvent::SubagentStart),
+        "SubagentStop" => Some(HookEvent::SubagentStop),
+        "PermissionRequest" => Some(HookEvent::PermissionRequest),
+        "Notification" => Some(HookEvent::Notification),
+        "Stop" => Some(HookEvent::Stop),
+        "CronTriggered" => Some(HookEvent::CronTriggered),
+        "WebhookReceived" => Some(HookEvent::WebhookReceived),
+        "FileChanged" => Some(HookEvent::FileChanged),
+        "DaemonStarted" => Some(HookEvent::DaemonStarted),
+        "DaemonStopped" => Some(HookEvent::DaemonStopped),
+        _ => None,
+    };
+    if let Some(event) = canonical {
+        return Some(event);
+    }
+
+    // Legacy aliases — resolve + warn once per session per alias.
+    let (event, hint): (HookEvent, &'static str) = match name {
+        "BeforeToolUse" => (HookEvent::PreToolUse, ""),
+        "AfterToolUse" => (HookEvent::PostToolUse, ""),
+        "BeforeMessage" => (HookEvent::UserPromptSubmit, ""),
+        "PreEdit" => (
+            HookEvent::PreToolUse,
+            " — use `if: \"Edit(*)\"` to filter to edit tools",
+        ),
+        "PostEdit" => (
+            HookEvent::PostToolUse,
+            " — use `if: \"Edit(*)\"` to filter to edit tools",
+        ),
+        "PreCommand" => (
+            HookEvent::PreToolUse,
+            " — use `if: \"Bash(*)\"` to filter to shell commands",
+        ),
+        "PostCommand" => (
+            HookEvent::PostToolUse,
+            " — use `if: \"Bash(*)\"` to filter to shell commands",
+        ),
+        "ContextCompacted" => (HookEvent::PostCompact, ""),
+        "SubagentSpawned" => (HookEvent::SubagentStart, ""),
+        "SubagentCompleted" => (HookEvent::SubagentStop, ""),
+        _ => return None,
+    };
+
+    if let Ok(mut seen) = deprecation_seen().lock() {
+        if seen.insert(name.to_string()) {
+            eprintln!(
+                "warning: hook event \"{}\" is deprecated; use \"{}\" instead{}. \
+                 (this warning shows once per session)",
+                name, event, hint
+            );
+        }
+    }
+    Some(event)
+}
+
+impl<'de> Deserialize<'de> for HookEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let name = String::deserialize(deserializer)?;
+        resolve_event_name(&name).ok_or_else(|| {
+            serde::de::Error::custom(format!(
+                "unknown hook event \"{}\". Canonical events: SessionStart, SessionEnd, \
+                 PreToolUse, PostToolUse, UserPromptSubmit, AfterMessage, PlanModeChanged, \
+                 PreCompact, PostCompact, SubagentStart, SubagentStop, PermissionRequest, \
+                 Notification, Stop, CronTriggered, WebhookReceived, FileChanged, \
+                 DaemonStarted, DaemonStopped. Legacy aliases (deprecated): BeforeToolUse, \
+                 AfterToolUse, BeforeMessage, PreEdit, PostEdit, PreCommand, PostCommand, \
+                 ContextCompacted, SubagentSpawned, SubagentCompleted.",
+                name
+            ))
+        })
+    }
+}
+
+/// Parse a permission-rule pattern of the form `ToolName(arg-glob)` and
+/// test whether the given `tool_name` and tool args match.
+///
+/// Examples: `Bash(git *)`, `Edit(*.rs)`, `WebFetch(*)`.
+///
+/// The arg-glob uses shell-style `*` (any chars) and `?` (one char) and is
+/// anchored — the entire arg must match. The arg-glob is tested against the
+/// first string-valued field of `tool_args` (or against an empty string if
+/// `tool_args` is absent / has no string field).
+fn matches_permission_rule(rule: &str, tool_name: &str, tool_args: Option<&serde_json::Value>) -> bool {
+    // Find the opening paren that begins the arg-glob.
+    let open = match rule.find('(') {
+        Some(i) => i,
+        None => return false,
+    };
+    if !rule.ends_with(')') {
+        return false;
+    }
+    let rule_tool = rule[..open].trim();
+    let arg_glob = &rule[open + 1..rule.len() - 1];
+
+    // Tool name must match exactly (case-sensitive, like Claude Code).
+    if rule_tool != tool_name {
+        return false;
+    }
+
+    // Find the first string arg to glob-match. Common keys for Bash =>
+    // `command`; for Edit/Read => `path`/`file_path`; otherwise the first
+    // string-valued field in iteration order.
+    let arg_value: String = tool_args
+        .and_then(|v| v.as_object())
+        .and_then(|obj| {
+            obj.get("command")
+                .or_else(|| obj.get("path"))
+                .or_else(|| obj.get("file_path"))
+                .or_else(|| obj.values().find(|v| v.is_string()))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
+        .unwrap_or_default();
+
+    glob_match(arg_glob, &arg_value)
+}
+
+/// Tiny shell-style glob matcher: `*` matches any (possibly empty) run of
+/// characters, `?` matches exactly one character, all other chars match
+/// literally. Anchored — the entire input must match.
+fn glob_match(pattern: &str, input: &str) -> bool {
+    let p: Vec<char> = pattern.chars().collect();
+    let s: Vec<char> = input.chars().collect();
+    // Iterative two-pointer with backtracking on `*`.
+    let (mut pi, mut si) = (0usize, 0usize);
+    let (mut star_p, mut star_s): (Option<usize>, usize) = (None, 0);
+    while si < s.len() {
+        if pi < p.len() && (p[pi] == '?' || p[pi] == s[si]) {
+            pi += 1;
+            si += 1;
+        } else if pi < p.len() && p[pi] == '*' {
+            star_p = Some(pi);
+            star_s = si;
+            pi += 1;
+        } else if let Some(sp) = star_p {
+            pi = sp + 1;
+            star_s += 1;
+            si = star_s;
+        } else {
+            return false;
+        }
+    }
+    while pi < p.len() && p[pi] == '*' {
+        pi += 1;
+    }
+    pi == p.len()
 }
 
 /// Hooks configuration loaded from hooks.json.
@@ -395,36 +587,51 @@ pub fn load_hooks() -> Result<HooksConfig> {
 // Matcher logic
 // ---------------------------------------------------------------------------
 
-/// Check whether a hook's optional matcher regex matches the event context.
+/// Check whether a hook's optional matcher regex + permission-rule `if:`
+/// filter both pass for the given event context.
 ///
-/// If the hook has no matcher the hook always matches.  Otherwise, the regex
-/// is tested against:
-///   1. the event name (e.g. "AfterToolUse")
-///   2. the tool_name from the input (if present)
+/// - If neither `matcher` nor `if_condition` is set, the hook always fires.
+/// - If only `matcher` is set, the regex is tested against the event name
+///   (e.g. "PostToolUse") and the input's `tool_name` (if present).
+/// - If only `if_condition` is set, the permission rule (e.g. `Bash(git *)`)
+///   is parsed and tested against `tool_name` + `tool_args`.
+/// - If both are set, both must pass (AND).
 ///
 /// Returns `true` if the hook should fire.
 fn hook_matches(hook: &Hook, event_name: &str, input: &HookInput) -> bool {
-    let pattern = match &hook.matcher {
-        Some(p) => p,
-        None => return true, // no matcher → always matches
+    // Regex matcher gate.
+    let matcher_ok = match &hook.matcher {
+        None => true,
+        Some(pattern) => match Regex::new(pattern) {
+            Err(_) => return false, // invalid regex → skip hook entirely
+            Ok(re) => {
+                re.is_match(event_name)
+                    || input
+                        .tool_name
+                        .as_deref()
+                        .map(|t| re.is_match(t))
+                        .unwrap_or(false)
+            }
+        },
     };
-
-    let re = match Regex::new(pattern) {
-        Ok(r) => r,
-        Err(_) => return false, // invalid regex → skip hook
-    };
-
-    if re.is_match(event_name) {
-        return true;
+    if !matcher_ok {
+        return false;
     }
 
-    if let Some(tool_name) = &input.tool_name {
-        if re.is_match(tool_name) {
-            return true;
+    // Permission-rule `if:` gate.
+    if let Some(rule) = &hook.if_condition {
+        let tool_name = match input.tool_name.as_deref() {
+            Some(t) => t,
+            // No tool_name in the input — `if:` rules can't match (they're
+            // tool-specific by design). Skip the hook.
+            None => return false,
+        };
+        if !matches_permission_rule(rule, tool_name, input.tool_args.as_ref()) {
+            return false;
         }
     }
 
-    false
+    true
 }
 
 // ---------------------------------------------------------------------------
@@ -695,6 +902,9 @@ pub fn format_hooks_list(config: &HooksConfig) -> String {
             if let Some(m) = &hook.matcher {
                 flags.push_str(&format!(" [matcher: {}]", m));
             }
+            if let Some(c) = &hook.if_condition {
+                flags.push_str(&format!(" [if: {}]", c));
+            }
             out.push_str(&format!("  - {}{}\n", hook.command, flags));
         }
     }
@@ -715,7 +925,7 @@ mod tests {
     #[test]
     fn test_hook_event_display() {
         assert_eq!(format!("{}", HookEvent::SessionStart), "SessionStart");
-        assert_eq!(format!("{}", HookEvent::AfterToolUse), "AfterToolUse");
+        assert_eq!(format!("{}", HookEvent::PostToolUse), "PostToolUse");
     }
 
     #[test]
@@ -783,6 +993,7 @@ mod tests {
                 timeout: 10,
                 blocking: true,
                 matcher: None,
+                if_condition: None,
             }],
         );
 
@@ -825,6 +1036,7 @@ mod tests {
             timeout: 5,
             blocking: true,
             matcher: None,
+            if_condition: None,
         };
 
         let result = run_single_hook(&hook, "{}").await;
@@ -842,6 +1054,7 @@ mod tests {
             timeout: 1,
             blocking: true,
             matcher: None,
+            if_condition: None,
         };
 
         let result = run_single_hook(&hook, "{}").await;
@@ -859,6 +1072,7 @@ mod tests {
             timeout: 10,
             blocking: true,
             matcher: None,
+            if_condition: None,
         };
         let input = HookInput {
             event: "AfterToolUse".to_string(),
@@ -881,6 +1095,7 @@ mod tests {
             timeout: 10,
             blocking: true,
             matcher: Some("Session.*".to_string()),
+            if_condition: None,
         };
         let input = HookInput {
             event: "SessionStart".to_string(),
@@ -904,6 +1119,7 @@ mod tests {
             timeout: 10,
             blocking: true,
             matcher: Some("^bash$".to_string()),
+            if_condition: None,
         };
         let input_bash = HookInput {
             event: "AfterToolUse".to_string(),
@@ -937,6 +1153,7 @@ mod tests {
             timeout: 10,
             blocking: true,
             matcher: Some("[invalid".to_string()),
+            if_condition: None,
         };
         let input = HookInput {
             event: "SessionStart".to_string(),
@@ -955,7 +1172,7 @@ mod tests {
     async fn test_matcher_filters_hooks_in_run_hooks() {
         let mut hooks = HashMap::new();
         hooks.insert(
-            "AfterToolUse".to_string(),
+            "PostToolUse".to_string(),
             vec![
                 Hook {
                     command: "echo matched".to_string(),
@@ -963,6 +1180,7 @@ mod tests {
                     timeout: 5,
                     blocking: true,
                     matcher: Some("^bash$".to_string()),
+                    if_condition: None,
                 },
                 Hook {
                     command: "echo always".to_string(),
@@ -970,6 +1188,7 @@ mod tests {
                     timeout: 5,
                     blocking: true,
                     matcher: None,
+                    if_condition: None,
                 },
             ],
         );
@@ -986,7 +1205,7 @@ mod tests {
             message: None,
             tool_execution: None,
         };
-        let results = run_hooks(&config, HookEvent::AfterToolUse, &input).await;
+        let results = run_hooks(&config, HookEvent::PostToolUse, &input).await;
         assert_eq!(results.len(), 1);
         assert!(results[0].stdout.contains("always"));
     }
@@ -1138,6 +1357,7 @@ mod tests {
             timeout: 5,
             blocking: true,
             matcher: None,
+            if_condition: None,
         };
         let result = run_single_hook(&hook, "{}").await;
         assert!(result.success);
@@ -1154,6 +1374,7 @@ mod tests {
             timeout: 5,
             blocking: true,
             matcher: None,
+            if_condition: None,
         };
         let result = run_single_hook(&hook, "{}").await;
         assert!(result.success);
@@ -1416,13 +1637,14 @@ mod tests {
     fn test_format_hooks_list_shows_matcher() {
         let mut hooks = HashMap::new();
         hooks.insert(
-            "AfterToolUse".to_string(),
+            "PostToolUse".to_string(),
             vec![Hook {
                 command: "guard.sh".to_string(),
                 args: Vec::new(),
                 timeout: 10,
                 blocking: true,
                 matcher: Some("^bash$".to_string()),
+                if_condition: None,
             }],
         );
         let config = HooksConfig { hooks };
