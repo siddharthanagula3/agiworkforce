@@ -2,6 +2,15 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+
+// WEB-4 audit fix (2026-05-03): pin to Node runtime so the Stripe SDK's
+// HMAC verification (stripe.webhooks.constructEvent) has access to Node
+// crypto. Edge runtime would silently fail signature checks. Also marks
+// this route as dynamic so Next.js doesn't try to pre-render or cache it.
+// Pairs with the proxy.ts matcher exclusion that keeps middleware off this
+// route entirely.
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
