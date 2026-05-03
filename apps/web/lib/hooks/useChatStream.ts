@@ -10,6 +10,8 @@ interface SendMessageOptions {
   attachments?: Attachment[];
   conversationId?: string;
   webSearch?: boolean;
+  codeExecution?: boolean;
+  thinkingEnabled?: boolean;
 }
 
 interface UseChatStreamReturn {
@@ -188,6 +190,8 @@ export function useChatStream(): UseChatStreamReturn {
             temperature: options.temperature,
             max_tokens: options.maxTokens,
             web_search: options.webSearch || undefined,
+            code_execution: options.codeExecution || undefined,
+            thinking_mode: options.thinkingEnabled || undefined,
           }),
           signal: abortControllerRef.current.signal,
         });
