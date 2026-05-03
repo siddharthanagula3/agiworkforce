@@ -72,6 +72,15 @@ export interface ChatMessage {
     isSearching?: boolean;
     /** Web search results from server-managed tools */
     searchResults?: Array<{ url: string; title: string; snippet: string }>;
+    /** True while server-managed code execution is running */
+    isExecutingCode?: boolean;
+    /** Code execution result from server-managed code_execution_20260120 tool */
+    codeExecutionResult?: {
+      stdout: string;
+      stderr: string;
+      returnCode: number;
+      images?: Array<{ mediaType: string; data: string }>;
+    };
   };
 }
 

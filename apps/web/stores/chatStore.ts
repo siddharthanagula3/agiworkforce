@@ -17,6 +17,15 @@ export interface MessageMetadata {
   isSearching?: boolean;
   /** Web search results from server-managed tools */
   searchResults?: Array<{ url: string; title: string; snippet: string }>;
+  /** True while server-managed code execution is running */
+  isExecutingCode?: boolean;
+  /** Code execution result from server-managed code_execution_20260120 tool */
+  codeExecutionResult?: {
+    stdout: string;
+    stderr: string;
+    returnCode: number;
+    images?: Array<{ mediaType: string; data: string }>;
+  };
 }
 
 export interface Message {
@@ -132,6 +141,11 @@ interface ChatState {
   setSearchResults: (
     id: string,
     results: Array<{ url: string; title: string; snippet: string }>,
+  ) => void;
+  setExecutingCode: (id: string, isExecuting: boolean) => void;
+  setCodeExecutionResult: (
+    id: string,
+    result: NonNullable<MessageMetadata['codeExecutionResult']>,
   ) => void;
   deleteMessage: (id: string) => void;
   clearMessages: () => void;
@@ -305,6 +319,39 @@ export const useChatStore = create<ChatState>()(
             }),
             undefined,
             'chat/setSearchResults',
+          ),
+
+        setExecutingCode: (id, isExecuting) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id
+                  ? { ...m, metadata: { ...m.metadata, isExecutingCode: isExecuting } }
+                  : m,
+              ),
+            }),
+            undefined,
+            'chat/setExecutingCode',
+          ),
+
+        setCodeExecutionResult: (id, result) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id
+                  ? {
+                      ...m,
+                      metadata: {
+                        ...m.metadata,
+                        codeExecutionResult: result,
+                        isExecutingCode: false,
+                      },
+                    }
+                  : m,
+              ),
+            }),
+            undefined,
+            'chat/setCodeExecutionResult',
           ),
 
         deleteMessage: (id) =>
