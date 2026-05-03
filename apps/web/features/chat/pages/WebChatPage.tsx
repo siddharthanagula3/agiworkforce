@@ -14,6 +14,9 @@ import type { ChatMessage } from '../stores/chat-store';
 import { cn } from '@shared/lib/utils';
 
 function toChatMessage(m: Message, conversationId: string): ChatMessage {
+  const thinkingContent = m.metadata?.thinkingContent;
+  const thinkingSteps = thinkingContent ? [thinkingContent] : undefined;
+
   return {
     id: m.id,
     sessionId: conversationId,
@@ -25,11 +28,8 @@ function toChatMessage(m: Message, conversationId: string): ChatMessage {
       m.metadata || m.model
         ? {
             model: m.model,
-            thinkingContent: m.metadata?.thinkingContent,
+            thinkingSteps,
             isThinkingStreaming: m.metadata?.isThinkingStreaming,
-            thinkingStartedAt: m.metadata?.thinkingStartedAt,
-            thinkingCompletedAt: m.metadata?.thinkingCompletedAt,
-            thinkingDurationSeconds: m.metadata?.thinkingDurationSeconds,
           }
         : undefined,
   };
@@ -43,7 +43,7 @@ export default function WebChatPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Streaming send + store state
-  const { sendMessage, isStreaming } = useChatStream();
+  const { sendMessage, stopGeneration, isStreaming } = useChatStream();
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const isLoading = useChatStore((s) => s.isLoading);
@@ -189,7 +189,12 @@ export default function WebChatPage() {
         <div
           className={cn('mx-auto w-full max-w-3xl px-4 pb-6', sidebarCollapsed ? 'max-w-4xl' : '')}
         >
-          <ChatComposerNew onSend={handleSend} isLoading={isLoading} isGenerating={isStreaming} />
+          <ChatComposerNew
+            onSend={handleSend}
+            onStop={stopGeneration}
+            isLoading={isLoading}
+            isGenerating={isStreaming}
+          />
         </div>
       </div>
     </div>
