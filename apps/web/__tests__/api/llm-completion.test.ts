@@ -155,7 +155,7 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(401);
       expect(data.error.code).toBe('UNAUTHORIZED');
-      expect(data.error.message).toContain('authorization');
+      expect(data.error.message).toContain('Authentication required');
     });
 
     it('should return 401 if authorization header does not start with Bearer', async () => {
@@ -199,7 +199,7 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(401);
       expect(data.error.code).toBe('UNAUTHORIZED');
-      expect(data.error.message).toContain('authentication');
+      expect(data.error.message).toContain('Authentication required');
     });
 
     it('should return 403 if user has no subscription', async () => {
@@ -221,7 +221,7 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(403);
       expect(data.error.code).toBe('FORBIDDEN');
-      expect(data.error.message).toContain('subscription');
+      expect(data.error.message).toContain('Access denied');
     });
 
     it('should return 403 if subscription is not active', async () => {
@@ -247,7 +247,7 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(403);
       expect(data.error.code).toBe('FORBIDDEN');
-      expect(data.error.message).toContain('past_due');
+      expect(data.error.message).toContain('Access denied');
     });
 
     it('should allow trialing subscription status', async () => {
@@ -602,7 +602,7 @@ describe('POST /api/llm/completion', () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.error.message).toContain('Streaming request failed');
+      expect(data.error.message).toContain('Internal server error');
 
       // Check that refund was issued (negative amount)
       expect(mockDeductCredits).toHaveBeenCalledWith(
