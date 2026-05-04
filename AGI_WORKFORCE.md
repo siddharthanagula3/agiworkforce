@@ -49,12 +49,12 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 
 ## MVP plan (3 waves, parallel where possible)
 
-| Wave       | Timeline   | What ships                                                                                              | Status      |
-| ---------- | ---------- | ------------------------------------------------------------------------------------------------------- | ----------- |
-| **Wave 0** | 2026-05-03 | Cleanup: -1.04M LOC, SSOT created, audit P0/P1 mostly closed                                            | ✅ SHIPPED  |
-| **Wave 1** | 2026-05-03 | CLI v1.0 — Homebrew + install.sh + cargo + GitHub Release (5 platforms) live; npm pending NPM_TOKEN     | ✅ SHIPPED  |
-| **Wave 2** | Weeks 2-5  | Desktop v1.0 — pixel-close Claude Desktop UI, Windows EV cert, web UnifiedAgenticChat done, IPC pruning | In progress |
-| **Wave 3** | Weeks 6-9  | Mobile (App Store + Play) + Chrome ext (Web Store) + VS Code ext (Marketplace) + Hobby tier launch      | Pending     |
+| Wave       | Timeline   | What ships                                                                                              | Status                               |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| **Wave 0** | 2026-05-03 | Cleanup: -1.04M LOC, SSOT created, audit P0/P1 mostly closed                                            | ✅ SHIPPED                           |
+| **Wave 1** | 2026-05-03 | CLI v1.0 — Homebrew + install.sh + cargo + GitHub Release (5 platforms) live; npm pending NPM_TOKEN     | ✅ SHIPPED                           |
+| **Wave 2** | Weeks 2-5  | Desktop v1.0 — pixel-close Claude Desktop UI, Windows EV cert, web UnifiedAgenticChat done, IPC pruning | In progress                          |
+| **Wave 3** | Weeks 6-9  | Mobile (App Store + Play) + Chrome ext (Web Store) + VS Code ext (Marketplace) + Hobby tier launch      | **In progress (kickoff 2026-05-04)** |
 
 Active sprint plan: [docs/plans/sprint1-vault-rewire.md](docs/plans/sprint1-vault-rewire.md). Master remediation: [docs/plans/master-remediation.md](docs/plans/master-remediation.md). License: PROPRIETARY (see [LICENSE](LICENSE)).
 
@@ -824,6 +824,39 @@ const adapter = createOpenAIAdapter({
 - ~10,150 LOC across the porting work
 - License attribution complete in `THIRD_PARTY_LICENSES.md`
 - 0 stashes
+
+## Wave 3 launch kickoff — 2026-05-04
+
+Wave 3 is fundamentally a **distribution wave**, not an engineering wave. The LLM/agent infrastructure is done (S1–S13 closed). What's left:
+
+| Surface                    | Code state                                                                                                                  | Operator steps remaining                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Mobile (iOS + Android)** | ✅ EAS profiles set up; `streamFromProvider` client shipped; chat UI wiring is the last code task                           | Apple Developer + Google Play Console accounts, listing copy, screenshots, signing, submission |
+| **Chrome Web Store**       | ✅ MV3 manifest v1.2.0 final; `streamFromProvider` client shipped                                                           | Chrome Web Store dev account ($5), screenshots, .zip upload, 2–7 day review                    |
+| **VS Code Marketplace**    | ✅ `package.json` metadata final; `streamFromProvider` client shipped                                                       | Microsoft Partner Center publisher account, PAT, `vsce publish` (instant)                      |
+| **Hobby tier**             | ✅ Tier code wired in `apps/web/lib/model-tiers.ts`, `services/api-gateway/src/middleware/planGate.ts`, `routes/llm.ts:126` | Stripe product + price ($5/mo), env vars, pricing page card render                             |
+
+The Hobby tier launch needs **zero new code** — only Stripe dashboard config + env vars. VS Code Marketplace publish is **near-instant** after the publisher PAT is created. Chrome Web Store is **2–7 day review**. Mobile is the long pole due to Apple's review queue.
+
+### Wave 3 docs landed this push
+
+| Doc                                                                                                      | Purpose                                                                                            |
+| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`docs/launch/wave-3-playbook.md`](docs/launch/wave-3-playbook.md)                                       | Operator's master checklist. Each step tagged 🟢 codeable / 🟡 config / 🔴 human                   |
+| [`docs/launch/store-listings/app-store.md`](docs/launch/store-listings/app-store.md)                     | iOS App Store listing copy (subtitle, description, keywords, screenshot specs)                     |
+| [`docs/launch/store-listings/google-play.md`](docs/launch/store-listings/google-play.md)                 | Google Play listing copy (short description, full description, Data Safety form answers)           |
+| [`docs/launch/store-listings/chrome-web-store.md`](docs/launch/store-listings/chrome-web-store.md)       | Chrome Web Store listing + per-permission justifications (MV3 single-purpose declaration included) |
+| [`docs/launch/store-listings/vs-code-marketplace.md`](docs/launch/store-listings/vs-code-marketplace.md) | VS Code Marketplace README outline + publisher setup steps                                         |
+| [`docs/launch/hobby-tier-checklist.md`](docs/launch/hobby-tier-checklist.md)                             | Operator's Stripe + env var checklist for the Hobby flip-on                                        |
+
+### Recommended launch order (per playbook)
+
+1. **Hobby tier** first — no review queue, instant on once Stripe is configured. Revenue starts.
+2. **VS Code extension** — instant publish via `vsce`.
+3. **Chrome extension** — 2–7 day review.
+4. **Mobile (Play first, App Store last)** — Apple is the long pole.
+
+Total wall-clock to all four live: 2–4 weeks, gated almost entirely on Apple's queue.
 
 ## How to use this file
 
