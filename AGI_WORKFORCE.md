@@ -763,6 +763,33 @@ The wrapper is generic over an opaque `StreamFn` so adapters don't need to depen
 - **Production secrets management**: `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`GOOGLE_API_KEY` need to land in the Fly.io env for `services/api-gateway/`. Currently the adapters work locally via env — production rollout needs a human deploy.
 - **Browser binaries**: `playwright-core` ships _without_ browsers. Production use needs `npx playwright install chromium` in the deploy step or a system Chrome already on the host.
 
+## What shipped on 2026-05-04 (deferred-completion pass)
+
+User asked to "complete these" for the 6 items previously marked deferred. Outcome:
+
+| Item                                          | Status this session | Notes                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Wire production `/chat` to new pipeline**   | **✅ Done**         | `apps/web/core/integrations/chat-completion-handler.ts` — `sendAIMessage()` opts into the new path via `NEXT_PUBLIC_USE_PROVIDER_STREAM=1`, falls back to `unifiedLLMService` on failure. Existing call sites unchanged.                                                                     |
+| **Mobile + Chrome ext + VS Code ext clients** | **✅ Done**         | Three per-surface `providerStreamClient.ts` files (~110 LOC each). Each is the `streamFromProvider` SSE consumer adapted to its runtime (Node fetch / MV3 service worker / Expo RN).                                                                                                         |
+| **S11 in-process gateway e2e**                | **✅ Done**         | `services/api-gateway/src/__tests__/providerStream.live.test.ts` — supertest boots Express + the providerStream router with stubbed auth, posts a 32-token claude-haiku prompt, asserts text-delta + non-error stop. Gated on `AGIWORKFORCE_LIVE_TEST=1` + `ANTHROPIC_API_KEY`.              |
+| **`apply-patch` lift with FS abstraction**    | **✅ Done**         | New `packages/apply-patch/` (~690 LOC). Minimal `FSBridge` interface replaces OpenClaw's sandbox-aware stack. Default `nodeFSBridge()` for real disk; callers can supply Tauri / S3 / sandbox bridges. Closes the OpenClaw S2-deferred backlog.                                              |
+| **S10 OpenAI Responses API**                  | **⏭ Skipped**      | 400+ LOC of new translate/stream code for the Responses API's fundamentally different shape (`output[]` blocks, server-side `store`, `previous_response_id`). Worthy of a dedicated session. Existing Chat Completions adapter handles current chat flow.                                    |
+| **Google Vertex AI provider**                 | **⏭ Skipped**      | Needs `google-auth-library` OAuth + project/region config + new package. ~600 LOC including OAuth flow. Worthy of a dedicated session, especially given Wave 3 enterprise positioning. The public-API `@agiworkforce/providers-google` adapter from S9 already covers BYOK/individual users. |
+
+**Cumulative state after deferred-completion pass:**
+
+- 10 packages: types, llm-normalize, providers-{anthropic,ollama,openai,google}, mcp, skills, browser-tool, apply-patch
+- 2 service integrations: api-gateway provider routes + web app proxy routes
+- 1 web demo surface at `/chat-multi`
+- Production `/chat` now opt-in to the new pipeline via env flag
+- 4 client surfaces wired (web + extension + extension-vscode + mobile)
+- 24 active Rust CLI hook events
+- ~9,400 LOC across the porting work
+- 0 stashes
+- License attribution complete in `THIRD_PARTY_LICENSES.md`
+
+**OpenClaw porting backlog**: only **2 items remain deferred** (S10 Responses API + Vertex AI provider). Everything else from the original 5-sprint plan plus the 6 deferred items have shipped.
+
 ## How to use this file
 
 - **New contributor?** Read this top to bottom, then [BUILD.md](BUILD.md) + [docs/VISION.md](docs/VISION.md).
