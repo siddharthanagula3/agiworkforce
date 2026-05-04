@@ -2189,6 +2189,9 @@ pub fn run() {
             crate::sys::commands::privacy::privacy_delete_account,
             crate::sys::commands::privacy::privacy_export_data,
             crate::sys::commands::privacy::settings_update_privacy,
+            crate::sys::commands::privacy::privacy_request_account_deletion,
+            crate::sys::commands::privacy::privacy_get_pending_deletion,
+            crate::sys::commands::privacy::privacy_cancel_pending_deletion,
 
             // Undo Manager (AGI action reversal)
             crate::sys::commands::undo_get_summary,
