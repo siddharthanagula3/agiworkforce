@@ -44,7 +44,7 @@ export function ChatSettings() {
   }, []);
 
   function getToken(): string {
-    // Non-blocking token read — components that need auth will handle redirects
+    // Non-blocking token read - components that need auth will handle redirects
     try {
       const raw = localStorage.getItem('sb-session');
       if (raw) {

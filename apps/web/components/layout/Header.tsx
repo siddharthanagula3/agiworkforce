@@ -32,7 +32,7 @@ const featureItems = [
     name: 'MCP Plugins',
     href: '/features/plugins',
     icon: Plug,
-    description: 'Unlimited MCP servers — stdio, SSE, HTTP',
+    description: 'Unlimited MCP servers - stdio, SSE, HTTP',
   },
   {
     name: 'Computer Use',

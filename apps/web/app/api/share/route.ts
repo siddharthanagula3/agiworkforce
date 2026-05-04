@@ -1,5 +1,5 @@
 /**
- * Share API — POST /api/share
+ * Share API - POST /api/share
  *
  * Creates a shareable link for a conversation session.
  * Returns a token, URL, expiry, and message count.
@@ -24,7 +24,7 @@ const CreateShareSchema = z.object({
   messages: z.array(z.record(z.string(), z.unknown())).default([]),
 });
 
-// Sanitize messages — strip local absolute paths from display_args to avoid leaking local FS info
+// Sanitize messages - strip local absolute paths from display_args to avoid leaking local FS info
 function sanitizeMessages(
   messages: Array<Record<string, unknown>>,
 ): Array<Record<string, unknown>> {
@@ -64,7 +64,7 @@ async function handleCreateShare(request: NextRequest) {
   try {
     rawBody = await request.json();
   } catch {
-    // Empty body is fine — defaults applied by schema
+    // Empty body is fine - defaults applied by schema
   }
 
   const parsed = CreateShareSchema.safeParse(rawBody);

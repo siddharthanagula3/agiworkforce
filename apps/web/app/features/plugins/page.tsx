@@ -21,7 +21,7 @@ import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Plugins & MCP Tools | AGI Workforce',
   description:
-    'Unlimited MCP tool ecosystem for AGI Workforce. Connect any MCP server — file systems, databases, APIs, browsers, and more. No artificial limits, no tool caps. Supports stdio, SSE, and HTTP transports.',
+    'Unlimited MCP tool ecosystem for AGI Workforce. Connect any MCP server - file systems, databases, APIs, browsers, and more. No artificial limits, no tool caps. Supports stdio, SSE, and HTTP transports.',
   keywords: [
     'MCP tools',
     'Model Context Protocol',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Plugins & MCP Tools | AGI Workforce',
     description:
-      'Unlimited MCP tool ecosystem. Connect any MCP server — file systems, databases, APIs, browsers, and more. No artificial limits.',
+      'Unlimited MCP tool ecosystem. Connect any MCP server - file systems, databases, APIs, browsers, and more. No artificial limits.',
     type: 'website',
     url: 'https://agiworkforce.com/features/plugins',
     images: [
@@ -65,9 +65,9 @@ export const metadata: Metadata = {
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebPage',
-  name: 'Plugins & MCP Tools — AGI Workforce',
+  name: 'Plugins & MCP Tools - AGI Workforce',
   description:
-    'Unlimited MCP tool ecosystem for AGI Workforce. Connect any MCP server — file systems, databases, APIs, browsers, and more.',
+    'Unlimited MCP tool ecosystem for AGI Workforce. Connect any MCP server - file systems, databases, APIs, browsers, and more.',
   url: 'https://agiworkforce.com/features/plugins',
   mainEntity: {
     '@type': 'SoftwareApplication',
@@ -226,7 +226,7 @@ export default function PluginsPage() {
             </div>
           </section>
 
-          {/* Transports — horizontal row */}
+          {/* Transports - horizontal row */}
           <section className="border-y border-zinc-800/50 py-20 md:py-24">
             <div className="mx-auto max-w-5xl px-6">
               <h2 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">
@@ -251,7 +251,7 @@ export default function PluginsPage() {
             </div>
           </section>
 
-          {/* Tool Categories — compact grid */}
+          {/* Tool Categories - compact grid */}
           <section id="tools" className="py-20 md:py-24">
             <div className="mx-auto max-w-5xl px-6">
               <h2 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">
@@ -281,7 +281,7 @@ export default function PluginsPage() {
             </div>
           </section>
 
-          {/* Adding a server — concrete example */}
+          {/* Adding a server - concrete example */}
           <section className="border-t border-zinc-800/50 py-20 md:py-24">
             <div className="mx-auto max-w-3xl px-6">
               <h2 className="mb-2 text-2xl font-semibold tracking-tight md:text-3xl">
@@ -312,7 +312,7 @@ export default function PluginsPage() {
                   <span>
                     AGI Workforce spawns the process, calls{' '}
                     <code className="font-mono text-[#555150]">tools/list</code>, and registers
-                    every tool — create issues, manage PRs, search repos, read files.
+                    every tool - create issues, manage PRs, search repos, read files.
                   </span>
                 </div>
                 <div className="flex items-start gap-3">

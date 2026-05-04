@@ -16,10 +16,10 @@ import { getAuthenticatedUser } from '@/lib/api-auth';
  * Agent Communication API
  *
  * GET  /api/agents/communication?agentId=<id>[&type=delegations]
- *      — List messages or delegations for an agent
+ *      - List messages or delegations for an agent
  *
  * POST /api/agents/communication
- *      — Send a message from one agent to another
+ *      - Send a message from one agent to another
  */
 
 const SendMessageSchema = z.object({
@@ -68,7 +68,7 @@ async function handleGetCommunication(request: NextRequest) {
       .limit(50);
 
     if (error) {
-      // Table may not exist in all environments — return empty list gracefully
+      // Table may not exist in all environments - return empty list gracefully
       if (error.code === '42P01' || (error.message && error.message.includes('does not exist'))) {
         return NextResponse.json({ delegations: [] });
       }
@@ -108,7 +108,7 @@ async function handleGetCommunication(request: NextRequest) {
     .limit(100);
 
   if (error) {
-    // Table may not exist in all environments — return empty list gracefully
+    // Table may not exist in all environments - return empty list gracefully
     if (error.code === '42P01' || (error.message && error.message.includes('does not exist'))) {
       return NextResponse.json({ messages: [] });
     }

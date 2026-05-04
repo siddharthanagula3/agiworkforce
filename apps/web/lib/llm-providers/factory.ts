@@ -127,7 +127,7 @@ export class LLMProviderFactory {
    *  overrides (used by ai-gateway test fixtures, on-prem proxies),
    *  but only if they resolve to a hostname we explicitly recognise.
    *  An attacker who compromises a Vercel preview env var can no
-   *  longer redirect LLM traffic — including the user's prompts — to
+   *  longer redirect LLM traffic - including the user's prompts - to
    *  an arbitrary attacker-controlled host. */
   private static readonly ALLOWED_BASE_HOSTS: ReadonlySet<string> = new Set([
     'api.openai.com',
@@ -172,7 +172,7 @@ export class LLMProviderFactory {
     try {
       parsed = new URL(raw);
     } catch {
-      logger.warn({ provider, envKey }, 'Invalid *_BASE_URL — ignoring');
+      logger.warn({ provider, envKey }, 'Invalid *_BASE_URL - ignoring');
       return undefined;
     }
     if (

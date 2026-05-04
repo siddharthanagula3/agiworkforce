@@ -45,7 +45,7 @@ async function handleCollaboration(request: NextRequest): Promise<NextResponse> 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // Authenticate user — never trust userId from request body
+  // Authenticate user - never trust userId from request body
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -86,7 +86,7 @@ async function handleCollaboration(request: NextRequest): Promise<NextResponse> 
     userId = user.id;
   }
 
-  // Rate limiting — collaboration uses the same budget as LLM completion
+  // Rate limiting - collaboration uses the same budget as LLM completion
   const rateLimitResponse = await withRateLimit(request, 'llm-completion');
   if (rateLimitResponse) return rateLimitResponse;
 

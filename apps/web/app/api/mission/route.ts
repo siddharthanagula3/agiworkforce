@@ -154,7 +154,7 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // Rate limiting — share the llm-completion bucket
+  // Rate limiting - share the llm-completion bucket
   const rateLimitResponse = await withRateLimit(request, 'llm-completion');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -235,7 +235,7 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
   // Estimate cost for pre-flight credit check
   const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
   const estimatedTokens = Math.ceil(totalChars / 3.5) + 500; // +500 for output buffer
-  // Use claude-haiku-4.5 as the mission planner — cost-effective and fast
+  // Use claude-haiku-4.5 as the mission planner - cost-effective and fast
   const missionModel = 'claude-haiku-4.5';
   const missionProvider = 'anthropic';
   const estimatedCostCents = Math.max(

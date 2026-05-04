@@ -16,14 +16,14 @@ import { logger } from '@/lib/logger';
 const GITHUB_BOT_LOGIN = process.env['GITHUB_BOT_LOGIN'] ?? 'agi-workforce[bot]';
 const BOT_MENTION = '@agi-workforce';
 
-// NOTE: No CSRF check — GitHub webhook HMAC-SHA256 signature IS the authentication
+// NOTE: No CSRF check - GitHub webhook HMAC-SHA256 signature IS the authentication
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'github-webhook');
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
 
-  // IMPORTANT: Read raw body BEFORE any JSON parsing — required for HMAC verification
+  // IMPORTANT: Read raw body BEFORE any JSON parsing - required for HMAC verification
   const rawBody = await request.text();
   const signature = request.headers.get('x-hub-signature-256') ?? '';
 
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true });
   }
 
-  // Prevent infinite loop — skip bot's own comments
+  // Prevent infinite loop - skip bot's own comments
   const sender = payload['sender'] as Record<string, unknown> | undefined;
   if (sender?.['type'] === 'Bot' || sender?.['login'] === GITHUB_BOT_LOGIN) {
     return NextResponse.json({ received: true });
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true });
   }
 
-  // Process review asynchronously — return 200 immediately so GitHub doesn't retry
+  // Process review asynchronously - return 200 immediately so GitHub doesn't retry
   const processReview = async () => {
     try {
       const cookieStore = await cookies();

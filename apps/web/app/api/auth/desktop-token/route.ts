@@ -142,7 +142,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           try {
             cookieStore.set({ name, value, ...options });
           } catch {
-            // ignore — read-only context
+            // ignore - read-only context
           }
         },
         remove(name: string, options: CookieOptions) {

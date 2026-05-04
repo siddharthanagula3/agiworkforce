@@ -30,7 +30,7 @@ async function fetchSharedConversation(token: string): Promise<SharedData | null
 
   try {
     const res = await fetch(`${appUrl}/api/shared?token=${encodeURIComponent(token)}`, {
-      // Revalidate once per minute — conversation content never changes.
+      // Revalidate once per minute - conversation content never changes.
       next: { revalidate: 60 },
     });
 
@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const data = await fetchSharedConversation(id);
   const title = data?.title ?? 'Shared Conversation';
   return {
-    title: `${title} — AGI Workforce`,
+    title: `${title} - AGI Workforce`,
     description: 'A shared conversation from AGI Workforce',
   };
 }
@@ -96,7 +96,7 @@ export default async function SharedConversationPage({ params }: PageProps) {
         {/* Page header */}
         <div className="mb-8 text-center">
           <p className="text-xs font-medium uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">
-            AGI Workforce — Shared Conversation
+            AGI Workforce - Shared Conversation
           </p>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100 break-words">
             {conversationTitle}
@@ -129,7 +129,7 @@ export default async function SharedConversationPage({ params }: PageProps) {
                   {roleLabel(msg.role)}
                 </p>
 
-                {/* Message content — preserve newlines */}
+                {/* Message content - preserve newlines */}
                 <p className="whitespace-pre-wrap break-words">{msg.content}</p>
 
                 {/* Timestamp if available */}

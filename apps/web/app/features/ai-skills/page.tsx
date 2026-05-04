@@ -33,7 +33,7 @@ import { CtaSection } from '../../../components/marketing/CtaSection';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'AI Skills | AGI Workforce — AI Employees Across Multiple Categories',
+  title: 'AI Skills | AGI Workforce - AI Employees Across Multiple Categories',
   description:
     'Explore pre-built AI employee skills across engineering, AI & data, marketing, operations, finance, IT, support, creative, HR, and more. Real work, not just code.',
   keywords: [
@@ -49,9 +49,9 @@ export const metadata: Metadata = {
     'desktop AI app',
   ],
   openGraph: {
-    title: 'AI Skills | AGI Workforce — Pre-Built AI Employees',
+    title: 'AI Skills | AGI Workforce - Pre-Built AI Employees',
     description:
-      'Pre-built AI specialists across 23 categories. From engineering to finance, marketing to creative — AI employees that handle real work.',
+      'Pre-built AI specialists across 23 categories. From engineering to finance, marketing to creative - AI employees that handle real work.',
     type: 'website',
     url: 'https://agiworkforce.com/features/ai-skills',
     images: [
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce — AI Skills across 23 categories',
+        alt: 'AGI Workforce - AI Skills across 23 categories',
       },
     ],
   },
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AI Skills | AGI Workforce — Pre-Built AI Employees',
+    title: 'AI Skills | AGI Workforce - Pre-Built AI Employees',
     description:
       'Pre-built AI specialists across 23 categories including engineering, marketing, finance, and more. Real work, not just code.',
     images: ['/app-preview.png'],
@@ -310,7 +310,7 @@ export default function AISkillsPage() {
                 AI Employees, Ready to Work
               </h1>
               <p className="mt-5 text-lg leading-relaxed text-[#888480]">
-                150+ pre-built specialists across 23 categories — engineering, finance, legal,
+                150+ pre-built specialists across 23 categories - engineering, finance, legal,
                 creative, and 19 more.
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -329,7 +329,7 @@ export default function AISkillsPage() {
                 </Link>
               </div>
 
-              {/* Stats — single row */}
+              {/* Stats - single row */}
               <div className="mt-14 flex items-center justify-center gap-3 text-sm text-[#555150]">
                 <span>
                   <span className="font-medium text-[#edebe8]">150+</span> Pre-Built Skills
@@ -346,7 +346,7 @@ export default function AISkillsPage() {
             </div>
           </section>
 
-          {/* Skill Categories — dense list */}
+          {/* Skill Categories - dense list */}
           <section id="skills" className="border-t border-[#1a1917] py-20">
             <div className="mx-auto max-w-2xl px-6">
               <h2 className="text-lg font-medium tracking-tight">Skills by category</h2>
@@ -362,12 +362,12 @@ export default function AISkillsPage() {
               </div>
 
               <p className="mt-4 text-sm text-[#555150]">
-                and {remainingCount} more — {remainingNames.join(', ')}.
+                and {remainingCount} more - {remainingNames.join(', ')}.
               </p>
             </div>
           </section>
 
-          {/* Before / After — replaces step 1-2-3 */}
+          {/* Before / After - replaces step 1-2-3 */}
           <section className="border-t border-[#1a1917] py-20">
             <div className="mx-auto max-w-3xl px-6">
               <h2 className="text-lg font-medium tracking-tight">What a skill actually does</h2>
@@ -411,7 +411,7 @@ export default function AISkillsPage() {
           <CtaSection
             icon="Layers"
             headline="Start With Any Skill Today"
-            body="Download AGI Workforce and put AI employees to work — engineering, marketing, finance, creative, and beyond."
+            body="Download AGI Workforce and put AI employees to work - engineering, marketing, finance, creative, and beyond."
           />
         </main>
 

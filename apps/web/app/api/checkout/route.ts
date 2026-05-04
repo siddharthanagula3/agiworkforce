@@ -40,7 +40,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
 
   const supabase = await createSupabaseServerClient();
-  // Use getUser() for server-side JWT validation — getSession() reads from
+  // Use getUser() for server-side JWT validation - getSession() reads from
   // the cookie without server verification and must not be trusted for auth.
   const {
     data: { user },
@@ -202,7 +202,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       // Metadata duplicates user.id for fast webhook lookups: the webhook handler
       // resolves the Supabase user via metadata first (O(1) map read) before falling
       // back to client_reference_id or a Stripe customer lookup. This is intentional
-      // — not redundant — because Stripe customer IDs are not always available at
+      // - not redundant - because Stripe customer IDs are not always available at
       // webhook time (e.g. first-time checkout before the customer object is linked).
       metadata: {
         supabase_user_id: user.id,

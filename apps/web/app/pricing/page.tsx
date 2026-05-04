@@ -21,7 +21,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { getPlanPriceUsd } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
-// Plan Recommendation Calculator — data
+// Plan Recommendation Calculator - data
 // ---------------------------------------------------------------------------
 
 interface AssessmentOption {
@@ -134,7 +134,7 @@ function getRecommendation(totalPoints: number): PlanRecommendation {
 }
 
 // ---------------------------------------------------------------------------
-// PlanCalculator — self-contained inline component
+// PlanCalculator - self-contained inline component
 // ---------------------------------------------------------------------------
 
 interface PlanCalculatorProps {
@@ -236,7 +236,7 @@ function PlanCalculator({
         : 'translateX(16px)',
   };
 
-  // Not started yet — show CTA card
+  // Not started yet - show CTA card
   if (assessmentStep === -1) {
     return (
       <div
@@ -249,7 +249,7 @@ function PlanCalculator({
         <div className="rounded-2xl bg-zinc-950 p-8 text-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-4 py-1.5 text-xs font-medium text-zinc-300 mb-4">
             <Sparkles className="h-3.5 w-3.5 text-[#c8892a]" />
-            Plan Finder — 4 quick questions
+            Plan Finder - 4 quick questions
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Find your perfect plan</h2>
           <p className="text-zinc-400 text-sm mb-6 max-w-md mx-auto">
@@ -483,7 +483,7 @@ function PricingContent() {
     const targetRef = refMap[plan];
     if (targetRef?.current) {
       targetRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Brief highlight pulse via a class toggle — we use a data attribute instead
+      // Brief highlight pulse via a class toggle - we use a data attribute instead
       targetRef.current.dataset['highlighted'] = 'true';
       setTimeout(() => {
         if (targetRef.current) delete targetRef.current.dataset['highlighted'];
@@ -1182,7 +1182,7 @@ function PricingContent() {
                             row.hobby ? (
                               <Check className="h-5 w-5 text-emerald-400 mx-auto" />
                             ) : (
-                              <span className="text-zinc-600">—</span>
+                              <span className="text-zinc-600">-</span>
                             )
                           ) : (
                             <span
@@ -1201,7 +1201,7 @@ function PricingContent() {
                             row.pro ? (
                               <Check className="h-5 w-5 text-[#c8892a] mx-auto" />
                             ) : (
-                              <span className="text-zinc-600">—</span>
+                              <span className="text-zinc-600">-</span>
                             )
                           ) : (
                             <span
@@ -1220,7 +1220,7 @@ function PricingContent() {
                             row.max ? (
                               <Check className="h-5 w-5 text-purple-400 mx-auto" />
                             ) : (
-                              <span className="text-zinc-600">—</span>
+                              <span className="text-zinc-600">-</span>
                             )
                           ) : (
                             <span

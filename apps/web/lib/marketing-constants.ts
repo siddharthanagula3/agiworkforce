@@ -2,7 +2,7 @@
  * Single source of truth for all marketing statistics used across the website.
  * Import from here instead of hardcoding numbers in pages.
  *
- * When product stats change, update ONLY this file — all pages pull from here.
+ * When product stats change, update ONLY this file - all pages pull from here.
  */
 
 export const MARKETING = {

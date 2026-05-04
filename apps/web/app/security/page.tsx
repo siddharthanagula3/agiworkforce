@@ -74,7 +74,7 @@ const securityFeatures = [
     iconColor: 'text-[#c8892a]',
     features: [
       'API keys encrypted at rest with Argon2id key derivation + AES-256-GCM',
-      'Keys stored in OS keychain or encrypted SQLCipher database — never plaintext',
+      'Keys stored in OS keychain or encrypted SQLCipher database - never plaintext',
     ],
     tagline: 'Industry-standard encryption for every credential',
   },
@@ -91,12 +91,12 @@ const securityFeatures = [
   },
   {
     icon: Key,
-    title: 'BYOK — Bring Your Own Keys',
+    title: 'BYOK - Bring Your Own Keys',
     borderHover: 'hover:border-[#c8892a]/50',
     iconColor: 'text-[#c8892a]',
     features: [
-      'Your API calls go directly to the provider — we never proxy them',
-      'Zero markup, zero interception — you own your AI relationship',
+      'Your API calls go directly to the provider - we never proxy them',
+      'Zero markup, zero interception - you own your AI relationship',
     ],
     tagline: 'Your keys stay yours, always',
   },
@@ -107,7 +107,7 @@ const securityFeatures = [
     iconColor: 'text-[#c8892a]',
     features: [
       'Row Level Security ensures users can only access their own data',
-      'Local SQLite encrypted via SQLCipher — data at rest fully protected',
+      'Local SQLite encrypted via SQLCipher - data at rest fully protected',
     ],
     tagline: 'Isolated data access at every layer',
   },
@@ -118,7 +118,7 @@ const securityFeatures = [
     iconColor: 'text-[#c8892a]',
     features: [
       'We never sell or share your data with third parties',
-      'Request data export or deletion at any time — full GDPR compliance',
+      'Request data export or deletion at any time - full GDPR compliance',
     ],
     tagline: 'Your data is yours, not ours',
   },
@@ -179,7 +179,7 @@ const steps = [
     icon: Lock,
     title: 'Keys Stay Local',
     description:
-      'Enter your API keys once. They are immediately encrypted with Argon2id + AES-GCM and stored in your OS keychain — never on our servers.',
+      'Enter your API keys once. They are immediately encrypted with Argon2id + AES-GCM and stored in your OS keychain - never on our servers.',
   },
   {
     number: '02',
@@ -219,7 +219,7 @@ export default function SecurityPage() {
                 Your Data Is Protected
               </h1>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-[#888480] md:text-xl">
-                Local-first encryption, sandboxed tool execution, zero data brokering — security is
+                Local-first encryption, sandboxed tool execution, zero data brokering - security is
                 not an afterthought at AGI Workforce.
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -454,7 +454,7 @@ export default function SecurityPage() {
           <CtaSection
             icon="Shield"
             headline="Secure AI, From Day One"
-            body="Download the desktop app and run AI with full local encryption, sandboxed tool execution, and zero data brokering — your keys, your data, your control."
+            body="Download the desktop app and run AI with full local encryption, sandboxed tool execution, and zero data brokering - your keys, your data, your control."
           />
         </main>
 
