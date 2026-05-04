@@ -131,7 +131,7 @@ describe('POST /api/checkout', () => {
 
     expect(response.status).toBe(401);
     expect(data.error.code).toBe('UNAUTHORIZED');
-    expect(data.error.message).toBe('Please sign in to continue');
+    expect(data.error.message).toBe('Authentication required');
   });
 
   it('should validate request body', async () => {
