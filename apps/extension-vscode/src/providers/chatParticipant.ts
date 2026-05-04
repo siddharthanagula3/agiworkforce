@@ -13,7 +13,12 @@
  */
 
 import * as vscode from 'vscode';
-import { streamChatCompletion, AgiWorkforceApiError, type LlmChatMessage } from '../utils/api';
+import {
+  streamChatCompletion,
+  streamChatCompletionViaProvider,
+  AgiWorkforceApiError,
+  type LlmChatMessage,
+} from '../utils/api';
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
 import { getContextBuilder } from '../services/contextBuilder';
@@ -352,41 +357,64 @@ export function createChatHandler(
       );
     }
 
+    // Wave 3 follow-up: feature flag to route through the new
+    // /api/v1/providers/:id/stream pipeline. Default off — existing path
+    // is the safe default. Falls back to legacy on missing JWT or any
+    // runtime error so users don't get stuck with a broken chat.
+    const useProviderStream =
+      vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('useProviderStream') ?? false;
+
+    const streamFn = useProviderStream ? streamChatCompletionViaProvider : streamChatCompletion;
+
+    const streamCallbacks = {
+      onToken: (t: string) => {
+        responseTokens.push(t);
+        stream.markdown(t);
+      },
+      onDone: () => {
+        // Persist completed conversation to store
+        if (conversationStore !== undefined && conversationTreeProvider !== undefined) {
+          const fullResponse = responseTokens.join('');
+          const title = userMessage.slice(0, 60).replace(/\n/g, ' ');
+          const model = normalizeConfiguredModelId(
+            vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
+          );
+          const conv = conversationStore.create(title, model);
+          const now = Date.now();
+          conv.messages = [
+            ...messages.filter((m) => m.role !== 'system').map((m) => ({ ...m, timestamp: now })),
+            { role: 'assistant' as const, content: fullResponse, timestamp: now },
+          ];
+          conversationStore.save(conv);
+          conversationTreeProvider.refresh();
+        }
+      },
+      onError: (err: Error) => {
+        throw err;
+      },
+    };
+
     try {
-      await streamChatCompletion(
-        secrets,
-        messages,
-        {
-          onToken: (t) => {
-            responseTokens.push(t);
-            stream.markdown(t);
-          },
-          onDone: () => {
-            // Persist completed conversation to store
-            if (conversationStore !== undefined && conversationTreeProvider !== undefined) {
-              const fullResponse = responseTokens.join('');
-              const title = userMessage.slice(0, 60).replace(/\n/g, ' ');
-              const model = normalizeConfiguredModelId(
-                vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-              );
-              const conv = conversationStore.create(title, model);
-              const now = Date.now();
-              conv.messages = [
-                ...messages
-                  .filter((m) => m.role !== 'system')
-                  .map((m) => ({ ...m, timestamp: now })),
-                { role: 'assistant' as const, content: fullResponse, timestamp: now },
-              ];
-              conversationStore.save(conv);
-              conversationTreeProvider.refresh();
-            }
-          },
-          onError: (err) => {
-            throw err;
-          },
-        },
-        token,
-      );
+      try {
+        await streamFn(secrets, messages, streamCallbacks, token);
+      } catch (err) {
+        // Fall back to the legacy path on provider-stream errors that
+        // indicate a config gap (no JWT, no provider key on the gateway).
+        // Existing code paths already handle NO_API_KEY below; everything
+        // else propagates.
+        if (
+          useProviderStream &&
+          err instanceof AgiWorkforceApiError &&
+          (err.code === 'NO_SUPABASE_JWT' || err.code === 'STREAM_ERROR')
+        ) {
+          stream.markdown(
+            `\n\n_Provider-stream path unavailable (${err.code}); falling back to legacy._\n\n`,
+          );
+          await streamChatCompletion(secrets, messages, streamCallbacks, token);
+        } else {
+          throw err;
+        }
+      }
     } catch (err) {
       const isNoKey = err instanceof AgiWorkforceApiError && err.code === 'NO_API_KEY';
       const isCancelled = err instanceof AgiWorkforceApiError && err.code === 'CANCELLED';
