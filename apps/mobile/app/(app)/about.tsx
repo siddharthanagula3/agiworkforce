@@ -7,10 +7,15 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { colors } from '@/lib/theme';
+// Metro's default config supports importing package.json — read versions from
+// the manifest so the About screen never drifts from the actual installed deps.
+import pkg from '../../package.json';
 
 const APP_VERSION = '1.0.0';
 const APP_BUILD = '1.0.0 (1)';
-const RUNTIME = 'Expo 55 + React Native 0.83';
+const expoVersion = (pkg.dependencies?.expo ?? '').replace(/^[~^]/, '').split('.')[0] || '?';
+const rnVersion = pkg.dependencies?.['react-native'] ?? '?';
+const RUNTIME = `Expo ${expoVersion} + React Native ${rnVersion}`;
 
 // ---------------------------------------------------------------------------
 // Link row

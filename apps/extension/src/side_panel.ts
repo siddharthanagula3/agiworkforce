@@ -1664,7 +1664,7 @@ function buildUI(): void {
     class: 'sp-settings-input',
     id: 'sp-bridge-url-input',
     type: 'text',
-    placeholder: 'ws://localhost:8765',
+    placeholder: 'ws://localhost:8787',
     spellcheck: 'false',
   }) as HTMLInputElement;
 
