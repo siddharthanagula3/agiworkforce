@@ -61,7 +61,7 @@ UI screenshots from competitors are at `~/Desktop/reference/ui/` (8 sets — `cl
 
 ## Why users should switch
 
-**Tagline:** *Beyond one model. Beyond one surface. AGI in your hands.*
+**Tagline:** _Beyond one model. Beyond one surface. AGI in your hands._
 
 **Core pitch:** One app replaces Claude Desktop, ChatGPT, Gemini — with the same features but multi-model, BYOK, local LLM, and cross-device.
 

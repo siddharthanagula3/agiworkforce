@@ -16,15 +16,15 @@ Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.j
 
 ## Why AGI Workforce
 
-| You want                                  | Anthropic Claude | OpenAI ChatGPT | AGI Workforce             |
-| ----------------------------------------- | ---------------- | -------------- | ------------------------- |
+| You want                                  | Anthropic Claude | OpenAI ChatGPT | AGI Workforce              |
+| ----------------------------------------- | ---------------- | -------------- | -------------------------- |
 | One model family                          | ✅ Claude only   | ✅ GPT only    | ✅ Pick from 10+ Providers |
-| Bring your own API key                    | ❌               | ❌             | ✅                        |
-| Run local LLMs (Ollama / LMStudio)        | ❌               | ❌             | ✅                        |
-| Switch model mid-conversation             | ❌               | Limited        | ✅ Across providers       |
-| Desktop + Web + Mobile + CLI + extensions | ✅               | Partial        | ✅ All six                |
-| Computer use, MCP, browser automation     | ✅ Cowork        | Limited        | ✅                        |
-| Mobile-to-desktop task dispatch           | ✅ Dispatch      | ❌             | ✅                        |
+| Bring your own API key                    | ❌               | ❌             | ✅                         |
+| Run local LLMs (Ollama / LMStudio)        | ❌               | ❌             | ✅                         |
+| Switch model mid-conversation             | ❌               | Limited        | ✅ Across providers        |
+| Desktop + Web + Mobile + CLI + extensions | ✅               | Partial        | ✅ All six                 |
+| Computer use, MCP, browser automation     | ✅ Cowork        | Limited        | ✅                         |
+| Mobile-to-desktop task dispatch           | ✅ Dispatch      | ❌             | ✅                         |
 
 The unique slice: **multi-provider + BYOK + local LLM all in one app, on every surface**. No competitor offers all three.
 
