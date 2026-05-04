@@ -102,7 +102,9 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SECRET_KEY = 'agiWorkforce.apiKey';
+const SUPABASE_JWT_SECRET_KEY = 'agiWorkforce.supabaseJwt';
 const DEFAULT_ENDPOINT = 'https://agiworkforce.com/api/llm/v1';
+const DEFAULT_GATEWAY_URL = 'https://api.agiworkforce.com';
 
 // ─── Secret storage ───────────────────────────────────────────────────────────
 
@@ -127,6 +129,23 @@ export async function setApiKey(secrets: vscode.SecretStorage, apiKey: string): 
  */
 export async function clearApiKey(secrets: vscode.SecretStorage): Promise<void> {
   await secrets.delete(SECRET_KEY);
+}
+
+/**
+ * Retrieve the stored Supabase JWT used by the new provider-stream path
+ * (`/api/v1/providers/:id/stream`). Distinct from the legacy `apiKey` so
+ * users can run both paths in parallel during rollout.
+ */
+export async function getSupabaseJwt(secrets: vscode.SecretStorage): Promise<string | undefined> {
+  return secrets.get(SUPABASE_JWT_SECRET_KEY);
+}
+
+export async function setSupabaseJwt(secrets: vscode.SecretStorage, jwt: string): Promise<void> {
+  await secrets.store(SUPABASE_JWT_SECRET_KEY, jwt);
+}
+
+export async function clearSupabaseJwt(secrets: vscode.SecretStorage): Promise<void> {
+  await secrets.delete(SUPABASE_JWT_SECRET_KEY);
 }
 
 // ─── Config helpers ───────────────────────────────────────────────────────────
@@ -490,4 +509,131 @@ export async function chatCompletion(
       overrideModel,
     ).catch(safeReject);
   });
+}
+
+// ─── Provider-stream path (Wave 3 follow-up) ──────────────────────────────────
+//
+// Opt-in alternative to streamChatCompletion that calls the new
+// /api/v1/providers/:id/stream route on the AGI Workforce gateway. Activated
+// via the `agiWorkforce.useProviderStream: true` setting. Requires a
+// Supabase JWT in SecretStorage (set via "AGI Workforce: Set Supabase JWT").
+
+import { streamFromProvider } from '../services/providerStreamClient';
+
+type ProviderStreamId = 'anthropic' | 'openai' | 'google' | 'ollama';
+
+/**
+ * Map a model id to its provider stream id. Best-effort by prefix; falls
+ * through to Ollama (the catch-all for local / any-string-model). Caller
+ * can override by setting `agiWorkforce.providerStreamProvider` if the
+ * heuristic doesn't fit.
+ */
+function inferProviderFromModel(model: string): ProviderStreamId {
+  const id = model.toLowerCase();
+  if (id.startsWith('claude') || id.startsWith('anthropic/')) return 'anthropic';
+  if (
+    id.startsWith('gpt-') ||
+    id.startsWith('o1') ||
+    id.startsWith('o3') ||
+    id.startsWith('o4') ||
+    id.startsWith('codex') ||
+    id.startsWith('openai/')
+  ) {
+    return 'openai';
+  }
+  if (id.startsWith('gemini') || id.startsWith('palm') || id.startsWith('google/')) {
+    return 'google';
+  }
+  return 'ollama';
+}
+
+function getGatewayUrl(): string {
+  const config = vscode.workspace.getConfiguration('agiWorkforce');
+  const url = config.get<string>('gatewayUrl');
+  return typeof url === 'string' && url.trim().length > 0 ? url.trim() : DEFAULT_GATEWAY_URL;
+}
+
+function getProviderOverride(): ProviderStreamId | undefined {
+  const config = vscode.workspace.getConfiguration('agiWorkforce');
+  const raw = config.get<string>('providerStreamProvider');
+  if (raw === 'anthropic' || raw === 'openai' || raw === 'google' || raw === 'ollama') {
+    return raw;
+  }
+  return undefined;
+}
+
+/**
+ * Stream a chat completion through the new ProviderAdapter pipeline. Same
+ * `StreamCallbacks` shape as `streamChatCompletion`, so chat participant
+ * call sites can branch on a feature flag without restructuring.
+ */
+export async function streamChatCompletionViaProvider(
+  secrets: vscode.SecretStorage,
+  messages: LlmChatMessage[],
+  callbacks: StreamCallbacks,
+  cancellationToken: vscode.CancellationToken,
+  overrideModel?: string,
+): Promise<void> {
+  const jwt = await getSupabaseJwt(secrets);
+  if (jwt === undefined || jwt === '') {
+    throw new AgiWorkforceApiError(
+      'No Supabase JWT configured for provider-stream path. Run "AGI Workforce: Set Supabase JWT", or unset agiWorkforce.useProviderStream to use the legacy API key path.',
+      401,
+      'NO_SUPABASE_JWT',
+    );
+  }
+
+  const model = overrideModel ?? getModel();
+  const providerId = getProviderOverride() ?? inferProviderFromModel(model);
+  const gatewayUrl = getGatewayUrl();
+
+  const ctrl = new AbortController();
+  const cancelSub = cancellationToken.onCancellationRequested(() => ctrl.abort());
+
+  try {
+    for await (const chunk of streamFromProvider({
+      gatewayUrl,
+      providerId,
+      authToken: jwt,
+      request: {
+        model,
+        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+        maxOutputTokens: 4096,
+        temperature: 0.2,
+      },
+      signal: ctrl.signal,
+    })) {
+      switch (chunk.type) {
+        case 'text-delta':
+          callbacks.onToken(chunk.delta);
+          break;
+        case 'error':
+          callbacks.onError(
+            new AgiWorkforceApiError(chunk.message, 500, chunk.code ?? 'STREAM_ERROR'),
+          );
+          return;
+        case 'stop':
+          if (chunk.reason === 'error') {
+            callbacks.onError(
+              new AgiWorkforceApiError('Stream ended with error stop', 500, 'STREAM_STOP_ERROR'),
+            );
+            return;
+          }
+          callbacks.onDone();
+          return;
+        // text-delta / thinking-delta / tool-use-* / usage are ignored in
+        // the chat-participant integration for now (they don't have a slot
+        // in the StreamCallbacks shape). Future: enrich callbacks to
+        // surface usage + thinking inline.
+        default:
+          break;
+      }
+    }
+    // Stream ended without an explicit stop — treat as done.
+    callbacks.onDone();
+  } catch (err) {
+    callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+  } finally {
+    cancelSub.dispose();
+  }
 }
