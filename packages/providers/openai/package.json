@@ -8,11 +8,16 @@
   "types": "./src/index.ts",
   "scripts": {
     "build": "tsc --project tsconfig.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:live": "AGIWORKFORCE_LIVE_TEST=1 vitest run --passWithNoTests"
   },
   "dependencies": {
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/llm-normalize": "workspace:*",
     "openai": "^4.85.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
   }
 }
