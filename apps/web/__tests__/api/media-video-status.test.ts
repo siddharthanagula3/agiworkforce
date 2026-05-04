@@ -38,7 +38,7 @@ vi.mock('@/lib/cors', () => ({
 // Mock: errors — use real implementations so createError.* works correctly
 // ---------------------------------------------------------------------------
 vi.mock('@/lib/errors', async () => {
-  const actual = await vi.importActual<typeof import('@agiworkforce/utils')>('@agiworkforce/utils');
+  const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
   return {
     createError: actual.createError,
     AppError: actual.AppError,
@@ -523,7 +523,7 @@ describe('GET /api/media/video/status', () => {
       const data = await response.json();
 
       expect(response.status).toBe(503);
-      expect(data.error.message).toContain('authentication');
+      expect(data.error.message).toContain('Service temporarily unavailable');
     });
 
     it('should return 500 for a generic Runway API error', async () => {

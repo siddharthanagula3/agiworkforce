@@ -89,7 +89,7 @@ describe('Onboarding', () => {
 
     it('shows tagline subtitle', () => {
       const { getByText } = render(<OnboardingScreen />);
-      expect(getByText('One app, every model, total control.')).toBeTruthy();
+      expect(getByText('Beyond one model. Beyond one surface. AGI in your hands.')).toBeTruthy();
     });
 
     it('shows "Get Started" button on first slide', () => {
@@ -127,7 +127,7 @@ describe('Onboarding', () => {
 
       fireEvent.press(getByText('Get Started'));
 
-      expect(getByText('Claude, GPT, Gemini, Grok, DeepSeek & more. 9+ providers.')).toBeTruthy();
+      expect(getByText('Claude, GPT, Gemini, Grok, DeepSeek & more. 10+ providers.')).toBeTruthy();
     });
 
     it('shows "Next" button on middle slide', () => {
