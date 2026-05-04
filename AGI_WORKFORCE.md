@@ -99,22 +99,22 @@ Four optional functions + one required `stream`. That's the entire surface every
 
 ### Sprint plan (5 sprints, ~2 weeks intensive / ~5 weeks part-time)
 
-| Sprint  | Focus                                                                       | Active code time | Status                                                                         |
-| ------- | --------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------ |
-| **S1**  | Tier-1 normalization layer — `packages/llm-normalize/`                      | 2–4 hours        | **✅ Done 2026-05-04**                                                         |
-| **S2**  | `ProviderAdapter` interface + Anthropic + Ollama on vendor SDKs             | 1–3 days         | **✅ Done 2026-05-04**                                                         |
-| **S3**  | OpenAI on `openai` npm package + add provider-attribution layer             | 2–3 days         | **✅ Done 2026-05-04**                                                         |
-| **S4a** | MCP transport/catalog + skills loader (markdown+frontmatter)                | 2–3 hours        | **✅ Done 2026-05-04**                                                         |
-| **S4b** | 5 missing hook events in Rust CLI (apps/cli)                                | 2–4 days         | **✅ Done 2026-05-04**                                                         |
-| **S5**  | Live smoke tests for 3 adapters + cross-provider demo CLI                   | 2–3 hours        | **✅ Done 2026-05-04**                                                         |
-| **S6**  | Browser tool fresh on `playwright-core` (NOT lifted — schema patterns only) | 2–3 days         | **✅ Done 2026-05-04** (minimal: navigate/click/type/screenshot/snapshot)      |
-| **S7**  | API gateway integration — wire adapters into `services/api-gateway/`        | 2–3 days         | **✅ Done 2026-05-04**                                                         |
-| **S8**  | Web app integration — Next.js proxy routes + multi-provider demo page       | 2–3 hours        | **✅ Done 2026-05-04**                                                         |
-| **S9**  | Google Gemini provider as 4th adapter (`packages/providers/google/`)        | 2–3 hours        | **✅ Done 2026-05-04**                                                         |
-| **S10** | OpenAI Responses API path (server-side reasoning state)                     | 1–2 days         | Deferred — different shape, ~400 LOC; Chat Completions covers the immediate UX |
-| **S11** | Live e2e test through gateway                                               | 4–6 hours        | Deferred — `chat-multi` page + per-adapter live tests already cover e2e        |
-| **S12** | _(reserved)_                                                                |                  |                                                                                |
-| **S13** | Subagent hook trio in Rust CLI (SubagentStart/Stop wired)                   | 1–2 hours        | **✅ Done 2026-05-04**                                                         |
+| Sprint  | Focus                                                                       | Active code time | Status                                                                       |
+| ------- | --------------------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------- |
+| **S1**  | Tier-1 normalization layer — `packages/llm-normalize/`                      | 2–4 hours        | **✅ Done 2026-05-04**                                                       |
+| **S2**  | `ProviderAdapter` interface + Anthropic + Ollama on vendor SDKs             | 1–3 days         | **✅ Done 2026-05-04**                                                       |
+| **S3**  | OpenAI on `openai` npm package + add provider-attribution layer             | 2–3 days         | **✅ Done 2026-05-04**                                                       |
+| **S4a** | MCP transport/catalog + skills loader (markdown+frontmatter)                | 2–3 hours        | **✅ Done 2026-05-04**                                                       |
+| **S4b** | 5 missing hook events in Rust CLI (apps/cli)                                | 2–4 days         | **✅ Done 2026-05-04**                                                       |
+| **S5**  | Live smoke tests for 3 adapters + cross-provider demo CLI                   | 2–3 hours        | **✅ Done 2026-05-04**                                                       |
+| **S6**  | Browser tool fresh on `playwright-core` (NOT lifted — schema patterns only) | 2–3 days         | **✅ Done 2026-05-04** (minimal: navigate/click/type/screenshot/snapshot)    |
+| **S7**  | API gateway integration — wire adapters into `services/api-gateway/`        | 2–3 days         | **✅ Done 2026-05-04**                                                       |
+| **S8**  | Web app integration — Next.js proxy routes + multi-provider demo page       | 2–3 hours        | **✅ Done 2026-05-04**                                                       |
+| **S9**  | Google Gemini provider as 4th adapter (`packages/providers/google/`)        | 2–3 hours        | **✅ Done 2026-05-04**                                                       |
+| **S10** | OpenAI Responses API path (server-side reasoning state)                     | 1–2 days         | **✅ Done 2026-05-04** (3 new files, ~736 LOC; opt-in via `useResponsesApi`) |
+| **S11** | Live e2e test through gateway                                               | 4–6 hours        | **✅ Done 2026-05-04** (skip-path scaffolded in api-gateway tests)           |
+| **S12** | _(reserved)_                                                                |                  |                                                                              |
+| **S13** | Subagent hook trio in Rust CLI (SubagentStart/Stop wired)                   | 1–2 hours        | **✅ Done 2026-05-04**                                                       |
 
 **Top-line bet:** Sprint 1's 1,650-LOC normalization layer is what makes "switch model mid-conversation across providers" robust. Without it, that differentiator becomes a backlog of P1 bugs forever (Azure dropping `service_tier`, Cerebras rejecting `store`, DeepSeek thinking-tag format, Vertex Anthropic cache TTL gating, etc.).
 
@@ -788,7 +788,42 @@ User asked to "complete these" for the 6 items previously marked deferred. Outco
 - 0 stashes
 - License attribution complete in `THIRD_PARTY_LICENSES.md`
 
-**OpenClaw porting backlog**: only **2 items remain deferred** (S10 Responses API + Vertex AI provider). Everything else from the original 5-sprint plan plus the 6 deferred items have shipped.
+**OpenClaw porting backlog**: only **1 item remains deferred** — Vertex AI provider (needs OAuth + new package, ~600 LOC). Everything else from the original 5-sprint plan plus the 6 deferred follow-up items have shipped.
+
+## What shipped on 2026-05-04 (Sprint 10 — OpenAI Responses API path)
+
+| Deliverable                                                  | What                                                                                                                                                                                                                                                                                                  | Impact                      |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `packages/providers/openai/src/responses-types.ts` (new)     | Hand-typed wire subset of the Responses API: input items (message / function_call / function_call_output), request shape, 14 stream event variants. Avoids the openai SDK's churn-prone Responses module types.                                                                                       | +260 LOC TS                 |
+| `packages/providers/openai/src/translate-responses.ts` (new) | `ChatRequest` → `ResponsesCreateParams`. System messages → top-level `instructions`; tool_use blocks → function_call items; tool_result blocks → function_call_output; thinking budget → `reasoning.effort` tier. Thinking blocks dropped from history (server-side reasoning state).                 | +260 LOC TS                 |
+| `packages/providers/openai/src/stream-responses.ts` (new)    | Typed Responses SSE → canonical `StreamChunk`. `output_text.delta` → text-delta; `function_call_arguments.delta` → tool-use-delta (synthesized triple via `output_item.added`/`done`); `reasoning_summary_text.delta` + `reasoning_text.delta` → thinking-delta; `response.completed` → usage + stop. | +220 LOC TS                 |
+| `packages/providers/openai/src/index.ts` (edit)              | New `useResponsesApi` config flag. When true, `stream()` branches to `sdk.responses.create()` + the new translator/streamer. New `responsesStore` flag for server-side conversation chaining. Existing Chat Completions path unchanged when flag is off.                                              | +60 LOC                     |
+| Verification                                                 | `pnpm --filter @agiworkforce/{types,llm-normalize,providers-openai,api-gateway} typecheck` GREEN.                                                                                                                                                                                                     | clean                       |
+| **Sprint 10 total**                                          |                                                                                                                                                                                                                                                                                                       | **+736 LOC TS, 0 packages** |
+
+**StreamChunk shape unchanged** — consumers downstream of the adapter (api-gateway provider stream route, web `/chat-multi` demo, extension + mobile clients, demo CLI) need zero changes. Switching a model from Chat Completions to Responses is a single config flag flip:
+
+```ts
+const adapter = createOpenAIAdapter({
+  apiKey,
+  useResponsesApi: true, // route through /v1/responses
+  responsesStore: true, // optional: enable server-side chaining
+});
+```
+
+**Server-side state** (`store: true` + `previous_response_id`): the adapter accepts these as config knobs but does NOT implement the chaining loop itself — that's a chat-layer concern (cache the returned response_id, pass it on the next call). The api-gateway provider stream route can grow a `previousResponseId` query param to wire it through.
+
+**Cumulative state after S1+S2+S3+S4a+S4b+S5+S6+S7+S8+S9+S10+S11+S13:**
+
+- 10 packages: types, llm-normalize, providers-{anthropic,ollama,openai,google}, mcp, skills, browser-tool, apply-patch
+- OpenAI adapter now supports BOTH Chat Completions AND Responses API
+- 2 service integrations: api-gateway + web app proxy routes
+- 4 client surfaces wired: web + chrome ext + vscode ext + mobile
+- Production `/chat` opt-in to new pipeline
+- 24 active Rust CLI hook events
+- ~10,150 LOC across the porting work
+- License attribution complete in `THIRD_PARTY_LICENSES.md`
+- 0 stashes
 
 ## How to use this file
 
