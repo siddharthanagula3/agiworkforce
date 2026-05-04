@@ -78,7 +78,7 @@ describe('OpenAIProvider', () => {
     it('should create provider with default configuration', () => {
       const config = provider.getConfig();
 
-      expect(config.model).toBe('gpt-5.4');
+      expect(config.model).toBe('gpt-5.5');
       expect(config.maxTokens).toBe(4000);
       expect(config.temperature).toBe(0.7);
       expect(config.systemPrompt).toBe('You are a helpful AI assistant.');
@@ -192,7 +192,7 @@ describe('OpenAIProvider', () => {
       expect(response.usage?.promptTokens).toBe(10);
       expect(response.usage?.completionTokens).toBe(15);
       expect(response.usage?.totalTokens).toBe(25);
-      expect(response.model).toBe('gpt-5.4');
+      expect(response.model).toBe('gpt-5.5');
     });
 
     it('should handle response with content field directly', async () => {
@@ -490,7 +490,7 @@ describe('OpenAIProvider', () => {
       );
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(requestBody.model).toBe('gpt-5.4');
+      expect(requestBody.model).toBe('gpt-5.5');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
     });

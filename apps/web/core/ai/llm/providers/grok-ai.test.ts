@@ -349,7 +349,7 @@ describe('GrokProvider', () => {
       );
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(requestBody.model).toBe('grok-4');
+      expect(requestBody.model).toBe('grok-4.3');
       expect(requestBody.max_tokens).toBe(4000);
       expect(requestBody.temperature).toBe(0.7);
       expect(requestBody.stream).toBe(false);
