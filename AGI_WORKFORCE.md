@@ -109,6 +109,7 @@ Four optional functions + one required `stream`. That's the entire surface every
 | **S5**  | Live smoke tests for 3 adapters + cross-provider demo CLI                   | 2–3 hours        | **✅ Done 2026-05-04** |
 | **S6**  | Browser tool fresh on `playwright-core` (NOT lifted — schema patterns only) | 2–3 days         | Pending                |
 | **S7**  | API gateway integration — wire adapters into `services/api-gateway/`        | 2–3 days         | **✅ Done 2026-05-04** |
+| **S8**  | Web app integration — Next.js proxy routes + multi-provider demo page       | 2–3 hours        | **✅ Done 2026-05-04** |
 
 **Top-line bet:** Sprint 1's 1,650-LOC normalization layer is what makes "switch model mid-conversation across providers" robust. Without it, that differentiator becomes a backlog of P1 bugs forever (Azure dropping `service_tier`, Cerebras rejecting `store`, DeepSeek thinking-tag format, Vertex Anthropic cache TTL gating, etc.).
 
@@ -557,6 +558,51 @@ The adapters that already work via `pnpm demo:multi-provider` are now reachable 
 - 22 Rust CLI hook events
 - Multi-provider streaming reachable via HTTP for the first time
 - Total OpenClaw-port LOC across S1-S7: ~6,300 (TS ~5,938 + Rust ~169 + integration ~334)
+
+## What shipped on 2026-05-04 (Sprint 8 — web app integration)
+
+| Deliverable                                                                | What                                                                                                              | Impact                  |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `apps/web/app/api/v1/providers/route.ts`                                   | Next.js GET proxy → api-gateway `/api/v1/providers` (availability list).                                          | +30 LOC TS              |
+| `apps/web/app/api/v1/providers/[providerId]/catalog/route.ts`              | Next.js GET proxy → api-gateway catalog endpoint per provider.                                                    | +33 LOC TS              |
+| `apps/web/app/api/v1/providers/[providerId]/stream/route.ts`               | Next.js POST proxy → api-gateway SSE stream endpoint. Forwards Authorization header through; no server-side keys. | +60 LOC TS              |
+| `apps/web/lib/providerStreamClient.ts`                                     | Browser-side SSE consumer. `streamFromProvider({...}) → AsyncIterable<StreamChunk>`. Frame-aware, abort-aware.    | +75 LOC TS              |
+| `apps/web/app/chat-multi/page.tsx`                                         | New `/chat-multi` route. Three-up demo: same prompt → Anthropic + OpenAI + Ollama, streaming side-by-side with token usage and timing. Pulls Supabase JWT for auth. | +175 LOC TSX            |
+| Verification                                                               | `pnpm --filter @agiworkforce/web typecheck` GREEN.                                                                | clean                   |
+| **Sprint 8 total**                                                         |                                                                                                                   | **+373 LOC TS, 0 packages** |
+
+**How to demo the web page (locally):**
+
+```bash
+# 1. Start api-gateway with provider creds
+cd services/api-gateway
+ANTHROPIC_API_KEY=sk-ant-... \
+OPENAI_API_KEY=sk-... \
+pnpm dev   # runs at http://localhost:3000
+
+# 2. Start web with the gateway URL pointed at it (and creds for Supabase)
+cd ../../apps/web
+API_GATEWAY_URL=http://localhost:3000 \
+NEXT_PUBLIC_SUPABASE_URL=... \
+NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
+pnpm dev   # runs at http://localhost:3001
+
+# 3. Sign in, then visit
+open http://localhost:3001/chat-multi
+```
+
+Type a prompt, click "Run on all providers". Three cards stream Anthropic / OpenAI / Ollama in parallel. Each shows live text, token usage, and total duration once done. This is the **first end-to-end demo of the multi-provider differentiator inside the actual website surface**.
+
+**On the prior-session stashes** (user asked to apply them as part of this sprint): inspected and aborted. Both `stash@{2}` ("lint-staged automatic backup") and `stash@{3}` ("sprint-agent-changes-2026-03-15") tried to delete files that exist on current `main` (e.g., `apps/web/app/chat/ChatLayoutShell.tsx`, `docs/DESKTOP_RELEASE_GATE.md`, `docs/features/browser-automation.md`) and produced 13–25 merge conflicts each on Rust and TS sources. The remaining 4 stashes were already classified DANGEROUS (each shows -27k to -156k net LOC, all stale lockfile snapshots). All 6 stashes are months old relative to current `main`; treat them as historical artefacts, not pending work. They remain in `git stash list` and can be dropped with `git stash drop stash@{N}` once you've confirmed nothing else needed from them.
+
+**Cumulative state after S1+S2+S3+S4a+S4b+S5+S7+S8** (S6 browser tool still pending):
+
+- 7 LLM/agent-infra TS packages
+- 2 service integrations: api-gateway provider routes + web app proxy routes
+- 1 web demo surface at `/chat-multi`
+- 22 Rust CLI hook events
+- ~6,673 LOC across S1-S8 (TS ~6,311 + Rust ~169 + integration ~193)
+- License attribution in `THIRD_PARTY_LICENSES.md`
 
 ## How to use this file
 
