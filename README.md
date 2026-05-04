@@ -1,10 +1,12 @@
 # AGI Workforce
 
+> **Beyond one model. Beyond one surface. AGI in your hands.**
+
 [![CLI Release](https://img.shields.io/github/v/release/siddharthanagula3/agiworkforce?filter=v-cli-*&label=cli&color=blue)](https://github.com/siddharthanagula3/agiworkforce/releases)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 [![Homebrew](https://img.shields.io/badge/brew-siddharthanagula3%2Ftap%2Fagiworkforce-orange)](https://github.com/siddharthanagula3/homebrew-tap)
 
-Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.js web at agiworkforce.com/chat, one Expo mobile companion, one Rust CLI, plus VS Code and Chrome extensions — all wired into the same chat layer with **25 LLM providers**, MCP, browser automation, and computer-use.
+Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.js web at agiworkforce.com/chat, one Expo mobile companion, one Rust CLI, plus VS Code and Chrome extensions — all wired into the same chat layer with **10+ Providers**, MCP, browser automation, and computer-use.
 
 > **CLI v1.0 SHIPPED** (2026-05-03). Install: `brew install siddharthanagula3/tap/agiworkforce` or see [Quick start](#quick-start) below.
 >
@@ -16,7 +18,7 @@ Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.j
 
 | You want                                  | Anthropic Claude | OpenAI ChatGPT | AGI Workforce             |
 | ----------------------------------------- | ---------------- | -------------- | ------------------------- |
-| One model family                          | ✅ Claude only   | ✅ GPT only    | ✅ Pick from 25 providers |
+| One model family                          | ✅ Claude only   | ✅ GPT only    | ✅ Pick from 10+ Providers |
 | Bring your own API key                    | ❌               | ❌             | ✅                        |
 | Run local LLMs (Ollama / LMStudio)        | ❌               | ❌             | ✅                        |
 | Switch model mid-conversation             | ❌               | Limited        | ✅ Across providers       |
@@ -33,7 +35,9 @@ The unique slice: **multi-provider + BYOK + local LLM all in one app, on every s
 | Local-only (run Ollama / LMStudio yourself) | Free forever   | ✅            |
 | BYOK (bring your own API keys)              | Free forever   | ✅            |
 | Hobby (managed cloud, limited credits)      | $5/mo (target) | ✅            |
-| Pro / Max (full models, higher caps)        | TBD            | Waitlist      |
+| Pro (full models, higher caps)              | TBD            | Waitlist      |
+| Max (highest caps, computer use)            | TBD            | Waitlist      |
+| Enterprise (SSO, SCIM, custom retention)    | Contact sales  | Contact sales |
 
 See [docs/PRICING.md](docs/PRICING.md) for details.
 
@@ -108,8 +112,7 @@ cargo run -p agiworkforce-cli -- exec "hello"
 
 ## License
 
-The CLI (`apps/cli`) is licensed under [Apache-2.0](LICENSE).
-Other surfaces (desktop, web, mobile, extensions) remain proprietary at this time. Per-surface license headers will be added as each surface stabilizes.
+This is proprietary software. © 2026 AGI Workforce. All rights reserved.
 
 ## Status
 

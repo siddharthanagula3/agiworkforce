@@ -20,7 +20,7 @@ const featureItems = [
     name: 'Multi-Model Chat',
     href: '/features/ai-chat',
     icon: MessageSquare,
-    description: '25+ providers, switch models mid-conversation',
+    description: '10+ providers, switch models mid-conversation',
   },
   {
     name: 'AI Skills',

@@ -32,7 +32,7 @@ my own API keys, including local Ollama for sensitive work.
 
 This is what I built:
 
-- 25 LLM providers in one CLI: Anthropic, OpenAI, Google, xAI, DeepSeek,
+- 10+ Providers in one CLI: Anthropic, OpenAI, Google, xAI, DeepSeek,
   Mistral, Groq, Together, Fireworks, Perplexity, Azure, Bedrock, Cohere,
   Ollama, LM Studio, OllamaCloud + GitHub Copilot subscription + ChatGPT
   Plus subscription
@@ -46,7 +46,7 @@ This is what I built:
 - Sandbox: Seatbelt (macOS), Bubblewrap/Landlock (Linux), Restricted Token
   (Windows)
 - Daemon mode with cron + webhook + file-watcher triggers
-- 22 subcommands, 898 unit tests, single 5.7 MB Rust binary
+- 22 subcommands, 19 hook events, 914 unit tests, single 5.7 MB Rust binary
 
 Install:
 - npm: `npm install -g @agiworkforce/cli`
@@ -62,7 +62,7 @@ waitlist until I clear the security audit (see docs/audit/).
 
 Vision: <https://github.com/siddharthanagula3/agiworkforce/blob/main/docs/VISION.md>
 
-Happy to answer anything. The Rust source is 192 files / 152 K LOC, the
+Happy to answer anything. The Rust source is 195 files / 155,029 LOC, the
 agentic loop and provider dispatch are in apps/cli/src/{agent,models}.rs
 if you want to dig in.
 
@@ -76,7 +76,7 @@ shipping today, Desktop ships in 4 weeks, the rest follow.
 
 1. **Show HN format** is the right tag (working software, not a pitch deck)
 2. **Direct comparison** to Claude Code / Codex CLI / Gemini CLI sets the frame
-3. **Concrete numbers** (25 providers, 898 tests, 5.7 MB, 152 K LOC) are credible
+3. **Concrete numbers** (10+ Providers, 914 tests, 5.7 MB, 155,029 LOC) are credible
 4. **Architecture link** rewards engineers who want to dig
 5. **Honest pricing** (free for BYOK + local; waitlist for Pro/Max) is HN-friendly
 6. **No "AI changes everything" hyperbole** — just what it does
