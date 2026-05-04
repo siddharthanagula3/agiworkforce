@@ -4,7 +4,7 @@
 
 ## What this is
 
-A multi-surface AI agent platform that wraps **10+ Providers** (cloud + local + BYOK + managed Hobby cloud) into a unified Claude-Desktop / ChatGPT / Gemini alternative. Six shipping surfaces, **one chat layout**. Tagline: *Beyond one model. Beyond one surface. AGI in your hands.* The Rust CLI (`apps/cli`) is the engine; Desktop / Web / Mobile / Chrome ext / VS Code ext wrap it.
+A multi-surface AI agent platform that wraps **10+ Providers** (cloud + local + BYOK + managed Hobby cloud) into a unified Claude-Desktop / ChatGPT / Gemini alternative. Six shipping surfaces, **one chat layout**. Tagline: _Beyond one model. Beyond one surface. AGI in your hands._ The Rust CLI (`apps/cli`) is the engine; Desktop / Web / Mobile / Chrome ext / VS Code ext wrap it.
 
 ## True differentiators (verified May 2026)
 
@@ -16,14 +16,14 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 
 ## Six surfaces — verified state
 
-| Surface         | Path                     | Stack                                                                                                 | Status                                                            | Distribution path                                                            |
-| --------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Surface         | Path                     | Stack                                                                                                                 | Status                                                            | Distribution path                                                            |
+| --------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | **CLI**         | `apps/cli/`              | Rust monolith, 195 .rs / 155,029 LOC, Ratatui TUI 125 files, 22 subcommands, 19 hook events, 914 tests, 10+ Providers | Cargo green; binary at `~/.cargo/bin/agiworkforce` (5.7MB arm64)  | npm (`@agiworkforce/cli`) + Homebrew + GitHub releases + `install.sh`        |
-| **Desktop**     | `apps/desktop/`          | Tauri v2 + React (Vite), 737 .rs backend / 373K LOC, 1,469 IPC commands, 84 component dirs, 84 stores | Builds clean; chat surface = `ChatInterface` from `packages/chat` | DMG (macOS, signed `D2PR62RLT4`) + EXE (Windows, EV cert pending) + AppImage |
-| **Web**         | `apps/web/`              | Next.js 14 app router, 231 routes + 86 API endpoints, Vite SPA bundled into `/public/chat/`           | Vercel deployed at `agiworkforce.com/chat`                        | Hosted at agiworkforce.com                                                   |
-| **Mobile**      | `apps/mobile/` + `ios/`  | Expo + RN, 41 screens, drawer nav, MMKV+biometric, dispatch (Anthropic Dispatch parity)               | Expo build profiles ready (dev/preview/prod)                      | iOS App Store + Google Play (no listings yet)                                |
-| **Chrome ext**  | `apps/extension/`        | MV3 v1.2.0, autofill (LinkedIn/Lever), 14 test suites                                                 | dist/ + extension.zip (87K) ready                                 | Chrome Web Store (no listing yet)                                            |
-| **VS Code ext** | `apps/extension-vscode/` | v0.3.0, 54+ commands, @agi chat participant, 13 providers                                             | out/extension.js compiled                                         | VS Code Marketplace (no listing yet)                                         |
+| **Desktop**     | `apps/desktop/`          | Tauri v2 + React (Vite), 737 .rs backend / 373K LOC, 1,469 IPC commands, 84 component dirs, 84 stores                 | Builds clean; chat surface = `ChatInterface` from `packages/chat` | DMG (macOS, signed `D2PR62RLT4`) + EXE (Windows, EV cert pending) + AppImage |
+| **Web**         | `apps/web/`              | Next.js 14 app router, 231 routes + 86 API endpoints, Vite SPA bundled into `/public/chat/`                           | Vercel deployed at `agiworkforce.com/chat`                        | Hosted at agiworkforce.com                                                   |
+| **Mobile**      | `apps/mobile/` + `ios/`  | Expo + RN, 41 screens, drawer nav, MMKV+biometric, dispatch (Anthropic Dispatch parity)                               | Expo build profiles ready (dev/preview/prod)                      | iOS App Store + Google Play (no listings yet)                                |
+| **Chrome ext**  | `apps/extension/`        | MV3 v1.2.0, autofill (LinkedIn/Lever), 14 test suites                                                                 | dist/ + extension.zip (87K) ready                                 | Chrome Web Store (no listing yet)                                            |
+| **VS Code ext** | `apps/extension-vscode/` | v0.3.0, 54+ commands, @agi chat participant, 13 providers                                                             | out/extension.js compiled                                         | VS Code Marketplace (no listing yet)                                         |
 
 **Backend:** `services/api-gateway/` (Express v5.2, 14 routes, Fly.io ready) + `services/signaling-server/` (WebRTC, deployed Fly.io) + `supabase/` (17 migrations, us-east-2).
 **Shared TS packages:** `packages/chat` (canonical chat component), `packages/api`, `packages/types`, `packages/runtime`, `packages/utils`.
@@ -58,23 +58,109 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 
 Active sprint plan: [docs/plans/sprint1-vault-rewire.md](docs/plans/sprint1-vault-rewire.md). Master remediation: [docs/plans/master-remediation.md](docs/plans/master-remediation.md). License: PROPRIETARY (see [LICENSE](LICENSE)).
 
+## OpenClaw reference & porting plan
+
+> Distilled from a thorough subsystem-by-subsystem review of [openclaw/openclaw](https://github.com/openclaw/openclaw) (~17,499 files / ~1.5M LOC TS, MIT, Peter Steinberger) cloned at `~/Desktop/reference/openclaw/`. OpenClaw is a TypeScript orchestration shell built on top of `@mariozechner/pi-ai`; its bet is "one local-first daemon ↔ many messaging channels", which is the inverse of ours ("one engine ↔ many shells"). Most of it is misaligned for AGI Workforce — but a narrow band of production-tested helpers is gold.
+
+### Verdict by tier
+
+| Tier   | What                                                                                                                                                          | LOC      | Decision                                                               |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------- |
+| **T1** | Pure cross-provider payload-normalization helpers (OpenAI Responses policy, reasoning-effort tables, system-prompt cache boundary, GPT-5.x fallbacks)         | ~1,650   | **Lift verbatim** — Sprint 1 (✅ shipped 2026-05-04, partial: 727 LOC) |
+| **T2** | Provider adapters with lighter coupling (Anthropic 3,191 LOC, Ollama 10,638 LOC) + MCP transport/catalog + provider-attribution + `ProviderAdapter` interface | ~30,000  | **Lift with adapter layer** — Sprint 2                                 |
+| **T3** | Plugin SDK shape (`definePluginEntry`, `ProviderPlugin`), hook pipeline (30+ events with priority/sticky-block merge), skills loader pattern                  | n/a      | **Study, then implement fresh in Rust CLI**                            |
+| **T4** | OpenAI provider (13,374 LOC, 8 capabilities, 48 SDK imports), browser tool (~25,500 LOC, Express server hardwired)                                            | ~40,000  | **Skip — vendor SDK + Playwright direct is faster**                    |
+| **T5** | All 23 messaging channels, Gateway daemon, Canvas/A2UI, voice-call, ACPX, memory plugins, qa-lab/qa-matrix, compat-shims (codex/migrate-\*), companion apps   | ~250,000 | **Irrelevant — wrong product shape**                                   |
+
+Full extension inventory and per-extension classification: see [docs/openclaw-port/extensions-inventory.md](docs/openclaw-port/extensions-inventory.md) (TODO — captured in agent transcripts pending).
+
+### Critical hidden dependency
+
+Every OpenClaw provider extension declares `@mariozechner/pi-ai@0.71.1` as a runtime dependency. Pi-ai is the actual model-loop / streaming / tool-call engine; OpenClaw's plugin-sdk is the orchestration glue around it. **Lifting an OpenClaw provider extension means inheriting pi-ai too**, or replacing it with our own runtime. This is why Sprint 2 must define `ProviderAdapter` first and use **vendor SDKs** (`@anthropic-ai/sdk`, `openai`, `ollama`) for the wire — we get OpenClaw's _logic_ (what to send) without its _runtime_ (how to send).
+
+### `ProviderAdapter` interface (planned)
+
+Lifted shape from OpenClaw's `ProviderPlugin` (`packages/plugin-sdk/src/provider-entry.ts`). Will land in `packages/types/src/provider-adapter.ts` in Sprint 2.
+
+```ts
+export interface ProviderAdapter {
+  id: Provider; // from packages/types/src/provider.ts
+  label: string;
+  auth: AuthMethod[];
+  catalog(ctx: ProviderCatalogContext): Promise<ModelInfo[]>;
+  buildReplayPolicy?(ctx: ReplayPolicyContext): ReplayPolicy; // session-history rebuild
+  normalizeToolSchemas?(ctx: NormalizeToolSchemasContext): void; // Gemini cleanup, OpenAI strict, etc.
+  wrapStreamFn?(ctx: WrapStreamFnContext): StreamFn; // OpenAI tools → Anthropic etc.
+  stream(req: ChatRequest, signal: AbortSignal): AsyncIterable<StreamChunk>;
+}
+```
+
+Four optional functions + one required `stream`. That's the entire surface every provider implements in OpenClaw, and it's the right shape for us too.
+
+### Sprint plan (5 sprints, ~2 weeks intensive / ~5 weeks part-time)
+
+| Sprint  | Focus                                                                       | Active code time | Status                 |
+| ------- | --------------------------------------------------------------------------- | ---------------- | ---------------------- |
+| **S1**  | Tier-1 normalization layer — `packages/llm-normalize/`                      | 2–4 hours        | **✅ Done 2026-05-04** |
+| **S2**  | `ProviderAdapter` interface + Anthropic + Ollama on vendor SDKs             | 1–3 days         | **✅ Done 2026-05-04** |
+| **S3**  | OpenAI on `openai` npm package + add provider-attribution layer             | 2–3 days         | **✅ Done 2026-05-04** |
+| **S4a** | MCP transport/catalog + skills loader (markdown+frontmatter)                | 2–3 hours        | **✅ Done 2026-05-04** |
+| **S4b** | 5 missing hook events in Rust CLI (apps/cli)                                | 2–4 days         | **✅ Done 2026-05-04** |
+| **S5**  | Browser tool fresh on `playwright-core` (NOT lifted — schema patterns only) | 2–3 days         | Pending                |
+
+**Top-line bet:** Sprint 1's 1,650-LOC normalization layer is what makes "switch model mid-conversation across providers" robust. Without it, that differentiator becomes a backlog of P1 bugs forever (Azure dropping `service_tier`, Cerebras rejecting `store`, DeepSeek thinking-tag format, Vertex Anthropic cache TTL gating, etc.).
+
+### Skip lists, with reasoning
+
+- **All 23 channels** (Discord/Telegram/Slack/WhatsApp/Signal/iMessage/Matrix/IRC/Teams/WeChat/QQ/Feishu/LINE/etc.) — wrong product shape; we ship apps, not channels.
+- **OpenAI provider extension** (13k LOC, 8 capabilities, 48 SDK imports) — implementing fresh on the official `openai` package costs ~600 LOC vs lifting 13k of harness coupling.
+- **Browser tool** (25k LOC, Express server, plugin-sdk threaded throughout) — `playwright-core` gives 90% of this in 800 LOC. Lift the _patterns_ (managed isolated profile, discriminated-union schema for one tool with action verbs, `aria` vs `ai` snapshot modes, stale-ref recovery loop) — not the code.
+- **Plugin SDK** (40,620 LOC, 56 subpaths) — borrow the contract shapes (`definePluginEntry`, `ProviderPlugin`), implement Rust-native in our CLI.
+- **Gateway daemon** — we don't run a long-lived ↔ many-clients daemon; our Tauri app + Fly.io services already do this.
+- **Memory plugins** (~78k LOC) — we have Supabase + our own schema; our memory contract is mode-aware (Local/Cloud) which OpenClaw isn't.
+
+### License compliance
+
+OpenClaw is **MIT** (Peter Steinberger, 2025). Per the license:
+
+- Each ported file carries an SPDX-style attribution comment at the top
+- [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) at repo root catalogs every ported source path with the upstream MIT license text
+- Our license remains PROPRIETARY for the rest of the codebase
+
+That is the entire compliance burden.
+
+### Reading order for new contributors
+
+1. This section.
+2. [`packages/llm-normalize/README.md`](packages/llm-normalize/README.md) — what already shipped + what's deferred.
+3. [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) — provenance ledger.
+4. (Sprint 2+) `packages/types/src/provider-adapter.ts` — the interface every adapter implements.
+
 ## Documentation map
 
-| Doc                                                  | What                                                                   |
-| ---------------------------------------------------- | ---------------------------------------------------------------------- |
-| **THIS FILE**                                        | Single source of truth, entry point                                    |
-| [README.md](README.md)                               | User-facing quick start (download, install)                            |
-| [BUILD.md](BUILD.md)                                 | Prerequisites, build commands per surface                              |
-| [CONTRIBUTING.md](CONTRIBUTING.md)                   | PR conventions, branch protection, commit format                       |
-| [docs/VISION.md](docs/VISION.md)                     | Product vision (ONE chat layout, multi-provider)                       |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)         | Cross-surface architecture                                             |
-| [docs/ROADMAP.md](docs/ROADMAP.md)                   | Live wave/sprint status (this is what changes weekly)                  |
-| [docs/DESIGN.md](docs/DESIGN.md)                     | UI principles. Reference: `~/Desktop/reference/ui/`                    |
-| [docs/PRICING.md](docs/PRICING.md)                   | Tier model details                                                     |
-| [apps/cli/ARCHITECTURE.md](apps/cli/ARCHITECTURE.md) | CLI deep-dive (will be folded into docs/ARCHITECTURE.md in v2)         |
-| [docs/audit/](docs/audit/)                           | Historical audits (AUDIT_REPORT.md, FIX_QUEUE.md, AUDIT_2026-05-03.md) |
-| [docs/plans/](docs/plans/)                           | Active sprint plans (only — stale plans deleted 2026-05-03)            |
-| [docs/api/](docs/api/)                               | Postman + OpenAPI 3.0 + curl/JS/Python examples                        |
+| Doc                                                                              | What                                                                               |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **THIS FILE**                                                                    | Single source of truth, entry point                                                |
+| [README.md](README.md)                                                           | User-facing quick start (download, install)                                        |
+| [BUILD.md](BUILD.md)                                                             | Prerequisites, build commands per surface                                          |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                                               | PR conventions, branch protection, commit format                                   |
+| [docs/VISION.md](docs/VISION.md)                                                 | Product vision (ONE chat layout, multi-provider)                                   |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                                     | Cross-surface architecture                                                         |
+| [docs/ROADMAP.md](docs/ROADMAP.md)                                               | Live wave/sprint status (this is what changes weekly)                              |
+| [docs/DESIGN.md](docs/DESIGN.md)                                                 | UI principles. Reference: `~/Desktop/reference/ui/`                                |
+| [docs/PRICING.md](docs/PRICING.md)                                               | Tier model details                                                                 |
+| [apps/cli/ARCHITECTURE.md](apps/cli/ARCHITECTURE.md)                             | CLI deep-dive (will be folded into docs/ARCHITECTURE.md in v2)                     |
+| [docs/audit/](docs/audit/)                                                       | Historical audits (AUDIT_REPORT.md, FIX_QUEUE.md, AUDIT_2026-05-03.md)             |
+| [docs/plans/](docs/plans/)                                                       | Active sprint plans (only — stale plans deleted 2026-05-03)                        |
+| [docs/api/](docs/api/)                                                           | Postman + OpenAPI 3.0 + curl/JS/Python examples                                    |
+| [packages/llm-normalize/README.md](packages/llm-normalize/README.md)             | Tier-1 cross-provider normalization helpers (ported from OpenClaw)                 |
+| [packages/providers/anthropic/](packages/providers/anthropic/)                   | Anthropic provider adapter via `@anthropic-ai/sdk`                                 |
+| [packages/providers/ollama/](packages/providers/ollama/)                         | Ollama provider adapter via direct HTTP                                            |
+| [packages/providers/openai/](packages/providers/openai/)                         | OpenAI provider adapter via the `openai` SDK (Chat Completions API)                |
+| [packages/mcp/](packages/mcp/)                                                   | MCP client wrapper (stdio / sse / streamable-http) via `@modelcontextprotocol/sdk` |
+| [packages/skills/](packages/skills/)                                             | Skills loader: markdown + YAML frontmatter, layered precedence, prompt formatter   |
+| [packages/types/src/provider-adapter.ts](packages/types/src/provider-adapter.ts) | `ProviderAdapter` interface — every provider implements this                       |
+| [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)                               | Provenance ledger for code ported from open-source projects                        |
 
 ## Build verification (this snapshot, 2026-05-03)
 
@@ -118,6 +204,241 @@ pnpm lint                     # not re-run
 **v-cli-1.0.0 LIVE**: Tag `v-cli-1.0.0` triggered release-cli.yml after 3 iterations. GitHub Release with 5 platform binaries published. Homebrew tap formula auto-generated and pushed to `siddharthanagula3/homebrew-tap`. install.sh tested. Run `./scripts/launch-readiness-check.sh` anytime to verify state.
 
 Original codex-cli source preserved at `~/Desktop/reference/codex-cli/` for future re-port if needed.
+
+## What shipped on 2026-05-04 (OpenClaw porting Sprint 1)
+
+| Deliverable                             | What                                                                 | Impact                  |
+| --------------------------------------- | -------------------------------------------------------------------- | ----------------------- |
+| `packages/llm-normalize/` (new package) | Cross-provider payload normalization, ported from OpenClaw (MIT)     | +727 LOC TS, +1 package |
+| `THIRD_PARTY_LICENSES.md` (new)         | Provenance ledger with full MIT license text for OpenClaw            | +50 LOC                 |
+| `AGI_WORKFORCE.md` (this file)          | New top-level section "OpenClaw reference & porting plan" + S1 entry | +90 LOC                 |
+| Build + typecheck                       | `pnpm --filter @agiworkforce/llm-normalize {typecheck,build}` GREEN  | clean                   |
+
+**Sprint 1 deliverables (`packages/llm-normalize/src/`):**
+
+| File                                 | LOC     | Purpose                                                                                                                                     |
+| ------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openai-responses-payload-policy.ts` | 410     | Decides `service_tier`/`store`/`prompt_cache_key`/server-compaction per endpoint+model. Inlined hostname classification covers ~15 vendors. |
+| `openai-reasoning-effort.ts`         | 146     | Per-model-family reasoning effort tables (GPT-5/5.1/5.2-pro/Codex/Codex-mini/Codex-max) with graceful fallbacks.                            |
+| `system-prompt-cache-boundary.ts`    | 58      | Sentinel-comment splitter so providers with prompt caching get max cache hits across stable-prefix and dynamic-suffix.                      |
+| `index.ts` (barrel)                  | 54      | Public surface: 14 named exports, no default export.                                                                                        |
+| `lib/prompt-cache-stability.ts`      | 29      | `normalizeStructuredPromptSection` + `normalizePromptCapabilityIds` (pure helpers).                                                         |
+| `lib/string-utils.ts`                | 30      | Minimal subset of OpenClaw's `string-coerce` (5 helpers).                                                                                   |
+| **Total**                            | **727** | All pure functions. Zero new runtime deps. `target: ES2022`, `lib: ES2023` (Node 22+).                                                      |
+
+**Deferred to Sprint 2** (transitive deps too heavy for a clean S1 lift):
+
+- `provider-attribution.ts` (806 LOC, dynamically scans plugin manifests at runtime)
+- `anthropic-payload-policy.ts` (depends on provider-attribution)
+- `openai-completions-compat.ts` (depends on provider-attribution + pi-ai `Model` type)
+- `openai-tool-schema.ts` (depends on TypeBox + Gemini schema cleanup)
+- `anthropic-family-tool-payload-compat.ts` (StreamFn wrapper, depends on `@mariozechner/pi-agent-core`)
+- `apply-patch.ts` (does file I/O via OpenClaw's sandbox FS bridge — needs full sandbox-or-host rewrite)
+
+## What shipped on 2026-05-04 (OpenClaw porting Sprint 2)
+
+| Deliverable                                       | What                                                                                               | Impact                         |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `packages/types/src/provider-adapter.ts` (new)    | `ProviderAdapter` interface + supporting types (auth, content blocks, tools, stream chunks, hooks) | +358 LOC TS                    |
+| `packages/llm-normalize/` (added Tier-1B helpers) | `provider-attribution` (simplified, pure), `anthropic-payload-policy`, `openai-completions-compat` | +667 LOC TS                    |
+| `packages/providers/anthropic/` (new package)     | Adapter via `@anthropic-ai/sdk@^0.40.1` — catalog, translate, stream events, replay policy         | +547 LOC TS, +1 package        |
+| `packages/providers/ollama/` (new package)        | Adapter via direct HTTP — `/api/tags` discovery, `/api/chat` NDJSON streaming                      | +549 LOC TS, +1 package        |
+| `pnpm-workspace.yaml` (updated)                   | Added `packages/providers/*` glob                                                                  | +1 line                        |
+| `AGI_WORKFORCE.md` (this file)                    | Sprint 2 entry + sprint-table mark + docs map updates                                              | +50 LOC                        |
+| Build + typecheck                                 | All four packages (`types`, `llm-normalize`, `providers-anthropic`, `providers-ollama`) GREEN      | clean                          |
+| **Sprint 2 total**                                |                                                                                                    | **+2,121 LOC TS, +2 packages** |
+
+**Sprint 2 deliverables (`packages/providers/`):**
+
+| File                                            | LOC | Purpose                                                                                                  |
+| ----------------------------------------------- | --- | -------------------------------------------------------------------------------------------------------- |
+| **anthropic** (5 files, 580 LOC incl. 33 tests) |     |                                                                                                          |
+| `anthropic/src/index.ts`                        | 147 | `createAnthropicAdapter(config) → ProviderAdapter`. Wraps `@anthropic-ai/sdk`. Auth list. Error mapping. |
+| `anthropic/src/translate.ts`                    | 224 | `ChatRequest` → SDK `MessageStreamParams`. Image/tool/thinking blocks → vendor wire shape.               |
+| `anthropic/src/stream.ts`                       | 133 | SDK `MessageStreamEvent` → canonical `StreamChunk` discriminated union. Tracks block-by-index state.     |
+| `anthropic/src/catalog.ts`                      | 43  | Hardcoded model list (Anthropic has no `/models` discovery). Update with each Claude release.            |
+| `anthropic/src/replay-policy.ts`                | 33  | Drops unsigned `thinking` blocks on replay (Anthropic rejects them).                                     |
+| **ollama** (5 files, 549 LOC)                   |     |                                                                                                          |
+| `ollama/src/index.ts`                           | 147 | `createOllamaAdapter(config) → ProviderAdapter`. Direct fetch, no SDK. `keep_alive` + `num_ctx` knobs.   |
+| `ollama/src/translate.ts`                       | 122 | `ChatRequest` → Ollama `/api/chat` body. System prompt as first message. OpenAI-style tools.             |
+| `ollama/src/stream.ts`                          | 100 | NDJSON line parser + `OllamaChatStreamChunk` → `StreamChunk`. Synthesizes tool-use start/delta/end.      |
+| `ollama/src/types.ts`                           | 98  | Hand-typed Ollama HTTP API subset (no `ollama` npm dep).                                                 |
+| `ollama/src/catalog.ts`                         | 82  | `/api/tags` discovery. Per-family context-window estimation table.                                       |
+
+**Sprint 2 verification:**
+
+```bash
+pnpm --filter @agiworkforce/types typecheck                # GREEN
+pnpm --filter @agiworkforce/llm-normalize typecheck        # GREEN
+pnpm --filter @agiworkforce/providers-anthropic typecheck  # GREEN
+pnpm --filter @agiworkforce/providers-ollama typecheck     # GREEN
+pnpm --filter @agiworkforce/llm-normalize \
+     --filter @agiworkforce/providers-anthropic \
+     --filter @agiworkforce/providers-ollama build         # GREEN (3/3 emitted)
+```
+
+**Sprint 2 still-deferred items** (land alongside OpenAI in S3):
+
+- `openai-tool-schema.ts` — JSON Schema strict-mode normalizer + Gemini cleanup helper
+- `anthropic-family-tool-payload-compat.ts` — StreamFn wrapper for OpenAI-style tools through Anthropic-shaped APIs (relevant when running OpenAI's tool format through Vertex Anthropic)
+- `apply-patch.ts` — needs sandbox-or-host abstraction first
+- Live API smoke tests for both adapters (require user's `ANTHROPIC_API_KEY` + a running Ollama daemon)
+- Wiring into `services/api-gateway/` and `apps/desktop/` chat flow (separate sprint)
+
+## What shipped on 2026-05-04 (OpenClaw porting Sprint 3)
+
+| Deliverable                                       | What                                                                                                                                                                                                        | Impact                        |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `packages/llm-normalize/` (added Tier-1C helpers) | `openai-tool-schema` (strict-mode JSON Schema normalizer), `tool-parameter-schema` (provider-aware), `clean-for-gemini` (lifted full 458→442 LOC scrubber, TypeBox-free)                                    | +987 LOC TS                   |
+| `packages/providers/openai/` (new package)        | Adapter via `openai@^4.85.0` SDK — Chat Completions API. Catalog with optional dynamic `/models` discovery; tool/image/thinking content; `store`/`prompt_cache_key`/`service_tier` policy via llm-normalize | +756 LOC TS, +1 package       |
+| `pnpm install` regen                              | Resolved `openai` workspace dep                                                                                                                                                                             | (lockfile)                    |
+| `THIRD_PARTY_LICENSES.md`                         | Added 3 new ported file entries (clean-for-gemini, openai-tool-schema, tool-parameter-schema)                                                                                                               | +6 LOC                        |
+| `AGI_WORKFORCE.md` (this file)                    | Sprint 3 entry + S3 ✅ in sprint table + docs map updates                                                                                                                                                   | +35 LOC                       |
+| Build + typecheck                                 | All five LLM packages (`types`, `llm-normalize`, `providers-anthropic`, `providers-ollama`, `providers-openai`) GREEN                                                                                       | clean                         |
+| **Sprint 3 total**                                |                                                                                                                                                                                                             | **+1,743 LOC TS, +1 package** |
+
+**Sprint 3 deliverables (`packages/providers/openai/`):**
+
+| File                      | LOC | Purpose                                                                                                                                                                                                    |
+| ------------------------- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openai/src/index.ts`     | 180 | `createOpenAIAdapter(config) → ProviderAdapter`. Wraps `openai` SDK. Auth list (api-key + Codex OAuth). Catalog with discovery toggle. Wires `detectOpenAICompletionsCompat` + Responses payload policy.   |
+| `openai/src/translate.ts` | 254 | `ChatRequest` → SDK `ChatCompletionCreateParams`. Splits tool-result blocks into separate `role:"tool"` messages. Maps thinking-budget → `reasoning_effort`. Strict-mode tool schema flow gated on compat. |
+| `openai/src/stream.ts`    | 140 | SDK chunk → canonical `StreamChunk`. Tracks tool calls by index→id. Drains trailing usage chunks. Maps `finish_reason` → our stop reasons.                                                                 |
+| `openai/src/types.ts`     | 127 | Hand-typed Chat Completions wire subset (we hand-type so we stay decoupled from minor SDK type churn).                                                                                                     |
+| `openai/src/catalog.ts`   | 55  | Curated current-model list (GPT-5.4 family). Discovery merges in newer ids from `/models` when reachable.                                                                                                  |
+
+**Sprint 3 normalization layer additions (`packages/llm-normalize/src/`):**
+
+| File                       | LOC | Purpose                                                                                                                                                                     |
+| -------------------------- | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openai-tool-schema.ts`    | 248 | OpenAI strict-mode JSON Schema normalizer + diagnostics. Top-level `type:"object"`, `additionalProperties:false`, every property in `required`, no `anyOf`/`oneOf`/`allOf`. |
+| `tool-parameter-schema.ts` | 297 | Provider-aware schema flattener. Auto-converts TypeBox root unions → object schemas with merged properties. Routes Gemini cleanup vs xAI keyword strip.                     |
+| `lib/clean-for-gemini.ts`  | 442 | Gemini / Cloud Code Assist tool-schema scrubber. Strips disallowed keywords, resolves local `$ref`, flattens literal unions, last-resort union-fallback type pick.          |
+
+**Sprint 3 verification:**
+
+```bash
+pnpm --filter @agiworkforce/types typecheck                # GREEN
+pnpm --filter @agiworkforce/llm-normalize typecheck        # GREEN
+pnpm --filter @agiworkforce/providers-anthropic typecheck  # GREEN
+pnpm --filter @agiworkforce/providers-ollama typecheck     # GREEN
+pnpm --filter @agiworkforce/providers-openai typecheck     # GREEN
+pnpm build (4/4 LLM packages with build script)             # GREEN
+```
+
+**Cumulative state after S1+S2+S3:**
+
+- 5 packages: `@agiworkforce/types` (provider-adapter), `@agiworkforce/llm-normalize`, `@agiworkforce/providers-{anthropic,ollama,openai}`
+- ~4,641 LOC TypeScript total in the LLM layer
+- 3 working provider adapters (Anthropic, Ollama, OpenAI) all implementing the same `ProviderAdapter` interface
+- 13 production-tested cross-vendor normalization helpers from OpenClaw + 1 Gemini scrubber + 1 strict-mode normalizer
+- Zero new runtime deps beyond `@anthropic-ai/sdk` and `openai`
+- License attribution complete in `THIRD_PARTY_LICENSES.md`
+
+**Sprint 3 still-deferred items** (move to S4):
+
+- `anthropic-family-tool-payload-compat.ts` — StreamFn wrapper for OpenAI-style tool payloads through Anthropic API (only relevant when proxying OpenAI tool format through Anthropic-shaped endpoints)
+- `apply-patch.ts` — needs sandbox-or-host abstraction first
+- OpenAI Responses API path (`store`/`prompt_cache_key`/server compaction) — current adapter uses Chat Completions only; Responses needed for o-series with full server-side reasoning state
+- Live API smoke tests with real keys (Anthropic, OpenAI, running Ollama daemon)
+- MCP transport + catalog
+- Skills loader (markdown + frontmatter format)
+- Wiring into `services/api-gateway/` and `apps/desktop/` chat flow
+
+## What shipped on 2026-05-04 (OpenClaw porting Sprint 4a)
+
+| Deliverable                      | What                                                                                                                                                                                                                        | Impact                       |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `packages/mcp/` (new package)    | MCP client wrapper. Three transports (stdio / sse / streamable-http) via `@modelcontextprotocol/sdk@^1.0.4`. `McpServerConfig` shape mirrors OpenClaw for ecosystem compat. `connectMcpServer()` + `buildMcpToolCatalog()`. | +309 LOC TS, +1 package      |
+| `packages/skills/` (new package) | Skills loader: tiny YAML-frontmatter parser (no heavy `yaml` dep), filesystem scanner (subdir + flat layouts), 6-tier precedence merger, XML-style prompt formatter.                                                        | +485 LOC TS, +1 package      |
+| `THIRD_PARTY_LICENSES.md`        | Added shape-derivation notes for MCP config types and skill format                                                                                                                                                          | +6 LOC                       |
+| `AGI_WORKFORCE.md` (this file)   | Sprint 4a entry + sprint table split (S4a ✅ done, S4b pending)                                                                                                                                                             | +25 LOC                      |
+| Build + typecheck                | Both packages GREEN; no new runtime deps beyond `@modelcontextprotocol/sdk`                                                                                                                                                 | clean                        |
+| **Sprint 4a total**              |                                                                                                                                                                                                                             | **+794 LOC TS, +2 packages** |
+
+**Sprint 4a deliverables:**
+
+| File                          | LOC | Purpose                                                                                                                                             |
+| ----------------------------- | --- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **mcp** (4 files, 309 LOC)    |     |                                                                                                                                                     |
+| `mcp/src/types.ts`            | 70  | `McpServerConfig` (mirrors OpenClaw), `McpToolCatalog`, `McpCatalogTool`, `McpCallToolResult`                                                       |
+| `mcp/src/transport.ts`        | 63  | Resolve config → `StdioClientTransport` / `SSEClientTransport` / `StreamableHTTPClientTransport`                                                    |
+| `mcp/src/connect.ts`          | 145 | `connectMcpServer()` (single server) + `buildMcpToolCatalog()` (many servers, fail-soft per-server)                                                 |
+| `mcp/src/index.ts`            | 31  | Public surface barrel                                                                                                                               |
+| **skills** (6 files, 485 LOC) |     |                                                                                                                                                     |
+| `skills/src/frontmatter.ts`   | 142 | Tiny YAML frontmatter parser (no runtime dep). Handles flat key:value, lists, one-level nested objects (sufficient for OpenClaw skill schema 100%). |
+| `skills/src/loader.ts`        | 121 | Filesystem scanner. Two layouts: OpenClaw subdir (`<id>/SKILL.md`) and flat (`<name>.md`). Errors per-file don't fail the batch.                    |
+| `skills/src/types.ts`         | 79  | `Skill`, `SkillLayer`, `SkillMetadata`, `SkillSource`                                                                                               |
+| `skills/src/format.ts`        | 66  | XML-style `<available_skills>` block for system-prompt injection. Optional `inlineBodies` mode.                                                     |
+| `skills/src/merge.ts`         | 45  | 6-tier precedence: `extra > workspace > project > personal > managed-local > bundled`                                                               |
+| `skills/src/index.ts`         | 32  | Public surface barrel                                                                                                                               |
+
+**Sprint 4a verification:**
+
+```bash
+pnpm --filter @agiworkforce/mcp typecheck      # GREEN
+pnpm --filter @agiworkforce/skills typecheck   # GREEN
+pnpm --filter @agiworkforce/mcp --filter @agiworkforce/skills build  # GREEN
+```
+
+**Cumulative state after S1+S2+S3+S4a:**
+
+- 7 LLM/agent-infra packages: types, llm-normalize, providers-{anthropic,ollama,openai}, mcp, skills
+- ~5,435 LOC TypeScript total
+- 3 working provider adapters + MCP client + skills loader
+- 15 cross-vendor normalization helpers + 1 frontmatter parser + 1 XML prompt formatter
+- Runtime deps: `@anthropic-ai/sdk`, `openai`, `@modelcontextprotocol/sdk`. Zero added beyond what each capability requires.
+
+**Sprint 4b (deferred): Rust CLI hook events.** OpenClaw's `src/plugins/hook-types.ts` defines 30+ hook events; AGI Workforce's CLI already has 19. The high-leverage missing ones from S1's analysis:
+
+- `before_model_resolve` — deterministic provider/model override before resolution
+- `before_prompt_build` — inject `prependContext`, system additions before prompt submission
+- `before_compaction` / `after_compaction` — observe/annotate compaction cycles
+- `tool_result_persist` — synchronously transform tool results before transcript write
+- `subagent_spawning` / `subagent_spawned` / `subagent_ended` — sub-agent lifecycle
+
+Adding these in the Rust CLI requires reading `apps/cli/src/` (specifically the existing hook dispatcher) and is split out as **S4b**. Different language, different shape — separate sprint.
+
+## What shipped on 2026-05-04 (OpenClaw porting Sprint 4b)
+
+| Deliverable                       | What                                                                                                                                                                                                                                                                               | Impact                                                           |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `apps/cli/src/hooks.rs`           | Added 3 new `HookEvent` variants (`BeforeModelResolve`, `BeforePromptBuild`, `ToolResultPersist`) + Display + canonical-name resolver entries.                                                                                                                                     | +24 LOC Rust                                                     |
+| `apps/cli/src/agent.rs`           | Wired 8 hook fire sites: `PreCompact` + `PostCompact` (existing variants, never fired before), `BeforePromptBuild` + `BeforeModelResolve` paired before each LLM call, `ToolResultPersist` after `PostToolUse` on all 3 tool execution paths (subagent / concurrent / sequential). | +145 LOC Rust                                                    |
+| `AGI_WORKFORCE.md` (this file)    | S4b ✅ in sprint table + this section                                                                                                                                                                                                                                              | +35 LOC                                                          |
+| `cargo check -p agiworkforce-cli` | GREEN (3.38s)                                                                                                                                                                                                                                                                      | clean                                                            |
+| **Sprint 4b total**               |                                                                                                                                                                                                                                                                                    | **+169 LOC Rust, 0 packages, 22 events (3 new + 2 newly-fired)** |
+
+**Hook events added or newly wired:**
+
+| Event                | Status before | Status after        | Fire site (`apps/cli/src/agent.rs`)                                                      |
+| -------------------- | ------------- | ------------------- | ---------------------------------------------------------------------------------------- |
+| `BeforeModelResolve` | did not exist | new variant + wired | Before every `models::stream_completion()` call in `send()`                              |
+| `BeforePromptBuild`  | did not exist | new variant + wired | Paired with `BeforeModelResolve`, immediately before                                     |
+| `ToolResultPersist`  | did not exist | new variant + wired | After `PostToolUse` on each of 3 tool execution paths (subagent, concurrent, sequential) |
+| `PreCompact`         | defined-only  | now fires           | Just before `compaction::compact_messages()`                                             |
+| `PostCompact`        | defined-only  | now fires           | Just after `compact_messages()`, before the user-visible "Context compacted" line        |
+
+Hook input shape unchanged — uses the existing `HookInput` struct (`event`, `session_id`, `model`, `tool_name`, `tool_args`, `tool_output`, `message`, `tool_execution`). New events use `message` for advisory state where helpful (e.g., `PreCompact` carries `"context_usage_before_compact: 156000/200000 tokens (78%)"`).
+
+**Sprint 4b verification:**
+
+```bash
+cd apps/cli && cargo check         # GREEN (3.38s; agiworkforce-cli + 11 transitive crates)
+```
+
+**Sprint 4b deferred** (require subagent runtime first or live integration):
+
+- `subagent_spawning` / `subagent_spawned` / `subagent_ended` — `SubagentStart` / `SubagentStop` already exist as enum variants in the CLI but the surrounding subagent runtime is sparser than OpenClaw's. Wiring them requires a separate read of `apps/cli/src/agents.rs` and the `Team` orchestration code.
+- Hooks `block: true` semantics for the new events — currently observation-only. Adding mutating semantics (e.g., a `BeforeModelResolve` hook that overrides `self.model` from `{"model": "..."}` JSON) is a follow-up since it touches the `aggregate_transformers` aggregator.
+
+**Cumulative state after S1+S2+S3+S4a+S4b:**
+
+- 7 LLM/agent-infra TS packages: types, llm-normalize, providers-{anthropic,ollama,openai}, mcp, skills
+- 22 Rust CLI hook events (was 19; +3 new + 2 newly-fired)
+- ~5,604 LOC across TS (~5,435) + Rust (+169)
+- License attribution complete in `THIRD_PARTY_LICENSES.md`
+- All packages typecheck + build green; CLI `cargo check` green
 
 ## How to use this file
 
