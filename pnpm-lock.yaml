@@ -1082,6 +1082,8 @@ importers:
         specifier: workspace:*
         version: link:../types
 
+  packages/apply-patch: {}
+
   packages/browser-tool:
     dependencies:
       '@agiworkforce/types':
