@@ -280,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_provider_default_model_spot_checks() {
-        assert_eq!(Provider::OpenAI.default_model(), "gpt-5.4");
+        assert_eq!(Provider::OpenAI.default_model(), "gpt-5.5");
         assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-4.6");
         assert_eq!(Provider::Google.default_model(), "gemini-3.1-pro-preview");
         assert_eq!(Provider::DeepSeek.default_model(), "deepseek-chat");
@@ -300,7 +300,7 @@ mod tests {
     #[test]
     fn test_get_model_for_task_openai_complex_reasoning() {
         let model = Provider::OpenAI.get_model_for_task(TaskType::ComplexReasoning);
-        assert_eq!(model, "gpt-5.4-pro");
+        assert_eq!(model, "gpt-5.5");
     }
 
     #[test]
@@ -969,7 +969,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.4");
+        assert_eq!(suggestion.model, "gpt-5.5");
     }
 
     #[test]
@@ -1113,7 +1113,7 @@ mod tests {
         let context = intelligent_context("pro", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.4-pro");
+        assert_eq!(suggestion.model, "gpt-5.5");
     }
 
     #[test]
