@@ -103,3 +103,15 @@ export type { ToolParameterSchemaOptions } from './tool-parameter-schema';
 
 // Gemini schema cleanup (exposed for direct use by Google adapter when added)
 export { cleanSchemaForGemini, GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS } from './lib/clean-for-gemini';
+
+// Anthropic-family tool payload compat (OpenAI-shape tools through Anthropic API)
+export {
+  createAnthropicToolPayloadCompatibilityWrapper,
+  createOpenAIAnthropicToolPayloadCompatibilityWrapper,
+} from './anthropic-tool-payload-compat';
+export type {
+  AnthropicToolPayloadCompatibilityOptions,
+  AnthropicToolSchemaMode,
+  AnthropicToolChoiceMode,
+  GenericStreamFn,
+} from './anthropic-tool-payload-compat';
