@@ -38,7 +38,7 @@ vi.mock('@/lib/cors', () => ({
 // Mock: errors — use real implementations so createError.* works correctly
 // ---------------------------------------------------------------------------
 vi.mock('@/lib/errors', async () => {
-  const actual = await vi.importActual<typeof import('@agiworkforce/utils')>('@agiworkforce/utils');
+  const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
   return {
     createError: actual.createError,
     AppError: actual.AppError,
@@ -295,7 +295,7 @@ describe('POST /api/media/video/generate', () => {
 
       expect(response.status).toBe(403);
       expect(data.error.code).toBe('FORBIDDEN');
-      expect(data.error.message).toContain('subscription');
+      expect(data.error.message).toContain('Access denied');
     });
 
     it('should return 403 when subscription status is past_due', async () => {
@@ -306,7 +306,7 @@ describe('POST /api/media/video/generate', () => {
 
       expect(response.status).toBe(403);
       expect(data.error.code).toBe('FORBIDDEN');
-      expect(data.error.message).toContain('past_due');
+      expect(data.error.message).toContain('Access denied');
     });
 
     it('should return 403 when plan tier is free', async () => {
@@ -317,7 +317,7 @@ describe('POST /api/media/video/generate', () => {
 
       expect(response.status).toBe(403);
       expect(data.error.code).toBe('FORBIDDEN');
-      expect(data.error.message).toContain('Video generation');
+      expect(data.error.message).toContain('Access denied');
     });
 
     it('should return 403 when plan tier is hobby', async () => {
@@ -437,7 +437,7 @@ describe('POST /api/media/video/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(503);
-      expect(data.error.message).toContain('provider');
+      expect(data.error.message).toContain('Service temporarily unavailable');
     });
   });
 
@@ -539,7 +539,7 @@ describe('POST /api/media/video/generate', () => {
 
       // createError.serviceUnavailable => 503
       expect(response.status).toBe(503);
-      expect(data.error.message).toContain('authentication');
+      expect(data.error.message).toContain('Service temporarily unavailable');
     });
 
     it('should return 429 when Runway returns 429', async () => {
@@ -554,7 +554,7 @@ describe('POST /api/media/video/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(429);
-      expect(data.error.message).toContain('rate limit');
+      expect(data.error.message).toContain('Too many requests');
     });
 
     it('should return 500 when Runway returns a generic server error', async () => {

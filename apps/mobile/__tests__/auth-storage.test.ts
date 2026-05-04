@@ -20,9 +20,11 @@
  *    with Zustand's persist middleware).
  *  - removeItem delegates to SecureStore.deleteItemAsync.
  *  - Keys containing characters outside [A-Za-z0-9._-] are sanitized to '_'.
- *  - A storage error in setItem is swallowed (fire-and-forget) — the store
- *    must not crash.
- *  - A storage error in removeItem is swallowed.
+ *  - A storage error in setItem propagates as a rejected promise (MOB-3,
+ *    audit 2026-05-03) so Zustand's persist middleware can react to write
+ *    failures instead of silently dropping the auth token.
+ *  - A storage error in removeItem is swallowed (removal failures aren't
+ *    security-critical).
  *  - authStore.signOut clears the session and triggers storage removal.
  *  - authStore.onRehydrateStorage sets isLoading=false / isInitialized=true
  *    when a cached session is present.
@@ -222,14 +224,16 @@ describe('secureStorage adapter', () => {
       expect(mockSetItemAsync).toHaveBeenCalledWith('auth_store_v2', 'value', expect.any(Object));
     });
 
-    it('does not throw when SecureStore.setItemAsync rejects (fire-and-forget)', async () => {
+    it('propagates the rejection when SecureStore.setItemAsync fails', async () => {
       mockSetItemAsync.mockRejectedValue(new Error('Keychain unavailable'));
 
-      // Must not throw — errors are silently swallowed
-      expect(() => secureStorage.setItem('auth-store', 'value')).not.toThrow();
-
-      // Suppress the unhandled rejection in the test environment
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      // MOB-3 (audit 2026-05-03): the write must reject, not silently
+      // swallow, so Zustand's persist middleware can detect that the
+      // session was not durably written and avoid leaving stale state
+      // on disk after a token refresh.
+      await expect(secureStorage.setItem('auth-store', 'value')).rejects.toThrow(
+        'Keychain unavailable',
+      );
     });
 
     it('persists large serialized values (>2 KB) without truncation', async () => {

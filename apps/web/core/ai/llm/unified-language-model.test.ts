@@ -203,7 +203,7 @@ describe('UnifiedLLMService', () => {
       const config = service.getConfig();
 
       expect(config.provider).toBe('openai');
-      expect(config.model).toBe('gpt-5.4');
+      expect(config.model).toBe('gpt-5.5');
       expect(config.maxTokens).toBe(4000);
       expect(config.temperature).toBe(0.7);
     });
