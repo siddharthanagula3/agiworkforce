@@ -61,8 +61,9 @@ export function DownloadSection({ downloads }: { downloads: DownloadUrls }) {
       {platforms.map((platform) => {
         const isDetected = detectedOS === platform.id;
 
-        // All platforms are now available for download
-        const isComingSoon = false;
+        // Windows installer deferred to Q3 2026 (no EV code-signing cert yet).
+        // Windows users: use the web app at /chat or install the CLI.
+        const isComingSoon = platform.id === 'windows';
 
         if (!platform.url && !isComingSoon) return null;
 
@@ -89,7 +90,7 @@ export function DownloadSection({ downloads }: { downloads: DownloadUrls }) {
 
             {isComingSoon && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-zinc-700 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
-                Coming Soon
+                Coming Q3 2026
               </div>
             )}
 
@@ -114,7 +115,7 @@ export function DownloadSection({ downloads }: { downloads: DownloadUrls }) {
                 !isComingSoon && !isDetected && 'hover:bg-zinc-700',
               )}
             >
-              {isComingSoon ? 'Coming Soon' : `Download ${platform.extension}`}
+              {isComingSoon ? 'Coming Q3 2026' : `Download ${platform.extension}`}
             </span>
           </button>
         );

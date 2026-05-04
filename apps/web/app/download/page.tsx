@@ -8,7 +8,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 const APP_VERSION = '1.1.5';
-const LAST_UPDATED = 'March 2026';
+const LAST_UPDATED = 'May 2026';
 
 function getDownloadUrls() {
   return {
@@ -27,7 +27,11 @@ const releaseInfo: TrustItem[] = [
   { label: 'Version', value: `${APP_VERSION} (Early Access)` },
   { label: 'Last updated', value: LAST_UPDATED },
   { label: 'macOS', value: 'Universal binary (Apple Silicon + Intel), .dmg, ~120 MB' },
-  { label: 'Windows', value: '64-bit installer, .exe, ~90 MB' },
+  {
+    label: 'Windows',
+    value:
+      'Coming Q3 2026. Use the web app at agiworkforce.com/chat or install the CLI in the meantime.',
+  },
   { label: 'Linux', value: 'AppImage, ~110 MB' },
   {
     label: 'CLI',
@@ -65,7 +69,7 @@ const safetyItems: SafetyItem[] = [
     icon: Trash2,
     title: 'Easy to uninstall',
     description:
-      'macOS: drag AGI Workforce to Trash. Windows: standard Add/Remove Programs uninstaller. Linux: delete the AppImage file.',
+      'macOS: drag AGI Workforce to Trash. Linux: delete the AppImage file. (Windows installer coming Q3 2026.)',
   },
 ];
 
