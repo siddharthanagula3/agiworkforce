@@ -108,7 +108,7 @@ Four optional functions + one required `stream`. That's the entire surface every
 | **S4b** | 5 missing hook events in Rust CLI (apps/cli)                                | 2–4 days         | **✅ Done 2026-05-04** |
 | **S5**  | Live smoke tests for 3 adapters + cross-provider demo CLI                   | 2–3 hours        | **✅ Done 2026-05-04** |
 | **S6**  | Browser tool fresh on `playwright-core` (NOT lifted — schema patterns only) | 2–3 days         | Pending                |
-| **S7**  | API gateway integration — wire adapters into `services/api-gateway/`        | 2–3 days         | Pending                |
+| **S7**  | API gateway integration — wire adapters into `services/api-gateway/`        | 2–3 days         | **✅ Done 2026-05-04** |
 
 **Top-line bet:** Sprint 1's 1,650-LOC normalization layer is what makes "switch model mid-conversation across providers" robust. Without it, that differentiator becomes a backlog of P1 bugs forever (Azure dropping `service_tier`, Cerebras rejecting `store`, DeepSeek thinking-tag format, Vertex Anthropic cache TTL gating, etc.).
 
@@ -484,6 +484,79 @@ pnpm --filter @agiworkforce/providers-ollama test:live
 ```
 
 Each suite runs 2 tests: a stream-end-to-end smoke and a catalog assertion. With `AGIWORKFORCE_LIVE_TEST` unset, all suites skip cleanly so default `pnpm test` is safe in CI.
+
+## What shipped on 2026-05-04 (Sprint 7 — api-gateway integration)
+
+| Deliverable                                                | What                                                                                                                                                                                                                                                           | Impact                      |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `services/api-gateway/src/lib/providerAdapters.ts`         | Server-side adapter factory. Sources credentials from env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_BASE_URL` / `OLLAMA_API_KEY`, optional `OPENAI_ORG_ID` / `OPENAI_PROJECT_ID`). Lazy construction; returns null when creds missing.                   | +110 LOC TS                 |
+| `services/api-gateway/src/routes/providerStream.ts`        | New `/api/v1/providers` route with three endpoints: `GET /` (availability), `GET /:providerId/catalog` (model list), `POST /:providerId/stream` (SSE stream of `StreamChunk` events). Full Zod validation for `ChatRequest` body. Aborts on client disconnect. | +220 LOC TS                 |
+| `services/api-gateway/src/index.ts`                        | Mount the new router at `/api/v1/providers`. Existing `/api/llm/v1` OpenAI-compat proxy left untouched.                                                                                                                                                        | +2 LOC                      |
+| `services/api-gateway/package.json`                        | Added 4 workspace deps: `@agiworkforce/{llm-normalize,providers-anthropic,providers-ollama,providers-openai}`.                                                                                                                                                 | +4 deps                     |
+| `packages/llm-normalize/src/lib/prompt-cache-stability.ts` | Replaced `Array.prototype.toSorted` (ES2023) with `[...arr].sort()` (ES2015) so consumers on ES2022 lib (api-gateway) can depend on this package without bumping target.                                                                                       | +2 LOC                      |
+| `AGI_WORKFORCE.md`                                         | S7 ✅ in sprint table + this section                                                                                                                                                                                                                           | +20 LOC                     |
+| Verification                                               | `tsc --noEmit` GREEN; `tsc` build GREEN (api-gateway); all 5 LLM packages still GREEN.                                                                                                                                                                         | clean                       |
+| **Sprint 7 total**                                         |                                                                                                                                                                                                                                                                | **+334 LOC TS, 0 packages** |
+
+**API surface (new):**
+
+```
+GET  /api/v1/providers
+       → { providers: [{ id, available, unavailableReason? }] }
+
+GET  /api/v1/providers/:providerId/catalog
+       → { provider, catalog: ModelInfo[] }
+
+POST /api/v1/providers/:providerId/stream
+       body:    ChatRequest (provider-shape: messages, tools, thinking, ...)
+       headers: Authorization: Bearer <jwt>
+       resp:    text/event-stream
+                  data: {"type":"text-delta","delta":"..."}
+                  data: {"type":"usage","inputTokens":...,"outputTokens":...}
+                  data: {"type":"stop","reason":"end_turn"}
+                  data: [DONE]
+```
+
+Auth, rate limiting, content-type validation, and error handling all reuse the existing api-gateway middleware. Server holds API keys in env; clients never see them. Aborting the request (client disconnect) propagates an `AbortSignal` into the adapter so the upstream stream is cancelled cleanly.
+
+**How to demo the end-to-end path:**
+
+```bash
+# 1. Set credentials
+export ANTHROPIC_API_KEY=sk-ant-...
+export JWT_SECRET=...                 # however the gateway is configured
+
+# 2. Run the gateway
+pnpm --filter @agiworkforce/api-gateway dev
+
+# 3. Hit the new route
+curl -N -X POST http://localhost:3000/api/v1/providers/anthropic/stream \
+  -H "Authorization: Bearer <a-valid-jwt>" \
+  -H "Content-Type: application/json" \
+  -H "X-Requested-With: agiworkforce" \
+  -d '{
+    "model": "claude-haiku-4.5",
+    "messages": [{"role": "user", "content": "Say hi in 5 words."}],
+    "maxOutputTokens": 64
+  }'
+```
+
+The adapters that already work via `pnpm demo:multi-provider` are now reachable from any client that can hit the gateway — Web (Next.js), Mobile (Expo), Chrome ext, VS Code ext. The Desktop's existing `/api/llm/v1` OpenAI-compat path is unchanged for backward compatibility.
+
+**S7 deferred** (separate sprints):
+
+- Migrating the existing `/api/llm/v1` proxy (756 LOC of fetch-based vendor calls) onto the new adapter pipeline — a 50-70% LOC reduction once done, but requires touching the desktop's `ManagedCloudProvider` consumer.
+- Adding Google adapter (so `/api/v1/providers/google/stream` works) — `cleanSchemaForGemini` from llm-normalize is ready; needs a thin `@agiworkforce/providers-google` package modeled after Anthropic.
+- Live integration test that POSTs through the gateway against a running daemon — currently each adapter has its own live test, but no end-to-end through-the-gateway test yet.
+- Updating the Web/Mobile/extension chat clients to call the new `/api/v1/providers/...` endpoints (separate UI sprints).
+
+**Cumulative state after S1+S2+S3+S4a+S4b+S5+S7:**
+
+- 7 LLM/agent-infra TS packages (unchanged from S5)
+- 1 new api-gateway integration (`/api/v1/providers/*` route + adapter factory)
+- 22 Rust CLI hook events
+- Multi-provider streaming reachable via HTTP for the first time
+- Total OpenClaw-port LOC across S1-S7: ~6,300 (TS ~5,938 + Rust ~169 + integration ~334)
 
 ## How to use this file
 
