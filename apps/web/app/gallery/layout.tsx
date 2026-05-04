@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Gallery | AGI Workforce',
     description:
-      'Real examples of AGI Workforce in action — code generation, research, automation, and more.',
+      'Real examples of AGI Workforce in action - code generation, research, automation, and more.',
     type: 'website',
     url: 'https://agiworkforce.com/gallery',
     images: [
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Gallery | AGI Workforce',
     description:
-      'Real examples of AGI Workforce in action — code generation, research, automation, and more.',
+      'Real examples of AGI Workforce in action - code generation, research, automation, and more.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },

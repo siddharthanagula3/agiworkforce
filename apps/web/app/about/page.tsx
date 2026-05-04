@@ -231,7 +231,7 @@ export default function AboutPage() {
                   <h4 className="text-lg font-semibold mb-3 text-[#edebe8]">Why we built this</h4>
                   <p className="text-[#888480] text-sm leading-relaxed">
                     Every powerful AI tool we tried was either locked to one model, cloud-only, or
-                    required engineering expertise to set up. We built AGI Workforce to fix that — a
+                    required engineering expertise to set up. We built AGI Workforce to fix that - a
                     native desktop app where you bring your own API keys, run models locally, and
                     stay in full control of your data. No subscriptions to 5 different tools. One
                     app, any model, full autonomy.
@@ -274,7 +274,7 @@ export default function AboutPage() {
           {/* CTA Section */}
           <CtaSection
             headline="Ready to Get Started?"
-            body="Just tell the AI what you want done. No setup, no configuration — everything is reversible."
+            body="Just tell the AI what you want done. No setup, no configuration - everything is reversible."
           />
         </main>
 

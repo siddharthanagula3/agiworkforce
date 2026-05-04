@@ -68,7 +68,7 @@ function verifyWorkOSSignature(
     }
 
     // Verify timestamp is within tolerance to prevent replay attacks
-    // Reject non-numeric timestamps — parseInt('abc') returns NaN, which
+    // Reject non-numeric timestamps - parseInt('abc') returns NaN, which
     // makes NaN > threshold evaluate to false, bypassing the check.
     if (!/^\d+$/.test(timestamp)) {
       logger.warn({ timestamp }, 'WorkOS webhook timestamp is not a valid integer');
@@ -185,7 +185,7 @@ async function resolveOrganization(
 // ---------------------------------------------------------------------------
 
 /**
- * dsync.user.created — Create a Supabase auth user and profile, then
+ * dsync.user.created - Create a Supabase auth user and profile, then
  * add them to the organization associated with the directory.
  */
 async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): Promise<void> {
@@ -193,10 +193,10 @@ async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): P
 
   const rawEmail = getPrimaryEmail(user);
   if (!rawEmail) {
-    logger.error({ workosUserId: user.id }, 'SCIM user.created missing email — skipping');
+    logger.error({ workosUserId: user.id }, 'SCIM user.created missing email - skipping');
     return;
   }
-  // Normalize to lowercase — email local parts are case-insensitive in practice (RFC 5321)
+  // Normalize to lowercase - email local parts are case-insensitive in practice (RFC 5321)
   const email = rawEmail.toLowerCase();
 
   const displayName = buildDisplayName(user);
@@ -246,10 +246,10 @@ async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): P
     userId = existingUser.id;
     logger.info(
       { userId, email, workosUserId: user.id },
-      'SCIM user.created — existing auth user found, updating profile',
+      'SCIM user.created - existing auth user found, updating profile',
     );
   } else {
-    // Create new Supabase auth user (no password — enterprise users authenticate via SSO)
+    // Create new Supabase auth user (no password - enterprise users authenticate via SSO)
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       email_confirm: true,
@@ -270,7 +270,7 @@ async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): P
     userId = newUser.user.id;
     logger.info(
       { userId, email, workosUserId: user.id },
-      'SCIM user.created — new auth user created',
+      'SCIM user.created - new auth user created',
     );
   }
 
@@ -313,7 +313,7 @@ async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): P
         { error: memberError, userId, organizationId: orgInfo.organizationId },
         'Failed to add SCIM user to organization',
       );
-      // Non-fatal — user is created, membership can be retried
+      // Non-fatal - user is created, membership can be retried
     }
 
     // Update last_sync_at on the directory connection
@@ -340,7 +340,7 @@ async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): P
 }
 
 /**
- * dsync.user.updated — Update profile attributes from the directory.
+ * dsync.user.updated - Update profile attributes from the directory.
  */
 async function handleUserUpdated(user: WorkOSDirectoryUser, request: Request): Promise<void> {
   if (!supabaseAdmin) throw new Error('Supabase admin client not initialized');
@@ -371,7 +371,7 @@ async function handleUserUpdated(user: WorkOSDirectoryUser, request: Request): P
   if (!userId) {
     logger.warn(
       { workosUserId: user.id, email },
-      'SCIM user.updated — profile not found, ignoring',
+      'SCIM user.updated - profile not found, ignoring',
     );
     return;
   }
@@ -432,7 +432,7 @@ async function handleUserUpdated(user: WorkOSDirectoryUser, request: Request): P
 }
 
 /**
- * dsync.user.deleted — Disable the account (soft-delete; preserves data).
+ * dsync.user.deleted - Disable the account (soft-delete; preserves data).
  */
 async function handleUserDeleted(user: WorkOSDirectoryUser, request: Request): Promise<void> {
   if (!supabaseAdmin) throw new Error('Supabase admin client not initialized');
@@ -462,7 +462,7 @@ async function handleUserDeleted(user: WorkOSDirectoryUser, request: Request): P
   if (!userId) {
     logger.warn(
       { workosUserId: user.id, email },
-      'SCIM user.deleted — profile not found, ignoring',
+      'SCIM user.deleted - profile not found, ignoring',
     );
     return;
   }
@@ -493,7 +493,7 @@ async function handleUserDeleted(user: WorkOSDirectoryUser, request: Request): P
     );
   }
 
-  logger.info({ userId, workosUserId: user.id, email }, 'SCIM user.deleted — account disabled');
+  logger.info({ userId, workosUserId: user.id, email }, 'SCIM user.deleted - account disabled');
 
   await logSecurityEvent({
     userId,
@@ -511,7 +511,7 @@ async function handleUserDeleted(user: WorkOSDirectoryUser, request: Request): P
 }
 
 /**
- * dsync.group.user_added — Add user to an organization with a default role.
+ * dsync.group.user_added - Add user to an organization with a default role.
  */
 async function handleGroupUserAdded(
   data: { user: WorkOSDirectoryUser; group: WorkOSDirectoryGroup },
@@ -526,7 +526,7 @@ async function handleGroupUserAdded(
   if (!orgInfo) {
     logger.warn(
       { directoryId: group.directory_id, groupId: group.id },
-      'SCIM group.user_added — no directory connection found',
+      'SCIM group.user_added - no directory connection found',
     );
     return;
   }
@@ -554,7 +554,7 @@ async function handleGroupUserAdded(
   if (!userId) {
     logger.warn(
       { workosUserId: user.id, email, groupId: group.id },
-      'SCIM group.user_added — user not found in profiles, ignoring',
+      'SCIM group.user_added - user not found in profiles, ignoring',
     );
     return;
   }
@@ -608,7 +608,7 @@ async function handleGroupUserAdded(
 
   logger.info(
     { userId, organizationId: orgInfo.organizationId, groupId: group.id, role },
-    'SCIM group.user_added — user added to organization',
+    'SCIM group.user_added - user added to organization',
   );
 
   await logSecurityEvent({
@@ -629,7 +629,7 @@ async function handleGroupUserAdded(
 }
 
 /**
- * dsync.group.user_removed — Remove user from organization.
+ * dsync.group.user_removed - Remove user from organization.
  */
 async function handleGroupUserRemoved(
   data: { user: WorkOSDirectoryUser; group: WorkOSDirectoryGroup },
@@ -644,7 +644,7 @@ async function handleGroupUserRemoved(
   if (!orgInfo) {
     logger.warn(
       { directoryId: group.directory_id, groupId: group.id },
-      'SCIM group.user_removed — no directory connection found',
+      'SCIM group.user_removed - no directory connection found',
     );
     return;
   }
@@ -672,7 +672,7 @@ async function handleGroupUserRemoved(
   if (!userId) {
     logger.warn(
       { workosUserId: user.id, email, groupId: group.id },
-      'SCIM group.user_removed — user not found, ignoring',
+      'SCIM group.user_removed - user not found, ignoring',
     );
     return;
   }
@@ -693,7 +693,7 @@ async function handleGroupUserRemoved(
 
   logger.info(
     { userId, organizationId: orgInfo.organizationId, groupId: group.id },
-    'SCIM group.user_removed — user removed from organization',
+    'SCIM group.user_removed - user removed from organization',
   );
 
   await logSecurityEvent({
@@ -859,7 +859,7 @@ export async function POST(request: NextRequest) {
       default:
         logger.info(
           { eventType: event.event, eventId: event.id },
-          'Unhandled WorkOS directory sync event type — acknowledged',
+          'Unhandled WorkOS directory sync event type - acknowledged',
         );
     }
   } catch (err) {

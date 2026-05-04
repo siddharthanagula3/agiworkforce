@@ -17,7 +17,7 @@ async function handleGetCsrfToken(request: NextRequest): Promise<NextResponse> {
   try {
     const rateLimitResponse = await withRateLimit(request, 'default');
     if (rateLimitResponse) return rateLimitResponse;
-    // Note: We intentionally skip getSession()/getUser() here — the CSRF token is bound to
+    // Note: We intentionally skip getSession()/getUser() here - the CSRF token is bound to
     // the anonymous session from getOrCreateAnonSession(), not the Supabase auth session.
     // This avoids an unnecessary round-trip for anonymous visitors requesting CSRF tokens.
 

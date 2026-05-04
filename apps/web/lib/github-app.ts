@@ -12,7 +12,7 @@ import { cookies } from 'next/headers';
 
 /**
  * SECURITY: Validate GitHub API path segments to prevent SSRF and path traversal.
- * Only allows alphanumeric, hyphen, underscore, and dot — the valid characters
+ * Only allows alphanumeric, hyphen, underscore, and dot - the valid characters
  * for GitHub owner/repo names.
  */
 const SAFE_PATH_SEGMENT = /^[a-zA-Z0-9._-]+$/;
@@ -52,7 +52,7 @@ export function verifyGitHubWebhookSignature(
 
 /**
  * Build a GitHub App JWT using Node.js built-in crypto (RS256).
- * jose is not available in this project — we implement manually.
+ * jose is not available in this project - we implement manually.
  */
 export async function getGitHubAppJwt(): Promise<string> {
   if (!GITHUB_APP_ID || !GITHUB_APP_PRIVATE_KEY_BASE64) {
@@ -85,7 +85,7 @@ let _devFallbackKey: Buffer | null = null;
 function getEncryptionKey(): Buffer {
   const keyHex = GITHUB_TOKEN_ENCRYPTION_KEY;
   if (!keyHex || keyHex.length !== 64) {
-    // Fallback for development — in production GITHUB_TOKEN_ENCRYPTION_KEY must be set
+    // Fallback for development - in production GITHUB_TOKEN_ENCRYPTION_KEY must be set
     if (!_devFallbackKey) {
       _devFallbackKey = randomBytes(32);
     }

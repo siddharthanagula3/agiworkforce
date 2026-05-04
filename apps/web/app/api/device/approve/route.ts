@@ -37,7 +37,7 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
 
   try {
     const supabase = await createSupabaseServerClient();
-    // Use getUser() for server-side JWT validation — getSession() reads from
+    // Use getUser() for server-side JWT validation - getSession() reads from
     // the cookie without server verification and must not be trusted for auth.
     const {
       data: { user },
@@ -138,7 +138,7 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       throw createError.internal('Missing session tokens');
     }
 
-    // Encrypt tokens at rest — the poll endpoint will decrypt on retrieval
+    // Encrypt tokens at rest - the poll endpoint will decrypt on retrieval
     const encryptedAccessToken = encryptToken(accessToken);
     const encryptedRefreshToken = encryptToken(refreshToken);
 

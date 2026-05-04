@@ -4,7 +4,7 @@
 
 import { logger } from './logger';
 
-// Allowed hosts for redirects — trusted subdomains for cross-origin auth flows
+// Allowed hosts for redirects - trusted subdomains for cross-origin auth flows
 const ALLOWED_HOSTS: Set<string> = new Set([
   'chat.agiworkforce.com',
   'agiworkforce-chat.vercel.app',
@@ -56,7 +56,7 @@ export function getSafeRedirectUrl(
   // If it's a relative path (starts with /), it's safe
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
     // Normalize only the pathname to prevent path traversal tricks with double slashes.
-    // Apply to pathname only — not query string or hash — to avoid corrupting URL parameters
+    // Apply to pathname only - not query string or hash - to avoid corrupting URL parameters
     // that contain URLs (e.g. /search?redirect=https://example.com).
     try {
       const u = new URL(trimmed, 'http://placeholder');

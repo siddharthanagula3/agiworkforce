@@ -1,9 +1,9 @@
 /**
  * Individual Team API
  *
- * GET /api/teams/[id] — fetch a single team with its members
- * PUT /api/teams/[id] — update team name/description (CSRF, admin or owner only)
- * DELETE /api/teams/[id] — delete a team (CSRF, owner only)
+ * GET /api/teams/[id] - fetch a single team with its members
+ * PUT /api/teams/[id] - update team name/description (CSRF, admin or owner only)
+ * DELETE /api/teams/[id] - delete a team (CSRF, owner only)
  */
 
 import { createClient } from '@supabase/supabase-js';

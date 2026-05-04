@@ -54,7 +54,7 @@ const safetyItems: SafetyItem[] = [
     icon: RotateCcw,
     title: 'Every action is reversible',
     description:
-      'The built-in undo manager tracks all AI actions — file writes, edits, and automations can be rolled back from inside the app.',
+      'The built-in undo manager tracks all AI actions - file writes, edits, and automations can be rolled back from inside the app.',
   },
   {
     icon: Trash2,
@@ -69,12 +69,12 @@ interface FirstLaunchItem {
 }
 
 const firstLaunchItems: FirstLaunchItem[] = [
-  { text: 'Open the app and start chatting immediately — no configuration required.' },
+  { text: 'Open the app and start chatting immediately - no configuration required.' },
   {
     text: 'Connect your own API key (OpenAI, Anthropic, Google, etc.) or use local models via Ollama.',
   },
   {
-    text: 'No account required to try the app — sign up only if you want cloud sync and mobile access.',
+    text: 'No account required to try the app - sign up only if you want cloud sync and mobile access.',
   },
 ];
 

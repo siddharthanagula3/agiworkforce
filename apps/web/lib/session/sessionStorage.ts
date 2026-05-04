@@ -366,7 +366,7 @@ export function importSessions(jsonString: string): boolean {
     const data = JSON.parse(jsonString);
 
     if (data.version !== SESSION_STORAGE_VERSION) {
-      // Version mismatch on import — proceed with best-effort migration
+      // Version mismatch on import - proceed with best-effort migration
     }
 
     if (Array.isArray(data.sessions)) {

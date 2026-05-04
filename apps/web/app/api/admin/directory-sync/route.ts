@@ -43,11 +43,11 @@ async function verifyAdminAccess(
     return { isAdmin: false, error: 'Invalid or expired token' };
   }
 
-  // Check admin via app_metadata (secure — only modifiable via service role)
+  // Check admin via app_metadata (secure - only modifiable via service role)
   const isAdminFromAppMetadata = user.app_metadata?.['role'] === 'admin';
 
   if (!isAdminFromAppMetadata) {
-    // Not a global admin — check if they are an org owner/admin.
+    // Not a global admin - check if they are an org owner/admin.
     // NOTE: profiles.is_admin is intentionally NOT used as a fallback here because
     // profiles is user-editable and could allow privilege escalation. Only
     // app_metadata.role (service-role-only writable) grants global admin status.
@@ -60,7 +60,7 @@ async function verifyAdminAccess(
       .maybeSingle();
 
     if (!membership) {
-      return { isAdmin: false, error: 'Insufficient privileges — org admin or owner required' };
+      return { isAdmin: false, error: 'Insufficient privileges - org admin or owner required' };
     }
 
     return {
@@ -70,7 +70,7 @@ async function verifyAdminAccess(
     };
   }
 
-  // Global admin — resolve their organization
+  // Global admin - resolve their organization
   const { data: membership } = await supabase
     .from('organization_members')
     .select('organization_id')
@@ -86,7 +86,7 @@ async function verifyAdminAccess(
 }
 
 // ---------------------------------------------------------------------------
-// GET — List directory sync connections for the admin's organization
+// GET - List directory sync connections for the admin's organization
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
 }
 
 // ---------------------------------------------------------------------------
-// POST — Register a new directory sync connection
+// POST - Register a new directory sync connection
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
 }
 
 // ---------------------------------------------------------------------------
-// DELETE — Remove a directory sync connection
+// DELETE - Remove a directory sync connection
 // ---------------------------------------------------------------------------
 
 export async function DELETE(request: NextRequest) {

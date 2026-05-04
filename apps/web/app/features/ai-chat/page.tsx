@@ -21,7 +21,7 @@ import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Agentic AI Chat | AGI Workforce',
   description:
-    'Multi-model AI chat with real-time tool execution, streaming responses, reasoning traces, and voice input — all in a native desktop interface.',
+    'Multi-model AI chat with real-time tool execution, streaming responses, reasoning traces, and voice input - all in a native desktop interface.',
   keywords: [
     'AI chat',
     'agentic chat',
@@ -120,7 +120,7 @@ export default function AIChatFeaturePage() {
               <p className="mt-6 max-w-2xl text-lg text-[#888480] leading-relaxed md:text-xl">
                 Claude Opus 4.6, GPT-5.4, Gemini 3.1 Pro, DeepSeek, Grok 4, and{' '}
                 {MARKETING.providers.display} more providers. Streaming responses, inline tool
-                execution across {MARKETING.tools.display} tools, and full reasoning traces — from a
+                execution across {MARKETING.tools.display} tools, and full reasoning traces - from a
                 native desktop app that stays out of your way.
               </p>
               <div className="mt-10 flex items-center gap-4">
@@ -141,7 +141,7 @@ export default function AIChatFeaturePage() {
             </div>
           </section>
 
-          {/* Primary capability — full width */}
+          {/* Primary capability - full width */}
           <section id="capabilities" className="border-t border-[#555150]/30 py-24">
             <div className="container mx-auto max-w-5xl px-4">
               <div className="grid gap-12 lg:grid-cols-5">
@@ -157,7 +157,7 @@ export default function AIChatFeaturePage() {
                   </h2>
                   <p className="mt-4 text-[#888480] leading-relaxed">
                     Start a chain-of-thought with Claude Opus, hand it to GPT-5.4 for code
-                    generation, then ask Gemini 3.1 Pro for a second opinion — without losing
+                    generation, then ask Gemini 3.1 Pro for a second opinion - without losing
                     context. {MARKETING.providers.display} providers, one chat window. Your API
                     keys, stored locally with AES-GCM encryption. No middleman, no markup.
                   </p>
@@ -200,11 +200,11 @@ export default function AIChatFeaturePage() {
             </div>
           </section>
 
-          {/* Secondary features — asymmetric 2-col */}
+          {/* Secondary features - asymmetric 2-col */}
           <section className="border-t border-[#555150]/30 py-24">
             <div className="container mx-auto max-w-5xl px-4">
               <div className="grid gap-8 md:grid-cols-2">
-                {/* Streaming — tall card */}
+                {/* Streaming - tall card */}
                 <div className="row-span-2 rounded-lg border border-[#555150]/40 p-8">
                   <Zap className="h-5 w-5 text-[#c8892a]" />
                   <h3 className="mt-4 text-xl font-semibold">Real-time streaming</h3>
@@ -227,7 +227,7 @@ export default function AIChatFeaturePage() {
                   <MessageSquare className="h-5 w-5 text-[#c8892a]" />
                   <h3 className="mt-4 text-xl font-semibold">Inline tool execution</h3>
                   <p className="mt-3 text-[#888480] leading-relaxed">
-                    Claude Code-style status labels — Read, Write, Bash, WebSearch — with a full
+                    Claude Code-style status labels - Read, Write, Bash, WebSearch - with a full
                     timeline showing duration, arguments, and result previews.
                   </p>
                 </div>
@@ -263,14 +263,14 @@ export default function AIChatFeaturePage() {
                   <Search className="h-5 w-5 text-[#888480]" />
                   <h3 className="mt-3 text-base font-semibold">{MARKETING.tools.display} tools</h3>
                   <p className="mt-2 text-sm text-[#888480]">
-                    File I/O, shell, web search, code analysis, and more — all sandboxed.
+                    File I/O, shell, web search, code analysis, and more - all sandboxed.
                   </p>
                 </div>
               </div>
             </div>
           </section>
 
-          {/* Chat transcript — monospace code block */}
+          {/* Chat transcript - monospace code block */}
           <section className="border-t border-[#555150]/30 py-24">
             <div className="container mx-auto max-w-3xl px-4">
               <h2 className="mb-8 text-2xl font-bold tracking-tight md:text-3xl">
@@ -283,7 +283,7 @@ export default function AIChatFeaturePage() {
                   <div className="h-2.5 w-2.5 rounded-full bg-[#555150]" />
                   <div className="h-2.5 w-2.5 rounded-full bg-[#555150]" />
                   <span className="ml-2 text-xs text-[#555150]">
-                    AGI Workforce — claude-opus-4-6
+                    AGI Workforce - claude-opus-4-6
                   </span>
                 </div>
                 <div className="space-y-5 p-5">
@@ -350,7 +350,7 @@ export default function AIChatFeaturePage() {
                     <p className="mt-1 text-[#edebe8]">
                       The refactor looks correct. Two observations: (1) the memory cost parameter is
                       appropriate for a server-side context but consider raising it for desktop-only
-                      use, (2) the old bcrypt fallback path should be removed after migration —
+                      use, (2) the old bcrypt fallback path should be removed after migration -
                       leaving it creates a downgrade vector.
                     </p>
                   </div>
