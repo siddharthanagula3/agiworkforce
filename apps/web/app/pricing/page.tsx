@@ -1,9 +1,11 @@
 'use client';
 
 import { Suspense, useState, useEffect, useRef, type CSSProperties, type RefObject } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   ArrowRight,
+  Building2,
   Check,
   AlertCircle,
   Zap,
@@ -819,7 +821,7 @@ function PricingContent() {
             </div>
 
             {/* Pricing Cards */}
-            <div className="grid gap-6 lg:grid-cols-3 max-w-6xl mx-auto">
+            <div className="grid gap-6 lg:grid-cols-4 max-w-7xl mx-auto">
               {/* Hobby Plan */}
               <div
                 ref={hobbyRef}
@@ -1072,6 +1074,70 @@ function PricingContent() {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
+
+              {/* Enterprise Plan */}
+              <div className="rounded-2xl border border-zinc-700 bg-zinc-950/40 p-6 flex flex-col relative overflow-hidden">
+                <div className="absolute inset-0 bg-zinc-800/20 pointer-events-none" />
+                <div className="relative">
+                  <div className="inline-flex items-center rounded-full bg-zinc-700/30 px-3 py-1 text-xs font-medium text-zinc-200 mb-3">
+                    <Building2 className="h-3 w-3 mr-2" />
+                    Enterprise
+                  </div>
+                  <h2 className="text-xl font-semibold mb-2">Enterprise</h2>
+                  <p className="text-zinc-200 mb-4 h-10">
+                    Custom deployments, SSO, audit logs, and dedicated support.
+                  </p>
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <div className="text-3xl font-bold">Custom</div>
+                  </div>
+                  <div className="text-xs text-zinc-500 mb-6">Volume pricing, annual contracts</div>
+                </div>
+                <ul className="space-y-3 text-sm text-zinc-100 flex-1 relative">
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-zinc-300 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Everything in Max</strong>
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-zinc-300 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>SSO &amp; SAML</strong>: Okta, Google Workspace
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-zinc-300 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Audit Logs</strong>: SOC 2 compliance ready
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-zinc-300 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Dedicated Support</strong>: Slack channel + SLA
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-zinc-300 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Custom Deployments</strong>: VPC, on-prem options
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <Check className="h-4 w-4 text-zinc-300 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Volume Discounts</strong>
+                    </span>
+                  </li>
+                </ul>
+                <Link
+                  href="/contact-sales"
+                  className="mt-6 w-full inline-flex items-center justify-center gap-2 rounded-md bg-zinc-100 px-4 py-2 text-sm font-semibold text-black hover:bg-white transition-colors"
+                >
+                  Contact Sales
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
             </div>
 
             {/* Feature Comparison Table */}
@@ -1110,9 +1176,9 @@ function PricingContent() {
                       },
                       {
                         feature: 'Web Search',
-                        hobby: false,
-                        pro: 'Perplexity',
-                        max: 'Deep Research',
+                        hobby: 'Yes (lower token cap)',
+                        pro: 'Yes (Perplexity)',
+                        max: 'Yes (Deep Research)',
                       },
                       {
                         feature: 'Image Generation',

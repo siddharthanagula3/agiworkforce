@@ -1,6 +1,6 @@
 # @agiworkforce/cli
 
-> **Multi-provider AI agent for your terminal.** Switch between 25 LLM providers (cloud + local) mid-conversation. BYOK. No vendor lock.
+> **Multi-provider AI agent for your terminal.** Switch between 10+ Providers (cloud + local) mid-conversation. BYOK. No vendor lock.
 
 ```bash
 npm install -g @agiworkforce/cli
@@ -13,7 +13,7 @@ agiworkforce exec "..."  # one-shot
 
 | You want                                          | Claude Code  | OpenAI Codex CLI | Gemini CLI | AGI Workforce CLI         |
 | ------------------------------------------------- | ------------ | ---------------- | ---------- | ------------------------- |
-| One model family                                  | ✅ Anthropic | ✅ OpenAI        | ✅ Google  | ✅ Pick from 25 providers |
+| One model family                                  | ✅ Anthropic | ✅ OpenAI        | ✅ Google  | ✅ Pick from 10+ Providers |
 | Bring your own API key                            | ❌           | ❌               | ❌         | ✅                        |
 | Run local LLMs (Ollama / LMStudio)                | ❌           | ❌               | ❌         | ✅                        |
 | Switch model mid-conversation                     | ❌           | Limited          | ❌         | ✅ Across providers       |
@@ -23,6 +23,16 @@ agiworkforce exec "..."  # one-shot
 | Sandbox (Seatbelt / Bwrap / Landlock / Win Token) | ✅           | ✅               | ❌         | ✅                        |
 
 The unique slice: **multi-provider + BYOK + local LLM**. No competitor offers all three in their CLI.
+
+## Pricing
+
+| Tier            | Price         | What                                                          |
+| --------------- | ------------- | ------------------------------------------------------------- |
+| **Local**       | Free forever  | Self-hosted, no cloud (Ollama / LMStudio)                     |
+| **BYOK**        | Free forever  | Bring your own API keys                                       |
+| **Hobby**       | Coming soon   | Managed cloud, limited credits ($5/mo target)                 |
+| **Pro / Max**   | Waitlist      | Full models (post-security-audit)                             |
+| **Enterprise**  | Contact sales | SSO, SCIM, custom retention — https://agiworkforce.com/contact |
 
 ## Installation
 
@@ -113,11 +123,3 @@ AGI Workforce CLI is both an MCP client (consumes external MCP servers) and an M
 
 PROPRIETARY. See [LICENSE](https://github.com/siddharthanagula3/agiworkforce/blob/main/LICENSE).
 
-## Pricing
-
-| Tier                          | Price        | What                              |
-| ----------------------------- | ------------ | --------------------------------- |
-| **Local** (Ollama / LMStudio) | Free forever | Self-hosted, no cloud             |
-| **BYOK**                      | Free forever | Bring your own API keys           |
-| **Hobby**                     | Coming soon  | Managed cloud, limited credits    |
-| **Pro / Max**                 | Waitlist     | Full models (post-security-audit) |

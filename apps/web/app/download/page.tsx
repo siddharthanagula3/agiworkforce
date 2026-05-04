@@ -29,6 +29,11 @@ const releaseInfo: TrustItem[] = [
   { label: 'macOS', value: 'Universal binary (Apple Silicon + Intel), .dmg, ~120 MB' },
   { label: 'Windows', value: '64-bit installer, .exe, ~90 MB' },
   { label: 'Linux', value: 'AppImage, ~110 MB' },
+  {
+    label: 'CLI',
+    value:
+      'AGI Workforce CLI is a separate ~5.7 MB binary, install via `cargo install agiworkforce-cli`.',
+  },
 ];
 
 interface SafetyItem {

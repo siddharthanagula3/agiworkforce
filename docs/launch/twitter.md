@@ -10,7 +10,7 @@
 ```
 Just shipped AGI Workforce CLI v1.0.
 
-It's Claude Code, but you can use any of 25 LLM providers — Anthropic,
+It's Claude Code, but you can use any of 10+ Providers — Anthropic,
 OpenAI, Google, xAI, DeepSeek, Mistral, Groq, Ollama (local), LM Studio
 (local), and more.
 
@@ -62,9 +62,9 @@ This is what "no vendor lock" actually means.
 ```
 Under the hood:
 
-- 192 .rs files / 152K LOC / 898 unit tests
+- 195 .rs files / 155,029 LOC / 914 unit tests
 - Ratatui TUI (125 files)
-- 22 subcommands, 8 native providers
+- 22 subcommands, 19 hook events, 10+ Providers
 - MCP support (client + server)
 - Sandbox: Seatbelt / Bubblewrap / Landlock / Restricted Token
 - Daemon: cron + webhook + file-watcher
@@ -134,14 +134,14 @@ Pin Tweet 1 of this thread.
 
 ```
 Building @agiworkforce — multi-provider AI agent for your terminal.
-BYOK + local Ollama + 25 cloud providers. github.com/siddharthanagula3/agiworkforce
+BYOK + local Ollama + 10+ Providers. github.com/siddharthanagula3/agiworkforce
 ```
 
 ## Reply hooks
 
 When someone says **"how is this different from cursor / aider?"**:
 
-> Cursor is an IDE; Aider is single-provider Python. AGI Workforce is a Rust CLI/TUI like Claude Code, but works with any of 25 providers in the same session. Different category, different value prop.
+> Cursor is an IDE; Aider is single-provider Python. AGI Workforce is a Rust CLI/TUI like Claude Code, but works with any of 10+ Providers in the same session. Different category, different value prop.
 
 When someone says **"this should be open source"**:
 

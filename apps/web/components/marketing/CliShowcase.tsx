@@ -6,10 +6,10 @@ import { Check, Minus, Terminal } from 'lucide-react';
  * CliShowcase - full-bleed section for the AGI Workforce CLI.
  *
  * Anchored on the YC-application differentiators:
- *   • Multi-provider in one session (mid-turn switch)
+ *   • Multi-provider in one session (mid-turn switch, 10+ providers)
  *   • MCP over stdio + SSE + HTTP + OAuth (sprint B, May 2026)
  *   • Real plan mode (`update_plan` model tool)
- *   • Apache-2.0, native Rust binary
+ *   • Proprietary, native Rust binary
  *
  * Visual: rendered as a "terminal manuscript" - editorial serif headings,
  * monospaced body text in the demo card, hairline-rule comparison table.
@@ -52,8 +52,8 @@ export function CliShowcase() {
             </h2>
 
             <p className="font-body mt-7 max-w-md text-base leading-relaxed text-[#888480] md:text-lg">
-              Eight LLM providers in one session. Mid-turn provider switch. Live cost HUD. Forking
-              sessions. MCP over stdio, SSE, HTTP, and OAuth. Apache-2.0. Native Rust.
+              10+ providers in one session. Mid-turn provider switch. Live cost HUD. Forking
+              sessions. MCP over stdio, SSE, HTTP, and OAuth. Proprietary. Native Rust.
             </p>
 
             {/* Install snippet */}
@@ -82,7 +82,7 @@ export function CliShowcase() {
               <span>·</span>
               <span>5.7 MB binary</span>
               <span>·</span>
-              <span>Apache-2.0</span>
+              <span>Proprietary</span>
               <span>·</span>
               <span>2,161 tests green</span>
             </div>
@@ -260,7 +260,7 @@ function ComparisonTable() {
       codex: 'OpenAI only',
       opencode: '~10 (Vercel AI SDK)',
       gemini: 'Google only',
-      agi: '8 + /model',
+      agi: '10+ + /model',
     },
     {
       feature: 'Live cost HUD (tokens · $ · ctx %)',
@@ -303,12 +303,12 @@ function ComparisonTable() {
       agi: true,
     },
     {
-      feature: 'OSS license',
+      feature: 'License',
       claudeCode: 'Closed',
       codex: 'Apache-2.0',
       opencode: 'MIT',
       gemini: 'Apache-2.0',
-      agi: 'Apache-2.0',
+      agi: 'Proprietary',
     },
     {
       feature: 'MCP transports',
