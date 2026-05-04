@@ -1,3 +1,4 @@
+use crate::core::llm::models_config;
 use tracing::debug;
 
 /// Strip control characters and truncate to a maximum length for safe prompt injection.
@@ -274,12 +275,28 @@ pub(super) fn escape_xml(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// Check if a model is likely to support vision based on its name.
-/// This is a heuristic check - providers should also implement supports_vision().
+/// Check if a model is likely to support vision.
+///
+/// Authoritative source: `packages/types/src/models.json` (`capabilities.vision`).
+/// Looked up first via the canonical catalog.  For models not in the catalog
+/// (custom Ollama tags, brand-new releases that haven't been added yet,
+/// prefix-only sniffing, etc.) we fall back to a list of FAMILY SUBSTRINGS —
+/// these are intentionally generic prefixes (`"gpt-4"`, `"claude-3"`, …),
+/// not specific model IDs, so they keep matching new versions like
+/// `gpt-4o-2024-11`, `claude-3-5-sonnet`, etc.
 pub(super) fn model_likely_supports_vision(model: &str) -> bool {
-    let model_lower = model.to_lowercase();
+    // 1. Authoritative catalog lookup (post-canonicalization, e.g. "claude-opus-4-6"
+    //    -> "claude-opus-4.6").  If the model is in the catalog we trust the flag.
+    let canonical = models_config::get_canonicalized_id(model);
+    if let Some(entry) = models_config::get_all_model_entries().get(&canonical) {
+        return entry.capabilities.vision;
+    }
 
-    let vision_models = [
+    // 2. Heuristic family-substring fallback for unknown / unreleased models.
+    //    These are family prefixes (NOT specific catalog IDs) and rule
+    //    `rule-models-json.md` does not apply — they're substring patterns.
+    let model_lower = model.to_lowercase();
+    let vision_families = [
         "gpt-4",
         "gpt-5",
         "o1",
@@ -297,7 +314,7 @@ pub(super) fn model_likely_supports_vision(model: &str) -> bool {
         "vision",
     ];
 
-    vision_models
+    vision_families
         .iter()
         .any(|pattern| model_lower.contains(pattern))
 }
