@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    // Node 22+ runtime per package.json#engines.node — safe to use modern stdlib.
+    // `toSorted` (Array.prototype) needs ES2023; `replaceAll` (String.prototype) needs ES2021.
+    "target": "ES2022",
+    "lib": ["ES2023"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}
