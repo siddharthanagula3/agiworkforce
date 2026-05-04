@@ -1,6 +1,6 @@
 'use client';
 
-import { Download } from 'lucide-react';
+import { Clock, Download } from 'lucide-react';
 import { triggerDownload } from '../services/download';
 
 export function DirectDownloadButtons() {
@@ -14,11 +14,13 @@ export function DirectDownloadButtons() {
         Download for macOS
       </button>
       <button
-        onClick={() => triggerDownload('windows')}
-        className="flex items-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-lg font-medium transition-colors text-white"
+        type="button"
+        disabled
+        title="Windows installer coming Q3 2026. Use the web app or CLI in the meantime."
+        className="flex items-center gap-2 px-6 py-3 bg-zinc-900 rounded-lg font-medium text-zinc-500 cursor-not-allowed"
       >
-        <Download className="h-5 w-5" />
-        Download for Windows
+        <Clock className="h-5 w-5" />
+        Windows: Coming Q3 2026
       </button>
       <button
         onClick={() => triggerDownload('linux')}
