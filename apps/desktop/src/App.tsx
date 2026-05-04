@@ -101,11 +101,6 @@ const QuickQuery = lazy(() =>
     default: m.QuickQuery,
   })),
 );
-const ModeSelectionDialog = lazy(() =>
-  import('./components/ModeSelectionDialog').then((m) => ({
-    default: m.ModeSelectionDialog,
-  })),
-);
 const VoiceInputOverlay = lazy(() =>
   import('./components/Voice/VoiceInputOverlay').then((m) => ({
     default: m.VoiceInputOverlay,
@@ -221,8 +216,9 @@ const DesktopShell = () => {
   const isAuthLoading = useAuthStore((state) => state.isLoading);
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
 
-  // Mode selection dialog — show on first launch before mode has been chosen
-  const hasSelectedMode = useAppModeStore((state) => state.hasSelectedMode);
+  // Mode selection is handled inside the OnboardingWizard (single onboarding flow).
+  // The legacy `hasSelectedMode` flag is still flipped by the wizard for any
+  // downstream consumers that read it from the appModeStore.
 
   const subscriptionFetchStatus = useAccountStore((state) => state.subscriptionFetchStatus);
 
@@ -1220,11 +1216,6 @@ const DesktopShell = () => {
         {isTauri && showOnboarding && !onboardingCompleted && (
           <Suspense fallback={null}>
             <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
-          </Suspense>
-        )}
-        {isTauri && !hasSelectedMode && (
-          <Suspense fallback={null}>
-            <ModeSelectionDialog open={!hasSelectedMode} />
           </Suspense>
         )}
         <div className="flex flex-col gap-1">
