@@ -90,8 +90,8 @@ export default function PrivacyPage() {
             <p>AGI Workforce operates in two modes with materially different data flows:</p>
             <ul>
               <li>
-                <strong>Local Mode (Desktop only):</strong> All data — conversations, tasks,
-                settings — is stored exclusively on your device (SQLite). No account is required. No
+                <strong>Local Mode (Desktop only):</strong> All data - conversations, tasks,
+                settings - is stored exclusively on your device (SQLite). No account is required. No
                 data is transmitted to AGI Workforce servers. LLM requests go directly from your
                 device to the AI provider you configure (Ollama, LM Studio, or a BYOK cloud
                 provider). We receive no visibility into Local Mode usage.
@@ -181,7 +181,7 @@ export default function PrivacyPage() {
                   <strong>{p.name}</strong>
                   {p.url ? (
                     <>
-                      {' — '}
+                      {' - '}
                       <a
                         href={p.url}
                         target="_blank"

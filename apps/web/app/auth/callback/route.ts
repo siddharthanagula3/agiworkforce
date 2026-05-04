@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     if (stateParam && expectedState && stateParam !== expectedState) {
       logger.error(
         { stateParamPresent: !!stateParam, expectedPresent: !!expectedState },
-        'OAuth callback state mismatch — possible CSRF',
+        'OAuth callback state mismatch - possible CSRF',
       );
       const errorUrl = new URL('/auth/error', requestUrl.origin);
       errorUrl.searchParams.set('error', 'state_mismatch');

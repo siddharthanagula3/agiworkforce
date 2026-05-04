@@ -19,13 +19,13 @@ import { randomUUID } from 'crypto';
  * Endpoint: POST /api/media/video/generate
  *
  * Proxies video generation requests to Runway (Gen4 Turbo) or Google Veo3.
- * Video generation is async — this endpoint creates a task and returns a task_id
+ * Video generation is async - this endpoint creates a task and returns a task_id
  * for polling via GET /api/media/video/status?task_id=xxx.
  *
  * Requires Pro or Max subscription tier.
  */
 
-// Next.js route configuration — video task creation can take up to 30s
+// Next.js route configuration - video task creation can take up to 30s
 // (the actual generation is async, so we just need time for the task-creation call).
 export const maxDuration = 60;
 export const runtime = 'nodejs';
@@ -128,7 +128,7 @@ async function generateWithRunway(
     throw createError.serviceUnavailable('Runway API not configured');
   }
 
-  // Map resolution to Runway ratio — Gen4 supports 16:9 and 9:16
+  // Map resolution to Runway ratio - Gen4 supports 16:9 and 9:16
   // 4K is not yet available; fall back to 1080p
   const ratio = resolution === '9:16' ? '9:16' : '16:9';
   const clampedDuration = Math.max(2, Math.min(durationSecs, 10));
@@ -192,7 +192,7 @@ async function generateWithRunway(
  *
  * Current model (as of 2025-10): veo-3.1-generate-preview
  *   - Previous model veo-2.0-generate-001 is outdated
- * Duration: "4", "6", or "8" (string seconds — Veo does not accept arbitrary integers)
+ * Duration: "4", "6", or "8" (string seconds - Veo does not accept arbitrary integers)
  * Polling: GET /v1beta/{operation_name} until done === true
  */
 async function generateWithGoogleVeo(
@@ -289,7 +289,7 @@ async function generateWithGoogleVeo(
     throw createError.internal('Failed to start video generation: no operation name returned');
   }
 
-  // Operation name format: "operations/{id}" — extract the ID portion for storage
+  // Operation name format: "operations/{id}" - extract the ID portion for storage
   const operationId = result.name.split('/').pop() || result.name;
 
   // Estimated wait: ~90s base + 15s per second of video
@@ -461,7 +461,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     );
     logger.warn(
       { userId: user.id, provider, requestId },
-      'Video task creation failed — credits refunded',
+      'Video task creation failed - credits refunded',
     );
 
     // Re-throw AppError instances (from createError.*)

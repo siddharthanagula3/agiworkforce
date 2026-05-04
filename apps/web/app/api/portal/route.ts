@@ -224,7 +224,7 @@ async function handlePortal(request: NextRequest) {
           ) {
             logger.error(
               { userId: user.id, customerId: matchedCustomer.id },
-              'Stripe customer belongs to different user — email fallback blocked',
+              'Stripe customer belongs to different user - email fallback blocked',
             );
             return NextResponse.json(
               { error: 'Customer account mismatch. Please contact support.' },

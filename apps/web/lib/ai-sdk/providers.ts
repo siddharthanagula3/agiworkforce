@@ -4,7 +4,7 @@ import 'server-only';
  * AI SDK v6 Provider Instances
  *
  * Creates Vercel AI SDK v6 provider instances for Anthropic, OpenAI, and Google.
- * This is a parallel path to the existing LLMProviderFactory — it does NOT replace it.
+ * This is a parallel path to the existing LLMProviderFactory - it does NOT replace it.
  * Use these helpers in /api/llm/v2 to opt into the AI SDK code path.
  */
 
@@ -111,7 +111,7 @@ export function getAnthropicModel(modelId: string, apiKey?: string): LanguageMod
       : {}),
   });
 
-  // AI SDK v6: provider(modelId) — per-call settings go via providerOptions in streamText
+  // AI SDK v6: provider(modelId) - per-call settings go via providerOptions in streamText
   return provider(modelId);
 }
 

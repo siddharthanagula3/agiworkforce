@@ -19,7 +19,7 @@ import { MARKETING } from '../../../lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'Desktop Tools & Computer Use | AGI Workforce',
   description:
-    'Native desktop automation that sees your screen, controls your keyboard, manages your files, and runs terminal commands — all with safety controls. Browser automation, computer use, file management, and more.',
+    'Native desktop automation that sees your screen, controls your keyboard, manages your files, and runs terminal commands - all with safety controls. Browser automation, computer use, file management, and more.',
   keywords: [
     'desktop automation',
     'computer use',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Desktop Tools & Computer Use | AGI Workforce',
     description:
-      'Native desktop automation that sees your screen, controls your keyboard, manages your files, and runs terminal commands — all with safety controls.',
+      'Native desktop automation that sees your screen, controls your keyboard, manages your files, and runs terminal commands - all with safety controls.',
     url: 'https://agiworkforce.com/features/tools',
     siteName: 'AGI Workforce',
     type: 'website',
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Desktop Tools & Computer Use | AGI Workforce',
     description:
-      'Native desktop automation: browser control, terminal, file management, screen capture, computer use — with full safety controls.',
+      'Native desktop automation: browser control, terminal, file management, screen capture, computer use - with full safety controls.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
@@ -66,7 +66,7 @@ const jsonLd = {
   '@type': 'WebPage',
   name: 'Desktop Tools & Computer Use - AGI Workforce',
   description:
-    'Native desktop automation that sees your screen, controls your keyboard, manages your files, and runs terminal commands — all with safety controls.',
+    'Native desktop automation that sees your screen, controls your keyboard, manages your files, and runs terminal commands - all with safety controls.',
   url: 'https://agiworkforce.com/features/tools',
   isPartOf: {
     '@type': 'WebSite',
@@ -251,7 +251,7 @@ export default function ToolsFeaturePage() {
                 </h1>
                 <p className="mt-6 max-w-xl text-lg text-[#888480]">
                   Sees your screen, controls your keyboard, manages your files, and runs terminal
-                  commands — all validated through a 4-tier safety model before execution.
+                  commands - all validated through a 4-tier safety model before execution.
                 </p>
 
                 {/* 6 domain pills */}
@@ -308,7 +308,7 @@ export default function ToolsFeaturePage() {
                     <div className="h-3 w-3 rounded-full bg-[#333330]" />
                     <div className="h-3 w-3 rounded-full bg-[#333330]" />
                     <span className="ml-3 font-mono text-xs text-[#555150]">
-                      agiworkforce — tool execution log
+                      agiworkforce - tool execution log
                     </span>
                   </div>
 
@@ -440,7 +440,7 @@ export default function ToolsFeaturePage() {
           <CtaSection
             icon="Monitor"
             headline="Download the desktop app"
-            body="Browser automation, file management, terminal commands, screen capture, computer use — 1,459+ IPC tools validated through ToolGuard."
+            body="Browser automation, file management, terminal commands, screen capture, computer use - 1,459+ IPC tools validated through ToolGuard."
           />
         </main>
 

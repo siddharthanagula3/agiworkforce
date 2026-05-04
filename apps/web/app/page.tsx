@@ -16,6 +16,7 @@ import {
 
 import { Header } from '../components/layout/Header';
 import { SurfaceShowcase } from '../components/SurfaceShowcase';
+import { CliShowcase } from '../components/marketing/CliShowcase';
 import { CtaSection } from '../components/marketing/CtaSection';
 import { MarketingFooter } from '../components/marketing/MarketingFooter';
 import { ScrollRevealInit } from '../components/marketing/ScrollRevealInit';
@@ -24,7 +25,7 @@ import { MARKETING } from '../lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'AGI Workforce | AI Agent Automation Platform',
   description:
-    'AGI Workforce is a privacy-first AI agent platform. Chat with AI, automate your browser, terminal, files, and code — across desktop, web, CLI, VS Code, and browser extension. Multi-provider LLM support with BYOK and full offline mode via Ollama.',
+    'AGI Workforce is a privacy-first AI agent platform. Chat with AI, automate your browser, terminal, files, and code - across desktop, web, CLI, VS Code, and browser extension. Multi-provider LLM support with BYOK and full offline mode via Ollama.',
   keywords: [
     'AI agent',
     'AI automation',
@@ -45,7 +46,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'AGI Workforce | AI Agent Automation Platform',
     description:
-      'A team of AI agents that automates your browser, terminal, files, and code — across desktop, web, CLI, VS Code, and browser extension. Free to try.',
+      'A team of AI agents that automates your browser, terminal, files, and code - across desktop, web, CLI, VS Code, and browser extension. Free to try.',
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [{ url: '/app-preview.png', width: 1200, height: 630, alt: 'AGI Workforce' }],
@@ -54,7 +55,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AGI Workforce | AI Agent Automation Platform',
     description:
-      'A team of AI agents that automates your browser, terminal, files, and code — across desktop, web, CLI, VS Code, and browser extension.',
+      'A team of AI agents that automates your browser, terminal, files, and code - across desktop, web, CLI, VS Code, and browser extension.',
     images: ['/app-preview.png'],
   },
 };
@@ -74,7 +75,7 @@ const jsonLd = {
     `${MARKETING.appSize.display} native app (Rust/Tauri, not Electron)`,
     'Mobile companion with live agent dashboard',
     'Privacy-first: all processing happens locally',
-    'Bring Your Own Keys (BYOK) — AES-256 encrypted',
+    'Bring Your Own Keys (BYOK) - AES-256 encrypted',
     'Run fully offline with Ollama or LM Studio',
   ],
 };
@@ -91,14 +92,14 @@ const features = [
     icon: Plug,
     title: 'Unlimited MCP',
     stat: '3 transports',
-    desc: 'Connect any MCP server — stdio, SSE, or HTTP. File systems, databases, APIs, browsers. No tool caps.',
+    desc: 'Connect any MCP server - stdio, SSE, or HTTP. File systems, databases, APIs, browsers. No tool caps.',
     href: '/features/plugins',
   },
   {
     icon: Wrench,
     title: 'Computer Use',
     stat: `${MARKETING.tools.display} IPC tools`,
-    desc: 'Browser automation, terminal, file I/O, screen capture, keyboard — all through ToolGuard safety tiers.',
+    desc: 'Browser automation, terminal, file I/O, screen capture, keyboard - all through ToolGuard safety tiers.',
     href: '/features/tools',
   },
   {
@@ -150,7 +151,7 @@ export default function Home() {
               {/* Badge */}
               <div className="animate-hero-1 mb-10 inline-flex items-center gap-2.5 rounded-full border border-[#c8892a]/25 bg-[#c8892a]/[0.07] px-4 py-1.5 text-sm font-medium text-[#c8892a]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#c8892a]" />
-                Early Access — Free to try
+                Early Access - Free to try
               </div>
 
               {/* Headline */}
@@ -168,8 +169,9 @@ export default function Home() {
 
               {/* Subtitle */}
               <p className="animate-hero-4 font-body mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-[#888480] md:text-xl">
-                A team of AI agents that automates your browser, terminal, files, and code — across
-                desktop, web, CLI, VS Code, and browser extension.
+                The multi-provider agentic platform - desktop app, web, mobile, native Rust CLI, VS
+                Code, and Chrome extension. Eight LLM providers in one chat thread. Local-first.
+                Bring your own keys.
               </p>
 
               {/* CTAs */}
@@ -193,7 +195,7 @@ export default function Home() {
               <div className="animate-hero-5 mt-12 flex flex-col items-center gap-3 md:flex-row md:flex-wrap md:justify-center md:gap-x-8">
                 {[
                   'No training on your data. Ever.',
-                  'Multi-model — best LLM for every task',
+                  'Multi-model - best LLM for every task',
                   'BYOK or Managed Cloud subscription',
                   'macOS · Windows · Linux · Web · CLI',
                 ].map((text) => (
@@ -215,7 +217,7 @@ export default function Home() {
                   <div className="flex animate-marquee items-center gap-20 md:gap-28">
                     {[...Array(2)].map((_, i) => (
                       <div key={i} className="flex shrink-0 items-center gap-20 md:gap-28">
-                        {/* OpenAI — official rosette from simple-icons */}
+                        {/* OpenAI - official rosette from simple-icons */}
                         <svg
                           viewBox="0 0 24 24"
                           className="h-7 w-7 shrink-0 fill-white/60 transition-all hover:fill-white/90"
@@ -223,7 +225,7 @@ export default function Home() {
                         >
                           <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.998 5.998 0 0 0-3.998 2.9 6.042 6.042 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.602 1.5v3.003l-2.602 1.5-2.602-1.5z" />
                         </svg>
-                        {/* Anthropic — official "A" mark */}
+                        {/* Anthropic - official "A" mark */}
                         <svg
                           viewBox="0 0 24 24"
                           className="h-7 w-7 shrink-0 fill-white/60 transition-all hover:fill-white/90"
@@ -231,7 +233,7 @@ export default function Home() {
                         >
                           <path d="M13.827 3.52h3.603L24 20.48h-3.603l-6.57-16.96zm-7.258 0h3.767L16.906 20.48h-3.674l-1.343-3.461H5.017l-1.344 3.46H0L6.57 3.522zm4.132 10.86L8.453 7.687 6.205 14.38h4.496z" />
                         </svg>
-                        {/* Google — official "G" multicolor */}
+                        {/* Google - official "G" multicolor */}
                         <svg
                           viewBox="0 0 24 24"
                           className="h-7 w-7 shrink-0 opacity-60 transition-opacity hover:opacity-90"
@@ -254,7 +256,7 @@ export default function Home() {
                             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                           />
                         </svg>
-                        {/* xAI — official glyph */}
+                        {/* xAI - official glyph */}
                         <svg
                           viewBox="0 0 24 24"
                           className="h-7 w-7 shrink-0 fill-white/60 transition-all hover:fill-white/90"
@@ -262,7 +264,7 @@ export default function Home() {
                         >
                           <path d="M3.005 6.3h3.2l5.59 8.24L6.36 22H3.005l5.735-7.735L3.005 6.3zm8.25 0h3.2L22 22h-3.2L11.255 6.3zm5.545 0H20l-3.5 4.7-1.6-2.35L16.8 6.3z" />
                         </svg>
-                        {/* Mistral — official "M" mark from simple-icons */}
+                        {/* Mistral - official "M" mark from simple-icons */}
                         <svg
                           viewBox="0 0 24 24"
                           className="h-7 w-7 shrink-0 fill-white/60 transition-all hover:fill-white/90"
@@ -270,7 +272,7 @@ export default function Home() {
                         >
                           <path d="M3.428 0h4.398v4.398H3.428zM16.174 0h4.398v4.398h-4.398zM3.428 6.6h4.398v4.399H3.428zM9.801 6.6H14.2v4.399H9.801zM16.174 6.6h4.398v4.399h-4.398zM3.428 13.201h4.398V17.6H3.428zM9.801 13.201H14.2V17.6H9.801zM16.174 13.201h4.398V17.6h-4.398zM3.428 19.602h4.398V24H3.428zM16.174 19.602h4.398V24h-4.398z" />
                         </svg>
-                        {/* Ollama — official llama mark from simple-icons */}
+                        {/* Ollama - official llama mark from simple-icons */}
                         <svg
                           viewBox="0 0 24 24"
                           className="h-7 w-7 shrink-0 fill-white/60 transition-all hover:fill-white/90"
@@ -278,7 +280,7 @@ export default function Home() {
                         >
                           <path d="M15.832 3.076c-.247-.026-.498.063-.68.245-.29.29-.329.743-.093 1.078.014.02.143.235.27.569.127.332.254.784.3 1.308.057.657-.017 1.456-.386 2.282-.735 1.645-1.175 2.343-1.175 3.872 0 1.04.204 1.774.506 2.312a3.856 3.856 0 0 0 .908 1.073c-.07.06-.263.198-.652.38-.506.234-1.08.394-1.554.394-.473 0-1.047-.16-1.553-.395-.39-.181-.582-.319-.652-.379a3.856 3.856 0 0 0 .908-1.073c.302-.538.506-1.272.506-2.312 0-1.53-.44-2.227-1.175-3.872-.369-.826-.443-1.625-.385-2.282.046-.524.172-.976.299-1.308.127-.334.256-.548.27-.569.236-.335.197-.788-.093-1.078a.753.753 0 0 0-.68-.245c-.248.026-.473.17-.591.395 0 0-.465.891-.593 1.912-.128 1.02-.027 2.243.485 3.389.577 1.29.898 1.776.898 2.658 0 .674-.13 1.117-.314 1.445-.185.328-.416.543-.618.7-.201.157-.373.26-.472.378a.684.684 0 0 0-.168.452c0 .39.305.756.83 1.09.527.332 1.279.62 2.123.62.845 0 1.597-.288 2.124-.62.526-.334.83-.7.83-1.09a.684.684 0 0 0-.168-.452c-.099-.118-.27-.221-.472-.379a2.87 2.87 0 0 1-.618-.699c-.183-.328-.314-.771-.314-1.445 0-.882.321-1.369.898-2.658.512-1.146.613-2.37.485-3.39-.128-1.02-.593-1.911-.593-1.911a.77.77 0 0 0-.591-.395zm-2.556 8.08a.4.4 0 0 1 .4.399.4.4 0 0 1-.4.4.4.4 0 0 1-.399-.4.4.4 0 0 1 .4-.4zm-2.552 0a.4.4 0 0 1 .4.399.4.4 0 0 1-.4.4.4.4 0 0 1-.4-.4.4.4 0 0 1 .4-.4z" />
                         </svg>
-                        {/* Groq — text wordmark */}
+                        {/* Groq - text wordmark */}
                         <svg
                           viewBox="0 0 24 24"
                           className="h-5 w-auto shrink-0 fill-white/60 transition-all hover:fill-white/90"
@@ -286,7 +288,7 @@ export default function Home() {
                         >
                           <path d="M4.092 7.174a4.826 4.826 0 1 0 0 9.652 4.826 4.826 0 1 0 0-9.652zm0 7.347a2.52 2.52 0 1 1 0-5.042 2.52 2.52 0 0 1 0 5.042zm7.073-3.413v5.357h-2.31V7.316h2.158l.12.773a3.388 3.388 0 0 1 2.489-1.022v2.312a3.086 3.086 0 0 0-2.457.729zm4.786-.521a4.826 4.826 0 1 1 4.826 4.826h-1.714v3.052h-2.305V12.28a.63.63 0 0 1 .185-.447.63.63 0 0 1 .447-.185h3.387a2.521 2.521 0 1 0-2.521-2.521v1.46h-2.305v-1.46z" />
                         </svg>
-                        {/* DeepSeek — official whale mark from simple-icons */}
+                        {/* DeepSeek - official whale mark from simple-icons */}
                         <svg
                           viewBox="0 0 24 24"
                           className="h-7 w-7 shrink-0 fill-white/60 transition-all hover:fill-white/90"
@@ -294,7 +296,7 @@ export default function Home() {
                         >
                           <path d="M9.143 0C4.093 0 0 4.093 0 9.143c0 2.414.943 4.608 2.478 6.238.058-.067.117-.13.179-.192a8.08 8.08 0 0 1 1.601-1.27c-.72-1.399-1.115-2.96-1.115-4.586C3.143 5.66 5.702 2.572 9.143 2.143V0zm5.714 0v2.143c3.441.429 6 3.517 6 7.19 0 1.626-.395 3.187-1.115 4.586a8.08 8.08 0 0 1 1.601 1.27c.062.062.121.125.179.192A9.098 9.098 0 0 0 24 9.143C24 4.093 19.907 0 14.857 0zM12 3.429a5.71 5.71 0 0 0-5.714 5.714c0 2.005 1.038 3.768 2.604 4.779C7.27 14.896 6 16.557 6 18.514c0 .293.03.583.086.871C7.614 21.857 9.67 24 12 24s4.386-2.143 5.914-4.615c.057-.288.086-.578.086-.87 0-1.958-1.27-3.619-2.89-4.593A5.705 5.705 0 0 0 17.714 9.143 5.71 5.71 0 0 0 12 3.429zm0 2.142a3.572 3.572 0 1 1 0 7.143 3.572 3.572 0 0 1 0-7.143z" />
                         </svg>
-                        {/* Perplexity — official mark from simple-icons */}
+                        {/* Perplexity - official mark from simple-icons */}
                         <svg
                           viewBox="0 0 24 24"
                           className="h-7 w-7 shrink-0 fill-white/60 transition-all hover:fill-white/90"
@@ -312,6 +314,9 @@ export default function Home() {
 
           <SurfaceShowcase />
 
+          {/* ── CLI SHOWCASE (added 2026-05-03 for YC S26 polish) ── */}
+          <CliShowcase />
+
           {/* ── FEATURES ── */}
           <section
             id="features"
@@ -325,7 +330,7 @@ export default function Home() {
                 What you can do
               </h2>
               <p className="font-body mt-5 max-w-xl text-lg leading-relaxed text-[#888480]">
-                One app that handles the full range of AI-assisted work — from quick questions to
+                One app that handles the full range of AI-assisted work - from quick questions to
                 long-running automations.
               </p>
 
@@ -466,15 +471,15 @@ export default function Home() {
 
               <div className="mt-10 flex flex-wrap justify-center gap-3">
                 {[
-                  { icon: Shield, text: 'Memory-safe by default — no buffer overflows' },
-                  { icon: Zap, text: 'Zero-cost abstractions — pays only for what it uses' },
+                  { icon: Shield, text: 'Memory-safe by default - no buffer overflows' },
+                  { icon: Zap, text: 'Zero-cost abstractions - pays only for what it uses' },
                   {
                     icon: Lock,
-                    text: 'Capability-based IPC — every tool call is permission-gated',
+                    text: 'Capability-based IPC - every tool call is permission-gated',
                   },
                   {
                     icon: Monitor,
-                    text: 'Direct access to OS APIs — GPU, camera, files, clipboard',
+                    text: 'Direct access to OS APIs - GPU, camera, files, clipboard',
                   },
                 ].map(({ icon: Icon, text }) => (
                   <div
@@ -571,7 +576,7 @@ export default function Home() {
 
           <div className="scroll-reveal opacity-0 translate-y-8 transition-all duration-1000 ease-out pb-12">
             <CtaSection
-              headline="Try it free — no credit card needed"
+              headline="Try it free - no credit card needed"
               body="Download in under a minute. Connect your preferred AI provider and start working. Uninstall anytime."
             />
           </div>

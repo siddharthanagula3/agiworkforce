@@ -321,7 +321,7 @@ export class SubscriptionService {
         //
         // The previous logic only blocked when
         //   `customer.metadata.supabase_user_id !== userId`.
-        // It accepted the customer if the metadata field was MISSING —
+        // It accepted the customer if the metadata field was MISSING -
         // which is exactly the case for legacy customers created before
         // metadata was attached. Combined with the email-fallback path,
         // a user who changed their Supabase email to one that previously
@@ -330,7 +330,7 @@ export class SubscriptionService {
         //
         // We now REQUIRE the metadata field to exist AND match. Customers
         // with no metadata are treated as "ownership unknown" and
-        // refused — operators can run a one-time backfill to attach
+        // refused - operators can run a one-time backfill to attach
         // metadata to legacy customers, after which the email fallback
         // becomes safe.
         const recordedUserId = customer.metadata?.['supabase_user_id'];
@@ -386,7 +386,7 @@ export class SubscriptionService {
           expand: ['data.items.data.price'],
         });
 
-        // Find the most recent valid subscription (past_due excluded — payment has failed)
+        // Find the most recent valid subscription (past_due excluded - payment has failed)
         const validStatusSet = new Set(['active', 'trialing']);
         stripeSubscription = recentSubs.data.find((sub) => validStatusSet.has(sub.status)) ?? null;
       }

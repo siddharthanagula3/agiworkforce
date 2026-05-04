@@ -54,7 +54,7 @@ async function handleCompletion(request: NextRequest): Promise<NextResponse> {
   const token = authHeader.substring(7);
 
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  // Use service role key for server-side JWT verification — anon key cannot verify
+  // Use service role key for server-side JWT verification - anon key cannot verify
   // JWT signatures server-side since it lacks the JWT secret.
   const supabase = createClient(supabaseUrl, requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 

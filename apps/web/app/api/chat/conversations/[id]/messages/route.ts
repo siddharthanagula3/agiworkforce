@@ -18,7 +18,7 @@ import { getAuthenticatedUser } from '@/lib/api-auth';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** Wire-format message for the LLM provider call — not the canonical UI ChatMessage. */
+/** Wire-format message for the LLM provider call - not the canonical UI ChatMessage. */
 interface LlmTurnMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -161,7 +161,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     headers: {
       'Content-Type': 'application/json',
       Authorization: request.headers.get('authorization') || '',
-      // Do not forward cookies to internal LLM endpoint — Authorization header is sufficient.
+      // Do not forward cookies to internal LLM endpoint - Authorization header is sufficient.
     },
     body: JSON.stringify({
       model: model || conversation.model || 'auto',

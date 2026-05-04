@@ -27,7 +27,7 @@ type ConversationTag =
   | 'creative'
   | 'general';
 
-// Keyword-based classifier (no LLM call — simple and fast)
+// Keyword-based classifier (no LLM call - simple and fast)
 const KEYWORD_RULES: { tag: ConversationTag; patterns: RegExp[] }[] = [
   {
     tag: 'debug',

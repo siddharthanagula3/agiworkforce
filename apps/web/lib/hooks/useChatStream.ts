@@ -355,7 +355,7 @@ export function useChatStream(): UseChatStreamReturn {
               }
 
               // Handle finish reason
-              // We keep the originally selected model name for display consistency — the API
+              // We keep the originally selected model name for display consistency - the API
               // may return a different model name due to fallback or version differences.
               if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
                 updateMessage(assistantMessageId, { isStreaming: false });

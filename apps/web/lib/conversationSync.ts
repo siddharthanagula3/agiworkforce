@@ -1,11 +1,11 @@
 /**
- * ConversationSyncService — 3-device conversation sync (web ↔ mobile ↔ desktop)
+ * ConversationSyncService - 3-device conversation sync (web ↔ mobile ↔ desktop)
  *
  * Uses the existing `web_conversations` + `web_messages` Supabase tables with
  * realtime subscriptions for live cross-device push. Conflict resolution is
  * last-write-wins based on `updated_at` timestamps.
  *
- * Expected table shape (uses existing tables — no migration needed):
+ * Expected table shape (uses existing tables - no migration needed):
  *
  * ```sql
  * web_conversations (
@@ -308,7 +308,7 @@ export class ConversationSyncService {
     const localTime = new Date(local.updated_at ?? local.created_at).getTime();
     const remoteTime = new Date(remote.updated_at ?? remote.created_at).getTime();
 
-    // Remote wins on tie (safer — ensures server state is preserved)
+    // Remote wins on tie (safer - ensures server state is preserved)
     if (remoteTime >= localTime) {
       return remote;
     }
@@ -328,7 +328,7 @@ export class ConversationSyncService {
       merged.set(msg.id, msg);
     }
 
-    // Overlay remote messages — last-write-wins per message
+    // Overlay remote messages - last-write-wins per message
     for (const msg of remote) {
       const existing = merged.get(msg.id);
       if (!existing) {
@@ -359,7 +359,7 @@ export class ConversationSyncService {
    *
    * 1. Pulls all remote conversations updated since `since`.
    * 2. Merges each with the corresponding local conversation (caller provides).
-   * 3. Returns the merged list — caller is responsible for updating local state
+   * 3. Returns the merged list - caller is responsible for updating local state
    *    and pushing any local-only conversations via `pushConversation()`.
    */
   async fullSync(
@@ -417,7 +417,7 @@ export class ConversationSyncService {
   // -------------------------------------------------------------------------
 
   /**
-   * Tear down the service — unsubscribes from realtime and clears listeners.
+   * Tear down the service - unsubscribes from realtime and clears listeners.
    */
   destroy(): void {
     this.unsubscribe();

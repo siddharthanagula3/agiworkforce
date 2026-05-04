@@ -299,7 +299,7 @@ async function upsertSubscriptionFromSession(
 
   let supabaseUserId =
     session.metadata?.['supabase_user_id'] ||
-    session.metadata?.['userId'] || // Legacy key — kept for sessions created before cleanup
+    session.metadata?.['userId'] || // Legacy key - kept for sessions created before cleanup
     session.client_reference_id;
 
   // If no user ID in metadata, try to find user by Stripe customer ID (BEST PRACTICE)
@@ -474,7 +474,7 @@ async function upsertSubscriptionFromSession(
         priceId,
         registeredPriceIds: Object.keys(getTierMapping()),
       },
-      'Checkout session contained unrecognised price ID — skipping subscription upsert. ' +
+      'Checkout session contained unrecognised price ID - skipping subscription upsert. ' +
         'This may happen legitimately during price migration; verify STRIPE_PRICE_* env vars if unexpected.',
     );
     return;
@@ -802,7 +802,7 @@ async function updateSubscriptionFromStripeSubscription(subscription: Stripe.Sub
         priceId: stripePriceId,
         registeredPriceIds: Object.keys(getTierMapping()),
       },
-      'Webhook contained unrecognised price ID — skipping subscription update. ' +
+      'Webhook contained unrecognised price ID - skipping subscription update. ' +
         'This may happen legitimately during price migration; verify STRIPE_PRICE_* env vars if unexpected.',
     );
     return;

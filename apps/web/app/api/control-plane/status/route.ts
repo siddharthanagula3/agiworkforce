@@ -18,7 +18,7 @@ import { requireEnv } from '@/utils/env';
 export const runtime = 'nodejs';
 
 // ---------------------------------------------------------------------------
-// Singleton service-role client — stateless, safe to reuse across requests
+// Singleton service-role client - stateless, safe to reuse across requests
 // ---------------------------------------------------------------------------
 
 let _serviceClient: ReturnType<typeof createClient> | null = null;
@@ -64,7 +64,7 @@ interface ControlPlaneResponse {
   recentActivity: ActivityRow[];
 }
 
-// Provider probes — fast HEAD requests with a 4 s timeout
+// Provider probes - fast HEAD requests with a 4 s timeout
 const PROVIDER_PROBES: Array<{ name: string; url: string }> = [
   { name: 'Anthropic', url: 'https://anthropic.com' },
   { name: 'OpenAI', url: 'https://openai.com' },
@@ -122,7 +122,7 @@ async function authenticateRequest(request: NextRequest): Promise<string | null>
 }
 
 export async function GET(request: NextRequest) {
-  // Rate limit: use 'health-check' bucket (30 req/min) — appropriate for polling
+  // Rate limit: use 'health-check' bucket (30 req/min) - appropriate for polling
   const rateLimitResponse = await withRateLimit(request, 'health-check');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
 
     if (heartbeats && Array.isArray(heartbeats)) {
       const ONLINE_MS = 5 * 60 * 1000; // 5 min
-      const OFFLINE_MS = 60 * 60 * 1000; // 1 hr — beyond this still "offline"
+      const OFFLINE_MS = 60 * 60 * 1000; // 1 hr - beyond this still "offline"
       const now = Date.now();
 
       for (const hb of heartbeats as Array<{ surface_id: string; last_seen_at: string }>) {
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
       }
     }
   } catch {
-    // Table not yet created — all surfaces remain 'unknown'
+    // Table not yet created - all surfaces remain 'unknown'
   }
 
   // ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ export async function GET(request: NextRequest) {
       completedToday: (completedRes as { count: number | null }).count ?? 0,
     };
   } catch {
-    // Table not yet created — return zeros
+    // Table not yet created - return zeros
   }
 
   // ---------------------------------------------------------------------------
@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
       }));
     }
   } catch {
-    // Table not yet created — empty feed
+    // Table not yet created - empty feed
   }
 
   const response: ControlPlaneResponse = {
