@@ -188,7 +188,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
         onError?.(
           isSimple
             ? "This model can't see images. Please choose a different model from the dropdown above, or remove the image."
-            : `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
+            : `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like Claude Sonnet 4.6 or Gemini Pro.`,
         );
         // Filter out images, but allow other files if any
         const nonImageFiles = files.filter((f) => !f.type.startsWith('image/'));
@@ -273,7 +273,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
         onError?.(
           isSimple
             ? "This model can't see images. Please choose a different model from the dropdown above."
-            : `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like GPT-5.2 or Claude Sonnet.`,
+            : `The model "${metadata.name}" does not support image attachments. Please switch to a vision-capable model like Claude Sonnet 4.6 or Gemini Pro.`,
         );
         return;
       }

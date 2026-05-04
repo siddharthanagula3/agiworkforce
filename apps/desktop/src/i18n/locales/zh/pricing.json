@@ -1,8 +1,10 @@
 {
   "free": "免费",
-  "starter": "入门版",
-  "pro": "专业版",
-  "team": "团队版",
+  "localOnly": "仅本地",
+  "byok": "BYOK",
+  "hobby": "Hobby",
+  "pro": "Pro",
+  "max": "Max",
   "enterprise": "企业版",
   "monthly": "按月",
   "yearly": "按年",

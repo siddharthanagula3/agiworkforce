@@ -104,6 +104,11 @@ export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({ className }) =
 
       {/* Branded sub-tagline */}
       <p className="text-sm text-white/40 font-medium">{subline}</p>
+
+      {/* Platform tagline */}
+      <p className="text-xs text-white/30 italic mt-1">
+        Beyond one model. Beyond one surface. AGI in your hands.
+      </p>
     </div>
   );
 };
