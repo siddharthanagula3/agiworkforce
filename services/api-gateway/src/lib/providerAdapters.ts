@@ -16,11 +16,12 @@ import {
 } from '@agiworkforce/providers-anthropic';
 import { createOpenAIAdapter, type OpenAIAdapterConfig } from '@agiworkforce/providers-openai';
 import { createOllamaAdapter, type OllamaAdapterConfig } from '@agiworkforce/providers-ollama';
+import { createGoogleAdapter, type GoogleAdapterConfig } from '@agiworkforce/providers-google';
 import type { ProviderAdapter } from '@agiworkforce/types';
 
-export type ProviderId = 'anthropic' | 'openai' | 'ollama';
+export type ProviderId = 'anthropic' | 'openai' | 'ollama' | 'google';
 
-export const SUPPORTED_PROVIDER_IDS = ['anthropic', 'openai', 'ollama'] as const;
+export const SUPPORTED_PROVIDER_IDS = ['anthropic', 'openai', 'ollama', 'google'] as const;
 
 interface ProviderAvailability {
   id: ProviderId;
@@ -44,6 +45,10 @@ export function listProviderAvailability(): ProviderAvailability[] {
         // Ollama is "available" if the env points at one — the daemon
         // probe lives on the catalog endpoint, not here.
         return { id, available: true };
+      case 'google':
+        return process.env['GOOGLE_API_KEY']
+          ? { id, available: true }
+          : { id, available: false, unavailableReason: 'GOOGLE_API_KEY not set' };
     }
   });
 }
@@ -91,6 +96,15 @@ export function buildProviderAdapter(id: ProviderId): ProviderAdapter | null {
         config.apiKey = process.env['OLLAMA_API_KEY'];
       }
       return createOllamaAdapter(config);
+    }
+    case 'google': {
+      const apiKey = process.env['GOOGLE_API_KEY'];
+      if (!apiKey) return null;
+      const config: GoogleAdapterConfig = { apiKey };
+      if (process.env['GOOGLE_GENAI_BASE_URL']) {
+        config.baseUrl = process.env['GOOGLE_GENAI_BASE_URL'];
+      }
+      return createGoogleAdapter(config);
     }
   }
 }
