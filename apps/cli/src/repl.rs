@@ -34,6 +34,8 @@ pub async fn run_repl(
     team_mode: bool,
     auto_approve_safe: bool,
     quiet: bool,
+    permission_mode: crate::cli_options::PermissionMode,
+    auto_approve_plan: bool,
 ) -> Result<()> {
     let provider_name = crate::models::detect_provider(model);
     output::print_banner(model, &format!("{:?}", provider_name).to_lowercase());
@@ -45,6 +47,15 @@ pub async fn run_repl(
     session.quiet = quiet;
     session.fallback_model = fallback_model;
     session.session_name = session_name;
+    // Sprint B4: thread the initial permission mode + auto-approve flag
+    // into the session before the REPL loop. The /plan slash command can
+    // change permission_mode at runtime; auto_approve_plan is a one-shot
+    // CLI flag and only affects the very first plan write.
+    session.permission_mode = permission_mode;
+    session.auto_approve_plan = auto_approve_plan;
+    if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
+        session.plan_mode = true;
+    }
 
     // Enable team mode if requested
     if team_mode {
@@ -598,15 +609,74 @@ fn handle_slash_command(
                 return SlashResult::Btw(arg.to_string());
             }
         }
-        "/plan" => {
-            session.plan_mode = !session.plan_mode;
-            if session.plan_mode {
-                output::print_info(
-                    "Plan mode ON — only read-only tools (read_file, search_files, list_directory, web_search, web_fetch).",
+        // Sprint B4: 3-state /plan command. The legacy boolean toggle
+        // (`/plan`) becomes "/plan on" (entering plan mode + clearing
+        // approval). Sub-commands `accept`, `reject`, `show`, `off` drive
+        // the model-written-plan -> approve -> execute flow. Without
+        // arguments, `/plan` flips between on (Plan + unapproved) and
+        // off (Default + reset).
+        "/plan" if arg.is_empty() || arg == "on" => {
+            session.permission_mode = crate::cli_options::PermissionMode::Plan;
+            session.plan_mode = true;
+            session.plan_approved = false;
+            output::print_info(
+                "Plan mode ON. Ask the model to plan; then `/plan accept` or `/plan reject <feedback>`.",
+            );
+        }
+        "/plan" if arg == "off" => {
+            session.permission_mode = crate::cli_options::PermissionMode::Default;
+            session.plan_mode = false;
+            session.reset_plan_state();
+            output::print_info("Plan mode OFF. All tools available.");
+        }
+        "/plan" if arg == "accept" || arg == "approve" => {
+            if !matches!(
+                session.permission_mode,
+                crate::cli_options::PermissionMode::Plan
+            ) {
+                output::print_warn(
+                    "/plan accept: not in plan mode. Use `/plan` to enter first.",
+                );
+            } else if session.current_plan.is_none() {
+                output::print_warn(
+                    "/plan accept: no plan to approve yet. Ask the model to call `update_plan` first.",
                 );
             } else {
-                output::print_info("Plan mode OFF — all tools available.");
+                session.plan_approved = true;
+                output::print_info("Plan approved. Mutating tools enabled for this session.");
             }
+        }
+        "/plan" if arg.starts_with("reject") => {
+            let feedback = arg.strip_prefix("reject").unwrap_or("").trim().to_string();
+            if feedback.is_empty() {
+                output::print_warn(
+                    "/plan reject: needs a reason. Usage: /plan reject <feedback>",
+                );
+            } else {
+                session.plan_rejection_feedback = Some(feedback);
+                session.current_plan = None;
+                session.current_plan_path = None;
+                session.plan_approved = false;
+                output::print_info(
+                    "Plan rejected. Feedback queued for the model on the next turn.",
+                );
+            }
+        }
+        "/plan" if arg == "show" || arg == "view" => {
+            match (&session.current_plan, &session.current_plan_path) {
+                (Some(plan), Some(path)) => {
+                    eprintln!("\n# Plan ({})\n\n{}", path.display(), plan.render_markdown());
+                }
+                (Some(plan), None) => {
+                    eprintln!("\n{}", plan.render_markdown());
+                }
+                _ => output::print_info("No plan yet. Ask the model to call `update_plan`."),
+            }
+        }
+        "/plan" => {
+            output::print_warn(&format!(
+                "Unknown /plan subcommand: {arg}. Use one of: on | off | accept | reject <feedback> | show"
+            ));
         }
         "/fast" => {
             let fast_model = config.default.fast_model.as_deref();
