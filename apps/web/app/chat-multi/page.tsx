@@ -19,13 +19,16 @@ import { streamFromProvider } from '@/lib/providerStreamClient';
 import type { ChatRequest, StreamChunk } from '@agiworkforce/types';
 import { createClient } from '@/utils/supabase/client';
 
-type ProviderId = 'anthropic' | 'openai' | 'ollama';
+type ProviderId = 'anthropic' | 'openai' | 'ollama' | 'google';
 
 const DEFAULT_MODEL_BY_PROVIDER: Record<ProviderId, string> = {
   anthropic: 'claude-haiku-4.5',
   openai: 'gpt-5.4-mini',
   ollama: 'llama3.2',
+  google: 'gemini-3.1-flash-lite',
 };
+
+const PROVIDER_IDS: readonly ProviderId[] = ['anthropic', 'openai', 'google', 'ollama'] as const;
 
 interface ProviderRunState {
   providerId: ProviderId;
@@ -54,6 +57,7 @@ export default function MultiProviderChatPage(): ReactElement {
     anthropic: initialState('anthropic'),
     openai: initialState('openai'),
     ollama: initialState('ollama'),
+    google: initialState('google'),
   });
   const [busy, setBusy] = useState(false);
 
@@ -158,9 +162,7 @@ export default function MultiProviderChatPage(): ReactElement {
     if (!prompt.trim() || busy) return;
     setBusy(true);
     const ctrl = new AbortController();
-    await Promise.allSettled(
-      (['anthropic', 'openai', 'ollama'] as ProviderId[]).map((id) => runProvider(id, ctrl)),
-    );
+    await Promise.allSettled(PROVIDER_IDS.map((id) => runProvider(id, ctrl)));
     setBusy(false);
   };
 
@@ -197,8 +199,8 @@ export default function MultiProviderChatPage(): ReactElement {
         {busy ? 'Streaming…' : 'Run on all providers'}
       </button>
 
-      <section className="mt-6 grid gap-4 md:grid-cols-3">
-        {(['anthropic', 'openai', 'ollama'] as ProviderId[]).map((id) => (
+      <section className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {PROVIDER_IDS.map((id) => (
           <ProviderCard key={id} run={runs[id]} />
         ))}
       </section>

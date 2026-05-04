@@ -15,6 +15,7 @@
   "dependencies": {
     "@agiworkforce/llm-normalize": "workspace:*",
     "@agiworkforce/providers-anthropic": "workspace:*",
+    "@agiworkforce/providers-google": "workspace:*",
     "@agiworkforce/providers-ollama": "workspace:*",
     "@agiworkforce/providers-openai": "workspace:*",
     "@agiworkforce/types": "workspace:*",
