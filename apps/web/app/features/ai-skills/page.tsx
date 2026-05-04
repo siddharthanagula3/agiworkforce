@@ -31,6 +31,7 @@ import {
 import { Header } from '../../../components/layout/Header';
 import { CtaSection } from '../../../components/marketing/CtaSection';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { MARKETING } from '../../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'AI Skills | AGI Workforce - AI Employees Across Multiple Categories',
@@ -50,8 +51,7 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'AI Skills | AGI Workforce - Pre-Built AI Employees',
-    description:
-      'Pre-built AI specialists across 23 categories. From engineering to finance, marketing to creative - AI employees that handle real work.',
+    description: `Pre-built AI specialists across ${MARKETING.categories.display} categories. From engineering to finance, marketing to creative - AI employees that handle real work.`,
     type: 'website',
     url: 'https://agiworkforce.com/features/ai-skills',
     images: [
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce - AI Skills across 23 categories',
+        alt: `AGI Workforce - AI Skills across ${MARKETING.categories.display} categories`,
       },
     ],
   },
@@ -69,8 +69,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AI Skills | AGI Workforce - Pre-Built AI Employees',
-    description:
-      'Pre-built AI specialists across 23 categories including engineering, marketing, finance, and more. Real work, not just code.',
+    description: `Pre-built AI specialists across ${MARKETING.categories.display} categories including engineering, marketing, finance, and more. Real work, not just code.`,
     images: ['/app-preview.png'],
   },
 };
@@ -81,11 +80,10 @@ const jsonLd = {
   name: 'AGI Workforce',
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'macOS, Windows, Linux',
-  description:
-    'AI desktop application with pre-built AI employee skills across 23 categories including engineering, AI & data, marketing, operations, finance, IT, support, creative, HR, and more.',
+  description: `AI desktop application with pre-built AI employee skills across ${MARKETING.categories.display} categories including engineering, AI & data, marketing, operations, finance, IT, support, creative, HR, and more.`,
   featureList: [
     'Pre-built AI employee skills',
-    '23 skill categories',
+    `${MARKETING.categories.display} skill categories`,
     'Engineering AI specialists',
     'AI & data science tools',
     'Marketing automation',
@@ -310,7 +308,7 @@ export default function AISkillsPage() {
                 AI Employees, Ready to Work
               </h1>
               <p className="mt-5 text-lg leading-relaxed text-[#888480]">
-                150+ pre-built specialists across 23 categories - engineering, finance, legal,
+                {MARKETING.skills.display} pre-built specialists across {MARKETING.categories.display} categories - engineering, finance, legal,
                 creative, and 19 more.
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -332,15 +330,20 @@ export default function AISkillsPage() {
               {/* Stats - single row */}
               <div className="mt-14 flex items-center justify-center gap-3 text-sm text-[#555150]">
                 <span>
-                  <span className="font-medium text-[#edebe8]">150+</span> Pre-Built Skills
+                  <span className="font-medium text-[#edebe8]">{MARKETING.skills.display}</span>{' '}
+                  Pre-Built Skills
                 </span>
                 <span aria-hidden="true">|</span>
                 <span>
-                  <span className="font-medium text-[#edebe8]">23</span> Categories
+                  <span className="font-medium text-[#edebe8]">
+                    {MARKETING.categories.display}
+                  </span>{' '}
+                  Categories
                 </span>
                 <span aria-hidden="true">|</span>
                 <span>
-                  <span className="font-medium text-[#edebe8]">6</span> Surfaces
+                  <span className="font-medium text-[#edebe8]">{MARKETING.surfaces.display}</span>{' '}
+                  Surfaces
                 </span>
               </div>
             </div>

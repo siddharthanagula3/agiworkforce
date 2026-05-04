@@ -47,7 +47,7 @@ const releases: Release[] = [
     date: 'February 2026',
     tag: 'stable',
     highlights: [
-      'Multi-model chat with 25+ providers',
+      'Multi-model chat with 10+ providers',
       'Parallel agent orchestration (swarm engine)',
       'AI skills across multiple categories',
       'Unlimited MCP tool support (stdio + SSE + HTTP)',

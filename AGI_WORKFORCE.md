@@ -4,11 +4,11 @@
 
 ## What this is
 
-A multi-surface AI agent platform that wraps **25 LLM providers** (cloud + local + BYOK + managed Hobby cloud) into a unified Claude-Desktop / ChatGPT / Gemini alternative. Six shipping surfaces, **one chat layout**. The Rust CLI (`apps/cli`) is the engine; Desktop / Web / Mobile / Chrome ext / VS Code ext wrap it.
+A multi-surface AI agent platform that wraps **10+ Providers** (cloud + local + BYOK + managed Hobby cloud) into a unified Claude-Desktop / ChatGPT / Gemini alternative. Six shipping surfaces, **one chat layout**. Tagline: *Beyond one model. Beyond one surface. AGI in your hands.* The Rust CLI (`apps/cli`) is the engine; Desktop / Web / Mobile / Chrome ext / VS Code ext wrap it.
 
 ## True differentiators (verified May 2026)
 
-1. **Multi-provider in one UI** — 25 providers, switch mid-conversation. Anthropic locks to Claude only.
+1. **Multi-provider in one UI** — 10+ Providers, switch mid-conversation. Anthropic locks to Claude only.
 2. **BYOK + Local LLM (Ollama, LMStudio)** — Anthropic doesn't accept user keys.
 3. **Cross-provider session continuity** — Claude → GPT → Llama in same thread.
 
@@ -18,7 +18,7 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 
 | Surface         | Path                     | Stack                                                                                                 | Status                                                            | Distribution path                                                            |
 | --------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **CLI**         | `apps/cli/`              | Rust monolith, 192 .rs / 152K LOC, Ratatui TUI 125 files, 22 subcommands, 1,848 tests, 8 providers    | Cargo green; binary at `~/.cargo/bin/agiworkforce` (5.7MB arm64)  | npm (`@agiworkforce/cli`) + Homebrew + GitHub releases + `install.sh`        |
+| **CLI**         | `apps/cli/`              | Rust monolith, 195 .rs / 155,029 LOC, Ratatui TUI 125 files, 22 subcommands, 19 hook events, 914 tests, 10+ Providers | Cargo green; binary at `~/.cargo/bin/agiworkforce` (5.7MB arm64)  | npm (`@agiworkforce/cli`) + Homebrew + GitHub releases + `install.sh`        |
 | **Desktop**     | `apps/desktop/`          | Tauri v2 + React (Vite), 737 .rs backend / 373K LOC, 1,469 IPC commands, 84 component dirs, 84 stores | Builds clean; chat surface = `ChatInterface` from `packages/chat` | DMG (macOS, signed `D2PR62RLT4`) + EXE (Windows, EV cert pending) + AppImage |
 | **Web**         | `apps/web/`              | Next.js 14 app router, 231 routes + 86 API endpoints, Vite SPA bundled into `/public/chat/`           | Vercel deployed at `agiworkforce.com/chat`                        | Hosted at agiworkforce.com                                                   |
 | **Mobile**      | `apps/mobile/` + `ios/`  | Expo + RN, 41 screens, drawer nav, MMKV+biometric, dispatch (Anthropic Dispatch parity)               | Expo build profiles ready (dev/preview/prod)                      | iOS App Store + Google Play (no listings yet)                                |
@@ -38,6 +38,7 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 | Hobby      | TBD ($5/mo target) | YES           | Managed cloud, limited credits, basic models. Only paid MVP tier.                    |
 | Pro        | TBD                | NO (waitlist) | Released after security audit clears.                                                |
 | Max        | TBD                | NO (waitlist) | Released after security audit clears.                                                |
+| Enterprise | Contact sales      | Contact sales | SSO, SCIM, custom retention, audit log export, dedicated support.                    |
 
 ## Local vs Cloud mode (architecture)
 
@@ -55,7 +56,7 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 | **Wave 2** | Weeks 2-5  | Desktop v1.0 — pixel-close Claude Desktop UI, Windows EV cert, web UnifiedAgenticChat done, IPC pruning | In progress |
 | **Wave 3** | Weeks 6-9  | Mobile (App Store + Play) + Chrome ext (Web Store) + VS Code ext (Marketplace) + Hobby tier launch      | Pending     |
 
-Active sprint plan: [docs/plans/sprint1-vault-rewire.md](docs/plans/sprint1-vault-rewire.md). Master remediation: [docs/plans/master-remediation.md](docs/plans/master-remediation.md).
+Active sprint plan: [docs/plans/sprint1-vault-rewire.md](docs/plans/sprint1-vault-rewire.md). Master remediation: [docs/plans/master-remediation.md](docs/plans/master-remediation.md). License: PROPRIETARY (see [LICENSE](LICENSE)).
 
 ## Documentation map
 

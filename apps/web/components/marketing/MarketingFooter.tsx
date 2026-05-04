@@ -97,8 +97,12 @@ export function MarketingFooter() {
           </div>
         </div>
 
-        <div className="mt-12 border-t border-white/10 pt-8 text-center text-sm text-zinc-600">
-          &copy; {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
+        <div className="mt-12 border-t border-white/10 pt-8 text-center text-sm text-zinc-600 space-y-1">
+          <div>&copy; {new Date().getFullYear()} AGI Automation LLC. All rights reserved.</div>
+          <div>&copy; 2026 AGI Workforce. Proprietary.</div>
+          <div className="text-xs text-zinc-700">
+            Coming soon: Azure OpenAI, AWS Bedrock provider integrations.
+          </div>
         </div>
       </div>
     </footer>
