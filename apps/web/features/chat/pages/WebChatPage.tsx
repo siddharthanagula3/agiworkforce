@@ -201,7 +201,6 @@ export default function WebChatPage() {
   // from the first user message content if the conversation is still named "New Chat".
   // Intentionally only re-runs on messages.length, not the full messages array, to
   // avoid re-running on every streaming chunk.
-
   useEffect(() => {
     if (!activeConversationId || messages.length !== 2) return;
     const convo = conversations.find((c) => c.id === activeConversationId);
@@ -210,6 +209,7 @@ export default function WebChatPage() {
     if (!firstUser || firstUser.role !== 'user') return;
     const title = firstUser.content.trim().slice(0, 60).replace(/\n/g, ' ') || 'New Chat';
     updateConversation(activeConversationId, { title });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, activeConversationId, conversations, updateConversation]);
 
   const handleDeleteMessage = useCallback(
@@ -271,7 +271,8 @@ export default function WebChatPage() {
               <div className="text-center">
                 <h1 className="text-2xl font-semibold text-foreground">What can I help with?</h1>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Ask anything — I support 10+ providers including Claude, GPT, Gemini, and local LLMs.
+                  Ask anything — I support 10+ providers including Claude, GPT, Gemini, and local
+                  LLMs.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2 w-full max-w-lg">
