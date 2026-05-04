@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-03-27",
+  "lastUpdated": "2026-05-04",
   "providers": {
     "managed_cloud": {
       "label": "Managed Cloud",
@@ -39,16 +39,18 @@
       },
       "modelPrefixes": ["gpt-", "o1", "o3", "o4", "dall-e", "tts-", "whisper", "sora", "gpt-image"],
       "aliases": [],
-      "defaultModel": "gpt-5.4",
+      "defaultModel": "gpt-5.5",
       "taskRouting": {
         "fast_completion": "gpt-5.4-mini",
         "code_generation": "gpt-5.4-codex-medium",
-        "complex_reasoning": "gpt-5.4-pro",
-        "chat": "gpt-5.4",
-        "vision": "gpt-5.4",
-        "long_context": "gpt-5.4"
+        "complex_reasoning": "gpt-5.5",
+        "chat": "gpt-5.5",
+        "vision": "gpt-5.5",
+        "long_context": "gpt-5.5"
       },
       "canonicalization": {
+        "gpt-5.5-2026-04-23": "gpt-5.5",
+        "gpt-5.5-latest": "gpt-5.5",
         "gpt-5.4-codex-low": "gpt-5.4-codex",
         "gpt-5.4-codex-medium": "gpt-5.4-codex",
         "gpt-5.4-codex-high": "gpt-5.4-codex",
@@ -82,7 +84,7 @@
       "taskRouting": {
         "fast_completion": "claude-haiku-4.5",
         "code_generation": "claude-sonnet-4.6",
-        "complex_reasoning": "claude-opus-4.6",
+        "complex_reasoning": "claude-opus-4.7",
         "chat": "claude-sonnet-4.6",
         "vision": "claude-sonnet-4.6",
         "long_context": "claude-sonnet-4.6"
@@ -91,7 +93,8 @@
         "claude-haiku-4-5": "claude-haiku-4.5",
         "claude-sonnet-4-5": "claude-sonnet-4.5",
         "claude-sonnet-4-6": "claude-sonnet-4.6",
-        "claude-opus-4-6": "claude-opus-4.6"
+        "claude-opus-4-6": "claude-opus-4.6",
+        "claude-opus-4-7": "claude-opus-4.7"
       }
     },
     "google": {
@@ -137,17 +140,19 @@
       },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
-      "defaultModel": "grok-4",
+      "defaultModel": "grok-4.3",
       "taskRouting": {
         "fast_completion": "grok-4-1-fast-reasoning",
-        "code_generation": "grok-4-1-fast-reasoning",
-        "complex_reasoning": "grok-4-1-fast-reasoning",
-        "chat": "grok-4-1-fast-reasoning",
-        "vision": "grok-4",
-        "long_context": "grok-4-1-fast-reasoning"
+        "code_generation": "grok-4.3",
+        "complex_reasoning": "grok-4.3",
+        "chat": "grok-4.3",
+        "vision": "grok-4.3",
+        "long_context": "grok-4.3"
       },
       "canonicalization": {
         "grok-4": "grok-4-0709",
+        "grok-4-latest": "grok-4.3",
+        "grok-4.3-latest": "grok-4.3",
         "grok-4-fast-reasoning": "grok-4-1-fast-reasoning",
         "grok-4-fast-non-reasoning": "grok-4-1-fast-reasoning"
       }
@@ -725,6 +730,42 @@
       "bestFor": ["Maximum Performance", "Complex Tasks", "Research"],
       "released": "January 2026"
     },
+    "gpt-5.5": {
+      "id": "gpt-5.5",
+      "apiModelId": "gpt-5.5",
+      "name": "GPT-5.5",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 400000,
+      "inputCost": 4.0,
+      "outputCost": 16.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 84.5,
+        "humaneval": 98.0,
+        "mmlu": 92.5,
+        "gpqa": 86.0,
+        "aime": 92.0
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Research"],
+      "released": "April 2026"
+    },
     "gpt-5.4-codex": {
       "id": "gpt-5.4-codex",
       "apiModelId": "gpt-5.4-codex",
@@ -795,6 +836,43 @@
       "qualityTier": "best",
       "bestFor": ["Complex Reasoning", "Math", "Science", "Hard Problems"],
       "released": "January 2026"
+    },
+    "claude-opus-4.7": {
+      "id": "claude-opus-4.7",
+      "apiModelId": "claude-opus-4-7",
+      "name": "Claude 4.7 Opus",
+      "provider": "anthropic",
+      "modelType": "reasoning",
+      "contextWindow": 1000000,
+      "inputCost": 5.0,
+      "outputCost": 25.0,
+      "variantPartner": "claude-sonnet-4.6",
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": false
+      },
+      "benchmarks": {
+        "swebench": 84.0,
+        "humaneval": 98.5,
+        "mmlu": 91.0,
+        "gpqa": 91.0,
+        "aime": 95.0
+      },
+      "speed": "slow",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
+      "released": "April 2026"
     },
     "claude-opus-4.6": {
       "id": "claude-opus-4.6",
@@ -1137,6 +1215,42 @@
       "qualityTier": "best",
       "bestFor": ["Complex Reasoning", "Research", "Enterprise"],
       "released": "January 2026"
+    },
+    "grok-4.3": {
+      "id": "grok-4.3",
+      "apiModelId": "grok-4.3",
+      "name": "Grok 4.3",
+      "provider": "xai",
+      "modelType": "reasoning",
+      "contextWindow": 1000000,
+      "inputCost": 1.8,
+      "outputCost": 9.0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": true,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 68.0,
+        "humaneval": 96.5,
+        "mmlu": 91.5,
+        "gpqa": 80.0,
+        "aime": 82.0
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Real-time Info", "Video Input", "Long Context (1M)", "Reasoning"],
+      "released": "April 2026"
     },
     "grok-4": {
       "id": "grok-4",
