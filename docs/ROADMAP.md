@@ -54,7 +54,7 @@ curl -fsSL https://agiworkforce.com/install.sh | bash
 # Or: GitHub releases
 ```
 
-**Pitch for launch post:** "Codex CLI but with 25 providers including local Ollama. BYOK. No vendor lock."
+**Pitch for launch post:** "Codex CLI but with 10+ Providers including local Ollama. BYOK. No vendor lock."
 
 ---
 
