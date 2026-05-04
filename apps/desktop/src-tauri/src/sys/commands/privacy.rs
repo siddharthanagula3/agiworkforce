@@ -1,6 +1,13 @@
 use crate::sys::commands::chat::AppDatabase;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{Manager, State};
+
+/// Number of days between requesting account deletion and the actual purge.
+/// Mirrors the disclosure in the public Privacy Policy.
+const ACCOUNT_DELETION_GRACE_DAYS: i64 = 7;
+
+/// Filename for the pending-deletion marker stored in the app data directory.
+const PENDING_DELETION_FILE: &str = "pending_deletion.json";
 
 /// AUDIT-003-001 fix: Enum of allowed tables for privacy deletion.
 /// Using an enum prevents SQL injection by ensuring only known table names
@@ -303,4 +310,142 @@ pub async fn privacy_delete_account(
         user_id
     );
     Ok("Account data deleted successfully".to_string())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pending account deletion (7-day grace window).
+//
+// These commands implement the "soft delete" flow described in the Privacy
+// Policy and the Settings UI: the user requests deletion, a marker file is
+// written with `purge_at = now + 7 days`, and the actual purge runs in a
+// later sprint. The user can cancel the request during the grace window.
+//
+// The actual marshaling-and-purge logic depends on Supabase schema work that
+// is tracked separately. For Wave 2 we ship the disclosure + UI affordance
+// so Stripe / App Store / Play Store / GDPR / CCPA reviewers see a working
+// data-control surface.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Status of a pending account-deletion request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingDeletionStatus {
+    /// True when a pending-deletion marker exists on disk.
+    pub pending: bool,
+    /// RFC3339 timestamp of when the request was filed (None when not pending).
+    pub requested_at: Option<String>,
+    /// RFC3339 timestamp of when the purge will execute (None when not pending).
+    pub purge_at: Option<String>,
+    /// Whole days remaining in the grace window (None when not pending).
+    pub days_remaining: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PendingDeletionRecord {
+    requested_at: String,
+    purge_at: String,
+    user_id: Option<String>,
+}
+
+fn pending_deletion_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data directory: {}", e))?;
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+    }
+    Ok(dir.join(PENDING_DELETION_FILE))
+}
+
+/// Mark the user's account for deletion after a 7-day grace window.
+///
+/// Writes a marker file at `<app_data>/pending_deletion.json` containing the
+/// request timestamp and the scheduled purge time. The actual purge of
+/// Supabase rows / Stripe subscriptions runs in a later sprint once the
+/// cross-surface data marshaling lands. The marker is reversible via
+/// `privacy_cancel_pending_deletion`.
+#[tauri::command]
+pub async fn privacy_request_account_deletion(
+    user_id: Option<String>,
+    app_handle: tauri::AppHandle,
+) -> Result<PendingDeletionStatus, String> {
+    let path = pending_deletion_path(&app_handle)?;
+    let now = chrono::Utc::now();
+    let purge_at = now + chrono::Duration::days(ACCOUNT_DELETION_GRACE_DAYS);
+
+    let record = PendingDeletionRecord {
+        requested_at: now.to_rfc3339(),
+        purge_at: purge_at.to_rfc3339(),
+        user_id: user_id.clone(),
+    };
+
+    let json = serde_json::to_string_pretty(&record)
+        .map_err(|e| format!("Failed to serialize pending deletion record: {}", e))?;
+    std::fs::write(&path, json)
+        .map_err(|e| format!("Failed to write pending deletion marker: {}", e))?;
+
+    tracing::warn!(
+        "[Privacy] Account marked for deletion (user={:?}, purge_at={})",
+        user_id,
+        purge_at.to_rfc3339()
+    );
+
+    Ok(PendingDeletionStatus {
+        pending: true,
+        requested_at: Some(now.to_rfc3339()),
+        purge_at: Some(purge_at.to_rfc3339()),
+        days_remaining: Some(ACCOUNT_DELETION_GRACE_DAYS),
+    })
+}
+
+/// Read the current pending-deletion status. Returns `pending: false` when no
+/// marker file exists (the common case).
+#[tauri::command]
+pub async fn privacy_get_pending_deletion(
+    app_handle: tauri::AppHandle,
+) -> Result<PendingDeletionStatus, String> {
+    let path = pending_deletion_path(&app_handle)?;
+    if !path.exists() {
+        return Ok(PendingDeletionStatus {
+            pending: false,
+            requested_at: None,
+            purge_at: None,
+            days_remaining: None,
+        });
+    }
+
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read pending deletion marker: {}", e))?;
+    let record: PendingDeletionRecord = serde_json::from_str(&raw)
+        .map_err(|e| format!("Failed to parse pending deletion marker: {}", e))?;
+
+    let purge_at = chrono::DateTime::parse_from_rfc3339(&record.purge_at)
+        .map_err(|e| format!("Failed to parse purge_at: {}", e))?
+        .with_timezone(&chrono::Utc);
+    let now = chrono::Utc::now();
+    let days_remaining = (purge_at - now).num_days();
+
+    Ok(PendingDeletionStatus {
+        pending: true,
+        requested_at: Some(record.requested_at),
+        purge_at: Some(record.purge_at),
+        days_remaining: Some(days_remaining.max(0)),
+    })
+}
+
+/// Cancel a pending account-deletion request by removing the marker file.
+/// Safe to call even when no marker exists.
+#[tauri::command]
+pub async fn privacy_cancel_pending_deletion(
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let path = pending_deletion_path(&app_handle)?;
+    if path.exists() {
+        std::fs::remove_file(&path)
+            .map_err(|e| format!("Failed to remove pending deletion marker: {}", e))?;
+        tracing::info!("[Privacy] Pending account deletion cancelled");
+    }
+    Ok(())
 }

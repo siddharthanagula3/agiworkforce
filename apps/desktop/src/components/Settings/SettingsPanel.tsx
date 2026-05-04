@@ -192,6 +192,11 @@ const LazyFeaturesPrivacySettings = lazy(() =>
     default: module.FeaturesPrivacySettings,
   })),
 );
+const LazyPrivacyDataSection = lazy(() =>
+  import('./Privacy/DataSection').then((module) => ({
+    default: module.DataSection,
+  })),
+);
 const LazyOAuthCredentialsPanel = lazy(() =>
   import('./OAuthCredentialsPanel').then((module) => ({
     default: module.OAuthCredentialsPanel,
@@ -1406,6 +1411,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               </p>
               <SettingsSectionLoader label="Loading security settings...">
                 <LazyMasterPasswordSettings />
+              </SettingsSectionLoader>
+            </div>
+            <div className="pt-6 border-t border-border">
+              <SettingsSectionLoader label="Loading data controls...">
+                <LazyPrivacyDataSection />
               </SettingsSectionLoader>
             </div>
             <div className="pt-6 border-t border-border">
