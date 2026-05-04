@@ -1254,12 +1254,66 @@ message -- revise and call `update_plan` again.\n\n"
                     ));
                 }
 
+                // Sprint S13: SubagentStart fires before the spawn. Hook
+                // observers see the description + prompt (truncated) so
+                // dashboards can show "agent is spawning <task> for <prompt>"
+                // in real time. The hook is observation-only; blocking is
+                // already handled by the plan-mode gate above.
+                hooks::run_hooks(
+                    &hcfg,
+                    hooks::HookEvent::SubagentStart,
+                    &hooks::HookInput {
+                        event: "SubagentStart".to_string(),
+                        session_id: None,
+                        model: Some(self.model.clone()),
+                        tool_name: Some(tc.name.clone()),
+                        tool_args: Some(tc.arguments.clone()),
+                        tool_output: None,
+                        message: Some(format!(
+                            "subagent_spawn description={:?} prompt_len={}",
+                            description,
+                            prompt.len()
+                        )),
+                        tool_execution: None,
+                    },
+                )
+                .await;
+
                 // SAFETY: We just set subagent_manager above if it was None.
                 let mgr = self
                     .subagent_manager
                     .as_ref()
                     .expect("subagent_manager was just initialized above");
                 let id_result = mgr.spawn(&description, &prompt).await;
+
+                // Sprint S13: SubagentStop fires after the spawn call returns.
+                // For sync-spawn-then-poll managers, this signals the spawn
+                // completed (whether successful or errored); the underlying
+                // task may still be running async — observers wanting actual
+                // task-end should listen on PostToolUse for the wrapping
+                // task tool call (which fires when the result is collected).
+                hooks::run_hooks(
+                    &hcfg,
+                    hooks::HookEvent::SubagentStop,
+                    &hooks::HookInput {
+                        event: "SubagentStop".to_string(),
+                        session_id: None,
+                        model: Some(self.model.clone()),
+                        tool_name: Some(tc.name.clone()),
+                        tool_args: Some(tc.arguments.clone()),
+                        tool_output: id_result
+                            .as_ref()
+                            .ok()
+                            .map(|id| format!("subagent_id={}", id)),
+                        message: id_result
+                            .as_ref()
+                            .err()
+                            .map(|err| format!("spawn_error: {:#}", err)),
+                        tool_execution: None,
+                    },
+                )
+                .await;
+
                 task_spawn_results.push((
                     tc.id.clone(),
                     tc.name.clone(),
