@@ -114,6 +114,30 @@ pub struct AgentSession {
     pub max_turns: Option<usize>,
     /// Plan mode: only read-only tools allowed (read_file, search_files, list_directory, web_search, web_fetch).
     pub plan_mode: bool,
+    /// Sprint B4: tracked permission mode for the session. Mirrors
+    /// `--mode {plan|default|...}` from the CLI and the 3-state `/plan`
+    /// command at runtime. The mutating-tool gate uses this together
+    /// with `plan_approved` to decide whether to allow a tool call.
+    pub permission_mode: crate::cli_options::PermissionMode,
+    /// Sprint B4: real plan mode -- true once the user has approved the
+    /// current plan, unlocking mutating tools. Independent of `plan_mode`
+    /// (the read-only-tool gate) so headless flows can flip approval
+    /// without touching that gate.
+    pub plan_approved: bool,
+    /// Sprint B4: latest plan written by the model via `update_plan`.
+    /// Cleared on `/plan reject` and `/clear`.
+    pub current_plan: Option<crate::plan_mode::Plan>,
+    /// Sprint B4: path of the on-disk markdown rendering of the current
+    /// plan (`~/.agiworkforce/plans/<session-id>.md`). Set by the
+    /// `update_plan` tool handler.
+    pub current_plan_path: Option<std::path::PathBuf>,
+    /// Sprint B4: queued one-shot feedback string from `/plan reject`. The
+    /// next user-message send prepends this to the prompt so the model
+    /// sees why the plan was rejected, then clears the field.
+    pub plan_rejection_feedback: Option<String>,
+    /// Sprint B4: in headless mode, auto-approve the first complete plan
+    /// the model writes via `update_plan`. Set from `--auto-approve-plan`.
+    pub auto_approve_plan: bool,
     /// Skip all tool confirmation prompts.
     pub skip_permissions: bool,
     /// Auto-approve safe tools (reads, searches) — skip confirmation for them.
@@ -270,6 +294,12 @@ impl AgentSession {
             mcp_manager: None,
             max_turns: None,
             plan_mode: false,
+            permission_mode: crate::cli_options::PermissionMode::Default,
+            plan_approved: false,
+            current_plan: None,
+            current_plan_path: None,
+            plan_rejection_feedback: None,
+            auto_approve_plan: false,
             skip_permissions: false,
             auto_approve_safe: false,
             quiet: false,
@@ -395,6 +425,87 @@ impl AgentSession {
         self.turn_count = 0;
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
+        // Sprint B4: a fresh conversation starts with a fresh plan.
+        self.reset_plan_state();
+    }
+
+    /// Sprint B4: clear all four plan-mode state fields. Called from
+    /// `/clear` and `/plan off`. Does NOT touch `plan_mode` (the read-only
+    /// tool gate) -- the slash command owns that.
+    pub fn reset_plan_state(&mut self) {
+        self.plan_approved = false;
+        self.current_plan = None;
+        self.current_plan_path = None;
+        self.plan_rejection_feedback = None;
+    }
+
+    /// Sprint B4: handle a model `update_plan` tool call. Parses the args,
+    /// stores the plan on the session, persists to disk under
+    /// `~/.agiworkforce/plans/<session-id>.md`, and -- if
+    /// `auto_approve_plan` is set -- flips the approval bit so headless
+    /// flows (`-p --mode plan --auto-approve-plan`) proceed end-to-end
+    /// without a prompt. Returns the JSON result the model should see.
+    pub fn handle_update_plan(&mut self, args: &serde_json::Value) -> serde_json::Value {
+        let parsed: Result<crate::plan_mode::Plan, _> = serde_json::from_value(args.clone());
+        let plan = match parsed {
+            Ok(p) => p,
+            Err(e) => {
+                return serde_json::json!({
+                    "ok": false,
+                    "error": "invalid_arguments",
+                    "message": format!("update_plan: failed to parse arguments: {e}")
+                });
+            }
+        };
+
+        let session_id = self
+            .managed_session_id()
+            .map(str::to_string)
+            .unwrap_or_else(|| "ephemeral".to_string());
+
+        // Persist to disk; non-fatal if the home dir is unavailable.
+        let path_result = plan.write_to_disk(&session_id);
+        match &path_result {
+            Ok(p) => self.current_plan_path = Some(p.clone()),
+            Err(e) => {
+                eprintln!(
+                    "  warning: could not persist plan to disk: {e:#}"
+                );
+            }
+        }
+
+        let was_approved = self.plan_approved;
+        self.current_plan = Some(plan);
+
+        // Headless auto-approval -- only on the first plan write so that
+        // explicit `/plan reject` from a follow-up still requires the
+        // model to revise.
+        if self.auto_approve_plan && !was_approved {
+            self.plan_approved = true;
+        }
+
+        let path_str = self
+            .current_plan_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<unwritten>".to_string());
+
+        let message = if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
+            && !self.plan_approved
+        {
+            "plan written; awaiting user approval. Do not call mutating tools yet."
+        } else if was_approved {
+            "plan updated"
+        } else {
+            "plan written"
+        };
+
+        serde_json::json!({
+            "ok": true,
+            "message": message,
+            "path": path_str,
+            "plan_approved": self.plan_approved
+        })
     }
 
     /// Enable managed session persistence for this session.
@@ -647,8 +758,37 @@ impl AgentSession {
             );
         }
 
-        // Add user message
-        self.messages.push(Message::text("user", user_input));
+        // Add user message. Sprint B4: prepend two transient blocks when
+        // applicable -- (1) a one-shot rejection feedback if `/plan
+        // reject` queued one, (2) a per-turn plan-mode reminder so the
+        // model knows mutating tools require `update_plan` + approval.
+        // Both prepend to the user-visible input so the model sees them
+        // alongside the actual question. The reminder is re-added every
+        // turn (not baked into the system prompt) because plan mode and
+        // approval state can flip mid-conversation via `/plan`.
+        let mut prefix = String::new();
+        if let Some(feedback) = self.plan_rejection_feedback.take() {
+            prefix.push_str(&format!(
+                "USER REJECTED THE PREVIOUS PLAN. FEEDBACK: {feedback}\n\n"
+            ));
+        }
+        if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
+            && !self.plan_approved
+        {
+            prefix.push_str(
+                "[plan-mode] You must call the `update_plan` tool with a complete, ordered plan \
+of steps before any mutating action (run_command, edit_file, write_file, apply_patch, MCP tools, \
+task subagents). The user reviews and approves the plan; only then can you execute mutating \
+tools. If your plan is rejected, the rejection feedback will be prefixed to the next user \
+message -- revise and call `update_plan` again.\n\n"
+            );
+        }
+        let effective_input = if prefix.is_empty() {
+            user_input.to_string()
+        } else {
+            format!("{prefix}{user_input}")
+        };
+        self.messages.push(Message::text("user", &effective_input));
 
         // Save checkpoint for /rewind
         self.save_checkpoint();
@@ -965,6 +1105,25 @@ impl AgentSession {
                     continue;
                 }
 
+                // Sprint B4: block subagent spawns in unapproved plan mode
+                // for the same reason we block bash/edit/write -- a task
+                // subagent has the full mutating tool surface.
+                if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
+                    && !self.plan_approved
+                {
+                    let payload = serde_json::json!({
+                        "ok": false,
+                        "error": "plan_mode_unapproved",
+                        "message": "Plan mode is active and the current plan has not been approved. Call `update_plan` first; subagent tasks are blocked until the user approves."
+                    });
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id: tc.id.clone(),
+                        content: payload.to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                }
+
                 hooks::run_hooks(
                     &hcfg,
                     hooks::HookEvent::PreToolUse,
@@ -1264,6 +1423,28 @@ Files modified:
                     continue;
                 }
 
+                // Sprint B4: plan-mode gate. When the session is in plan
+                // mode and the user has not approved the current plan,
+                // refuse mutating tools. Returns a structured error so the
+                // model knows to call `update_plan` first instead of
+                // looping or surfacing a confusing failure.
+                if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
+                    && !self.plan_approved
+                    && is_mutating_tool(&tc.name)
+                {
+                    let payload = serde_json::json!({
+                        "ok": false,
+                        "error": "plan_mode_unapproved",
+                        "message": "Plan mode is active and the current plan has not been approved. Call `update_plan` with a complete ordered plan, then await user approval. Do NOT call mutating tools yet."
+                    });
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id: tc.id.clone(),
+                        content: payload.to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                }
+
                 // Phase 10: BeforeToolUse hooks may return updated_input to
                 // rewrite tool args before exec. Last hook in the chain wins
                 // (see aggregate_transformers).
@@ -1285,12 +1466,42 @@ Files modified:
                 let pre_t = hooks::aggregate_transformers(&pre_results);
                 let effective_args = pre_t.updated_input.clone().unwrap_or_else(|| tc.arguments.clone());
 
-                // Route: team tools -> MCP tools (mcp_*) -> built-in tools
+                // Route: update_plan -> team tools -> MCP tools (mcp_*) -> built-in tools
                 let legacy = ToolCall {
                     name: tc.name.clone(),
                     args: value_to_legacy_args(&effective_args),
                 };
-                let tool_result = if is_team_tool(&tc.name) {
+                let tool_result = if tc.name == "update_plan" {
+                    // Sprint B4: handled inside the session so we can
+                    // mutate `current_plan`, `current_plan_path`, and
+                    // (in --auto-approve-plan mode) `plan_approved`.
+                    let payload = self.handle_update_plan(&effective_args);
+                    let success = payload.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let message = payload
+                        .get("message")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("plan handled")
+                        .to_string();
+                    if !self.quiet {
+                        let path_disp = self
+                            .current_plan_path
+                            .as_ref()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_default();
+                        eprintln!(
+                            "  {} {} ({}{})",
+                            "->".dimmed(),
+                            "update_plan".bold(),
+                            message,
+                            if path_disp.is_empty() { String::new() } else { format!(" -> {path_disp}") }
+                        );
+                    }
+                    tools::ToolResult {
+                        tool_name: "update_plan".to_string(),
+                        success,
+                        output: payload.to_string(),
+                    }
+                } else if is_team_tool(&tc.name) {
                     execute_team_tool(&self.team_manager, &tc.name, &legacy.args).await?
                 } else if tc.name.starts_with("mcp_") {
                     execute_mcp_tool(&mut self.mcp_manager, &tc.name, effective_args.clone()).await?
@@ -1694,6 +1905,28 @@ const TEAM_TOOL_NAMES: &[&str] = &[
     "list_teammates",
 ];
 
+/// Sprint B4: built-in tools considered mutating for the plan-mode gate.
+/// The dispatcher refuses to run these when `permission_mode == Plan` and
+/// `plan_approved == false`. MCP tools (`mcp_*`) are also treated as
+/// mutating by default -- their outward effects are unknown to the gate.
+const MUTATING_TOOL_NAMES: &[&str] = &[
+    "write_file",
+    "edit_file",
+    "run_command",
+    "apply_patch",
+    "multiedit",
+    "task",
+    "batch",
+    "todo_write",
+];
+
+/// True when the named tool is considered mutating for plan-mode gating.
+/// MCP tools are conservatively treated as mutating; built-in read-only
+/// tools and `update_plan` itself are not.
+fn is_mutating_tool(name: &str) -> bool {
+    MUTATING_TOOL_NAMES.contains(&name) || name.starts_with("mcp_")
+}
+
 /// Check if a tool name is a team tool.
 fn is_team_tool(name: &str) -> bool {
     TEAM_TOOL_NAMES.contains(&name)
@@ -1886,8 +2119,9 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        // 8 base tools + 1 task tool + 3 parity tools (apply_patch, grep_files, tool_search) = 12
-        assert_eq!(defs.len(), 12);
+        // 8 base + 1 task + 3 parity (apply_patch, grep_files, tool_search)
+        // + 1 sprint-b4 (update_plan) = 13
+        assert_eq!(defs.len(), 13);
     }
 
     #[test]
