@@ -212,7 +212,7 @@ function transformMessagesForGoogle(messages: LLMProviderRequest['messages']): {
       }
 
       // Look up the actual function name from the tool_call_id.
-      // Fall back to 'unknown_tool' — never use the raw UUID as function name
+      // Fall back to 'unknown_tool' - never use the raw UUID as function name
       // since Gemini validates the name matches a prior functionCall part.
       const functionName =
         (msg.tool_call_id && toolCallIdToName.get(msg.tool_call_id)) || 'unknown_tool';

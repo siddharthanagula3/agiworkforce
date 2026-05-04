@@ -13,11 +13,11 @@ interface DownloadUrls {
 
 function detectOS(): 'mac' | 'windows' | 'linux' | 'unknown' {
   const userAgent = window.navigator.userAgent.toLowerCase();
-  // Order matters: 'mac' must be checked before 'win' — macOS user agents never contain 'win',
+  // Order matters: 'mac' must be checked before 'win' - macOS user agents never contain 'win',
   // and Windows user agents never contain 'mac', so this ordering is unambiguous and correct.
   if (userAgent.indexOf('mac') !== -1) return 'mac';
   if (userAgent.indexOf('linux') !== -1) return 'linux';
-  // 'win' matches 'windows', 'win32', 'win64', 'wince' — covers all Windows versions
+  // 'win' matches 'windows', 'win32', 'win64', 'wince' - covers all Windows versions
   if (userAgent.indexOf('win') !== -1) return 'windows';
   return 'unknown';
 }

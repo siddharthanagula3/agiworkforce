@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .single();
 
   return {
-    title: data ? `${data.title} — AGI Workforce` : 'Shared Session — AGI Workforce',
+    title: data ? `${data.title} - AGI Workforce` : 'Shared Session - AGI Workforce',
     description: data
       ? `${data.total_messages} message conversation shared from AGI Workforce`
       : undefined,

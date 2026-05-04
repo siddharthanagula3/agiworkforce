@@ -1,10 +1,10 @@
 /**
  * Shared Conversations API
  *
- * POST /api/shared — Store a packaged conversation and return its public URL.
- * GET  /api/shared?token=<token> — Retrieve a stored conversation by token.
+ * POST /api/shared - Store a packaged conversation and return its public URL.
+ * GET  /api/shared?token=<token> - Retrieve a stored conversation by token.
  *
- * POST requires no authentication — the share token acts as the capability.
+ * POST requires no authentication - the share token acts as the capability.
  * The conversation is stored in the `shared_conversations` Supabase table and
  * expires after 30 days (enforced by the GET handler and a DB cron job).
  */
@@ -32,7 +32,7 @@ function getAdminClient() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-/** POST /api/shared — upload a packaged conversation */
+/** POST /api/shared - upload a packaged conversation */
 async function handlePost(request: NextRequest) {
   // Rate-limit uploads to prevent abuse.
   const rateLimitResponse = await withRateLimit(request, 'share-create');
@@ -85,7 +85,7 @@ async function handlePost(request: NextRequest) {
   });
 
   if (error) {
-    // Duplicate token — return the existing URL instead of erroring.
+    // Duplicate token - return the existing URL instead of erroring.
     if (error.code === '23505') {
       const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
       return NextResponse.json({ url: `${appUrl}/shared/${token}` });
@@ -99,7 +99,7 @@ async function handlePost(request: NextRequest) {
   return NextResponse.json({ url }, { status: 201 });
 }
 
-/** GET /api/shared?token=<token> — retrieve a stored conversation */
+/** GET /api/shared?token=<token> - retrieve a stored conversation */
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'share-view');
   if (rateLimitResponse) return rateLimitResponse;

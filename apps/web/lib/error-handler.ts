@@ -24,7 +24,7 @@ const GENERIC_MESSAGES: Record<number, string> = {
   503: 'Service temporarily unavailable',
 };
 
-/** A small set of error codes that are safe to render verbatim — these
+/** A small set of error codes that are safe to render verbatim - these
  *  are app-defined (not service-leak vectors) and the UI uses them to
  *  drive recovery flows (e.g. credit_required → upgrade prompt). */
 const SAFE_TO_EXPOSE_CODES = new Set<string>([
@@ -68,7 +68,7 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
           code: error.code,
           message: safeErrorMessage(error),
           // WEB-10: only forward `details` when the code is safe to
-          // expose — Supabase / SQL details are otherwise dropped.
+          // expose - Supabase / SQL details are otherwise dropped.
           ...(error.details && SAFE_TO_EXPOSE_CODES.has(error.code)
             ? { details: error.details }
             : {}),

@@ -119,7 +119,7 @@ function checkModelTierAccess(model: string, subscriptionTier: string): boolean 
   if (!allowed && subscriptionTier.toLowerCase() !== 'free') {
     logger.warn(
       { model: model.toLowerCase(), tier: subscriptionTier.toLowerCase() },
-      'Model access denied — not in economy or tier requirements map',
+      'Model access denied - not in economy or tier requirements map',
     );
   }
   return allowed;
@@ -222,7 +222,7 @@ async function handleChatCompletions(request: NextRequest) {
 
   const token = authHeader.substring(7);
 
-  // Verify user with Supabase — use service role key for server-side JWT verification
+  // Verify user with Supabase - use service role key for server-side JWT verification
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -298,7 +298,7 @@ async function handleChatCompletions(request: NextRequest) {
     );
   }
 
-  // SECURITY: Also enforce actual body size limit after reading — Content-Length can be
+  // SECURITY: Also enforce actual body size limit after reading - Content-Length can be
   // absent, spoofed, or omitted with chunked transfer encoding.
   let body: unknown;
   try {
@@ -608,7 +608,7 @@ async function handleChatCompletions(request: NextRequest) {
   let resolvedTools = chatRequest.tools;
   const providerLower = provider.toLowerCase();
 
-  // Web Search — each provider has a native search tool
+  // Web Search - each provider has a native search tool
   if (chatRequest.web_search) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
@@ -622,7 +622,7 @@ async function handleChatCompletions(request: NextRequest) {
     }
   }
 
-  // Web Fetch — Anthropic's URL content reading tool
+  // Web Fetch - Anthropic's URL content reading tool
   if (chatRequest.web_fetch && providerLower === 'anthropic') {
     resolvedTools = [
       ...(resolvedTools ?? []),
@@ -630,7 +630,7 @@ async function handleChatCompletions(request: NextRequest) {
     ];
   }
 
-  // Code Execution — sandboxed Python/code execution
+  // Code Execution - sandboxed Python/code execution
   if (chatRequest.code_execution) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
@@ -731,7 +731,7 @@ async function handleChatCompletions(request: NextRequest) {
                     event.delta?.type === 'input_json_delta'
                   ) {
                     // Skip input_json_delta for server-managed tools (web_search, code_execution)
-                    // — the server executes these, so the client doesn't need the tool input
+                    // - the server executes these, so the client doesn't need the tool input
                     const blockType = activeBlockTypes.get(event.index ?? -1);
                     if (blockType === 'server_tool_use') {
                       continue;
@@ -793,7 +793,7 @@ async function handleChatCompletions(request: NextRequest) {
                     event.content_block?.type === 'server_tool_use'
                   ) {
                     // Anthropic server-managed tool execution (e.g., web_search).
-                    // The server executes the tool — no client-side action needed.
+                    // The server executes the tool - no client-side action needed.
                     // Track block type and skip (the search happens server-side).
                     if (event.index !== undefined) {
                       activeBlockTypes.set(event.index, 'server_tool_use');
@@ -829,7 +829,7 @@ async function handleChatCompletions(request: NextRequest) {
                     event.type === 'content_block_start' &&
                     event.content_block?.type === 'code_execution_tool_result'
                   ) {
-                    // Anthropic code execution result — contains stdout, stderr, and
+                    // Anthropic code execution result - contains stdout, stderr, and
                     // optional image outputs (e.g., matplotlib plots as base64 PNGs).
                     if (event.index !== undefined) {
                       activeBlockTypes.set(event.index, 'code_execution_tool_result');
@@ -850,7 +850,7 @@ async function handleChatCompletions(request: NextRequest) {
                     event.type === 'content_block_start' &&
                     event.content_block?.type === 'web_search_tool_result'
                   ) {
-                    // Anthropic web search results block — contains the search results
+                    // Anthropic web search results block - contains the search results
                     // that the model will use to generate its response with citations.
                     if (event.index !== undefined) {
                       activeBlockTypes.set(event.index, 'web_search_tool_result');

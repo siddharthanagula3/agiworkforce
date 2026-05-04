@@ -85,7 +85,7 @@ export default function Error({
     logger.error('Unhandled Next.js error boundary caught', {
       digest: error.digest,
       message: error.message,
-      // Stack traces are omitted intentionally — they leak internal details in production
+      // Stack traces are omitted intentionally - they leak internal details in production
     });
   }, [error]);
 

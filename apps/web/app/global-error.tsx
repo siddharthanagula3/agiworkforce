@@ -14,7 +14,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Use console directly — the shared logger may not be available at this level
+    // Use console directly - the shared logger may not be available at this level
     console.error('[GlobalError] Root layout error caught:', error.digest ?? error.message);
   }, [error]);
 

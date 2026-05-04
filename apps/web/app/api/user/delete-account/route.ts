@@ -64,11 +64,11 @@ async function getAuthenticatedUserId(request: NextRequest): Promise<string | nu
 }
 
 export async function DELETE(request: NextRequest) {
-  // Strict rate limit — this is a destructive action (5 req/min per IP)
+  // Strict rate limit - this is a destructive action (5 req/min per IP)
   const rateLimitResponse = await withRateLimit(request, 'user-data-delete');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // SECURITY: CSRF protection — account deletion is an irreversible state-changing action
+  // SECURITY: CSRF protection - account deletion is an irreversible state-changing action
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {
     return csrfError as NextResponse;
