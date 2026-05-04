@@ -1,8 +1,10 @@
 {
   "free": "無料",
-  "starter": "スターター",
-  "pro": "プロ",
-  "team": "チーム",
+  "localOnly": "ローカルのみ",
+  "byok": "BYOK",
+  "hobby": "Hobby",
+  "pro": "Pro",
+  "max": "Max",
   "enterprise": "エンタープライズ",
   "monthly": "月払い",
   "yearly": "年払い",
