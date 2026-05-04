@@ -107,7 +107,7 @@ Four optional functions + one required `stream`. That's the entire surface every
 | **S4a** | MCP transport/catalog + skills loader (markdown+frontmatter)                | 2–3 hours        | **✅ Done 2026-05-04**                                                         |
 | **S4b** | 5 missing hook events in Rust CLI (apps/cli)                                | 2–4 days         | **✅ Done 2026-05-04**                                                         |
 | **S5**  | Live smoke tests for 3 adapters + cross-provider demo CLI                   | 2–3 hours        | **✅ Done 2026-05-04**                                                         |
-| **S6**  | Browser tool fresh on `playwright-core` (NOT lifted — schema patterns only) | 2–3 days         | Pending                                                                        |
+| **S6**  | Browser tool fresh on `playwright-core` (NOT lifted — schema patterns only) | 2–3 days         | **✅ Done 2026-05-04** (minimal: navigate/click/type/screenshot/snapshot)      |
 | **S7**  | API gateway integration — wire adapters into `services/api-gateway/`        | 2–3 days         | **✅ Done 2026-05-04**                                                         |
 | **S8**  | Web app integration — Next.js proxy routes + multi-provider demo page       | 2–3 hours        | **✅ Done 2026-05-04**                                                         |
 | **S9**  | Google Gemini provider as 4th adapter (`packages/providers/google/`)        | 2–3 hours        | **✅ Done 2026-05-04**                                                         |
@@ -693,16 +693,75 @@ Pieces that need additional sprints to actually demo, with honest reasons. Some 
 - **Apple notarization, Android signing**: cert management is human-only per security model.
 - **Production secrets management**: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` need to land in the Fly.io env for `services/api-gateway/` to actually work in production. Currently env-only.
 
-**Cumulative state after S1+S2+S3+S4a+S4b+S5+S7+S8+S9+S13** (S6 browser tool still pending):
+**Cumulative state after S1+S2+S3+S4a+S4b+S5+S6+S7+S8+S9+S13** (all in-scope sprints done):
 
-- 8 LLM/agent-infra TS packages: types, llm-normalize, providers-{anthropic,ollama,openai,google}, mcp, skills
+- 9 packages: types, llm-normalize, providers-{anthropic,ollama,openai,google}, mcp, skills, browser-tool
 - 2 service integrations: api-gateway provider routes + web app proxy routes
 - 1 web demo surface at `/chat-multi` with 4 providers side-by-side
 - 24 active Rust CLI hook events (was 19 fired; +3 new + 2 newly-fired in S4b + 2 wired in S13)
 - 4 working ProviderAdapter implementations covering the differentiator
-- ~7,400 LOC across the porting work
+- 1 working browser tool with 10 actions (navigate, click, clickCoords, type, press, screenshot, snapshot, wait, evaluate, close) on managed isolated profiles
+- ~8,500 LOC across the porting work
 - License attribution complete in `THIRD_PARTY_LICENSES.md`
-- 0 stashes (4 stale ones dropped this session; 2 had already been aborted in S8)
+- 0 stashes (all 6 stale ones dropped this session)
+
+## What shipped on 2026-05-04 (Sprint 6 — browser tool, fresh on Playwright)
+
+| Deliverable                            | What                                                                                                                                                                                                                                                                                                                  | Impact                  |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `packages/browser-tool/` (new package) | Minimal agent-controlled browser via `playwright-core`. One tool, discriminated-union schema across 10 actions. Managed isolated profile dir at `~/.agiworkforce/browser/profiles/<name>`. Default profile name `agiworkforce` — never touches the user's daily Chrome.                                               | +500 LOC TS, +1 package |
+| Snapshot modes (`aria` / `ai`)         | Both use Playwright's role-based selectors (legacy `Page.accessibility.snapshot()` was removed in playwright-core 1.50+). `aria` walks named-priority roles; `ai` walks the full interactive role set. Refs are scoped per-profile and invalidated after any state-changing action so the agent re-snapshots cleanly. | (in-package)            |
+| `packages/browser-tool/src/profile.ts` | `openProfile`/`closeProfile`/`closeAllProfiles`/`listProfiles`. Persistent context (cookies + localStorage survive) via `chromium.launchPersistentContext`. Optional `executablePath` for system Chrome.                                                                                                              | +110 LOC                |
+| Verification                           | `pnpm --filter @agiworkforce/browser-tool typecheck` GREEN.                                                                                                                                                                                                                                                           | clean                   |
+
+**Schema lessons from OpenClaw** (NOT lifted — patterns only):
+
+- Single tool name `browser` with discriminated-union `action.kind` — Vertex AI's tool validator rejects nested `anyOf`, so the union stays flat at the action layer.
+- `aria` vs `ai` snapshot modes — different recall/precision tradeoffs.
+- `ref`-based element targeting + stale-ref recovery loop. The agent should re-`snapshot` whenever a `click`/`type`/`navigate` mutates page state.
+- `arm`-style dialog/file-chooser handling (deferred — separate sprint).
+
+What this package does NOT do vs OpenClaw's full `extensions/browser/` (~25k LOC):
+
+- No HTTP control service / Express server (call `runBrowserAction()` directly from gateway/app)
+- No multi-profile dialog / file-chooser arming
+- No Chrome MCP stdio mode (we use Playwright directly)
+- No PDF generation (use CDP `printToPDF` directly if needed)
+- No "doctor" health check, no profile delete/reset commands
+
+Those land as future sprints if/when chat ergonomics demand them.
+
+## What shipped on 2026-05-04 (Tier-1D — anthropic-family-tool-payload-compat)
+
+Final OpenClaw S2-deferred normalizer landed:
+
+| File                                                          | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | LOC      |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `packages/llm-normalize/src/anthropic-tool-payload-compat.ts` | Generic `StreamFn` wrapper that mutates outgoing payloads to convert OpenAI-style tool defs (`{ function: { name, description, parameters } }`) to Anthropic-shape (`{ name, description, input_schema }`) and string-mode `tool_choice` when a model has `compat.requiresOpenAiAnthropicToolPayload === true` OR the caller passed `toolSchemaMode`/`toolChoiceMode` options. Adapted from OpenClaw `src/agents/pi-embedded-runner/anthropic-family-tool-payload-compat.ts` (MIT). | +200 LOC |
+
+The wrapper is generic over an opaque `StreamFn` so adapters don't need to depend on `@mariozechner/pi-agent-core`. Useful for OpenRouter pass-throughs, Vertex Anthropic, and other proxies that route OpenAI-style tools through Anthropic-shaped APIs.
+
+**Only OpenClaw deferred file remaining**: `apply-patch.ts` — needs sandbox-or-host abstraction first (writes files), so it sits behind a working sandbox infra design.
+
+## What's still NOT done (and why — per "do what you can, skip what you cannot")
+
+### Codeable but NOT done this session (separate sprint when prioritized)
+
+- **S10** OpenAI Responses API path (~400 LOC, fundamentally different request/response shape — `output[]` blocks vs `choices[]`, server-side `store`, `previous_response_id` chaining)
+- **S11** Live e2e test spinning up the gateway in-process — `chat-multi` page + per-adapter live tests already cover e2e
+- **Wire production `/chat`** to the new pipeline — `apps/web/core/integrations/chat-completion-handler.ts` still calls `unifiedLLMService`. Migrating it to `streamFromProvider({...})` is a 5-file change, medium risk. The new pipeline is reachable via `/chat-multi` for now.
+- **Mobile + Chrome ext + VS Code ext** wiring — replicate `apps/web/lib/providerStreamClient.ts` into each. Repetitive, low-risk, 3 separate small sprints.
+- **Vertex AI** for Google adapter — OAuth + project/region routing. Separate `@agiworkforce/providers-google-vertex` package modeled on Anthropic.
+- **`apply-patch.ts`** — needs a sandbox-or-host filesystem abstraction first; that itself is a sub-package design call.
+
+### NOT codeable from this session (require human steps)
+
+- **Wave 2 — Desktop v1.0 polish**: pixel-close Claude Desktop UI is a design + implementation effort that lives in `apps/desktop/`. Windows EV cert is a procurement step (vendor account + business identity verification). IPC pruning needs design decisions per command — what to keep, what to deprecate.
+- **Wave 3 — store listings**: App Store / Play Store / Chrome Web Store / VS Code Marketplace each require a developer account, signed builds, screenshots, descriptions, privacy policies, and store-level review approvals.
+- **Hobby tier launch**: Stripe price configuration (manual setup in dashboard), credit deduction wiring (touches the existing `LLMCostCalculator` flow in `apps/web/app/api/llm/completion`), end-to-end billing QA.
+- **Apple notarization, Android signing, Windows code signing**: cert management is human-only per the security model — keys can't be checked into the repo.
+- **Production secrets management**: `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`/`GOOGLE_API_KEY` need to land in the Fly.io env for `services/api-gateway/`. Currently the adapters work locally via env — production rollout needs a human deploy.
+- **Browser binaries**: `playwright-core` ships _without_ browsers. Production use needs `npx playwright install chromium` in the deploy step or a system Chrome already on the host.
 
 ## How to use this file
 
