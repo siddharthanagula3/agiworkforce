@@ -1,4 +1,22 @@
-export type PricingModel = 'free' | 'pay_per_result' | 'pro' | 'max' | 'enterprise';
+/**
+ * Canonical 6-tier taxonomy (kebab-case strings matching Supabase
+ * `subscriptions.tier` and the Rust `PlanTier` enum's `serde(rename)` values).
+ *
+ * Legacy aliases `'free'` and `'pay_per_result'` are retained so older rows /
+ * pricing-plan rows persisted under the previous schema continue to type-check.
+ * New code should use the canonical values: `'local-only' | 'byok' | 'hobby' |
+ * 'pro' | 'max' | 'enterprise'`.
+ */
+export type PricingModel =
+  | 'local-only'
+  | 'byok'
+  | 'hobby'
+  | 'pro'
+  | 'max'
+  | 'enterprise'
+  // Legacy aliases (backward-compat)
+  | 'free'
+  | 'pay_per_result';
 
 export interface PricingPlan {
   id: string;

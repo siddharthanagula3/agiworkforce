@@ -1,10 +1,26 @@
 use serde::{Deserialize, Serialize};
 
+/// Canonical 6-tier taxonomy (matches Supabase `subscriptions.tier` strings):
+/// `local-only`, `byok`, `hobby`, `pro`, `max`, `enterprise`.  `Free` is
+/// retained as a backward-compat alias for legacy rows.  Any other string
+/// would deserialize-fail before the variants below were added.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum PlanTier {
+    #[serde(rename = "local-only")]
+    LocalOnly,
+    #[serde(rename = "byok")]
+    Byok,
+    #[serde(rename = "hobby")]
     Hobby,
+    #[serde(rename = "pro")]
     Pro,
+    #[serde(rename = "max")]
     Max,
+    #[serde(rename = "enterprise")]
+    Enterprise,
+    /// Legacy alias retained for backward compatibility with older Supabase rows.
+    #[serde(rename = "free")]
+    Free,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -16,7 +32,9 @@ pub struct UserSubscription {
 }
 
 impl UserSubscription {
+    /// Cloud LLM access is denied only for tiers that don't include it
+    /// (LocalOnly = Ollama/LMStudio only; Hobby = limited cloud credits).
     pub fn has_cloud_access(&self) -> bool {
-        !matches!(self.tier, PlanTier::Hobby)
+        !matches!(self.tier, PlanTier::Hobby | PlanTier::LocalOnly)
     }
 }
