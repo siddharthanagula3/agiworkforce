@@ -16,7 +16,9 @@ const privacySource = readFileSync(resolve(__dirname, '../app/privacy/page.tsx')
 const termsSource = readFileSync(resolve(__dirname, '../app/terms/page.tsx'), 'utf-8');
 
 // Minimum number of distinct AI provider names required in the privacy policy.
-const MIN_PROVIDER_COUNT = 20;
+// Locked at 9 hosted providers per the cross-surface coherence sprint (privacy
+// page rewrite, commit c924e4f6 — 9 hosted providers + Local LLM options).
+const MIN_PROVIDER_COUNT = 9;
 
 describe('Privacy Policy required disclosures (FIX-008)', () => {
   it('discloses Sentry error reporting', () => {

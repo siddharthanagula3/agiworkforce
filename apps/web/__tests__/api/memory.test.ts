@@ -246,7 +246,7 @@ describe('Memory API', () => {
       expect(response.status).toBe(401);
 
       const data = await response.json();
-      expect(data.error.message).toMatch(/Invalid token|[Uu]nauthorized/);
+      expect(data.error.message).toMatch(/Authentication required|UNAUTHORIZED/);
     });
 
     it('should authenticate with valid Bearer token', async () => {
