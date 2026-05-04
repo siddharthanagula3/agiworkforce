@@ -88,6 +88,16 @@
         "icon": "$(trash)"
       },
       {
+        "command": "agi-workforce.setSupabaseJwt",
+        "title": "AGI Workforce: Set Supabase JWT",
+        "icon": "$(key)"
+      },
+      {
+        "command": "agi-workforce.clearSupabaseJwt",
+        "title": "AGI Workforce: Clear Supabase JWT",
+        "icon": "$(trash)"
+      },
+      {
         "command": "agi-workforce.selectModel",
         "title": "AGI Workforce: Select Model",
         "icon": "$(symbol-misc)"
@@ -591,6 +601,28 @@
           "type": "string",
           "default": "https://telemetry.agiworkforce.com/v1/events",
           "description": "Endpoint URL for sending anonymous telemetry events"
+        },
+        "agiWorkforce.useProviderStream": {
+          "type": "boolean",
+          "default": false,
+          "description": "Route chat through the new /api/v1/providers/:id/stream pipeline instead of the legacy AGI Workforce LLM proxy. Requires a Supabase JWT (run \"AGI Workforce: Set Supabase JWT\")."
+        },
+        "agiWorkforce.gatewayUrl": {
+          "type": "string",
+          "default": "https://api.agiworkforce.com",
+          "description": "Base URL of the AGI Workforce gateway used by the provider-stream path. Override for self-hosted / regional gateways."
+        },
+        "agiWorkforce.providerStreamProvider": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "anthropic",
+            "openai",
+            "google",
+            "ollama"
+          ],
+          "default": "auto",
+          "description": "Provider to use on the provider-stream path. \"auto\" infers from the model id (claude-* → anthropic, gpt-* → openai, gemini-* → google, otherwise → ollama)."
         }
       }
     },
