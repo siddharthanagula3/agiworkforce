@@ -9,7 +9,7 @@ export const handlers = [
       id: 'chatcmpl-test',
       object: 'chat.completion',
       created: Date.now(),
-      model: 'gpt-5.1',
+      model: 'gpt-5.5',
       choices: [
         {
           index: 0,

@@ -1,8 +1,10 @@
 {
   "free": "मुफ्त",
-  "starter": "स्टार्टर",
-  "pro": "प्रो",
-  "team": "टीम",
+  "localOnly": "केवल स्थानीय",
+  "byok": "BYOK",
+  "hobby": "Hobby",
+  "pro": "Pro",
+  "max": "Max",
   "enterprise": "एंटरप्राइज",
   "monthly": "मासिक",
   "yearly": "वार्षिक",

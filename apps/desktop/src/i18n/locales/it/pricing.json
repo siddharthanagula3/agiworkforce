@@ -1,8 +1,10 @@
 {
   "free": "Gratuito",
-  "starter": "Starter",
+  "localOnly": "Solo locale",
+  "byok": "BYOK",
+  "hobby": "Hobby",
   "pro": "Pro",
-  "team": "Team",
+  "max": "Max",
   "enterprise": "Enterprise",
   "monthly": "Mensile",
   "yearly": "Annuale",

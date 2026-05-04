@@ -1,8 +1,10 @@
 {
   "free": "Бесплатно",
-  "starter": "Стартовый",
+  "localOnly": "Только локально",
+  "byok": "BYOK",
+  "hobby": "Hobby",
   "pro": "Pro",
-  "team": "Командный",
+  "max": "Max",
   "enterprise": "Корпоративный",
   "monthly": "Ежемесячно",
   "yearly": "Ежегодно",
