@@ -4,23 +4,23 @@
 
 ## Tiers
 
-| Tier            | Price              | Available at MVP?           | What you get                                                                                                                                                                                                  |
-| --------------- | ------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Local-only**  | Free forever       | ✅ YES                      | Run Ollama / LMStudio on your own laptop. No Supabase. No cloud. Desktop only. Full feature set, just on your hardware.                                                                                       |
-| **BYOK**        | Free forever       | ✅ YES                      | Bring your own API keys (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Groq, Together, Fireworks, Perplexity, Azure, Bedrock, OpenRouter, AI21, SambaNova, Cohere — **10+ Providers**). Optional Supabase if Cloud mode (for cross-device sync). |
-| **Hobby**       | TBD ($5/mo target) | ✅ YES (only paid MVP tier) | Managed cloud — limited credits per month, basic models (Haiku 4.5, GPT-5.4-mini equivalent). The simple option for users who don't want to manage API keys. **Required for Cloud mode** on Web/Mobile.       |
-| **Pro**         | TBD                | ❌ Waitlist                 | Released after security audit clears. Full models, higher credit cap, priority support. Mirrors Claude Cowork Pro tier.                                                                                       |
-| **Max**         | TBD                | ❌ Waitlist                 | Released after security audit clears. Highest credit cap, computer use, advanced agent features. Mirrors Claude Cowork Max tier.                                                                              |
-| **Enterprise**  | Contact sales      | ✅ Contact sales            | SSO (SAML / OIDC), SCIM provisioning, custom retention windows, audit log export, dedicated support, custom MSA. Reach out at https://agiworkforce.com/contact.                                                |
+| Tier           | Price              | Available at MVP?           | What you get                                                                                                                                                                                                                                          |
+| -------------- | ------------------ | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Local-only** | Free forever       | ✅ YES                      | Run Ollama / LMStudio on your own laptop. No Supabase. No cloud. Desktop only. Full feature set, just on your hardware.                                                                                                                               |
+| **BYOK**       | Free forever       | ✅ YES                      | Bring your own API keys (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Groq, Together, Fireworks, Perplexity, Azure, Bedrock, OpenRouter, AI21, SambaNova, Cohere — **10+ Providers**). Optional Supabase if Cloud mode (for cross-device sync). |
+| **Hobby**      | TBD ($5/mo target) | ✅ YES (only paid MVP tier) | Managed cloud — limited credits per month, basic models (Haiku 4.5, GPT-5.4-mini equivalent). The simple option for users who don't want to manage API keys. **Required for Cloud mode** on Web/Mobile.                                               |
+| **Pro**        | TBD                | ❌ Waitlist                 | Released after security audit clears. Full models, higher credit cap, priority support. Mirrors Claude Cowork Pro tier.                                                                                                                               |
+| **Max**        | TBD                | ❌ Waitlist                 | Released after security audit clears. Highest credit cap, computer use, advanced agent features. Mirrors Claude Cowork Max tier.                                                                                                                      |
+| **Enterprise** | Contact sales      | ✅ Contact sales            | SSO (SAML / OIDC), SCIM provisioning, custom retention windows, audit log export, dedicated support, custom MSA. Reach out at https://agiworkforce.com/contact.                                                                                       |
 
 ## Modes (Local vs Cloud)
 
 AGI Workforce ships in **2 modes**. The mode you pick determines which tiers are available and what data crosses the network.
 
-| Mode        | Where it runs            | Storage                  | Auth          | Sync                | Tiers required                                                |
-| ----------- | ------------------------ | ------------------------ | ------------- | ------------------- | ------------------------------------------------------------- |
-| **Local**   | Desktop only             | SQLite on your machine   | None          | None                | Local-only or BYOK (free forever; no account needed)           |
-| **Cloud**   | Desktop + Web + Mobile   | Supabase (us-east-2)     | Supabase OAuth | Realtime cross-device | Hobby+ (Hobby, Pro, Max, or Enterprise) — Cloud requires Hobby+ |
+| Mode      | Where it runs          | Storage                | Auth           | Sync                  | Tiers required                                                  |
+| --------- | ---------------------- | ---------------------- | -------------- | --------------------- | --------------------------------------------------------------- |
+| **Local** | Desktop only           | SQLite on your machine | None           | None                  | Local-only or BYOK (free forever; no account needed)            |
+| **Cloud** | Desktop + Web + Mobile | Supabase (us-east-2)   | Supabase OAuth | Realtime cross-device | Hobby+ (Hobby, Pro, Max, or Enterprise) — Cloud requires Hobby+ |
 
 - **Mode picker**: `apps/desktop/src/components/Onboarding/ModeSelectionDialog`
 - **Runtime detection**: `packages/runtime/src/detect.ts` (`isTauri`, `isCloudWeb`)
