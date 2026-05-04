@@ -84,7 +84,7 @@ export function CliShowcase() {
               <span>·</span>
               <span>Proprietary</span>
               <span>·</span>
-              <span>2,161 tests green</span>
+              <span>914 tests green</span>
             </div>
           </div>
 
