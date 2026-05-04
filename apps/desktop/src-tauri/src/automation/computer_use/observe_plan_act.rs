@@ -24,6 +24,7 @@ use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
 };
 
+use super::app_permissions::AppPermissionManager;
 use super::safety::{ComputerUseSafetyLayer, SafetyConfig};
 use super::session::{ComputerUseSession, SessionConfig};
 use super::types::{
@@ -60,6 +61,17 @@ pub struct ComputerUseConfig {
     pub session: SessionConfig,
     /// Window manager configuration.
     pub window: WindowManagerConfig,
+    /// Stream 2: explicit model override for the planning vision LLM.
+    /// `None` lets the router pick (typically the user's default vision
+    /// model). Setting this to e.g. `"claude-opus-4.7"`, `"gpt-5.5"`,
+    /// `"gemini-3.1-pro"`, or `"grok-4.3-vision"` lets the user choose
+    /// any vision-capable model from the catalog — this is the multi-
+    /// provider differentiator vs Cowork's Anthropic-only computer use.
+    pub model: Option<String>,
+    /// Stream 2: explicit provider override paired with `model`. When
+    /// `Some`, the router targets this provider; when `None`, lets the
+    /// router resolve from the model id.
+    pub provider: Option<crate::core::llm::Provider>,
 }
 
 impl Default for ComputerUseConfig {
@@ -77,6 +89,8 @@ impl Default for ComputerUseConfig {
             visual: VisualReasonerConfig::default(),
             session: SessionConfig::default(),
             window: WindowManagerConfig::default(),
+            model: None,
+            provider: None,
         }
     }
 }
@@ -158,6 +172,30 @@ impl ComputerUseAgent {
     pub fn new(llm_router: Arc<RwLock<LLMRouter>>, config: ComputerUseConfig) -> Result<Self> {
         let visual_reasoner = VisualReasoner::new(Arc::clone(&llm_router), config.visual.clone());
         let safety_layer = ComputerUseSafetyLayer::new(config.safety.clone());
+        let window_coordinator = WindowCoordinator::new(config.window.clone());
+
+        Ok(Self {
+            llm_router,
+            config,
+            visual_reasoner,
+            safety_layer,
+            window_coordinator,
+            app_handle: None,
+        })
+    }
+
+    /// Creates a new Computer Use agent with an attached per-app permission
+    /// registry. The agent will consult this registry on every action that
+    /// would affect the foreground window — closing the per-app blocklist
+    /// gap from today's architecture audit.
+    pub fn with_app_permissions(
+        llm_router: Arc<RwLock<LLMRouter>>,
+        config: ComputerUseConfig,
+        app_permissions: Arc<AppPermissionManager>,
+    ) -> Result<Self> {
+        let visual_reasoner = VisualReasoner::new(Arc::clone(&llm_router), config.visual.clone());
+        let safety_layer =
+            ComputerUseSafetyLayer::with_app_permissions(config.safety.clone(), app_permissions);
         let window_coordinator = WindowCoordinator::new(config.window.clone());
 
         Ok(Self {
@@ -293,6 +331,23 @@ impl ComputerUseAgent {
 
             // ACT: Execute planned actions
             for action in plan.actions {
+                // Per-app permission check: consult `WindowCoordinator::
+                // get_active_window` and the app_permissions registry. Refuses
+                // any action targeting an app on the always-blocked list
+                // (investment / crypto / banking) and any app the user has
+                // denied. Apps not yet decided trigger an approval request.
+                if let Some(reason) = self.safety_layer.check_app_permission().await {
+                    tracing::warn!("Action blocked by per-app permission: {:?}", reason);
+                    return self.complete_task(
+                        &mut session,
+                        state,
+                        CompletionReason::SafetyBlocked {
+                            reason: serde_json::to_string(&reason)
+                                .unwrap_or_else(|_| format!("{reason:?}")),
+                        },
+                    );
+                }
+
                 // Safety check
                 let decision = self.safety_layer.evaluate_action(&action);
 
@@ -525,7 +580,10 @@ Only include actions you're confident will make progress."#,
                 tool_call_id: None,
                 multimodal_content: Some(multimodal_content),
             }],
-            model: String::new(),
+            // Stream 2: honor an explicit model override from the config so
+            // the user can choose any vision-capable model (Claude / GPT /
+            // Gemini / Grok / Llama) for computer use — not just Anthropic.
+            model: self.config.model.clone().unwrap_or_default(),
             temperature: Some(0.2), // Low temperature for consistent planning
             max_tokens: Some(2048),
             stream: false,
@@ -536,8 +594,8 @@ Only include actions you're confident will make progress."#,
         };
 
         let preferences = crate::core::llm::llm_router::RouterPreferences {
-            provider: None,
-            model: None,
+            provider: self.config.provider,
+            model: self.config.model.clone(),
             strategy: crate::core::llm::llm_router::RoutingStrategy::Auto,
             context: Some(crate::core::llm::llm_router::RouterContext {
                 requires_vision: true,

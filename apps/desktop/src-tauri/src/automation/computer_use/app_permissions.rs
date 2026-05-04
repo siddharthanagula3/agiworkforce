@@ -10,6 +10,101 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Bundle IDs (macOS) and process names (Windows) that are ALWAYS blocked
+/// regardless of user-configured permissions. Mirrors Claude Cowork's
+/// hard-blocked categories: investment / brokerage / crypto / banking.
+///
+/// On macOS, matches against the foreground app's bundle identifier.
+/// On Windows, matches against the substring of the executable name (case
+/// insensitive — e.g. `robinhood.exe`, `coinbase.exe`).
+pub const ALWAYS_BLOCKED_BUNDLE_IDS: &[&str] = &[
+    // Brokerage / trading
+    "com.robinhood.app",
+    "com.robinhood",
+    "com.fidelity",
+    "com.fidelity.investments",
+    "com.schwab",
+    "com.tdameritrade",
+    "com.etrade.investing",
+    "com.vanguard",
+    "com.interactivebrokers.tws",
+    // Crypto exchanges & wallets
+    "com.coinbase.app",
+    "com.coinbase.wallet",
+    "com.binance",
+    "com.binance.us",
+    "com.kraken",
+    "com.gemini.exchange",
+    "io.metamask",
+    "io.ledger.live",
+    "com.ledger.live",
+    "com.trezor.suite",
+    // Consumer banking
+    "com.chase.sig.Chase",
+    "com.bankofamerica.cashpro",
+    "com.bofa.iphone",
+    "com.wellsfargo.mobile",
+    "com.citi.citimobile",
+    "com.capitalone.android",
+    // Payment apps
+    "com.venmo",
+    "com.squareup.cash",
+    "com.paypal.ppclient",
+    "com.zellepay.zelle",
+];
+
+/// URL host patterns that should be treated as ALWAYS blocked when the
+/// agent is targeting a browser tab via the browser bridge. Used for
+/// regex-style substring matches against `window.location.host`.
+///
+/// Mirrors the bundle-id list above but covers the case where the user
+/// is on the web app instead of the native client.
+pub const ALWAYS_BLOCKED_URL_HOSTS: &[&str] = &[
+    "robinhood.com",
+    "fidelity.com",
+    "schwab.com",
+    "tdameritrade.com",
+    "etrade.com",
+    "vanguard.com",
+    "interactivebrokers.com",
+    "coinbase.com",
+    "binance.com",
+    "binance.us",
+    "kraken.com",
+    "gemini.com",
+    "metamask.io",
+    "ledger.com",
+    "trezor.io",
+    "chase.com",
+    "bankofamerica.com",
+    "wellsfargo.com",
+    "citi.com",
+    "capitalone.com",
+    "venmo.com",
+    "cash.app",
+    "paypal.com",
+    "zellepay.com",
+];
+
+/// Returns `true` if the given bundle id (or process name) is on the
+/// always-blocked list. Case-insensitive substring matching against the
+/// listed identifiers.
+pub fn is_always_blocked_bundle(identifier: &str) -> bool {
+    let lowered = identifier.to_lowercase();
+    ALWAYS_BLOCKED_BUNDLE_IDS
+        .iter()
+        .any(|blocked| lowered.contains(&blocked.to_lowercase()))
+}
+
+/// Returns `true` if the given URL host is on the always-blocked list.
+/// Case-insensitive substring matching.
+pub fn is_always_blocked_host(host: &str) -> bool {
+    let lowered = host.to_lowercase();
+    ALWAYS_BLOCKED_URL_HOSTS
+        .iter()
+        .any(|blocked| lowered.contains(blocked))
+}
+
 /// Permission status for an application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -94,6 +189,40 @@ impl AppPermissionManager {
     pub async fn check_app(&self, app_name: &str) -> Option<PermissionStatus> {
         let perms = self.permissions.read().await;
         perms.get(app_name).map(|p| p.status)
+    }
+
+    /// Returns the effective permission decision for an app, taking into
+    /// account both the hardcoded `ALWAYS_BLOCKED_BUNDLE_IDS` refuse-list
+    /// and any user-configured per-app permission. Apps not in either
+    /// list default to `AskEveryTime` so the user is prompted on first use.
+    pub async fn decide(
+        &self,
+        app_name: &str,
+        bundle_id: Option<&str>,
+    ) -> PermissionStatus {
+        // Hard-blocked categories (investment / crypto / banking) always win.
+        if let Some(bid) = bundle_id {
+            if is_always_blocked_bundle(bid) {
+                return PermissionStatus::Denied;
+            }
+        }
+        if is_always_blocked_bundle(app_name) {
+            return PermissionStatus::Denied;
+        }
+
+        // Check user-configured permission by app name first, then bundle id.
+        let perms = self.permissions.read().await;
+        if let Some(p) = perms.get(app_name) {
+            return p.status;
+        }
+        if let Some(bid) = bundle_id {
+            if let Some(p) = perms.values().find(|p| p.bundle_id.as_deref() == Some(bid)) {
+                return p.status;
+            }
+        }
+
+        // Default: prompt the user (Cowork-style first-encounter behavior).
+        PermissionStatus::AskEveryTime
     }
 
     /// Sets the permission for an app.
