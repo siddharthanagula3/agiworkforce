@@ -510,7 +510,7 @@ mod tests {
         let dir = tmp.path();
 
         let ctx = test_ctx();
-        let mut session = AgentSession::new("gpt-4o", &ctx, None);
+        let mut session = AgentSession::new("gpt-5.5", &ctx, None);
         session.messages.push(Message::text("user", "Hello world"));
         session.messages.push(Message::text("assistant", "Hi!"));
 
@@ -519,7 +519,7 @@ mod tests {
 
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, id);
-        assert_eq!(summaries[0].model, "gpt-4o");
+        assert_eq!(summaries[0].model, "gpt-5.5");
         assert_eq!(summaries[0].title, "Hello world");
         // system + user + assistant = 3 messages
         assert_eq!(summaries[0].message_count, 3);
@@ -757,7 +757,7 @@ mod tests {
         };
 
         let ctx = test_ctx();
-        let mut session = AgentSession::new("gpt-4o", &ctx, None);
+        let mut session = AgentSession::new("gpt-5.5", &ctx, None);
         restore_into_session(&mut session, &conv);
 
         assert_eq!(session.model, "claude-sonnet-4-20250514");

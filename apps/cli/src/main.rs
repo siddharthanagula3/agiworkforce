@@ -799,6 +799,12 @@ async fn main() -> Result<()> {
     // Load configuration (global + project + env overrides merged)
     let mut app_config = config::CliConfig::load_merged()?;
 
+    // Pull any user-defined `[providers.<name>]` blocks into the runtime
+    // OpenAI-compatible registry (OpenRouter, NVIDIA NIM, Groq, Together,
+    // Fireworks, etc.). Reserved provider names are ignored — see
+    // `models::register_custom_providers`.
+    models::register_custom_providers(&app_config);
+
     // --debug: enable verbose logging
     if cli.debug.is_some() {
         // Setting verbose mode so debug info is visible
@@ -844,6 +850,7 @@ async fn main() -> Result<()> {
                 Ok(true) => {
                     // Reload config after onboarding may have changed it
                     app_config = config::CliConfig::load_merged()?;
+                    models::register_custom_providers(&app_config);
                 }
                 Ok(false) => {
                     // User skipped or interrupted — continue with defaults

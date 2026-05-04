@@ -11,28 +11,28 @@ agiworkforce exec "..."  # one-shot
 
 ## Why AGI Workforce CLI
 
-| You want                                          | Claude Code  | OpenAI Codex CLI | Gemini CLI | AGI Workforce CLI         |
-| ------------------------------------------------- | ------------ | ---------------- | ---------- | ------------------------- |
+| You want                                          | Claude Code  | OpenAI Codex CLI | Gemini CLI | AGI Workforce CLI          |
+| ------------------------------------------------- | ------------ | ---------------- | ---------- | -------------------------- |
 | One model family                                  | ✅ Anthropic | ✅ OpenAI        | ✅ Google  | ✅ Pick from 10+ Providers |
-| Bring your own API key                            | ❌           | ❌               | ❌         | ✅                        |
-| Run local LLMs (Ollama / LMStudio)                | ❌           | ❌               | ❌         | ✅                        |
-| Switch model mid-conversation                     | ❌           | Limited          | ❌         | ✅ Across providers       |
-| Subscription paths (Copilot / ChatGPT Plus)       | N/A          | ✅               | N/A        | ✅                        |
-| MCP support                                       | ✅           | ✅               | ✅         | ✅                        |
-| TUI (Ratatui)                                     | ✅           | ✅               | ✅         | ✅                        |
-| Sandbox (Seatbelt / Bwrap / Landlock / Win Token) | ✅           | ✅               | ❌         | ✅                        |
+| Bring your own API key                            | ❌           | ❌               | ❌         | ✅                         |
+| Run local LLMs (Ollama / LMStudio)                | ❌           | ❌               | ❌         | ✅                         |
+| Switch model mid-conversation                     | ❌           | Limited          | ❌         | ✅ Across providers        |
+| Subscription paths (Copilot / ChatGPT Plus)       | N/A          | ✅               | N/A        | ✅                         |
+| MCP support                                       | ✅           | ✅               | ✅         | ✅                         |
+| TUI (Ratatui)                                     | ✅           | ✅               | ✅         | ✅                         |
+| Sandbox (Seatbelt / Bwrap / Landlock / Win Token) | ✅           | ✅               | ❌         | ✅                         |
 
 The unique slice: **multi-provider + BYOK + local LLM**. No competitor offers all three in their CLI.
 
 ## Pricing
 
-| Tier            | Price         | What                                                          |
-| --------------- | ------------- | ------------------------------------------------------------- |
-| **Local**       | Free forever  | Self-hosted, no cloud (Ollama / LMStudio)                     |
-| **BYOK**        | Free forever  | Bring your own API keys                                       |
-| **Hobby**       | Coming soon   | Managed cloud, limited credits ($5/mo target)                 |
-| **Pro / Max**   | Waitlist      | Full models (post-security-audit)                             |
-| **Enterprise**  | Contact sales | SSO, SCIM, custom retention — https://agiworkforce.com/contact |
+| Tier           | Price         | What                                                           |
+| -------------- | ------------- | -------------------------------------------------------------- |
+| **Local**      | Free forever  | Self-hosted, no cloud (Ollama / LMStudio)                      |
+| **BYOK**       | Free forever  | Bring your own API keys                                        |
+| **Hobby**      | Coming soon   | Managed cloud, limited credits ($5/mo target)                  |
+| **Pro / Max**  | Waitlist      | Full models (post-security-audit)                              |
+| **Enterprise** | Contact sales | SSO, SCIM, custom retention — https://agiworkforce.com/contact |
 
 ## Installation
 
@@ -122,4 +122,3 @@ AGI Workforce CLI is both an MCP client (consumes external MCP servers) and an M
 ## License
 
 PROPRIETARY. See [LICENSE](https://github.com/siddharthanagula3/agiworkforce/blob/main/LICENSE).
-

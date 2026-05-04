@@ -188,7 +188,7 @@ pub(crate) fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
     vec![
         RegistryCommand::builtin_slash(
             "model",
-            "Switch model (e.g. /model gpt-4o)",
+            "Switch model (e.g. /model gpt-5.5)",
             false,
             true,
             vec!["m"],
