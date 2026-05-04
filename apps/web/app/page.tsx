@@ -25,7 +25,7 @@ import { MARKETING } from '../lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'AGI Workforce | AI Agent Automation Platform',
   description:
-    'AGI Workforce is a privacy-first AI agent platform. Chat with AI, automate your browser, terminal, files, and code - across desktop, web, CLI, VS Code, and browser extension. Multi-provider LLM support with BYOK and full offline mode via Ollama.',
+    'Beyond one model. Beyond one surface. AGI in your hands. 10+ AI providers in one chat thread - across desktop, web, mobile, CLI, VS Code, and Chrome. BYOK or run fully offline with Ollama and LM Studio.',
   keywords: [
     'AI agent',
     'AI automation',
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'AGI Workforce | AI Agent Automation Platform',
     description:
-      'A team of AI agents that automates your browser, terminal, files, and code - across desktop, web, CLI, VS Code, and browser extension. Free to try.',
+      'Beyond one model. Beyond one surface. AGI in your hands. 10+ AI providers in one chat thread - across desktop, web, mobile, CLI, VS Code, and Chrome.',
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [{ url: '/app-preview.png', width: 1200, height: 630, alt: 'AGI Workforce' }],
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AGI Workforce | AI Agent Automation Platform',
     description:
-      'A team of AI agents that automates your browser, terminal, files, and code - across desktop, web, CLI, VS Code, and browser extension.',
+      'Beyond one model. Beyond one surface. AGI in your hands. 10+ AI providers, six surfaces, one workforce.',
     images: ['/app-preview.png'],
   },
 };
@@ -169,9 +169,7 @@ export default function Home() {
 
               {/* Subtitle */}
               <p className="animate-hero-4 font-body mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-[#888480] md:text-xl">
-                The multi-provider agentic platform - desktop app, web, mobile, native Rust CLI, VS
-                Code, and Chrome extension. Eight LLM providers in one chat thread. Local-first.
-                Bring your own keys.
+                Beyond one model. Beyond one surface. AGI in your hands.
               </p>
 
               {/* CTAs */}
@@ -390,7 +388,11 @@ export default function Home() {
                   <div className="mb-6 font-heading text-2xl text-[#edebe8]">Rust + Tauri</div>
                   <div className="space-y-4">
                     {[
-                      { label: 'App size', value: '~35 MB', sub: 'native binary' },
+                      {
+                        label: 'Binary size',
+                        value: '~35 MB',
+                        sub: 'compiled binary, before installer packaging',
+                      },
                       { label: 'RAM on startup', value: '~80 MB', sub: 'no Chromium overhead' },
                       { label: 'Cold start', value: '<1 sec', sub: 'direct OS launch' },
                       {
