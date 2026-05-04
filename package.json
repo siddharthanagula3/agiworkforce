@@ -67,7 +67,8 @@
     "build:docs": "pnpm --filter @agiworkforce/docs build",
     "dev:desktop": "pnpm --filter @agiworkforce/desktop dev",
     "dev:docs": "pnpm --filter @agiworkforce/docs start",
-    "typecheck:all": "pnpm -r --if-present typecheck"
+    "typecheck:all": "pnpm -r --if-present typecheck",
+    "demo:multi-provider": "tsx examples/multi-provider-chat.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
