@@ -8,7 +8,7 @@
 ## Title
 
 ```
-[Tool] AGI Workforce CLI — terminal AI agent with first-class Ollama / LM Studio support, 25 providers, BYOK
+[Tool] AGI Workforce CLI — terminal AI agent with first-class Ollama / LM Studio support, 10+ Providers, BYOK
 ```
 
 ## Body
@@ -44,7 +44,7 @@ agiworkforce
 - Sandbox runs your tool calls under Bubblewrap/Landlock on Linux, Seatbelt on macOS, Restricted Token on Windows — so tool outputs from sketchy local models can't `rm -rf ~`
 - Cost tracking shows `$0.00` for local models — you can see exactly what your local setup saves you
 
-**The other 22 providers** if you want them: Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Groq, Together, Fireworks, Perplexity, Azure, Bedrock, Cohere, AI21, SambaNova, OpenRouter, plus subscription paths for GitHub Copilot and ChatGPT Plus.
+**The other cloud providers** if you want them (10+ in total): Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Groq, Together, Fireworks, Perplexity, Azure, Bedrock, Cohere, AI21, SambaNova, OpenRouter, plus subscription paths for GitHub Copilot and ChatGPT Plus.
 
 **Install**
 
@@ -58,7 +58,7 @@ cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkfor
 
 **Open source?**
 
-Source is in the public repo (Rust, 192 files, 152 K LOC, 898 tests). The license is currently proprietary because there's a planned managed-cloud Hobby tier ($5/mo) and I want to protect against drive-by repackaging. Local + BYOK use is and will remain unrestricted. OSI-license migration is on the roadmap once the business model is validated.
+Source is in the public repo (Rust, 195 files, 155,029 LOC, 914 tests). The license is proprietary — local + BYOK use is unrestricted via the binary releases. The repo is published for transparency.
 
 **Repo:** https://github.com/siddharthanagula3/agiworkforce
 **Architecture:** https://github.com/siddharthanagula3/agiworkforce/blob/main/apps/cli/ARCHITECTURE.md

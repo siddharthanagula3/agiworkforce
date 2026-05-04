@@ -271,7 +271,7 @@ export default function WebChatPage() {
               <div className="text-center">
                 <h1 className="text-2xl font-semibold text-foreground">What can I help with?</h1>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Ask anything — I support 25+ models including Claude, GPT, Gemini, and local LLMs.
+                  Ask anything — I support 10+ providers including Claude, GPT, Gemini, and local LLMs.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2 w-full max-w-lg">

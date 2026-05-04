@@ -61,11 +61,13 @@ UI screenshots from competitors are at `~/Desktop/reference/ui/` (8 sets — `cl
 
 ## Why users should switch
 
+**Tagline:** *Beyond one model. Beyond one surface. AGI in your hands.*
+
 **Core pitch:** One app replaces Claude Desktop, ChatGPT, Gemini — with the same features but multi-model, BYOK, local LLM, and cross-device.
 
 **What makes AGI Workforce different (the only 3 that hold up against May 2026 reality):**
 
-1. **Multi-provider in one UI** — 25+ providers, switch mid-conversation. Anthropic locks to Claude only.
+1. **Multi-provider in one UI** — 10+ Providers, switch mid-conversation. Anthropic locks to Claude only.
 2. **BYOK + Local LLM (Ollama, LMStudio)** — Anthropic doesn't allow user keys.
 3. **Cross-provider session continuity** — Claude → GPT → Llama in same thread, no context loss.
 

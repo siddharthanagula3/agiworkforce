@@ -49,7 +49,7 @@ npm install -g @agiworkforce/cli                        # ⏳ pending NPM_TOKEN 
 ### Added
 
 - **22 subcommands**: `exec`, `review`, `apply`, `sandbox`, `mcp-server`, `app-server`, `resume`, `fork`, `session`, `cloud`, `plugin`, `features`, `execpolicy`, `ecosystem`, `history`, `sync`, `login`, `logout`, `auth-status`, `marketplace`, `init`, `onboarding`
-- **8 LLM providers**: Anthropic, OpenAI, Google, Ollama, Mistral, xAI, DeepSeek, OllamaCloud + subscription paths for GitHub Copilot and ChatGPT Plus
+- **10+ Providers**: Anthropic, OpenAI, Google, Ollama, Mistral, xAI, DeepSeek, OllamaCloud + subscription paths for GitHub Copilot and ChatGPT Plus
 - **Ratatui TUI**: 125-file terminal UI with streaming markdown, slash commands, syntax highlighting (syntect), agent task panel
 - **Multi-provider fallback chain**: comma-separated `-m` flag rotates on RateLimit/Transient/Any errors
 - **--demo flag**: synthesizes a 429 on first call to demo fallback chain (no real API call needed for live demos)
@@ -86,7 +86,7 @@ npm install -g @agiworkforce/cli                        # ⏳ pending NPM_TOKEN 
 
 ### Tests
 
-- 898/898 unit tests green (`cargo test -p agiworkforce-cli --bin agiworkforce`)
+- 914/914 unit tests green (`cargo test -p agiworkforce-cli --bin agiworkforce` — verified 2026-05-03 via `cargo test --release`)
 - Snapshot tests for TUI rendering (chatwidget)
 - Integration tests for tool execution + permission stack
 
