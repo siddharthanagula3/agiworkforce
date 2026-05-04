@@ -119,3 +119,6 @@ export * from './workspace-analytics';
 
 // Command capability types (runtime-aware dispatch)
 export * from './command-capabilities';
+
+// Provider adapter contract (lifted from OpenClaw, adapted)
+export * from './provider-adapter';
