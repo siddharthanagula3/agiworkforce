@@ -1082,6 +1082,15 @@ importers:
         specifier: workspace:*
         version: link:../types
 
+  packages/browser-tool:
+    dependencies:
+      '@agiworkforce/types':
+        specifier: workspace:*
+        version: link:../types
+      playwright-core:
+        specifier: ^1.58.2
+        version: 1.58.2
+
   packages/chat:
     dependencies:
       '@agiworkforce/types':
