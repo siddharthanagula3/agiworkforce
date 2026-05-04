@@ -184,6 +184,17 @@ export async function getCurrentSession() {
   return session;
 }
 
+/**
+ * `PlanTier` is a UNION TYPE — the set of valid tier strings persisted in
+ * Supabase `subscriptions.tier`.  It is intentionally unordered.
+ *
+ * For PRECEDENCE / hierarchy (which tier is "higher"), see
+ * `PLAN_TIER_HIERARCHY` in `apps/desktop/src/utils/subscriptionGate.ts`.
+ *
+ * Canonical 6-tier taxonomy lives in `apps/desktop/src/types/pricing.ts`
+ * (`PricingModel`).  `'free'` here is a legacy alias kept for backward compat;
+ * new tiers (`'local-only'`, `'byok'`) are added there as the source of truth.
+ */
 export type PlanTier = 'hobby' | 'free' | 'pro' | 'max' | 'enterprise';
 
 const VALID_PLAN_TIERS: readonly PlanTier[] = [

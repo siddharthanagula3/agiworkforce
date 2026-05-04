@@ -1,5 +1,14 @@
 use super::{APIProvider, APIRoute, PromptContext, UseCase};
+use crate::core::llm::{models_config, Provider};
 use std::collections::HashMap;
+
+/// Look up OpenAI's task-routed model for the given snake_case task
+/// (e.g. `"code_generation"`, `"chat"`).  Falls back to the provider's
+/// default model from `models.json` so this never returns a stale literal.
+/// Source of truth: `packages/types/src/models.json`.
+fn openai_model_for_task(task: &str) -> String {
+    models_config::get_task_model(&Provider::OpenAI, task).to_string()
+}
 
 pub struct APIRouter {
     routing_rules: HashMap<UseCase, Vec<APIProvider>>,
@@ -139,12 +148,12 @@ impl APIRouter {
                 )
             },
             (UseCase::Coding, APIProvider::GPT) => (
-                "GPT-4 provides excellent code generation with broad language support.".to_string(),
-                "gpt-4".to_string(),
+                "GPT provides excellent code generation with broad language support.".to_string(),
+                openai_model_for_task("code_generation"),
             ),
             (UseCase::DocumentCreation, APIProvider::GPT) => (
-                "GPT-4 excels at creative writing and document generation with natural language.".to_string(),
-                "gpt-4".to_string(),
+                "GPT excels at creative writing and document generation with natural language.".to_string(),
+                openai_model_for_task("chat"),
             ),
             (UseCase::Search, APIProvider::Perplexity) => (
                 "Perplexity is specifically designed for search queries with up-to-date web information.".to_string(),
@@ -163,8 +172,8 @@ impl APIRouter {
                 "veo-3".to_string(),
             ),
             (UseCase::GeneralQA, APIProvider::GPT) => (
-                "GPT-4 provides versatile, accurate responses for general questions.".to_string(),
-                "gpt-4".to_string(),
+                "GPT provides versatile, accurate responses for general questions.".to_string(),
+                openai_model_for_task("chat"),
             ),
             (UseCase::GeneralQA, APIProvider::Ollama) => (
                 "Ollama provides free local inference for general questions.".to_string(),

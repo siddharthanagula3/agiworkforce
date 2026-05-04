@@ -857,6 +857,7 @@ pub fn create_token_usage(conn: &Connection, usage: &TokenUsage) -> Result<i64> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::llm::{models_config, Provider};
     use crate::data::db::migrations::run_migrations;
     use chrono::Utc;
 
@@ -979,7 +980,8 @@ mod tests {
         )
         .with_metrics(100, 0.5);
         message_a.provider = Some("openai".to_string());
-        message_a.model = Some("gpt-4o".to_string());
+        // Catalog: see packages/types/src/models.json
+        message_a.model = Some(models_config::get_default_model(&Provider::OpenAI).to_string());
         create_message(&conn, &message_a).unwrap();
 
         let mut message_b = Message::new(
