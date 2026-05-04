@@ -106,7 +106,9 @@ Four optional functions + one required `stream`. That's the entire surface every
 | **S3**  | OpenAI on `openai` npm package + add provider-attribution layer             | 2–3 days         | **✅ Done 2026-05-04** |
 | **S4a** | MCP transport/catalog + skills loader (markdown+frontmatter)                | 2–3 hours        | **✅ Done 2026-05-04** |
 | **S4b** | 5 missing hook events in Rust CLI (apps/cli)                                | 2–4 days         | **✅ Done 2026-05-04** |
-| **S5**  | Browser tool fresh on `playwright-core` (NOT lifted — schema patterns only) | 2–3 days         | Pending                |
+| **S5**  | Live smoke tests for 3 adapters + cross-provider demo CLI                   | 2–3 hours        | **✅ Done 2026-05-04** |
+| **S6**  | Browser tool fresh on `playwright-core` (NOT lifted — schema patterns only) | 2–3 days         | Pending                |
+| **S7**  | API gateway integration — wire adapters into `services/api-gateway/`        | 2–3 days         | Pending                |
 
 **Top-line bet:** Sprint 1's 1,650-LOC normalization layer is what makes "switch model mid-conversation across providers" robust. Without it, that differentiator becomes a backlog of P1 bugs forever (Azure dropping `service_tier`, Cerebras rejecting `store`, DeepSeek thinking-tag format, Vertex Anthropic cache TTL gating, etc.).
 
@@ -439,6 +441,49 @@ cd apps/cli && cargo check         # GREEN (3.38s; agiworkforce-cli + 11 transit
 - ~5,604 LOC across TS (~5,435) + Rust (+169)
 - License attribution complete in `THIRD_PARTY_LICENSES.md`
 - All packages typecheck + build green; CLI `cargo check` green
+
+## What shipped on 2026-05-04 (Sprint 5 — make it demo-able)
+
+| Deliverable                                                       | What                                                                                                                                                                                                                                          | Impact                         |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `packages/providers/{anthropic,openai,ollama}/src/*.live.test.ts` | 3 Vitest live smoke tests. Each: `describe.skipIf` gate on `AGIWORKFORCE_LIVE_TEST=1` + creds, asserts at least one `text-delta` + a `usage` chunk + a non-error `stop`. Tiny prompts (32-token cap). Catalog assertion runs unconditionally. | +183 LOC TS                    |
+| Vitest scripts on the 3 provider packages                         | `pnpm test` (skips live tests gracefully, `--passWithNoTests`); `pnpm test:live` (sets the env var)                                                                                                                                           | +9 LOC                         |
+| `examples/multi-provider-chat.ts`                                 | One-shot demo. Probes for `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / Ollama daemon → fans out the same `ChatRequest` to whichever providers are available → streams output side-by-side with vendor-coloured prefixes → final usage table.      | +172 LOC TS                    |
+| `package.json` (root)                                             | `pnpm demo:multi-provider "<prompt>"` script                                                                                                                                                                                                  | +1 LOC                         |
+| `AGI_WORKFORCE.md`                                                | S5 ✅ in sprint table + this section + sprint table renumbering (S5 = tests/demo, S6 = browser, S7 = api-gateway)                                                                                                                             | +30 LOC                        |
+| Verification                                                      | Skip-path tests run clean (1 passed, 2 skipped per provider); demo CLI exits 1 with helpful message when no creds available                                                                                                                   | clean                          |
+| **Sprint 5 total**                                                |                                                                                                                                                                                                                                               | **+395 LOC TS, +6 test files** |
+
+**How to demo cross-provider continuity right now:**
+
+```bash
+# any one of these enables that provider; multiple = side-by-side demo
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
+ollama serve   # in another terminal, then `ollama pull llama3.2`
+
+cd ~/Desktop/agiworkforce
+pnpm demo:multi-provider "Write a haiku about TypeScript."
+```
+
+Output: each available provider streams the same prompt with a coloured `[anthropic]` / `[openai]` / `[ollama]` prefix; final summary shows char count, duration, token usage, stop reason per vendor. This is the actual demo of "one chat layout, many providers" — minus the UI shell.
+
+**How to run live tests:**
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+pnpm --filter @agiworkforce/providers-anthropic test:live   # ~5-50 tokens
+
+export OPENAI_API_KEY=sk-...
+pnpm --filter @agiworkforce/providers-openai test:live      # ~5-50 tokens
+
+# (Ollama: free, just needs a daemon + a pulled model)
+ollama serve
+ollama pull llama3.2
+pnpm --filter @agiworkforce/providers-ollama test:live
+```
+
+Each suite runs 2 tests: a stream-end-to-end smoke and a catalog assertion. With `AGIWORKFORCE_LIVE_TEST` unset, all suites skip cleanly so default `pnpm test` is safe in CI.
 
 ## How to use this file
 
