@@ -18,7 +18,7 @@ const companyLinks = [
 ];
 
 const legalLinks = [
-  { label: 'Privacy', href: '/privacy' },
+  { label: 'Privacy', href: '/privacy', subtitle: 'Effective 2026-05-04' },
   { label: 'Terms', href: '/terms' },
   { label: 'Security', href: '/security' },
 ];
@@ -91,6 +91,9 @@ export function MarketingFooter() {
                   >
                     {link.label}
                   </Link>
+                  {link.subtitle ? (
+                    <div className="mt-0.5 text-[11px] text-zinc-600">{link.subtitle}</div>
+                  ) : null}
                 </li>
               ))}
             </ul>
