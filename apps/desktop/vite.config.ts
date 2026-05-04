@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react-swc';
 import { defineConfig, loadEnv, type ConfigEnv, type UserConfig } from 'vite';
+import { ipcCheckPlugin } from './scripts/vite-plugin-ipc-check';
 
 // ESM-compatible __dirname
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -66,6 +67,23 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       }),
       // Tailwind CSS v4 Vite plugin
       tailwindcss(),
+      // Wave 2 Task 2.1, Stream 2: IPC drift detection at build time.
+      // Scans every invoke('<name>', ...) literal under src/ and verifies
+      // the command exists as a #[tauri::command] under src-tauri/. Default
+      // mode is WARN (see scripts/vite-plugin-ipc-check.ts header for the
+      // rationale and how to flip to FAIL once existing drift is cleaned up).
+      // Skipped for the cloud-web build target — those bundles never reach
+      // the Tauri runtime, so missing #[tauri::command] is not a real bug
+      // (cloud-web routes through tauri-mock.ts's cloudApi fallthrough).
+      ...(isWebBuild
+        ? []
+        : [
+            ipcCheckPlugin({
+              srcDir: path.resolve(__dirname, './src'),
+              srcTauriDir: path.resolve(__dirname, './src-tauri/src'),
+              failOnDrift: false,
+            }),
+          ]),
     ],
 
     // ===================
