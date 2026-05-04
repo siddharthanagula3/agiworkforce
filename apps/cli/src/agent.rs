@@ -741,6 +741,32 @@ impl AgentSession {
         let usage = compaction::context_usage(&self.messages, &self.model);
         if usage.fraction > 0.90 {
             let target = usage.limit_tokens * 70 / 100;
+            // Sprint S4b: PreCompact hook — let handlers observe / annotate
+            // before the transcript shrinks. Currently advisory; future
+            // extensions may use `{"decision": "block"}` to skip compaction
+            // (with the caller responsible for handling near-overflow state).
+            let pre_hcfg = self.hooks_config.clone();
+            hooks::run_hooks(
+                &pre_hcfg,
+                hooks::HookEvent::PreCompact,
+                &hooks::HookInput {
+                    event: "PreCompact".to_string(),
+                    session_id: None,
+                    model: Some(self.model.clone()),
+                    tool_name: None,
+                    tool_args: None,
+                    tool_output: None,
+                    message: Some(format!(
+                        "context_usage_before_compact: {}/{} tokens ({}%)",
+                        usage.used_tokens,
+                        usage.limit_tokens,
+                        (usage.fraction * 100.0) as u32
+                    )),
+                    tool_execution: None,
+                },
+            )
+            .await;
+
             self.messages = compaction::compact_messages(&self.messages, target);
             let new_usage = compaction::context_usage(&self.messages, &self.model);
             eprintln!(
@@ -751,6 +777,29 @@ impl AgentSession {
                 )
                 .dimmed()
             );
+
+            // Sprint S4b: PostCompact hook — observe the new state for
+            // metrics / logging / persistence side effects.
+            hooks::run_hooks(
+                &pre_hcfg,
+                hooks::HookEvent::PostCompact,
+                &hooks::HookInput {
+                    event: "PostCompact".to_string(),
+                    session_id: None,
+                    model: Some(self.model.clone()),
+                    tool_name: None,
+                    tool_args: None,
+                    tool_output: None,
+                    message: Some(format!(
+                        "context_usage_after_compact: {}/{} tokens ({}%)",
+                        new_usage.used_tokens,
+                        new_usage.limit_tokens,
+                        (new_usage.fraction * 100.0) as u32
+                    )),
+                    tool_execution: None,
+                },
+            )
+            .await;
         } else if usage.near_limit {
             eprintln!(
                 "  {}",
@@ -817,6 +866,48 @@ message -- revise and call `update_plan` again.\n\n"
             .iter()
             .map(|tool_definition| tool_definition.name.as_str())
             .collect::<std::collections::HashSet<_>>();
+
+        // Sprint S4b: BeforePromptBuild + BeforeModelResolve.
+        // Run as a pair right before the first LLM call. BeforePromptBuild
+        // gives hooks a chance to inject context (logged for observation in
+        // v1; future versions can use `additional_context` to mutate
+        // self.messages). BeforeModelResolve is the latest deterministic
+        // override point for the model id before bytes leave the agent.
+        let pre_call_hcfg = self.hooks_config.clone();
+        hooks::run_hooks(
+            &pre_call_hcfg,
+            hooks::HookEvent::BeforePromptBuild,
+            &hooks::HookInput {
+                event: "BeforePromptBuild".to_string(),
+                session_id: None,
+                model: Some(self.model.clone()),
+                tool_name: None,
+                tool_args: None,
+                tool_output: None,
+                message: Some(format!(
+                    "messages_count={} tools_count={}",
+                    self.messages.len(),
+                    tool_defs.len()
+                )),
+                tool_execution: None,
+            },
+        )
+        .await;
+        hooks::run_hooks(
+            &pre_call_hcfg,
+            hooks::HookEvent::BeforeModelResolve,
+            &hooks::HookInput {
+                event: "BeforeModelResolve".to_string(),
+                session_id: None,
+                model: Some(self.model.clone()),
+                tool_name: None,
+                tool_args: None,
+                tool_output: None,
+                message: None,
+                tool_execution: None,
+            },
+        )
+        .await;
 
         // --- First LLM call (with user's streaming callback) ---
         // Demo hook: if the operator passed `--demo`, synthesize a 429 on the
@@ -1261,6 +1352,25 @@ Files modified:
                         event: "PostToolUse".to_string(),
                         session_id: None,
                         model: Some(self.model.clone()),
+                        tool_name: Some(tool_name.clone()),
+                        tool_args: Some(tool_args.clone()),
+                        tool_output: Some(tool_result.output.clone()),
+                        message: None,
+                        tool_execution: None,
+                    },
+                )
+                .await;
+
+                // Sprint S4b: ToolResultPersist — fires close to persistence
+                // so storage-affecting hooks (PII redaction, secret scrubbing)
+                // see the same payload that lands in the transcript.
+                hooks::run_hooks(
+                    &hcfg,
+                    hooks::HookEvent::ToolResultPersist,
+                    &hooks::HookInput {
+                        event: "ToolResultPersist".to_string(),
+                        session_id: None,
+                        model: Some(self.model.clone()),
                         tool_name: Some(tool_name),
                         tool_args: Some(tool_args),
                         tool_output: Some(tool_result.output.clone()),
@@ -1387,6 +1497,25 @@ Files modified:
                         hooks::HookEvent::PostToolUse,
                         &hooks::HookInput {
                             event: "PostToolUse".to_string(),
+                            session_id: None,
+                            model: Some(self.model.clone()),
+                            tool_name: Some(tool_name.clone()),
+                            tool_args: Some(tool_args.clone()),
+                            tool_output: Some(tool_result.output.clone()),
+                            message: None,
+                            tool_execution: None,
+                        },
+                    )
+                    .await;
+
+                    // Sprint S4b: ToolResultPersist — runs after PostToolUse
+                    // so its observers see the same payload about to be
+                    // appended to result_blocks.
+                    hooks::run_hooks(
+                        &hcfg,
+                        hooks::HookEvent::ToolResultPersist,
+                        &hooks::HookInput {
+                            event: "ToolResultPersist".to_string(),
                             session_id: None,
                             model: Some(self.model.clone()),
                             tool_name: Some(tool_name),
@@ -1547,6 +1676,26 @@ Files modified:
                 if let Some(ctx) = post_t.additional_context {
                     hook_additional_contexts.push(ctx);
                 }
+
+                // Sprint S4b: ToolResultPersist — fires *after* PostToolUse
+                // transformations so observers see the final-as-persisted
+                // payload (post-redaction etc.). This is the right place for
+                // append-only audit sinks.
+                hooks::run_hooks(
+                    &hcfg,
+                    hooks::HookEvent::ToolResultPersist,
+                    &hooks::HookInput {
+                        event: "ToolResultPersist".to_string(),
+                        session_id: None,
+                        model: Some(self.model.clone()),
+                        tool_name: Some(tc.name.clone()),
+                        tool_args: Some(effective_args.clone()),
+                        tool_output: Some(final_output.clone()),
+                        message: None,
+                        tool_execution: None,
+                    },
+                )
+                .await;
 
                 result_blocks.push(ContentBlock::ToolResult {
                     tool_use_id: tc.id.clone(),
