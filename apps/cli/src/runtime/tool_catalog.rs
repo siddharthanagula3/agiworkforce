@@ -164,6 +164,33 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             "Search available tools by keyword.",
             serde_json::json!({"type":"object","properties":{"query":{"type":"string","description":"Search query"},"max_results":{"type":"integer","description":"Max results (default 10)"}},"required":["query"]}),
         ).read_only().with_size_cap(20_000),
+        // Sprint B4: real plan mode -- model writes plan via this tool, user
+        // approves via /plan accept, then mutating tools unlock. The tool
+        // is registered always (cheap and useful for general planning) but
+        // only gated when permission_mode=Plan.
+        def(
+            "update_plan",
+            "Write or revise the execution plan. REQUIRED in plan mode before any mutating tool call (bash, edit_file, write_file, apply_patch, MCP tools). Each step is one discrete action. After calling, await user approval -- do NOT call mutating tools yet. The user reviews the plan and types `/plan accept`.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "steps": {
+                        "type": "array",
+                        "description": "Ordered list of plan steps.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "description": {"type": "string", "description": "What this step does."},
+                                "status": {"type": "string", "enum": ["pending", "in_progress", "complete"], "description": "Step status; defaults to pending."},
+                                "notes": {"type": "string", "description": "Optional notes about the step."}
+                            },
+                            "required": ["description"]
+                        }
+                    }
+                },
+                "required": ["steps"]
+            }),
+        ).with_size_cap(2_000),
     ]
 }
 
@@ -269,6 +296,10 @@ fn filter_read_only_builtin_tool_definitions() -> Vec<ToolDefinition> {
         "list_directory",
         "web_search",
         "web_fetch",
+        // Sprint B4: `update_plan` mutates only the in-memory plan + the
+        // markdown file under ~/.agiworkforce/plans/. It must be visible
+        // in plan mode -- that's the whole point of the tool.
+        "update_plan",
     ];
     built_in_tool_definitions()
         .into_iter()
@@ -313,6 +344,7 @@ mod tests {
                 "list_directory",
                 "web_search",
                 "web_fetch",
+                "update_plan",
                 "send_message",
                 "team_task",
                 "read_messages",
@@ -423,5 +455,6 @@ mod tests {
         assert_eq!(caps.get("grep_files"), Some(&Some(50_000)));
         assert_eq!(caps.get("tool_search"), Some(&Some(20_000)));
         assert_eq!(caps.get("task"), Some(&None));
+        assert_eq!(caps.get("update_plan"), Some(&Some(2_000)));
     }
 }

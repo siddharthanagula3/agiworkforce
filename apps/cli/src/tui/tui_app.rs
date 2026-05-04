@@ -1609,6 +1609,8 @@ pub async fn run(
     auto_approve_safe: bool,
     quiet: bool,
     provider_override: Option<String>,
+    permission_mode: crate::cli_options::PermissionMode,
+    auto_approve_plan: bool,
 ) -> Result<()> {
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
     if let Some(ref provider) = provider_override {
@@ -1618,6 +1620,14 @@ pub async fn run(
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
+    // Sprint B4: thread the initial permission mode + headless
+    // auto-approve flag so the TUI launch path matches `--mode plan`
+    // semantics from `repl::run_repl` and `run_oneshot`.
+    session.permission_mode = permission_mode;
+    session.auto_approve_plan = auto_approve_plan;
+    if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
+        session.plan_mode = true;
+    }
     if team_mode {
         session.enable_team_mode();
     }

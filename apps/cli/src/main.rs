@@ -19,6 +19,7 @@ mod models;
 mod output;
 mod output_styles;
 mod permissions;
+mod plan_mode;
 mod provider;
 mod repl;
 mod safety;
@@ -263,6 +264,19 @@ struct Cli {
     /// Permission mode for tool use.
     #[arg(long, value_name = "MODE", value_enum)]
     permission_mode: Option<cli_options::PermissionMode>,
+
+    /// Sprint B4: short alias for `--permission-mode`. Accepts the same
+    /// values (default, plan, accept-edits, bypass-permissions, dont-ask).
+    /// When both `--mode` and `--permission-mode` are provided, `--mode`
+    /// wins (it's the more visible flag for plan-mode users).
+    #[arg(long, value_name = "MODE", value_enum)]
+    mode: Option<cli_options::PermissionMode>,
+
+    /// Sprint B4: in plan mode, auto-approve the first complete plan the
+    /// model writes via `update_plan` -- intended for headless / CI runs
+    /// where there is no human at the prompt to type `/plan accept`.
+    #[arg(long)]
+    auto_approve_plan: bool,
 
     /// Allow specific tools or tool patterns. Comma-separated and repeatable.
     #[arg(long = "allowedTools", alias = "allowed-tools", value_delimiter = ',')]
@@ -1009,6 +1023,8 @@ async fn main() -> Result<()> {
                     false,
                     false,
                     false,
+                    cli_options::PermissionMode::Default,
+                    false,
                 )
                 .await
             }
@@ -1034,6 +1050,8 @@ async fn main() -> Result<()> {
                     None,
                     false,
                     false,
+                    false,
+                    cli_options::PermissionMode::Default,
                     false,
                 )
                 .await
@@ -1738,6 +1756,15 @@ async fn main() -> Result<()> {
         normalized_cli_options.should_skip_permissions(cli.dangerously_skip_permissions);
     let effective_auto_approve_safe = normalized_cli_options.should_auto_approve_safe(cli.yes);
 
+    // Sprint B4: `--mode` wins over `--permission-mode` when both are
+    // provided. Falls back to Default when neither is set, matching the
+    // existing PermissionMode default.
+    let effective_permission_mode: cli_options::PermissionMode = cli
+        .mode
+        .or(cli.permission_mode)
+        .unwrap_or(cli_options::PermissionMode::Default);
+    let effective_auto_approve_plan = cli.auto_approve_plan;
+
     // Resolve effective max_turns: explicit --max-turns wins, then --effort preset
     let effective_max_turns = cli.max_turns.or(effort_max_turns);
 
@@ -1754,6 +1781,8 @@ async fn main() -> Result<()> {
             effective_skip_permissions,
             effective_auto_approve_safe,
             cli.quiet,
+            effective_permission_mode,
+            effective_auto_approve_plan,
         )
         .await;
     }
@@ -1838,6 +1867,8 @@ async fn main() -> Result<()> {
             team_mode,
             effective_auto_approve_safe,
             cli.quiet,
+            effective_permission_mode,
+            effective_auto_approve_plan,
         )
         .await
     } else {
@@ -1856,6 +1887,8 @@ async fn main() -> Result<()> {
             effective_auto_approve_safe,
             cli.quiet,
             cli.provider,
+            effective_permission_mode,
+            effective_auto_approve_plan,
         )
         .await
     }
@@ -2041,6 +2074,8 @@ async fn run_oneshot(
     skip_permissions: bool,
     auto_approve_safe: bool,
     quiet: bool,
+    permission_mode: cli_options::PermissionMode,
+    auto_approve_plan: bool,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
     // Apply config-based provider override (e.g. "ollama-cloud") when the
@@ -2050,6 +2085,14 @@ async fn run_oneshot(
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
+    // Sprint B4: thread the permission mode + auto-approval into the
+    // session before any send. `--mode plan` here means the model sees
+    // the plan-mode reminder and the dispatcher gates mutating tools.
+    session.permission_mode = permission_mode;
+    session.auto_approve_plan = auto_approve_plan;
+    if matches!(permission_mode, cli_options::PermissionMode::Plan) {
+        session.plan_mode = true;
+    }
     session.enable_managed_session()?;
 
     if output_mode == OneShotOutputMode::JsonLine {
