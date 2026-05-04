@@ -642,7 +642,7 @@ describe('validators', () => {
 
   describe('isLocalUrl', () => {
     it('returns true for http://localhost', () => {
-      expect(validators.isLocalUrl('http://localhost:8765')).toBe(true);
+      expect(validators.isLocalUrl('http://localhost:8787')).toBe(true);
     });
 
     it('returns true for http://127.0.0.1', () => {
@@ -650,11 +650,11 @@ describe('validators', () => {
     });
 
     it('returns true for ws://localhost (normalized to http)', () => {
-      expect(validators.isLocalUrl('ws://localhost:8765')).toBe(true);
+      expect(validators.isLocalUrl('ws://localhost:8787')).toBe(true);
     });
 
     it('returns true for wss://127.0.0.1 (normalized to https)', () => {
-      expect(validators.isLocalUrl('wss://127.0.0.1:8765')).toBe(true);
+      expect(validators.isLocalUrl('wss://127.0.0.1:8787')).toBe(true);
     });
 
     it('returns false for a remote URL', () => {

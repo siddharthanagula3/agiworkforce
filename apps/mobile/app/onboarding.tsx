@@ -24,14 +24,14 @@ const SLIDES: Slide[] = [
   {
     icon: Sparkles,
     title: 'AGI Workforce',
-    subtitle: 'One app, every model, total control.',
+    subtitle: 'Beyond one model. Beyond one surface. AGI in your hands.',
     description: '',
   },
   {
     icon: Cpu,
     title: 'Every AI model, one app',
     subtitle: '',
-    description: 'Claude, GPT, Gemini, Grok, DeepSeek & more. 9+ providers.',
+    description: 'Claude, GPT, Gemini, Grok, DeepSeek & more. 10+ providers.',
   },
   {
     icon: Smartphone,
