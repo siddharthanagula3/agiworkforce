@@ -1,10 +1,11 @@
-import { expect, afterEach, vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
-import * as matchers from '@testing-library/jest-dom/matchers';
+// jest-dom's `vitest` entry both extends `expect` at runtime AND augments
+// Vitest's `Assertion<T>` interface so matchers like `toBeInTheDocument`
+// type-check. Importing from `/matchers` only does the runtime half and
+// leaves typecheck failing across all test files.
+import '@testing-library/jest-dom/vitest';
 import React from 'react';
-
-// Extend Vitest's expect with jest-dom matchers
-expect.extend(matchers);
 
 // Cleanup after each test
 afterEach(() => {
