@@ -193,7 +193,12 @@ ms-playwright/
 
 # --- Agent/AI temp files ---
 .agent/
-.claude/
+.claude/*
+# but track project-scoped subagent definitions + commands + rules so the
+# whole team / AI sessions get the same orchestration baseline
+!.claude/agents/
+!.claude/commands/
+!.claude/rules/
 
 # --- Business / personal data ---
 leads/
