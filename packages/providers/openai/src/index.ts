@@ -36,7 +36,10 @@ import {
 import { OPENAI_MODEL_CATALOG } from './catalog';
 import { translateChatRequest } from './translate';
 import { translateOpenAIStream } from './stream';
+import { translateChatRequestToResponses } from './translate-responses';
+import { translateOpenAIResponsesStream } from './stream-responses';
 import type { OpenAIChatCompletionChunk } from './types';
+import type { ResponsesStreamEvent } from './responses-types';
 
 const OPENAI_AUTH_METHODS: readonly AuthMethod[] = [
   {
@@ -63,6 +66,20 @@ export interface OpenAIAdapterConfig extends ProviderAdapterConfig {
   skipDiscovery?: boolean;
   /** Send `service_tier` on requests where allowed (api.openai.com only). */
   serviceTier?: 'auto' | 'default' | 'flex';
+  /**
+   * Use the Responses API (`/v1/responses`) instead of Chat Completions.
+   * Required for o-series and GPT-5.x server-side reasoning state. Default
+   * `false` — Chat Completions covers the broad chat use case and is the
+   * lower-friction path for proxies / Azure / OpenRouter.
+   */
+  useResponsesApi?: boolean;
+  /**
+   * For the Responses path: when `true`, the server stores the response so
+   * subsequent requests can chain via `previous_response_id`. Default
+   * `false` — stateless, matching Chat Completions semantics. Wave 3
+   * (Hobby/Pro tier) can flip this on for a server-side conversation cache.
+   */
+  responsesStore?: boolean;
 }
 
 export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderAdapter {
@@ -113,6 +130,40 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
         ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
         id: req.model,
       });
+
+      // 1a. Branch: Responses API path (`/v1/responses`).
+      if (config.useResponsesApi) {
+        try {
+          const responsesParams = translateChatRequestToResponses(req, {
+            compat: detected.defaults,
+            ...(config.responsesStore !== undefined ? { store: config.responsesStore } : {}),
+            ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
+          });
+          // SDK type churns; cast at the boundary.
+          const sdkStream = await sdk.responses.create(
+            responsesParams as unknown as Parameters<typeof sdk.responses.create>[0],
+            { signal },
+          );
+          for await (const chunk of translateOpenAIResponsesStream(
+            sdkStream as unknown as AsyncIterable<ResponsesStreamEvent>,
+          )) {
+            yield chunk;
+          }
+          return;
+        } catch (err) {
+          const error = err as Error & { status?: number };
+          const retryable =
+            typeof error.status === 'number' && (error.status === 429 || error.status >= 500);
+          yield {
+            type: 'error',
+            message: error.message ?? 'OpenAI Responses request failed',
+            ...(typeof error.status === 'number' ? { code: String(error.status) } : {}),
+            retryable,
+          };
+          yield { type: 'stop', reason: 'error' };
+          return;
+        }
+      }
 
       // 2. Translate the request using compat-aware shape rules.
       const params = translateChatRequest(req, {
@@ -178,4 +229,7 @@ export const openaiAdapterFactory: ProviderAdapterFactory = (config) =>
 export { OPENAI_MODEL_CATALOG } from './catalog';
 export { translateChatRequest } from './translate';
 export { translateOpenAIStream } from './stream';
+export { translateChatRequestToResponses } from './translate-responses';
+export { translateOpenAIResponsesStream } from './stream-responses';
 export type * from './types';
+export type * from './responses-types';
