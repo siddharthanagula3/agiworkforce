@@ -3635,7 +3635,7 @@ mod tests {
     #[test]
     fn session_header_includes_reasoning_level_when_present() {
         let cell = SessionHeaderHistoryCell::new(
-            "gpt-4o".to_string(),
+            "gpt-5.5".to_string(),
             Some(ReasoningEffortConfig::High),
             true,
             std::env::temp_dir(),
@@ -3655,7 +3655,7 @@ mod tests {
     #[test]
     fn session_header_hides_fast_status_when_disabled() {
         let cell = SessionHeaderHistoryCell::new(
-            "gpt-4o".to_string(),
+            "gpt-5.5".to_string(),
             Some(ReasoningEffortConfig::High),
             false,
             std::env::temp_dir(),
