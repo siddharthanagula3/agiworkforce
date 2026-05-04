@@ -25,9 +25,9 @@ export interface ModelPickerOption {
 const DEFAULT_CONTEXT_LIMIT = 128_000;
 
 const AUTO_MODEL_DEFAULTS = {
-  'auto-balanced': resolveAutoModeModel('auto-balanced', 'pro') ?? 'gpt-5.4',
-  'auto-economy': resolveAutoModeModel('auto-economy', 'hobby') ?? 'gpt-5.4-mini',
-  'auto-premium': resolveAutoModeModel('auto-premium', 'max') ?? 'claude-opus-4.6',
+  'auto-balanced': resolveAutoModeModel('auto-balanced', 'pro') ?? 'gpt-5.5',
+  'auto-economy': resolveAutoModeModel('auto-economy', 'hobby') ?? 'gpt-5.5-mini',
+  'auto-premium': resolveAutoModeModel('auto-premium', 'max') ?? 'claude-opus-4-6',
 } as const;
 
 const MANUAL_MODEL_OPTIONS = getCoreManualModelOptions();

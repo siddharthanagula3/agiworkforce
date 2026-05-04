@@ -1963,8 +1963,9 @@ async function captureCurrentPage(): Promise<void> {
   }
 }
 
-/** Default AGI bridge base URL — overridden by chrome.storage.local `agi_bridge_url`. */
-const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8765';
+/** Default AGI bridge base URL — overridden by chrome.storage.local `agi_bridge_url`.
+ *  Port 8787 is the canonical AGI Workforce desktop bridge port (matches VS Code ext + desktop). */
+const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8787';
 
 /** Allowed bridge URL hostnames — only local connections to the desktop app are permitted. */
 const ALLOWED_BRIDGE_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
