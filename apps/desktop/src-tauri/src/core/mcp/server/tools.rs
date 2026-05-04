@@ -16,7 +16,7 @@ impl McpServerToolRegistry {
                     "type": "object",
                     "properties": {
                         "message": { "type": "string", "description": "The user message to send" },
-                        "model": { "type": "string", "description": "Optional model ID (e.g. 'claude-opus-4-6', 'gpt-4o'). Omit for auto-routing." },
+                        "model": { "type": "string", "description": "Optional model ID. See `agi_list_models` for the current catalog. Omit for auto-routing." },
                         "system_prompt": { "type": "string", "description": "Optional system prompt" }
                     },
                     "required": ["message"]
