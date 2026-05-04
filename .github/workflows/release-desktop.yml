@@ -64,7 +64,11 @@ jobs:
             PRERELEASE="${{ inputs.prerelease }}"
           else
             TAG="${GITHUB_REF#refs/tags/}"
-            VERSION="${TAG#v}"
+            # Tag formats supported:
+            #   v1.2.0           -> VERSION=1.2.0  (legacy tags)
+            #   v-desktop-1.2.0  -> VERSION=1.2.0  (current desktop tags)
+            #   v-cli-1.0.0      -> VERSION=1.0.0  (cli tags, separate workflow)
+            VERSION=$(echo "$TAG" | sed -E 's/^v(-[a-z]+)?-?//')
             CHANNEL="stable"
             PRERELEASE="false"
 

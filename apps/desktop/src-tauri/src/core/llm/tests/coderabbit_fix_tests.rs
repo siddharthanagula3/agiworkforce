@@ -174,7 +174,7 @@ mod h13_resolve_model_for_strategy {
             5000,
             "fallback-model",
         );
-        assert_eq!(model, "gpt-5.4");
+        assert_eq!(model, "gpt-5.5");
     }
 
     #[test]
@@ -194,7 +194,7 @@ mod h13_resolve_model_for_strategy {
             20000,
             "fallback-model",
         );
-        assert_eq!(model, "claude-opus-4.6");
+        assert_eq!(model, "claude-opus-4.7");
     }
 
     #[test]
@@ -256,7 +256,7 @@ mod h13_resolve_model_for_strategy {
     fn auto_premium_boundary_at_16000() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoPremium, 16000, "fallback");
-        assert_eq!(model, "claude-opus-4.6");
+        assert_eq!(model, "claude-opus-4.7");
     }
 
     #[test]
@@ -277,7 +277,7 @@ mod h13_resolve_model_for_strategy {
     fn auto_balanced_boundary_at_4000() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoBalanced, 4000, "fallback");
-        assert_eq!(model, "gpt-5.4");
+        assert_eq!(model, "gpt-5.5");
     }
 
     #[test]
