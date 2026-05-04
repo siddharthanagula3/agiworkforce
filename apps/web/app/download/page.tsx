@@ -7,7 +7,7 @@ import { DownloadSection } from '../../components/DownloadSection';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-const APP_VERSION = '1.1.5';
+const APP_VERSION = '1.2.0';
 const LAST_UPDATED = 'May 2026';
 
 function getDownloadUrls() {
