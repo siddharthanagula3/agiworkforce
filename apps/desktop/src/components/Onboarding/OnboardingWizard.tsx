@@ -39,17 +39,31 @@ interface DetectedProvider {
 
 function detectProvider(apiKey: string): DetectedProvider | null {
   const trimmed = apiKey.trim();
+
+  // First-party providers we recognize by key prefix.
+  // Order matters: Anthropic must be checked before generic `sk-`.
   if (trimmed.startsWith('sk-ant-')) {
     return { name: 'Anthropic', secretKey: 'anthropic_api_key' };
-  }
-  if (trimmed.startsWith('sk-')) {
-    return { name: 'OpenAI', secretKey: 'openai_api_key' };
   }
   if (trimmed.startsWith('AIza')) {
     return { name: 'Google', secretKey: 'google_api_key' };
   }
   if (trimmed.startsWith('xai-')) {
     return { name: 'xAI', secretKey: 'xai_api_key' };
+  }
+  if (trimmed.startsWith('pplx-')) {
+    return { name: 'Perplexity', secretKey: 'perplexity_api_key' };
+  }
+  if (trimmed.startsWith('sk-or-')) {
+    // OpenRouter — handled as OpenAI-compatible BYO
+    return { name: 'OpenRouter', secretKey: 'open_router_api_key' };
+  }
+  // DeepSeek, Moonshot/Kimi, Qwen, Zhipu/GLM all use opaque tokens that look
+  // like generic `sk-...`. We can't disambiguate by prefix alone, so they
+  // fall through to the OpenAI bucket here. Users who need a specific
+  // provider can configure it explicitly in Settings → Models & Keys.
+  if (trimmed.startsWith('sk-')) {
+    return { name: 'OpenAI', secretKey: 'openai_api_key' };
   }
   return null;
 }
@@ -61,6 +75,7 @@ function detectProvider(apiKey: string): DetectedProvider | null {
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
   const completeOnboarding = useSimpleModeStore((s) => s.completeOnboarding);
   const setMode = useAppModeStore((s) => s.setMode);
+  const setHasSelectedMode = useAppModeStore((s) => s.setHasSelectedMode);
   // Ollama detection
   const [ollama, setOllama] = useState<OllamaStatus>({
     available: false,
@@ -98,20 +113,23 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
 
   const handleFinish = useCallback(() => {
     completeOnboarding();
+    setHasSelectedMode(true);
     onComplete();
-  }, [completeOnboarding, onComplete]);
+  }, [completeOnboarding, setHasSelectedMode, onComplete]);
 
   const handleCloud = useCallback(() => {
     setMode('cloud');
     completeOnboarding();
+    setHasSelectedMode(true);
     onComplete();
-  }, [setMode, completeOnboarding, onComplete]);
+  }, [setMode, completeOnboarding, setHasSelectedMode, onComplete]);
 
   const handleLocal = useCallback(() => {
     setMode('local');
     completeOnboarding();
+    setHasSelectedMode(true);
     onComplete();
-  }, [setMode, completeOnboarding, onComplete]);
+  }, [setMode, completeOnboarding, setHasSelectedMode, onComplete]);
 
   const handleByokSubmit = useCallback(async () => {
     if (!detected || saving) return;
@@ -126,8 +144,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
     }
     setMode('local');
     completeOnboarding();
+    setHasSelectedMode(true);
     onComplete();
-  }, [detected, saving, apiKey, setMode, completeOnboarding, onComplete]);
+  }, [detected, saving, apiKey, setMode, completeOnboarding, setHasSelectedMode, onComplete]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -172,14 +191,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                   <Cloud className="w-5 h-5 text-blue-400" />
                 </div>
                 <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                  $20/mo
+                  Hobby
                 </span>
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">Cloud</p>
-                <p className="text-xs text-blue-400 font-medium">Recommended</p>
+                <p className="text-xs text-blue-400 font-medium">Sync across devices</p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                  All models included. Start chatting instantly.
+                  Managed cloud LLMs. Requires Hobby ($5/mo target) or higher.
                 </p>
               </div>
               <button
@@ -279,9 +298,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
               )}
             </div>
             <p className="text-xs text-muted-foreground/60 mt-1.5 text-center">
-              Auto-detects: Anthropic, OpenAI, Google, xAI
+              Auto-detects: Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot,
+              Zhipu
             </p>
           </div>
+
+          {/* Cross-mode transfer note */}
+          <p className="text-[11px] text-muted-foreground/70 text-center mb-3">
+            You can move chats between modes anytime in Settings.
+          </p>
 
           {/* Skip link */}
           <div className="text-center">
