@@ -139,15 +139,14 @@ jobs:
 
             | Platform | Architecture | Download |
             |----------|--------------|----------|
-            | macOS | Apple Silicon (M1/M2/M3) | \`AGI.Workforce_${version}_aarch64.dmg\` |
-            | macOS | Intel | \`AGI.Workforce_${version}_x64.dmg\` |
-            | macOS | Universal | \`AGI.Workforce_${version}_universal.dmg\` |
+            | macOS | Apple Silicon (M1/M2/M3) | _Available in v1.2.1_ — see https://agiworkforce.com/chat in the meantime |
+            | macOS | Intel | _Available in v1.2.1_ |
             | Windows | x64 | _Coming Q3 2026_ — use the web app at https://agiworkforce.com/chat or install the CLI |
             | Linux | x64 | \`AGI.Workforce_${version}_amd64.AppImage\` |
 
             ### Installation
 
-            **macOS:** Download the \`.dmg\` file, open it, and drag AGI Workforce to your Applications folder.
+            **macOS:** The signed \`.dmg\` is being rebuilt for v1.2.1 (code-signing pipeline is being reconfigured). The web app at https://agiworkforce.com/chat works in any browser today.
 
             **Windows:** The native installer is not available yet (planned Q3 2026). In the meantime, the web app at https://agiworkforce.com/chat works in any browser, and the CLI installs via \`cargo install agiworkforce-cli\`.
 
@@ -246,8 +245,18 @@ jobs:
   # ==========================================================================
   # Build macOS - Universal binary (aarch64 + x86_64)
   # ==========================================================================
+  # DEFERRED to v1.2.1: the six APPLE_* signing secrets
+  # (APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+  # APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID) are not configured in repo
+  # settings, and the FIX-011 verify step (correctly) refuses to ship an
+  # unsigned bundle that Gatekeeper would block. The Developer ID cert
+  # itself still exists locally (last shipped v1.1.6 on 2026-03-07);
+  # secrets just need to be re-exported and uploaded. Re-enable by
+  # flipping `if: false` to `if: true` (or removing the gate) once
+  # the six secrets are configured.
   build-macos:
     name: Build macOS
+    if: false
     needs: [prepare-release, validate]
     runs-on: macos-latest
     permissions:
@@ -589,7 +598,7 @@ jobs:
   # ==========================================================================
   update-database:
     name: Update Release Database
-    needs: [prepare-release, build-macos, build-linux]
+    needs: [prepare-release, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -695,7 +704,7 @@ jobs:
   # ==========================================================================
   publish-release:
     name: Publish Release
-    needs: [prepare-release, build-macos, build-linux, update-database]
+    needs: [prepare-release, build-linux, update-database]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -725,7 +734,7 @@ jobs:
   # ==========================================================================
   cleanup-on-failure:
     name: Cleanup Failed Release
-    needs: [prepare-release, build-macos, build-linux]
+    needs: [prepare-release, build-linux]
     if: failure()
     runs-on: ubuntu-latest
     permissions:
