@@ -1,0 +1,17 @@
+{
+  "name": "@agiworkforce/browser-tool",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agiworkforce/types": "workspace:*",
+    "playwright-core": "^1.58.2"
+  }
+}
