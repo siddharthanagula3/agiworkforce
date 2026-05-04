@@ -126,8 +126,8 @@ pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
 /// ```text
 /// Model             Provider   Cost
 /// ─────────────────────────────────
-/// claude-opus-4     anthropic  $15.00
-/// gpt-4o            openai     $2.50
+/// claude-opus-4-6   anthropic  $15.00
+/// gpt-5.5           openai     $1.25
 /// ```
 #[allow(dead_code)]
 pub fn format_table(headers: &[&str], rows: &[Vec<String>]) -> String {

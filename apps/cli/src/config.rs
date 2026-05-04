@@ -689,7 +689,7 @@ mod tests {
     #[test]
     fn test_roundtrip_toml_all_fields() {
         let mut config = CliConfig::default();
-        config.default.model = "gpt-4o".to_string();
+        config.default.model = "gpt-5.5".to_string();
         config.default.provider = "openai".to_string();
         config.default.stream = false;
         config.default.max_tokens = 4096;
@@ -705,7 +705,7 @@ mod tests {
         let serialized = toml::to_string_pretty(&config).unwrap();
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();
 
-        assert_eq!(deserialized.default.model, "gpt-4o");
+        assert_eq!(deserialized.default.model, "gpt-5.5");
         assert_eq!(deserialized.default.provider, "openai");
         assert!(!deserialized.default.stream);
         assert_eq!(deserialized.default.max_tokens, 4096);
@@ -797,9 +797,9 @@ mod tests {
     fn test_merge_env_model_override() {
         let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
-        std::env::set_var("AGIWORKFORCE_MODEL", "gpt-4o");
+        std::env::set_var("AGIWORKFORCE_MODEL", "gpt-5.5");
         config.merge_env_overrides();
-        assert_eq!(config.default.model, "gpt-4o");
+        assert_eq!(config.default.model, "gpt-5.5");
         std::env::remove_var("AGIWORKFORCE_MODEL");
     }
 
@@ -878,7 +878,7 @@ mod tests {
             &config_file,
             r#"
 [default]
-model = "gpt-4o"
+model = "gpt-5.5"
 provider = "openai"
 max_tokens = 2048
 "#,
@@ -886,7 +886,7 @@ max_tokens = 2048
         .unwrap();
 
         let project = CliConfig::load_project_config_from(tmp.path()).unwrap();
-        assert_eq!(project.default.model, "gpt-4o");
+        assert_eq!(project.default.model, "gpt-5.5");
         assert_eq!(project.default.provider, "openai");
         assert_eq!(project.default.max_tokens, 2048);
         assert!(project.source.project_path.is_some());
@@ -918,10 +918,10 @@ max_tokens = 2048
     fn test_merge_from_overrides_non_default_model() {
         let mut base = CliConfig::default();
         let mut other = CliConfig::default();
-        other.default.model = "gpt-4o".to_string();
+        other.default.model = "gpt-5.5".to_string();
 
         base.merge_from(&other);
-        assert_eq!(base.default.model, "gpt-4o");
+        assert_eq!(base.default.model, "gpt-5.5");
     }
 
     #[test]
@@ -1044,7 +1044,7 @@ max_tokens = 2048
     fn test_env_overrides_tracked_in_source() {
         let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
-        std::env::set_var("AGIWORKFORCE_MODEL", "gpt-4o");
+        std::env::set_var("AGIWORKFORCE_MODEL", "gpt-5.5");
         std::env::set_var("AGIWORKFORCE_PROVIDER", "openai");
         config.merge_env_overrides();
 
@@ -1090,7 +1090,7 @@ max_tokens = 2048
         base.source.global_path = Some(PathBuf::from("/home/user/.agiworkforce/config.toml"));
 
         let mut other = CliConfig::default();
-        other.default.model = "gpt-4o".to_string();
+        other.default.model = "gpt-5.5".to_string();
         other.source.project_path = Some(PathBuf::from("/project/.agiworkforce/config.toml"));
 
         base.merge_from(&other);
@@ -1212,8 +1212,8 @@ max_tokens = 2048
     #[test]
     fn test_set_value_model() {
         let mut config = CliConfig::default();
-        config.set_value("model", "gpt-4o").unwrap();
-        assert_eq!(config.default.model, "gpt-4o");
+        config.set_value("model", "gpt-5.5").unwrap();
+        assert_eq!(config.default.model, "gpt-5.5");
     }
 
     #[test]
@@ -1241,15 +1241,15 @@ max_tokens = 2048
     fn test_set_get_fallback_chain() {
         let mut config = CliConfig::default();
         config
-            .set_value("fallback-chain", "gpt-4o, gemini-2.0-flash")
+            .set_value("fallback-chain", "gpt-5.5, gemini-2.0-flash")
             .unwrap();
         assert_eq!(
             config.default.fallback_chain,
-            vec!["gpt-4o", "gemini-2.0-flash"]
+            vec!["gpt-5.5", "gemini-2.0-flash"]
         );
         assert_eq!(
             config.get_value("fallback-chain"),
-            Some("gpt-4o,gemini-2.0-flash".to_string())
+            Some("gpt-5.5,gemini-2.0-flash".to_string())
         );
     }
 
@@ -1268,13 +1268,13 @@ max_tokens = 2048
     #[test]
     fn test_fallback_chain_serialization() {
         let mut config = CliConfig::default();
-        config.default.fallback_chain = vec!["gpt-4o".to_string(), "gemini-2.0-flash".to_string()];
+        config.default.fallback_chain = vec!["gpt-5.5".to_string(), "gemini-2.0-flash".to_string()];
         let serialized = toml::to_string_pretty(&config).unwrap();
         assert!(serialized.contains("fallback_chain"));
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();
         assert_eq!(
             deserialized.default.fallback_chain,
-            vec!["gpt-4o", "gemini-2.0-flash"]
+            vec!["gpt-5.5", "gemini-2.0-flash"]
         );
     }
 

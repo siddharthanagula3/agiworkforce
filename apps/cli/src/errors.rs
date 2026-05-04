@@ -454,10 +454,10 @@ mod tests {
 
     #[test]
     fn display_context_overflow() {
-        let err = CliError::context_overflow("gpt-4o", 200_000, 128_000);
+        let err = CliError::context_overflow("gpt-5.5", 200_000, 128_000);
         assert_eq!(
             err.to_string(),
-            "Context overflow for model 'gpt-4o': 200000 tokens exceeds limit of 128000"
+            "Context overflow for model 'gpt-5.5': 200000 tokens exceeds limit of 128000"
         );
     }
 
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn not_retryable_context_overflow() {
-        let err = CliError::context_overflow("gpt-4o", 200_000, 128_000);
+        let err = CliError::context_overflow("gpt-5.5", 200_000, 128_000);
         assert!(!err.is_retryable());
     }
 
@@ -698,7 +698,7 @@ mod tests {
 
     #[test]
     fn context_overflow_variant_detected() {
-        let err = CliError::context_overflow("gpt-4o", 200_000, 128_000);
+        let err = CliError::context_overflow("gpt-5.5", 200_000, 128_000);
         assert!(err.is_context_overflow());
     }
 
