@@ -142,14 +142,14 @@ jobs:
             | macOS | Apple Silicon (M1/M2/M3) | \`AGI.Workforce_${version}_aarch64.dmg\` |
             | macOS | Intel | \`AGI.Workforce_${version}_x64.dmg\` |
             | macOS | Universal | \`AGI.Workforce_${version}_universal.dmg\` |
-            | Windows | x64 | \`AGI.Workforce_${version}_x64-setup.exe\` |
+            | Windows | x64 | _Coming Q3 2026_ — use the web app at https://agiworkforce.com/chat or install the CLI |
             | Linux | x64 | \`AGI.Workforce_${version}_amd64.AppImage\` |
 
             ### Installation
 
             **macOS:** Download the \`.dmg\` file, open it, and drag AGI Workforce to your Applications folder.
 
-            **Windows:** Download and run the \`.exe\` installer.
+            **Windows:** The native installer is not available yet (planned Q3 2026). In the meantime, the web app at https://agiworkforce.com/chat works in any browser, and the CLI installs via \`cargo install agiworkforce-cli\`.
 
             **Linux:** Download the \`.AppImage\`, make it executable (\`chmod +x\`), and run it.
 
@@ -210,8 +210,17 @@ jobs:
   # ci.yml::windows-smoke check inline so the release workflow can `needs:
   # [windows-smoke]` directly without depending on a sibling workflow's
   # status.
+  #
+  # DEFERRED to v1.3+ (Q3 2026): Windows installer ship is gated on the
+  # SSL.com EV cert ($249/yr) which we are not paying for v1.x. The smoke
+  # check itself also fails today because libsqlite3-sys 0.30.1 needs
+  # OPENSSL_DIR set on windows-latest runners — and there is no point
+  # fixing that until the actual Windows build ships. Re-enable by
+  # changing `if: false` to `if: true` (or removing the gate entirely)
+  # once the EV cert lands.
   windows-smoke:
     name: Windows Rust smoke
+    if: false
     needs: [prepare-release]
     runs-on: windows-latest
     timeout-minutes: 90
@@ -239,7 +248,7 @@ jobs:
   # ==========================================================================
   build-macos:
     name: Build macOS
-    needs: [prepare-release, validate, windows-smoke]
+    needs: [prepare-release, validate]
     runs-on: macos-latest
     permissions:
       contents: write
@@ -382,9 +391,14 @@ jobs:
   # ==========================================================================
   # Build Windows - x86_64 with code signing
   # ==========================================================================
+  # DEFERRED to v1.3+ (Q3 2026): see windows-smoke comment above. The
+  # Windows installer needs the SSL.com EV cert before it can ship; until
+  # then this job is skipped and the /download page advertises the web
+  # app + CLI as Windows alternatives.
   build-windows:
     name: Build Windows
-    needs: [prepare-release, validate, windows-smoke]
+    if: false
+    needs: [prepare-release, validate]
     runs-on: windows-latest
     permissions:
       contents: write
@@ -481,7 +495,7 @@ jobs:
   # ==========================================================================
   build-linux:
     name: Build Linux
-    needs: [prepare-release, validate, windows-smoke]
+    needs: [prepare-release, validate]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -575,7 +589,7 @@ jobs:
   # ==========================================================================
   update-database:
     name: Update Release Database
-    needs: [prepare-release, build-macos, build-windows, build-linux]
+    needs: [prepare-release, build-macos, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -681,7 +695,7 @@ jobs:
   # ==========================================================================
   publish-release:
     name: Publish Release
-    needs: [prepare-release, build-macos, build-windows, build-linux, update-database]
+    needs: [prepare-release, build-macos, build-linux, update-database]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -711,7 +725,7 @@ jobs:
   # ==========================================================================
   cleanup-on-failure:
     name: Cleanup Failed Release
-    needs: [prepare-release, build-macos, build-windows, build-linux]
+    needs: [prepare-release, build-macos, build-linux]
     if: failure()
     runs-on: ubuntu-latest
     permissions:

@@ -383,42 +383,48 @@ const ChatComposerNewComponent = ({
     }
   }, [onStop]);
 
-  const handleSubmit = useCallback(() => {
-    if (!message.trim() && attachments.length === 0) return;
-    if (isLoading || disabled) return;
+  const handleSubmit = useCallback(
+    () => {
+      if (!message.trim() && attachments.length === 0) return;
+      if (isLoading || disabled) return;
 
-    onSend(message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id, {
+      onSend(message, attachments.length > 0 ? attachments : undefined, selectedSkill?.id, {
+        agentMode,
+        folderId: selectedFolderId,
+        webSearchEnabled,
+        thinkingEnabled,
+        codeExecutionEnabled: selectedTools.includes('code-execution'),
+      });
+
+      setMessage('');
+      clearAttachments();
+      setSelectedTools([]);
+      setSelectedSkill(null);
+      setWebSearchEnabled(false);
+      setThinkingEnabled(false);
+      setResearchEnabled(false);
+      clearSuggestion();
+
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      // selectedTools/thinkingEnabled/webSearchEnabled are read at send-time only;
+      // including them would re-create the callback on every toggle and break
+      // child memoization without changing behavior.
+    }, // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      message,
+      attachments,
+      selectedSkill,
+      isLoading,
+      disabled,
       agentMode,
-      folderId: selectedFolderId,
-      webSearchEnabled,
-      thinkingEnabled,
-      codeExecutionEnabled: selectedTools.includes('code-execution'),
-    });
-
-    setMessage('');
-    clearAttachments();
-    setSelectedTools([]);
-    setSelectedSkill(null);
-    setWebSearchEnabled(false);
-    setThinkingEnabled(false);
-    setResearchEnabled(false);
-    clearSuggestion();
-
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
-  }, [
-    message,
-    attachments,
-    selectedSkill,
-    isLoading,
-    disabled,
-    agentMode,
-    selectedFolderId,
-    onSend,
-    clearAttachments,
-    clearSuggestion,
-  ]);
+      selectedFolderId,
+      onSend,
+      clearAttachments,
+      clearSuggestion,
+    ],
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
