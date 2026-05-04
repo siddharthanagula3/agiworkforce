@@ -13,14 +13,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
     'NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here';
 
   console.error(errorMessage);
-  // Supabase features will be unavailable — do NOT throw here because the
+  // Supabase features will be unavailable - do NOT throw here because the
   // desktop app uses device-link OAuth (not Supabase JS) for core auth, and
   // throwing at module load time crashes auth.ts / authOrchestrator.ts which
   // import this module, preventing any LLM streaming from ever starting.
 }
 
 // localStorage-based storage adapter for Supabase auth (client-side only).
-// In server context (API routes, SSR), localStorage is unavailable — return no-ops.
+// In server context (API routes, SSR), localStorage is unavailable - return no-ops.
 const secureStorage = {
   getItem: async (key: string): Promise<string | null> => {
     if (typeof window === 'undefined') return null;

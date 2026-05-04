@@ -92,7 +92,7 @@ export function verifyCsrfToken(
  * Extract session ID from request.
  *
  * M3 FIX: For authenticated users, uses the Supabase server client to get the
- * verified user ID — this is more secure than parsing raw cookie bytes since
+ * verified user ID - this is more secure than parsing raw cookie bytes since
  * the user ID is verified through Supabase Auth, not derived from untrusted
  * cookie values.
  *
@@ -149,7 +149,7 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
  * Route handlers should set `Set-Cookie: newCookie` on their response when present.
  *
  * This is the preferred function to use in route handlers that need to generate
- * CSRF tokens for anonymous users — it ensures the session ID is stable across
+ * CSRF tokens for anonymous users - it ensures the session ID is stable across
  * the token-generation request and subsequent validation requests.
  */
 export async function getOrCreateAnonSession(

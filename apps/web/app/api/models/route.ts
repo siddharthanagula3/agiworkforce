@@ -67,7 +67,7 @@ interface ModelsJson {
 
 /**
  * Map modelType to the category enum expected by clients.
- * The JSON uses 'chat', 'code', 'image', 'video', 'reasoning' — we pass these through
+ * The JSON uses 'chat', 'code', 'image', 'video', 'reasoning' - we pass these through
  * and map unknown values to 'other'.
  */
 function toCategory(modelType: string | undefined): ModelEntry['category'] {
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return preflightResponse;
   }
 
-  // Rate limiting — generous public limit, fail-open
+  // Rate limiting - generous public limit, fail-open
   const rateLimitResponse = await withRateLimit(request, 'model-catalog');
   if (rateLimitResponse) {
     return rateLimitResponse;

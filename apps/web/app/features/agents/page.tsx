@@ -32,7 +32,7 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce — Parallel Agent Orchestration',
+        alt: 'AGI Workforce - Parallel Agent Orchestration',
       },
     ],
   },
@@ -53,7 +53,7 @@ const jsonLd = {
   '@type': 'WebPage',
   name: 'AI Agents & Parallel Orchestration',
   description:
-    'Deploy autonomous AI agents that decompose complex tasks, work simultaneously in parallel, and aggregate results — powered by an orchestration engine.',
+    'Deploy autonomous AI agents that decompose complex tasks, work simultaneously in parallel, and aggregate results - powered by an orchestration engine.',
   url: 'https://agiworkforce.com/features/agents',
   mainEntity: {
     '@type': 'SoftwareApplication',
@@ -324,7 +324,7 @@ export default function AgentsPage() {
                     </h2>
                     <p className="text-lg text-[#888480]">
                       QR-pair with your desktop, view a real-time agent dashboard, and approve or
-                      deny every tool call — all from your phone.
+                      deny every tool call - all from your phone.
                     </p>
                     <p className="text-sm text-[#c8892a]">
                       The only AI platform with a dedicated mobile companion for agent oversight.
@@ -393,7 +393,7 @@ export default function AgentsPage() {
           <CtaSection
             icon="Bot"
             headline="Deploy Your AI Workforce"
-            body="Stop running one agent at a time. Launch a parallel workforce that decomposes, executes, and delivers — all from your desktop."
+            body="Stop running one agent at a time. Launch a parallel workforce that decomposes, executes, and delivers - all from your desktop."
           />
         </main>
 

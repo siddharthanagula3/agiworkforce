@@ -254,7 +254,7 @@ async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusRespo
     progress: result.metadata?.progress,
   };
 
-  // Extract video URL when completed — handle both response shapes Veo may return
+  // Extract video URL when completed - handle both response shapes Veo may return
   if (status === 'completed' && result.response) {
     const samples = result.response.generatedSamples ?? result.response.videos ?? [];
     if (samples.length > 0) {
@@ -329,13 +329,13 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
   const { provider, originalId } = parseTaskId(taskId);
 
   // Verify task ownership: the requesting user must be the one who created this task.
-  // Tasks created in a different serverless instance won't be in this store — in that
+  // Tasks created in a different serverless instance won't be in this store - in that
   // case we allow the request through to avoid blocking legitimate cross-instance polls.
   const taskOwner = getVideoTaskOwner(taskId);
   if (taskOwner && taskOwner !== user.id) {
     logger.warn(
       { taskId, requestingUser: user.id, taskOwner },
-      'Video task ownership mismatch — rejecting status request',
+      'Video task ownership mismatch - rejecting status request',
     );
     throw createError.forbidden('You do not have permission to check this task');
   }

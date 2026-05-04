@@ -67,13 +67,13 @@ function LoginForm() {
       } else if (session?.access_token) {
         window.location.href = redirectTo;
       } else {
-        // No valid session — show the login form
+        // No valid session - show the login form
         setShowSplash(false);
       }
     });
   }, [redirectTo]);
 
-  // Debounce SSO domain check — only fire after user stops typing
+  // Debounce SSO domain check - only fire after user stops typing
   const ssoCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
@@ -102,7 +102,7 @@ function LoginForm() {
           setSsoMode(data.ssoEnabled);
         }
       } catch {
-        // Ignore network errors — fall back to standard login
+        // Ignore network errors - fall back to standard login
         setSsoMode(false);
       }
     }, 400);
@@ -116,7 +116,7 @@ function LoginForm() {
     checkSsoDomain(value);
   };
 
-  /** Initiate SSO login via Supabase — redirects the browser to the IdP. */
+  /** Initiate SSO login via Supabase - redirects the browser to the IdP. */
   const handleSsoLogin = async () => {
     const domain = email.split('@')[1];
     if (!domain) {
@@ -141,7 +141,7 @@ function LoginForm() {
         setMessage({ type: 'error', text: error.message });
         setSsoLoading(false);
       }
-      // On success the browser is redirected to the IdP — no further action needed here.
+      // On success the browser is redirected to the IdP - no further action needed here.
     } catch {
       setMessage({ type: 'error', text: 'Something went wrong. Please try again.' });
       setSsoLoading(false);
@@ -175,7 +175,7 @@ function LoginForm() {
         setMessage({ type: 'error', text: error.message });
       }
     } else {
-      // Login succeeded — show splash while redirect happens
+      // Login succeeded - show splash while redirect happens
       setShowSplash(true);
       // If redirecting to /chat (Vite SPA), pass session tokens via hash
       // so the SPA can pick them up (it can't read Next.js SSR cookies)
@@ -326,7 +326,7 @@ function LoginForm() {
               </div>
             )}
 
-            {/* Standard password + magic link fields — hidden when SSO is active */}
+            {/* Standard password + magic link fields - hidden when SSO is active */}
             {!ssoMode && (
               <>
                 <div>

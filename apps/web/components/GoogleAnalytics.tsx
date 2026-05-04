@@ -10,7 +10,7 @@ interface GoogleAnalyticsProps {
 }
 
 /**
- * GoogleAnalytics — wires GA4 into the Next.js App Router.
+ * GoogleAnalytics - wires GA4 into the Next.js App Router.
  *
  * - Loads the gtag.js script with strategy="afterInteractive" so it never
  *   blocks page rendering.

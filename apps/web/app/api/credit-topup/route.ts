@@ -60,7 +60,7 @@ async function handleCreditTopup(request: NextRequest) {
 
   const amount_cents = (body as { amount_cents?: unknown } | null | undefined)?.amount_cents;
 
-  // Require amount_cents — never silently default to avoid accidental charges
+  // Require amount_cents - never silently default to avoid accidental charges
   if (amount_cents === undefined || amount_cents === null) {
     throw createError.validation('amount_cents is required');
   }

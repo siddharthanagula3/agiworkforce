@@ -1,13 +1,13 @@
 /**
  * Team Members API
  *
- * POST /api/teams/[id]/members — invite a member (CSRF, admin or owner only)
+ * POST /api/teams/[id]/members - invite a member (CSRF, admin or owner only)
  *   Body: { email: string; role: 'admin' | 'editor' | 'viewer' }
  *
- * PUT /api/teams/[id]/members — update a member's role (CSRF, admin or owner only)
+ * PUT /api/teams/[id]/members - update a member's role (CSRF, admin or owner only)
  *   Body: { memberId: string; role: 'admin' | 'editor' | 'viewer' }
  *
- * DELETE /api/teams/[id]/members — remove a member (CSRF, admin or owner only)
+ * DELETE /api/teams/[id]/members - remove a member (CSRF, admin or owner only)
  *   Query: ?memberId=<uuid>
  */
 
@@ -76,7 +76,7 @@ function mapRowToMember(row: Record<string, unknown>) {
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/teams/[id]/members — invite a member
+// POST /api/teams/[id]/members - invite a member
 // ---------------------------------------------------------------------------
 
 async function handleInviteMember(
@@ -145,7 +145,7 @@ async function handleInviteMember(
   // If no matching Supabase user exists we still create the record, leaving
   // user_id as a placeholder UUID (same email used as lookup key). In a full
   // production flow you would send an invitation email; here we gracefully
-  // allow the invite even if the account is not yet created — the RLS policy
+  // allow the invite even if the account is not yet created - the RLS policy
   // uses user_id for access control so the invite is inert until the user
   // registers with that email.
   const inviteeUserId = inviteeProfile?.id ?? '00000000-0000-0000-0000-000000000000';
@@ -187,7 +187,7 @@ async function handleInviteMember(
 }
 
 // ---------------------------------------------------------------------------
-// PUT /api/teams/[id]/members — update a member's role
+// PUT /api/teams/[id]/members - update a member's role
 // ---------------------------------------------------------------------------
 
 async function handleUpdateMemberRole(
@@ -241,7 +241,7 @@ async function handleUpdateMemberRole(
 
   const targetRow = targetMember as Record<string, unknown>;
 
-  // An admin cannot promote another member to admin — only the owner can do that.
+  // An admin cannot promote another member to admin - only the owner can do that.
   if (callerAccess === 'admin' && body.role === 'admin') {
     throw createError.forbidden('Only the team owner can promote members to admin');
   }
@@ -270,7 +270,7 @@ async function handleUpdateMemberRole(
 }
 
 // ---------------------------------------------------------------------------
-// DELETE /api/teams/[id]/members — remove a member
+// DELETE /api/teams/[id]/members - remove a member
 // ---------------------------------------------------------------------------
 
 async function handleRemoveMember(
@@ -317,7 +317,7 @@ async function handleRemoveMember(
 
   const targetRow = targetMember as Record<string, unknown>;
 
-  // An admin cannot remove another admin — only the owner can do that.
+  // An admin cannot remove another admin - only the owner can do that.
   if (callerAccess === 'admin' && targetRow['role'] === 'admin') {
     throw createError.forbidden('Only the team owner can remove an admin');
   }

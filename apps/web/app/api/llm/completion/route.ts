@@ -29,7 +29,7 @@ function checkModelTierAccess(model: string, subscriptionTier: string): boolean 
   if (!allowed && subscriptionTier.toLowerCase() !== 'free') {
     logger.warn(
       { model: model.toLowerCase(), tier: subscriptionTier.toLowerCase() },
-      'Model access denied — not in economy or tier requirements map',
+      'Model access denied - not in economy or tier requirements map',
     );
   }
   return allowed;
@@ -58,7 +58,7 @@ function findCheaperFallbackModel(
 
   // Try each fallback model and find the cheapest one that's cheaper than current
   for (const fallback of fallbackModels) {
-    // Skip only if it's the exact same model (not same provider — cheaper same-provider
+    // Skip only if it's the exact same model (not same provider - cheaper same-provider
     // models like claude-haiku should be valid fallbacks for claude-opus)
     if (fallback.model === canonicalCurrentModel || fallback.model === modelLower) {
       continue;
@@ -515,7 +515,7 @@ async function handleLLMCompletion(request: NextRequest) {
       // sit idle without producing bytes. Without this, a stalled
       // upstream pins the edge function for the full function-timeout
       // (Vercel default: 5 min), starving capacity. We measure
-      // inactivity, not total runtime — long completions are fine as
+      // inactivity, not total runtime - long completions are fine as
       // long as bytes keep arriving. After 60s of silence we abort and
       // the existing catch-block refund path runs.
       const STREAM_IDLE_TIMEOUT_MS = 60_000;
@@ -528,7 +528,7 @@ async function handleLLMCompletion(request: NextRequest) {
             watchdog = setTimeout(() => {
               logger.warn(
                 { userId: user.id, model: llmRequest.model },
-                'Streaming response idle for >60s — aborting and refunding',
+                'Streaming response idle for >60s - aborting and refunding',
               );
               reader.cancel('idle-timeout').catch(() => {});
               controller.error(new Error('upstream stream idle timeout'));

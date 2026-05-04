@@ -25,7 +25,7 @@ function errorResponse(err: AppError, headers?: Record<string, string>): NextRes
 const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
 const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
-// Module-level admin client — created once and reused across requests.
+// Module-level admin client - created once and reused across requests.
 // Returns null when environment variables are missing so callers can
 // return a 500 without crashing at import time.
 const supabaseAdmin =

@@ -1,8 +1,8 @@
 /**
  * Teams API
  *
- * GET /api/teams — list teams the authenticated user owns or is a member of
- * POST /api/teams — create a new team (requires CSRF)
+ * GET /api/teams - list teams the authenticated user owns or is a member of
+ * POST /api/teams - create a new team (requires CSRF)
  */
 
 import { createClient } from '@supabase/supabase-js';
