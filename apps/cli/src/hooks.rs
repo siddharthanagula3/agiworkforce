@@ -94,6 +94,22 @@ pub enum HookEvent {
     /// Fires after context compaction completes. Renamed from
     /// `ContextCompacted` to match Claude Code vocabulary.
     PostCompact,
+    /// Fires before model resolution / first LLM call of a turn. Hook may
+    /// override the model via `{"model": "..."}` (e.g., to swap to a
+    /// fallback before the request even leaves the agent). Adapted from
+    /// OpenClaw's `before_model_resolve`.
+    BeforeModelResolve,
+    /// Fires after session load and before the prompt is finalized for the
+    /// LLM. Hook may inject extra context via `{"additional_context": "..."}`.
+    /// Adapted from OpenClaw's `before_prompt_build`.
+    BeforePromptBuild,
+    /// Fires after a tool returns and before its output is appended to the
+    /// transcript. Hook may rewrite the output via
+    /// `{"updated_mcp_tool_output": "..."}` (PII redaction, secret scrubbing,
+    /// truncation). Distinct from `PostToolUse` — runs *closer* to persistence
+    /// and is the right place for storage-affecting transforms. Adapted from
+    /// OpenClaw's `tool_result_persist`.
+    ToolResultPersist,
     /// Fires when a subagent starts. Renamed from `SubagentSpawned`.
     SubagentStart,
     /// Fires when a subagent stops. Renamed from `SubagentCompleted`.
@@ -129,6 +145,9 @@ impl std::fmt::Display for HookEvent {
             Self::PlanModeChanged => write!(f, "PlanModeChanged"),
             Self::PreCompact => write!(f, "PreCompact"),
             Self::PostCompact => write!(f, "PostCompact"),
+            Self::BeforeModelResolve => write!(f, "BeforeModelResolve"),
+            Self::BeforePromptBuild => write!(f, "BeforePromptBuild"),
+            Self::ToolResultPersist => write!(f, "ToolResultPersist"),
             Self::SubagentStart => write!(f, "SubagentStart"),
             Self::SubagentStop => write!(f, "SubagentStop"),
             Self::PermissionRequest => write!(f, "PermissionRequest"),
@@ -166,6 +185,9 @@ fn resolve_event_name(name: &str) -> Option<HookEvent> {
         "PlanModeChanged" => Some(HookEvent::PlanModeChanged),
         "PreCompact" => Some(HookEvent::PreCompact),
         "PostCompact" => Some(HookEvent::PostCompact),
+        "BeforeModelResolve" => Some(HookEvent::BeforeModelResolve),
+        "BeforePromptBuild" => Some(HookEvent::BeforePromptBuild),
+        "ToolResultPersist" => Some(HookEvent::ToolResultPersist),
         "SubagentStart" => Some(HookEvent::SubagentStart),
         "SubagentStop" => Some(HookEvent::SubagentStop),
         "PermissionRequest" => Some(HookEvent::PermissionRequest),
