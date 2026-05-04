@@ -1,5 +1,7 @@
 # AGI Workforce CLI
 
+> Beyond one model. Beyond one surface. AGI in your hands.
+
 The terminal-native AI coding agent that doesn't surprise you.
 
 ```
@@ -20,15 +22,15 @@ the ecosystem expects it.
 
 | Feature                                        |     Claude Code      |    Codex CLI     |        OpenCode        |   Gemini CLI   |                  **AGI Workforce**                   |
 | ---------------------------------------------- | :------------------: | :--------------: | :--------------------: | :------------: | :--------------------------------------------------: |
-| Multi-provider in one session, mid-turn switch |  ❌ Anthropic only   |  ❌ OpenAI only  | ✅ ~10 (Vercel AI SDK) | ❌ Google only |                   ✅ 8 + `/model`                    |
+| Multi-provider in one session, mid-turn switch |  ❌ Anthropic only   |  ❌ OpenAI only  | ✅ ~10 (Vercel AI SDK) | ❌ Google only |                  ✅ 10+ + `/model`                   |
 | Live cost HUD (tokens + $ + ctx %)             |          ❌          |        ❌        |           ❌           |       ❌       |                          ✅                          |
 | Machine-readable agent events for CI           |          ❌          |        ❌        |           ❌           |       ❌       |                  ✅ `--json-events`                  |
 | Multi-model fallback chain                     |          ❌          |        ❌        |           ❌           |       ❌       |                    ✅ `-m a,b,c`                     |
 | Session fork from any turn                     |    ✅ resume only    |  ✅ basic fork   |           ✅           |       ❌       |                   ✅ `--at-turn N`                   |
 | Native Rust binary                             |          ✅          |        ✅        |         ❌ Bun         |       ❌       |                          ✅                          |
-| OSS license                                    |      ❌ Closed       |  ✅ Apache-2.0   |         ✅ MIT         | ✅ Apache-2.0  |                    ✅ Apache-2.0                     |
-| MCP support (transports)                       | stdio+SSE+HTTP+OAuth | stdio+HTTP+OAuth |  stdio+SSE+HTTP+OAuth  |    (varies)    |          stdio (SSE/HTTP/OAuth in Phase 1)           |
-| Hook events                                    |          27          |        6         |           ✓            |    (varies)    |                          23                          |
+| OSS license                                    |      ❌ Closed       |  ✅ Apache-2.0   |         ✅ MIT         | ✅ Apache-2.0  |                    ❌ Proprietary                    |
+| MCP support (transports)                       | stdio+SSE+HTTP+OAuth | stdio+HTTP+OAuth |  stdio+SSE+HTTP+OAuth  |    (varies)    |             stdio + SSE + HTTP (+OAuth)              |
+| Hook events                                    |          27          |        6         |           ✓            |    (varies)    |                          19                          |
 | Plan mode (model writes plan → user approves)  |          ✅          | ✅ `update_plan` |           ✓            |       ❌       | ⚠️ tool-allowlist toggle (real plan mode in Phase 1) |
 
 ## Install
@@ -43,6 +45,26 @@ Then sign in with your provider:
 agiworkforce login        # device-code OAuth or API key
 agiworkforce auth-status  # confirm
 ```
+
+### Add a custom provider
+
+Drop a `[providers.<name>]` block into `~/.agiworkforce/config.toml` to wire up
+any OpenAI-compatible endpoint (OpenRouter, NVIDIA NIM, Groq, Together,
+Fireworks, etc.):
+
+```toml
+[providers.openrouter]
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+
+[providers.groq]
+base_url = "https://api.groq.com/openai/v1"
+api_key_env = "GROQ_API_KEY"
+```
+
+Custom names that collide with a pre-registered provider (`anthropic`,
+`openai`, `google`, `ollama`, `xai`, `deepseek`, `perplexity`, `qwen`,
+`moonshot`, `zhipu`, `lmstudio`) are ignored — the native handler always wins.
 
 ## The four differentiators
 
@@ -156,29 +178,35 @@ wired or removed per `~/.claude/plans/cli-competitive-floor.md` Sprint A2.
 
 - Pure Rust workspace (12 utility crates + `apps/cli` + `apps/desktop/src-tauri`).
   `cargo build --release -p agiworkforce-cli` produces a 5.7 MB binary.
-- TUI: ratatui + crossterm. 192 source files; 125 TUI files (~155 K LOC incl.
-  snapshot tests). 2,161 `#[test]` / `#[tokio::test]` cases.
+- TUI: ratatui + crossterm. 195 source files; 125 TUI files (~155 K LOC incl.
+  snapshot tests). 914+ `#[test]` / `#[tokio::test]` cases.
 - Sandboxing: Linux (bubblewrap), macOS (Seatbelt) shipped; Windows + Linux
   Landlock are enum stubs (Phase 2).
-- MCP: stdio transport shipped today; SSE + Streamable HTTP + OAuth coming in
-  Phase 1 per the floor plan.
-- Hooks: 23 events shipped (`apps/cli/src/hooks.rs`); Claude-Code-aligned
-  vocabulary coming in Phase 1.
-- 8 providers wired with mid-conversation switch: Anthropic, OpenAI, Google,
-  Ollama, Mistral, XAI, DeepSeek, Copilot. (Web/desktop platform = 25.)
+- MCP: 3 transports shipped (stdio, SSE, Streamable HTTP with optional OAuth).
+- Hooks: 19 events shipped (`apps/cli/src/hooks.rs`); aligned with the Sprint
+  B5 canonical vocabulary (Claude Code aliases like `BeforeToolUse` map to
+  canonical `PreToolUse`).
+- 10+ providers via OpenAI-compatible adapter, with mid-conversation switch:
+  Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu,
+  Ollama (local + cloud), LM Studio, plus user-defined endpoints (OpenRouter,
+  NVIDIA NIM, Groq, Together, Fireworks, etc.) registered through
+  `~/.agiworkforce/config.toml`. (Web/desktop platform = 25.)
 - Models loaded from `models.json` (no hardcoded model IDs anywhere).
 
 ## Roadmap
 
-- **Phase 0 (Sprint A, in progress)** — Decommission dead modules, license
-  Apache-2.0, ship real `init`. See `~/.claude/plans/cli-competitive-floor.md`.
-- **Phase 1 (Sprint B)** — MCP SSE + HTTP + OAuth, real plan mode (`update_plan`
-  model tool), hook event renaming for Claude Code interop, plugin manifest
-  discovery (`.agiworkforce-plugin/`, `.claude-plugin/`, `.codex-plugin/`).
-- **Phase 2 (after B)** — Routing strategy resurrection (the differentiator),
-  LMStudio integration, hot reload, `--from-pr`, OS keychain (sprint1-vault-rewire),
-  Linux Landlock + Windows sandbox, OpenTelemetry minimal.
+- **Phase 0 (Sprint A, complete)** — Decommissioned dead modules, shipped real
+  `init`. See `~/.claude/plans/cli-competitive-floor.md`.
+- **Phase 1 (Sprint B, complete)** — MCP SSE + HTTP + OAuth, plugin manifest
+  discovery (`.agiworkforce-plugin/`, `.claude-plugin/`, `.codex-plugin/`),
+  hook event vocabulary canonicalized to 19 events, OpenAI-compatible adapter
+  for 10+ providers + user-defined custom endpoints.
+- **Phase 2 (next)** — Routing strategy resurrection (the differentiator),
+  hot reload, `--from-pr`, OS keychain (sprint1-vault-rewire), Linux Landlock +
+  Windows sandbox, OpenTelemetry minimal.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](../../NOTICE).
+Proprietary. AGI Workforce CLI is part of the AGI Workforce platform; the
+whole platform is proprietary, not open source. See the root `NOTICE` for
+third-party attribution.

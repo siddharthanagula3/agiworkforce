@@ -1,8 +1,11 @@
 # AGI Workforce CLI — Architecture
 
-> Single source of truth for new contributors. Maps the 422-file / 151K-LOC codebase to its 14 subsystems.
+> Single source of truth for new contributors. Maps the **195-file / 155K-LOC** codebase to its 14 subsystems.
+> Last refresh: 2026-05-03 (post Sprint B5 — hooks canonical vocabulary, OpenAI-compatible adapter, license flip to Proprietary).
 
-This is a Rust monolithic binary (`agiworkforce`) compiled from `apps/cli/src/main.rs`. The workspace declares 115 crates in `crates/`, but **98 are excluded** (Sprint 5 FIX-022). The CLI links only two path crates: `agiworkforce-protocol` and `agiworkforce-sandbox-policy`.
+This is a Rust monolithic binary (`agiworkforce`) compiled from `apps/cli/src/main.rs`. The workspace declares 115 crates in `crates/`, but **110 are excluded** (Sprint 5 FIX-022; codex-rs port preserved at `~/Desktop/reference/codex-cli/`). The CLI links only two path crates: `agiworkforce-protocol` and `agiworkforce-sandbox-policy`.
+
+**License**: Proprietary (the whole AGI Workforce platform is proprietary; the CLI inherits the platform license).
 
 ## 0. The big picture
 
@@ -21,7 +24,7 @@ This is a Rust monolithic binary (`agiworkforce`) compiled from `apps/cli/src/ma
    Subcommand? ──→ Exec | Review | Apply | Sandbox | McpServer | AppServer |
                    Resume | Fork | Session | Cloud | Plugin | Features |
                    Execpolicy | Ecosystem | History | Sync | Login | Logout |
-                   AuthStatus | Marketplace | Init | Onboarding   (21 total)
+                   AuthStatus | Marketplace | Init | Onboarding   (22 total)
               │
               ↓ no subcommand
    --search? --stats? --daemon? --init? --cost? --list-models? --completions?
@@ -45,8 +48,10 @@ This is a Rust monolithic binary (`agiworkforce`) compiled from `apps/cli/src/ma
    │  compaction::context_usage() → 90%? compact to 70%             │
    │     ↓                                                          │
    │  models::stream_completion() — provider-specific SSE           │
-   │     ├─ Anthropic / OpenAI / Google / Ollama / Mistral / xAI    │
-   │     ├─ DeepSeek / OllamaCloud / Copilot / ChatGPT subscription │
+   │     ├─ Anthropic (native) / Google (native) / Ollama (native)  │
+   │     ├─ OpenAICompatible adapter: openai, xai, deepseek,        │
+   │     │  perplexity, qwen, moonshot, zhipu, lmstudio + custom    │
+   │     ├─ Copilot / ChatGPT Plus subscription overlays            │
    │     └─ FallbackChain rotates on RateLimit/Transient/Any        │
    │     ↓ assistant returns text + tool_use blocks                  │
    │  partition tool_calls: task → SubagentManager (concurrent),    │
@@ -67,7 +72,7 @@ This is a Rust monolithic binary (`agiworkforce`) compiled from `apps/cli/src/ma
    └──────────────────────────────────────────────────────────────┘
 ```
 
-**Numbers**: 422 files, 151,493 LOC under `apps/cli/src/`. Single binary. No `lib.rs` — every module mounted directly under `main.rs`. 65 top-level modules plus 7 sub-trees: `tui/`, `runtime/`, `routing/`, `policy/`, `sdk_io/`, `output_styles/`, `notifications/`.
+**Numbers**: 195 files, 155,029 LOC under `apps/cli/src/`. Single binary. No `lib.rs` — every module mounted directly under `main.rs`. ~50 top-level modules plus 7 sub-trees: `tui/`, `runtime/`, `routing/`, `policy/`, `sdk_io/`, `output_styles/`, `mcp/`. **914 test cases pass `cargo test --release`** (verified 2026-05-03).
 
 **Distribution**: dual-channel.
 
@@ -99,7 +104,7 @@ The single 1,000-line `async fn main` does linear dispatch (no React-style rende
 
 ---
 
-## 2. Subcommand catalog (21 total)
+## 2. Subcommand catalog (22 total)
 
 Defined as `enum Command` at `main.rs:421–521`.
 
@@ -198,7 +203,7 @@ pub struct ToolDefinition {
 
 **MCP**: The CLI is both a client and a server.
 
-- As client ([mcp.rs](src/mcp.rs)): JSON-RPC 2.0 over stdio. Configs from `.mcp.json` (project) + `~/.agiworkforce/.mcp.json` (global). Auto-reconnect with exponential backoff. Tools namespaced as `mcp_<server>_<tool>`.
+- As client ([mcp.rs](src/mcp.rs)): JSON-RPC 2.0 over **3 transports** — stdio, SSE, and Streamable HTTP (with optional OAuth on the HTTP transport). Configs from `.mcp.json` (project) + `~/.agiworkforce/.mcp.json` (global). Auto-reconnect with exponential backoff. Tools namespaced as `mcp_<server>_<tool>`.
 - As server: `agiworkforce mcp-server` exposes own tools over MCP stdio. `agiworkforce app-server` is broader: JSON-RPC for IDE integration with `tools/list`, `initialize`, `shutdown`.
 
 **[tool_search.rs](src/tool_search.rs)** (95 lines): scoring search across discoverable tools. Exact name +10, substring +5, description +2. Feature-flagged.
@@ -292,7 +297,15 @@ pub trait Renderable {
 }
 ```
 
-**8 hardcoded providers** ([models.rs](src/models.rs)::Provider enum): Anthropic, OpenAI, Google, Ollama, Mistral, Xai, Deepseek, OllamaCloud. Subscription paths for GitHub Copilot (`~/.copilot/token.json`) and ChatGPT Plus.
+**Provider enum** ([models.rs](src/models.rs)::Provider) — 4 variants:
+
+1. `Anthropic` (native, Messages API + cache breakpoints)
+2. `Google` (native, Gemini `streamGenerateContent`)
+3. `Ollama(OllamaMode::{Local, Cloud})` (newline-delimited JSON for local; OpenAI-compatible URL for cloud)
+4. `OpenAICompatible { name, base_url, api_key_env }` — pre-registered for **9 cloud providers** (`openai`, `xai`, `deepseek`, `perplexity`, `qwen`, `moonshot`, `zhipu`) plus **`lmstudio`** (keyless local) and the inline `mistral` fallback used by `detect_provider`.
+5. `Custom { name, base_url, api_key_env }` — populated at startup from `[providers.<name>]` blocks in `~/.agiworkforce/config.toml` (`models::register_custom_providers`). Reserved provider names cannot be hijacked. Lets users plug in OpenRouter, NVIDIA NIM, Groq, Together, Fireworks, etc.
+
+Subscription paths for GitHub Copilot (`~/.copilot/token.json`) and ChatGPT Plus run as overlays on top of the same dispatcher.
 
 **FallbackChain** ([routing/fallback.rs](src/routing/fallback.rs)):
 
@@ -360,9 +373,15 @@ agiworkforce -m "claude-opus-4-6,gpt-5.4,llama3.1:8b"
 - Auto-naming, auto-categorization (Code Modification & Build / Code Analysis / Research & Analysis / Testing & Validation)
 - Cap 50 learned skills
 
-**Plugins** ([plugins.rs](src/plugins.rs), 258 LOC):
+**Plugins** ([plugins.rs](src/plugins.rs)):
 
-- Manifest: `.app.json` or `.mcp.json` with `name`, `mcp_servers`, `apps`, `skill_roots`
+- 5 plugin manifest paths discovered (3 user-facing + 2 legacy):
+  1. `.agiworkforce-plugin/` (canonical)
+  2. `.claude-plugin/` (Claude Code interop)
+  3. `.codex-plugin/` (Codex CLI interop)
+  4. `.app.json` (legacy)
+  5. `.mcp.json` (legacy MCP-only)
+- Manifest schema: `name`, `mcp_servers`, `apps`, `skill_roots`
 - Security: shell injection prevention rejects `|`, `;`, `&`, `$`, `` ` ``, `\0`
 
 **Marketplace** ([marketplace.rs](src/marketplace.rs), 668 LOC):
@@ -373,16 +392,20 @@ agiworkforce -m "claude-opus-4-6,gpt-5.4,llama3.1:8b"
 
 ---
 
-## 10. Hooks ([hooks.rs](src/hooks.rs), 1,236 LOC) + Triggers
+## 10. Hooks ([hooks.rs](src/hooks.rs)) + Triggers
 
-**20 lifecycle events**: `SessionStart, SessionEnd, BeforeToolUse, AfterToolUse, BeforeMessage, AfterMessage, PreEdit, PostEdit, PreCommand, PostCommand, PlanModeChanged, ContextCompacted, SubagentSpawned, SubagentCompleted, Notification, Stop, CronTriggered, WebhookReceived, FileChanged, DaemonStarted, DaemonStopped`.
+**19 canonical lifecycle events** (post Sprint B5):
+
+`SessionStart, SessionEnd, PreToolUse, PostToolUse, UserPromptSubmit, AfterMessage, PlanModeChanged, PreCompact, PostCompact, SubagentStart, SubagentStop, PermissionRequest, Notification, Stop, CronTriggered, WebhookReceived, FileChanged, DaemonStarted, DaemonStopped`.
+
+Claude-Code-style aliases (`BeforeToolUse`, `AfterToolUse`, `BeforeMessage`, `ContextCompacted`, `SubagentSpawned`, `SubagentCompleted`) are accepted as input names and routed to the canonical event for backwards compatibility.
 
 Config: `~/.agiworkforce/hooks.json`:
 
 ```json
 {
   "events": {
-    "BeforeToolUse": [
+    "PreToolUse": [
       {
         "command": "python3",
         "args": ["my_hook.py"],
@@ -489,24 +512,25 @@ Whisper STT (OpenAI API or local binary). `cpal` 16 kHz mono PCM, `hound` WAV en
 
 ---
 
-## File counts
+## File counts (verified 2026-05-03)
 
 ```
-Total: 422 .rs files, 151,493 LOC
+Total: 195 .rs files, 155,029 LOC
 
-src/                      (top-level CLI modules)        ~28K LOC across 65 files
-src/tui/                  (Ratatui TUI)                   47K LOC across 47 files
-src/tui/bottom_pane/      (input + popups)              ~13K LOC across 21 files
-src/tui/chatwidget/       (extensions + tests)          ~12K LOC across 9 files
+src/                      (top-level CLI modules)         ~28K LOC across ~50 files
+src/tui/                  (Ratatui TUI, all sub-trees)   ~110K LOC across 125 files
+src/tui/bottom_pane/      (input + popups)               ~13K LOC across 21 files
+src/tui/chatwidget/       (extensions + tests)           ~12K LOC across 9 files
 
-Top files by LOC:
+Top files by LOC (approximate):
   src/tui/chatwidget/tests.rs                            12,648
   src/tui/bottom_pane/chat_composer.rs                    9,873
   src/tui/chatwidget.rs                                   9,733
   src/tui/app.rs                                          8,251
   src/tui/history_cell.rs                                 4,462
   src/tui/diff_render.rs                                  2,426
-  src/main.rs                                             2,204
+  src/main.rs                                             2,200+
+  src/models.rs                                           2,000+
   src/safety.rs                                           1,515
   src/agent.rs                                           ~2,500+
   src/hooks.rs                                            1,236
@@ -514,6 +538,9 @@ Top files by LOC:
   src/context.rs                                          1,199
   src/config.rs                                           1,271
   src/daemon.rs                                           1,266
+
+Tests: 914+ pass under cargo test --release
+Workspace check: cargo check --workspace = GREEN
 ```
 
 ---

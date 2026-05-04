@@ -911,7 +911,7 @@ async fn handle_batch_command(
 fn print_help() {
     eprintln!("{}", "Agent & Mode:".cyan().bold());
     eprintln!(
-        "  {}    Switch model (e.g. /model gpt-4o)",
+        "  {}    Switch model (e.g. /model gpt-5.5)",
         "/model <name>".bold()
     );
     eprintln!(
