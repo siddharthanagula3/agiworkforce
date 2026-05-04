@@ -14,9 +14,10 @@ pub(crate) enum InputFormat {
     StreamJson,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum PermissionMode {
+    #[default]
     Default,
     Plan,
     #[value(name = "acceptEdits", alias = "accept-edits")]
