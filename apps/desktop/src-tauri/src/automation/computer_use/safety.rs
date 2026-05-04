@@ -9,9 +9,11 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
+use super::app_permissions::{AppPermissionManager, PermissionStatus};
 use super::types::{ComputerUseAction, HotkeyModifier, ScreenAnalysis};
+use super::window_manager::WindowCoordinator;
 use crate::automation::safety_patterns;
 
 /// Static patterns for safety checks.
@@ -41,6 +43,11 @@ pub struct SafetyConfig {
     pub allow_clipboard: bool,
     /// Allow launching applications.
     pub allow_app_launch: bool,
+    /// Enforce per-application permission checks against the
+    /// `AppPermissionManager` (allow/deny/ask) and the always-blocked
+    /// bundle-id refuse-list. Set to `false` to disable the gate
+    /// (e.g. for tests or fully-sandboxed VM mode).
+    pub check_app_permissions: bool,
 }
 
 impl Default for SafetyConfig {
@@ -65,6 +72,7 @@ impl Default for SafetyConfig {
             sandboxed_mode: false,
             allow_clipboard: true,
             allow_app_launch: true,
+            check_app_permissions: true,
         }
     }
 }
@@ -107,6 +115,21 @@ pub enum SafetyReason {
     RequiresConfirmation { action: String },
     /// Negative or invalid coordinates.
     InvalidCoordinates { x: i32, y: i32 },
+    /// Active foreground app is on the user's deny list.
+    AppDenied { app_name: String },
+    /// Active foreground app is on the hardcoded always-blocked refuse-list
+    /// (investment / crypto / banking / payments). Cannot be overridden by
+    /// user settings — matches Cowork's hard-blocked categories.
+    AppHardBlocked {
+        app_name: String,
+        bundle_id: Option<String>,
+    },
+    /// Active foreground app has not yet been approved by the user.
+    /// The agent must request approval before proceeding.
+    AppRequiresApproval {
+        app_name: String,
+        bundle_id: Option<String>,
+    },
 }
 
 /// Decision made by the safety layer.
@@ -307,6 +330,10 @@ pub struct ComputerUseSafetyLayer {
     config: SafetyConfig,
     injection_detector: PromptInjectionDetector,
     action_timestamps: std::sync::Mutex<Vec<std::time::Instant>>,
+    /// Optional per-app permission registry. When `Some`, every action
+    /// is gated by `check_app_permission` (consults the active foreground
+    /// app via `WindowCoordinator::get_active_window`).
+    app_permissions: Option<Arc<AppPermissionManager>>,
 }
 
 impl ComputerUseSafetyLayer {
@@ -317,12 +344,98 @@ impl ComputerUseSafetyLayer {
             config,
             injection_detector: PromptInjectionDetector::new(),
             action_timestamps: std::sync::Mutex::new(Vec::new()),
+            app_permissions: None,
         }
+    }
+
+    /// Creates a new safety layer with the given configuration AND a
+    /// per-app permission manager. The manager will be consulted on every
+    /// action that affects the foreground window.
+    pub fn with_app_permissions(
+        config: SafetyConfig,
+        app_permissions: Arc<AppPermissionManager>,
+    ) -> Self {
+        Self::init_patterns();
+        Self {
+            config,
+            injection_detector: PromptInjectionDetector::new(),
+            action_timestamps: std::sync::Mutex::new(Vec::new()),
+            app_permissions: Some(app_permissions),
+        }
+    }
+
+    /// Attaches a permission manager to an existing safety layer.
+    pub fn set_app_permissions(&mut self, app_permissions: Arc<AppPermissionManager>) {
+        self.app_permissions = Some(app_permissions);
     }
 
     /// Creates a safety layer with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(SafetyConfig::default())
+    }
+
+    /// Returns whether per-app gating is wired up.
+    pub fn has_app_permissions(&self) -> bool {
+        self.app_permissions.is_some()
+    }
+
+    /// Consults the per-app permission registry against the currently-focused
+    /// foreground app. Returns `None` if the action should be allowed (or
+    /// gating is disabled), or `Some(SafetyReason)` describing why it must
+    /// be blocked / require approval.
+    ///
+    /// This is the wiring that closes the gap from Cowork: the agent now
+    /// knows which app is in front and refuses to operate on always-blocked
+    /// apps (investment / crypto / banking) and on apps the user has denied,
+    /// and asks the user before the first interaction with a new app.
+    pub async fn check_app_permission(&self) -> Option<SafetyReason> {
+        if !self.config.check_app_permissions {
+            return None;
+        }
+
+        let manager = match &self.app_permissions {
+            Some(m) => m,
+            None => return None,
+        };
+
+        let active = match WindowCoordinator::get_active_window() {
+            Some(w) => w,
+            None => {
+                // Could not determine the foreground app (Linux v1 path,
+                // or AppleScript blocked). Fail open with a warning rather
+                // than blocking — the rest of the safety stack still applies.
+                return None;
+            }
+        };
+
+        let decision = manager
+            .decide(&active.app_name, active.bundle_id.as_deref())
+            .await;
+
+        match decision {
+            PermissionStatus::Allowed => None,
+            PermissionStatus::Denied => {
+                // Distinguish hardcoded block (refuse-list) from user deny
+                // so the UI can surface the right message.
+                let bid = active.bundle_id.as_deref().unwrap_or("");
+                if super::app_permissions::is_always_blocked_bundle(bid)
+                    || super::app_permissions::is_always_blocked_bundle(&active.app_name)
+                {
+                    Some(SafetyReason::AppHardBlocked {
+                        app_name: active.app_name.clone(),
+                        bundle_id: active.bundle_id.clone(),
+                    })
+                } else {
+                    Some(SafetyReason::AppDenied {
+                        app_name: active.app_name.clone(),
+                    })
+                }
+            }
+            PermissionStatus::AskEveryTime => Some(SafetyReason::AppRequiresApproval {
+                app_name: active.app_name.clone(),
+                bundle_id: active.bundle_id.clone(),
+            }),
+        }
     }
 
     /// Initializes static patterns.

@@ -34,6 +34,7 @@
 //! }).await?;
 //! ```
 
+mod app_permissions;
 mod observe_plan_act;
 mod safety;
 mod session;
@@ -45,6 +46,11 @@ mod zoom;
 #[cfg(test)]
 mod tests;
 
+pub use app_permissions::{
+    is_always_blocked_bundle, is_always_blocked_host, AppPermission, AppPermissionManager,
+    AppPermissionRequest, PermissionDecision, PermissionStatus, ALWAYS_BLOCKED_BUNDLE_IDS,
+    ALWAYS_BLOCKED_URL_HOSTS,
+};
 pub use observe_plan_act::{ComputerUseAgent, ComputerUseConfig, ExecutionState, OpaLoopResult};
 pub use safety::{
     ComputerUseSafetyLayer, PromptInjectionDetector, SafetyConfig, SafetyDecision, SafetyReason,
@@ -60,7 +66,8 @@ pub use visual_reasoner::{
     ElementDetection, ScreenObservation, VisualReasoner, VisualReasonerConfig,
 };
 pub use window_manager::{
-    AppWindow, WindowActivation, WindowCoordinator, WindowEnumerator, WindowManagerConfig,
+    ActiveWindow, AppWindow, WindowActivation, WindowCoordinator, WindowEnumerator,
+    WindowManagerConfig,
 };
 pub use zoom::{
     suggest_zoom_level, zoom_around_point, zoom_region, zoom_region_raw, InterpolationMethod,

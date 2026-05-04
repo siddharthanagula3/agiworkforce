@@ -764,6 +764,33 @@ pub fn run() {
 
             app.manage(Arc::new(TokioMutex::new(ComputerUseState::new())));
 
+            // Per-app permission registry for Computer Use (Stream 1).
+            // Persisted to ~/Library/Application Support/.../app_permissions.json
+            // (or platform equivalent). Loaded on startup; saved on every change.
+            {
+                use crate::automation::computer_use::AppPermissionManager;
+                let perm_path = app_data_dir.join("app_permissions.json");
+                let manager = Arc::new(AppPermissionManager::new());
+                if perm_path.exists() {
+                    if let Ok(json) = std::fs::read_to_string(&perm_path) {
+                        let manager_clone = manager.clone();
+                        tauri::async_runtime::block_on(async move {
+                            if let Err(e) = manager_clone.from_json(&json).await {
+                                tracing::warn!(
+                                    "Failed to load app_permissions.json: {}",
+                                    e
+                                );
+                            }
+                        });
+                    }
+                }
+                app.manage(manager);
+                tracing::info!(
+                    "App permission registry initialized (persist path: {})",
+                    perm_path.display()
+                );
+            }
+
             app.manage(Arc::new(TokioMutex::new(CodeEditingState::new())));
 
             app.manage(Arc::new(TokioMutex::new(VoiceState::new())));
@@ -2376,6 +2403,12 @@ pub fn run() {
             crate::sys::commands::computer_use_type_text,
             crate::sys::commands::computer_use_stop_session,
             crate::sys::commands::computer_use_zoom_at_point,
+            // Stream 1: per-app permission registry
+            crate::sys::commands::app_permissions_list,
+            crate::sys::commands::app_permissions_set,
+            crate::sys::commands::app_permissions_remove,
+            crate::sys::commands::app_permissions_always_blocked,
+            crate::sys::commands::app_permissions_active_window,
             crate::sys::commands::contact_export_vcard,
             crate::sys::commands::contact_get,
             crate::sys::commands::contact_import_vcard,

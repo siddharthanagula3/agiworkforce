@@ -225,12 +225,15 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'chat_get_messages':
     case 'orchestrator_list_agents':
     case 'project_list':
+    case 'app_permissions_list': // Stream 1: array of AppPermission entries
+    case 'app_permissions_always_blocked': // Stream 1: array of bundle id strings
       return [] as T;
 
     case 'project_create':
       return args?.['project'] as T;
 
     case 'project_get':
+    case 'app_permissions_active_window': // Stream 1: Option<ActiveWindow>
       return null as T;
 
     case 'project_update':
@@ -2208,6 +2211,8 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'computer_use_click':
     case 'computer_use_move_mouse':
     case 'computer_use_stop_session':
+    case 'app_permissions_set':
+    case 'app_permissions_remove':
     case 'save_custom_agent':
     case 'delete_custom_agent':
     case 'shortcut_register':

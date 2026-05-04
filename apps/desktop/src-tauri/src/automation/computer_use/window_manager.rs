@@ -133,6 +133,23 @@ impl Default for WindowManagerConfig {
     }
 }
 
+/// Lightweight identification of the currently focused application,
+/// returned by `WindowCoordinator::get_active_window`. Used by the
+/// per-app permission gate before the agent sends an action that would
+/// affect the foreground window.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveWindow {
+    /// Human-readable application name (e.g. "Safari", "Terminal", "chrome").
+    pub app_name: String,
+    /// Title of the focused window (may be empty on some platforms).
+    pub window_title: String,
+    /// macOS bundle identifier (e.g. "com.apple.Safari"). On Windows this
+    /// is the executable file name (e.g. "chrome.exe"). On Linux this is
+    /// `None` because reliable bundle-id discovery requires X11/Wayland
+    /// atom queries that haven't been implemented yet.
+    pub bundle_id: Option<String>,
+}
+
 /// Information about an application window.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppWindow {
@@ -496,6 +513,146 @@ impl WindowCoordinator {
     /// Creates a coordinator with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(WindowManagerConfig::default())
+    }
+
+    /// Returns the currently focused (frontmost) application's identification.
+    ///
+    /// macOS: queries NSWorkspace.frontmostApplication via AppleScript
+    /// (avoids pulling additional cocoa/objc bindings; the call is cheap
+    /// and AppleScript already handles the security boundary).
+    /// Windows: GetForegroundWindow + GetWindowThreadProcessId +
+    /// QueryFullProcessImageNameW for the executable name.
+    /// Linux: returns `None` for v1 (TODO: implement via X11/Wayland atom
+    /// queries — `_NET_ACTIVE_WINDOW` + `_NET_WM_PID`).
+    pub fn get_active_window() -> Option<ActiveWindow> {
+        Self::get_active_window_impl()
+    }
+
+    #[cfg(target_os = "macos")]
+    fn get_active_window_impl() -> Option<ActiveWindow> {
+        // Use AppleScript via System Events. Returns three pipe-separated fields:
+        //   bundleId|appName|windowTitle
+        // We deliberately use AppleScript instead of cocoa/NSWorkspace bindings
+        // so we don't need to add `objc2` to Cargo.toml — AppleScript already
+        // does the right thing here, has no extra security surface (the agent
+        // is already capable of arbitrary AppleScript via existing window code),
+        // and matches the patterns used elsewhere in this module.
+        let script = r#"
+            try
+                tell application "System Events"
+                    set frontApp to first application process whose frontmost is true
+                    set procName to name of frontApp
+                    set bid to (bundle identifier of frontApp) as string
+                    set winTitle to ""
+                    try
+                        set winTitle to name of front window of frontApp
+                    end try
+                    return bid & "|" & procName & "|" & winTitle
+                end tell
+            on error
+                return ""
+            end try
+        "#;
+
+        let output = Command::new("osascript").arg("-e").arg(script).output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+
+        let raw = String::from_utf8_lossy(&output.stdout);
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        let parts: Vec<&str> = trimmed.splitn(3, '|').collect();
+        let (bundle_id, app_name, window_title) = match parts.as_slice() {
+            [bid, name, title] => (bid.to_string(), name.to_string(), title.to_string()),
+            [bid, name] => (bid.to_string(), name.to_string(), String::new()),
+            _ => return None,
+        };
+
+        Some(ActiveWindow {
+            app_name,
+            window_title,
+            bundle_id: if bundle_id.is_empty() {
+                None
+            } else {
+                Some(bundle_id)
+            },
+        })
+    }
+
+    #[cfg(target_os = "windows")]
+    fn get_active_window_impl() -> Option<ActiveWindow> {
+        use windows::core::PWSTR;
+        use windows::Win32::System::Threading::{
+            OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+            PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+
+        unsafe {
+            let hwnd = GetForegroundWindow();
+            if hwnd.0 == 0 {
+                return None;
+            }
+
+            // Title
+            let mut title_buf = [0u16; 512];
+            let title_len = GetWindowTextW(hwnd, &mut title_buf);
+            let window_title = if title_len > 0 {
+                String::from_utf16_lossy(&title_buf[..title_len as usize])
+            } else {
+                String::new()
+            };
+
+            // Process ID -> executable path
+            let mut pid: u32 = 0;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            if pid == 0 {
+                return None;
+            }
+
+            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+            let mut path_buf = [0u16; 512];
+            let mut size = path_buf.len() as u32;
+
+            let exe_name = if QueryFullProcessImageNameW(
+                process,
+                PROCESS_NAME_WIN32,
+                PWSTR(path_buf.as_mut_ptr()),
+                &mut size,
+            )
+            .is_ok()
+            {
+                let full_path = String::from_utf16_lossy(&path_buf[..size as usize]);
+                full_path
+                    .split('\\')
+                    .next_back()
+                    .unwrap_or("Unknown")
+                    .to_string()
+            } else {
+                "Unknown".to_string()
+            };
+
+            Some(ActiveWindow {
+                app_name: exe_name.clone(),
+                window_title,
+                // On Windows there's no bundle id; we use the exe filename
+                // (lowercased) as the matching key for ALWAYS_BLOCKED_BUNDLE_IDS.
+                bundle_id: Some(exe_name.to_lowercase()),
+            })
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    fn get_active_window_impl() -> Option<ActiveWindow> {
+        // TODO: implement via X11/Wayland atom queries
+        // (_NET_ACTIVE_WINDOW + _NET_WM_PID -> /proc/<pid>/exe). Until then,
+        // return None so the permission gate falls through to the user-prompt
+        // path rather than incorrectly allowing actions on Linux.
+        None
     }
 
     /// Activates a window by title.
