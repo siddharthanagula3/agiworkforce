@@ -25,5 +25,7 @@ export function normalizePromptCapabilityIds(capabilities: ReadonlyArray<string>
     seen.add(value);
     normalized.push(value);
   }
-  return normalized.toSorted((left, right) => left.localeCompare(right));
+  // [...arr].sort() instead of arr.toSorted() so consumers on ES2022 libs
+  // (e.g. services/api-gateway) can still depend on this package.
+  return [...normalized].sort((left, right) => left.localeCompare(right));
 }

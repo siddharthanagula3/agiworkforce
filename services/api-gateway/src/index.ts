@@ -25,6 +25,7 @@ import { providerHealthRouter } from './services/providerHealth';
 import { modelCatalogRouter } from './routes/models';
 import { cloudChatRouter } from './routes/cloudChat';
 import { llmRouter } from './routes/llm';
+import { providerStreamRouter } from './routes/providerStream';
 import { usageRouter } from './routes/usage';
 import { deviceAuthRouter } from './routes/deviceAuth';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -105,6 +106,7 @@ app.use('/api/providers', providerHealthRouter);
 app.use('/api/models', modelCatalogRouter);
 app.use('/api/cloud-chat', cloudChatRouter);
 app.use('/api/llm/v1', llmRouter);
+app.use('/api/v1/providers', providerStreamRouter);
 app.use('/api/v1/usage', usageRouter);
 
 // SECURITY: Rate limited to 100/min for monitoring endpoints
