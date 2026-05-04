@@ -1,8 +1,10 @@
 {
   "free": "مجاني",
-  "starter": "المبتدئ",
-  "pro": "الاحترافي",
-  "team": "الفريق",
+  "localOnly": "محلي فقط",
+  "byok": "BYOK",
+  "hobby": "Hobby",
+  "pro": "Pro",
+  "max": "Max",
   "enterprise": "المؤسسات",
   "monthly": "شهري",
   "yearly": "سنوي",
