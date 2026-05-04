@@ -12,9 +12,9 @@ import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 /**
  * Workforce API
  * Endpoints:
- *   GET  /api/workforce — fetch user's hired employees + stats
- *   POST /api/workforce — hire an employee
- *   DELETE /api/workforce?employeeId=xxx — fire an employee
+ *   GET  /api/workforce - fetch user's hired employees + stats
+ *   POST /api/workforce - hire an employee
+ *   DELETE /api/workforce?employeeId=xxx - fire an employee
  *
  * Requires authentication via Bearer token or cookie session.
  */

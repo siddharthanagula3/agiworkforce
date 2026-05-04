@@ -163,7 +163,7 @@ async function handler(request: NextRequest) {
   const { employeeId, message, model, provider, systemPrompt, conversationHistory } =
     validationResult.data;
 
-  // H10: Load canonical skill from filesystem — caller's systemPrompt is appended as context, never replaces
+  // H10: Load canonical skill from filesystem - caller's systemPrompt is appended as context, never replaces
   const canonicalPrompt = await loadEmployeeSystemPrompt(employeeId);
   if (!canonicalPrompt) {
     throw createError.badRequest(`Employee "${employeeId}" not found`);
@@ -281,7 +281,7 @@ async function handler(request: NextRequest) {
             );
           }
         } catch (error) {
-          // Log but don't fail — the response was already streamed
+          // Log but don't fail - the response was already streamed
           logger.error(
             { error, userId, requestId },
             'Error deducting credits after agent execution',

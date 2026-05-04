@@ -37,7 +37,7 @@ async function handleSearchMemories(request: NextRequest) {
   // Escape LIKE wildcards to prevent wildcard injection
   const escapedQuery = query.replace(/[%_\\]/g, '\\$&');
 
-  // Simple ILIKE text search — can be upgraded to vector similarity later
+  // Simple ILIKE text search - can be upgraded to vector similarity later
   const { data, error } = await supabase
     .from('user_memories')
     .select('id, content, category, source, created_at, updated_at')

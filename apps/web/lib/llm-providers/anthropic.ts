@@ -11,10 +11,10 @@ import { logger } from '@/lib/logger';
 /**
  * Transform tools from OpenAI format to Anthropic format.
  * Handles four cases:
- *   1. Anthropic server-managed tools (web_search, code_execution) — pass through as-is
- *   2. Already-Anthropic custom tools (has input_schema) — pass through as-is
- *   3. OpenAI function format (type: 'function', function: {...}) — transform
- *   4. Bare format — transform with fallback input_schema
+ *   1. Anthropic server-managed tools (web_search, code_execution) - pass through as-is
+ *   2. Already-Anthropic custom tools (has input_schema) - pass through as-is
+ *   3. OpenAI function format (type: 'function', function: {...}) - transform
+ *   4. Bare format - transform with fallback input_schema
  */
 
 /** Anthropic server-managed tool type prefixes (e.g. web_search_20260209, code_execution_20260120) */
@@ -42,7 +42,7 @@ interface AnthropicTool {
 function transformTools(tools: OpenAITool[]): AnthropicTool[] {
   return tools.map((tool) => {
     // 1. Anthropic server-managed tools: type starts with a known server-tool prefix.
-    //    These must be passed through exactly as-is — they have no input_schema.
+    //    These must be passed through exactly as-is - they have no input_schema.
     //    Examples: { type: 'web_search_20260209', name: 'web_search' }
     //             { type: 'code_execution_20260120', name: 'code_execution' }
     if (
@@ -256,7 +256,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
       // Extract tool_use blocks (client-executed tools) and map to OpenAI-format tool_calls
       // Note: server_tool_use blocks (like web_search) are server-executed and do NOT
-      // need client-side execution — Anthropic handles them internally
+      // need client-side execution - Anthropic handles them internally
       const toolUseBlocks = (data.content || []).filter(
         (block: { type: string }) => block.type === 'tool_use',
       );
@@ -277,7 +277,7 @@ export class AnthropicProvider extends BaseLLMProvider {
 
       // Map Anthropic stop_reason to OpenAI finish_reason
       // server_tool_use stop_reason means Anthropic executed tools server-side and
-      // returned results in the same response — this is a completed turn, map to 'stop'
+      // returned results in the same response - this is a completed turn, map to 'stop'
       const finishReason =
         stopReason === 'tool_use' ? 'tool_calls' : stopReason === 'end_turn' ? 'stop' : stopReason;
 

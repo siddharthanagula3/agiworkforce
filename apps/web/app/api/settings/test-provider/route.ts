@@ -30,7 +30,7 @@ async function handleTestProvider(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // Rate limiting — use the default bucket to avoid hammering providers
+  // Rate limiting - use the default bucket to avoid hammering providers
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -79,7 +79,7 @@ async function handleTestProvider(request: NextRequest) {
         {
           success: false,
           provider: providerKey,
-          error: `Provider "${providerKey}" is not configured — missing API key on server`,
+          error: `Provider "${providerKey}" is not configured - missing API key on server`,
         },
         { status: 502 },
       );

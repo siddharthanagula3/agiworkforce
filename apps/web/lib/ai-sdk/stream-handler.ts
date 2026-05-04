@@ -105,7 +105,7 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
 
     onFinish: async ({ text, usage, finishReason, reasoning }) => {
       if (onFinish) {
-        // AI SDK v6: reasoning is ReasoningOutput (array) — join text parts
+        // AI SDK v6: reasoning is ReasoningOutput (array) - join text parts
         let reasoningText: string | undefined;
         if (reasoning) {
           if (Array.isArray(reasoning)) {

@@ -164,7 +164,7 @@ async function handleViaV1Fallback(
 ): Promise<NextResponse> {
   logger.info(
     { model: chatRequest.model, userId: user.id },
-    'v2: model not in AI SDK providers — proxying to v1 factory',
+    'v2: model not in AI SDK providers - proxying to v1 factory',
   );
 
   const provider = LLMProviderFactory.getProviderFromModel(chatRequest.model);
@@ -428,7 +428,7 @@ async function handleViaV1Fallback(
         model: chatRequest.model,
         estimatedCostCents,
       },
-      'v2 fallback: credit reconciliation failed — may require manual adjustment',
+      'v2 fallback: credit reconciliation failed - may require manual adjustment',
     );
   }
 
@@ -657,7 +657,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
         planTier: subscription.plan_tier,
         requiredTier,
       },
-      'v2: model access denied — insufficient plan tier',
+      'v2: model access denied - insufficient plan tier',
     );
     return NextResponse.json(
       {
@@ -958,7 +958,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
           const costDifference = actualCostCents - aiSdkEstimatedCostCents;
 
           if (costDifference < 0) {
-            // Actual cost was less than estimated — refund the difference
+            // Actual cost was less than estimated - refund the difference
             const refundKey = CreditService.generateIdempotencyKey(
               user.id,
               'reconciliation',
@@ -992,7 +992,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
               );
             });
           } else if (costDifference > 0) {
-            // Actual cost exceeded estimate — charge the additional amount
+            // Actual cost exceeded estimate - charge the additional amount
             const chargeKey = CreditService.generateIdempotencyKey(
               user.id,
               'reconciliation',

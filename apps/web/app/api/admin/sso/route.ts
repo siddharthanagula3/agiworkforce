@@ -11,10 +11,10 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 /**
  * Admin SSO Management API
  *
- * GET    /api/admin/sso                  — List SSO connections for the caller's organization(s)
- * GET    /api/admin/sso?orgId=<uuid>     — List SSO connections for a specific org (admin/owner)
- * POST   /api/admin/sso                  — Create a new SSO connection (org owner only)
- * DELETE /api/admin/sso?id=<uuid>        — Remove/deactivate an SSO connection (org owner only)
+ * GET    /api/admin/sso                  - List SSO connections for the caller's organization(s)
+ * GET    /api/admin/sso?orgId=<uuid>     - List SSO connections for a specific org (admin/owner)
+ * POST   /api/admin/sso                  - Create a new SSO connection (org owner only)
+ * DELETE /api/admin/sso?id=<uuid>        - Remove/deactivate an SSO connection (org owner only)
  *
  * All endpoints require organization admin or owner role. Uses service role key to bypass RLS
  * so that explicit, audited authorization checks can be performed in application code.
@@ -168,7 +168,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       return NextResponse.json({ connections: (data ?? []) as SSOConnection[] });
     }
 
-    // No orgId — return connections for all orgs the caller administers
+    // No orgId - return connections for all orgs the caller administers
     const { data: memberRows, error: memberError } = await supabase
       .from('organization_members')
       .select('organization_id')
@@ -222,7 +222,7 @@ export async function GET(request: NextRequest): Promise<Response> {
  * Body: CreateSSOConnectionBody
  */
 export async function POST(request: NextRequest): Promise<Response> {
-  // Strict rate limit — creating SSO connections is a high-privilege admin action
+  // Strict rate limit - creating SSO connections is a high-privilege admin action
   const rateLimitResponse = await withRateLimit(request, 'api-key-create');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -368,8 +368,8 @@ export async function POST(request: NextRequest): Promise<Response> {
  * Caller must be an org owner.
  *
  * Query params:
- *   id    — UUID of the SSO connection to remove (required)
- *   hard  — Set to "true" for a permanent hard delete (default: soft deactivate)
+ *   id    - UUID of the SSO connection to remove (required)
+ *   hard  - Set to "true" for a permanent hard delete (default: soft deactivate)
  */
 export async function DELETE(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'api-key-revoke');

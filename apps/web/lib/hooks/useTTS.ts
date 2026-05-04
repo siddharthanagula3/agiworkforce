@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * useTTS — Text-to-Speech hook using the browser's SpeechSynthesis API.
+ * useTTS - Text-to-Speech hook using the browser's SpeechSynthesis API.
  *
  * Features:
  * - Strips Markdown/code blocks so the AI reads clean prose

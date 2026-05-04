@@ -1,8 +1,8 @@
 /**
  * Share Token API
  *
- * GET  /api/share/[token] — fetch a shared session (public, rate-limited)
- * DELETE /api/share/[token] — revoke a shared session (owner only)
+ * GET  /api/share/[token] - fetch a shared session (public, rate-limited)
+ * DELETE /api/share/[token] - revoke a shared session (owner only)
  */
 
 import { createClient } from '@supabase/supabase-js';

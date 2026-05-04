@@ -228,7 +228,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
   const [activeSubMenu, setActiveSubMenu] = useState<ActiveSubMenu>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Model state — sourced from shared model store via a lightweight selector
+  // Model state - sourced from shared model store via a lightweight selector
   const [currentModelId, setCurrentModelId] = useState(() => {
     if (typeof window === 'undefined') return DEFAULT_COMMAND_PALETTE_MODEL;
     try {
