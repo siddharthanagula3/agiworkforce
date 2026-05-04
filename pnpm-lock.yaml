@@ -1251,6 +1251,18 @@ importers:
 
   services/api-gateway:
     dependencies:
+      '@agiworkforce/llm-normalize':
+        specifier: workspace:*
+        version: link:../../packages/llm-normalize
+      '@agiworkforce/providers-anthropic':
+        specifier: workspace:*
+        version: link:../../packages/providers/anthropic
+      '@agiworkforce/providers-ollama':
+        specifier: workspace:*
+        version: link:../../packages/providers/ollama
+      '@agiworkforce/providers-openai':
+        specifier: workspace:*
+        version: link:../../packages/providers/openai
       '@agiworkforce/types':
         specifier: workspace:*
         version: link:../../packages/types
