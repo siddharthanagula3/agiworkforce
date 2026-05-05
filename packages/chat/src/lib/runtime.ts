@@ -64,6 +64,19 @@ export interface SendMessageOptions {
   systemPrompt?: string;
   /** Full conversation message history for multi-turn context. */
   messageHistory?: Array<{ role: string; content: string }>;
+  /**
+   * Agent operating mode forwarded to the backend.
+   * Maps to apps/desktop/src-tauri/src/tools.rs plan_mode gate.
+   * Values: 'ask' | 'auto' | 'plan' | 'bypass'
+   */
+  agentMode?: string;
+  /**
+   * Reasoning effort level forwarded to the backend.
+   * Translated to provider-specific params (thinking.budget_tokens, reasoning.effort, etc.)
+   * by the receiving runtime before hitting the provider API.
+   * Values: 'low' | 'medium' | 'high' | 'max'
+   */
+  effort?: string;
 }
 
 /**

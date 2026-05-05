@@ -47,6 +47,7 @@ import {
   buildGroupedQuickPickItems,
   type GroupedQuickPickItem,
 } from './services/modelConstants';
+import { Config } from './utils/config';
 import { ContextPanelProvider, setContextPanelInstance } from './providers/contextPanelProvider';
 import { DiffDecorationProvider } from './providers/diffDecorationProvider';
 import { showOriginalContext, getPatchOutputChannel } from './services/patchEngine';
@@ -981,6 +982,171 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('agi-workforce.modelDashboard', () => {
       ModelMetricsPanel.createOrShow(context.extensionUri, context);
     }),
+
+    // ── agi-workforce.rewindLast ──────────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.rewindLast', () => {
+      vscode.window.showInformationMessage(
+        'AGI Workforce: Rewind — coming soon in a future release.',
+      );
+    }),
+
+    // ── agi-workforce.openActionSheet ─────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.openActionSheet', async () => {
+      const currentModel = normalizeConfiguredModelId(Config.model());
+      const currentMode = Config.agentMode();
+      const currentEffort = Config.agentEffort();
+
+      // Capitalise helper
+      function cap(s: string): string {
+        return s.charAt(0).toUpperCase() + s.slice(1);
+      }
+
+      const items: vscode.QuickPickItem[] = [
+        { label: 'Context', kind: vscode.QuickPickItemKind.Separator },
+        {
+          label: '$(file-add) Attach file',
+          description: 'Add a workspace file to conversation context',
+          detail: 'attach-file',
+        },
+        { label: '$(history) Rewind', description: 'Undo the last AI turn', detail: 'rewind' },
+        {
+          label: '$(trash) Clear conversation',
+          description: 'Start a fresh conversation',
+          detail: 'clear',
+        },
+        { label: 'Model', kind: vscode.QuickPickItemKind.Separator },
+        {
+          label: '$(symbol-color) Switch model…',
+          description: `Current: ${currentModel}`,
+          detail: 'switch-model',
+        },
+        {
+          label: `$(brain) Effort: ${cap(currentEffort)}`,
+          description: 'Set reasoning effort (Low / Medium / High / Max)',
+          detail: 'effort',
+        },
+        {
+          label: `$(robot) Mode: ${cap(currentMode)}`,
+          description: 'Set agent operating mode',
+          detail: 'mode',
+        },
+        {
+          label: '$(account) Account & usage',
+          description: 'View model dashboard and token usage',
+          detail: 'account',
+        },
+      ];
+
+      const pick = await vscode.window.showQuickPick(items, {
+        title: 'AGI Workforce — Actions',
+        placeHolder: 'Search actions…',
+        matchOnDetail: true,
+        matchOnDescription: true,
+      });
+
+      if (pick === undefined) return;
+
+      switch (pick.detail) {
+        case 'attach-file': {
+          const uris = await vscode.window.showOpenDialog({
+            canSelectMany: true,
+            openLabel: 'Add to Context',
+            title: 'AGI Workforce — Attach File to Context',
+          });
+          if (uris !== undefined && uris.length > 0) {
+            for (const uri of uris) {
+              await vscode.commands.executeCommand('agi-workforce.addToContext', uri);
+            }
+          }
+          break;
+        }
+        case 'rewind':
+          await vscode.commands.executeCommand('agi-workforce.rewindLast');
+          break;
+        case 'clear': {
+          // Reset sidebar conversation
+          sidebarProvider.resetConversation();
+          sidebarProvider.reveal();
+          break;
+        }
+        case 'switch-model':
+          await vscode.commands.executeCommand('agi-workforce.selectModel');
+          break;
+        case 'effort': {
+          const effortItems: vscode.QuickPickItem[] = [
+            {
+              label: '$(circle-outline) Low',
+              description: 'Minimal reasoning — fastest, lowest cost',
+              detail: 'low',
+            },
+            {
+              label: '$(circle-filled) Medium',
+              description: 'Balanced reasoning — default',
+              detail: 'medium',
+            },
+            {
+              label: '$(pulse) High',
+              description: 'Extended reasoning — slower, higher quality',
+              detail: 'high',
+            },
+            { label: '$(sparkle) Max', description: 'Maximum reasoning budget', detail: 'max' },
+          ];
+          const effortPick = await vscode.window.showQuickPick(effortItems, {
+            title: 'AGI Workforce — Set Effort',
+            placeHolder: `Current: ${cap(currentEffort)}`,
+          });
+          if (effortPick?.detail !== undefined) {
+            await vscode.workspace
+              .getConfiguration('agiWorkforce')
+              .update('agent.effort', effortPick.detail, vscode.ConfigurationTarget.Global);
+            vscode.window.showInformationMessage(
+              `AGI Workforce effort set to: ${cap(effortPick.detail)}`,
+            );
+          }
+          break;
+        }
+        case 'mode': {
+          const modeItems: vscode.QuickPickItem[] = [
+            {
+              label: '$(comment-discussion) Ask before edits',
+              description: 'Confirm every edit before it runs',
+              detail: 'ask',
+            },
+            {
+              label: '$(robot) Edit automatically',
+              description: 'Edits run without confirmation',
+              detail: 'auto',
+            },
+            {
+              label: '$(checklist) Plan mode',
+              description: 'Generate a plan; no edits until approved',
+              detail: 'plan',
+            },
+            {
+              label: '$(warning) Bypass permissions',
+              description: 'Skip all approval prompts (dangerous)',
+              detail: 'bypass',
+            },
+          ];
+          const modePick = await vscode.window.showQuickPick(modeItems, {
+            title: 'AGI Workforce — Set Agent Mode',
+            placeHolder: `Current: ${cap(currentMode)}`,
+          });
+          if (modePick?.detail !== undefined) {
+            await vscode.workspace
+              .getConfiguration('agiWorkforce')
+              .update('agent.mode', modePick.detail, vscode.ConfigurationTarget.Global);
+            vscode.window.showInformationMessage(
+              `AGI Workforce agent mode set to: ${cap(modePick.detail)}`,
+            );
+          }
+          break;
+        }
+        case 'account':
+          await vscode.commands.executeCommand('agi-workforce.modelDashboard');
+          break;
+      }
+    }),
   );
 
   // ── Status bar item ──────────────────────────────────────────────────────
@@ -994,8 +1160,9 @@ export function activate(context: vscode.ExtensionContext): void {
     const model = normalizeConfiguredModelId(config.get<string>('model'));
     const chips: string[] = [];
 
-    if (config.get<boolean>('agent.planMode') ?? false) {
-      chips.push('plan');
+    const mode = Config.agentMode();
+    if (mode !== 'auto') {
+      chips.push(mode);
     }
     if (config.get<boolean>('mcp.enabled') ?? false) {
       chips.push('mcp');
@@ -1018,6 +1185,8 @@ export function activate(context: vscode.ExtensionContext): void {
       if (
         e.affectsConfiguration('agiWorkforce.model') ||
         e.affectsConfiguration('agiWorkforce.agent.planMode') ||
+        e.affectsConfiguration('agiWorkforce.agent.mode') ||
+        e.affectsConfiguration('agiWorkforce.agent.effort') ||
         e.affectsConfiguration('agiWorkforce.mcp.enabled') ||
         e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
         e.affectsConfiguration('agiWorkforce.desktopBridge.port')
@@ -1042,11 +1211,12 @@ export function activate(context: vscode.ExtensionContext): void {
         void validateAdvancedFeatureFlags(context);
       }
 
-      // ── planMode → agentModeProvider ────────────────────────────────────
-      if (e.affectsConfiguration('agiWorkforce.agent.planMode')) {
-        const planMode =
-          vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('agent.planMode') ?? false;
-        AgentModePanel.currentPanel?.setPlanMode(planMode);
+      // ── planMode / agent.mode → agentModeProvider ───────────────────────
+      if (
+        e.affectsConfiguration('agiWorkforce.agent.planMode') ||
+        e.affectsConfiguration('agiWorkforce.agent.mode')
+      ) {
+        AgentModePanel.currentPanel?.setPlanMode(Config.agentMode() === 'plan');
       }
 
       // ── mcp.enabled → desktop bridge ────────────────────────────────────
