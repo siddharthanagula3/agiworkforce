@@ -16,6 +16,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import WebSocket from 'ws';
+import { getExtensionVersion } from '../utils/version';
 
 // ─── Bridge auth token (VSCODE-03) ──────────────────────────────────────────
 
@@ -30,9 +31,16 @@ const BRIDGE_TOKEN_PATH = path.join(os.homedir(), '.agiworkforce', 'bridge-token
  * world-readable we refuse to load it to avoid token leakage via group membership.
  */
 export function readBridgeToken(): string | undefined {
+  // B9 fix: the previous implementation called `fs.statSync` then
+  // `fs.readFileSync` against the same path — a classic TOCTOU race where
+  // a local attacker can swap the file between the two calls. Open once
+  // and validate / read against the same file descriptor so the
+  // permission check applies to the bytes we actually consume.
+  let fd: number | undefined;
   try {
+    fd = fs.openSync(BRIDGE_TOKEN_PATH, fs.constants.O_RDONLY);
     if (process.platform !== 'win32') {
-      const stat = fs.statSync(BRIDGE_TOKEN_PATH);
+      const stat = fs.fstatSync(fd);
       const mode = stat.mode & 0o777;
       if (mode & 0o044) {
         console.error(
@@ -41,10 +49,31 @@ export function readBridgeToken(): string | undefined {
         return undefined;
       }
     }
-    const token = fs.readFileSync(BRIDGE_TOKEN_PATH, 'utf8').trim();
+    // B9 (Windows): without per-user ACL inspection we still ensure the
+    // file is in the user's profile directory. On Windows fs has no
+    // direct chmod equivalent, but the desktop side writes via
+    // `LocalAppData` whose default ACL is owner-only. We log a warning
+    // so a security-aware operator can audit the install.
+    if (process.platform === 'win32') {
+      console.warn(
+        '[AGI Workforce Bridge] Windows: skipping mode check; relying on default user-profile ACL.',
+      );
+    }
+    // Read up to 1 KiB from the open fd (real tokens are 64 hex chars).
+    const buf = Buffer.alloc(1024);
+    const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+    const token = buf.subarray(0, bytesRead).toString('utf8').trim();
     return token.length > 0 ? token : undefined;
   } catch {
     return undefined;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // best-effort close; nothing actionable on failure.
+      }
+    }
   }
 }
 
@@ -70,6 +99,26 @@ export const ALLOWED_INBOUND_TYPES = new Set([
   'desktop:show-message',
   'desktop:run-command',
   'auth_ok',
+]);
+
+/**
+ * Allowlist of VS Code commands the desktop bridge is permitted to trigger
+ * via `desktop:run-command`. Any commandId outside this set is blocked +
+ * logged. Module-scope so tests can assert the surface explicitly.
+ */
+export const ALLOWED_BRIDGE_COMMANDS: ReadonlySet<string> = new Set([
+  'agi-workforce.chat',
+  'agi-workforce.agentMode',
+  'agi-workforce.explain',
+  'agi-workforce.fix',
+  'agi-workforce.refactor',
+  'agi-workforce.generateTests',
+  'agi-workforce.selectModel',
+  'agi-workforce.openConversation',
+  'agi-workforce.sendToDesktop',
+  'agi-workforce.syncContextToDesktop',
+  'workbench.action.openSettings',
+  'workbench.action.files.openFile',
 ]);
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -364,9 +413,7 @@ export class DesktopBridge implements vscode.Disposable {
               type: 'vscode:connected',
               payload: {
                 workspaceFolders: vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath) ?? [],
-                extensionVersion:
-                  vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON
-                    ?.version ?? '0.0.0',
+                extensionVersion: getExtensionVersion(),
               },
               timestamp: Date.now(),
             });
@@ -597,6 +644,34 @@ export function getDesktopBridge(): DesktopBridge | undefined {
 }
 
 /**
+ * F2 fix: per-(type, key) debounce window for inbound bridge messages.
+ *
+ * Prevents 100 back-to-back `desktop:open-file` messages from firing 100
+ * concurrent `showTextDocument` calls. The debounce is leading-edge with a
+ * 50ms cooldown — the first message in a burst fires immediately, subsequent
+ * duplicates within 50ms are dropped.
+ *
+ * Key shape: `${type}:${first-payload-string}` — ensures different file
+ * targets are dispatched independently.
+ */
+const BRIDGE_DEBOUNCE_MS = 50;
+const _lastDispatch = new Map<string, number>();
+
+function shouldDispatch(key: string): boolean {
+  const now = Date.now();
+  const last = _lastDispatch.get(key);
+  if (last !== undefined && now - last < BRIDGE_DEBOUNCE_MS) return false;
+  _lastDispatch.set(key, now);
+  // Periodic GC: drop entries older than 5s so the map doesn't grow forever.
+  if (_lastDispatch.size > 64) {
+    for (const [k, t] of _lastDispatch) {
+      if (now - t > 5_000) _lastDispatch.delete(k);
+    }
+  }
+  return true;
+}
+
+/**
  * Register built-in message handlers on the given bridge instance.
  * Returns the disposable so callers can track and dispose it explicitly.
  * Also pushes onto context.subscriptions as a safety net.
@@ -609,6 +684,7 @@ function registerBridgeHandlersTracked(
     switch (msg.type) {
       case 'desktop:open-file': {
         const filePath = msg.payload['filePath'] as string | undefined;
+        if (filePath && !shouldDispatch(`open-file:${filePath}`)) break;
         if (filePath) {
           // Security: only allow opening files inside a workspace folder.
           // A compromised WS connection must not be able to read arbitrary files.
@@ -635,6 +711,7 @@ function registerBridgeHandlersTracked(
       }
       case 'desktop:show-message': {
         const text = msg.payload['text'] as string | undefined;
+        if (text && !shouldDispatch(`show-message:${text}`)) break;
         if (text) {
           void vscode.window.showInformationMessage(`AGI Workforce: ${text}`);
         }
@@ -642,24 +719,8 @@ function registerBridgeHandlersTracked(
       }
       case 'desktop:run-command': {
         const commandId = msg.payload['command'] as string | undefined;
+        if (commandId && !shouldDispatch(`run-command:${commandId}`)) break;
         if (commandId) {
-          // Allowlist of commands the desktop bridge is permitted to trigger.
-          // Any commandId not in this set is blocked and logged — a compromised
-          // or misbehaving desktop app cannot invoke arbitrary VS Code commands.
-          const ALLOWED_BRIDGE_COMMANDS = new Set([
-            'agi-workforce.chat',
-            'agi-workforce.agentMode',
-            'agi-workforce.explain',
-            'agi-workforce.fix',
-            'agi-workforce.refactor',
-            'agi-workforce.generateTests',
-            'agi-workforce.selectModel',
-            'agi-workforce.openConversation',
-            'agi-workforce.sendToDesktop',
-            'agi-workforce.syncContextToDesktop',
-            'workbench.action.openSettings',
-            'workbench.action.files.openFile',
-          ]);
           if (!ALLOWED_BRIDGE_COMMANDS.has(commandId)) {
             console.warn(`[AGI Workforce Bridge] blocked disallowed command: ${commandId}`);
             break;

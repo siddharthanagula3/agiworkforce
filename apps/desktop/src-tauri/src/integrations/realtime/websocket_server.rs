@@ -12,15 +12,120 @@ use futures::{
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
 use tauri::Emitter;
 use tauri::Manager;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex as TokioMutex;
-use tokio_tungstenite::{accept_async, tungstenite::Message, WebSocketStream};
+use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock, Semaphore};
+use tokio_tungstenite::{
+    accept_hdr_async_with_config,
+    tungstenite::{
+        handshake::server::{ErrorResponse, Request, Response},
+        protocol::WebSocketConfig,
+        Message,
+    },
+    WebSocketStream,
+};
+
+// SEV-DESK-01 limits ─────────────────────────────────────────────────────────
+//
+// The realtime server binds 127.0.0.1 and accepts ws+http upgrades from
+// the Chrome extension, VS Code extension, and Tauri webview. Without these
+// caps, any local process running as the same user (malware, bug-installer)
+// could open thousands of unauthenticated connections to exhaust file
+// descriptors / heap, or brute-force the IPC token.
+//
+// MAX_CONNECTIONS — total simultaneous accepted connections. Beyond this, the
+//   accept loop drops new connections at the TCP level (no upgrade).
+// MAX_AUTH_FAILURES / AUTH_FAILURE_WINDOW — within any 60s rolling window,
+//   five auth failures from the same IP triggers a lockout.
+// LOCKOUT_DURATION — duration the offending IP is rejected at handshake.
+// MAX_WS_MESSAGE_SIZE — caps a single WS frame so a malicious / buggy peer
+//   cannot force the server to buffer 64 MiB before validating.
+const MAX_CONNECTIONS: usize = 32;
+const MAX_AUTH_FAILURES: u32 = 5;
+const AUTH_FAILURE_WINDOW: Duration = Duration::from_secs(60);
+const LOCKOUT_DURATION: Duration = Duration::from_secs(300);
+const MAX_WS_MESSAGE_SIZE: usize = 4 * 1024 * 1024;
+
+#[derive(Default)]
+struct AuthFailureRecord {
+    /// First failure in the current window. Reset whenever the window expires.
+    first_failure_at: Option<Instant>,
+    /// Failures observed within the current window.
+    count: u32,
+    /// Lockout end-time. While `Some(t)` and `t > now`, all upgrades from
+    /// this IP are rejected at the handshake.
+    lockout_until: Option<Instant>,
+}
+
+// ── RT-04: WebSocket Origin allow-list ───────────────────────────────────────
+//
+// Any WebSocket from a non-allowed origin is rejected at the HTTP-upgrade
+// phase, before any application data is exchanged.  Allowed origins:
+//
+//   • chrome-extension://...      — Chrome/Chromium extension (any ID)
+//   • vscode-webview://...        — VS Code webview panel
+//   • vscode-file://...           — VS Code file-based webview
+//   • null                        — Tauri webview (no Origin header)
+//   • http(s)://localhost[:port]  — localhost (dev tools, Electron)
+//   • http(s)://127.0.0.1[:port]  — loopback IPv4
+//   • http(s)://[::1][:port]      — loopback IPv6
+//
+// HTTP/HTTPS pages from arbitrary domains are always rejected.
+//
+// B3 fix: the previous implementation used `origin.starts_with("http://localhost")`
+// which silently accepted `http://localhost.attacker.com`. We now require the
+// host component (after the scheme + `://`) to *equal* one of the allowed
+// values (modulo an optional `:port` suffix) so prefix attacks are closed.
+fn is_origin_allowed(origin: Option<&str>) -> bool {
+    let Some(origin) = origin else {
+        // No Origin header — Tauri native webview; allow.
+        return true;
+    };
+    if origin == "null" {
+        // Tauri sends the literal string "null".
+        return true;
+    }
+    if origin.starts_with("chrome-extension://")
+        || origin.starts_with("vscode-webview://")
+        || origin.starts_with("vscode-file://")
+    {
+        return true;
+    }
+    // For http(s) origins we must compare the *host* exactly, not the prefix.
+    // Origin headers are of the form `http(s)://host[:port]` (no path / no query).
+    let rest = origin
+        .strip_prefix("http://")
+        .or_else(|| origin.strip_prefix("https://"));
+    let Some(rest) = rest else {
+        return false;
+    };
+    // Strip optional :port. IPv6 origins are bracketed: `[::1]:8080` -> host `[::1]`.
+    let host = if let Some(stripped) = rest.strip_prefix('[') {
+        // IPv6: host runs through the closing ']'. `stripped` does NOT
+        // include the leading `[`, so the `]` index in `stripped` is offset
+        // by 1 relative to `rest` — and we want to keep BOTH brackets.
+        match stripped.find(']') {
+            Some(end) => &rest[..end + 2], // +1 for `[`, +1 for `]`
+            None => return false,
+        }
+    } else {
+        // IPv4 / DNS host: host runs until the first ':' or end.
+        match rest.find(':') {
+            Some(end) => &rest[..end],
+            None => rest,
+        }
+    };
+    matches!(host, "localhost" | "127.0.0.1" | "[::1]")
+}
+
+/// Duration the server waits for the first auth message before closing.
+const AUTH_TIMEOUT: Duration = Duration::from_secs(2);
+// ─────────────────────────────────────────────────────────────────────────────
 
 pub struct WebSocketClient {
     pub id: String,
@@ -34,14 +139,23 @@ pub struct RealtimeServer {
     clients: Arc<TokioMutex<HashMap<String, WebSocketClient>>>,
     senders: Arc<TokioMutex<HashMap<String, SplitSink<WebSocketStream<TcpStream>, Message>>>>,
     presence: Arc<PresenceManager>,
-    token: String,
+    /// B6 fix: live IPC token guarded by an `Arc<RwLock<String>>` so
+    /// `bridge_rotate_token` can swap the value at runtime and new
+    /// connections immediately authenticate against the rotated value.
+    /// Existing connections keep the snapshot they captured at handshake.
+    token: Arc<TokioRwLock<String>>,
     app_handle: Option<tauri::AppHandle>,
+    /// SEV-DESK-01: caps simultaneous accepted connections at MAX_CONNECTIONS.
+    connection_semaphore: Arc<Semaphore>,
+    /// SEV-DESK-01: per-source-IP auth-failure record; entries decay after
+    /// AUTH_FAILURE_WINDOW elapses without further failures.
+    auth_failures: Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
 }
 
 impl RealtimeServer {
     pub fn new(
         presence: Arc<PresenceManager>,
-        token: String,
+        token: Arc<TokioRwLock<String>>,
         app_handle: Option<tauri::AppHandle>,
     ) -> Self {
         Self {
@@ -50,7 +164,76 @@ impl RealtimeServer {
             presence,
             token,
             app_handle,
+            connection_semaphore: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
+            auth_failures: Arc::new(TokioMutex::new(HashMap::new())),
         }
+    }
+
+    /// SEV-DESK-01: returns true if `ip` is currently in the lockout window.
+    /// Also opportunistically clears expired lockouts so the map does not
+    /// grow without bound for transient offenders.
+    async fn is_locked_out(map: &Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>, ip: IpAddr) -> bool {
+        let mut failures = map.lock().await;
+        let Some(rec) = failures.get_mut(&ip) else {
+            return false;
+        };
+        if let Some(until) = rec.lockout_until {
+            if Instant::now() < until {
+                return true;
+            }
+            // Lockout expired — reset so a previously locked-out client gets
+            // a fresh failure budget after the cooldown.
+            rec.lockout_until = None;
+            rec.count = 0;
+            rec.first_failure_at = None;
+        }
+        false
+    }
+
+    /// SEV-DESK-01: records an auth failure for `ip` and applies the lockout
+    /// rule. Returns true iff the failure caused a new lockout.
+    async fn record_auth_failure(
+        map: &Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
+        ip: IpAddr,
+    ) -> bool {
+        let mut failures = map.lock().await;
+        let now = Instant::now();
+        let rec = failures.entry(ip).or_default();
+
+        // Reset the rolling window if the prior burst expired without
+        // crossing the threshold.
+        if let Some(start) = rec.first_failure_at {
+            if now.duration_since(start) > AUTH_FAILURE_WINDOW {
+                rec.count = 0;
+                rec.first_failure_at = None;
+            }
+        }
+
+        if rec.first_failure_at.is_none() {
+            rec.first_failure_at = Some(now);
+        }
+        rec.count = rec.count.saturating_add(1);
+
+        if rec.count >= MAX_AUTH_FAILURES {
+            rec.lockout_until = Some(now + LOCKOUT_DURATION);
+            tracing::warn!(
+                "SEV-DESK-01: locking out {} for {}s after {} auth failures",
+                ip,
+                LOCKOUT_DURATION.as_secs(),
+                rec.count
+            );
+            return true;
+        }
+        false
+    }
+
+    /// SEV-DESK-01: clears any failure record for `ip` after a successful auth.
+    async fn clear_auth_failures(
+        map: &Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
+        ip: IpAddr,
+    ) {
+        let mut failures = map.lock().await;
+        failures.remove(&ip);
     }
 
     pub async fn broadcast_to_user(
@@ -65,20 +248,69 @@ impl RealtimeServer {
         let addr = format!("127.0.0.1:{}", port);
         let listener = TcpListener::bind(&addr).await?;
 
-        tracing::info!("WebSocket server listening on {}", addr);
+        tracing::info!(
+            "WebSocket server listening on {} (max {} concurrent connections)",
+            addr,
+            MAX_CONNECTIONS
+        );
 
         loop {
             match listener.accept().await {
                 Ok((stream, peer)) => {
+                    // SEV-DESK-01: cap simultaneous connections. `try_acquire_owned`
+                    // is non-blocking — when the cap is reached we drop the
+                    // connection at the TCP layer rather than queue it (queueing
+                    // would still consume the FD and let an attacker hold it
+                    // indefinitely).
+                    let permit = match self.connection_semaphore.clone().try_acquire_owned() {
+                        Ok(permit) => permit,
+                        Err(_) => {
+                            tracing::warn!(
+                                "SEV-DESK-01: rejecting connection from {} — connection cap of {} reached",
+                                peer,
+                                MAX_CONNECTIONS
+                            );
+                            // Dropping `stream` closes the TCP socket cleanly.
+                            drop(stream);
+                            continue;
+                        }
+                    };
+
+                    // SEV-DESK-01: skip handshake entirely for IPs in lockout.
+                    if Self::is_locked_out(&self.auth_failures, peer.ip()).await {
+                        tracing::warn!(
+                            "SEV-DESK-01: rejecting connection from locked-out IP {}",
+                            peer
+                        );
+                        drop(stream);
+                        drop(permit);
+                        continue;
+                    }
+
                     let clients = self.clients.clone();
                     let senders = self.senders.clone();
                     let presence = self.presence.clone();
-                    let token = self.token.clone();
+                    // B6 fix: snapshot the live token at spawn time. Connections
+                    // authenticate against whatever value `bridge_rotate_token`
+                    // last wrote; in-flight handshakes captured at this point
+                    // keep their snapshot for the duration of the handshake.
+                    let token = self.token.read().await.clone();
                     let app_handle = self.app_handle.clone();
+                    let auth_failures = self.auth_failures.clone();
 
                     tokio::spawn(async move {
+                        // The permit is held for the entire connection lifetime;
+                        // drop on task exit releases it for the next connection.
+                        let _permit = permit;
                         if let Err(e) = Self::handle_connection_wrapper(
-                            stream, peer, clients, senders, presence, token, app_handle,
+                            stream,
+                            peer,
+                            clients,
+                            senders,
+                            presence,
+                            token,
+                            app_handle,
+                            auth_failures,
                         )
                         .await
                         {
@@ -101,30 +333,90 @@ impl RealtimeServer {
         presence: Arc<PresenceManager>,
         token: String,
         app_handle: Option<tauri::AppHandle>,
+        auth_failures: Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let ws_stream = accept_async(stream).await?;
-        Self::handle_connection(
-            ws_stream, peer, clients, senders, presence, token, app_handle,
-        )
-        .await;
+        // RT-04 fix: validate Origin header during the WebSocket handshake.
+        // `accept_hdr_async_with_config` lets us inspect the HTTP upgrade request
+        // before the connection is established AND cap per-frame size.
+        let callback = |request: &Request,
+                        response: Response|
+         -> Result<Response, ErrorResponse> {
+            let origin = request
+                .headers()
+                .get("origin")
+                .and_then(|v| v.to_str().ok());
+
+            if !is_origin_allowed(origin) {
+                tracing::warn!(
+                    "RT-04: WebSocket upgrade rejected from disallowed origin: {:?}",
+                    origin
+                );
+                let rejected = origin.unwrap_or("<none>").to_string();
+                // We can't capture `rejected_origin` here due to borrow rules,
+                // so we embed the rejection in the error response reason phrase.
+                let _ = rejected; // used via tracing above
+                let err_response = ErrorResponse::new(Some(
+                    "Origin not allowed".to_string(),
+                ));
+                return Err(err_response);
+            }
+            Ok(response)
+        };
+
+        // SEV-DESK-01: bound per-frame size. tungstenite default is 64 MiB;
+        // none of our valid messages are anywhere near 4 MiB. A peer that
+        // sends a frame above this gets disconnected at the protocol layer
+        // before any deserialisation runs.
+        let mut ws_config = WebSocketConfig::default();
+        ws_config.max_message_size = Some(MAX_WS_MESSAGE_SIZE);
+        ws_config.max_frame_size = Some(MAX_WS_MESSAGE_SIZE);
+
+        let ws_stream = match accept_hdr_async_with_config(stream, callback, Some(ws_config)).await
+        {
+            Ok(ws) => ws,
+            Err(e) => {
+                tracing::warn!("RT-04: WebSocket handshake failed (origin check or protocol error): {}", e);
+                return Ok(()); // connection is already closed; not an error we need to propagate
+            }
+        };
+
+        // RT-04 fix: enforce a hard timeout for the initial auth message.
+        // Wrap the whole connection handler so that a client that never sends
+        // auth is cleaned up after AUTH_TIMEOUT.
+        let handle_fut = Self::handle_connection(
+            ws_stream,
+            peer,
+            clients,
+            senders,
+            presence,
+            token,
+            app_handle,
+            auth_failures,
+        );
+        // The auth itself is handled inside `handle_connection`; the timeout
+        // there is enforced by the `tokio::time::timeout` around `ws_stream.next()`.
+        handle_fut.await;
         Ok(())
     }
 
     async fn handle_connection(
         mut ws_stream: WebSocketStream<TcpStream>,
-        _peer: SocketAddr,
+        peer: SocketAddr,
         clients: Arc<TokioMutex<HashMap<String, WebSocketClient>>>,
         senders: Arc<TokioMutex<HashMap<String, SplitSink<WebSocketStream<TcpStream>, Message>>>>,
         presence: Arc<PresenceManager>,
         token: String,
         app_handle: Option<tauri::AppHandle>,
+        auth_failures: Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
     ) {
         // Enforce Authentication
         tracing::debug!("Waiting for authentication...");
         let mut user_id_from_auth: Option<String> = None;
         let mut team_id_from_auth: Option<String> = None;
 
-        let auth_failure_reason = if let Some(Ok(Message::Text(text))) = ws_stream.next().await {
+        // RT-04 fix: the first message must arrive within AUTH_TIMEOUT.
+        let first_msg = tokio::time::timeout(AUTH_TIMEOUT, ws_stream.next()).await;
+        let auth_failure_reason = if let Ok(Some(Ok(Message::Text(text)))) = first_msg {
             if let Ok(RealtimeEvent::Authenticate {
                 user_id,
                 team_id,
@@ -155,10 +447,17 @@ impl RealtimeServer {
                 Some("Invalid authentication event format".to_string())
             }
         } else {
-            Some("Realtime websocket closed before authentication".to_string())
+            // Connection closed, non-text message received, or 2-second auth timeout expired.
+            Some("Realtime websocket closed or timed out before authentication".to_string())
         };
 
         if let Some(reason) = auth_failure_reason {
+            // SEV-DESK-01: record the failure against the source IP. If this
+            // crosses MAX_AUTH_FAILURES inside the rolling window, future
+            // connections from this IP are rejected at the listener for
+            // LOCKOUT_DURATION.
+            Self::record_auth_failure(&auth_failures, peer.ip()).await;
+
             if let Ok(auth_error_message) =
                 serde_json::to_string(&RealtimeEvent::AuthenticationFailed {
                     reason: reason.clone(),
@@ -168,11 +467,17 @@ impl RealtimeServer {
             }
             let _ = ws_stream.close(None).await;
             tracing::warn!(
-                "Connection closed due to authentication failure: {}",
+                "Connection closed due to authentication failure from {}: {}",
+                peer,
                 reason
             );
             return;
         }
+
+        // SEV-DESK-01: success — clear any prior failure budget for this IP
+        // so a transient typo or token-rotation race does not poison future
+        // connections.
+        Self::clear_auth_failures(&auth_failures, peer.ip()).await;
 
         if let Some(user_id) = &user_id_from_auth {
             if let Ok(auth_ok_message) = serde_json::to_string(&RealtimeEvent::Authenticated {
@@ -1447,5 +1752,103 @@ mod tests {
             .err()
             .unwrap_or_default()
             .contains("Desktop app handle unavailable"));
+    }
+
+    // ── B3 fix: Origin allowlist tests ──────────────────────────────────────
+    //
+    // The previous implementation used `origin.starts_with("http://localhost")`
+    // which silently allowed `http://localhost.attacker.com`. These tests
+    // pin the new exact-host behaviour so a future refactor cannot regress.
+
+    #[test]
+    fn origin_none_allowed_for_tauri_native() {
+        assert!(is_origin_allowed(None));
+    }
+
+    #[test]
+    fn origin_null_allowed_for_tauri_string() {
+        assert!(is_origin_allowed(Some("null")));
+    }
+
+    #[test]
+    fn origin_chrome_extension_allowed() {
+        assert!(is_origin_allowed(Some(
+            "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+        )));
+    }
+
+    #[test]
+    fn origin_vscode_webview_allowed() {
+        assert!(is_origin_allowed(Some(
+            "vscode-webview://12345678-1234-1234-1234-1234567890ab"
+        )));
+    }
+
+    #[test]
+    fn origin_vscode_file_allowed() {
+        assert!(is_origin_allowed(Some("vscode-file://./foo")));
+    }
+
+    #[test]
+    fn origin_localhost_with_port_allowed() {
+        assert!(is_origin_allowed(Some("http://localhost:3000")));
+    }
+
+    #[test]
+    fn origin_localhost_https_allowed() {
+        assert!(is_origin_allowed(Some("https://localhost")));
+    }
+
+    #[test]
+    fn origin_127_0_0_1_with_port_allowed() {
+        assert!(is_origin_allowed(Some("http://127.0.0.1:8787")));
+    }
+
+    #[test]
+    fn origin_ipv6_loopback_allowed() {
+        assert!(is_origin_allowed(Some("http://[::1]:8080")));
+    }
+
+    #[test]
+    fn origin_localhost_subdomain_attack_rejected() {
+        // B3 regression test: prefix-match would have accepted this.
+        assert!(!is_origin_allowed(Some("http://localhost.attacker.com")));
+    }
+
+    #[test]
+    fn origin_127_0_0_1_subdomain_attack_rejected() {
+        assert!(!is_origin_allowed(Some("http://127.0.0.1.attacker.com")));
+    }
+
+    #[test]
+    fn origin_arbitrary_https_rejected() {
+        assert!(!is_origin_allowed(Some("https://attacker.com")));
+    }
+
+    #[test]
+    fn origin_arbitrary_http_rejected() {
+        assert!(!is_origin_allowed(Some("http://evil.example.com")));
+    }
+
+    #[test]
+    fn origin_unsupported_scheme_rejected() {
+        assert!(!is_origin_allowed(Some("file:///etc/passwd")));
+        assert!(!is_origin_allowed(Some("ftp://localhost")));
+        assert!(!is_origin_allowed(Some("javascript:void(0)")));
+    }
+
+    #[test]
+    fn origin_malformed_rejected() {
+        assert!(!is_origin_allowed(Some("not-a-url")));
+        assert!(!is_origin_allowed(Some("http://")));
+        // Unclosed IPv6 bracket.
+        assert!(!is_origin_allowed(Some("http://[::1")));
+    }
+
+    #[test]
+    fn origin_localhost_no_port_allowed() {
+        assert!(is_origin_allowed(Some("http://localhost")));
+        assert!(is_origin_allowed(Some("http://127.0.0.1")));
+        assert!(is_origin_allowed(Some("http://[::1]")));
     }
 }

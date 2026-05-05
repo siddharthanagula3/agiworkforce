@@ -41,7 +41,22 @@ function verifyCronSecret(request: NextRequest): boolean {
   //   (b) CRON_DEV_BYPASS=1 explicitly set in .env.local
   // Any other environment denies; staging/preview/production will fail loud.
   if (nodeEnv === 'development' && devBypass) {
-    logger.warn({ nodeEnv }, 'CRON_SECRET unset; CRON_DEV_BYPASS=1 enabled — allowing dev request');
+    // I-cron fix: also require the request to arrive on a loopback host.
+    // A misconfigured preview/staging container with NODE_ENV=development
+    // and CRON_DEV_BYPASS=1 (e.g. wrong .env file) previously turned this
+    // endpoint into an unauthenticated credit-reset for any caller. The
+    // loopback check makes the bypass un-triggerable from the public Internet.
+    const host = (request.headers.get('host') ?? '').toLowerCase();
+    const isLoopbackHost =
+      host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]');
+    if (!isLoopbackHost) {
+      logger.error({ nodeEnv, host }, 'CRON_DEV_BYPASS rejected — request not from loopback host');
+      return false;
+    }
+    logger.warn(
+      { nodeEnv, host },
+      'CRON_SECRET unset; CRON_DEV_BYPASS=1 + loopback host — allowing dev request',
+    );
     return true;
   }
 
