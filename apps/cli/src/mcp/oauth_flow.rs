@@ -280,10 +280,80 @@ pub async fn dynamic_register(reg_endpoint: &str, redirect_uri: &str) -> Result<
 // PKCE flow
 // ---------------------------------------------------------------------------
 
+/// Bind a loopback listener for the OAuth callback and derive the
+/// redirect URI that matches it.
+///
+/// CLI-NEW-MCP-OAUTH-PORT-MISMATCH fix (2026-05-05): centralized so that
+/// dynamic registration and the PKCE flow can both be driven by the SAME
+/// (listener, redirect_uri) pair — eliminating the prior bug where
+/// `dynamic_register` was called with a port-less placeholder
+/// (`http://127.0.0.1/callback`) while `start_pkce_flow` then bound a
+/// fresh random port (`http://127.0.0.1:55237/callback`). Authorization
+/// servers that don't strictly follow RFC 8252 §7.3 (any-port for
+/// loopback) would reject the request as a `redirect_uri` mismatch, and
+/// any AS that did honour the registered port-less URI would route the
+/// browser to port 80 — which our random-port listener never sees.
+///
+/// Behaviour:
+///   * If the user pinned a loopback URI in `oauth_cfg.redirect_uri`,
+///     we attempt to bind that exact host:port. Useful when the AS
+///     pre-registers a fixed port.
+///   * Otherwise we bind 127.0.0.1:0 and synthesize the URI from the
+///     OS-assigned port.
+async fn prepare_loopback_callback(
+    oauth_cfg: &McpOAuthConfig,
+) -> Result<(TcpListener, String)> {
+    if let Some(uri) = oauth_cfg.redirect_uri.as_deref() {
+        let parsed = reqwest::Url::parse(uri)
+            .with_context(|| format!("invalid redirect_uri in config: {}", uri))?;
+        let host = parsed.host_str().unwrap_or("");
+        let is_loopback = host == "127.0.0.1" || host == "[::1]" || host == "localhost";
+        if is_loopback {
+            if let Some(port) = parsed.port() {
+                let bind_host = if host == "[::1]" { "[::1]" } else { "127.0.0.1" };
+                let listener = TcpListener::bind(format!("{}:{}", bind_host, port))
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "bind loopback listener at configured redirect_uri {}",
+                            uri
+                        )
+                    })?;
+                return Ok((listener, uri.to_string()));
+            }
+            // Loopback with no port — placeholder pattern. Honour the spirit of
+            // the user's config (loopback) but bind a real port and rewrite the
+            // URI to match. The AS will see the port-bearing URI from the very
+            // first request, so RFC-strict implementations are happy.
+        }
+        // Non-loopback redirect_uri: this binary can't actually receive the
+        // callback (we only listen on loopback). Refuse rather than burn the
+        // user's time on an OAuth flow that can never complete.
+        if !is_loopback {
+            bail!(
+                "redirect_uri {} is not a loopback address; \
+                 the agiworkforce CLI can only receive OAuth callbacks on 127.0.0.1 / [::1]",
+                uri
+            );
+        }
+    }
+
+    // Default: random loopback port.
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .context("bind loopback listener for OAuth callback")?;
+    let local_addr = listener.local_addr().context("query loopback addr")?;
+    Ok((
+        listener,
+        format!("http://127.0.0.1:{}/callback", local_addr.port()),
+    ))
+}
+
 /// Run the OAuth-2.0 authorization-code-with-PKCE flow against `as_meta`.
 ///
 /// Steps:
-///   1. Bind a random loopback port for the redirect URI.
+///   1. Use the supplied (listener, redirect_uri) pair (already bound by
+///      the caller) — see `prepare_loopback_callback`.
 ///   2. Build the authorize URL with `code_challenge_method=S256`.
 ///   3. Open the user's browser.
 ///   4. Block (≤ 2 minutes) waiting for the redirect with `?code=...&state=...`.
@@ -299,17 +369,9 @@ pub async fn start_pkce_flow(
     as_meta: &AsMetadata,
     client_id: &str,
     scope_override: Option<&str>,
+    listener: TcpListener,
+    redirect_uri: String,
 ) -> Result<McpOAuthToken> {
-    // 1. Bind loopback.
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .await
-        .context("bind loopback listener for OAuth callback")?;
-    let local_addr = listener.local_addr().context("query loopback addr")?;
-    let redirect_uri = oauth_cfg
-        .redirect_uri
-        .clone()
-        .unwrap_or_else(|| format!("http://127.0.0.1:{}/callback", local_addr.port()));
-
     // 2. Build authorize URL.
     let pkce = generate_pkce();
     let state = generate_random_string(32);
@@ -745,19 +807,20 @@ pub async fn perform_full_oauth(
         .ok_or_else(|| anyhow!("no authorization_servers in protected-resource metadata"))?;
     let as_meta = discover_authorization_server(as_url).await?;
 
-    // 3. Client id: pre-supplied wins; otherwise try dynamic registration.
+    // 3. Bind the loopback callback BEFORE registration so we can give the
+    //    AS the *exact* redirect_uri (with the real port) we'll be listening
+    //    on. CLI-NEW-MCP-OAUTH-PORT-MISMATCH fix (2026-05-05): previously a
+    //    port-less placeholder was registered and `start_pkce_flow` rebound
+    //    on a random port, producing a registered ≠ requested redirect_uri
+    //    mismatch on AS implementations that don't honour RFC 8252 §7.3.
+    let (listener, redirect_uri) = prepare_loopback_callback(oauth_cfg).await?;
+
+    // 4. Client id: pre-supplied wins; otherwise try dynamic registration
+    //    using the real redirect_uri we just bound.
     let client_id = if let Some(cid) = oauth_cfg.client_id.clone() {
         cid
     } else if let Some(reg_url) = as_meta.registration_endpoint.as_deref() {
-        // We need a redirect URI to register with. Generate a placeholder
-        // here; the actual loopback bind happens inside start_pkce_flow.
-        // Many AS implementations accept any loopback URL with a wildcard
-        // port per RFC 8252 §7.3, so this works for most servers.
-        let placeholder_redirect = oauth_cfg
-            .redirect_uri
-            .clone()
-            .unwrap_or_else(|| "http://127.0.0.1/callback".to_string());
-        let reg = dynamic_register(reg_url, &placeholder_redirect).await?;
+        let reg = dynamic_register(reg_url, &redirect_uri).await?;
         reg.client_id
     } else {
         bail!(
@@ -767,9 +830,17 @@ pub async fn perform_full_oauth(
         );
     };
 
-    // 4. Run PKCE.
-    let mut token =
-        start_pkce_flow(server_url, oauth_cfg, &as_meta, &client_id, scope_override).await?;
+    // 5. Run PKCE using the same listener+URI that was registered.
+    let mut token = start_pkce_flow(
+        server_url,
+        oauth_cfg,
+        &as_meta,
+        &client_id,
+        scope_override,
+        listener,
+        redirect_uri,
+    )
+    .await?;
     // Stash the metadata URL so refresh skips re-discovery next time.
     token.auth_server_metadata_url = Some(metadata_url);
     Ok(token)
@@ -811,6 +882,103 @@ mod tests {
     fn ignores_other_errors() {
         let h = r#"Bearer error="invalid_token""#;
         assert!(parse_insufficient_scope(Some(h)).is_none());
+    }
+
+    // ---- prepare_loopback_callback (CLI-NEW-MCP-OAUTH-PORT-MISMATCH) ----
+
+    /// Helper: build an `McpOAuthConfig` with only `redirect_uri` set.
+    /// `McpOAuthConfig` has no `Default` impl so we enumerate fields here;
+    /// any new field added to the struct will surface as a compile error
+    /// in this helper, which is the right place to be reminded.
+    fn cfg_with_redirect(redirect: Option<&str>) -> McpOAuthConfig {
+        McpOAuthConfig {
+            authorize_url: None,
+            token_url: None,
+            scope: None,
+            client_id: None,
+            client_secret: None,
+            redirect_uri: redirect.map(String::from),
+        }
+    }
+
+    /// No redirect_uri configured → bind random loopback port and return a
+    /// matching URI. The URI's port must equal the listener's bound port.
+    #[tokio::test]
+    async fn prepare_loopback_callback_default_uses_random_port() {
+        let cfg = cfg_with_redirect(None);
+        let (listener, uri) = super::prepare_loopback_callback(&cfg)
+            .await
+            .expect("default loopback bind should succeed");
+        let bound_port = listener.local_addr().unwrap().port();
+        let parsed = reqwest::Url::parse(&uri).expect("returned uri must parse");
+        assert_eq!(parsed.host_str(), Some("127.0.0.1"));
+        assert_eq!(
+            parsed.port(),
+            Some(bound_port),
+            "uri port {} must match bound listener port {}",
+            uri,
+            bound_port
+        );
+        assert_eq!(parsed.path(), "/callback");
+    }
+
+    /// Explicit loopback redirect_uri WITH a port → bind that exact port
+    /// and round-trip the URI verbatim. Asserts the registered URI and the
+    /// listener's port are identical, which is the whole point of this fix.
+    #[tokio::test]
+    async fn prepare_loopback_callback_honours_explicit_loopback_port() {
+        // Pick a port at random by binding a temp socket, releasing it,
+        // and using its number — avoids hard-coding a port that might be
+        // in use on some dev's machine.
+        let scratch = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let chosen_port = scratch.local_addr().unwrap().port();
+        drop(scratch);
+
+        let configured = format!("http://127.0.0.1:{}/callback", chosen_port);
+        let cfg = cfg_with_redirect(Some(&configured));
+        let (listener, uri) = super::prepare_loopback_callback(&cfg)
+            .await
+            .expect("explicit loopback bind should succeed");
+        assert_eq!(uri, configured, "uri must round-trip the configured value");
+        assert_eq!(listener.local_addr().unwrap().port(), chosen_port);
+    }
+
+    /// Non-loopback redirect_uri → refuse, since we can only listen on
+    /// loopback. Prevents the user from kicking off an OAuth flow whose
+    /// callback could never reach them.
+    #[tokio::test]
+    async fn prepare_loopback_callback_rejects_non_loopback() {
+        let cfg = cfg_with_redirect(Some("https://example.com/oauth/callback"));
+        let err = super::prepare_loopback_callback(&cfg)
+            .await
+            .expect_err("non-loopback redirect_uri must error");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("not a loopback address"),
+            "expected loopback rejection, got: {}",
+            msg
+        );
+    }
+
+    /// Loopback redirect_uri WITHOUT a port (the legacy placeholder
+    /// pattern `http://127.0.0.1/callback`) → fall through to random port
+    /// rather than honouring the URI verbatim. Prevents the AS from being
+    /// registered with port 80 (which we never listen on).
+    #[tokio::test]
+    async fn prepare_loopback_callback_rebinds_portless_placeholder() {
+        let cfg = cfg_with_redirect(Some("http://127.0.0.1/callback"));
+        let (listener, uri) = super::prepare_loopback_callback(&cfg)
+            .await
+            .expect("portless placeholder should fall through to random bind");
+        let bound_port = listener.local_addr().unwrap().port();
+        assert!(
+            uri.contains(&format!(":{}/callback", bound_port)),
+            "returned URI {} should include real bound port {}",
+            uri,
+            bound_port
+        );
+        // Crucially: NOT the port-less placeholder.
+        assert_ne!(uri, "http://127.0.0.1/callback");
     }
 
     #[test]
