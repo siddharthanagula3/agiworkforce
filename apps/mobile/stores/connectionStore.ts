@@ -10,6 +10,9 @@ import {
   verifyMessage,
   type HmacSessionState,
 } from '@/lib/dispatchHmac';
+// MED-MOB-05 fix: per-field Agent payload validator. Lives in its own
+// file so it can be unit-tested without pulling in react-native-webrtc.
+import { parseAgent, MAX_AGENTS_PER_UPDATE } from '@/lib/dispatchAgentValidator';
 
 /** RTCConfiguration is defined internally in react-native-webrtc but not re-exported. */
 interface RTCConfiguration {
@@ -109,9 +112,11 @@ interface ConnectionState {
 let signalingClient: SignalingClient | null = null;
 
 /**
- * HIGH-MOB-05 fix (2026-05-04): per-session HMAC state.
- * Initialised when a pairing code is resolved to a shared secret.
+ * HIGH-MOB-05 fix (2026-05-04, v2 nonce scheme 2026-05-05): per-session
+ * HMAC state. Initialised when a pairing code is resolved to a shared secret.
  * Outgoing messages are signed; incoming messages are verified before dispatch.
+ * The nonceCache (Map<nonce, receivedAt>) is pruned by verifyMessage() on
+ * each inbound message — no separate GC timer needed.
  */
 let hmacState: HmacSessionState | null = null;
 
@@ -185,12 +190,19 @@ function isTaskStatus(v: unknown): v is TaskStatus {
  * Handle incoming control messages from the desktop via signaling or data channel.
  * All fields are validated at runtime before use — no unsafe `as` casts.
  *
- * HIGH-MOB-05 fix (2026-05-04): messages are now expected to be signed
- * envelopes ({ seq, ts, payload, hmac }). When hmacState is initialised the
- * envelope is verified before the inner payload is processed. Messages that
- * fail verification are silently dropped (no error state — avoids oracle).
- * When hmacState is null (pairing code not yet resolved) the raw payload is
- * processed as before for backward compatibility during the handshake phase.
+ * HIGH-MOB-05 fix (v2 nonce scheme 2026-05-05): messages are expected to be
+ * signed envelopes { hmac, nonce, payload, ts, type }. When hmacState is
+ * initialised the envelope is verified before the inner payload is processed.
+ * Messages that fail verification are silently dropped (no error state —
+ * avoids providing an oracle to an active attacker).
+ *
+ * Transitional: unsigned messages (no `hmac` field) are accepted with a
+ * console.warn until DISPATCH_HMAC_REQUIRED_AFTER (2026-06-05). In that case
+ * the entire envelope object IS the inner payload and is passed directly to
+ * handleControlMessageInner without unwrapping.
+ *
+ * When hmacState is null (HKDF derivation not yet complete — a narrow window
+ * at the very start of connect()) the raw payload is passed as-is.
  */
 async function handleControlMessageAsync(envelope: unknown): Promise<void> {
   let payload: unknown = envelope;
@@ -201,8 +213,17 @@ async function handleControlMessageAsync(envelope: unknown): Promise<void> {
       console.warn('[dispatch] Message rejected:', result.reason);
       return;
     }
-    // Unwrap inner payload from the signed envelope
-    payload = (envelope as { payload: unknown }).payload;
+    // Unwrap inner payload when the envelope is a proper signed message.
+    // Unsigned transitional messages (ok=true but no hmac field) ARE the
+    // payload — do not attempt to unwrap a .payload property.
+    const isSignedEnvelope =
+      typeof envelope === 'object' &&
+      envelope !== null &&
+      typeof (envelope as Record<string, unknown>)['hmac'] === 'string';
+    if (isSignedEnvelope) {
+      payload = (envelope as { payload: unknown }).payload;
+    }
+    // else: transitional unsigned — payload stays = envelope (the raw object)
   }
 
   handleControlMessageInner(payload);
@@ -224,8 +245,15 @@ function handleControlMessageInner(payload: unknown): void {
     case 'agents_update': {
       const agents = payload['agents'];
       if (Array.isArray(agents)) {
-        // Filter to objects only — drop malformed entries
-        const valid = agents.filter(isObject) as unknown as Agent[];
+        // MED-MOB-05 fix (red-team 2026-05): per-field validation via
+        // parseAgent. Cap to MAX_AGENTS_PER_UPDATE so a malicious relay
+        // cannot flood the UI with thousands of fake entries.
+        const capped = agents.slice(0, MAX_AGENTS_PER_UPDATE);
+        const valid: Agent[] = [];
+        for (const raw of capped) {
+          const parsed = parseAgent(raw);
+          if (parsed) valid.push(parsed);
+        }
         useAgentStore.getState().setAgents(valid);
       }
       break;
@@ -493,16 +521,18 @@ export const useConnectionStore = create<ConnectionState>()(
           reconnectStartedAt: isReconnect ? Date.now() : state.reconnectStartedAt,
         }));
 
-        // HIGH-MOB-05 fix (2026-05-04): derive the per-session HMAC secret from
-        // the pairing code + a random session salt. The salt is generated here so
-        // it is unique per connect() call (even on reconnect with same code).
-        // The desktop derives the same secret when it receives the salt via the
-        // `registered` event metadata (the salt is not secret — only the derived
-        // key is). Reset seq counters for the new session.
+        // HIGH-MOB-05 fix (v2 nonce scheme 2026-05-05): derive the per-session
+        // HMAC key from the pairing code + a random session salt via HKDF-SHA-256.
+        // The salt is generated here so it is unique per connect() call (even on
+        // reconnect with the same pairing code). The desktop derives the same key
+        // when it receives the salt via the `registered` / `peer_ready` event
+        // metadata field `dispatchSalt`. The salt is NOT secret — only the derived
+        // key is. A fresh nonceCache is allocated for each session so replays from
+        // a previous connection cannot be injected into the new session.
         const sessionSalt = Math.random().toString(36).slice(2) + Date.now().toString(36);
         deriveDispatchSecret(code, sessionSalt)
           .then((secret) => {
-            hmacState = { sendSeq: 0, recvSeq: 0, secret };
+            hmacState = { secret, nonceCache: new Map() };
           })
           .catch((err) => {
             console.warn('[dispatch] HMAC secret derivation failed:', err);
@@ -521,6 +551,10 @@ export const useConnectionStore = create<ConnectionState>()(
             deviceType: 'mobile',
             app: 'agiworkforce-mobile',
             version: '0.1.0',
+            // HIGH-MOB-05: broadcast the session salt so the desktop peer can
+            // derive the same HMAC key via HKDF-SHA-256(salt, pairingCode).
+            // The salt is NOT secret — the derived key is.
+            dispatchSalt: sessionSalt,
           },
           heartbeatIntervalMs: 25000,
           onEvent: (event: SignalingEvent) => {
@@ -752,8 +786,11 @@ export const useConnectionStore = create<ConnectionState>()(
           return;
         }
 
-        // HIGH-MOB-05 fix (2026-05-04): sign the outgoing message when HMAC
-        // state is available. The signed envelope is what the desktop verifies.
+        // HIGH-MOB-05 fix (v2 nonce scheme 2026-05-05): sign the outgoing
+        // control message when HMAC state is available. signMessage() produces
+        // the canonical envelope { hmac, nonce, payload, ts, type } that the
+        // desktop peer verifies. Falls back to unsigned send when hmacState is
+        // null (pre-derivation race; extremely narrow window at connect start).
         const sendRaw = (envelope: unknown) => {
           const serialised = JSON.stringify(envelope);
           // Prefer data channel for low latency
@@ -771,7 +808,8 @@ export const useConnectionStore = create<ConnectionState>()(
         };
 
         if (hmacState) {
-          signMessage(hmacState, innerPayload)
+          // New signature: signMessage(state, type, payload)
+          signMessage(hmacState, action, innerPayload)
             .then(sendRaw)
             .catch((err) => {
               console.warn('[dispatch] Failed to sign control message:', err);
