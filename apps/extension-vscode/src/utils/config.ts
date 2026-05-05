@@ -26,6 +26,8 @@ import * as vscode from 'vscode';
 const DEFAULTS = {
   agentMaxIterations: 25,
   agentPlanMode: false,
+  agentMode: 'auto',
+  agentEffort: 'medium',
   codeLensEnabled: true,
   inlineCompletionsEnabled: false,
   inlineCompletionsDebounceMs: 300,
@@ -55,6 +57,23 @@ export const Config = {
   },
   agentPlanMode(): boolean {
     return get<boolean>('agent.planMode', DEFAULTS.agentPlanMode);
+  },
+  /**
+   * Resolve the effective agent mode:
+   *  1. If `agent.mode` has been explicitly set, use it.
+   *  2. Otherwise, fall back to `agent.planMode` backwards-compat alias:
+   *     `true` → 'plan', `false` → 'auto'.
+   */
+  agentMode(): 'ask' | 'auto' | 'plan' | 'bypass' {
+    const raw = get<string>('agent.mode', DEFAULTS.agentMode);
+    if (raw === 'ask' || raw === 'auto' || raw === 'plan' || raw === 'bypass') return raw;
+    // Backwards-compat: fall through to deprecated planMode alias
+    return get<boolean>('agent.planMode', false) ? 'plan' : 'auto';
+  },
+  agentEffort(): 'low' | 'medium' | 'high' | 'max' {
+    const raw = get<string>('agent.effort', DEFAULTS.agentEffort);
+    if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'max') return raw;
+    return 'medium';
   },
 
   // ── CodeLens / inline completions ───────────────────────────────────────
