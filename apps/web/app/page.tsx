@@ -15,8 +15,8 @@ import {
 } from 'lucide-react';
 
 import { Header } from '../components/layout/Header';
-import { SurfaceShowcase } from '../components/SurfaceShowcase';
-import { CliShowcase } from '../components/marketing/CliShowcase';
+import { SurfaceIndex } from '../components/marketing/editorial/SurfaceIndex';
+import { OperatorConsole } from '../components/marketing/editorial/OperatorConsole';
 import { CtaSection } from '../components/marketing/CtaSection';
 import { MarketingFooter } from '../components/marketing/MarketingFooter';
 import { ScrollRevealInit } from '../components/marketing/ScrollRevealInit';
@@ -308,10 +308,15 @@ export default function Home() {
             </div>
           </section>
 
-          <SurfaceShowcase />
+          {/* TODO(c7): full landing rewrite will integrate SurfaceIndex into a RuledSection graphite tier. */}
+          <div className="bg-[var(--color-graphite)] px-4 text-[var(--color-cream-on-graphite)]">
+            <div className="container mx-auto">
+              <SurfaceIndex />
+            </div>
+          </div>
 
-          {/* ── CLI SHOWCASE (added 2026-05-03 for YC S26 polish) ── */}
-          <CliShowcase />
+          {/* ── CLI / OPERATOR CONSOLE ── */}
+          <OperatorConsole />
 
           {/* ── FEATURES ── */}
           <section
