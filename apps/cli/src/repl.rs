@@ -504,7 +504,15 @@ fn handle_slash_command(
         }
         "/model" | "/m" => {
             if arg.is_empty() {
+                // In the REPL (non-TUI) path there is no ratatui terminal,
+                // so we print the current model and hint the user toward the
+                // interactive TUI picker (available via `agiworkforce` with no
+                // --no-tui flag, then `/model` with no argument).
                 output::print_info(&format!("Current model: {}", session.model));
+                output::print_info(
+                    "Tip: run without --no-tui and type /model to open the \
+                     interactive model picker (search + provider sections + effort selector).",
+                );
             } else {
                 session.switch_model(arg);
                 let provider = format!("{:?}", session.provider).to_lowercase();
