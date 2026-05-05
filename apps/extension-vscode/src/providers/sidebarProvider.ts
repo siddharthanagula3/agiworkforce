@@ -882,12 +882,15 @@ function getWebviewContent(
 // ─── Nonce generator ──────────────────────────────────────────────────────────
 
 function getNonce(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < 32; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+  // SECURITY: must be cryptographically random — this nonce is the sole token
+  // allowlisted in the webview CSP `script-src 'nonce-${nonce}'`. Math.random()
+  // is a deterministic PRNG seeded at process start; an attacker who can run
+  // any script in the host (including a malicious extension or a debugger
+  // attach) can predict subsequent nonces and bypass CSP. Use Node's CSPRNG.
+  // 24 bytes -> 32 base64url chars, same surface size as the previous output.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { randomBytes } = require('crypto') as typeof import('crypto');
+  return randomBytes(24).toString('base64url');
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────

@@ -29,6 +29,31 @@ const CSRF_HEADER = 'x-csrf-token';
 // Cookie name reserved for future CSRF implementation: 'csrf-token'
 
 /**
+ * Read a single cookie value by name from a Cookie header string.
+ *
+ * SECURITY (web-HIGH-1, audit 2026-05-05): the previous implementation called
+ * `cookies.match(/<name>=([^;]+)/)` with no leading anchor. That regex matches
+ * any cookie whose name *ends with* the target — so `x-anon-session-id=evil;
+ * anon-session-id=real` returned `evil` (the leftmost match), and an attacker
+ * who could plant `crafted-anon-session-id=<known>` via subdomain cookie
+ * injection could forge any user's CSRF binding by pre-seeding the value.
+ * The fix anchors the match to a cookie-name boundary `(?:^|; )` so the
+ * pattern only matches a true cookie name. The cookie-name argument is
+ * regex-escaped before interpolation so a caller passing a name with `.`
+ * or `*` does not accidentally widen the match.
+ *
+ * Exported for unit-test access. Treat as internal — production code in this
+ * file should be the only consumer.
+ *
+ * @internal
+ */
+export function readCookie(cookieHeader: string, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = cookieHeader.match(new RegExp(`(?:^|; )${escaped}=([^;]+)`));
+  return match?.[1] ?? null;
+}
+
+/**
  * Generate a CSRF token
  * In production, tokens should be session-specific and time-limited
  */
@@ -121,19 +146,28 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
     // Supabase client may fail in non-route-handler contexts; fall through
   }
 
-  // Option 2: Cookie-based fallback for anonymous users
+  // Option 2: Cookie-based fallback for anonymous users.
+  // All cookie reads below go through readCookie() which anchors to the
+  // cookie-name boundary — see web-HIGH-1 fix at the helper definition.
   const cookies = _request.headers.get('cookie') || '';
 
-  // Check for explicit session cookie
-  const sessionMatch = cookies.match(/session-id=([^;]+)/);
-  if (sessionMatch?.[1]) {
-    return sessionMatch[1];
+  const sessionId = readCookie(cookies, 'session-id');
+  if (sessionId) {
+    return sessionId;
   }
 
-  // Check for existing anonymous session ID cookie to preserve CSRF binding.
-  const anonMatch = cookies.match(/anon-session-id=([^;]+)/);
-  if (anonMatch?.[1]) {
-    return anonMatch[1];
+  // SEV-WEB-M-1 fix (2026-05-05): prefer the `__Host-` prefixed cookie which
+  // the browser refuses to set from JavaScript or from sibling subdomains.
+  // Fall back to the legacy `anon-session-id` for one Max-Age window (24h)
+  // so existing visitors don't lose their CSRF binding mid-session, then
+  // remove the fallback in a follow-up commit after 2026-05-06.
+  const hostPrefixed = readCookie(cookies, '__Host-anon-session-id');
+  if (hostPrefixed) {
+    return hostPrefixed;
+  }
+  const anonId = readCookie(cookies, 'anon-session-id');
+  if (anonId) {
+    return anonId;
   }
 
   // Option 3: Generate unique anonymous session ID
@@ -171,23 +205,34 @@ export async function getOrCreateAnonSession(
 
   const cookies = request.headers.get('cookie') || '';
 
-  // Option 2: Prefer authenticated session cookies (no new cookie needed)
-  const sessionMatch = cookies.match(/session-id=([^;]+)/);
-  if (sessionMatch?.[1]) {
-    return { id: sessionMatch[1] };
+  // Option 2: Prefer authenticated session cookies (no new cookie needed).
+  // All cookie reads use the anchored readCookie helper — see web-HIGH-1.
+  const sessionId = readCookie(cookies, 'session-id');
+  if (sessionId) {
+    return { id: sessionId };
   }
 
-  // Option 3: Existing anonymous session cookie
-  const anonMatch = cookies.match(/anon-session-id=([^;]+)/);
-  if (anonMatch?.[1]) {
-    return { id: anonMatch[1] };
+  // Option 3a: New `__Host-` prefixed cookie (SEV-WEB-M-1 fix, 2026-05-05).
+  // The `__Host-` prefix forces Path=/ + Secure + no Domain, and the browser
+  // refuses to set such a cookie from JavaScript or from a sibling subdomain
+  // — closing the cross-subdomain CSRF-binding hijack vector.
+  const hostPrefixed = readCookie(cookies, '__Host-anon-session-id');
+  if (hostPrefixed) {
+    return { id: hostPrefixed };
+  }
+  // Option 3b: Legacy cookie (transitional — accept for 24h Max-Age window
+  // so in-flight visitors don't lose CSRF binding; remove after 2026-05-06).
+  const legacyAnonId = readCookie(cookies, 'anon-session-id');
+  if (legacyAnonId) {
+    return { id: legacyAnonId };
   }
 
   // Option 4: Generate a new anonymous session ID and request it be stored in a cookie
   const anonId = `anon-${crypto.randomUUID()}`;
   return {
     id: anonId,
-    newCookie: `anon-session-id=${anonId}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400`,
+    // `__Host-` requires Path=/, Secure, and no Domain attribute — all set.
+    newCookie: `__Host-anon-session-id=${anonId}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400`,
   };
 }
 

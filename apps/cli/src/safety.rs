@@ -33,8 +33,11 @@ const SAFE_COMMANDS: &[&str] = &[
     "which",
     "echo",
     "file",
-    "env",
-    "printenv",
+    // SEV-CLI-LOW-1 fix: `env` and `printenv` previously auto-approved as
+    // read-only. They aren't — both dump every environment variable in the
+    // process, including ANTHROPIC_API_KEY / OPENAI_API_KEY etc., into the
+    // tool output that is then fed back to the model and may be persisted in
+    // logs. Downgraded to Unknown so the user is prompted before running.
     "whoami",
     "uname",
     "date",
@@ -680,9 +683,13 @@ mod tests {
     }
 
     #[test]
-    fn safe_env_commands() {
-        assert_eq!(classify_command("env"), CommandSafety::Safe);
-        assert_eq!(classify_command("printenv HOME"), CommandSafety::Safe);
+    fn env_commands_require_prompt() {
+        // SEV-CLI-LOW-1: `env` and `printenv` dump every environment variable
+        // (including ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.) into the tool
+        // output that is then fed back to the model. Removed from SAFE list;
+        // now classify as Unknown so the user is prompted before running.
+        assert_eq!(classify_command("env"), CommandSafety::Unknown);
+        assert_eq!(classify_command("printenv HOME"), CommandSafety::Unknown);
     }
 
     #[test]

@@ -49,7 +49,7 @@ Single 5.7 MB Rust binary. Zero deps. Works offline (with Ollama).
 ```
 The magic command:
 
-agiworkforce -m "claude-opus-4-6,gpt-5.4,llama3.1:8b" exec "..."
+agiworkforce -m "claude-opus-4-7,gpt-5.4,llama3.1:8b" exec "..."
 
 Claude first. If it rate-limits → tries GPT-5.4. If GPT fails → falls back
 to local Llama. All in the same session, with the same context.
@@ -62,9 +62,9 @@ This is what "no vendor lock" actually means.
 ```
 Under the hood:
 
-- 195 .rs files / 155,029 LOC / 914 unit tests
+- 195 .rs files / 155,029 LOC / 2,161 unit tests
 - Ratatui TUI (125 files)
-- 22 subcommands, 19 hook events, 10+ Providers
+- 22 subcommands, 22 hook events, 10+ Providers
 - MCP support (client + server)
 - Sandbox: Seatbelt / Bubblewrap / Landlock / Restricted Token
 - Daemon: cron + webhook + file-watcher

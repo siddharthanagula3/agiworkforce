@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@shared/lib/supabase-client';
 import { useChatStore } from '@shared/stores/chat-store';
+import { getProviderDefaultModel } from '@agiworkforce/types';
 import { chatPersistenceService } from '../services/conversation-storage';
 import { employeeChatService } from '../services/employee-chat-service';
 import { chatToolRouter, type ToolType, type ToolRouterResult } from '../services/chat-tool-router';
@@ -153,7 +154,8 @@ export const useChat = (sessionId?: string) => {
       content,
       attachments,
       mode = 'team',
-      model = selectedModel || 'gpt-5.4', // Use user's selected model or default to gpt-5.4
+      // MODEL-IDS-HARDCODED fix per UNIFIED_LAUNCH_PLAN.md §1: defer to models.json
+      model = selectedModel || getProviderDefaultModel('openai') || 'gpt-5.4',
       temperature = 0.7,
       tools = [],
     }: SendMessageParams) => {
