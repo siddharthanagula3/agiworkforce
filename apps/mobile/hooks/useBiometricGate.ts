@@ -14,13 +14,37 @@ export function useBiometricGate(): BiometricGateResult {
   const previousStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const authenticate = useCallback(async (): Promise<boolean> => {
+    if (!biometricLockEnabled) {
+      setIsUnlocked(true);
+      return true;
+    }
+
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
+      // CRIT-MOB-01 fix (2026-05-04): if biometric is not enrolled or hardware
+      // is absent we do NOT auto-unlock. We attempt a device passcode challenge
+      // instead (`disableDeviceFallback: false` triggers the OS PIN/password
+      // prompt when biometric is unavailable). Only if the OS itself says there
+      // is no fallback authentication at all do we allow through — in that
+      // case the device is already unprotected at the OS level and a software
+      // gate adds no real security.
       if (!hasHardware || !isEnrolled) {
-        setIsUnlocked(true);
-        return true;
+        // Still attempt OS-level passcode prompt; if unavailable it will return
+        // success immediately (device has no screen lock at all).
+        const fallbackResult = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Unlock AGI Workforce',
+          fallbackLabel: 'Use Passcode',
+          disableDeviceFallback: false,
+        });
+        if (fallbackResult.success) {
+          setIsUnlocked(true);
+          return true;
+        }
+        // Passcode prompt failed or was cancelled — stay locked.
+        setIsUnlocked(false);
+        return false;
       }
 
       const result = await LocalAuthentication.authenticateAsync({
@@ -33,14 +57,16 @@ export function useBiometricGate(): BiometricGateResult {
         setIsUnlocked(true);
         return true;
       }
+      setIsUnlocked(false);
       return false;
     } catch (err) {
-      // Unlock on error to prevent app lockout, but log for debugging
-      console.warn('[biometric] Authentication error, unlocking by default:', err);
-      setIsUnlocked(true);
-      return true;
+      // CRIT-MOB-01 fix: fail CLOSED on any error. A Frida-injected exception
+      // or OEM bug must never unlock the app.
+      console.warn('[biometric] Authentication error — staying locked:', err);
+      setIsUnlocked(false);
+      return false;
     }
-  }, []);
+  }, [biometricLockEnabled]);
 
   // Prompt on mount if lock is enabled
   useEffect(() => {
