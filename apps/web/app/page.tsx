@@ -13,6 +13,7 @@ import { ProviderGrid } from '../components/marketing/editorial/ProviderGrid';
 import { SurfaceIndex } from '../components/marketing/editorial/SurfaceIndex';
 import { OperatorConsole } from '../components/marketing/editorial/OperatorConsole';
 import { StampComingSoon } from '../components/marketing/editorial/StampComingSoon';
+import { DispatchSection } from '../components/marketing/editorial/DispatchSection';
 import { MARKETING } from '../lib/marketing-constants';
 
 export const metadata: Metadata = {
@@ -503,48 +504,7 @@ export default function Home() {
         </RuledSection>
 
         {/* ── S6 — FINAL DISPATCH / CTA (graphite) ── */}
-        <RuledSection tier="graphite" id="dispatch" slug={<Slug index="07" kicker="DISPATCH" />}>
-          <div className="container mx-auto px-4 py-16 md:py-24">
-            {/* TODO(c9): migrate to <DispatchSection /> from editorial/DispatchSection.tsx */}
-            <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-16">
-              {/* Left: tagline */}
-              <div className="flex flex-col justify-center">
-                <p className="font-display italic font-bold text-3xl md:text-5xl text-[var(--color-cream-on-graphite)] leading-[1.04]">
-                  Beyond one model. Beyond one surface.{' '}
-                  <span className="border-b-[3px] border-[var(--color-rule)] pb-1">
-                    <em>AGI in your hands.</em>
-                  </span>
-                </p>
-              </div>
-
-              {/* Right: install command */}
-              <div className="flex flex-col gap-4">
-                <div className="font-mono text-base bg-[var(--color-graphite-2)] border border-[var(--color-rule-soft)] p-6">
-                  <div className="text-[var(--color-fg-quiet)] mb-2">
-                    # install on macos / linux / wsl
-                  </div>
-                  <div className="text-[var(--color-cream-on-graphite)] mb-2">
-                    curl -fsSL https://agiworkforce.com/install.sh | sh
-                  </div>
-                  <div className="text-[var(--color-amber-text)]">
-                    agiworkforce exec &quot;your first task&quot;
-                  </div>
-                </div>
-                <MonoButton variant="ghost" href="/download" aria-label="Download AGI Workforce">
-                  copy
-                </MonoButton>
-              </div>
-            </div>
-
-            {/* Colophon */}
-            <div className="mt-12 border-t border-[var(--color-rule-soft)] pt-6">
-              <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-[var(--color-fg-quiet)] text-center">
-                SET IN NEWSREADER &amp; JETBRAINS MONO · BUILT BY AGI AUTOMATION LLC · NO TRAINING
-                ON YOUR DATA · 2026
-              </p>
-            </div>
-          </div>
-        </RuledSection>
+        <DispatchSection slugIndex="07" slugKicker="DISPATCH" />
 
         {/* ── FORTHCOMING STRIP (no slug, graphite-adjacent) ── */}
         <div className="bg-[var(--color-graphite)] border-t border-[var(--color-rule-soft)] py-10">
