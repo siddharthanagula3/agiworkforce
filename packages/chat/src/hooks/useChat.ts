@@ -331,7 +331,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   }, [runtime, addMsg]);
 
   const sendMessage = useCallback(
-    (content: string) => {
+    (content: string, agentMode?: string, effort?: string) => {
       if (!runtime || isStreamingRef.current) return;
 
       const store = useChatStore.getState();
@@ -376,6 +376,8 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           webSearch: webSearchEnabled,
           thinkingEnabled,
           messageHistory,
+          ...(agentMode ? { agentMode } : {}),
+          ...(effort ? { effort } : {}),
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
