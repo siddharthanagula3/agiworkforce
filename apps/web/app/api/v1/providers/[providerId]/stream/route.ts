@@ -5,10 +5,12 @@ import { z } from 'zod';
 
 import { getEnv } from '@/utils/env';
 import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getUserClient } from '@/lib/supabase-server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
 import { logger } from '@/lib/logger';
 import { createError } from '@/lib/errors';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -72,8 +74,19 @@ export async function POST(
 
   // 2. Authenticate — throws AppError(401) if missing/invalid
   let user: Awaited<ReturnType<typeof getAuthenticatedUser>>;
+  // RLS-bound client derived from the Bearer token when available.
+  // Cookie-path has no raw JWT, so falls back to the string overload (service-role).
+  let userClient: SupabaseClient | string;
   try {
     user = await getAuthenticatedUser(request);
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      userClient = getUserClient(authHeader.substring(7));
+    } else {
+      // Cookie auth: no raw JWT accessible here; use userId string so CreditService
+      // falls back to the service-role overload path.
+      userClient = user.id;
+    }
   } catch (err) {
     if (err && typeof err === 'object' && 'statusCode' in err) {
       const appErr = err as { statusCode: number; message: string };
@@ -100,7 +113,7 @@ export async function POST(
   }
 
   // 5. Credit pre-check
-  const canAfford = await CreditService.checkAvailable(user.id, MIN_STREAM_COST_CENTS);
+  const canAfford = await CreditService.checkAvailable(userClient, user.id, MIN_STREAM_COST_CENTS);
   if (!canAfford) {
     logger.warn({ userId: user.id }, 'RT-01: insufficient credits for stream');
     return NextResponse.json({ error: 'insufficient_credits' }, { status: 402 });
@@ -113,6 +126,7 @@ export async function POST(
     `stream-${Date.now()}`,
   );
   const deductResult = await CreditService.deductCredits(
+    userClient,
     user.id,
     MIN_STREAM_COST_CENTS,
     'Provider stream request',
@@ -161,6 +175,7 @@ export async function POST(
     logger.error({ fetchErr, providerId }, 'Upstream fetch failed');
     // Refund on hard failure
     void CreditService.deductCredits(
+      userClient,
       user.id,
       -MIN_STREAM_COST_CENTS,
       'Stream refund (upstream error)',
@@ -173,6 +188,7 @@ export async function POST(
     const errText = await upstream.text().catch(() => '');
     // Refund on upstream error
     void CreditService.deductCredits(
+      userClient,
       user.id,
       -MIN_STREAM_COST_CENTS,
       'Stream refund (upstream error)',

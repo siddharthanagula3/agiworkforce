@@ -1,7 +1,7 @@
 import 'server-only';
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { getServiceClient } from '@/lib/supabase-server';
 import { logger } from '@/lib/logger';
 import { randomBytes, scrypt, timingSafeEqual, createHash } from 'crypto';
 import { ApiKey } from '@/types/saas';
@@ -34,18 +34,6 @@ function detectHashFormat(storedHash: string): HashFormat {
   }
   // Legacy SHA-256: 64 hex characters, no separator
   return 'sha256';
-}
-
-// SECURITY (WEB-RLS-BYPASS defense-in-depth per docs/plans/UNIFIED_LAUNCH_PLAN.md task #18):
-// Service-role bypasses RLS. API keys MUST stay user-scoped — every query in this file
-// filters by `.eq('user_id', userId)`. Migration: callers should pass an authenticated
-// `SupabaseClient` from `getUserClient(jwt)` (`@/lib/supabase-server`) to enforce RLS.
-function getSupabaseClient() {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
 }
 
 /**
@@ -195,19 +183,21 @@ async function updateKeyHash(
 export class ApiKeyService {
   /**
    * Create a new API Key.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so inserts are
+   * scoped to the authenticated user's rows.
    * RETURNS THE RAW KEY ONLY ONCE.
    *
    * RT-02: Stores `key_prefix` (the keyId segment) for O(1) verification lookup.
    */
   static async createApiKey(
+    client: SupabaseClient,
     userId: string,
     name: string,
     scopes: string[] = [],
   ): Promise<{ apiKey: ApiKey; rawKey: string }> {
-    const supabase = getSupabaseClient();
     const { raw, hash, keyId } = await generateKey();
 
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('api_keys')
       .insert({
         user_id: userId,
@@ -231,14 +221,15 @@ export class ApiKeyService {
   }
 
   /**
-   * List user's API Keys
+   * List user's API Keys.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only the
+   * requesting user's keys are returned.
+   *
    * PERFORMANCE OPTIMIZATION: Select only required columns instead of '*'
    * to reduce data transfer and improve query performance.
    */
-  static async listApiKeys(userId: string): Promise<ApiKey[]> {
-    const supabase = getSupabaseClient();
-
-    const { data, error } = await supabase
+  static async listApiKeys(client: SupabaseClient, userId: string): Promise<ApiKey[]> {
+    const { data, error } = await client
       .from('api_keys')
       .select('id, user_id, name, scopes, created_at, expires_at, last_used_at')
       .eq('user_id', userId)
@@ -253,12 +244,12 @@ export class ApiKeyService {
   }
 
   /**
-   * Revoke/Delete API Key
+   * Revoke/Delete API Key.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient to enforce
+   * ownership via RLS in addition to the explicit .eq('user_id', userId).
    */
-  static async revokeApiKey(id: string, userId: string): Promise<void> {
-    const supabase = getSupabaseClient();
-
-    const { error } = await supabase.from('api_keys').delete().eq('id', id).eq('user_id', userId); // Ensure ownership
+  static async revokeApiKey(client: SupabaseClient, id: string, userId: string): Promise<void> {
+    const { error } = await client.from('api_keys').delete().eq('id', id).eq('user_id', userId); // Ensure ownership
 
     if (error) {
       logger.error({ error, id }, 'Failed to revoke API key');
@@ -268,6 +259,10 @@ export class ApiKeyService {
 
   /**
    * Verify an API Key (for external API usage).
+   * SERVICE-CONTEXT: this method receives a raw API key with no user JWT.
+   * It must use service-role to look up the key by prefix across all users.
+   * Once a key is verified and user_id is returned, downstream callers should
+   * construct a getUserClient(jwt) for any further user-scoped operations.
    *
    * RT-02 FIX: Two-path verification to prevent DoS via Argon2 fan-out:
    *
@@ -282,7 +277,9 @@ export class ApiKeyService {
    * is rejected immediately with no Argon2 work.
    */
   static async verifyKey(rawKey: string): Promise<ApiKey | null> {
-    const supabase = getSupabaseClient();
+    // SECURITY: service-role required because verifyKey receives only a raw API key
+    // (no user JWT). It must look up the key across all users to identify the owner.
+    const supabase = getServiceClient();
 
     // Parse-time rejection: reject keys that don't even look like API keys.
     // Regex allows both new format (with embedded keyId) and old format (no underscore separator).
