@@ -148,15 +148,80 @@ export async function clearSupabaseJwt(secrets: vscode.SecretStorage): Promise<v
   await secrets.delete(SUPABASE_JWT_SECRET_KEY);
 }
 
+// ─── Trusted-config helper (VSCODE-01 fix) ────────────────────────────────────
+//
+// Security: workspace settings are attacker-controlled in any cloned repo.
+// For security-sensitive settings (endpoint URLs, paths) we MUST ignore the
+// workspace layer and read only from the user's global config.
+//
+// VS Code's `inspect()` returns values split by scope:
+//   { defaultValue, globalValue, workspaceValue, workspaceFolderValue }
+// We use globalValue ?? defaultValue, skipping workspace overrides entirely.
+//
+// Belt-and-suspenders: even if isTrusted is true, we still validate URL shape
+// to defend against a compromised global config or social-engineering.
+
+/** Allowlist of hosts valid for the AGI Workforce API endpoint. */
+const ENDPOINT_ALLOWED_HOSTS = new Set([
+  'agiworkforce.com',
+  'api.agiworkforce.com',
+  'staging.agiworkforce.com',
+]);
+
+/**
+ * Validate that a URL is safe to use as an API endpoint.
+ * - Must be https: (or http://localhost/127.0.0.1 which is fine for local dev)
+ * - Host must be in the allowlist OR be localhost/127.0.0.1
+ * Returns the sanitised URL string (trailing slashes stripped) or undefined if invalid.
+ */
+export function validateEndpointUrl(raw: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return undefined;
+  }
+
+  const isHttps = parsed.protocol === 'https:';
+  const isLocalhost =
+    parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+
+  if (!isHttps && !isLocalhost) {
+    return undefined;
+  }
+
+  if (!isLocalhost && !ENDPOINT_ALLOWED_HOSTS.has(parsed.hostname)) {
+    return undefined;
+  }
+
+  return raw.replace(/\/+$/, '');
+}
+
+/**
+ * Read a setting that must never be overridden by workspace settings.
+ * Returns the global value (user settings) → fallback to default.
+ * Workspace-scoped values are intentionally ignored.
+ */
+function getGlobalConfig<T>(section: string, key: string, defaultValue: T): T {
+  const config = vscode.workspace.getConfiguration(section);
+  const inspected = config.inspect<T>(key);
+  // Use globalValue (user's own settings) only — ignore workspaceValue / workspaceFolderValue
+  return inspected?.globalValue ?? inspected?.defaultValue ?? defaultValue;
+}
+
 // ─── Config helpers ───────────────────────────────────────────────────────────
 
 /**
  * Returns the cloud AI API endpoint. Used for all LLM calls (chat completions).
  * Never routes through the desktop bridge — the bridge is for non-AI operations only.
+ *
+ * SECURITY (VSCODE-01): reads from global config only. Workspace overrides are
+ * silently ignored to prevent API-key exfiltration via a malicious .vscode/settings.json.
+ * URL is additionally validated against the host allowlist.
  */
 function getCloudApiEndpoint(): string {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  return (config.get<string>('apiEndpoint') ?? DEFAULT_ENDPOINT).replace(/\/+$/, '');
+  const raw = getGlobalConfig('agiWorkforce', 'apiEndpoint', DEFAULT_ENDPOINT);
+  return validateEndpointUrl(raw) ?? DEFAULT_ENDPOINT;
 }
 
 function getModel(): string {
@@ -548,9 +613,9 @@ function inferProviderFromModel(model: string): ProviderStreamId {
 }
 
 function getGatewayUrl(): string {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  const url = config.get<string>('gatewayUrl');
-  return typeof url === 'string' && url.trim().length > 0 ? url.trim() : DEFAULT_GATEWAY_URL;
+  // SECURITY (VSCODE-01): read from global config only — same as getCloudApiEndpoint().
+  const raw = getGlobalConfig('agiWorkforce', 'gatewayUrl', DEFAULT_GATEWAY_URL);
+  return validateEndpointUrl(raw) ?? DEFAULT_GATEWAY_URL;
 }
 
 function getProviderOverride(): ProviderStreamId | undefined {
