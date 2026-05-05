@@ -8,6 +8,14 @@ export type ChatFontSize = 'sm' | 'md' | 'lg';
 export type ChatFont = 'default' | 'system' | 'dyslexic';
 export type ResponseStyle = 'concise' | 'balanced' | 'detailed' | 'technical';
 
+export interface NotificationPreferences {
+  emailWeeklySummary: boolean;
+  emailAgentTaskComplete: boolean;
+  emailBillingAlerts: boolean;
+  pushTaskComplete: boolean;
+  pushMention: boolean;
+}
+
 interface SettingsState {
   theme: Theme;
   chatFontSize: ChatFontSize;
@@ -17,6 +25,7 @@ interface SettingsState {
   defaultModel: string;
   defaultModelTier: 'economy' | 'balanced' | 'premium';
   responseStyle: ResponseStyle;
+  notifications: NotificationPreferences;
   // Actions
   setTheme: (theme: Theme) => void;
   setChatFontSize: (size: ChatFontSize) => void;
@@ -25,6 +34,7 @@ interface SettingsState {
   setStreamingEnabled: (enabled: boolean) => void;
   setDefaultModel: (modelId: string, tier: 'economy' | 'balanced' | 'premium') => void;
   setResponseStyle: (style: ResponseStyle) => void;
+  setNotification: (key: keyof NotificationPreferences, value: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -38,6 +48,13 @@ export const useSettingsStore = create<SettingsState>()(
       defaultModel: 'auto-balanced',
       defaultModelTier: 'balanced',
       responseStyle: 'balanced',
+      notifications: {
+        emailWeeklySummary: true,
+        emailAgentTaskComplete: true,
+        emailBillingAlerts: true,
+        pushTaskComplete: false,
+        pushMention: false,
+      },
       setTheme: (theme) => set({ theme }),
       setChatFontSize: (size) => set({ chatFontSize: size }),
       setChatFont: (font) => set({ chatFont: font }),
@@ -45,6 +62,8 @@ export const useSettingsStore = create<SettingsState>()(
       setStreamingEnabled: (enabled) => set({ streamingEnabled: enabled }),
       setDefaultModel: (modelId, tier) => set({ defaultModel: modelId, defaultModelTier: tier }),
       setResponseStyle: (style) => set({ responseStyle: style }),
+      setNotification: (key, value) =>
+        set((state) => ({ notifications: { ...state.notifications, [key]: value } })),
     }),
     {
       name: 'agiworkforce-web-settings',
