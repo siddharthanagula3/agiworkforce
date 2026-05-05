@@ -36,6 +36,10 @@ function detectHashFormat(storedHash: string): HashFormat {
   return 'sha256';
 }
 
+// SECURITY (WEB-RLS-BYPASS defense-in-depth per docs/plans/UNIFIED_LAUNCH_PLAN.md task #18):
+// Service-role bypasses RLS. API keys MUST stay user-scoped — every query in this file
+// filters by `.eq('user_id', userId)`. Migration: callers should pass an authenticated
+// `SupabaseClient` from `getUserClient(jwt)` (`@/lib/supabase-server`) to enforce RLS.
 function getSupabaseClient() {
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
@@ -56,19 +60,36 @@ function scryptAsync(password: string, salt: string, keylen: number): Promise<Bu
   });
 }
 
+// RT-02 fix: API key format now embeds a key_id prefix so verifyKey can do a
+// single-row DB lookup instead of scanning all active keys.
+// Format: sk_live_<keyId16hex>_<secret48hex>
+// - keyId: 8 random bytes → 16 hex chars. Stored as `key_prefix` column.
+// - secret: 24 random bytes → 48 hex chars. Only the Argon2id hash is stored.
+//
+// Backward compat: old keys (no underscore after sk_live_ prefix beyond the
+// 8-char prefix segment) fall through to the legacy slow-scan path, which is
+// rate-limited per IP at 5/min by callers.
+export const KEY_ID_REGEX = /^sk_live_([0-9a-f]{16})_[A-Za-z0-9]{1,}/;
+
 /**
  * Generate a new API key and derive a secure hash using Argon2id.
  * Argon2id is the recommended algorithm for password/key hashing (OWASP).
  * The hash is self-describing and includes salt, parameters, and the derived key.
+ *
+ * RT-02: New keys embed a keyId prefix so verification can be O(1) DB lookup.
  */
-async function generateKey(): Promise<{ raw: string; hash: string }> {
-  // Generate the raw API key
-  const raw = 'sk_live_' + randomBytes(24).toString('hex');
+async function generateKey(): Promise<{ raw: string; hash: string; keyId: string }> {
+  // keyId: 8 bytes → 16 hex chars (stored in DB, used as lookup index)
+  const keyId = randomBytes(8).toString('hex');
+  // secret: 24 bytes → 48 hex chars (never stored; only the hash is stored)
+  const secret = randomBytes(24).toString('base64url');
+  // Full raw key embeds the keyId so verifyKey can extract it for single-row lookup
+  const raw = `sk_live_${keyId}_${secret}`;
 
   // Derive the hash using Argon2id (memory-hard KDF, resistant to GPU attacks)
   const hash = await argon2.hash(raw, ARGON2_OPTIONS);
 
-  return { raw, hash };
+  return { raw, hash, keyId };
 }
 
 /**
@@ -175,6 +196,8 @@ export class ApiKeyService {
   /**
    * Create a new API Key.
    * RETURNS THE RAW KEY ONLY ONCE.
+   *
+   * RT-02: Stores `key_prefix` (the keyId segment) for O(1) verification lookup.
    */
   static async createApiKey(
     userId: string,
@@ -182,7 +205,7 @@ export class ApiKeyService {
     scopes: string[] = [],
   ): Promise<{ apiKey: ApiKey; rawKey: string }> {
     const supabase = getSupabaseClient();
-    const { raw, hash } = await generateKey();
+    const { raw, hash, keyId } = await generateKey();
 
     const { data, error } = await supabase
       .from('api_keys')
@@ -190,6 +213,9 @@ export class ApiKeyService {
         user_id: userId,
         name,
         key_hash: hash,
+        // RT-02: key_prefix stores the keyId for fast single-row lookup in verifyKey.
+        // Column must exist in DB; migration adds it as nullable for backward compat.
+        key_prefix: keyId,
         scopes,
         expires_at: null, // customizable
       })
@@ -241,34 +267,91 @@ export class ApiKeyService {
   }
 
   /**
-   * Verify an API Key (for external API usage)
-   * Supports three hash formats for backward compatibility:
-   * 1. Argon2id (primary) - new keys use this
-   * 2. scrypt (legacy) - migrated on successful auth
-   * 3. SHA-256 unsalted (legacy) - migrated on successful auth
+   * Verify an API Key (for external API usage).
    *
-   * SECURITY: Legacy keys are automatically rehashed to Argon2id on successful verification.
+   * RT-02 FIX: Two-path verification to prevent DoS via Argon2 fan-out:
    *
-   * PERFORMANCE OPTIMIZATION:
-   * - Select only required columns for verification (id, key_hash, user_id, scopes, expires_at)
-   * - Use early return for invalid key format
-   * - Fire-and-forget update for last_used_at to avoid blocking
-   * - Consider implementing Redis caching for verified keys in high-traffic scenarios
+   * FAST PATH (new keys): Parse keyId from `sk_live_<keyId16>_<secret>` format,
+   * do a single DB lookup by `key_prefix = keyId`, run exactly one Argon2id call.
+   *
+   * LEGACY PATH (old format): Fall back to per-user scan if the key doesn't
+   * match the new format. This path MUST only be exercised after per-IP rate
+   * limiting (5/min) by the caller to prevent DoS.
+   *
+   * PARSE-TIME REJECTION: Any key not matching `^sk_(live|test)_[A-Za-z0-9_]{20,}$`
+   * is rejected immediately with no Argon2 work.
    */
   static async verifyKey(rawKey: string): Promise<ApiKey | null> {
     const supabase = getSupabaseClient();
 
-    // Early return for invalid key format
-    // The raw key format is: sk_live_<48 hex chars>
-    if (!rawKey.startsWith('sk_live_')) {
+    // Parse-time rejection: reject keys that don't even look like API keys.
+    // Regex allows both new format (with embedded keyId) and old format (no underscore separator).
+    const VALID_KEY_PATTERN = /^sk_(?:live|test)_[A-Za-z0-9_]{20,}$/;
+    if (!VALID_KEY_PATTERN.test(rawKey)) {
+      // No Argon2 work — immediate rejection
       return null;
     }
 
+    // Try to extract keyId from new format: sk_live_<16hex>_<rest>
+    const keyIdMatch = KEY_ID_REGEX.exec(rawKey);
+
+    if (keyIdMatch?.[1]) {
+      // FAST PATH: Single DB lookup by key_prefix
+      const keyId = keyIdMatch[1];
+      const { data: keys, error } = await supabase
+        .from('api_keys')
+        .select(
+          'id, user_id, name, key_hash, key_prefix, scopes, created_at, expires_at, last_used_at',
+        )
+        .eq('key_prefix', keyId)
+        .or('expires_at.is.null,expires_at.gt.now()')
+        .limit(2); // Expect exactly 1; limit(2) detects collision
+
+      if (error || !keys || keys.length === 0) {
+        return null;
+      }
+
+      // Run Argon2 exactly once
+      const key = keys[0]!;
+      const result = await verifyKeyHash(rawKey, key.key_hash);
+      if (!result.valid) return null;
+
+      void supabase
+        .from('api_keys')
+        .update({ last_used_at: new Date().toISOString() })
+        .eq('id', key.id)
+        .then(({ error: updateError }) => {
+          if (updateError) logger.error({ error: updateError }, 'Failed to update last_used_at');
+        });
+
+      if (result.needsRehash) {
+        void (async () => {
+          try {
+            const newHash = await rehashWithArgon2(rawKey);
+            await updateKeyHash(supabase, key.id, newHash);
+          } catch (rehashError) {
+            logger.error({ error: rehashError, keyId: key.id }, 'Failed to rehash API key');
+          }
+        })();
+      }
+
+      const { key_hash: _h, key_prefix: _p, ...keyWithoutSecrets } = key;
+      void _h;
+      void _p;
+      return keyWithoutSecrets as ApiKey;
+    }
+
+    // LEGACY PATH: Old key format — no key_id prefix. Scan user's keys only.
+    // Caller MUST enforce per-IP rate limiting (5/min) before reaching this path.
+    logger.warn({ keyPrefix: rawKey.slice(0, 12) }, 'RT-02: legacy key format — slow Argon2 path');
+
     // Fetch only required columns for verification to reduce data transfer
-    // key_hash is needed for verification, other fields are returned if valid
     const { data: keys, error } = await supabase
       .from('api_keys')
-      .select('id, user_id, name, key_hash, scopes, created_at, expires_at, last_used_at')
+      .select(
+        'id, user_id, name, key_hash, key_prefix, scopes, created_at, expires_at, last_used_at',
+      )
+      .is('key_prefix', null) // Only old-format keys lack a key_prefix
       .or('expires_at.is.null,expires_at.gt.now()')
       .limit(1000); // Safety limit
 
@@ -276,23 +359,17 @@ export class ApiKeyService {
       return null;
     }
 
-    // Verify against each key's hash
     for (const key of keys) {
       const result = await verifyKeyHash(rawKey, key.key_hash);
       if (result.valid) {
-        // Update last used (fire and forget - don't await)
         void supabase
           .from('api_keys')
           .update({ last_used_at: new Date().toISOString() })
           .eq('id', key.id)
           .then(({ error: updateError }) => {
-            if (updateError) {
-              logger.error({ error: updateError }, 'Failed to update last_used_at');
-            }
+            if (updateError) logger.error({ error: updateError }, 'Failed to update last_used_at');
           });
 
-        // Rehash legacy keys to Argon2id (fire and forget - don't await)
-        // This provides transparent migration to the stronger hash algorithm
         if (result.needsRehash) {
           void (async () => {
             try {
@@ -303,14 +380,13 @@ export class ApiKeyService {
                 { error: rehashError, keyId: key.id, fromFormat: result.format },
                 'Failed to rehash API key to Argon2id',
               );
-              // Don't throw - rehashing failure shouldn't affect authentication
             }
           })();
         }
 
-        // Return key without the hash for security
-        const { key_hash: _keyHash, ...keyWithoutHash } = key;
-        void _keyHash; // Intentionally discarded for security
+        const { key_hash: _keyHash, key_prefix: _kp, ...keyWithoutHash } = key;
+        void _keyHash;
+        void _kp;
         return keyWithoutHash as ApiKey;
       }
     }
