@@ -39,8 +39,11 @@ import {
   PROVIDER_DISPLAY,
   type AgentMode,
   type Effort,
+  type UsageMeter,
 } from '@agiworkforce/types';
 import { Config } from '../utils/config';
+import { resolveUsageMeter, formatManagedUsageLabel, daysUntilReset } from '../services/usageMeter';
+import { getTokenCounter } from '../services/tokenCounter';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -57,7 +60,10 @@ type WebviewToExtMessage =
   | { type: 'clearConversation' }
   | { type: 'openActionSheet' }
   | { type: 'setMode'; payload: { mode: AgentMode } }
-  | { type: 'setEffort'; payload: { effort: Effort } };
+  | { type: 'setEffort'; payload: { effort: Effort } }
+  | { type: 'dismissUsageMeter' }
+  | { type: 'restoreUsageMeter' }
+  | { type: 'upgradeClicked' };
 
 type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
@@ -70,7 +76,22 @@ type ExtToWebviewMessage =
   | { type: 'conversationCleared' }
   | { type: 'addUserMessage'; payload: { text: string } }
   | { type: 'modeChanged'; payload: { mode: AgentMode } }
-  | { type: 'effortChanged'; payload: { effort: Effort; supportsEffort: boolean } };
+  | { type: 'effortChanged'; payload: { effort: Effort; supportsEffort: boolean } }
+  | { type: 'usageMeter'; payload: UsageMeterWebviewPayload };
+
+interface UsageMeterWebviewPayload {
+  source: UsageMeter['source'];
+  /** 0–1 remaining fraction, null for non-managed plans */
+  remaining: number | null;
+  /** Human-readable label e.g. "6.2k/50k tokens" */
+  usageLabel: string | null;
+  /** "resets in Xd" string, null when not applicable */
+  resetsIn: string | null;
+  /** Show upgrade CTA — only true when managed-plan + remaining < 0.20 */
+  showUpgrade: boolean;
+  /** Whether the banner is collapsed (user dismissed it) */
+  collapsed: boolean;
+}
 
 // ─── HTML template ────────────────────────────────────────────────────────────
 
@@ -97,6 +118,7 @@ function getWebviewContent(
   initialMode: AgentMode,
   initialEffort: Effort,
   supportsEffort: boolean,
+  meterCollapsed: boolean,
 ): string {
   // Build CSP-safe URIs for any local assets we might need
   const cspSource = webview.cspSource;
@@ -494,6 +516,103 @@ function getWebviewContent(
       flex: 1;
     }
 
+    /* ── Usage meter banner ── */
+    .usage-meter-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+      min-height: 30px;
+      transition: background 0.15s var(--transition);
+    }
+
+    .usage-meter-banner.warn {
+      background: rgba(218, 119, 86, 0.08);
+      border-bottom-color: rgba(218, 119, 86, 0.2);
+    }
+
+    .usage-meter-collapsed {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 12px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .usage-meter-bar-wrap {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .usage-progress {
+      flex: 1;
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .usage-progress-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.4s var(--transition), background 0.4s var(--transition);
+    }
+
+    .usage-text {
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .usage-reset {
+      white-space: nowrap;
+      color: var(--text-secondary);
+      opacity: 0.7;
+      flex-shrink: 0;
+    }
+
+    .upgrade-btn {
+      background: var(--accent-terra);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      padding: 2px 8px;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    .upgrade-btn:hover { opacity: 0.85; }
+
+    .meter-dismiss-btn, .meter-restore-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0 2px;
+      line-height: 1;
+      transition: color 0.12s;
+      flex-shrink: 0;
+    }
+    .meter-dismiss-btn:hover, .meter-restore-btn:hover { color: var(--text-primary); }
+
+    .byok-icon, .local-icon {
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
     /* ── @mention dropdown ── */
     .input-wrapper { position: relative; flex: 1; }
     .mention-dropdown {
@@ -540,6 +659,25 @@ function getWebviewContent(
     <div class="header-actions">
       <button class="icon-btn" id="actionsBtn" title="Actions">≡</button>
     </div>
+  </div>
+
+  <!-- ── Usage meter banner ── -->
+  <div class="usage-meter-banner" id="usageMeterBanner" style="display:none">
+    <span class="byok-icon" id="meterByokIcon" style="display:none">&#128273;</span>
+    <span class="local-icon" id="meterLocalIcon" style="display:none">&#127968;</span>
+    <div class="usage-meter-bar-wrap" id="meterBarWrap" style="display:none">
+      <div class="usage-progress">
+        <div class="usage-progress-fill" id="meterFill" style="width:0%;background:#21808d"></div>
+      </div>
+    </div>
+    <span class="usage-text" id="meterText"></span>
+    <span class="usage-reset" id="meterReset"></span>
+    <button class="upgrade-btn" id="upgradeBtn" style="display:none">Upgrade</button>
+    <button class="meter-dismiss-btn" id="meterDismissBtn" title="Collapse meter">&#215;</button>
+  </div>
+  <!-- ── Usage meter collapsed pill ── -->
+  <div class="usage-meter-collapsed" id="usageMeterCollapsed" style="display:none">
+    <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage meter">&#9660; Usage</button>
   </div>
 
   <!-- ── API key banner (hidden when key is present) ── -->
@@ -604,6 +742,22 @@ function getWebviewContent(
     const modeChip = document.getElementById('modeChip');
     const effortChip = document.getElementById('effortChip');
 
+    // ── Usage meter DOM refs ──────────────────────────────────────────────────
+    const usageMeterBanner = document.getElementById('usageMeterBanner');
+    const usageMeterCollapsed = document.getElementById('usageMeterCollapsed');
+    const meterFill = document.getElementById('meterFill');
+    const meterText = document.getElementById('meterText');
+    const meterReset = document.getElementById('meterReset');
+    const upgradeBtn = document.getElementById('upgradeBtn');
+    const meterDismissBtn = document.getElementById('meterDismissBtn');
+    const meterRestoreBtn = document.getElementById('meterRestoreBtn');
+    const meterBarWrap = document.getElementById('meterBarWrap');
+    const meterByokIcon = document.getElementById('meterByokIcon');
+    const meterLocalIcon = document.getElementById('meterLocalIcon');
+
+    // Initial collapsed state (injected by extension host)
+    var meterCollapsed = ${meterCollapsed ? 'true' : 'false'};
+
     // ── Provider badge helper ─────────────────────────────────────────────────
     function updateProviderBadge(providerLabel, brandColor) {
       if (!providerBadgeEl || !providerBadgeDotEl || !providerBadgeTextEl) return;
@@ -611,6 +765,88 @@ function getWebviewContent(
       providerBadgeDotEl.style.background = 'rgba(0,0,0,0.35)';
       providerBadgeTextEl.textContent = providerLabel;
       providerBadgeEl.style.display = 'inline-flex';
+    }
+
+    // ── Usage meter helpers ───────────────────────────────────────────────────
+    function applyMeterCollapsed(collapsed) {
+      meterCollapsed = collapsed;
+      if (!usageMeterBanner || !usageMeterCollapsed) return;
+      if (collapsed) {
+        usageMeterBanner.style.display = 'none';
+        usageMeterCollapsed.style.display = 'flex';
+      } else {
+        usageMeterCollapsed.style.display = 'none';
+        // banner display is controlled by renderUsageMeter; show it
+        usageMeterBanner.style.display = 'flex';
+      }
+    }
+
+    function renderUsageMeter(payload) {
+      if (!usageMeterBanner || !meterFill || !meterText || !meterReset || !upgradeBtn ||
+          !meterBarWrap || !meterByokIcon || !meterLocalIcon) return;
+
+      // Reset all conditional elements
+      meterByokIcon.style.display = 'none';
+      meterLocalIcon.style.display = 'none';
+      meterBarWrap.style.display = 'none';
+      upgradeBtn.style.display = 'none';
+      usageMeterBanner.classList.remove('warn');
+
+      if (payload.source === 'unbounded') {
+        meterLocalIcon.style.display = 'inline';
+        meterText.textContent = 'Local model — no quota tracking';
+        meterReset.textContent = '';
+      } else if (payload.source === 'user-api-key') {
+        meterByokIcon.style.display = 'inline';
+        meterText.textContent = 'Using your own API key — no usage limit from us';
+        meterReset.textContent = '';
+      } else {
+        // managed-plan
+        meterBarWrap.style.display = 'flex';
+        var pct = payload.remaining !== null ? payload.remaining * 100 : 100;
+        var usedPct = 100 - pct;
+        var fillColor = pct < 20 ? '#da7756' : pct < 40 ? '#f59e0b' : '#21808d';
+        meterFill.style.width = Math.max(0, Math.min(100, usedPct)) + '%';
+        meterFill.style.background = fillColor;
+        meterText.textContent = 'Usage: ' + (payload.usageLabel || '');
+        meterReset.textContent = payload.resetsIn ? '· ' + payload.resetsIn : '';
+        if (payload.showUpgrade) {
+          upgradeBtn.style.display = 'inline-block';
+          usageMeterBanner.classList.add('warn');
+        }
+      }
+
+      // Apply collapsed state without hiding the banner if it should be visible
+      if (meterCollapsed) {
+        usageMeterBanner.style.display = 'none';
+        usageMeterCollapsed.style.display = 'flex';
+      } else {
+        usageMeterBanner.style.display = 'flex';
+        usageMeterCollapsed.style.display = 'none';
+      }
+    }
+
+    // Dismiss (collapse) button
+    if (meterDismissBtn) {
+      meterDismissBtn.addEventListener('click', function() {
+        applyMeterCollapsed(true);
+        vscode.postMessage({ type: 'dismissUsageMeter' });
+      });
+    }
+
+    // Restore (expand) button
+    if (meterRestoreBtn) {
+      meterRestoreBtn.addEventListener('click', function() {
+        applyMeterCollapsed(false);
+        vscode.postMessage({ type: 'restoreUsageMeter' });
+      });
+    }
+
+    // Upgrade button — opens pricing page via extension host
+    if (upgradeBtn) {
+      upgradeBtn.addEventListener('click', function() {
+        vscode.postMessage({ type: 'upgradeClicked' });
+      });
     }
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -944,6 +1180,10 @@ function getWebviewContent(
           effortChip.style.display = msg.payload.supportsEffort ? '' : 'none';
         }
       }
+
+      else if (msg.type === 'usageMeter') {
+        renderUsageMeter(msg.payload);
+      }
     });
 
     // ── @mention autocomplete ─────────────────────────────────────────────────
@@ -1032,13 +1272,24 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private _mode: AgentMode | undefined;
   /** Per-conversation effort override (falls back to workspace setting when undefined) */
   private _effort: Effort | undefined;
+  /** Whether the usage meter banner is collapsed — persisted via workspaceState */
+  private _meterCollapsed = false;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _secrets: vscode.SecretStorage,
     private readonly _conversationStore?: ConversationStore,
     private readonly _conversationTreeProvider?: ConversationTreeProvider,
-  ) {}
+    private readonly _workspaceState?: vscode.Memento,
+  ) {
+    // Restore persisted collapsed state
+    if (this._workspaceState !== undefined) {
+      this._meterCollapsed = this._workspaceState.get<boolean>(
+        'agiWorkforce.usageMeterCollapsed',
+        false,
+      );
+    }
+  }
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -1066,6 +1317,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       initialMode,
       initialEffort,
       supportsEffort,
+      this._meterCollapsed,
     );
 
     // Handle messages from the webview — track the listener for cleanup
@@ -1110,6 +1362,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             supportsEffort: this._modelSupportsEffort(model),
           },
         });
+
+        // Push initial usage meter state
+        await this._pushUsageMeter();
         break;
       }
 
@@ -1244,7 +1499,62 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         });
         break;
       }
+
+      case 'dismissUsageMeter': {
+        this._meterCollapsed = true;
+        if (this._workspaceState !== undefined) {
+          await this._workspaceState.update('agiWorkforce.usageMeterCollapsed', true);
+        }
+        break;
+      }
+
+      case 'restoreUsageMeter': {
+        this._meterCollapsed = false;
+        if (this._workspaceState !== undefined) {
+          await this._workspaceState.update('agiWorkforce.usageMeterCollapsed', false);
+        }
+        // Re-push meter data so the banner content is current when restored
+        await this._pushUsageMeter();
+        break;
+      }
+
+      case 'upgradeClicked': {
+        await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
+        break;
+      }
     }
+  }
+
+  /** Resolve and push usage meter payload to the webview. */
+  private async _pushUsageMeter(): Promise<void> {
+    const MANAGED_LIMIT = 50_000;
+    const sessionTokens = getTokenCounter().totalTokens;
+    const meter = await resolveUsageMeter(this._secrets, sessionTokens);
+
+    let usageLabel: string | null = null;
+    let resetsIn: string | null = null;
+    let showUpgrade = false;
+
+    if (meter.source === 'managed-plan' && meter.remaining !== null) {
+      usageLabel = formatManagedUsageLabel(meter.remaining, MANAGED_LIMIT);
+      if (meter.resetsAt !== null) {
+        const days = daysUntilReset(meter.resetsAt);
+        resetsIn = `resets in ${days}d`;
+      }
+      showUpgrade = meter.remaining < 0.2;
+    }
+
+    this._post({
+      type: 'usageMeter',
+      payload: {
+        source: meter.source,
+        remaining: meter.remaining,
+        usageLabel,
+        resetsIn,
+        showUpgrade,
+        collapsed: this._meterCollapsed,
+      },
+    });
   }
 
   /** Returns true when the given model's provider supports an explicit effort axis. */
@@ -1413,6 +1723,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   /** Programmatically reveal the sidebar panel. */
   public reveal(): void {
     this._view?.show?.(true);
+  }
+
+  /** Public entry-point so extension.ts can push a fresh usage meter on config change. */
+  public pushUsageMeter(): void {
+    void this._pushUsageMeter();
   }
 
   /** Clear conversation history and notify the webview. */
