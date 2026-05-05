@@ -42,7 +42,11 @@ import { activateDesktopBridge, getDesktopBridge } from './services/desktopBridg
 import { activateTerminal } from './providers/terminalProvider';
 import { activateErrorExplainer } from './providers/errorExplainerProvider';
 import { ModelMetricsPanel, initModelMetrics } from './services/modelMetrics';
-import { MODEL_PICKER_OPTIONS, normalizeConfiguredModelId } from './services/modelConstants';
+import {
+  normalizeConfiguredModelId,
+  buildGroupedQuickPickItems,
+  type GroupedQuickPickItem,
+} from './services/modelConstants';
 import { ContextPanelProvider, setContextPanelInstance } from './providers/contextPanelProvider';
 import { DiffDecorationProvider } from './providers/diffDecorationProvider';
 import { showOriginalContext, getPatchOutputChannel } from './services/patchEngine';
@@ -505,31 +509,23 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // ── agi-workforce.selectModel ─────────────────────────────────────────────
     vscode.commands.registerCommand('agi-workforce.selectModel', async () => {
-      type ModelQuickPickItem = vscode.QuickPickItem & { modelId: string };
-      const models: ModelQuickPickItem[] = MODEL_PICKER_OPTIONS.map((option) => ({
-        label: option.label,
-        description: option.description,
-        detail: `${option.id} · ${option.detail}`,
-        modelId: option.id,
-      }));
-
       const config = vscode.workspace.getConfiguration('agiWorkforce');
       const currentModel = normalizeConfiguredModelId(config.get<string>('model'));
 
-      // Mark the current selection
-      const items = models.map((m) => ({
-        ...m,
-        picked: m.modelId === currentModel,
+      // Build grouped items; mark the currently active model as picked
+      const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems().map((item) => ({
+        ...item,
+        picked: item.modelId !== undefined && item.modelId === currentModel,
       }));
 
-      const picked = await vscode.window.showQuickPick(items, {
-        title: 'AGI Workforce — Select Model',
+      const picked = await vscode.window.showQuickPick(allItems, {
+        title: 'AGI Workforce — Select Model (10+ providers)',
         placeHolder: `Current: ${currentModel}`,
         matchOnDescription: true,
         matchOnDetail: true,
       });
 
-      if (picked === undefined) return;
+      if (picked === undefined || picked.modelId === undefined) return;
 
       await config.update('model', picked.modelId, vscode.ConfigurationTarget.Global);
 
