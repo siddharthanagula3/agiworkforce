@@ -1013,10 +1013,19 @@ function renderMarkdown(text: string): string {
   html = html.replace(/(<li>[\s\S]*?<\/li>)(\n(?!<li>)|$)/g, '<ul>$1</ul>$2');
 
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-  // Only allow http(s) URLs to block javascript: scheme injection
+  // Only allow http(s) URLs to block javascript: scheme injection.
+  // SECURITY (M-1): entity-encode link text before interpolation so that a
+  // model response like [<img onerror=…>](url) cannot inject HTML even if a
+  // downstream DOMPurify pass is skipped or removed in a future refactor.
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
     const safeUrl = /^https?:\/\//i.test(url.trim()) ? url : '#';
-    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    const encodedText = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
   });
 
   html = html
