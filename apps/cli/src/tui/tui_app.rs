@@ -115,9 +115,8 @@ struct TuiApp {
     show_slash_popup: bool,
     slash_filter: String,
     slash_selected: usize,
-    // Model picker popup
-    show_model_picker: bool,
-    model_picker_selected: usize,
+    // Model picker popup (new widget-based state)
+    model_picker: super::widgets::model_picker::ModelPickerState,
     // Streaming
     stream_buffer: String,
     stream_start: Option<Instant>,
@@ -179,8 +178,7 @@ impl TuiApp {
             show_slash_popup: false,
             slash_filter: String::new(),
             slash_selected: 0,
-            show_model_picker: false,
-            model_picker_selected: 0,
+            model_picker: super::widgets::model_picker::ModelPickerState::default(),
             stream_buffer: String::new(),
             stream_start: None,
             git_branch,
@@ -313,8 +311,13 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
         super::cost_hud::render(frame, area, &hud, &app.model_name);
 
         // Popups (only one visible at a time)
-        if app.show_model_picker {
-            render_model_picker(frame, chunks[1], app);
+        if app.model_picker.visible {
+            super::widgets::model_picker::render(
+                frame,
+                chunks[1],
+                &app.model_picker,
+                &app.model_name,
+            );
         } else if app.show_slash_popup {
             render_slash_popup(frame, chunks[1], app);
         }
@@ -706,81 +709,8 @@ fn render_slash_popup(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
     frame.render_widget(list, popup_area);
 }
 
-fn render_model_picker(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp) {
-    let models = crate::model_catalog::catalog().all();
-    if models.is_empty() {
-        return;
-    }
-
-    let max_visible = 12.min(models.len());
-    let popup_height = max_visible as u16 + 2;
-    let popup_width = 70.min(chat_area.width.saturating_sub(4));
-
-    let popup_area = Rect::new(
-        chat_area.x + 2,
-        chat_area.y + chat_area.height - popup_height - 1,
-        popup_width,
-        popup_height,
-    );
-
-    frame.render_widget(Clear, popup_area);
-
-    // Scroll the list if needed
-    let scroll_offset = if app.model_picker_selected >= max_visible {
-        app.model_picker_selected - max_visible + 1
-    } else {
-        0
-    };
-
-    let items: Vec<ListItem> = models
-        .iter()
-        .enumerate()
-        .skip(scroll_offset)
-        .take(max_visible)
-        .map(|(i, m)| {
-            let is_current = m.id == app.model_name;
-            let style = if i == app.model_picker_selected {
-                Style::default().fg(Color::Black).bg(Color::Cyan)
-            } else if is_current {
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-
-            let flags = format!(
-                "{}{}{}",
-                if m.supports_tools { "T" } else { " " },
-                if m.supports_vision { "V" } else { " " },
-                if m.supports_reasoning { "R" } else { " " },
-            );
-            let current_marker = if is_current { " ●" } else { "  " };
-            let text = format!(
-                "{}{:<30} [{}] {:>6}K  ${:.2}/${:.2}  {}",
-                current_marker,
-                m.id,
-                flags,
-                m.context_window / 1000,
-                m.input_price_per_1m,
-                m.output_price_per_1m,
-                m.provider,
-            );
-            ListItem::new(text).style(style)
-        })
-        .collect();
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Green))
-        .title(format!(
-            " Select Model (↑↓ Enter Esc) — current: {} ",
-            app.model_name
-        ));
-
-    let list = List::new(items).block(block);
-    frame.render_widget(list, popup_area);
-}
+// render_model_picker was replaced by super::widgets::model_picker::render
+// (called directly from the render() fn above)
 
 // ---------------------------------------------------------------------------
 // Event handling
@@ -798,7 +728,7 @@ enum InputAction {
 
 fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     // Model picker mode
-    if app.show_model_picker {
+    if app.model_picker.visible {
         return handle_model_picker_key(app, key);
     }
 
@@ -931,8 +861,8 @@ fn handle_slash_popup_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                     app.cursor = app.input.len();
                     // Show model picker for /model
                     if cmd_name == "/model" {
-                        app.show_model_picker = true;
-                        app.model_picker_selected = 0;
+                        let all = crate::model_catalog::catalog().all();
+                        app.model_picker.open(&all, &app.model_name.clone());
                     }
                     return InputAction::None;
                 }
@@ -976,54 +906,37 @@ fn handle_slash_popup_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
 }
 
 fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
-    let models = crate::model_catalog::catalog().all();
-    let model_count = models.len();
+    use super::widgets::model_picker::{handle_key, PickerAction};
 
-    match key.code {
-        KeyCode::Esc => {
-            app.show_model_picker = false;
+    let all_models = crate::model_catalog::catalog().all();
+    let action = handle_key(&mut app.model_picker, key, &all_models);
+
+    match action {
+        PickerAction::Nothing => InputAction::None,
+
+        PickerAction::Close => {
             app.input.clear();
             app.cursor = 0;
             InputAction::None
         }
-        KeyCode::Up => {
-            if app.model_picker_selected > 0 {
-                app.model_picker_selected -= 1;
-            }
+
+        PickerAction::FocusSearch => InputAction::None,
+
+        PickerAction::Select {
+            model_id,
+            effort: _effort,
+            banner,
+        } => {
+            app.input.clear();
+            app.cursor = 0;
+            app.session.switch_model(&model_id);
+            app.sync_stats();
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: banner,
+            });
             InputAction::None
         }
-        KeyCode::Down => {
-            if app.model_picker_selected < model_count.saturating_sub(1) {
-                app.model_picker_selected += 1;
-            }
-            InputAction::None
-        }
-        KeyCode::Enter => {
-            if let Some(model) = models.get(app.model_picker_selected) {
-                let model_id = model.id.clone();
-                app.show_model_picker = false;
-                app.input.clear();
-                app.cursor = 0;
-                // Switch the model
-                app.session.switch_model(&model_id);
-                app.sync_stats();
-                let provider = format!("{:?}", app.session.provider).to_lowercase();
-                app.chat_messages.push(ChatMessage {
-                    role: ChatRole::System,
-                    text: format!(
-                        "Switched to {} ({}) — {}K context, ${:.2}/${:.2} per 1M tokens",
-                        model_id,
-                        provider,
-                        model.context_window / 1000,
-                        model.input_price_per_1m,
-                        model.output_price_per_1m,
-                    ),
-                });
-            }
-            app.show_model_picker = false;
-            InputAction::None
-        }
-        _ => InputAction::None,
     }
 }
 
@@ -1162,18 +1075,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/model" | "/m" => {
             if arg.is_empty() {
-                // Open model picker
-                app.show_model_picker = true;
-                app.model_picker_selected = 0;
-                // Pre-select current model
-                if let Some(pos) = crate::model_catalog::catalog()
-                    .all()
-                    .iter()
-                    .position(|m| m.id == app.model_name)
-                {
-                    app.model_picker_selected = pos;
-                }
-                SlashResult::SystemMessage(String::new()) // no message, picker handles it
+                // Open the interactive model picker overlay.
+                let all = crate::model_catalog::catalog().all();
+                let current = app.model_name.clone();
+                app.model_picker.open(&all, &current);
+                SlashResult::SystemMessage(String::new()) // picker UI handles confirmation
             } else {
                 app.session.switch_model(arg);
                 app.sync_stats();
