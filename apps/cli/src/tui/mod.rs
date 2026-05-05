@@ -11,4 +11,5 @@ mod terminal_palette;
 
 mod markdown_renderer;
 mod tui_app;
+pub mod widgets;
 pub use tui_app::run;
