@@ -122,3 +122,6 @@ export * from './command-capabilities';
 
 // Provider adapter contract (lifted from OpenClaw, adapted)
 export * from './provider-adapter';
+
+// Design-system shared contracts (provider identity, effort, agent mode, settings IA, etc.)
+export * from './design-system';
