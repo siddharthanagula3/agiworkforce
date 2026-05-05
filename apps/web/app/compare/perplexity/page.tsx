@@ -1,324 +1,330 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, CheckCircle2, AlertCircle, Minus } from 'lucide-react';
+import Link from 'next/link';
 
-import { Header } from '@/components/layout/Header';
-import { MarketingFooter } from '@/components/marketing/MarketingFooter';
 import { MARKETING } from '@/lib/marketing-constants';
+import { EditorialPage } from '@/components/marketing/editorial/EditorialPage';
+import { RuledSection } from '@/components/marketing/editorial/RuledSection';
+import { Slug } from '@/components/marketing/editorial/Slug';
+import { Specimen } from '@/components/marketing/editorial/Specimen';
+import { MonoButton } from '@/components/marketing/editorial/MonoButton';
+import { DispatchSection } from '@/components/marketing/editorial/DispatchSection';
 
 export const metadata: Metadata = {
   title: 'AGI Workforce vs Perplexity | Honest Comparison',
   description:
-    'AGI Workforce vs Perplexity: web search, multi-provider support, BYOK, local LLM, CLI, desktop app, mobile, browser extension, VS Code extension, and pricing compared.',
+    'AGI Workforce vs Perplexity: web search, multi-provider support, BYOK, local LLM, CLI, desktop, and pricing compared honestly.',
+  alternates: { canonical: '/compare/perplexity' },
   openGraph: {
-    title: 'AGI Workforce vs Perplexity — An Honest Comparison',
+    title: 'AGI Workforce vs Perplexity | Honest Comparison',
     description:
-      'Perplexity is the best live-search AI product. AGI Workforce includes Perplexity Sonar via BYOK plus every other provider for tasks that do not need live search.',
+      'Perplexity Search is the strongest answer-engine for current-knowledge queries. Our lane is multi-provider agent work, not Q&A search.',
     type: 'website',
     url: 'https://agiworkforce.com/compare/perplexity',
   },
-  alternates: { canonical: '/compare/perplexity' },
 };
 
-type RowStatus = 'yes' | 'no' | 'partial' | 'waitlist';
-
-interface CompareRow {
-  feature: string;
-  us: RowStatus;
-  usNote: string;
-  them: RowStatus;
-  themNote: string;
+interface ScorecardRow {
+  capability: string;
+  us: string;
+  them: string;
 }
 
-const rows: CompareRow[] = [
+const scorecard: ScorecardRow[] = [
   {
-    feature: 'Models available',
-    us: 'yes',
-    usNote: `${MARKETING.providers.display} providers (Perplexity Sonar, Claude 4, GPT-5, Gemini 3, and more)`,
-    them: 'partial',
-    themNote: 'Perplexity Sonar models with web search',
+    capability: 'Models available',
+    us: `${MARKETING.providers.display} providers (Perplexity Sonar, Claude, GPT, Gemini, and more)`,
+    them: 'Perplexity Sonar models with web search',
   },
   {
-    feature: 'Live web search',
-    us: 'partial',
-    usNote: 'Via Perplexity Sonar (BYOK). Not built-in for other providers.',
-    them: 'yes',
-    themNote: 'Core product; real-time citations',
+    capability: 'Live web search',
+    us: 'Partial — via Perplexity Sonar (BYOK); not built-in for other providers',
+    them: 'Yes — core product; real-time citations',
   },
   {
-    feature: 'BYOK support',
-    us: 'yes',
-    usNote: `All ${MARKETING.providers.display} cloud providers including Perplexity`,
-    them: 'no',
-    themNote: 'Subscription-only; no API key passthrough in chat',
+    capability: 'BYOK support',
+    us: `All ${MARKETING.providers.display} cloud providers including Perplexity`,
+    them: 'Subscription-only; no API key passthrough in chat',
   },
   {
-    feature: 'Local LLM (Ollama / LM Studio)',
-    us: 'yes',
-    usNote: 'Desktop only, free forever',
-    them: 'no',
-    themNote: 'Not supported',
+    capability: 'Local LLM',
+    us: 'Yes — Ollama + LM Studio (Desktop, free forever)',
+    them: 'Not supported',
   },
   {
-    feature: 'Cross-provider switching',
-    us: 'yes',
-    usNote: 'Mid-conversation, context preserved',
-    them: 'no',
-    themNote: 'Sonar models only; no cross-provider',
+    capability: 'Cross-provider thread',
+    us: 'Yes — mid-conversation, context preserved',
+    them: 'Sonar models only; no cross-provider',
   },
   {
-    feature: 'CLI',
-    us: 'yes',
-    usNote: 'Rust CLI, 22 subcommands, TUI',
-    them: 'no',
-    themNote: 'No CLI product',
+    capability: 'CLI',
+    us: 'Yes — Rust, 22 subcommands, TUI',
+    them: 'No CLI product',
   },
   {
-    feature: 'Desktop app',
-    us: 'yes',
-    usNote: 'Tauri, macOS / Windows / Linux',
-    them: 'yes',
-    themNote: 'Perplexity desktop app (Electron)',
+    capability: 'Desktop app',
+    us: 'Yes — Tauri, macOS / Windows / Linux',
+    them: 'Yes — Perplexity desktop (Electron)',
   },
   {
-    feature: 'Mobile app',
-    us: 'yes',
-    usNote: 'iOS + Android (Expo)',
-    them: 'yes',
-    themNote: 'Perplexity iOS and Android apps',
+    capability: 'Mobile app',
+    us: 'Partial — iOS + Android (Expo, in progress)',
+    them: 'Yes — Perplexity iOS + Android',
   },
   {
-    feature: 'Computer use',
-    us: 'partial',
-    usNote: 'Desktop: browser, terminal, file I/O',
-    them: 'no',
-    themNote: 'Not a computer-use product',
+    capability: 'Computer use',
+    us: 'Partial — browser, terminal, file I/O',
+    them: 'Yes — Comet computer use',
   },
   {
-    feature: 'Browser extension',
-    us: 'yes',
-    usNote: 'Chrome MV3, v1.2.0',
-    them: 'yes',
-    themNote: 'Perplexity Chrome extension',
+    capability: 'Browser extension',
+    us: 'Yes — Chrome MV3 v1.2.0',
+    them: 'Yes — Perplexity Chrome extension',
   },
   {
-    feature: 'VS Code extension',
-    us: 'yes',
-    usNote: 'v0.3.0, multi-provider',
-    them: 'no',
-    themNote: 'No VS Code extension',
+    capability: 'VS Code extension',
+    us: 'Yes — v0.3.0, multi-provider',
+    them: 'No VS Code extension',
   },
   {
-    feature: 'Free tier',
-    us: 'yes',
-    usNote: 'Local mode: free forever. BYOK: free forever.',
-    them: 'yes',
-    themNote: 'Free tier with limited searches',
-  },
-  {
-    feature: 'Pricing (paid)',
-    us: 'partial',
-    usNote: 'Hobby subscription + BYOK; Pro/Max on waitlist',
-    them: 'partial',
-    themNote: 'Perplexity Pro subscription',
+    capability: 'Free tier',
+    us: 'Local mode: free forever. BYOK: free forever.',
+    them: 'Free tier with limited searches',
   },
 ];
 
-function StatusIcon({ status }: { status: RowStatus }) {
-  if (status === 'yes') return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />;
-  if (status === 'no') return <AlertCircle className="h-4 w-4 shrink-0 text-red-400/70" />;
-  return <Minus className="h-4 w-4 shrink-0 text-[#888480]" />;
-}
-
 export default function ComparePerplexityPage() {
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#edebe8]">
-      <Header />
+    <EditorialPage tier="mixed">
+      {/* S1 — Review masthead */}
+      <RuledSection tier="paper" id="compare-perplexity-hero">
+        <div className="py-4 pb-2">
+          <Link
+            href="/compare"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] hover:text-[var(--color-ink)] transition-colors"
+          >
+            ← All comparisons
+          </Link>
+        </div>
+        <div className="pt-4 pb-16 md:pb-24 max-w-3xl">
+          <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] mb-6">
+            REVIEW · 2026-05-05
+          </div>
 
-      <main className="pt-24">
-        {/* Hero */}
-        <section className="relative overflow-hidden pt-20 pb-16 md:pt-28 md:pb-20">
-          <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:28px_28px]" />
-          <div className="container relative mx-auto px-4">
-            <Link
-              href="/compare"
-              className="mb-8 inline-flex items-center gap-1.5 text-sm text-[#555150] hover:text-[#888480]"
+          <h1 className="font-display leading-[0.95] tracking-tight">
+            <span
+              className="block text-[clamp(2rem,6vw,4rem)]"
+              style={{ fontVariationSettings: '"wght" 400' }}
             >
-              <ArrowRight className="h-3.5 w-3.5 rotate-180" /> All comparisons
-            </Link>
-            <div className="max-w-3xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-purple-500/20 bg-purple-500/[0.06] px-3 py-1 text-sm text-purple-400">
-                vs Perplexity
-              </div>
-              <h1 className="font-heading text-4xl tracking-tight md:text-5xl lg:text-6xl">
-                AGI Workforce vs Perplexity
-              </h1>
-              <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#888480]">
-                Perplexity is the best purpose-built live-search AI product. AGI Workforce is not
-                trying to compete on that. We include Perplexity Sonar via BYOK and add every other
-                provider for tasks that do not need live web results.
+              AGI Workforce
+            </span>
+            <span
+              className="block italic text-[clamp(2rem,6vw,4rem)] border-b-[3px] border-[var(--color-rule)] pb-1 mt-1"
+              style={{ fontVariationSettings: '"wght" 700' }}
+            >
+              vs Perplexity.
+            </span>
+          </h1>
+
+          <div className="mt-10">
+            <Specimen dropCap columns={2}>
+              <p>
+                Perplexity Search is the strongest answer-engine for current-knowledge queries.
+                Real-time web search with citations is genuinely better than anything a generalist
+                platform offers for that specific workflow. Comet is a real computer-use product.
+                The product polish on the search experience is exceptional. None of that is in
+                dispute.
               </p>
-            </div>
+              <p>
+                The case for AGI Workforce is multi-provider agent work, not Q&amp;A search. When
+                search is one tool in a longer agent chain, we can hand off to Perplexity's API as
+                one of the providers. When local LLM is required, or when your task is coding and
+                reasoning rather than web lookup, the multi-provider lane is ours.
+              </p>
+            </Specimen>
           </div>
-        </section>
+        </div>
+      </RuledSection>
 
-        {/* Comparison table */}
-        <section className="border-t border-white/[0.05] py-16 md:py-20">
-          <div className="container mx-auto px-4">
-            <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/[0.06]">
-                    <th className="py-4 px-5 text-left text-xs font-semibold uppercase tracking-widest text-[#555150]">
-                      Feature
-                    </th>
-                    <th className="py-4 px-5 text-left text-xs font-semibold uppercase tracking-widest text-[#c8892a]">
-                      AGI Workforce
-                    </th>
-                    <th className="py-4 px-5 text-left text-xs font-semibold uppercase tracking-widest text-[#444240]">
-                      Perplexity
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, i) => (
-                    <tr
-                      key={row.feature}
-                      className={`border-b border-white/[0.04] ${i % 2 === 0 ? 'bg-white/[0.01]' : ''}`}
-                    >
-                      <td className="py-4 px-5 text-sm font-medium text-[#a8a4a0]">
-                        {row.feature}
-                      </td>
-                      <td className="py-4 px-5 text-sm">
-                        <div className="flex items-start gap-2">
-                          <StatusIcon status={row.us} />
-                          <span className="text-[#888480]">{row.usNote}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-5 text-sm">
-                        <div className="flex items-start gap-2">
-                          <StatusIcon status={row.them} />
-                          <span className="text-[#666260]">{row.themNote}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {/* S2 — When Perplexity wins */}
+      <RuledSection tier="paper" slug={<Slug index="01" kicker="WHEN PERPLEXITY WINS" />}>
+        <div className="py-14 md:py-20">
+          <h2
+            className="font-display text-2xl md:text-3xl mb-8"
+            style={{ fontVariationSettings: '"wght" 600' }}
+          >
+            When to use Perplexity instead.
+          </h2>
+
+          <Specimen columns={2}>
+            <p>
+              If fact-checked search with real-time citations is your primary workflow, Perplexity
+              is the purpose-built tool and currently does it better than any generalist platform.
+              Perplexity Pro Search features (deeper research, more sources, academic mode) have no
+              equivalent in AGI Workforce at present.
+            </p>
+            <p>
+              Comet computer use for browsing is a real product. If browser-native computer use with
+              search integration is the workflow, Perplexity's vertical focus on that use case makes
+              it the right choice. Academic or factual research where source attribution is critical
+              is also a Perplexity-first scenario.
+            </p>
+          </Specimen>
+
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-0">
+            {[
+              'Live web search with real-time citations is your primary use case.',
+              'You need Perplexity Pro Search features (deeper research, more sources).',
+              'You want the most polished search-first interface optimized for Sonar.',
+              'Academic or factual research where source attribution is critical.',
+              'Comet browser computer use is the specific workflow you need.',
+            ].map((item) => (
+              <div
+                key={item}
+                className="border-b border-[var(--color-rule-soft)] py-4 pr-8 flex items-start gap-3"
+              >
+                <span className="font-mono text-[var(--color-fg-quiet)] mt-0.5 shrink-0">—</span>
+                <span className="text-sm leading-relaxed text-[var(--color-fg-muted)]">{item}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Honest callout */}
+          <div className="mt-8 border border-[var(--color-rule-soft)] p-6">
+            <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] mb-3">
+              Honest note
             </div>
-            <p className="mt-3 text-xs text-[#444240]">
-              Accurate as of May 2026. Perplexity ships desktop app, mobile apps, and Chrome
-              extension. We acknowledge all of these. Live search with real-time citations is
-              Perplexity&apos;s core strength.
+            <p className="text-sm leading-relaxed text-[var(--color-fg-muted)]">
+              For live search with citations, Perplexity is the purpose-built tool. If that is your
+              main workflow, use Perplexity directly. AGI Workforce is the right choice when you
+              need web search as one tool among many, not the entire product.
             </p>
           </div>
-        </section>
+        </div>
+      </RuledSection>
 
-        {/* When to use Perplexity instead */}
-        <section className="border-y border-white/[0.05] bg-[#0c0c0e] py-16 md:py-20">
-          <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl">
-              <h2 className="mb-6 font-heading text-2xl tracking-tight md:text-3xl">
-                When to use Perplexity instead
-              </h2>
-              <div className="space-y-3">
-                {[
-                  'Live web search with real-time citations is your primary use case.',
-                  'You need Perplexity Pro Search features (deeper research, more sources).',
-                  'You want the most polished search-first interface optimized for Sonar.',
-                  'Academic or factual research where source attribution is critical.',
-                  'You do not need coding, local AI, or cross-provider switching.',
-                ].map((item) => (
-                  <div key={item} className="flex items-start gap-3 text-sm text-[#888480]">
-                    <div className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#444240]" />
-                    {item}
-                  </div>
-                ))}
-              </div>
+      {/* S3 — When AGI Workforce wins */}
+      <RuledSection tier="paper" slug={<Slug index="02" kicker="WHEN AGI WORKFORCE WINS" />}>
+        <div className="py-14 md:py-20">
+          <h2
+            className="font-display text-2xl md:text-3xl mb-8"
+            style={{ fontVariationSettings: '"wght" 600' }}
+          >
+            When the multi-provider lane wins.
+          </h2>
 
-              {/* Honest callout */}
-              <div className="mt-8 rounded-xl border border-purple-500/15 bg-purple-500/[0.04] p-5">
-                <p className="text-sm leading-relaxed text-[#888480]">
-                  <span className="font-semibold text-[#edebe8]">Honest note:</span> For live search
-                  with citations, Perplexity is the purpose-built tool and currently does it better
-                  than any generalist platform. If that is your main workflow, use Perplexity
-                  directly. AGI Workforce is the right choice when you need web search as one tool
-                  among many, not the entire product.
-                </p>
+          <Specimen columns={2}>
+            <p>
+              When search is one tool in a longer agent chain, bring your Perplexity API key, use
+              Sonar for web research, then switch to Claude for writing and GPT for code. Full
+              context preserved across every hop.
+            </p>
+            <p>
+              Perplexity has no CLI, no VS Code extension, and no local model support. AGI Workforce
+              covers the full developer surface: Rust CLI with 22 subcommands, VS Code extension at
+              v0.3.0, and Ollama or LM Studio running locally at zero cost. When offline operation
+              is required, Perplexity's core search product cannot function by definition.
+            </p>
+          </Specimen>
+
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              {
+                title: 'Perplexity Sonar plus everything else',
+                desc: 'Bring your Perplexity key. Use Sonar for web research, Claude for writing, GPT for code. One thread, full context.',
+              },
+              {
+                title: 'Coding and development workflows',
+                desc: 'No Perplexity CLI, no VS Code ext, no local model support. AGI Workforce covers the full developer surface.',
+              },
+              {
+                title: 'Offline operation',
+                desc: 'Live search requires internet by definition. Ollama and LM Studio run locally in AGI Workforce Desktop when offline.',
+              },
+              {
+                title: 'Multi-provider strategy',
+                desc: `Use the right model for each subtask. ${MARKETING.providers.display} providers in one thread. Perplexity is one of them.`,
+              },
+            ].map(({ title, desc }) => (
+              <div key={title} className="border border-[var(--color-rule-soft)] p-6">
+                <div
+                  className="font-display text-base mb-2"
+                  style={{ fontVariationSettings: '"wght" 600' }}
+                >
+                  {title}
+                </div>
+                <p className="text-sm leading-relaxed text-[var(--color-fg-muted)]">{desc}</p>
               </div>
-            </div>
+            ))}
           </div>
-        </section>
+        </div>
+      </RuledSection>
 
-        {/* When AGI Workforce wins */}
-        <section className="py-16 md:py-20">
-          <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl">
-              <h2 className="mb-6 font-heading text-2xl tracking-tight md:text-3xl">
-                When AGI Workforce wins
-              </h2>
-              <div className="space-y-4">
-                {[
-                  {
-                    title: 'Perplexity Sonar plus everything else',
-                    desc: 'Bring your Perplexity API key. Use Sonar for web research, then switch to Claude 4 for writing, GPT-5 for code. One thread, full context.',
-                  },
-                  {
-                    title: 'Coding and development workflows',
-                    desc: 'Perplexity has no CLI, no VS Code extension, no local model support. AGI Workforce covers the full developer surface.',
-                  },
-                  {
-                    title: 'Offline operation',
-                    desc: 'Live search requires internet by definition. When you need AI offline, Ollama and LM Studio run locally in AGI Workforce Desktop.',
-                  },
-                  {
-                    title: 'Multi-provider strategy',
-                    desc: `Use the right model for each task. ${MARKETING.providers.display} providers in one thread. Perplexity is one of them.`,
-                  },
-                ].map(({ title, desc }) => (
-                  <div
-                    key={title}
-                    className="rounded-xl border border-[#c8892a]/15 bg-[#c8892a]/[0.03] p-5"
+      {/* S4 — Scorecard */}
+      <RuledSection tier="graphite" slug={<Slug index="03" kicker="SCORECARD" />}>
+        <div className="py-14 md:py-20">
+          <h2
+            className="font-display text-2xl md:text-3xl mb-6 text-[var(--color-cream-on-graphite)]"
+            style={{ fontVariationSettings: '"wght" 600' }}
+          >
+            Side by side.
+          </h2>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] mb-8">
+            Accurate as of May 2026. Perplexity ships desktop app, mobile, Chrome ext, Comet
+            computer use. Live search with real-time citations is their core strength.
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-[var(--color-rule-soft)]">
+                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] text-left py-3 pr-6 w-[30%]">
+                    Capability
+                  </th>
+                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-amber-text)] text-left py-3 px-4 w-[35%]">
+                    AGI Workforce
+                  </th>
+                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] text-left py-3 px-4 w-[35%]">
+                    Perplexity
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {scorecard.map((row, i) => (
+                  <tr
+                    key={row.capability}
+                    className={[
+                      'border-b border-[var(--color-rule-soft)]',
+                      i % 2 === 0 ? 'bg-white/[0.02]' : '',
+                    ].join(' ')}
                   >
-                    <h3 className="mb-1.5 font-semibold text-[#edebe8]">{title}</h3>
-                    <p className="text-sm leading-relaxed text-[#888480]">{desc}</p>
-                  </div>
+                    <td className="font-mono text-[11px] text-[var(--color-fg-muted)] py-3 pr-6 align-top">
+                      {row.capability}
+                    </td>
+                    <td className="text-[13px] text-[var(--color-amber-text)] py-3 px-4 align-top leading-snug">
+                      {row.us}
+                    </td>
+                    <td className="text-[13px] text-[var(--color-fg-muted)] py-3 px-4 align-top leading-snug">
+                      {row.them}
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </div>
+              </tbody>
+            </table>
           </div>
-        </section>
 
-        {/* CTA */}
-        <section className="border-t border-white/[0.05] bg-[#0c0c0e] py-16 md:py-20">
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="font-heading text-2xl tracking-tight md:text-3xl">
-              Use Perplexity Sonar in AGI Workforce.
-            </h2>
-            <p className="mx-auto mt-3 max-w-md text-[#888480]">
-              Bring your Perplexity API key. Sonar search, alongside coding models, writing models,
-              and local AI in one thread.
-            </p>
-            <div className="mt-6 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link
-                href="/download"
-                className="group inline-flex h-11 items-center gap-2 rounded-md bg-[#c8892a] px-7 text-sm font-semibold text-[#09090b] transition-all hover:bg-[#d4993a]"
-              >
-                Download Free
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                href="/providers"
-                className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-7 text-sm font-medium text-[#a8a4a0] hover:border-white/20 hover:text-[#edebe8]"
-              >
-                See all providers
-              </Link>
-            </div>
+          <div className="mt-10 flex flex-col sm:flex-row gap-4">
+            <MonoButton href="/byok" variant="primary" prefix="./">
+              Learn about BYOK
+            </MonoButton>
+            <MonoButton href="/providers" variant="ghost" prefix="./">
+              See all providers
+            </MonoButton>
           </div>
-        </section>
-      </main>
+        </div>
+      </RuledSection>
 
-      <MarketingFooter />
-    </div>
+      {/* S5 — Dispatch */}
+      <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
+    </EditorialPage>
   );
 }
