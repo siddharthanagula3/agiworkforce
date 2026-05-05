@@ -19,11 +19,14 @@ Multi-provider AI coding assistant. 10+ providers (Anthropic, OpenAI, Google, xA
 2. Run **AGI Workforce: Set API Key** from the command palette (`cmd+shift+p`).
 3. Or, if you have GitHub Copilot installed, leave `agiWorkforce.fallbackToVscodeLm` on (default true) and the `@agi` participant will use Copilot's model when no API key is set.
 
-## Privacy
+## Setup
 
-- No telemetry is sent unless both VS Code's global `telemetry.telemetryLevel` setting **and** the extension-level `agiWorkforce.telemetryEnabled` setting are on. Both default to off for this extension.
-- Error messages and event properties are scrubbed for credentials (JWTs, Bearer tokens, OpenAI/Anthropic/Stripe/Slack/GitHub/Google/AWS keys) before any network call.
-- Settings are read from the **global** scope only when in an untrusted workspace; workspace overrides for endpoint URLs and similar are ignored.
+1. Install the extension.
+2. Open the AGI Workforce sidebar (Activity Bar icon).
+3. Pick a provider:
+   - **BYOK:** paste your provider API key in Settings → AGI Workforce → Models.
+   - **Local:** install Ollama or LM Studio; the extension auto-detects them.
+   - **Cloud:** sign in with your AGI Workforce account in the sidebar header.
 
 ## Configuration highlights
 
@@ -35,6 +38,32 @@ Multi-provider AI coding assistant. 10+ providers (Anthropic, OpenAI, Google, xA
 | `agiWorkforce.inlineCompletions.enabled` | `false`                               | Opt-in inline ghost-text completions.                            |
 | `agiWorkforce.useProviderStream`         | `false`                               | Route chat through `/api/v1/providers/:id/stream` (Wave 3 path). |
 | `agiWorkforce.telemetryEnabled`          | `false`                               | Anonymous usage telemetry.                                       |
+
+## Keyboard shortcuts
+
+- `Cmd/Ctrl+Shift+A` — open chat
+- `Cmd/Ctrl+Shift+Alt+E` — explain selection
+- `Cmd/Ctrl+Shift+Alt+G` — agent mode
+- `Cmd/Ctrl+Shift+Alt+A` — ask about code
+- `Cmd/Ctrl+Shift+Alt+X` — explain error
+- `Cmd/Ctrl+Shift+Alt+T` — run terminal command
+- `Cmd/Ctrl+Shift+Alt+N` — new conversation
+
+See the `Keyboard Shortcuts` editor for the full list.
+
+## Privacy
+
+- No telemetry is sent unless both VS Code's global `telemetry.telemetryLevel` setting **and** the extension-level `agiWorkforce.telemetryEnabled` setting are on. Both default to off for this extension.
+- Error messages and event properties are scrubbed for credentials (JWTs, Bearer tokens, OpenAI/Anthropic/Stripe/Slack/GitHub/Google/AWS keys) before any network call.
+- Settings are read from the **global** scope only when in an untrusted workspace; workspace overrides for endpoint URLs and similar are ignored.
+
+## Differentiators
+
+Most VS Code AI extensions lock you into one vendor. AGI Workforce lets you:
+
+- Switch providers mid-conversation (Claude → GPT → Llama in the same thread).
+- Use Local LLMs (Ollama, LM Studio) with zero cloud dependency.
+- Bring your own API keys — no subscription, no rate-limit ceiling beyond your own key's.
 
 ## License
 
