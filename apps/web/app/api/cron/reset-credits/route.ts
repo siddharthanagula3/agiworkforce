@@ -15,40 +15,41 @@ function getSupabaseClient() {
 }
 
 // Verify cron secret to prevent unauthorized access
+//
+// WEB-NEW-010 fix (2026-05-04 audit): the prior implementation auto-allowed
+// when `NODE_ENV === 'development'` and `CRON_SECRET` was absent. That is
+// safe on a developer's laptop, but a misconfigured staging container
+// (NODE_ENV=development is a common copy-paste from dev profiles) silently
+// became an unauthenticated endpoint that resets credits for ALL active
+// subscriptions. We now require an explicit `CRON_DEV_BYPASS=1` co-flag
+// for the dev-mode shortcut so it cannot be triggered by a single
+// environment variable getting copied into the wrong place.
 function verifyCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env['CRON_SECRET'];
   const nodeEnv = process.env['NODE_ENV'];
+  const devBypass = process.env['CRON_DEV_BYPASS'] === '1';
 
-  // AUDIT-008-010: Explicit NODE_ENV check to block production without secret
-  // This prevents accidental deployment of dev-mode bypass to production
-  const isProduction = nodeEnv === 'production';
-  const isVercelProduction = process.env['VERCEL_ENV'] === 'production';
-  const shouldRequireSecret = isProduction || isVercelProduction;
-
-  // In production (or Vercel production), CRON_SECRET is required
-  if (!cronSecret) {
-    if (shouldRequireSecret) {
-      logger.error(
-        { nodeEnv, vercelEnv: process.env['VERCEL_ENV'] },
-        'CRON_SECRET not set in production environment - denying request',
-      );
-      return false;
-    }
-    // Only allow in true development (local dev)
-    if (nodeEnv === 'development') {
-      logger.warn('CRON_SECRET not set in development - allowing request');
-      return true;
-    }
-    // Default deny for any other environment (staging, preview, etc.)
-    logger.error(
-      { nodeEnv },
-      'CRON_SECRET not set in non-development environment - denying request',
-    );
-    return false;
+  // CRON_SECRET is the only blessed way to authorize a cron call. Always
+  // accept it when present and matching, regardless of environment.
+  if (cronSecret) {
+    return authHeader === `Bearer ${cronSecret}`;
   }
 
-  return authHeader === `Bearer ${cronSecret}`;
+  // No secret configured. Only allow when BOTH:
+  //   (a) NODE_ENV=development AND
+  //   (b) CRON_DEV_BYPASS=1 explicitly set in .env.local
+  // Any other environment denies; staging/preview/production will fail loud.
+  if (nodeEnv === 'development' && devBypass) {
+    logger.warn({ nodeEnv }, 'CRON_SECRET unset; CRON_DEV_BYPASS=1 enabled — allowing dev request');
+    return true;
+  }
+
+  logger.error(
+    { nodeEnv, vercelEnv: process.env['VERCEL_ENV'], devBypass },
+    'CRON_SECRET not set and CRON_DEV_BYPASS not enabled — denying request',
+  );
+  return false;
 }
 
 export async function GET(request: NextRequest) {
