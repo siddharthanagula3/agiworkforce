@@ -419,6 +419,25 @@
   }
 }
 
+/* =====================================================
+   Editorial primitive kit — operator-broadsheet c4/11
+   ===================================================== */
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes opsz-morph {
+  from {
+    font-variation-settings: 'opsz' var(--opsz-from, 36);
+  }
+  to {
+    font-variation-settings: 'opsz' var(--opsz-to, 56);
+  }
+}
+
 @keyframes slide-in-right {
   from {
     opacity: 0;
@@ -427,6 +446,12 @@
   to {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
   }
 }
 
@@ -648,6 +673,20 @@
     --chat-radius-lg: 12px;
     --chat-radius-xl: 16px;
     --chat-radius-2xl: 24px;
+  }
+}
+
+@layer base {
+  /* Editorial specimen drop-cap */
+  .specimen--dropcap > p:first-of-type::first-letter {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-style: italic;
+    font-size: 4em;
+    line-height: 0.8;
+    padding-right: 0.1em;
+    float: left;
+    color: var(--color-rule);
   }
 }
 
