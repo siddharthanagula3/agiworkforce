@@ -16,6 +16,7 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::sync::{Arc, Mutex, RwLock};
+use zeroize::Zeroize;
 
 const NONCE_SIZE: usize = 12;
 const PBKDF2_ITERATIONS: u32 = 600_000; // OWASP recommended for PBKDF2-HMAC-SHA256
@@ -108,23 +109,16 @@ impl SecureStorage {
         Ok(())
     }
 
-    /// Lock storage (clear master key from memory)
+    /// Lock storage (clear master key from memory).
     ///
-    /// Uses volatile writes to prevent the compiler from optimizing away the
-    /// zeroization (Bug #65 fix — matches master_password.rs pattern).
+    /// SEV-DESK-16: replaced the hand-rolled `unsafe { std::ptr::write_volatile }`
+    /// + `compiler_fence(SeqCst)` pattern with the `zeroize` crate's `Zeroize`
+    /// trait, which guarantees the same volatile-write semantics. Removes
+    /// the only `#[allow(unsafe_code)]` block in this file.
     pub fn lock(&self) {
         if let Ok(mut master) = self.master_key.safe_write() {
             if let Some(ref mut key) = *master {
-                // Secure zeroization via volatile writes + compiler fence
-                for byte in key.iter_mut() {
-                    // SAFETY: volatile_write ensures the write is not optimized away
-                    #[allow(unsafe_code)]
-                    unsafe {
-                        std::ptr::write_volatile(byte, 0);
-                    }
-                }
-                // Memory barrier to ensure all writes complete
-                std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+                key.zeroize();
             }
             *master = None;
         }

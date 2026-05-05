@@ -5,7 +5,7 @@
  * Connections, Preferences, and About.
  */
 import { useCallback, useRef } from 'react';
-import { View, SectionList, Pressable, Alert, Linking } from 'react-native';
+import { View, SectionList, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
@@ -41,6 +41,7 @@ import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useModelStore } from '@/stores/modelStore';
 import { api } from '@/services/api';
+import { openExternalUrl } from '@/lib/safeOpenURL';
 import { colors } from '@/lib/theme';
 import { VoiceSelector } from '@/components/voice/VoiceSelector';
 
@@ -237,16 +238,16 @@ export default function SettingsTabScreen() {
   const handleManageSubscription = useCallback(async () => {
     try {
       const data = await api.post<{ url: string }>('/api/portal');
-      if (data.url) {
-        await Linking.openURL(data.url);
+      // HIGH-MOB-02 fix: validate `data.url` against the allowlist (see
+      // lib/safeOpenURL.ts). MITM/compromised backend cannot redirect to
+      // intent://, javascript:, or phishing URLs.
+      if (data.url && (await openExternalUrl(data.url))) {
         return;
       }
     } catch {
       // Fall back to static URL
     }
-    try {
-      await Linking.openURL('https://agiworkforce.com/billing');
-    } catch {
+    if (!(await openExternalUrl('https://agiworkforce.com/billing'))) {
       Alert.alert(
         'Error',
         'Could not open subscription management. Please visit agiworkforce.com/billing in your browser.',
@@ -388,9 +389,7 @@ export default function SettingsTabScreen() {
           label: 'Help & FAQ',
           type: 'navigation',
           onPress: () => {
-            Linking.openURL('https://agiworkforce.com/help').catch(() => {
-              // silently ignore
-            });
+            void openExternalUrl('https://agiworkforce.com/help');
           },
         },
         {
@@ -399,9 +398,7 @@ export default function SettingsTabScreen() {
           label: 'Privacy Policy',
           type: 'navigation',
           onPress: () => {
-            Linking.openURL('https://agiworkforce.com/privacy').catch(() => {
-              // silently ignore
-            });
+            void openExternalUrl('https://agiworkforce.com/privacy');
           },
         },
         {
@@ -410,9 +407,7 @@ export default function SettingsTabScreen() {
           label: 'Terms of Service',
           type: 'navigation',
           onPress: () => {
-            Linking.openURL('https://agiworkforce.com/terms').catch(() => {
-              // silently ignore
-            });
+            void openExternalUrl('https://agiworkforce.com/terms');
           },
         },
         {

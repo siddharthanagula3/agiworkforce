@@ -166,8 +166,28 @@ export const useAuthStore = create<AuthState>()(
       },
 
       resetPassword: async (email) => {
+        // CRIT-MOB-01 fix (red-team finding 2026-05): Supabase emits the
+        // recovery JWT in the redirect URL fragment. Sending it to a
+        // custom scheme (`agiworkforce://reset-password`) lets any APK on
+        // an Android device register the same scheme and intercept the
+        // recovery token — full account takeover.
+        //
+        // We now redirect to the verified HTTPS App Link
+        // (`https://agiworkforce.com/auth/reset-password`). HTTPS App Links
+        // require domain ownership verification (assetlinks.json on Android,
+        // AASA on iOS, served from /.well-known/ on agiworkforce.com), so a
+        // hostile app cannot claim the same path. If the OS hasn't been
+        // taught about the App Link yet, the URL opens in the browser and
+        // the user completes the flow on the web — also safe, because the
+        // web reset-password page is on the same origin and the JWT stays
+        // there.
+        //
+        // Mirrors the same fix already applied to Google OAuth in
+        // components/auth/OAuthButtons.tsx (HIGH-MOB-04). The
+        // assetlinks.json + AASA prerequisite is a deployment-side task,
+        // not a mobile-code task.
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: 'agiworkforce://reset-password',
+          redirectTo: 'https://agiworkforce.com/auth/reset-password',
         });
         if (error) {
           throw error;

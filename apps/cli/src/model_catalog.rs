@@ -39,7 +39,7 @@ const SUPPORTED_SHARED_PROVIDERS: &[&str] = &[
     "deepseek",
 ];
 
-const FALLBACK_DEFAULT_MODEL: &str = "claude-opus-4-6";
+const FALLBACK_DEFAULT_MODEL: &str = "claude-opus-4-7";
 const FALLBACK_DEFAULT_PROVIDER: &str = "anthropic";
 
 /// Fallback defaults for model metadata when upstream data is missing.
@@ -272,7 +272,7 @@ fn legacy_bundled_models() -> Vec<Model> {
     vec![
         // ── Anthropic ── docs.anthropic.com/en/docs/about-claude/models
         m(
-            "claude-opus-4-6",
+            "claude-opus-4-7",
             "anthropic",
             "Claude Opus 4.6",
             200_000,
@@ -1197,7 +1197,8 @@ mod tests {
     #[test]
     fn context_window_lookup() {
         let cat = Catalog::bundled();
-        assert_eq!(cat.context_window("claude-opus-4-6"), 200_000);
+        // claude-opus-4-7 ships with 1M context window per models.json
+        assert_eq!(cat.context_window("claude-opus-4-7"), 1_000_000);
         assert_eq!(cat.context_window("gpt-5.4"), 1_000_000);
         assert_eq!(cat.context_window("gemini-3.1-pro-preview"), 2_000_000);
         assert_eq!(cat.context_window("grok-4-0709"), 256_000);
@@ -1206,7 +1207,7 @@ mod tests {
     #[test]
     fn pricing_lookup() {
         let cat = Catalog::bundled();
-        let (i, o) = cat.pricing("claude-opus-4-6");
+        let (i, o) = cat.pricing("claude-opus-4-7");
         assert!(i > 0.0 && o > 0.0);
         let (i, o) = cat.pricing("llama3.1");
         assert_eq!((i, o), (0.0, 0.0));
@@ -1215,7 +1216,7 @@ mod tests {
     #[test]
     fn provider_detection() {
         let cat = Catalog::bundled();
-        assert_eq!(cat.provider_for("claude-opus-4-6"), Some("anthropic"));
+        assert_eq!(cat.provider_for("claude-opus-4-7"), Some("anthropic"));
         assert_eq!(cat.provider_for("gpt-5.4"), Some("openai"));
         assert_eq!(cat.provider_for("gemini-3.1-pro-preview"), Some("google"));
         assert_eq!(cat.provider_for("grok-4.1"), Some("xai"));
@@ -1260,7 +1261,7 @@ mod tests {
     fn user_override_replaces_existing() {
         let mut cat = Catalog::bundled();
         let ov = UserModelOverride {
-            id: "claude-opus-4-6".into(),
+            id: "claude-opus-4-7".into(),
             provider: "anthropic".into(),
             display_name: Some("Custom Opus".into()),
             context_window: Some(500_000),
@@ -1272,7 +1273,7 @@ mod tests {
             supports_reasoning: None,
         };
         cat.apply_overrides(&[ov]);
-        let found = cat.find("claude-opus-4-6").unwrap();
+        let found = cat.find("claude-opus-4-7").unwrap();
         assert_eq!(found.context_window, 500_000);
         assert_eq!(found.display_name, "Custom Opus");
     }

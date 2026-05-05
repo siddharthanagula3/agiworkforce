@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
-import { View, ScrollView, Pressable, Alert, Linking } from 'react-native';
+import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -23,6 +23,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { api } from '@/services/api';
+import { openExternalUrl } from '@/lib/safeOpenURL';
 import { colors } from '@/lib/theme';
 
 interface UsageStats {
@@ -106,16 +107,19 @@ export default function ProfileScreen() {
   const handleManageSubscription = useCallback(async () => {
     try {
       const data = await api.post<{ url: string }>('/api/portal');
-      if (data.url) {
-        await Linking.openURL(data.url);
+      // HIGH-MOB-02 fix (red-team 2026-05): validate `data.url` against the
+      // agiworkforce / stripe allowlist before opening — a MITM or
+      // compromised backend could otherwise return `intent://...`,
+      // `javascript:...`, or a phishing-clone URL and Linking.openURL would
+      // honor it. openExternalUrl returns false on rejected/failed URLs
+      // and we fall through to the static URL.
+      if (data.url && (await openExternalUrl(data.url))) {
         return;
       }
     } catch {
       // Fall back to static URL
     }
-    try {
-      await Linking.openURL('https://agiworkforce.com/billing');
-    } catch {
+    if (!(await openExternalUrl('https://agiworkforce.com/billing'))) {
       Alert.alert(
         'Error',
         'Could not open subscription management. Please visit agiworkforce.com/billing in your browser.',
@@ -233,7 +237,9 @@ export default function ProfileScreen() {
               Account
             </Text>
             <Pressable
-              onPress={() => Linking.openURL('https://agiworkforce.com/account')}
+              onPress={() => {
+                void openExternalUrl('https://agiworkforce.com/account');
+              }}
               className="flex-row items-center gap-3 py-3 active:bg-white/5 rounded-lg"
               accessibilityLabel="Manage account online"
               accessibilityRole="link"

@@ -11,6 +11,17 @@ const JWT_SECRET = requireEnv('JWT_SECRET');
 // TTL is intentionally short (60s) so suspensions take effect quickly.
 // On DB error with no cached entry: fail closed (503). With a cached entry: use it.
 const ACCOUNT_STATUS_CACHE_TTL_MS = 60_000;
+
+// SECURITY (H7, redteam-services 2026-05-04): per-jti revocation cache.
+// The check itself is one indexed PK lookup so we keep the TTL short — 5
+// seconds is enough that we make at most ~1 lookup per active session per
+// 5s. The cache only stores positive non-revoked answers; revoked tokens
+// always re-check (defense in depth).
+const REVOCATION_CACHE_TTL_MS = 5_000;
+interface RevocationCacheEntry {
+  cachedAt: number;
+}
+const revocationCache = new Map<string, RevocationCacheEntry>();
 interface AccountStatusEntry {
   status: string;
   cachedAt: number;
@@ -37,6 +48,12 @@ setInterval(() => {
   for (const [userId, entry] of accountStatusCache) {
     if (now - entry.cachedAt > ACCOUNT_STATUS_CACHE_TTL_MS) {
       accountStatusCache.delete(userId);
+    }
+  }
+  // SECURITY (H7): also flush the revocation positive-cache.
+  for (const [jti, entry] of revocationCache) {
+    if (now - entry.cachedAt > REVOCATION_CACHE_TTL_MS) {
+      revocationCache.delete(jti);
     }
   }
 }, 300_000);
@@ -70,8 +87,55 @@ export async function authenticateToken(
       algorithms: ['HS256'],
       issuer: 'agiworkforce-api-gateway',
       audience: 'agiworkforce',
-    });
+    }) as jwt.JwtPayload;
     req.user = authenticatedUserSchema.parse(payload);
+
+    // SECURITY (H7, redteam-services 2026-05-04): per-jti revocation check.
+    // Tokens issued before the H7 fix do not carry `jti` — accept them so
+    // the rollout is non-breaking but log so we can track residual risk.
+    if (typeof payload.jti === 'string' && payload.jti.length > 0) {
+      const jti = payload.jti;
+      const cached = revocationCache.get(jti);
+      const cacheStale = !cached || Date.now() - cached.cachedAt > REVOCATION_CACHE_TTL_MS;
+
+      if (cacheStale) {
+        try {
+          const { data: revokedRow, error: revokedError } = await supabase
+            .from('revoked_jwts')
+            .select('jti')
+            .eq('jti', jti)
+            .maybeSingle();
+
+          if (revokedError) {
+            // DB outage on revocation check: fail closed for defense in
+            // depth — a stolen token must not slip through during an outage.
+            logger.error({ error: revokedError, jti }, 'Revocation DB check failed');
+            res.status(503).json({
+              error: 'Service temporarily unavailable. Please try again shortly.',
+              code: 'AUTH_CHECK_UNAVAILABLE',
+            });
+            return;
+          }
+
+          if (revokedRow) {
+            res.status(401).json({ error: 'Token revoked', code: 'TOKEN_REVOKED' });
+            return;
+          }
+
+          revocationCache.set(jti, { cachedAt: Date.now() });
+        } catch (revocationCheckError) {
+          logger.error(
+            { error: revocationCheckError, jti },
+            'Revocation check threw — failing closed',
+          );
+          res.status(503).json({
+            error: 'Service temporarily unavailable. Please try again shortly.',
+            code: 'AUTH_CHECK_UNAVAILABLE',
+          });
+          return;
+        }
+      }
+    }
 
     // P0 Kill Switch: Check account status. Fail closed — never fail open.
     // Uses a short-TTL in-memory cache so brief DB outages don't block active users.

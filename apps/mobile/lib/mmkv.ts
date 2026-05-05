@@ -39,6 +39,42 @@ function getStorage(): MMKV {
 }
 
 /**
+ * Generate a 256-bit MMKV encryption key as 64 lowercase hex chars.
+ *
+ * **Why this is a separate, exported function** (CRIT-MOB-02 fix, 2026-05):
+ * the previous implementation concatenated two `Crypto.randomUUID()` calls
+ * and stripped dashes:
+ *
+ *   const uuid1 = Crypto.randomUUID();  // 36 chars, 122 bits of entropy
+ *   const uuid2 = Crypto.randomUUID();  // 36 chars, 122 bits of entropy
+ *   key = (uuid1 + uuid2).replace(/-/g, ''); // 64 hex chars, 244 bits effective
+ *
+ * Each RFC 4122 v4 UUID encodes only 122 bits of entropy (4 bits go to the
+ * version field, 2 bits go to the variant field, both fixed). Concatenating
+ * two yields 244 bits of entropy in a 256-bit-shaped string — the visible
+ * key shape suggests stronger material than is actually present, and the
+ * fixed-bit pattern is a distinguisher in pathological cracking scenarios.
+ *
+ * `Crypto.getRandomBytesAsync(32)` returns 32 raw random bytes from the
+ * platform CSPRNG — the actual primitive. Hex-encode for storage as a
+ * string; `react-native-mmkv` accepts the hex string directly as
+ * `encryptionKey`. Result: a true 256-bit key with no fixed-bit overhead.
+ *
+ * Exported separately so unit tests can pin the format without spinning
+ * up a real `SecureStore`.
+ */
+export async function generateMmkvEncryptionKey(): Promise<string> {
+  const bytes = await Crypto.getRandomBytesAsync(32); // 256 bits, raw
+  // Manual hex encoding — Buffer is not available in Hermes / RN runtimes.
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i] as number;
+    out += b.toString(16).padStart(2, '0');
+  }
+  return out;
+}
+
+/**
  * Initialise (or re-use) the encrypted MMKV instance.
  *
  * Must be called once, early in app startup (e.g. the very first `useEffect`
@@ -54,10 +90,7 @@ export async function initMmkvEncryption(): Promise<void> {
   let key = await SecureStore.getItemAsync(MMKV_KEY_STORAGE_ID);
 
   if (!key) {
-    // Generate a cryptographically random 64-char hex key (256 bits).
-    const uuid1 = Crypto.randomUUID(); // 36 chars
-    const uuid2 = Crypto.randomUUID(); // 36 chars
-    key = (uuid1 + uuid2).replace(/-/g, ''); // 64 hex chars
+    key = await generateMmkvEncryptionKey();
 
     await SecureStore.setItemAsync(MMKV_KEY_STORAGE_ID, key, {
       keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,

@@ -104,6 +104,17 @@ const pairingCodeResponseSchema = z.object({
   httpUrl: z.string(),
   wsUrl: z.string(),
   qrData: z.string(),
+  // SECURITY (C2, redteam-services 2026-05-04): per-role pair tokens issued by
+  // the signaling server. We MUST forward the desktop token to the desktop
+  // client (over the authenticated gateway channel) and the mobile token to
+  // the mobile client. Optional during the rollout window; required in
+  // production once SIGNALING_REQUIRE_PAIR_TOKEN=1.
+  pairTokens: z
+    .object({
+      desktop: z.string(),
+      mobile: z.string(),
+    })
+    .optional(),
 });
 
 // SECURITY: .strict() rejects unexpected fields
@@ -285,6 +296,14 @@ router.post(
 
     const payload = pairingCodeResponseSchema.parse(jsonBody);
 
+    // SECURITY (C2): forward both pair tokens. The mobile client (current
+    // request) gets the mobile token; the desktop client picks up its own
+    // token via a separate authenticated channel — typically the
+    // /api/desktop/* endpoints which read from a server-side store keyed
+    // by user_id. For Wave 3, we return both tokens here and rely on the
+    // caller's surface ID to select the right one. (When the gateway has
+    // persistent device routing, the desktop token should NOT round-trip
+    // through the mobile response.)
     res.json({
       code: payload.code,
       expiresAt: payload.expiresAt,
@@ -294,6 +313,7 @@ router.post(
         httpUrl: payload.httpUrl,
         wsUrl: payload.wsUrl,
       },
+      pairTokens: payload.pairTokens,
     });
   },
 );

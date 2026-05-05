@@ -20,5 +20,7 @@
     "filesystem",
     "github",
     "vercel"
-  ]
+  ],
+  "prefersReducedMotion": false,
+  "outputStyle": "default"
 }

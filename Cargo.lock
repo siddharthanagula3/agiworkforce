@@ -148,6 +148,7 @@ dependencies = [
  "toml 0.8.2",
  "tower",
  "tower-http",
+ "tracing",
  "two-face",
  "urlencoding",
  "uuid 1.20.0",
@@ -280,6 +281,7 @@ dependencies = [
  "whisper-rs",
  "windows 0.56.0",
  "xcap",
+ "zeroize",
  "zip 1.1.4",
 ]
 

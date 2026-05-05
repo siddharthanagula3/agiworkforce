@@ -27,7 +27,7 @@ Every other terminal AI tool I tried (Claude Code, OpenAI Codex CLI, Gemini CLI)
 agiworkforce -m llama3.1:8b exec "summarize this README"
 
 # Cloud-first with local fallback (rotates on rate-limit)
-agiworkforce -m "claude-opus-4-6,gpt-5.4,llama3.1:8b" exec "..."
+agiworkforce -m "claude-opus-4-7,gpt-5.4,llama3.1:8b" exec "..."
 
 # LM Studio works the same
 agiworkforce -m lmstudio:llama-3.3-70b exec "..."
@@ -58,7 +58,7 @@ cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkfor
 
 **Open source?**
 
-Source is in the public repo (Rust, 195 files, 155,029 LOC, 914 tests). The license is proprietary — local + BYOK use is unrestricted via the binary releases. The repo is published for transparency.
+Source is in the public repo (Rust, 195 files, 155,029 LOC, 2,161 tests). The license is proprietary — local + BYOK use is unrestricted via the binary releases. The repo is published for transparency.
 
 **Repo:** https://github.com/siddharthanagula3/agiworkforce
 **Architecture:** https://github.com/siddharthanagula3/agiworkforce/blob/main/apps/cli/ARCHITECTURE.md

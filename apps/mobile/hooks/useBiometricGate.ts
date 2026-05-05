@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useBiometricFlag } from '@/lib/biometricFlagStore';
 import { AppState, type AppStateStatus } from 'react-native';
 
 interface BiometricGateResult {
@@ -9,7 +9,10 @@ interface BiometricGateResult {
 }
 
 export function useBiometricGate(): BiometricGateResult {
-  const biometricLockEnabled = useSettingsStore((s) => s.biometricLockEnabled);
+  // LOW-MOB-1 fix (red-team 2026-05): the flag lives in SecureStore, not
+  // MMKV — extracting the MMKV encryption key no longer disables the gate.
+  // See lib/biometricFlagStore.ts for the rationale.
+  const biometricLockEnabled = useBiometricFlag((s) => s.enabled);
   const [isUnlocked, setIsUnlocked] = useState(!biometricLockEnabled);
   const previousStateRef = useRef<AppStateStatus>(AppState.currentState);
 

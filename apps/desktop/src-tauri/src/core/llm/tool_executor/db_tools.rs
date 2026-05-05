@@ -111,10 +111,15 @@ impl ToolExecutor {
 
         // SECURITY: Table allowlist — LLM may only SELECT from non-sensitive tables.
         // Sensitive tables (users, auth_sessions, api_keys, master_password, etc.) are excluded.
+        // SEV-DESK-10 fix: `settings` removed. The settings table holds encrypted
+        // API key blobs (provider keys, BYOK material) and OAuth tokens — even
+        // though the values are encrypted, returning them to the LLM means
+        // they cross the user→provider trust boundary (the LLM provider sees
+        // the ciphertext + adjacent metadata, expanding leak surface). The LLM
+        // has no legitimate need to read settings.
         const ALLOWED_QUERY_TABLES: &[&str] = &[
             "conversations",
             "messages",
-            "settings",
             "automation_history",
             "overlay_events",
             "command_history",
@@ -188,8 +193,21 @@ impl ToolExecutor {
             }
         }
 
-        // SECURITY: Audit log for AI-constructed queries
-        tracing::info!("[SECURITY][db_query] AI executing SELECT query: {}", query);
+        // SECURITY: Audit log for AI-constructed queries.
+        // SEV-DESK-17 fix: demoted from `info!` to `debug!`. The full query text
+        // can include user-pasted content via WHERE filters and surfaces in
+        // Console.app on macOS at INFO level. DEBUG keeps the audit trail
+        // available when troubleshooting without bleeding into default-level
+        // log streams. Truncate to 200 chars to bound a misbehaving model.
+        let trimmed_query = if query.len() > 200 {
+            format!("{}…", &query[..200])
+        } else {
+            query.to_string()
+        };
+        tracing::debug!(
+            "[SECURITY][db_query] AI executing SELECT query: {}",
+            trimmed_query
+        );
 
         if let Some(ref app) = self.app_handle {
             use crate::sys::commands::chat::AppDatabase;

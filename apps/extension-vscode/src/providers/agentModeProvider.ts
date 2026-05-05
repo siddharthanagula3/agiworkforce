@@ -10,6 +10,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
+import { getActiveWorkspaceFolderSync } from '../utils/workspaceFolders';
+import { Config } from '../utils/config';
 import { WorkspaceIndexer } from '../services/workspaceIndexer';
 import { getContextBuilder } from '../services/contextBuilder';
 import * as telemetry from '../services/telemetry';
@@ -112,7 +114,6 @@ export class AgentModePanel {
   /** Counts autonomous continuation iterations for the current agent session. */
   private _iterationCount = 0;
   /** Default max iterations — overridden by agiWorkforce.agent.maxIterations setting. */
-  private static readonly DEFAULT_MAX_ITERATIONS = 25;
 
   public static createOrShow(
     extensionUri: vscode.Uri,
@@ -391,9 +392,7 @@ export class AgentModePanel {
 
     // Enforce per-session iteration cap to prevent runaway autonomous loops.
     this._iterationCount += 1;
-    const maxIterations =
-      vscode.workspace.getConfiguration('agiWorkforce').get<number>('agent.maxIterations') ??
-      AgentModePanel.DEFAULT_MAX_ITERATIONS;
+    const maxIterations = Config.agentMaxIterations();
 
     if (this._iterationCount > maxIterations) {
       const choice = await vscode.window.showWarningMessage(
@@ -471,13 +470,16 @@ export class AgentModePanel {
       }
     }
 
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders === undefined || workspaceFolders.length === 0) {
-      this.postMessage({ type: 'error', text: 'No workspace folder open.' });
+    const folder = getActiveWorkspaceFolderSync();
+    if (folder === undefined) {
+      this.postMessage({
+        type: 'error',
+        text: 'No active workspace folder. Open a file to anchor multi-root operations.',
+      });
       return;
     }
 
-    const rootUri = workspaceFolders[0]!.uri;
+    const rootUri = folder.uri;
     const edits: FileEdit[] = [];
 
     for (const req of editRequests) {
@@ -812,10 +814,10 @@ export class AgentModePanel {
    * Open a diff editor showing the intended change so the user can apply it manually.
    */
   private async _openManualDiffEditor(patch: PatchBlock & { error: string }): Promise<void> {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders === undefined || workspaceFolders.length === 0) return;
+    const folder = getActiveWorkspaceFolderSync();
+    if (folder === undefined) return;
 
-    const rootUri = workspaceFolders[0]!.uri;
+    const rootUri = folder.uri;
 
     // Validate that the path stays within the workspace root (prevent path traversal)
     const resolvedPath = path.resolve(rootUri.fsPath, patch.filePath);
@@ -896,10 +898,10 @@ export class AgentModePanel {
    * (ignore all whitespace, case-insensitive).
    */
   private async _retryWithAggressiveFuzzy(patch: PatchBlock & { error: string }): Promise<void> {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders === undefined || workspaceFolders.length === 0) return;
+    const folder = getActiveWorkspaceFolderSync();
+    if (folder === undefined) return;
 
-    const rootUri = workspaceFolders[0]!.uri;
+    const rootUri = folder.uri;
 
     // Validate that the path stays within the workspace root (prevent path traversal)
     const resolvedPath = path.resolve(rootUri.fsPath, patch.filePath);
@@ -1083,10 +1085,10 @@ export class AgentModePanel {
   private async readFiles(
     paths: string[],
   ): Promise<Array<{ path: string; content: string; language: string }>> {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders === undefined || workspaceFolders.length === 0) return [];
+    const folder = getActiveWorkspaceFolderSync();
+    if (folder === undefined) return [];
 
-    const rootUri = workspaceFolders[0]!.uri;
+    const rootUri = folder.uri;
     const results: Array<{ path: string; content: string; language: string }> = [];
 
     for (const filePath of paths) {

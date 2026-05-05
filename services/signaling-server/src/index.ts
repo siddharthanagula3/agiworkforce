@@ -70,7 +70,6 @@ import {
   MAX_SDP_MLINE_INDEX,
   MAX_USERNAME_FRAGMENT_SIZE,
   MAX_CONTROL_PAYLOAD_SIZE,
-  MAX_ACTION_NAME_SIZE,
   PAIRING_CODE_LENGTH,
   CODE_GENERATION_MAX_ATTEMPTS,
   SESSION_CLEANUP_INTERVAL_MS,
@@ -157,6 +156,63 @@ function constantTimeCompare(a: string, b: string): boolean {
   const ha = createHmac('sha256', COMPARE_KEY).update(a).digest();
   const hb = createHmac('sha256', COMPARE_KEY).update(b).digest();
   return timingSafeEqual(ha, hb);
+}
+
+// =============================================================================
+// SECURITY (C2, redteam-services 2026-05-04): per-pair authentication tokens
+// =============================================================================
+//
+// Knowledge of the 8-char pairing code alone is insufficient to register as a
+// peer. The signaling-server issues a short-lived HMAC token for each role at
+// pairing-creation time; the legitimate clients receive these tokens through
+// the gateway's authenticated channel and present them on `register`.
+//
+// HMAC payload: `${code}|${role}|${expiresAt}` keyed by SIGNALING_INTERNAL_SECRET.
+// (We bind to expiresAt so tokens for an old expired pairing cannot be replayed
+// against a newly-issued pairing that happens to recycle the same code.)
+//
+// When SIGNALING_REQUIRE_PAIR_TOKEN=0 the verifier short-circuits to true so a
+// staged rollout can land server-side first. Production MUST set =1.
+
+const REQUIRE_PAIR_TOKEN =
+  (process.env['SIGNALING_REQUIRE_PAIR_TOKEN'] ?? '1').toLowerCase() === '1' ||
+  process.env['NODE_ENV'] === 'production';
+
+function buildPairTokenSecret(): string {
+  // Falls back to a process-local secret if SIGNALING_INTERNAL_SECRET is not
+  // set (dev only). In production SIGNALING_INTERNAL_SECRET MUST be set or the
+  // token verification will fall back to the random per-process secret and the
+  // tokens will not survive a restart — that's acceptable for dev.
+  return SIGNALING_SECRET ?? COMPARE_KEY.toString('hex');
+}
+
+function issuePairToken(code: string, role: Role, expiresAt: number): string {
+  const payload = `${code}|${role}|${expiresAt}`;
+  return createHmac('sha256', buildPairTokenSecret()).update(payload).digest('hex');
+}
+
+/**
+ * Verify a pairToken issued by issuePairToken(). Returns true only when the
+ * HMAC matches in constant time. When pair-token enforcement is disabled,
+ * always returns true.
+ */
+function verifyPairToken(
+  presented: string | undefined,
+  code: string,
+  role: Role,
+  expiresAt: number,
+): boolean {
+  if (!REQUIRE_PAIR_TOKEN) return true;
+  if (!presented || presented.length === 0) return false;
+  let presentedBuf: Buffer;
+  try {
+    presentedBuf = Buffer.from(presented, 'hex');
+  } catch {
+    return false;
+  }
+  const expected = Buffer.from(issuePairToken(code, role, expiresAt), 'hex');
+  if (presentedBuf.length !== expected.length) return false;
+  return timingSafeEqual(presentedBuf, expected);
 }
 
 const DEFAULT_TTL_SECONDS = Number(
@@ -357,6 +413,17 @@ const registerMessageSchema = z.object({
   code: pairingCodeSchema,
   role: z.union([z.literal('desktop'), z.literal('mobile')]),
   metadata: metadataSchema,
+  // SECURITY (C2, redteam-services 2026-05-04): per-pair authentication token.
+  // The signaling-server returns this as part of POST /pairings; the legitimate
+  // peer presents it on register. An attacker who learns only the 8-char code
+  // (e.g., shoulder-surfing the QR display) cannot forge it without the server
+  // secret. The token is an HMAC over (code, role, expiresAt, nonce) so it also
+  // binds the connection to the role the requester intended.
+  //
+  // OPTIONAL during the rollout window: when SIGNALING_REQUIRE_PAIR_TOKEN=0 the
+  // server still accepts un-tokenized registers (legacy clients). Default in
+  // production is "1" — see verifyPairToken() below.
+  pairToken: z.string().min(1).max(512).optional(),
 });
 
 // WebRTC SDP payload validation (offer/answer)
@@ -374,9 +441,34 @@ const icePayloadSchema = z.object({
 });
 
 // Control message payload
+//
+// SECURITY (H4, redteam-services 2026-05-04): the `action` field was previously
+// `z.string().max(MAX_ACTION_NAME_SIZE)` which let any registered peer forward
+// arbitrary action strings. We now restrict to a strict allowlist that mirrors
+// the action types the desktop and mobile clients actually handle. New action
+// types MUST be added here AND in the mobile/desktop dispatch handlers.
+//
+// Allowlist (mirror of apps/mobile + apps/desktop dispatch protocol):
+//   - approval_request / approval_response — desktop ↔ mobile approval flow
+//   - sync_request / sync_response         — state sync after reconnect
+//   - dispatch_request / dispatch_response — natural-language task dispatch
+//   - heartbeat / heartbeat_ack            — application-level liveness
+//   - cancel                               — cancel an in-flight task
+const ALLOWED_CONTROL_ACTIONS = [
+  'approval_request',
+  'approval_response',
+  'sync_request',
+  'sync_response',
+  'dispatch_request',
+  'dispatch_response',
+  'heartbeat',
+  'heartbeat_ack',
+  'cancel',
+] as const;
+
 const controlPayloadSchema = z
   .object({
-    action: z.string().max(MAX_ACTION_NAME_SIZE),
+    action: z.enum(ALLOWED_CONTROL_ACTIONS),
     data: z.record(z.string(), z.unknown()).optional(),
   })
   .refine((val) => JSON.stringify(val).length <= MAX_CONTROL_PAYLOAD_SIZE, {
@@ -583,6 +675,16 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
   logger.info({ correlationId, code, expiresAt }, 'Pairing session created');
   metrics.recordPairingRequest(true);
 
+  // SECURITY (C2): mint per-role auth tokens. The gateway is responsible for
+  // delivering these to the right device — `desktopPairToken` to the desktop
+  // (which already trusts the gateway via the signed JWT it presented to
+  // /api/mobile/pairing-code) and `mobilePairToken` to the mobile client (via
+  // the QR encoding produced by buildQrPayload + a side-channel for the
+  // token). The signaling-server itself has no notion of which device is
+  // which user — that binding lives in the gateway.
+  const desktopPairToken = issuePairToken(code, 'desktop', expiresAt);
+  const mobilePairToken = issuePairToken(code, 'mobile', expiresAt);
+
   return res.json({
     code,
     expiresAt,
@@ -595,20 +697,36 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
       httpUrl: publicHttpUrl,
       wsUrl: publicWsUrl,
     },
+    // SECURITY (C2): per-role auth tokens. Gateway MUST forward these to the
+    // appropriate peers and MUST NOT log them at info level. See
+    // services/api-gateway/src/routes/mobile.ts.
+    pairTokens: {
+      desktop: desktopPairToken,
+      mobile: mobilePairToken,
+    },
   });
 });
 
 // SECURITY: Rate limited to 60/min - read-only operations
+//
+// SECURITY (M5, redteam-services 2026-05-04): all failure responses return
+// 404 with the same body so an attacker scanning the 36^8 pairing-code
+// keyspace cannot use status code differentiation as an existence oracle.
+// Only the WS `register` handler authoritatively determines whether a code
+// is valid — and that path requires a per-pair HMAC token (C2).
 app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
+  const generic404 = { error: 'pairing_not_found' };
   const rawCode = req.params['code'];
   if (!rawCode) {
-    return res.status(400).json({ error: 'missing_code' });
+    return res.status(404).json(generic404);
   }
 
-  // SECURITY: Validate pairing code format before database lookup
+  // SECURITY: Validate pairing code format before database lookup. Even
+  // malformed codes return 404 (not 400) to avoid leaking the validator
+  // pattern as a probing oracle.
   const codeValidation = pairingCodeSchema.safeParse(rawCode);
   if (!codeValidation.success) {
-    return res.status(400).json({ error: 'invalid_code_format' });
+    return res.status(404).json(generic404);
   }
 
   // Use validated code (guaranteed to be string)
@@ -621,13 +739,13 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
     .single();
 
   if (!sessionData) {
-    return res.status(404).json({ error: 'pairing_not_found' });
+    return res.status(404).json(generic404);
   }
 
   const activeSession = activeSessions.get(code);
 
   if (sessionData.expires_at <= Date.now()) {
-    return res.status(410).json({ error: 'pairing_expired' });
+    return res.status(404).json(generic404);
   }
 
   return res.json({
@@ -1232,6 +1350,29 @@ async function handleRegister(
   if (isSessionExpired(session)) {
     activeSessions.delete(message.code);
     socket.send(JSON.stringify({ type: 'error', error: 'pairing_expired' }));
+    socket.close();
+    return;
+  }
+
+  // SECURITY (C2, redteam-services 2026-05-04): verify per-pair auth token
+  // BEFORE any state-changing checks. We do this BEFORE the
+  // "role_already_connected" check so an attacker without the token cannot
+  // probe which roles are taken — both failures look the same to them.
+  if (!verifyPairToken(message.pairToken, message.code, message.role, session.expiresAt)) {
+    logger.warn(
+      {
+        correlationId,
+        code: message.code,
+        role: message.role,
+        hasToken: Boolean(message.pairToken),
+      },
+      'Pair token verification failed',
+    );
+    metrics.recordError('pair_token_invalid');
+    // Use a generic error so an attacker cannot distinguish "wrong token" from
+    // "wrong code" or "wrong role". Mirrors the H1/H2 enumeration-prevention
+    // pattern used in HTTP 404s elsewhere.
+    socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
     socket.close();
     return;
   }

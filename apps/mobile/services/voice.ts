@@ -1,6 +1,7 @@
 import { Audio, type AudioMode } from 'expo-av';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { supabase } from './supabase';
+import { secureFetch } from './secureFetch';
 
 // CRIT-MOB-02 fix (2026-05-04): ephemeral Deepgram token endpoint.
 // The backend mints a short-lived (<60s) Deepgram temp token scoped to a
@@ -23,7 +24,7 @@ export async function getDeepgramEphemeralToken(): Promise<string> {
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.DEFAULT);
 
   try {
-    const response = await fetch(`${API_URL}/api/v1/voice/token`, {
+    const response = await secureFetch(`${API_URL}/api/v1/voice/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -253,7 +254,7 @@ export async function transcribe(uri: string): Promise<TranscriptionResult> {
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.UPLOAD);
 
   try {
-    const response = await fetch(`${API_URL}/api/voice/transcribe`, {
+    const response = await secureFetch(`${API_URL}/api/voice/transcribe`, {
       method: 'POST',
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -311,7 +312,7 @@ export async function transcribeWithDeepgram(uri: string, ephemeralToken: string
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.UPLOAD);
 
   try {
-    const response = await fetch(DEEPGRAM_ENDPOINT, {
+    const response = await secureFetch(DEEPGRAM_ENDPOINT, {
       method: 'POST',
       headers: { Authorization: `Bearer ${ephemeralToken}` },
       body: formData,

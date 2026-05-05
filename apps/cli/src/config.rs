@@ -375,6 +375,18 @@ impl CliConfig {
         let path = Self::config_path()?;
         let contents = toml::to_string_pretty(self).context("Failed to serialize config")?;
         std::fs::write(&path, contents).context("Failed to write config file")?;
+
+        // SEV-CLI-12 fix: config.toml may carry provider configuration that the
+        // user expects to remain private (custom base_urls, env-var key names,
+        // model preferences, fallback chains). The other CLI state files
+        // (auth.json, mcp-oauth.json, permissions.toml) all chmod 0o600 after
+        // write; config.toml was the outlier inheriting the umask (0o644 on a
+        // typical Unix shell), making it world-readable. Match the rest.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        }
         Ok(())
     }
 

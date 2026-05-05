@@ -24,12 +24,25 @@ export default function ResetPasswordScreen() {
   const { colors: themeColors } = useTheme();
   const router = useRouter();
   // Expo Router passes URL fragment params as query params when the route is
-  // matched via a deep link. Supabase recovery links look like:
-  //   agiworkforce://reset-password#access_token=...&type=recovery
+  // matched via a deep link.
+  //
+  // CRIT-MOB-01 fix (2026-05): three entry paths now feed this screen, in
+  // descending order of preference:
+  //   (a) `?recovery=1` — _layout.tsx already exchanged the PKCE code (or
+  //       legacy-fragment access_token) via supabase.auth and set a session.
+  //       We just trust supabase.auth.getSession() here.
+  //   (b) Legacy fragment with `access_token` + `type=recovery` — older
+  //       Supabase emails. We exchange via setSession ourselves.
+  //   (c) No params — direct navigation to the screen with no recovery
+  //       context. We surface an error and ask the user to re-request.
+  //
+  // The previous implementation only handled (b) and lost the token in (a),
+  // and silently no-op'd on (c).
   const params = useLocalSearchParams<{
     access_token?: string;
     refresh_token?: string;
     type?: string;
+    recovery?: string;
   }>();
 
   const [sessionReady, setSessionReady] = useState(false);
@@ -43,25 +56,44 @@ export default function ResetPasswordScreen() {
     const accessToken = params.access_token;
     const refreshToken = params.refresh_token;
     const type = params.type;
+    const recoveryFlag = params.recovery;
 
-    if (!accessToken || type !== 'recovery') {
-      setError('Invalid or missing recovery link. Please request a new password reset email.');
+    // Path (a): _layout.tsx already established a session for us.
+    if (recoveryFlag === '1') {
+      supabase.auth
+        .getSession()
+        .then(({ data, error: err }) => {
+          if (err || !data?.session) {
+            setError('Recovery session not found. Please request a new password reset email.');
+            return;
+          }
+          setSessionReady(true);
+        })
+        .catch(() => {
+          setError('Could not validate recovery link. Please try again.');
+        });
       return;
     }
 
-    // Establish a temporary session scoped to password reset.
-    supabase.auth
-      .setSession({ access_token: accessToken, refresh_token: refreshToken ?? '' })
-      .then(({ error: err }) => {
-        if (err) {
-          setError('Recovery link has expired or is invalid. Please request a new one.');
-        } else {
-          setSessionReady(true);
-        }
-      })
-      .catch(() => {
-        setError('Could not validate recovery link. Please try again.');
-      });
+    // Path (b): legacy fragment-bearing URL routed directly to this screen.
+    if (accessToken && type === 'recovery') {
+      supabase.auth
+        .setSession({ access_token: accessToken, refresh_token: refreshToken ?? '' })
+        .then(({ error: err }) => {
+          if (err) {
+            setError('Recovery link has expired or is invalid. Please request a new one.');
+          } else {
+            setSessionReady(true);
+          }
+        })
+        .catch(() => {
+          setError('Could not validate recovery link. Please try again.');
+        });
+      return;
+    }
+
+    // Path (c): no recovery context.
+    setError('Invalid or missing recovery link. Please request a new password reset email.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

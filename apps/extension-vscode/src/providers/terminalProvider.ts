@@ -12,6 +12,7 @@
 
 import * as vscode from 'vscode';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
+import { getActiveWorkspaceFolderSync, getWorkspaceDisplayName } from '../utils/workspaceFolders';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -133,7 +134,7 @@ export class TerminalProvider implements vscode.Disposable {
     }
 
     // Create a new terminal
-    const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+    const workspaceUri = getActiveWorkspaceFolderSync()?.uri;
     this._terminal = vscode.window.createTerminal(
       workspaceUri !== undefined
         ? { name: TERMINAL_NAME, cwd: workspaceUri }
@@ -222,7 +223,7 @@ export class TerminalProvider implements vscode.Disposable {
     context: string,
     cancellationToken: vscode.CancellationToken,
   ): Promise<string | undefined> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.name ?? 'unknown';
+    const workspaceFolder = getWorkspaceDisplayName();
     const platform =
       process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
 
@@ -547,8 +548,8 @@ export function activateTerminal(
         contextParts.push(`Current file: ${fileName} (${editor.document.languageId})`);
       }
 
-      // Workspace folder
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      // Workspace folder (active editor's folder, not silently the first root)
+      const workspaceFolder = getActiveWorkspaceFolderSync();
       if (workspaceFolder !== undefined) {
         contextParts.push(`Workspace: ${workspaceFolder.name}`);
       }
