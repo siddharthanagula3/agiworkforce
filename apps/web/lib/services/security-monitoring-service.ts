@@ -1,3 +1,17 @@
+/**
+ * @file security-monitoring-service.ts
+ *
+ * # Client injection contract (WEB-RLS-BYPASS mitigation)
+ *
+ * All methods are SERVICE-CONTEXT. `security_audit_logs` is a cross-tenant
+ * admin table. Access is gated at the route level by admin authentication.
+ * Service-role is correct and intentional throughout this file.
+ *
+ * No user-context injection is needed here because there are no user-scoped
+ * operations in this service (all queries aggregate across all users for admin).
+ *
+ * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ */
 import 'server-only';
 
 import { getServiceClient } from '@/lib/supabase-server';

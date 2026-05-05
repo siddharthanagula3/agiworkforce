@@ -1,3 +1,17 @@
+/**
+ * @file credit-service.ts
+ *
+ * # Client injection contract (WEB-RLS-BYPASS mitigation)
+ *
+ * USER-CONTEXT methods use an overloaded first argument:
+ *   - `(client: SupabaseClient, userId, ...)` - pass `getUserClient(jwt)` from caller
+ *   - `(userId: string, ...)` - legacy service-context path (no user JWT); uses service-role internally
+ *
+ * SERVICE-CONTEXT methods (`getOrCreateAccount`, `resetForPeriod`) call `getServiceClient()`
+ * internally. They are called only from Stripe webhook and cron handlers.
+ *
+ * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ */
 import 'server-only';
 
 import { type SupabaseClient } from '@supabase/supabase-js';
