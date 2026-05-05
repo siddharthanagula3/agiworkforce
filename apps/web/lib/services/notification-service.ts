@@ -1,3 +1,17 @@
+/**
+ * @file notification-service.ts
+ *
+ * # Client injection contract (WEB-RLS-BYPASS mitigation)
+ *
+ * SERVICE-CONTEXT methods:
+ *   `send()` - System writes notifications (after Stripe events, etc.) where no
+ *   user JWT is available. Uses `getServiceClient()` internally.
+ *
+ * USER-CONTEXT methods (`getUserNotifications`, `markAsRead`, `markAllAsRead`)
+ *   accept a `client: SupabaseClient` parameter. Callers pass `getUserClient(jwt)`.
+ *
+ * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ */
 import 'server-only';
 
 import { type SupabaseClient } from '@supabase/supabase-js';

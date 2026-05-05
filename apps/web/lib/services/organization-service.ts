@@ -1,3 +1,14 @@
+/**
+ * @file organization-service.ts
+ *
+ * # Client injection contract (WEB-RLS-BYPASS mitigation)
+ *
+ * All methods are USER-CONTEXT and accept a `client: SupabaseClient` parameter.
+ * Callers pass `getUserClient(jwt)` from `@/lib/supabase-server`.
+ * RLS policies enforce organization membership visibility and mutability.
+ *
+ * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ */
 import 'server-only';
 
 import { type SupabaseClient } from '@supabase/supabase-js';

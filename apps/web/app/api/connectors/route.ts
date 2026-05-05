@@ -6,20 +6,34 @@
  * DELETE /api/connectors - Remove a connector connection
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getAuthenticatedUser } from '@/lib/api-auth';
+// WEB-RLS-BYPASS fix: use canonical client factories from lib/supabase-server
+// instead of a locally-defined duplicate. User-scoped connector operations use
+// getUserClient(jwt) when a Bearer token is present so RLS policies are enforced.
+// Cookie-path falls back to the canonical getServiceClient() (not a local copy)
+// with explicit .eq('user_id') filter as defense-in-depth — same pattern used
+// by other routes that cannot extract a raw JWT from SSR cookie sessions.
+import { getServiceClient, getUserClient } from '@/lib/supabase-server';
 
-function getServiceClient() {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return createClient(supabaseUrl, supabaseServiceKey);
+/**
+ * Return an RLS-bound client when the request carries a Bearer JWT, or the
+ * canonical service-role client when only cookie auth is available.
+ * Callers MUST still apply .eq('user_id', user.id) for defense-in-depth.
+ */
+function getScopedClient(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    return getUserClient(authHeader.substring(7));
+  }
+  // Cookie-auth: no raw JWT accessible. Use service-role with mandatory
+  // user_id filter. This matches the established pattern in chat routes.
+  return getServiceClient();
 }
 
 // Allowlist of valid connector IDs to prevent arbitrary data injection
@@ -65,7 +79,7 @@ async function handleGetConnectors(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const user = await getAuthenticatedUser(request);
-  const supabase = getServiceClient();
+  const supabase = getScopedClient(request);
 
   const { data, error } = await supabase
     .from('user_connectors')
@@ -122,7 +136,7 @@ async function handleCreateConnector(request: NextRequest) {
     throw createError.validation('Invalid auth type');
   }
 
-  const supabase = getServiceClient();
+  const supabase = getScopedClient(request);
 
   // Upsert: if user reconnects a previously disconnected connector, reactivate it
   const { data, error } = await supabase
@@ -182,7 +196,7 @@ async function handleDeleteConnector(request: NextRequest) {
     throw createError.validation('Valid connectorId query param is required');
   }
 
-  const supabase = getServiceClient();
+  const supabase = getScopedClient(request);
 
   // Soft-delete: mark as inactive rather than removing the row
   const { error } = await supabase

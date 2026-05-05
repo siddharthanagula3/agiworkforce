@@ -1,18 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
+// SECURITY: cron job runs without any user JWT — service-role is correct here.
+// Do not replace getServiceClient() with getUserClient() in this file.
+import { getServiceClient } from '@/lib/supabase-server';
 import { SubscriptionService } from '@/lib/services/subscription-service';
-
-function getSupabaseClient() {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
-}
 
 // Verify cron secret to prevent unauthorized access
 //
@@ -78,7 +71,7 @@ export async function GET(request: NextRequest) {
     logger.info('Starting monthly credit reset cron job');
 
     // Get all active subscriptions
-    const supabase = getSupabaseClient();
+    const supabase = getServiceClient();
     const { data: subscriptions, error: fetchError } = await supabase
       .from('subscriptions')
       .select(

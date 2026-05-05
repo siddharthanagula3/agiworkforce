@@ -1,3 +1,18 @@
+/**
+ * @file api-key-service.ts
+ *
+ * # Client injection contract (WEB-RLS-BYPASS mitigation)
+ *
+ * USER-CONTEXT methods (`createApiKey`, `listApiKeys`, `revokeApiKey`) accept a
+ *   `client: SupabaseClient` parameter. Callers pass `getUserClient(jwt)`.
+ *
+ * SERVICE-CONTEXT methods:
+ *   `verifyKey()` - receives only a raw API key (no user JWT). Must use service-role
+ *   to look up the key across all users. Once verified, downstream callers should
+ *   construct a `getUserClient(jwt)` for subsequent user-scoped operations.
+ *
+ * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ */
 import 'server-only';
 
 import { type SupabaseClient } from '@supabase/supabase-js';
