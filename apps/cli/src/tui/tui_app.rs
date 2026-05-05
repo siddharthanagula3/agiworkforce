@@ -27,48 +27,62 @@ use crate::context::SystemContext;
 // ---------------------------------------------------------------------------
 
 const TICK_RATE_MS: u64 = 50;
+/// Duration the mode-cycle banner is shown after Shift+Tab.
+const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 
 // ---------------------------------------------------------------------------
 // Interaction mode (Shift+Tab cycling)
 // ---------------------------------------------------------------------------
 
+/// Permission modes available in the TUI, cycling with Shift+Tab.
+///
+/// Cycle order: Default → Plan → AcceptEdits → BypassPermissions → FullAuto → Default
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum InteractionMode {
+    /// Normal conversation mode (maps to `PermissionMode::Default`).
     Chat,
+    /// Plan mode — read-only tools, no file edits.
     Plan,
+    /// Auto-accept file edits; commands still prompt.
     AcceptEdits,
+    /// Bypass all tool permission prompts.
     BypassPermissions,
-    Debug,
+    /// Full-auto: no prompts, no confirmations. Equivalent to headless YOLO.
+    FullAuto,
 }
 
 impl InteractionMode {
+    /// Advance to next mode in the cycle.
     fn next(self) -> Self {
         match self {
             Self::Chat => Self::Plan,
             Self::Plan => Self::AcceptEdits,
             Self::AcceptEdits => Self::BypassPermissions,
-            Self::BypassPermissions => Self::Debug,
-            Self::Debug => Self::Chat,
+            Self::BypassPermissions => Self::FullAuto,
+            Self::FullAuto => Self::Chat,
         }
     }
 
     fn label(self) -> &'static str {
         match self {
-            Self::Chat => "CHAT",
-            Self::Plan => "PLAN",
-            Self::AcceptEdits => "ACCEPT EDITS",
-            Self::BypassPermissions => "BYPASS PERMS",
-            Self::Debug => "DEBUG",
+            Self::Chat => "Default",
+            Self::Plan => "Plan",
+            Self::AcceptEdits => "AcceptEdits",
+            Self::BypassPermissions => "Bypass",
+            Self::FullAuto => "FullAuto",
         }
     }
 
+    /// Status-bar color per the UI audit spec.
+    ///
+    /// Default=grey, Plan=blue, AcceptEdits=green, Bypass=yellow, FullAuto=red.
     fn color(self) -> Color {
         match self {
-            Self::Chat => Color::Cyan,
-            Self::Plan => Color::Yellow,
+            Self::Chat => Color::DarkGray,
+            Self::Plan => Color::Blue,
             Self::AcceptEdits => Color::Green,
-            Self::BypassPermissions => Color::Red,
-            Self::Debug => Color::Magenta,
+            Self::BypassPermissions => Color::Yellow,
+            Self::FullAuto => Color::Red,
         }
     }
 }
@@ -117,6 +131,13 @@ struct TuiApp {
     slash_selected: usize,
     // Model picker popup (new widget-based state)
     model_picker: super::widgets::model_picker::ModelPickerState,
+    // Effort picker popup
+    effort_picker: super::widgets::effort_picker::EffortPickerState,
+    // Currently active effort level (persisted across model switches)
+    effort: crate::design_system::Effort,
+    // Mode-change banner: timestamp when the mode was last cycled via Shift+Tab.
+    // The banner self-clears after MODE_BANNER_TTL.
+    mode_banner_shown_at: Option<Instant>,
     // Streaming
     stream_buffer: String,
     stream_start: Option<Instant>,
@@ -179,6 +200,9 @@ impl TuiApp {
             slash_filter: String::new(),
             slash_selected: 0,
             model_picker: super::widgets::model_picker::ModelPickerState::default(),
+            effort_picker: super::widgets::effort_picker::EffortPickerState::default(),
+            effort: crate::design_system::Effort::Medium,
+            mode_banner_shown_at: None,
             stream_buffer: String::new(),
             stream_start: None,
             git_branch,
@@ -310,7 +334,14 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
         };
         super::cost_hud::render(frame, area, &hud, &app.model_name);
 
-        // Popups (only one visible at a time)
+        // Mode-change banner (self-clears after MODE_BANNER_TTL)
+        render_mode_banner(frame, chunks[1], app);
+
+        // Popups (only one visible at a time; effort picker takes lowest priority)
+        if app.effort_picker.visible {
+            super::widgets::effort_picker::render(frame, chunks[1], &app.effort_picker);
+        }
+
         if app.model_picker.visible {
             super::widgets::model_picker::render(
                 frame,
@@ -582,7 +613,7 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         InteractionMode::Plan => "P ",
         InteractionMode::AcceptEdits => "A ",
         InteractionMode::BypassPermissions => "! ",
-        InteractionMode::Debug => "D ",
+        InteractionMode::FullAuto => "F ",
     };
 
     let input_line = Line::from(vec![
@@ -639,9 +670,15 @@ fn render_fallback_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &Tui
 }
 
 fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
+    // For Default (grey) use white fg so text is legible on the dark badge.
+    let badge_fg = if app.mode == InteractionMode::Chat {
+        Color::White
+    } else {
+        Color::Black
+    };
     let mode_span = Span::styled(
         format!(" {} ", app.mode.label()),
-        Style::default().fg(Color::Black).bg(app.mode.color()),
+        Style::default().fg(badge_fg).bg(app.mode.color()),
     );
 
     let cost_str = crate::output::format_cost(
@@ -650,10 +687,14 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         app.session.total_output_tokens,
     );
 
+    let effort_str = format!("effort:{}", app.effort.label());
+
     let status = Line::from(vec![
         mode_span,
         Span::raw(" "),
         Span::styled(cost_str, Style::default().fg(Color::DarkGray)),
+        Span::raw("  "),
+        Span::styled(effort_str, Style::default().fg(Color::DarkGray)),
         Span::raw("  "),
         Span::styled("Shift+Tab: mode", Style::default().fg(Color::DarkGray)),
         Span::raw("  "),
@@ -664,6 +705,40 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let bar = Paragraph::new(status).style(Style::default().bg(Color::DarkGray).fg(Color::White));
     frame.render_widget(bar, area);
+}
+
+/// Render the 2-second mode-cycle banner across the top of the chat area.
+fn render_mode_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp) {
+    let Some(shown_at) = app.mode_banner_shown_at else {
+        return;
+    };
+    if shown_at.elapsed() > MODE_BANNER_TTL {
+        return;
+    }
+    let text = format!(
+        "  Mode: {} (shift+tab to cycle)  ",
+        app.mode.label()
+    );
+    let width = (text.chars().count() as u16).min(chat_area.width.saturating_sub(2));
+    if width == 0 {
+        return;
+    }
+    let area = Rect {
+        x: chat_area.x + (chat_area.width.saturating_sub(width)) / 2,
+        y: chat_area.y,
+        width,
+        height: 1,
+    };
+    // Use the same color as the mode badge, white text for legibility on grey
+    let bg = app.mode.color();
+    let fg = if app.mode == InteractionMode::Chat { Color::White } else { Color::Black };
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            text,
+            Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
+        ))),
+        area,
+    );
 }
 
 fn render_slash_popup(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp) {
@@ -730,6 +805,11 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     // Model picker mode
     if app.model_picker.visible {
         return handle_model_picker_key(app, key);
+    }
+
+    // Effort picker mode
+    if app.effort_picker.visible {
+        return handle_effort_picker_key(app, key);
     }
 
     // Slash popup mode
@@ -940,6 +1020,36 @@ fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
 }
 
+fn handle_effort_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
+    use super::widgets::effort_picker::{handle_key, PickerAction};
+
+    let action = handle_key(&mut app.effort_picker, key);
+
+    match action {
+        PickerAction::Nothing => InputAction::None,
+        PickerAction::Close => {
+            app.input.clear();
+            app.cursor = 0;
+            InputAction::None
+        }
+        PickerAction::Select(effort) => {
+            app.effort = effort;
+            app.input.clear();
+            app.cursor = 0;
+            let budget = effort.anthropic_budget_tokens();
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: format!(
+                    "Effort set to {} (anthropic budget: {} tokens)",
+                    effort.label(),
+                    budget,
+                ),
+            });
+            InputAction::None
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Natural language mode detection
 // ---------------------------------------------------------------------------
@@ -963,16 +1073,6 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         return Some(InteractionMode::Plan);
     }
 
-    // Debug mode triggers — require "debug mode" or "debug this", not bare "debug"
-    if lower.contains("enter debug")
-        || lower.contains("debug mode")
-        || lower.contains("switch to debug")
-        || lower.contains("verbose mode")
-        || lower.contains("enable debug")
-    {
-        return Some(InteractionMode::Debug);
-    }
-
     // Accept edits mode triggers
     if lower.contains("accept edits")
         || lower.contains("auto accept")
@@ -988,9 +1088,13 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         || lower.contains("skip permission")
         || lower.contains("dangerously skip")
         || lower.contains("no prompts")
-        || lower.contains("full auto")
     {
         return Some(InteractionMode::BypassPermissions);
+    }
+
+    // FullAuto mode
+    if lower.contains("full auto") || lower.contains("fullauto") || lower.contains("full-auto") {
+        return Some(InteractionMode::FullAuto);
     }
 
     // Back to chat mode
@@ -998,7 +1102,6 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         || lower.contains("chat mode")
         || lower.contains("exit plan")
         || lower.contains("stop planning")
-        || lower.contains("exit debug")
     {
         return Some(InteractionMode::Chat);
     }
@@ -1010,12 +1113,14 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
 fn apply_mode(app: &mut TuiApp, mode: InteractionMode) {
     app.mode = mode;
     app.session.plan_mode = mode == InteractionMode::Plan;
-    app.session.skip_permissions = mode == InteractionMode::BypassPermissions;
+    app.session.skip_permissions =
+        mode == InteractionMode::BypassPermissions || mode == InteractionMode::FullAuto;
     app.session.auto_approve_safe =
-        mode == InteractionMode::AcceptEdits || mode == InteractionMode::BypassPermissions;
-    // Debug mode: quiet=false so tool output is shown verbosely
-    // All other modes: quiet inherits from startup setting
-    if mode == InteractionMode::Debug {
+        mode == InteractionMode::AcceptEdits
+        || mode == InteractionMode::BypassPermissions
+        || mode == InteractionMode::FullAuto;
+    // FullAuto: verbose output so the user can see what is happening
+    if mode == InteractionMode::FullAuto {
         app.session.quiet = false;
     }
 }
@@ -1027,12 +1132,14 @@ fn mode_description(mode: InteractionMode) -> &'static str {
             "Plan mode — read-only tools only, no file edits. Model will plan before acting."
         }
         InteractionMode::AcceptEdits => {
-            "Auto-accept — file edits approved automatically, commands still prompt"
+            "AcceptEdits — file edits approved automatically, commands still prompt"
         }
         InteractionMode::BypassPermissions => {
-            "⚠ BYPASS — all tool prompts skipped. Use with caution!"
+            "Bypass — all tool prompts skipped. Use with caution!"
         }
-        InteractionMode::Debug => "Debug — verbose output enabled",
+        InteractionMode::FullAuto => {
+            "FullAuto — no prompts, no confirmations. Extreme caution required!"
+        }
     }
 }
 
@@ -1294,18 +1401,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 ));
             }
             help.push_str("\nKeyboard shortcuts:\n");
-            help.push_str("  Shift+Tab    Cycle mode: Chat → Plan → AcceptEdits → BypassPerms → Debug\n");
+            help.push_str("  Shift+Tab    Cycle mode: Default → Plan → AcceptEdits → Bypass → FullAuto\n");
             help.push_str("  /            Open command palette\n");
             help.push_str("  Esc          Quit\n");
             help.push_str("  Up/Down      Scroll chat history\n");
             help.push_str("  Ctrl-L       Clear screen\n");
             help.push_str("  Ctrl-C       Clear input\n");
             help.push_str("\nModes (cycle with Shift+Tab):\n");
-            help.push_str("  CHAT           Normal conversation\n");
-            help.push_str("  PLAN           Read-only planning (no edits)\n");
-            help.push_str("  ACCEPT EDITS   Auto-accept file edits\n");
-            help.push_str("  BYPASS PERMS   Skip all tool confirmation (dangerous)\n");
-            help.push_str("  DEBUG          Verbose debug output\n");
+            help.push_str("  Default        Normal conversation (grey)\n");
+            help.push_str("  Plan           Read-only planning, no edits (blue)\n");
+            help.push_str("  AcceptEdits    Auto-accept file edits (green)\n");
+            help.push_str("  Bypass         Skip all tool confirmation (yellow)\n");
+            help.push_str("  FullAuto       No prompts at all — extreme caution (red)\n");
             SlashResult::SystemMessage(help)
         }
 
@@ -1491,6 +1598,37 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SendAsPrompt
         }
 
+        "/effort" | "/e" => {
+            if arg.is_empty() {
+                // Open the interactive effort picker overlay.
+                app.effort_picker.open(app.effort);
+                SlashResult::SystemMessage(String::new()) // picker handles confirmation
+            } else {
+                // Direct-set: /effort low|medium|high|max
+                let new_effort = match arg.to_lowercase().as_str() {
+                    "low" | "l" => Some(crate::design_system::Effort::Low),
+                    "medium" | "med" | "m" => Some(crate::design_system::Effort::Medium),
+                    "high" | "h" => Some(crate::design_system::Effort::High),
+                    "max" => Some(crate::design_system::Effort::Max),
+                    _ => None,
+                };
+                match new_effort {
+                    Some(e) => {
+                        app.effort = e;
+                        let budget = e.anthropic_budget_tokens();
+                        SlashResult::SystemMessage(format!(
+                            "Effort set to {} (anthropic budget: {} tokens)",
+                            e.label(),
+                            budget,
+                        ))
+                    }
+                    None => SlashResult::SystemMessage(format!(
+                        "Unknown effort level '{arg}'. Use: low | medium | high | max"
+                    )),
+                }
+            }
+        }
+
         _ => SlashResult::SendAsPrompt,
     }
 }
@@ -1668,14 +1806,20 @@ async fn run_event_loop(
                     InputAction::CycleMode => {
                         let new_mode = app.mode.next();
                         apply_mode(app, new_mode);
+                        // Stamp the banner so it shows for MODE_BANNER_TTL seconds.
+                        app.mode_banner_shown_at = Some(Instant::now());
                         let mut msg =
                             format!("{} — {}", app.mode.label(), mode_description(app.mode));
                         if new_mode == InteractionMode::BypassPermissions {
-                            msg.push_str("\n\n  ⚠ WARNING: All tool confirmations are bypassed!");
+                            msg.push_str("\n\n  WARNING: All tool confirmations are bypassed!");
                             msg.push_str(
                                 "\n  This means commands will execute without asking you first.",
                             );
-                            msg.push_str("\n  Press Shift+Tab again to move to Debug mode, or twice more to return to Chat.");
+                            msg.push_str("\n  Press Shift+Tab again to advance to FullAuto, or cycle back to Default.");
+                        }
+                        if new_mode == InteractionMode::FullAuto {
+                            msg.push_str("\n\n  WARNING: Full-auto mode — no prompts, no confirmations.");
+                            msg.push_str("\n  Use with extreme caution in trusted environments only.");
                         }
                         app.chat_messages.push(ChatMessage {
                             role: ChatRole::System,
