@@ -66,6 +66,18 @@
   --color-stamp-oxblood: #8b1a1a;
   --color-stamp-ok: #1e6b3b;
 
+  /* Motion tokens — operator-broadsheet redesign 2026-05-05.
+     Rule: enter at --dur-base, exit at ~70% of enter (~220ms) with --ease-in.
+     All scroll reveals: opacity 0→1 + translateY(8→0). Drop the 1000ms / 32px
+     pattern that signals dated AI-tool aesthetic. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-quart: cubic-bezier(0.5, 0, 0.75, 0);
+  --dur-fast: 180ms;
+  --dur-base: 320ms;
+  --dur-slow: 520ms;
+  --stagger-tight: 40ms;
+  --stagger-loose: 80ms;
+
   /* Custom colors - Cream */
   --color-cream-50: #fcfcf9;
   --color-cream-100: #f9f9f6;
