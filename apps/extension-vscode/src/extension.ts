@@ -108,6 +108,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.secrets,
     conversationStore,
     conversationTreeProvider,
+    context.workspaceState,
   );
 
   context.subscriptions.push(
@@ -1209,6 +1210,14 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('agiWorkforce.desktopBridge.port')
       ) {
         updateStatusBar();
+      }
+
+      // Re-push usage meter when model changes (Local vs BYOK vs managed changes source)
+      if (
+        e.affectsConfiguration('agiWorkforce.model') ||
+        e.affectsConfiguration('agiWorkforce.apiKey')
+      ) {
+        sidebarProvider.pushUsageMeter();
       }
 
       if (e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled')) {
