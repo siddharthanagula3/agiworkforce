@@ -14,9 +14,8 @@ import {
   Settings,
   Search,
 } from 'lucide-react';
-import { Header } from '../../../components/layout/Header';
-import { CtaSection } from '../../../components/marketing/CtaSection';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { EditorialPage } from '../../../components/marketing/editorial/EditorialPage';
+import { DispatchSection } from '../../../components/marketing/editorial/DispatchSection';
 
 export const metadata: Metadata = {
   title: 'Agentic AI Chat | AGI Workforce',
@@ -98,15 +97,13 @@ const safetyFeatures = [
 
 export default function AIChatFeaturePage() {
   return (
-    <>
+    <EditorialPage tier="paper">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8]">
-        <Header />
-
-        <main className="flex-1 pt-24">
+        <div className="flex-1 pt-24">
           {/* Hero */}
           <section className="relative py-20 md:py-32 lg:py-40">
             <div className="container relative mx-auto max-w-4xl px-4">
@@ -428,15 +425,9 @@ export default function AIChatFeaturePage() {
             </div>
           </section>
 
-          <CtaSection
-            icon="MessageSquare"
-            headline="Start Chatting With Any AI Model"
-            body={`Download the desktop app and connect your preferred provider. ${MARKETING.providers.display} providers, ${MARKETING.tools.display} tools, streaming and reasoning out of the box.`}
-          />
-        </main>
-
-        <MarketingFooter />
+          <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
+        </div>
       </div>
-    </>
+    </EditorialPage>
   );
 }

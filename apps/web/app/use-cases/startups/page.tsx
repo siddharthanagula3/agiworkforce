@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import StartupsPageWithErrorBoundary from '@/features/pages/use-cases/Startups';
+import { EditorialPage } from '../../../components/marketing/editorial/EditorialPage';
 
 export const metadata: Metadata = {
   title: 'AI for Startups | AGI Workforce',
@@ -14,5 +15,9 @@ export const metadata: Metadata = {
 };
 
 export default function StartupsPage() {
-  return <StartupsPageWithErrorBoundary />;
+  return (
+    <EditorialPage tier="paper">
+      <StartupsPageWithErrorBoundary />
+    </EditorialPage>
+  );
 }

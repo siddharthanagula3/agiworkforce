@@ -11,9 +11,8 @@ import {
   Shield,
   ChevronRight,
 } from 'lucide-react';
-import { Header } from '../../../components/layout/Header';
-import { CtaSection } from '../../../components/marketing/CtaSection';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { EditorialPage } from '../../../components/marketing/editorial/EditorialPage';
+import { DispatchSection } from '../../../components/marketing/editorial/DispatchSection';
 import { MARKETING } from '../../../lib/marketing-constants';
 
 export const metadata: Metadata = {
@@ -224,7 +223,7 @@ const capabilities = [
 
 export default function ToolsFeaturePage() {
   return (
-    <>
+    <EditorialPage tier="paper">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -234,9 +233,7 @@ export default function ToolsFeaturePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
       />
       <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8]">
-        <Header />
-
-        <main className="flex-1 pt-24">
+        <div className="flex-1 pt-24">
           {/* Hero */}
           <section className="relative py-20 md:py-28 lg:py-36">
             <div className="container mx-auto px-4">
@@ -437,15 +434,9 @@ export default function ToolsFeaturePage() {
             </div>
           </section>
 
-          <CtaSection
-            icon="Monitor"
-            headline="Download the desktop app"
-            body={`Browser automation, file management, terminal commands, screen capture, computer use - ${MARKETING.tools.display} IPC tools validated through ToolGuard.`}
-          />
-        </main>
-
-        <MarketingFooter />
+          <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
+        </div>
       </div>
-    </>
+    </EditorialPage>
   );
 }
