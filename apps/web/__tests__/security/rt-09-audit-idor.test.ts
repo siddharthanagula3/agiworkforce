@@ -34,6 +34,10 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ from: mockFrom })),
 }));
 
+// Mock client passed explicitly to getOrganizationLogs (mirrors getUserClient output).
+
+const mockClient = { from: mockFrom } as any;
+
 function setupMocks() {
   // org_members query chain: from → select → eq → eq → maybeSingle
   const memberChain = {
@@ -72,11 +76,15 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
     mockMembershipResult = { data: null, error: null }; // No membership
     setupMocks();
 
-    await expect(AuditService.getOrganizationLogs('org-1', 'attacker-user-id')).rejects.toThrow(
-      /Forbidden/,
-    );
+    await expect(
+      AuditService.getOrganizationLogs(mockClient, 'org-1', 'attacker-user-id'),
+    ).rejects.toThrow(/Forbidden/);
 
-    const err = await AuditService.getOrganizationLogs('org-1', 'attacker-user-id').catch((e) => e);
+    const err = await AuditService.getOrganizationLogs(
+      mockClient,
+      'org-1',
+      'attacker-user-id',
+    ).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
     expect((err as Error & { statusCode?: number }).statusCode).toBe(403);
   });
@@ -86,9 +94,9 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
     mockMembershipResult = { data: null, error: null };
     setupMocks();
 
-    await expect(AuditService.getOrganizationLogs('org-1', 'user-who-is-in-org-2')).rejects.toThrow(
-      /Forbidden/,
-    );
+    await expect(
+      AuditService.getOrganizationLogs(mockClient, 'org-1', 'user-who-is-in-org-2'),
+    ).rejects.toThrow(/Forbidden/);
   });
 
   it('returns logs when caller IS a member of the org', async () => {
@@ -113,7 +121,7 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
     };
     setupMocks();
 
-    const logs = await AuditService.getOrganizationLogs('org-1', 'user-1');
+    const logs = await AuditService.getOrganizationLogs(mockClient, 'org-1', 'user-1');
     expect(logs).toHaveLength(1);
     expect(logs[0]?.id).toBe('log-1');
     expect(logs[0]?.actor_email).toBe('user@example.com');
@@ -127,7 +135,7 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
     let caughtError: Error | null = null;
     let result: unknown = null;
     try {
-      result = await AuditService.getOrganizationLogs('org-1', 'unauthorized-user');
+      result = await AuditService.getOrganizationLogs(mockClient, 'org-1', 'unauthorized-user');
     } catch (e) {
       caughtError = e as Error;
     }
@@ -140,7 +148,7 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
     mockMembershipResult = { data: null, error: new Error('DB connection failed') };
     setupMocks();
 
-    await expect(AuditService.getOrganizationLogs('org-1', 'user-1')).rejects.toThrow();
+    await expect(AuditService.getOrganizationLogs(mockClient, 'org-1', 'user-1')).rejects.toThrow();
   });
 
   it('membership check uses both org_id and user_id as filters', async () => {
@@ -148,7 +156,7 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
     mockLogsResult = { data: [], error: null };
     const { memberChain } = setupMocks();
 
-    await AuditService.getOrganizationLogs('org-1', 'user-1');
+    await AuditService.getOrganizationLogs(mockClient, 'org-1', 'user-1');
 
     // Verify eq was called with org constraint AND user constraint
     expect(memberChain.eq).toHaveBeenCalledWith('organization_id', 'org-1');

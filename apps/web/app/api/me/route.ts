@@ -1,8 +1,9 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@/utils/env';
+import { getUserClient } from '@/lib/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -25,6 +26,7 @@ async function handleGetMe(request: NextRequest) {
     const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
     let user: User | null = null;
+    let userClient: SupabaseClient | null = null;
 
     // Check for Bearer token in Authorization header (desktop/mobile app)
     const authHeader = request.headers.get('authorization');
@@ -47,6 +49,7 @@ async function handleGetMe(request: NextRequest) {
       }
 
       user = data.user;
+      userClient = getUserClient(token);
     } else {
       // Fall back to cookie-based authentication (web app)
       const cookieStore = await cookies();
@@ -87,16 +90,18 @@ async function handleGetMe(request: NextRequest) {
       }
 
       user = cookieUser;
+      // supabase (SSR client) is already RLS-bound via cookie session; use it directly.
+      userClient = supabase;
     }
 
-    if (!user) {
+    if (!user || !userClient) {
       throw createError.unauthorized();
     }
 
-    // Fetch subscription using SubscriptionService (uses service role, works for both auth methods)
+    // Fetch subscription using SubscriptionService (RLS-bound client, enforces row security)
     let subscription = null;
     try {
-      subscription = await SubscriptionService.getSubscription(user.id);
+      subscription = await SubscriptionService.getSubscription(userClient, user.id);
     } catch (subscriptionError) {
       logger.warn(
         {
@@ -126,7 +131,7 @@ async function handleGetMe(request: NextRequest) {
     // Get credit balance
     let credits = null;
     try {
-      credits = await CreditService.getBalance(user.id);
+      credits = await CreditService.getBalance(userClient, user.id);
     } catch (creditError) {
       logger.warn(
         {

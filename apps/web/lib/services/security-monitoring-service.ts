@@ -1,17 +1,8 @@
 import 'server-only';
 
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
+import { getServiceClient } from '@/lib/supabase-server';
 import { logger } from '@/lib/logger';
 import type { SecurityEventType, SecurityEventSeverity } from '@/lib/security-audit';
-
-function getSupabaseClient() {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
-}
 
 export interface SecurityEvent {
   id: string;
@@ -102,7 +93,9 @@ const DEFAULT_THRESHOLDS: Array<
 
 export class SecurityMonitoringService {
   /**
-   * Get recent security events
+   * Get recent security events.
+   * SERVICE-CONTEXT: security_audit_logs is a cross-tenant admin table.
+   * Access is gated at the route level by admin authentication.
    */
   static async getRecentEvents(
     limit: number = 100,
@@ -110,7 +103,9 @@ export class SecurityMonitoringService {
     eventType?: SecurityEventType,
   ): Promise<SecurityEvent[]> {
     try {
-      const supabase = getSupabaseClient();
+      // SECURITY: service-role required because security_audit_logs is a cross-tenant
+      // admin table. Route-level admin auth gates access; service-role gives full visibility.
+      const supabase = getServiceClient();
       let query = supabase
         .from('security_audit_logs')
         .select('*')
@@ -139,11 +134,14 @@ export class SecurityMonitoringService {
   }
 
   /**
-   * Get aggregated security metrics
+   * Get aggregated security metrics.
+   * SERVICE-CONTEXT: cross-tenant admin metrics; no user JWT involved.
    */
   static async getMetrics(): Promise<SecurityMetrics> {
     try {
-      const supabase = getSupabaseClient();
+      // SECURITY: service-role required because security metrics span all users
+      // and are only accessible via the admin dashboard endpoint.
+      const supabase = getServiceClient();
       const now = new Date();
       const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -234,11 +232,13 @@ export class SecurityMonitoringService {
   }
 
   /**
-   * Check alert thresholds and return triggered alerts
+   * Check alert thresholds and return triggered alerts.
+   * SERVICE-CONTEXT: cross-tenant admin operation; no user JWT involved.
    */
   static async checkAlerts(): Promise<AlertStatus[]> {
     try {
-      const supabase = getSupabaseClient();
+      // SECURITY: service-role required because alert thresholds aggregate across all users.
+      const supabase = getServiceClient();
       const alerts: AlertStatus[] = [];
 
       for (const threshold of DEFAULT_THRESHOLDS) {
@@ -298,14 +298,17 @@ export class SecurityMonitoringService {
   }
 
   /**
-   * Get top IP addresses by event count (for abuse detection)
+   * Get top IP addresses by event count (for abuse detection).
+   * SERVICE-CONTEXT: cross-tenant admin operation; no user JWT involved.
    */
   static async getTopIpAddresses(
     windowHours: number = 24,
     limit: number = 10,
   ): Promise<Array<{ ip_address: string; event_count: number }>> {
     try {
-      const supabase = getSupabaseClient();
+      // SECURITY: service-role required because IP-level abuse detection aggregates
+      // across all users and is only accessible via the admin dashboard endpoint.
+      const supabase = getServiceClient();
       const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
 
       const { data, error } = await supabase
@@ -339,11 +342,15 @@ export class SecurityMonitoringService {
   }
 
   /**
-   * Get events by user (for investigating specific accounts)
+   * Get events by user (for investigating specific accounts).
+   * SERVICE-CONTEXT: admin investigation endpoint; no user JWT involved.
+   * Access is gated at the route level by admin authentication.
    */
   static async getEventsByUser(userId: string, limit: number = 50): Promise<SecurityEvent[]> {
     try {
-      const supabase = getSupabaseClient();
+      // SECURITY: service-role required because this is an admin investigation tool
+      // accessible only via the admin dashboard endpoint.
+      const supabase = getServiceClient();
       const { data, error } = await supabase
         .from('security_audit_logs')
         .select('*')
@@ -364,7 +371,8 @@ export class SecurityMonitoringService {
   }
 
   /**
-   * Get summary for dashboard display
+   * Get summary for dashboard display.
+   * SERVICE-CONTEXT: aggregates all the above admin-only methods.
    */
   static async getDashboardSummary(): Promise<{
     metrics: SecurityMetrics;
@@ -388,11 +396,14 @@ export class SecurityMonitoringService {
   }
 
   /**
-   * Trigger cleanup of old logs (calls the database function)
+   * Trigger cleanup of old logs (calls the database function).
+   * SERVICE-CONTEXT: maintenance operation; no user JWT involved.
    */
   static async cleanupOldLogs(): Promise<number> {
     try {
-      const supabase = getSupabaseClient();
+      // SECURITY: service-role required because log cleanup is a maintenance
+      // operation triggered by the admin endpoint, not by a user request.
+      const supabase = getServiceClient();
       const { data, error } = await supabase.rpc('cleanup_old_security_logs');
 
       if (error) {
