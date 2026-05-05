@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import ITServiceProvidersPageWithErrorBoundary from '@/features/pages/use-cases/ITServiceProviders';
+import { EditorialPage } from '../../../components/marketing/editorial/EditorialPage';
 
 export const metadata: Metadata = {
   title: 'AI for IT Providers | AGI Workforce',
@@ -14,5 +15,9 @@ export const metadata: Metadata = {
 };
 
 export default function ITProvidersPage() {
-  return <ITServiceProvidersPageWithErrorBoundary />;
+  return (
+    <EditorialPage tier="paper">
+      <ITServiceProvidersPageWithErrorBoundary />
+    </EditorialPage>
+  );
 }
