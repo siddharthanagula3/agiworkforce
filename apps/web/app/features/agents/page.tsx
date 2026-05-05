@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, Bot, Check, Clock, Eye, Smartphone, Terminal, Wrench } from 'lucide-react';
+import { MARKETING } from '../../../lib/marketing-constants';
 import { Header } from '../../../components/layout/Header';
 import { CtaSection } from '../../../components/marketing/CtaSection';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
@@ -293,7 +294,7 @@ export default function AgentsPage() {
                     },
                     {
                       icon: Wrench,
-                      name: '1,459+ IPC tools',
+                      name: `${MARKETING.tools.display} IPC tools`,
                       detail:
                         'File system, terminal, git, browser, databases, MCP servers, and every Tauri command.',
                     },
@@ -327,7 +328,8 @@ export default function AgentsPage() {
                       deny every tool call - all from your phone.
                     </p>
                     <p className="text-sm text-[#c8892a]">
-                      The only AI platform with a dedicated mobile companion for agent oversight.
+                      Cross-provider session continuity and real-time mobile oversight, in one
+                      unified platform.
                     </p>
 
                     <div className="space-y-3 pt-2">
