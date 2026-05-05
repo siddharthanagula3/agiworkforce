@@ -16,17 +16,33 @@ import {
   Wrench,
   Link,
   ChevronRight,
+  Check,
+  EyeOff,
+  Shield,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useChatStore, type ChatMode } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useAgentControlStore } from '@/stores/agentControlStore';
+import { useModelStore } from '@/stores/modelStore';
 import { useTheme } from '@/hooks/useTheme';
 import { colors } from '@/lib/theme';
 import { StyleSelector } from './StyleSelector';
 import { ToolAccessSelector } from './ToolAccessSelector';
 import { isHealthAvailable, requestHealthPermission } from '@/services/healthData';
+import { getModelById } from '@/lib/models';
+import {
+  AGENT_MODE_LABEL,
+  AGENT_MODE_DESCRIPTION,
+  EFFORT_LABEL,
+  PROVIDER_DISPLAY,
+  type AgentMode,
+  type Effort,
+} from '@agiworkforce/types';
 
 interface AddToChatSheetProps {
   onCamera: () => void;
@@ -34,7 +50,7 @@ interface AddToChatSheetProps {
   onFile: () => void;
 }
 
-const SNAP_POINTS = ['90%'];
+const SNAP_POINTS = ['75%'];
 
 const TOOL_ACCESS_LABELS: Record<string, string> = {
   auto: 'Auto',
@@ -52,15 +68,36 @@ const MODE_OPTIONS: Array<{
   { id: 'create', label: 'Create', description: 'Generate docs, slides & apps' },
 ];
 
+const AGENT_MODES: AgentMode[] = ['ask', 'auto', 'plan', 'bypass'];
+const EFFORT_LEVELS: Effort[] = ['low', 'medium', 'high', 'max'];
+
+/** Auto-approve icon + color config keyed by mode from settingsStore. */
+const AUTO_APPROVE_CONFIG: Record<
+  string,
+  { icon: typeof Shield; color: string; label: string; sub: string }
+> = {
+  ask: {
+    icon: ShieldCheck,
+    color: '#10b981',
+    label: 'Ask always',
+    sub: 'Confirm every tool action',
+  },
+  smart: { icon: Shield, color: '#f59e0b', label: 'Smart auto', sub: 'Auto-approve safe actions' },
+  full: { icon: ShieldAlert, color: '#ef4444', label: 'Full auto', sub: 'Skip all approvals' },
+};
+
 /**
  * "Add to Chat" bottom sheet.
  * Opened by the [+] button in ChatInput.
  *
  * Sections:
  * 1. Attachment row (Camera, Photos, File, Skills)
- * 2. Mode selector (Chat, Research, Create)
- * 3. Feature toggles (Web search, Image generation, Health)
- * 4. Config links (Project, Style, Tool access, Connectors)
+ * 2. Chat mode selector (Chat, Research, Create)
+ * 3. Agent mode (Ask / Auto / Plan / Bypass)
+ * 4. Effort (Low / Medium / High / Max — shown only when provider supports it)
+ * 5. Session toggles (Auto-approve, Temporary chat)
+ * 6. Feature toggles (Web search, Image generation, Health)
+ * 7. Config links (Project, Style, Tool access, Connectors)
  */
 export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(function AddToChatSheet(
   { onCamera, onPhotos, onFile },
@@ -76,6 +113,25 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const features = useChatStore((s) => s.features);
   const setChatMode = useChatStore((s) => s.setChatMode);
   const setFeature = useChatStore((s) => s.setFeature);
+
+  const agentMode = useAgentControlStore((s) => s.agentMode);
+  const effort = useAgentControlStore((s) => s.effort);
+  const setAgentMode = useAgentControlStore((s) => s.setAgentMode);
+  const setEffort = useAgentControlStore((s) => s.setEffort);
+
+  const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
+  const setAutoApproveMode = useSettingsStore((s) => s.setAutoApproveMode);
+  const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
+  const setTemporaryChat = useSettingsStore((s) => s.setTemporaryChat);
+
+  const selectedModel = useModelStore((s) => s.selectedModel);
+
+  // Determine if current model's provider supports effort axis.
+  const modelDef = getModelById(selectedModel);
+  const providerDisplay = modelDef?.provider
+    ? PROVIDER_DISPLAY[modelDef.provider as keyof typeof PROVIDER_DISPLAY]
+    : undefined;
+  const supportsEffort = providerDisplay?.supportsEffort ?? false;
 
   const styleSelectorRef = useRef<BottomSheet>(null);
   const toolAccessSelectorRef = useRef<BottomSheet>(null);
@@ -127,6 +183,30 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     },
     [haptic, setChatMode],
   );
+
+  const handleAgentModeChange = useCallback(
+    (mode: AgentMode) => {
+      haptic();
+      setAgentMode(mode);
+    },
+    [haptic, setAgentMode],
+  );
+
+  const handleEffortChange = useCallback(
+    (level: Effort) => {
+      haptic();
+      setEffort(level);
+    },
+    [haptic, setEffort],
+  );
+
+  const autoApproveModes = ['ask', 'smart', 'full'] as const;
+  const cycleAutoApprove = useCallback(() => {
+    haptic();
+    const idx = autoApproveModes.indexOf(autoApproveMode);
+    const next = autoApproveModes[(idx + 1) % autoApproveModes.length];
+    setAutoApproveMode(next);
+  }, [haptic, autoApproveMode, setAutoApproveMode]);
 
   const handleOpenStyleSelector = useCallback(() => {
     haptic();
@@ -340,7 +420,204 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           {/* Divider */}
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
-          {/* Section 3: Feature Toggles */}
+          {/* Section 3: Agent mode */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '600',
+                color: themeColors.textMuted,
+                letterSpacing: 0.6,
+                textTransform: 'uppercase',
+                marginBottom: 4,
+              }}
+            >
+              Agent mode
+            </Text>
+            {AGENT_MODES.map((mode) => {
+              const isSelected = agentMode === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  onPress={() => handleAgentModeChange(mode)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    paddingVertical: 12,
+                    paddingHorizontal: 4,
+                    minHeight: 44,
+                  }}
+                  accessibilityLabel={`${AGENT_MODE_LABEL[mode]}${isSelected ? ', selected' : ''}`}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: isSelected }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontWeight: '500',
+                        color: isSelected ? colors.teal : themeColors.textPrimary,
+                      }}
+                    >
+                      {AGENT_MODE_LABEL[mode]}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: themeColors.textMuted, marginTop: 2 }}>
+                      {AGENT_MODE_DESCRIPTION[mode]}
+                    </Text>
+                  </View>
+                  {isSelected && <Check size={18} color={colors.teal} style={{ marginTop: 2 }} />}
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Divider */}
+          <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+
+          {/* Section 4: Effort (gated by supportsEffort) */}
+          {supportsEffort && (
+            <>
+              <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: '600',
+                    color: themeColors.textMuted,
+                    letterSpacing: 0.6,
+                    textTransform: 'uppercase',
+                    marginBottom: 4,
+                  }}
+                >
+                  Effort
+                </Text>
+                {EFFORT_LEVELS.map((level) => {
+                  const isSelected = effort === level;
+                  return (
+                    <Pressable
+                      key={level}
+                      onPress={() => handleEffortChange(level)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingVertical: 12,
+                        paddingHorizontal: 4,
+                        minHeight: 44,
+                      }}
+                      accessibilityLabel={`${EFFORT_LABEL[level]} effort${isSelected ? ', selected' : ''}`}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: isSelected }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight: '500',
+                          color: isSelected ? colors.teal : themeColors.textPrimary,
+                        }}
+                      >
+                        {EFFORT_LABEL[level]}
+                      </Text>
+                      {isSelected && <Check size={18} color={colors.teal} />}
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Divider */}
+              <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+            </>
+          )}
+
+          {/* Section 5: AutoApprove + TempChat toggles */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '600',
+                color: themeColors.textMuted,
+                letterSpacing: 0.6,
+                textTransform: 'uppercase',
+                marginBottom: 4,
+              }}
+            >
+              Session
+            </Text>
+
+            {/* Auto-approve row — cycles through ask / smart / full */}
+            {(() => {
+              const cfg = AUTO_APPROVE_CONFIG[autoApproveMode] ?? AUTO_APPROVE_CONFIG['ask'];
+              const Icon = cfg.icon;
+              return (
+                <Pressable
+                  onPress={cycleAutoApprove}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 12,
+                    paddingHorizontal: 4,
+                    minHeight: 44,
+                  }}
+                  accessibilityLabel={`Auto-approve: ${cfg.label}. Tap to cycle.`}
+                  accessibilityRole="button"
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Icon size={18} color={cfg.color} />
+                    <View>
+                      <Text style={{ fontSize: 15, color: themeColors.textPrimary }}>
+                        Auto-approve
+                      </Text>
+                      <Text style={{ fontSize: 12, color: themeColors.textMuted, marginTop: 1 }}>
+                        {cfg.label} — {cfg.sub}
+                      </Text>
+                    </View>
+                  </View>
+                  <ChevronRight size={16} color={themeColors.textMuted} />
+                </Pressable>
+              );
+            })()}
+
+            {/* Temporary chat row */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: 10,
+                paddingHorizontal: 4,
+                minHeight: 44,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <EyeOff size={18} color={isTemporaryChat ? '#a855f7' : themeColors.textMuted} />
+                <View>
+                  <Text style={{ fontSize: 15, color: themeColors.textPrimary }}>
+                    Temporary chat
+                  </Text>
+                  <Text style={{ fontSize: 12, color: themeColors.textMuted, marginTop: 1 }}>
+                    This conversation won't be saved
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={isTemporaryChat}
+                onValueChange={(v) => {
+                  haptic();
+                  setTemporaryChat(v);
+                }}
+                trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#a855f7' }}
+                thumbColor="#ffffff"
+                ios_backgroundColor="rgba(255,255,255,0.1)"
+                accessibilityLabel={`Temporary chat ${isTemporaryChat ? 'on' : 'off'}`}
+              />
+            </View>
+          </View>
+
+          {/* Divider */}
+          <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+
+          {/* Section 7: Feature Toggles */}
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
             <FeatureToggle
               icon={<Globe size={18} color={colors.teal} />}
@@ -369,7 +646,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           {/* Divider */}
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
-          {/* Section 4: Config Links */}
+          {/* Section 8: Config Links */}
           <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
             <ConfigLink
               icon={<FolderPlus size={18} color={themeColors.textMuted} />}
