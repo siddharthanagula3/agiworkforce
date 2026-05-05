@@ -31,6 +31,8 @@ function readPkgConfigSettings(): Record<string, PkgConfigContrib> {
 const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   agentMaxIterations: 'agiWorkforce.agent.maxIterations',
   agentPlanMode: 'agiWorkforce.agent.planMode',
+  agentMode: 'agiWorkforce.agent.mode',
+  agentEffort: 'agiWorkforce.agent.effort',
   codeLensEnabled: 'agiWorkforce.codeLensEnabled',
   inlineCompletionsEnabled: 'agiWorkforce.inlineCompletions.enabled',
   inlineCompletionsDebounceMs: 'agiWorkforce.inlineCompletions.debounceMs',
