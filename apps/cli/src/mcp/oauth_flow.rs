@@ -331,11 +331,27 @@ pub async fn start_pkce_flow(
     );
 
     // 3. Open browser; if it fails, print the URL so the user can copy it.
-    eprintln!(
-        "\n  [mcp oauth] opening browser for {} ...\n  {}\n",
-        server_url, authorize_url
-    );
-    let _ = webbrowser::open(&authorize_url);
+    //
+    // CLI-NEW-009 fix (2026-05-04 audit): the previous code printed the full
+    // authorize URL — including the `state=` parameter — to stderr in every
+    // case. A local sibling process that reads this terminal output (or a CI
+    // log scraper) could observe `state` and race the loopback callback to
+    // inject its own `code` (the state mismatch check at line 354 is bypassed
+    // because the attacker has the state value). We now only print the full
+    // URL when the browser failed to open AND we genuinely need the user to
+    // copy it manually. In the success path the user only sees an opaque
+    // "opening browser" line.
+    match webbrowser::open(&authorize_url) {
+        Ok(_) => {
+            eprintln!("\n  [mcp oauth] opened browser for {} (waiting for callback)\n", server_url);
+        }
+        Err(_) => {
+            eprintln!(
+                "\n  [mcp oauth] could not open browser for {} — copy this URL manually:\n  {}\n",
+                server_url, authorize_url
+            );
+        }
+    }
 
     // 4. Wait for the redirect (with timeout so headless CI fails fast).
     let (code, returned_state) = tokio::time::timeout(

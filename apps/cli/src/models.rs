@@ -512,6 +512,22 @@ pub fn register_custom_providers(config: &CliConfig) {
             continue;
         };
         let trimmed = base.trim_end_matches('/');
+
+        // SEV-CLI-04 fix: enforce a scheme allowlist before registering any
+        // custom provider. Without this, a project-level config inside a cloned
+        // repository can point base_url at IMDS (169.254.169.254), an internal
+        // service, or another loopback port and exfiltrate API keys + prompts
+        // there. Permit only https:// (production) and explicit loopback hosts
+        // for local model servers (Ollama, LMStudio).
+        if !is_safe_provider_base_url(trimmed) {
+            tracing::warn!(
+                provider = %lower,
+                base_url = %trimmed,
+                "skipping custom provider — base_url must be https:// or http://(localhost|127.0.0.1|[::1])"
+            );
+            continue;
+        }
+
         let url = if trimmed.ends_with("/chat/completions") {
             trimmed.to_string()
         } else {
@@ -525,6 +541,70 @@ pub fn register_custom_providers(config: &CliConfig) {
                 api_key_env: pc.api_key_env.clone(),
             },
         );
+    }
+}
+
+/// Returns true if the URL is acceptable as a custom-provider base URL.
+/// Allows `https://` to any host, and `http://` only to loopback hosts.
+fn is_safe_provider_base_url(url: &str) -> bool {
+    if url.starts_with("https://") {
+        return true;
+    }
+    if let Some(rest) = url.strip_prefix("http://") {
+        // IPv6 hosts arrive bracketed: `http://[::1]:8000/v1`. Splitting on
+        // ':' would chop the host to just `[`, mis-classifying loopback as
+        // public. Detect the bracketed form explicitly and extract the
+        // entire `[...]` segment as the host.
+        let host = if rest.starts_with('[') {
+            match rest.find(']') {
+                Some(end) => rest[..=end].to_ascii_lowercase(),
+                None => return false, // malformed — refuse rather than guess
+            }
+        } else {
+            rest.split(['/', ':', '?', '#'])
+                .next()
+                .unwrap_or("")
+                .to_ascii_lowercase()
+        };
+        return host == "localhost" || host == "127.0.0.1" || host == "[::1]";
+    }
+    false
+}
+
+#[cfg(test)]
+mod safe_provider_url_tests {
+    use super::is_safe_provider_base_url;
+
+    #[test]
+    fn https_anywhere_is_allowed() {
+        assert!(is_safe_provider_base_url("https://api.openai.com/v1"));
+        assert!(is_safe_provider_base_url("https://example.com"));
+    }
+
+    #[test]
+    fn http_localhost_is_allowed() {
+        assert!(is_safe_provider_base_url("http://localhost:11434/v1"));
+        assert!(is_safe_provider_base_url("http://127.0.0.1:1234"));
+        assert!(is_safe_provider_base_url("http://[::1]:8000/v1"));
+    }
+
+    #[test]
+    fn http_external_is_blocked() {
+        assert!(!is_safe_provider_base_url("http://example.com"));
+        assert!(!is_safe_provider_base_url(
+            "http://169.254.169.254/latest/meta-data"
+        ));
+        assert!(!is_safe_provider_base_url("http://192.168.1.1"));
+        assert!(!is_safe_provider_base_url("http://0.0.0.0:8080"));
+    }
+
+    #[test]
+    fn other_schemes_are_blocked() {
+        assert!(!is_safe_provider_base_url("file:///etc/passwd"));
+        assert!(!is_safe_provider_base_url("ftp://example.com"));
+        assert!(!is_safe_provider_base_url("gopher://internal"));
+        assert!(!is_safe_provider_base_url(""));
+        assert!(!is_safe_provider_base_url("localhost:8080"));
     }
 }
 

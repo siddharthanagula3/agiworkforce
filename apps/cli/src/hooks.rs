@@ -591,9 +591,22 @@ pub fn load_hooks() -> Result<HooksConfig> {
     let mut config: HooksConfig = if !path.exists() {
         HooksConfig::default()
     } else {
-        // Security: verify hooks.json is not group/other-writable (prevents tampering)
+        // Security: verify hooks.json permissions and ownership.
+        //
+        // CLI-NEW-011 hardening (2026-05-04 audit):
+        //   1. Original check rejected mode `&0o022` (group/other-writable) but
+        //      ignored `&0o044` (group/other-readable). hooks.json may contain
+        //      sensitive command strings — paths, embedded tokens, project
+        //      identifiers — so a readable file is still a leak.
+        //   2. There was no ownership check at all. A symlink-replacement
+        //      attack (drop a symlink at ~/.agiworkforce/hooks.json pointing
+        //      to a different user's hooks.json) could trick this code into
+        //      executing hooks defined by another user. We now refuse to load
+        //      hooks.json when the file's owning UID does not match the
+        //      current process UID.
         #[cfg(unix)]
         {
+            use std::os::unix::fs::MetadataExt;
             use std::os::unix::fs::PermissionsExt;
             if let Ok(meta) = std::fs::metadata(&path) {
                 let mode = meta.permissions().mode();
@@ -605,6 +618,29 @@ pub fn load_hooks() -> Result<HooksConfig> {
                         mode & 0o777,
                         path.display()
                     );
+                }
+                if mode & 0o044 != 0 {
+                    eprintln!(
+                        "{} hooks.json is group/other-readable (mode {:o}). \
+                         Fix with: chmod 600 {}",
+                        "security warning:".red().bold(),
+                        mode & 0o777,
+                        path.display()
+                    );
+                }
+                let owner_uid = meta.uid();
+                // Use nix's safe wrapper rather than a raw `extern "C"` block;
+                // workspace lints reject unsafe code.
+                let process_uid = nix::unistd::getuid().as_raw();
+                if owner_uid != process_uid {
+                    return Err(anyhow::anyhow!(
+                        "Refusing to load hooks.json: owned by uid {} but \
+                         current process is uid {}. Suspected symlink or \
+                         permissions attack. Path: {}",
+                        owner_uid,
+                        process_uid,
+                        path.display()
+                    ));
                 }
             }
         }
