@@ -147,13 +147,7 @@ export default function Home() {
 
             {/* Provider grid */}
             <div className="mt-10 border-t border-[var(--color-rule)]" />
-            {/*
-              Note: ProviderGrid renders marks using text-[var(--color-cream-on-graphite)]
-              which is near-white — on paper (#faf9f7) this is low-contrast. The grid is
-              wrapped in a graphite-tinted block to preserve legibility without modifying
-              the primitive.
-            */}
-            <div className="mt-0 bg-[var(--color-graphite)] -mx-4 px-4 py-8">
+            <div className="mt-8">
               <ProviderGrid
                 caption={`${MARKETING.providers.display} PROVIDERS · ONE THREAD · ZERO LOCK-IN`}
               />

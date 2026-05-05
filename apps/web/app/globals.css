@@ -45,9 +45,14 @@
   --color-graphite: #0a0908;
   --color-graphite-2: #131110;
   --color-cream-on-graphite: #ede8df;
+  /* fg-* tokens are tuned for graphite (cream-on-dark) backgrounds.
+     fg-paper-* counterparts ensure ≥4.5:1 contrast on #faf9f7 paper. */
   --color-fg-muted: #a8a4a0;
   --color-fg-quiet: #888480;
   --color-fg-faint: #555150;
+  --color-fg-paper-muted: #4a4744; /* ~9.4:1 on paper, body-safe */
+  --color-fg-paper-quiet: #6b6764; /* ~5.6:1 on paper, body-safe AA */
+  --color-fg-paper-faint: #8e8a86; /* ~3.1:1 on paper, large text only */
 
   /* Brand: amber as RULE color (structural rule lines, drop-caps, carets).
      Hex unchanged; role changes from accent to ink. */
