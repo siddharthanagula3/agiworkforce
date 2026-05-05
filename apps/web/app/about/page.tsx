@@ -1,29 +1,33 @@
-import { Bot, Target, Zap, Shield, Users } from 'lucide-react';
-import { MARKETING } from '../../lib/marketing-constants';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { CtaSection } from '../../components/marketing/CtaSection';
 import type { Metadata } from 'next';
 
+import { MARKETING } from '../../lib/marketing-constants';
+import { EditorialPage } from '../../components/marketing/editorial/EditorialPage';
+import { RuledSection } from '../../components/marketing/editorial/RuledSection';
+import { Slug } from '../../components/marketing/editorial/Slug';
+import { Specimen } from '../../components/marketing/editorial/Specimen';
+import { OpsizMorph } from '../../components/marketing/editorial/OpsizMorph';
+import { SurfaceIndex } from '../../components/marketing/editorial/SurfaceIndex';
+import { DispatchSection } from '../../components/marketing/editorial/DispatchSection';
+
 export const metadata: Metadata = {
-  title: 'About Us - AGI Automation LLC | AGI Workforce',
+  title: 'About | AGI Workforce',
   description:
-    'Meet the team behind AGI Workforce. Founded in 2025 in Austin, TX, AGI Automation LLC is on a mission to democratize AI automation and help people work smarter.',
+    'AGI Automation LLC. Austin, TX. We build a multi-provider AI agent platform across six surfaces.',
   keywords: [
     'AGI Automation LLC',
     'AGI Workforce',
     'AI automation company',
-    'Siddhartha Nagula',
     'Austin TX startup',
     'AI agents',
+    'multi-provider AI',
   ],
   alternates: {
     canonical: 'https://agiworkforce.com/about',
   },
   openGraph: {
-    title: 'About AGI Automation LLC | AGI Workforce',
+    title: 'About | AGI Workforce',
     description:
-      "Meet the team behind AGI Workforce. Founded in 2025 in Austin, TX, we're democratizing AI automation.",
+      'AGI Automation LLC. Austin, TX. Multi-provider AI agent platform across six surfaces.',
     url: 'https://agiworkforce.com/about',
     siteName: 'AGI Workforce',
     type: 'website',
@@ -32,14 +36,14 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Workforce - About Us',
+        alt: 'AGI Workforce - About',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'About AGI Automation LLC | AGI Workforce',
-    description: 'Meet the team behind AGI Workforce. Founded in 2025 in Austin, TX.',
+    title: 'About | AGI Workforce',
+    description: 'AGI Automation LLC. Austin, TX. Multi-provider AI across six surfaces.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
@@ -55,8 +59,8 @@ const jsonLd = {
       url: 'https://agiworkforce.com',
       logo: 'https://agiworkforce.com/logo.png',
       description:
-        'AGI Automation LLC builds AGI Workforce, a desktop app where you tell the AI what you want and it handles everything - with full undo support.',
-      foundingDate: '2025',
+        'AGI Automation LLC builds AGI Workforce, a multi-provider AI agent platform across six surfaces.',
+      foundingDate: '2026',
       foundingLocation: {
         '@type': 'Place',
         address: {
@@ -91,8 +95,7 @@ const jsonLd = {
       '@id': 'https://agiworkforce.com/#founder',
       name: 'Siddhartha Nagula',
       jobTitle: 'Founder & CEO',
-      description:
-        'Founder and CEO of AGI Automation LLC, passionate about building tools that empower people to work smarter with AI.',
+      description: 'Founder and CEO of AGI Automation LLC.',
       worksFor: {
         '@type': 'Organization',
         name: 'AGI Automation LLC',
@@ -102,18 +105,139 @@ const jsonLd = {
       '@type': 'WebPage',
       '@id': 'https://agiworkforce.com/about',
       url: 'https://agiworkforce.com/about',
-      name: 'About Us - AGI Automation LLC',
+      name: 'About - AGI Automation LLC',
       description: 'Learn about AGI Automation LLC, the company behind AGI Workforce.',
-      isPartOf: {
-        '@id': 'https://agiworkforce.com/#website',
-      },
-      about: {
-        '@id': 'https://agiworkforce.com/#organization',
-      },
+      isPartOf: { '@id': 'https://agiworkforce.com/#website' },
+      about: { '@id': 'https://agiworkforce.com/#organization' },
     },
   ],
 };
 
+/* ── S1: Masthead colophon ──────────────────────────────────────── */
+function AboutHero() {
+  return (
+    <RuledSection tier="paper" id="about-hero">
+      <div className="py-20 md:py-28">
+        <h1
+          className="font-display font-[300] leading-[1.04]"
+          style={{ fontSize: 'clamp(3rem, 7vw, 5rem)' }}
+        >
+          Multi-provider
+        </h1>
+        <h1
+          className="font-display font-[800] italic leading-[1.04] mt-1 inline-block border-b-[3px] border-[var(--color-rule)]"
+          style={{ fontSize: 'clamp(3rem, 7vw, 5rem)' }}
+        >
+          by design.
+        </h1>
+
+        <div className="mt-8 max-w-2xl">
+          <Specimen columns={2}>
+            <p>
+              Anthropic locks you to Claude. OpenAI locks you to GPT. Google locks you to Gemini. We
+              don&apos;t lock — we route.
+            </p>
+            <p>
+              AGI Workforce is a multi-provider AI agent platform across six surfaces (CLI, Desktop,
+              Web, Mobile, Chrome ext, VS Code ext). The CLI is the engine; the apps are surfaces
+              over it.
+            </p>
+          </Specimen>
+        </div>
+      </div>
+    </RuledSection>
+  );
+}
+
+/* ── S2: Mission ────────────────────────────────────────────────── */
+function Mission() {
+  return (
+    <RuledSection tier="paper" slug={<Slug index="01" kicker="MISSION" />}>
+      <div className="py-16 md:py-24">
+        <OpsizMorph as="h2" className="text-[var(--color-ink)] mb-8 text-3xl md:text-5xl">
+          One thread. {MARKETING.providers.display} providers. <em>Yours.</em>
+        </OpsizMorph>
+
+        <Specimen columns={3} dropCap>
+          <p>
+            AGI capabilities are not arriving as a single model from a single vendor. They&apos;re
+            emerging across providers, each with different strengths.
+          </p>
+          <p>
+            Switching between them — mid-conversation, with full context preserved — is the
+            practical reality of working with frontier AI in 2026. The infrastructure to do this
+            cleanly didn&apos;t exist, so we built it.
+          </p>
+          <p>
+            Our bet: the user, not the vendor, owns the keys, the data, and the choice of model. We
+            shipped local LLM mode on day one for that reason.
+          </p>
+        </Specimen>
+      </div>
+    </RuledSection>
+  );
+}
+
+/* ── S3: Operator's Colophon ────────────────────────────────────── */
+function OperatorsColophon() {
+  const rows: { label: string; value: string }[] = [
+    { label: 'Legal entity', value: 'AGI Automation LLC' },
+    { label: 'Headquarters', value: 'Austin, Texas, USA' },
+    { label: 'Founded', value: '2026' },
+    { label: 'License', value: 'Proprietary' },
+    { label: 'Region', value: 'us-east-2 (Supabase)' },
+    { label: 'Set in', value: 'Newsreader & JetBrains Mono' },
+    { label: 'Engine', value: 'Pure Rust CLI · 195 .rs files · 2,161 tests' },
+    { label: 'Surfaces', value: '6 (CLI, Desktop, Web, Mobile, Chrome ext, VS Code ext)' },
+    { label: 'Providers', value: '12 (10+ as a count includes BYO endpoints)' },
+    { label: 'Audit posture', value: 'P0 13/14 closed · P1 20/25 closed (2026-05-03)' },
+    { label: 'Compliance', value: 'SOC2 in progress · GDPR DPA available · No HIPAA cert' },
+    { label: 'Data policy', value: 'We do not train on your data.' },
+  ];
+
+  return (
+    <RuledSection tier="graphite" slug={<Slug index="02" kicker="COLOPHON" />}>
+      <div className="py-16 md:py-24">
+        <h2
+          className="font-display italic font-bold text-[var(--color-cream-on-graphite)] mb-12"
+          style={{ fontSize: 'clamp(1.75rem, 3.5vw, 2.75rem)' }}
+        >
+          Built by AGI Automation LLC.
+        </h2>
+
+        <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 font-mono text-sm">
+          {rows.map(({ label, value }) => (
+            <div key={label} className="border-b border-[var(--color-rule-soft)] pb-4">
+              <dt className="text-[11px] tracking-[0.18em] uppercase text-[var(--color-fg-quiet)] mb-1">
+                {label}
+              </dt>
+              <dd className="font-display italic text-[1.125rem] text-[var(--color-cream-on-graphite)]">
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        <p className="mt-10 font-display italic text-lg text-[var(--color-cream-on-graphite)]">
+          The CLI is the product. The apps are surfaces over it.
+        </p>
+      </div>
+    </RuledSection>
+  );
+}
+
+/* ── S4: Surfaces ───────────────────────────────────────────────── */
+function Surfaces() {
+  return (
+    <RuledSection tier="graphite" slug={<Slug index="03" kicker="SURFACES" />}>
+      <div className="px-0">
+        <SurfaceIndex />
+      </div>
+    </RuledSection>
+  );
+}
+
+/* ── Page ───────────────────────────────────────────────────────── */
 export default function AboutPage() {
   return (
     <>
@@ -121,172 +245,13 @@ export default function AboutPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="flex min-h-screen flex-col bg-[#09090b] text-[#edebe8]">
-        <Header />
-
-        <main className="flex-1 pt-24">
-          {/* Hero Section */}
-          <section className="relative overflow-hidden py-20 md:py-32">
-            <div className="container relative mx-auto px-4 text-center">
-              <h1 className="mx-auto max-w-4xl text-4xl font-bold tracking-tight text-[#edebe8] md:text-6xl lg:text-7xl">
-                Building the Future of
-                <span className="text-[#c8892a]"> AI Automation</span>
-              </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-lg text-[#888480] md:text-xl">
-                We believe everyone deserves access to powerful AI tools. AGI Workforce makes
-                automation accessible, secure, and incredibly powerful.
-              </p>
-            </div>
-          </section>
-
-          {/* Mission Section */}
-          <section className="py-24 bg-[#09090b]">
-            <div className="container mx-auto px-4">
-              <div className="grid md:grid-cols-2 gap-16 items-center">
-                <div>
-                  <div className="inline-flex items-center rounded-md border border-[#c8892a]/30 bg-[#c8892a]/10 px-3 py-1 text-sm text-[#c8892a] mb-6">
-                    <Target className="h-4 w-4 mr-2" />
-                    Our Mission
-                  </div>
-                  <h2 className="text-3xl font-bold tracking-tight text-[#edebe8] mb-6">
-                    Helping People Work Smarter, Not Harder
-                  </h2>
-                  <p className="text-[#888480] text-lg leading-relaxed mb-6">
-                    At AGI Automation LLC, we&apos;re on a mission to democratize AI automation. We
-                    believe that powerful AI tools shouldn&apos;t be locked behind enterprise
-                    contracts or require a team of engineers to deploy.
-                  </p>
-                  <p className="text-[#888480] text-lg leading-relaxed">
-                    With AGI Workforce, you simply tell the AI what you want done - no technical
-                    knowledge required. Everything is reversible, so you can experiment freely
-                    knowing you can always undo.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-6">
-                  {[
-                    { icon: Zap, label: 'Fast', desc: 'Native performance' },
-                    { icon: Shield, label: 'Secure', desc: 'Local-first privacy' },
-                    { icon: Bot, label: 'Smart', desc: 'Multi-LLM support' },
-                    { icon: Users, label: 'Simple', desc: 'No code required' },
-                  ].map((item, i) => (
-                    <div
-                      key={i}
-                      className="rounded-2xl border border-[#1a1917] bg-black/50 p-6 text-center"
-                    >
-                      <item.icon className="h-8 w-8 text-[#c8892a] mx-auto mb-3" />
-                      <div className="font-semibold text-[#edebe8] mb-1">{item.label}</div>
-                      <div className="text-sm text-[#555150]">{item.desc}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Founder Section */}
-          <section className="py-24 bg-black">
-            <div className="container mx-auto px-4">
-              <div className="text-center mb-16">
-                <h2 className="text-3xl font-bold tracking-tight text-[#edebe8] mb-4">
-                  Leadership
-                </h2>
-                <p className="text-[#888480] max-w-2xl mx-auto">
-                  AGI Workforce is built by a passionate team dedicated to making AI accessible to
-                  everyone.
-                </p>
-              </div>
-              <div className="max-w-xl mx-auto">
-                <div className="rounded-2xl border border-[#1a1917] bg-[#09090b]/50 p-8 text-center">
-                  <div className="w-24 h-24 rounded-full bg-[#c8892a]/15 border border-[#c8892a]/30 mx-auto mb-6 flex items-center justify-center">
-                    <span className="text-3xl font-bold text-[#c8892a]">SN</span>
-                  </div>
-                  <h3 className="text-xl font-semibold text-[#edebe8] mb-1">Siddhartha Nagula</h3>
-                  <p className="text-[#c8892a] mb-4">Founder & CEO</p>
-                  <p className="text-[#888480] text-sm leading-relaxed mb-6">
-                    Software engineer and AI researcher focused on making autonomous AI tools safe
-                    and accessible. Built AGI Workforce from the ground up as a native Tauri desktop
-                    app with a privacy-first architecture.
-                  </p>
-                  <div className="flex justify-center gap-4">
-                    <a
-                      href="https://www.linkedin.com/company/agi-automation-llc"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-[#555150] hover:text-[#edebe8] transition-colors border border-[#555150]/40 rounded-md px-3 py-1"
-                    >
-                      LinkedIn
-                    </a>
-                    <a
-                      href="https://twitter.com/agiworkforce"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-[#555150] hover:text-[#edebe8] transition-colors border border-[#555150]/40 rounded-md px-3 py-1"
-                    >
-                      Twitter / X
-                    </a>
-                  </div>
-                </div>
-
-                {/* Why we built this */}
-                <div className="mt-8 rounded-2xl border border-[#1a1917] border-l-[#c8892a] border-l-2 bg-[#09090b]/50 p-8">
-                  <h4 className="text-lg font-semibold mb-3 text-[#edebe8]">Why we built this</h4>
-                  <p className="text-[#888480] text-sm leading-relaxed">
-                    Every powerful AI tool we tried was either locked to one model, cloud-only, or
-                    required engineering expertise to set up. We built AGI Workforce to fix that - a
-                    native desktop app where you bring your own API keys, run models locally, and
-                    stay in full control of your data. No subscriptions to 5 different tools. One
-                    app, any model, full autonomy.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Company Info */}
-          <section className="py-24 bg-[#09090b]">
-            <div className="container mx-auto px-4">
-              <div className="grid md:grid-cols-4 gap-8 text-center">
-                <div className="p-8">
-                  <div className="text-4xl font-bold text-[#c8892a] mb-2">
-                    {MARKETING.providers.display}
-                  </div>
-                  <div className="text-[#edebe8] font-medium">AI Providers</div>
-                  <div className="text-sm text-[#555150] mt-1">
-                    OpenAI, Anthropic, Google &amp; more
-                  </div>
-                </div>
-                <div className="p-8">
-                  <div className="text-4xl font-bold text-[#c8892a] mb-2">
-                    {MARKETING.skills.display}
-                  </div>
-                  <div className="text-[#edebe8] font-medium">AI Skills</div>
-                  <div className="text-sm text-[#555150] mt-1">
-                    Across {MARKETING.categories.display} categories
-                  </div>
-                </div>
-                <div className="p-8">
-                  <div className="text-4xl font-bold text-[#c8892a] mb-2">macOS</div>
-                  <div className="text-[#edebe8] font-medium">Windows &amp; Linux</div>
-                  <div className="text-sm text-[#555150] mt-1">Native desktop app</div>
-                </div>
-                <div className="p-8">
-                  <div className="text-4xl font-bold text-[#c8892a] mb-2">BYOK</div>
-                  <div className="text-[#edebe8] font-medium">Own Your Keys</div>
-                  <div className="text-sm text-[#555150] mt-1">No middleman, no markup</div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* CTA Section */}
-          <CtaSection
-            headline="Ready to Get Started?"
-            body="Just tell the AI what you want done. No setup, no configuration - everything is reversible."
-          />
-        </main>
-
-        <MarketingFooter />
-      </div>
+      <EditorialPage tier="mixed">
+        <AboutHero />
+        <Mission />
+        <OperatorsColophon />
+        <Surfaces />
+        <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
+      </EditorialPage>
     </>
   );
 }
