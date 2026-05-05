@@ -1,418 +1,406 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import {
-  ArrowRight,
-  Terminal,
-  Zap,
-  GitBranch,
-  Plug,
-  Package,
-  CheckCircle2,
-  Code2,
-  Copy,
-} from 'lucide-react';
-import { Header } from '@/components/layout/Header';
-import { MarketingFooter } from '@/components/marketing/MarketingFooter';
+
+import { EditorialPage } from '../../components/marketing/editorial/EditorialPage';
+import { RuledSection } from '../../components/marketing/editorial/RuledSection';
+import { Slug } from '../../components/marketing/editorial/Slug';
+import { OpsizMorph } from '../../components/marketing/editorial/OpsizMorph';
+import { MonoButton } from '../../components/marketing/editorial/MonoButton';
+import { StampComingSoon } from '../../components/marketing/editorial/StampComingSoon';
+import { OperatorConsole } from '../../components/marketing/editorial/OperatorConsole';
+import { DispatchSection } from '../../components/marketing/editorial/DispatchSection';
 
 export const metadata: Metadata = {
   title: 'CLI | AGI Workforce',
   description:
-    'agiworkforce — the Rust CLI. 22 subcommands, Ratatui TUI, 13 providers, 2,161 tests. Install via Homebrew, Cargo, curl, or npm.',
+    'agiworkforce — pure Rust CLI. 22 subcommands. 13 wired providers. 2,161 tests. v1.0 live.',
   alternates: { canonical: 'https://agiworkforce.com/cli' },
   openGraph: {
     title: 'CLI | AGI Workforce',
     description:
-      'Pure Rust CLI with Ratatui TUI. 22 subcommands, 13 providers, 5.7 MB binary, 2,161 tests.',
+      'Pure Rust CLI with Ratatui TUI. 22 subcommands. 13 providers. 5.7 MB binary. 2,161 tests.',
     url: 'https://agiworkforce.com/cli',
     type: 'website',
     images: [{ url: '/app-preview.png', width: 1200, height: 630, alt: 'AGI Workforce CLI' }],
   },
 };
 
-const cliStats = [
-  { label: 'Rust files', value: '195', sub: 'source files' },
-  { label: 'Subcommands', value: '22', sub: 'CLI commands' },
-  { label: 'Tests', value: '2,161', sub: 'all passing' },
-  { label: 'Binary size', value: '5.7 MB', sub: 'arm64 macOS' },
+/* ── canonical subcommand list from apps/cli/src/main.rs ─────────────────── */
+const SUBCOMMANDS: { cmd: string; desc: string }[] = [
+  { cmd: 'exec', desc: 'run a task non-interactively' },
+  { cmd: 'review', desc: 'non-interactive code review' },
+  { cmd: 'apply', desc: 'apply latest diff as git patch' },
+  { cmd: 'sandbox', desc: 'run commands inside a sandbox' },
+  { cmd: 'mcp-server', desc: 'run as mcp server (stdio)' },
+  { cmd: 'app-server', desc: 'run app server for ide integration' },
+  { cmd: 'resume', desc: 'continue a previous session' },
+  { cmd: 'fork', desc: 'fork a previous session' },
+  { cmd: 'session', desc: 'inspect or branch sessions (replay)' },
+  { cmd: 'cloud', desc: 'cloud tasks (byok, top models only)' },
+  { cmd: 'plugin', desc: 'manage plugins' },
+  { cmd: 'features', desc: 'inspect feature flags' },
+  { cmd: 'execpolicy', desc: 'show execution policy rules' },
+  { cmd: 'ecosystem', desc: 'scan and import mcp configs' },
+  { cmd: 'history', desc: 'browse session history' },
+  { cmd: 'sync', desc: 'sync dotfiles and settings across devices' },
+  { cmd: 'login', desc: 'sign in to a provider or agi workforce cloud' },
+  { cmd: 'logout', desc: 'logout from agi workforce cloud' },
+  { cmd: 'auth-status', desc: 'show auth status for all providers' },
+  { cmd: 'marketplace', desc: 'browse and install marketplace plugins' },
+  { cmd: 'init', desc: 'initialize ~/.agiworkforce/ directory structure' },
+  { cmd: 'onboarding', desc: 'run the first-run onboarding wizard again' },
 ];
 
-const providers = [
-  'Anthropic',
-  'OpenAI',
-  'Google',
-  'Ollama (Local + Cloud)',
-  'xAI',
-  'DeepSeek',
-  'Perplexity',
-  'Qwen',
-  'Moonshot',
-  'Zhipu',
-  'LM Studio',
-  'Custom',
-];
-
-const subcommands = [
+const ENGINEERING_SPECS: { label: string; value: string }[] = [
+  { label: 'Language', value: 'Rust (no Electron, no Tauri -- pure Rust)' },
+  { label: 'Source files', value: '195 .rs files' },
+  { label: 'Lines of code', value: '155,029 LOC' },
+  { label: 'Test count', value: '2,161 tests' },
+  { label: 'TUI', value: 'Ratatui -- 125 files' },
+  { label: 'Subcommands', value: '22' },
+  { label: 'Hook events', value: '22' },
+  { label: 'Wired providers', value: '13 named registrations' },
+  { label: 'MCP transports', value: 'stdio · SSE · streamable HTTP' },
+  { label: 'Plan mode', value: 'dual-shipped (P0 legacy + new update_plan)' },
   {
-    cmd: 'agiworkforce exec',
-    desc: 'Run a one-shot agent task with any provider. Multi-model fallback built in.',
-    example: 'agiworkforce exec -m claude-opus-4-7 "Summarize this file"',
+    label: 'Sandbox',
+    value: 'macOS Seatbelt · Linux bwrap (Windows/Landlock = stubs)',
   },
-  {
-    cmd: 'agiworkforce repl',
-    desc: 'Interactive Ratatui TUI. Full chat with streaming, tool calls, and history.',
-    example: 'agiworkforce repl --provider openai',
-  },
-  {
-    cmd: 'agiworkforce plan',
-    desc: 'Agentic plan mode. Decompose a task into steps, approve, then execute.',
-    example: 'agiworkforce plan "Refactor auth module"',
-  },
-  {
-    cmd: 'agiworkforce sessions',
-    desc: 'Resume, fork, or branch conversations. Full session continuity.',
-    example: 'agiworkforce sessions resume abc123',
-  },
-  {
-    cmd: 'agiworkforce mcp',
-    desc: 'Connect and manage MCP servers (stdio only). Browse available tools.',
-    example: 'agiworkforce mcp connect ./my-server',
-  },
-  {
-    cmd: '--demo --json-events',
-    desc: 'Structured JSON event stream. Pipe into scripts, CI, or your own tooling.',
-    example: 'agiworkforce --demo --json-events exec -m claude-opus-4-7,gpt-5.5 "..."',
-  },
-];
-
-const installMethods = [
-  {
-    label: 'Homebrew',
-    cmd: 'brew install siddharthanagula3/tap/agiworkforce',
-    status: 'live',
-  },
-  {
-    label: 'Cargo',
-    cmd: 'cargo install agiworkforce-cli',
-    status: 'live',
-  },
-  {
-    label: 'curl installer',
-    cmd: 'curl -fsSL https://agiworkforce.com/install.sh | sh',
-    status: 'live',
-  },
-  {
-    label: 'npm (global)',
-    cmd: 'npm install -g @agiworkforce/cli',
-    status: 'coming-soon',
-  },
-];
-
-const hookEvents = [
-  'before_exec',
-  'after_exec',
-  'before_tool',
-  'after_tool',
-  'on_error',
-  'on_stream_start',
-  'on_stream_end',
-  'on_plan_approved',
-  'on_session_start',
-  'on_session_end',
-  'on_fallback_triggered',
-  'on_mcp_connect',
-  'on_mcp_disconnect',
-  'on_provider_switch',
-  'on_context_limit',
-  'on_cancel',
-  'on_token_budget',
-  'before_sandbox',
-  'after_sandbox',
-  'on_approval_required',
-  'on_skill_start',
-  'on_skill_end',
+  { label: 'Binary size', value: '5.7 MB on arm64' },
+  { label: 'Install path', value: '~/.cargo/bin/agiworkforce' },
+  { label: 'Released', value: 'v1.0 LIVE (2026-05-03)' },
 ];
 
 export default function CliPage() {
   return (
-    <div className="min-h-screen bg-black text-white">
-      <Header />
-      <main className="pt-24">
-        {/* Hero */}
-        <section className="relative overflow-hidden py-20 md:py-32">
-          <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:28px_28px]" />
-          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[500px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#c8892a]/[0.07] blur-[140px]" />
-
-          <div className="container mx-auto px-4 relative">
-            <div className="max-w-4xl mx-auto text-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#c8892a]/25 bg-[#c8892a]/[0.07] px-4 py-1.5 text-sm font-medium text-[#c8892a] mb-8">
-                <Terminal className="h-3.5 w-3.5" />
-                Pure Rust — 5.7 MB binary
-              </div>
-
-              <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[0.95] mb-6">
-                <span className="font-mono">agiworkforce</span>
-                <br />
-                <span className="bg-gradient-to-r from-[#c8892a] via-[#e8af50] to-[#c8892a] bg-clip-text text-transparent">
-                  the Rust CLI.
+    <EditorialPage tier="mixed">
+      {/* S1 — Masthead Hero */}
+      <RuledSection tier="graphite" id="cli-hero">
+        <div className="py-20 md:py-32">
+          <div className="grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-16">
+            {/* Left: asymmetric headline */}
+            <div>
+              <h1 className="leading-[1.02] tracking-[-0.018em]">
+                <span
+                  className="block font-[var(--font-newsreader)] font-light text-[var(--color-cream-on-graphite)]"
+                  style={{ fontSize: 'clamp(2.5rem, 5vw, 4.5rem)' }}
+                >
+                  agiworkforce &mdash;
+                </span>
+                <span
+                  className={[
+                    'block font-[var(--font-newsreader)] font-extrabold italic',
+                    'text-[var(--color-cream-on-graphite)]',
+                    'underline decoration-[var(--color-rule)] underline-offset-4',
+                  ].join(' ')}
+                  style={{ fontSize: 'clamp(2.5rem, 5vw, 4.5rem)' }}
+                >
+                  the operator&apos;s CLI.
                 </span>
               </h1>
-
-              <p className="text-xl text-zinc-400 max-w-2xl mx-auto mb-4 leading-relaxed">
-                22 subcommands. 13 providers. Ratatui TUI. 2,161 tests. v1.0 live.
-              </p>
-
-              {/* Quick install */}
-              <div className="max-w-xl mx-auto mb-10">
-                <div className="rounded-xl border border-white/10 bg-[#0c0c0e] p-4 flex items-center gap-3 text-left">
-                  <Terminal className="h-4 w-4 text-[#c8892a] shrink-0" />
-                  <code className="font-mono text-sm text-zinc-200 flex-1 overflow-x-auto">
-                    brew install siddharthanagula3/tap/agiworkforce
-                  </code>
-                  <Copy className="h-4 w-4 text-zinc-600 shrink-0" />
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link
-                  href="https://github.com/siddharthanagula3/agiworkforce/releases"
-                  className="group inline-flex h-12 items-center gap-2 rounded-md bg-[#c8892a] px-8 text-sm font-semibold text-black hover:bg-[#d4993a] transition-all"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  GitHub Releases
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                </Link>
-                <Link
-                  href="/docs"
-                  className="inline-flex h-12 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-8 text-sm font-medium text-zinc-400 hover:border-white/20 hover:text-white transition-all"
-                >
-                  Documentation
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Stats strip */}
-        <section className="border-y border-white/[0.05] bg-[#0c0c0e]">
-          <div className="container mx-auto px-4 py-12">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/[0.05] rounded-2xl overflow-hidden max-w-3xl mx-auto">
-              {cliStats.map(({ label, value, sub }) => (
-                <div key={label} className="bg-[#0c0c0e] p-6 text-center">
-                  <div className="font-mono text-2xl font-bold text-[#c8892a] mb-1">{value}</div>
-                  <div className="text-sm font-medium text-white mb-0.5">{label}</div>
-                  <div className="text-xs text-zinc-600">{sub}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Subcommand showcase */}
-        <section className="py-24">
-          <div className="container mx-auto px-4">
-            <div className="text-center mb-16">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#c8892a] mb-3">
-                Subcommands
-              </p>
-              <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
-                22 commands, every workflow
-              </h2>
             </div>
 
-            <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-4">
-              {subcommands.map(({ cmd, desc, example }) => (
-                <div key={cmd} className="rounded-xl border border-white/[0.06] bg-[#0c0c0e] p-6">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Code2 className="h-4 w-4 text-[#c8892a] shrink-0" />
-                    <code className="font-mono text-sm font-bold text-white">{cmd}</code>
-                  </div>
-                  <p className="text-sm text-zinc-500 mb-3 leading-relaxed">{desc}</p>
-                  <div className="rounded-lg bg-zinc-950 border border-white/[0.04] px-4 py-2.5">
-                    <code className="font-mono text-xs text-zinc-400 break-all">{example}</code>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Providers */}
-        <section className="py-20 border-y border-white/[0.05] bg-[#0c0c0e]">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <div className="text-center mb-10">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#c8892a] mb-3">
-                  Provider registry
-                </p>
-                <h2 className="text-3xl font-bold tracking-tight mb-2">13 named providers</h2>
-                <p className="text-zinc-500 text-sm">
-                  Registered at build time in models.rs. Custom endpoints via OpenAI-compatible
-                  adapter.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {providers.map((p) => (
-                  <div
-                    key={p}
-                    className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-[#111114] px-4 py-3"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                    <span className="text-sm text-zinc-300">{p}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Install methods */}
-        <section className="py-24">
-          <div className="container mx-auto px-4">
-            <div className="max-w-3xl mx-auto">
-              <h2 className="text-3xl font-bold tracking-tight mb-2">Install</h2>
-              <p className="text-zinc-500 mb-10">
-                Four install paths. Pick the one that fits your workflow.
-              </p>
-
-              <div className="space-y-4">
-                {installMethods.map(({ label, cmd, status }) => (
-                  <div
-                    key={label}
-                    className="rounded-xl border border-white/[0.06] bg-[#0c0c0e] p-5"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-semibold text-zinc-300">{label}</span>
-                      {status === 'live' ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                          Live
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-amber-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                          Coming soon
-                        </span>
-                      )}
-                    </div>
-                    <div className="rounded-lg bg-zinc-950 border border-white/[0.04] px-4 py-3 flex items-center gap-3">
-                      <Terminal className="h-4 w-4 text-zinc-600 shrink-0" />
-                      <code className="font-mono text-sm text-zinc-300 flex-1 overflow-x-auto">
-                        {cmd}
-                      </code>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Hook events */}
-        <section className="py-20 border-y border-white/[0.05] bg-[#0c0c0e]">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <div className="flex flex-col md:flex-row md:items-end gap-4 mb-8">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#c8892a] mb-2">
-                    Hooks system
-                  </p>
-                  <h2 className="text-3xl font-bold tracking-tight">22 lifecycle events</h2>
-                  <p className="text-zinc-500 text-sm mt-2">
-                    Register shell scripts or Rust plugins on any event in the agent lifecycle.
-                  </p>
-                </div>
-                <div className="ml-auto">
-                  <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-1.5 text-xs text-emerald-400">
-                    <GitBranch className="h-3 w-3" />
-                    hooks.rs:179-200
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {hookEvents.map((evt) => (
-                  <code
-                    key={evt}
-                    className="rounded-md border border-white/[0.06] bg-zinc-950 px-3 py-1.5 font-mono text-xs text-zinc-400"
-                  >
-                    {evt}
-                  </code>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Additional capabilities */}
-        <section className="py-24">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-6">
-              <div className="rounded-xl border border-white/[0.06] bg-[#0c0c0e] p-7">
-                <Package className="h-5 w-5 text-[#c8892a] mb-4" />
-                <h3 className="font-semibold text-white mb-2">MCP (stdio)</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed">
-                  Connect any Model Context Protocol server via stdio. Browse tools, call them
-                  inline in agent loops.
-                </p>
-              </div>
-              <div className="rounded-xl border border-white/[0.06] bg-[#0c0c0e] p-7">
-                <Zap className="h-5 w-5 text-[#c8892a] mb-4" />
-                <h3 className="font-semibold text-white mb-2">Sandbox</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed">
-                  macOS Seatbelt and Linux bwrap ship by default. Every tool call runs in a
-                  policy-gated sandbox.
-                </p>
-              </div>
-              <div className="rounded-xl border border-white/[0.06] bg-[#0c0c0e] p-7">
-                <Plug className="h-5 w-5 text-[#c8892a] mb-4" />
-                <h3 className="font-semibold text-white mb-2">JSON Events</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed">
-                  Structured event stream with{' '}
-                  <code className="font-mono text-xs text-zinc-300">--json-events</code>. Pipe into
-                  CI, scripts, or observability tooling.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="py-20 border-t border-white/[0.05] bg-[#0c0c0e]">
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-              Install in one line.
-            </h2>
-            <div className="max-w-lg mx-auto mb-8">
-              <div className="rounded-xl border border-white/10 bg-zinc-950 p-4 flex items-center gap-3 text-left">
-                <Terminal className="h-4 w-4 text-[#c8892a] shrink-0" />
-                <code className="font-mono text-sm text-zinc-200 flex-1">
-                  brew install siddharthanagula3/tap/agiworkforce
-                </code>
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link
-                href="/docs"
-                className="inline-flex h-12 items-center gap-2 rounded-md bg-[#c8892a] px-8 text-sm font-semibold text-black hover:bg-[#d4993a] transition-all"
+            {/* Right: lede */}
+            <div className="flex flex-col justify-end">
+              <p
+                className={[
+                  'font-mono text-[14px] leading-[1.65]',
+                  'text-[var(--color-fg-quiet)]',
+                  'whitespace-pre-line',
+                ].join(' ')}
               >
-                Read the docs
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                href="https://github.com/siddharthanagula3/agiworkforce/releases"
-                className="inline-flex h-12 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-8 text-sm font-medium text-zinc-400 hover:border-white/20 hover:text-white transition-all"
-                target="_blank"
-                rel="noopener noreferrer"
+                {`Pure Rust. Ratatui TUI. 22 subcommands. 13 wired providers. 2,161 tests. 5.7 MB binary on arm64.
+
+The CLI is the product. The apps are surfaces over it.
+
+— THE EDITORS`}
+              </p>
+
+              {/* Hairline amber rule */}
+              <div className="mt-6 mb-4 border-t border-[var(--color-rule)]" />
+
+              {/* Trust strip */}
+              <p
+                className={[
+                  'font-mono text-[11px] tracking-[0.18em] uppercase',
+                  'text-[var(--color-fg-muted)]',
+                ].join(' ')}
               >
-                GitHub Releases
-              </Link>
+                RUST · NO ELECTRON · MCP STDIO+SSE+HTTP · LOCAL OR CLOUD
+              </p>
+
+              {/* CTAs */}
+              <div className="mt-8 flex flex-wrap gap-3">
+                <MonoButton variant="primary" href="#install" prefix="./">
+                  install
+                </MonoButton>
+                <MonoButton
+                  variant="ghost"
+                  href="https://github.com/siddharthanagula3/agiworkforce"
+                >
+                  source on github
+                </MonoButton>
+              </div>
             </div>
           </div>
-        </section>
-      </main>
-      <MarketingFooter />
-    </div>
+        </div>
+      </RuledSection>
+
+      {/* S2 — Operator Console live demo */}
+      <OperatorConsole slugIndex="01" slugKicker="LIVE DEMO" />
+
+      {/* S3 — Subcommand index */}
+      <RuledSection tier="graphite" slug={<Slug index="02" kicker="SUBCOMMANDS" />}>
+        <div className="py-20 md:py-28">
+          <OpsizMorph as="h2" className="text-[var(--color-cream-on-graphite)] mb-12">
+            22 subcommands.
+          </OpsizMorph>
+
+          <nav aria-label="CLI subcommands">
+            <ul className="flex flex-col divide-y divide-[var(--color-rule-soft)]">
+              {SUBCOMMANDS.map(({ cmd, desc }) => (
+                <li key={cmd}>
+                  <a
+                    href={`/docs/cli/${cmd}`}
+                    className={[
+                      'flex items-baseline gap-2 px-3 py-3',
+                      'group -mx-3',
+                      'transition-colors duration-150',
+                      'hover:bg-[var(--color-graphite-2)]',
+                      'focus-visible:outline focus-visible:outline-2',
+                      'focus-visible:outline-[var(--color-rule)] focus-visible:outline-offset-1',
+                    ].join(' ')}
+                  >
+                    {/* Command name */}
+                    <span
+                      className={[
+                        'font-mono text-[13px] font-semibold tracking-[0.08em]',
+                        'text-[var(--color-cream-on-graphite)]',
+                        'shrink-0 w-36',
+                        'group-hover:underline group-hover:decoration-[var(--color-rule)]',
+                        'group-hover:underline-offset-2',
+                      ].join(' ')}
+                    >
+                      {cmd}
+                    </span>
+
+                    {/* Dot leaders */}
+                    <span
+                      className="flex-1 border-b border-dotted border-[var(--color-rule-soft)] self-end mb-[0.35em]"
+                      aria-hidden="true"
+                    />
+
+                    {/* Description */}
+                    <span
+                      className={[
+                        'font-mono text-[12px] tracking-[0.04em]',
+                        'text-[var(--color-fg-quiet)]',
+                        'shrink-0 text-right max-w-[50%]',
+                      ].join(' ')}
+                    >
+                      {desc}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </div>
+      </RuledSection>
+
+      {/* S4 — Install */}
+      <RuledSection tier="graphite" id="install" slug={<Slug index="03" kicker="INSTALL" />}>
+        <div className="py-20 md:py-28">
+          <h2
+            className={[
+              'font-[var(--font-newsreader)] font-light',
+              'text-[var(--color-cream-on-graphite)]',
+              'mb-12',
+            ].join(' ')}
+            style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}
+          >
+            Four ways in.
+          </h2>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {/* Card 1 — Homebrew */}
+            <div className="border border-[var(--color-rule)] p-6 flex flex-col gap-4">
+              <p
+                className={[
+                  'font-mono text-[11px] tracking-[0.18em] uppercase',
+                  'text-[var(--color-fg-muted)]',
+                ].join(' ')}
+              >
+                HOMEBREW · MACOS, LINUX
+              </p>
+              <code
+                className={[
+                  'font-mono text-[13px] leading-[1.6] break-all',
+                  'text-[var(--color-amber-text)]',
+                ].join(' ')}
+              >
+                brew install siddharthanagula3/tap/agiworkforce
+              </code>
+              <p
+                className={[
+                  'font-mono text-[10px] tracking-[0.15em] uppercase mt-auto',
+                  'text-[var(--color-stamp-ok)]',
+                ].join(' ')}
+              >
+                LIVE
+              </p>
+            </div>
+
+            {/* Card 2 — Cargo */}
+            <div className="border border-[var(--color-rule)] p-6 flex flex-col gap-4">
+              <p
+                className={[
+                  'font-mono text-[11px] tracking-[0.18em] uppercase',
+                  'text-[var(--color-fg-muted)]',
+                ].join(' ')}
+              >
+                CARGO · ANY PLATFORM
+              </p>
+              <code
+                className={[
+                  'font-mono text-[13px] leading-[1.6] break-all',
+                  'text-[var(--color-amber-text)]',
+                ].join(' ')}
+              >
+                cargo install agiworkforce-cli
+              </code>
+              <p
+                className={[
+                  'font-mono text-[10px] tracking-[0.15em] uppercase mt-auto',
+                  'text-[var(--color-stamp-ok)]',
+                ].join(' ')}
+              >
+                LIVE
+              </p>
+            </div>
+
+            {/* Card 3 — curl */}
+            <div className="border border-[var(--color-rule)] p-6 flex flex-col gap-4">
+              <p
+                className={[
+                  'font-mono text-[11px] tracking-[0.18em] uppercase',
+                  'text-[var(--color-fg-muted)]',
+                ].join(' ')}
+              >
+                CURL · MACOS, LINUX, WSL
+              </p>
+              <code
+                className={[
+                  'font-mono text-[13px] leading-[1.6] break-all',
+                  'text-[var(--color-amber-text)]',
+                ].join(' ')}
+              >
+                curl -fsSL https://agiworkforce.com/install.sh | sh
+              </code>
+              <p
+                className={[
+                  'font-mono text-[10px] tracking-[0.15em] uppercase mt-auto',
+                  'text-[var(--color-stamp-ok)]',
+                ].join(' ')}
+              >
+                LIVE
+              </p>
+            </div>
+
+            {/* Card 4 — npm */}
+            <div className="border border-[var(--color-rule)] p-6 flex flex-col gap-4">
+              <p
+                className={[
+                  'font-mono text-[11px] tracking-[0.18em] uppercase',
+                  'text-[var(--color-fg-muted)]',
+                ].join(' ')}
+              >
+                NPM · ANY PLATFORM
+              </p>
+              <code
+                className={[
+                  'font-mono text-[13px] leading-[1.6] break-all',
+                  'text-[var(--color-amber-text)]',
+                ].join(' ')}
+              >
+                npm install -g @agiworkforce/cli
+              </code>
+              <div className="mt-auto">
+                <StampComingSoon variant="coming-soon" />
+              </div>
+            </div>
+          </div>
+
+          {/* Default install line */}
+          <div className="mt-10 bg-[var(--color-graphite-2)] border border-[var(--color-rule-soft)] p-6">
+            <p
+              className={[
+                'font-mono text-[11px] tracking-[0.15em] uppercase mb-3',
+                'text-[var(--color-fg-quiet)]',
+              ].join(' ')}
+            >
+              # quickest path in
+            </p>
+            <code className="font-mono text-[13px] text-[var(--color-cream-on-graphite)]">
+              curl -fsSL https://agiworkforce.com/install.sh | sh
+            </code>
+          </div>
+        </div>
+      </RuledSection>
+
+      {/* S5 — Engineering facts */}
+      <RuledSection tier="graphite" slug={<Slug index="04" kicker="ENGINEERING" />}>
+        <div className="py-20 md:py-28">
+          <h2
+            className={[
+              'font-[var(--font-newsreader)] font-light',
+              'text-[var(--color-cream-on-graphite)]',
+              'mb-12',
+            ].join(' ')}
+            style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}
+          >
+            What&apos;s actually under the hood.
+          </h2>
+
+          <dl className="grid grid-cols-1 gap-0 sm:grid-cols-2 lg:grid-cols-3 border-t border-[var(--color-rule-soft)]">
+            {ENGINEERING_SPECS.map(({ label, value }) => (
+              <div
+                key={label}
+                className="flex flex-col gap-1 py-4 pr-6 border-b border-[var(--color-rule-soft)]"
+              >
+                <dt
+                  className={[
+                    'font-mono text-[10px] tracking-[0.18em] uppercase',
+                    'text-[var(--color-fg-faint)]',
+                  ].join(' ')}
+                >
+                  {label}
+                </dt>
+                <dd
+                  className={[
+                    'font-mono text-[13px] leading-[1.5]',
+                    'text-[var(--color-cream-on-graphite)]',
+                  ].join(' ')}
+                >
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+
+          <p
+            className={[
+              'mt-10 font-[var(--font-newsreader)] italic',
+              'text-[var(--color-fg-muted)]',
+              'text-lg',
+            ].join(' ')}
+          >
+            The CLI is the product.
+          </p>
+        </div>
+      </RuledSection>
+
+      {/* S6 — Dispatch */}
+      <DispatchSection slugIndex="05" slugKicker="DISPATCH" />
+    </EditorialPage>
   );
 }

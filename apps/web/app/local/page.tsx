@@ -1,417 +1,345 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
-import {
-  ArrowRight,
-  CheckCircle2,
-  AlertCircle,
-  HardDrive,
-  Lock,
-  Wifi,
-  WifiOff,
-  Cpu,
-  Clock,
-  Shield,
-} from 'lucide-react';
 
-import { Header } from '@/components/layout/Header';
-import { MarketingFooter } from '@/components/marketing/MarketingFooter';
+import { EditorialPage } from '../../components/marketing/editorial/EditorialPage';
+import { RuledSection } from '../../components/marketing/editorial/RuledSection';
+import { Slug } from '../../components/marketing/editorial/Slug';
+import { Specimen } from '../../components/marketing/editorial/Specimen';
+import { OpsizMorph } from '../../components/marketing/editorial/OpsizMorph';
+import { MonoButton } from '../../components/marketing/editorial/MonoButton';
+import { DispatchSection } from '../../components/marketing/editorial/DispatchSection';
 
 export const metadata: Metadata = {
-  title: 'Local AI Mode | AGI Workforce - Run AI Offline, Free Forever',
+  title: 'Local | AGI Workforce',
   description:
-    'Run Ollama and LM Studio through AGI Workforce Desktop. 100% offline, free forever. No API key, no per-token cost, no rate limits. Your data never leaves your machine.',
+    'Run AI offline. Free forever. Ollama and LM Studio integrated. No internet required.',
+  alternates: { canonical: 'https://agiworkforce.com/local' },
   openGraph: {
-    title: 'Run AI Offline. Free Forever. | AGI Workforce',
+    title: 'Local | AGI Workforce',
     description:
-      'Ollama and LM Studio, integrated. Local mode runs entirely offline. SQLite storage, no cloud, no subscription.',
-    type: 'website',
+      'Run AI offline. Free forever. Ollama and LM Studio integrated. SQLite storage. No cloud.',
     url: 'https://agiworkforce.com/local',
+    type: 'website',
+    images: [
+      { url: '/app-preview.png', width: 1200, height: 630, alt: 'AGI Workforce Local Mode' },
+    ],
   },
-  alternates: { canonical: '/local' },
 };
 
-const setupSteps = [
+const REASONS: { kicker: string; body: string }[] = [
   {
-    step: '01',
-    title: 'Install Ollama or LM Studio',
-    desc: 'Download Ollama (ollama.com) or LM Studio (lmstudio.ai). Both are free and run on macOS, Windows, and Linux. Ollama is CLI-first; LM Studio has a GUI model browser.',
-    note: 'Ollama: brew install ollama or download the installer. LM Studio: download from lmstudio.ai.',
+    kicker: '01 · PRIVACY',
+    body: 'Nothing leaves your machine. No API logs anywhere -- yours or theirs.',
   },
   {
-    step: '02',
-    title: 'Pull a model',
-    desc: 'With Ollama, run `ollama pull llama3` (or gemma3, qwen3, mistral, phi4, and many more). With LM Studio, browse and download GGUF models from the in-app catalog.',
-    note: 'Smaller quantized models (4-bit, 8-bit) run on laptops. Larger models benefit from a dedicated GPU.',
+    kicker: '02 · LATENCY',
+    body: 'First-token latency under 200ms on M-series Apple Silicon for 7B models.',
   },
   {
-    step: '03',
-    title: 'Open AGI Workforce Desktop',
-    desc: 'In Settings, select Local mode. AGI Workforce will auto-detect Ollama at localhost:11434 and LM Studio at localhost:1234. No API key required.',
-    note: 'Desktop only. Local mode requires macOS, Windows, or Linux desktop installation.',
+    kicker: '03 · COST',
+    body: 'Free forever. No per-token billing, no rate limits, no subscriptions.',
   },
   {
-    step: '04',
-    title: 'Chat offline',
-    desc: 'All requests go to your local server. No internet required. No per-token cost. No rate limits. Conversations stored in SQLite on your machine.',
-    note: 'Disconnect your network any time. Local mode keeps working.',
-  },
-];
-
-const modelFamilies = [
-  { name: 'Llama 3 family', origin: 'Meta', via: 'Ollama', notes: 'General-purpose, strong base' },
-  {
-    name: 'Mistral family',
-    origin: 'Mistral AI',
-    via: 'Ollama / LM Studio',
-    notes: 'Efficient, good for code',
+    kicker: '04 · OFFLINE',
+    body: 'Works on a plane, in a SCIF, on a boat. The CLI does not notice the network is down.',
   },
   {
-    name: 'Qwen family',
-    origin: 'Alibaba',
-    via: 'Ollama / LM Studio',
-    notes: 'Multilingual, math-strong',
-  },
-  {
-    name: 'Phi family',
-    origin: 'Microsoft',
-    via: 'Ollama / LM Studio',
-    notes: 'Small, fast, instruction-tuned',
-  },
-  { name: 'Gemma family', origin: 'Google', via: 'Ollama', notes: 'Lightweight, open-weight' },
-  {
-    name: 'DeepSeek family',
-    origin: 'DeepSeek',
-    via: 'Ollama / LM Studio',
-    notes: 'Code and reasoning specialist',
+    kicker: '05 · CONTROL',
+    body: 'Pin a specific model version. No vendor deprecation surprises.',
   },
 ];
 
 export default function LocalPage() {
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#edebe8]">
-      <Header />
-
-      <main className="pt-24">
-        {/* Hero */}
-        <section className="relative overflow-hidden pt-20 pb-24 md:pt-28 md:pb-32">
-          <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:28px_28px]" />
-          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[500px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/[0.04] blur-[160px]" />
-
-          <div className="container relative mx-auto px-4 text-center">
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[0.07] px-4 py-1.5 text-sm font-medium text-emerald-400">
-              <WifiOff className="h-3.5 w-3.5" />
-              No internet required
-            </div>
-
-            <h1 className="font-heading leading-[0.92] tracking-tight">
-              <span className="block text-5xl md:text-7xl lg:text-[5.5rem]">Run AI offline.</span>
-              <span className="block bg-gradient-to-r from-emerald-400 via-emerald-300 to-emerald-400 bg-clip-text text-5xl text-transparent md:text-7xl lg:text-[5.5rem]">
-                Free forever.
-              </span>
-            </h1>
-
-            <p className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-[#888480] md:text-xl">
-              Ollama and LM Studio, integrated directly into AGI Workforce Desktop. No API key. No
-              per-token cost. No rate limits. Your data never leaves your machine.
-            </p>
-
-            <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link
-                href="/download"
-                className="group inline-flex h-12 items-center gap-2 rounded-md bg-white px-8 text-sm font-semibold text-black transition-all hover:bg-zinc-200"
-              >
-                Download Desktop
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                href="/byok"
-                className="inline-flex h-12 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-8 text-sm font-medium text-[#a8a4a0] transition-all hover:border-white/20 hover:text-[#edebe8]"
-              >
-                Or use BYOK cloud models
-              </Link>
-            </div>
-
-            {/* Trust items */}
-            <div className="mt-10 flex flex-wrap justify-center gap-x-8 gap-y-3">
-              {[
-                'Zero API keys required',
-                'No per-token cost',
-                'No rate limits',
-                'No internet needed',
-              ].map((text) => (
-                <div key={text} className="flex items-center gap-2 text-sm text-[#666260]">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                  {text}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Why local */}
-        <section className="border-y border-white/[0.05] bg-[#0c0c0e] py-20 md:py-28">
-          <div className="container mx-auto px-4">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#c8892a]">
-              Why local
-            </p>
-            <h2 className="font-heading text-3xl tracking-tight md:text-4xl">
-              Four reasons to run locally
-            </h2>
-
-            <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                {
-                  icon: Shield,
-                  title: 'Complete privacy',
-                  desc: 'Prompts, responses, and documents never touch a remote server. Suitable for sensitive code, legal drafts, and private data.',
-                },
-                {
-                  icon: Clock,
-                  title: 'Low latency',
-                  desc: 'LAN latency instead of cloud round-trips. Smaller models on fast hardware often respond faster than cloud APIs.',
-                },
-                {
-                  icon: HardDrive,
-                  title: 'No per-token cost',
-                  desc: 'After downloading the model once, inference is free. Ideal for high-volume workflows that would burn through API credits.',
-                },
-                {
-                  icon: WifiOff,
-                  title: 'Offline operation',
-                  desc: 'Works on a plane, in a Faraday cage, on an airgapped machine. No internet dependency for any part of the workflow.',
-                },
-              ].map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex flex-col gap-3">
-                  <div className="rounded-lg bg-emerald-500/10 p-2.5 w-fit">
-                    <Icon className="h-5 w-5 text-emerald-400" />
-                  </div>
-                  <h3 className="font-semibold text-[#edebe8]">{title}</h3>
-                  <p className="text-sm leading-relaxed text-[#888480]">{desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Setup steps */}
-        <section className="py-20 md:py-28">
-          <div className="container mx-auto px-4">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#c8892a]">
-              Setup
-            </p>
-            <h2 className="font-heading text-3xl tracking-tight md:text-4xl">
-              Up and running in four steps
-            </h2>
-
-            <div className="mt-12 space-y-6 max-w-3xl">
-              {setupSteps.map(({ step, title, desc, note }) => (
-                <div
-                  key={step}
-                  className="flex gap-6 rounded-2xl border border-white/[0.06] bg-[#0f0f11] p-6"
+    <EditorialPage tier="mixed">
+      {/* S1 — Masthead Hero */}
+      <RuledSection tier="paper" id="local-hero">
+        <div className="py-20 md:py-32">
+          <div className="grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-16">
+            {/* Left: headline */}
+            <div>
+              <h1 className="leading-[1.02] tracking-[-0.018em]">
+                <span
+                  className="block font-[var(--font-newsreader)] font-light text-[var(--color-ink)]"
+                  style={{ fontSize: 'clamp(2.5rem, 5vw, 4.5rem)' }}
                 >
-                  <div className="font-mono text-4xl font-bold text-[#1e1c1a] shrink-0 leading-none mt-1">
-                    {step}
-                  </div>
-                  <div>
-                    <h3 className="mb-2 font-semibold text-[#edebe8]">{title}</h3>
-                    <p className="text-sm leading-relaxed text-[#888480]">{desc}</p>
-                    <p className="mt-2 text-xs text-[#555150]">{note}</p>
-                  </div>
-                </div>
-              ))}
+                  Run AI offline.
+                </span>
+                <span
+                  className={[
+                    'block font-[var(--font-newsreader)] font-extrabold italic',
+                    'text-[var(--color-ink)]',
+                    'underline decoration-[var(--color-rule)] underline-offset-4',
+                  ].join(' ')}
+                  style={{ fontSize: 'clamp(2.5rem, 5vw, 4.5rem)' }}
+                >
+                  Free forever.
+                </span>
+              </h1>
+            </div>
+
+            {/* Right: lede */}
+            <div className="flex flex-col justify-end">
+              <Specimen columns={2} dropCap>
+                <p>
+                  No internet. No keys. No quotas. Just your laptop, Ollama or LM Studio, and a
+                  model file.
+                </p>
+                <p>
+                  Local-only mode is shipped today and free forever. SQLite for storage. No
+                  Supabase. No auth. No cross-device sync. No Dispatch; but also no leakage.
+                </p>
+              </Specimen>
+
+              {/* CTAs */}
+              <div className="mt-8 flex flex-wrap gap-3">
+                <MonoButton variant="primary" href="/download" prefix="./">
+                  install desktop
+                </MonoButton>
+                <MonoButton variant="ghost" href="https://ollama.ai">
+                  get ollama
+                </MonoButton>
+              </div>
             </div>
           </div>
-        </section>
+        </div>
+      </RuledSection>
 
-        {/* Model families */}
-        <section className="border-y border-white/[0.05] bg-[#0c0c0e] py-20 md:py-28">
-          <div className="container mx-auto px-4">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#c8892a]">
-              Compatible models
-            </p>
-            <h2 className="mb-2 font-heading text-3xl tracking-tight md:text-4xl">
-              Which models can I run?
-            </h2>
-            <p className="mb-10 max-w-xl text-[#888480]">
-              Any model supported by Ollama or LM Studio. A few popular families to start:
-            </p>
+      {/* S2 — Why local */}
+      <RuledSection tier="paper" slug={<Slug index="01" kicker="WHY LOCAL" />}>
+        <div className="py-20 md:py-28">
+          <OpsizMorph as="h2" className="text-[var(--color-ink)] mb-14">
+            Five reasons. <em>One tradeoff.</em>
+          </OpsizMorph>
 
-            <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/[0.06]">
-                    {['Model family', 'Made by', 'Via', 'Notes'].map((h) => (
-                      <th
-                        key={h}
-                        className="py-3.5 px-5 text-left text-xs font-semibold uppercase tracking-widest text-[#555150]"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {modelFamilies.map((m, i) => (
-                    <tr
-                      key={m.name}
-                      className={`border-b border-white/[0.04] ${i % 2 === 0 ? 'bg-white/[0.01]' : ''}`}
-                    >
-                      <td className="py-3.5 px-5 text-sm font-medium text-[#edebe8]">{m.name}</td>
-                      <td className="py-3.5 px-5 text-sm text-[#888480]">{m.origin}</td>
-                      <td className="py-3.5 px-5 font-mono text-xs text-[#c8892a]">{m.via}</td>
-                      <td className="py-3.5 px-5 text-sm text-[#666260]">{m.notes}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-4 text-xs text-[#444240]">
-              This is a small sample. Ollama hosts hundreds of models. LM Studio supports any GGUF
-              file. Model versions are not listed here because they change frequently.
-            </p>
+          <ul className="flex flex-col divide-y divide-[var(--color-rule-soft)]" role="list">
+            {REASONS.map(({ kicker, body }) => (
+              <li key={kicker} className="flex flex-col gap-2 py-6 md:flex-row md:gap-10">
+                <p
+                  className={[
+                    'font-mono text-[11px] tracking-[0.18em] uppercase shrink-0',
+                    'text-[var(--color-rule)] md:w-36',
+                  ].join(' ')}
+                >
+                  {kicker}
+                </p>
+                <p
+                  className={[
+                    'font-[var(--font-newsreader)] text-[1.0625rem] leading-[1.65]',
+                    'text-[var(--color-ink-2)]',
+                  ].join(' ')}
+                >
+                  {body}
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          <p
+            className={[
+              'mt-8 font-[var(--font-newsreader)] italic text-lg',
+              'text-[var(--color-fg-quiet)]',
+            ].join(' ')}
+          >
+            The tradeoff: smaller models, slower than frontier cloud, GPU helps a lot.
+          </p>
+        </div>
+      </RuledSection>
+
+      {/* S3 — Setup (graphite) */}
+      <RuledSection tier="graphite" slug={<Slug index="02" kicker="SETUP" />}>
+        <div className="py-20 md:py-28">
+          <h2
+            className={[
+              'font-[var(--font-newsreader)] italic',
+              'text-[var(--color-cream-on-graphite)]',
+              'mb-12',
+            ].join(' ')}
+            style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}
+          >
+            Three commands. Five minutes.
+          </h2>
+
+          {/* Terminal block */}
+          <div className="bg-[var(--color-graphite-2)] border border-[var(--color-rule-soft)] p-6 md:p-8 font-mono text-[13px] leading-[1.8] max-w-3xl">
+            <div className="text-[var(--color-fg-quiet)]">{`$ # 1. install ollama`}</div>
+            <div className="text-[var(--color-cream-on-graphite)]">{`$ brew install ollama`}</div>
+            <div className="mt-3 text-[var(--color-fg-quiet)]">{`$ # 2. pull a model — start with 7B for speed`}</div>
+            <div className="text-[var(--color-cream-on-graphite)]">{`$ ollama pull qwen2.5:7b`}</div>
+            <div className="mt-3 text-[var(--color-fg-quiet)]">{`$ # 3. point AGI Workforce at it`}</div>
+            <div className="text-[var(--color-cream-on-graphite)]">{`$ agiworkforce config set provider local`}</div>
+            <div className="text-[var(--color-amber-text)]">{`$ agiworkforce exec "summarize the last commit"`}</div>
           </div>
-        </section>
 
-        {/* Honest tradeoffs */}
-        <section className="py-20 md:py-28">
-          <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl">
-              <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#c8892a]">
-                Honest tradeoffs
-              </p>
-              <h2 className="font-heading text-3xl tracking-tight md:text-4xl">
-                What local mode cannot do (yet)
-              </h2>
-              <p className="mt-4 text-[#888480]">
-                We believe in honest marketing. Local models are great, but frontier cloud models
-                are still ahead on most benchmarks.
-              </p>
+          {/* Caption */}
+          <p
+            className={[
+              'mt-6 font-mono text-[10px] tracking-[0.15em] uppercase',
+              'text-[var(--color-fg-faint)]',
+            ].join(' ')}
+          >
+            MODELS ALSO WORK WITH LM STUDIO — JUST ENABLE THE LOCAL SERVER ON :1234.
+          </p>
+        </div>
+      </RuledSection>
 
-              <div className="mt-10 space-y-4">
+      {/* S4 — Modes comparison (paper) */}
+      <RuledSection tier="paper" slug={<Slug index="03" kicker="MODES" />}>
+        <div className="py-20 md:py-28">
+          <h2
+            className={[
+              'font-[var(--font-newsreader)] font-light',
+              'text-[var(--color-ink)]',
+              'mb-12',
+            ].join(' ')}
+            style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}
+          >
+            Local mode vs Cloud mode.
+          </h2>
+
+          <div className="overflow-x-auto border border-[var(--color-rule-soft)]">
+            <table className="w-full" aria-label="Local mode vs cloud mode comparison">
+              <thead>
+                <tr className="border-b border-[var(--color-rule-soft)]">
+                  <th
+                    scope="col"
+                    className={[
+                      'py-3 px-4 text-left',
+                      'font-mono text-[10px] tracking-[0.18em] uppercase',
+                      'text-[var(--color-fg-faint)]',
+                    ].join(' ')}
+                  >
+                    Feature
+                  </th>
+                  <th
+                    scope="col"
+                    className={[
+                      'py-3 px-4 text-left',
+                      'font-mono text-[10px] tracking-[0.18em] uppercase',
+                      'text-[var(--color-rule)]',
+                    ].join(' ')}
+                  >
+                    Local Mode
+                  </th>
+                  <th
+                    scope="col"
+                    className={[
+                      'py-3 px-4 text-left',
+                      'font-mono text-[10px] tracking-[0.18em] uppercase',
+                      'text-[var(--color-fg-faint)]',
+                    ].join(' ')}
+                  >
+                    Cloud Mode (BYOK)
+                  </th>
+                  <th
+                    scope="col"
+                    className={[
+                      'py-3 px-4 text-left',
+                      'font-mono text-[10px] tracking-[0.18em] uppercase',
+                      'text-[var(--color-fg-faint)]',
+                    ].join(' ')}
+                  >
+                    Cloud Mode (Hobby)
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-rule-soft)]">
                 {[
                   {
-                    icon: Cpu,
-                    title: 'Smaller parameter count',
-                    desc: 'A 7B or 13B local model is not as capable as Claude 4 Opus or GPT-5. For complex reasoning, cloud APIs still win.',
+                    feature: 'Storage',
+                    local: 'SQLite, on disk',
+                    byok: 'Supabase us-east-2',
+                    hobby: 'Supabase us-east-2',
                   },
                   {
-                    icon: Clock,
-                    title: 'Slower without a GPU',
-                    desc: 'CPU inference on large models is slow. A dedicated GPU (NVIDIA or Apple Silicon with unified memory) makes a major difference.',
+                    feature: 'Auth',
+                    local: 'None',
+                    byok: 'Supabase OAuth',
+                    hobby: 'Supabase OAuth',
                   },
                   {
-                    icon: WifiOff,
-                    title: 'Desktop only',
-                    desc: 'Local mode requires the Desktop app (macOS, Windows, or Linux). Web, Mobile, CLI, and extensions require a cloud provider or BYOK.',
+                    feature: 'Cross-device sync',
+                    local: '✗',
+                    byok: '✓',
+                    hobby: '✓',
                   },
                   {
-                    icon: Lock,
-                    title: 'No Dispatch, no cross-device sync',
-                    desc: 'Local mode uses SQLite on your machine. No Supabase, no cross-device session continuity. Cloud mode unlocks those features.',
+                    feature: 'Mobile dispatch',
+                    local: '✗',
+                    byok: '✓',
+                    hobby: '✓',
                   },
-                ].map(({ title, desc }) => (
-                  <div
-                    key={title}
-                    className="flex gap-4 rounded-xl border border-white/[0.06] bg-[#0f0f11] p-5"
+                  {
+                    feature: 'LLM',
+                    local: 'Ollama / LM Studio',
+                    byok: 'Provider directly (BYOK)',
+                    hobby: 'Managed cloud',
+                  },
+                  {
+                    feature: 'Network required',
+                    local: '✗',
+                    byok: '✓ (provider calls)',
+                    hobby: '✓',
+                  },
+                  {
+                    feature: 'Cost',
+                    local: '$0',
+                    byok: "Provider's rate",
+                    hobby: '~$5/mo',
+                  },
+                  {
+                    feature: 'Privacy',
+                    local: 'Maximum',
+                    byok: "Provider's policy",
+                    hobby: "Provider's policy",
+                  },
+                ].map((row, i) => (
+                  <tr
+                    key={row.feature}
+                    className={i % 2 === 0 ? 'bg-[var(--color-paper-2)]/40' : ''}
                   >
-                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-[#c8892a]" />
-                    <div>
-                      <h3 className="mb-1 font-semibold text-[#edebe8]">{title}</h3>
-                      <p className="text-sm leading-relaxed text-[#888480]">{desc}</p>
-                    </div>
-                  </div>
+                    <td
+                      className={[
+                        'py-3 px-4',
+                        'font-mono text-[12px]',
+                        'text-[var(--color-ink-2)]',
+                      ].join(' ')}
+                    >
+                      {row.feature}
+                    </td>
+                    <td
+                      className={[
+                        'py-3 px-4',
+                        'font-mono text-[12px] font-semibold',
+                        'text-[var(--color-rule)]',
+                      ].join(' ')}
+                    >
+                      {row.local}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-[12px] text-[var(--color-fg-quiet)]">
+                      {row.byok}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-[12px] text-[var(--color-fg-quiet)]">
+                      {row.hobby}
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </div>
+              </tbody>
+            </table>
           </div>
-        </section>
 
-        {/* Local vs Cloud */}
-        <section className="border-y border-white/[0.05] bg-[#0c0c0e] py-16">
-          <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl">
-              <h2 className="mb-8 text-center font-heading text-2xl tracking-tight">
-                Local mode vs Cloud mode
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-emerald-500/20 bg-[#0f0f11] p-5">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-emerald-400">
-                    <WifiOff className="h-4 w-4" /> Local mode
-                  </div>
-                  <ul className="space-y-2 text-sm text-[#888480]">
-                    {[
-                      'Free forever',
-                      'Completely offline',
-                      'SQLite storage on device',
-                      'No Supabase, no sync',
-                      'No Dispatch',
-                      'Desktop only',
-                    ].map((item) => (
-                      <li key={item} className="flex items-center gap-2">
-                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+          <p
+            className={[
+              'mt-8 font-[var(--font-newsreader)] italic text-lg',
+              'text-[var(--color-fg-quiet)]',
+            ].join(' ')}
+          >
+            Local mode is desktop-only; there is no point running offline on a hosted web app.
+          </p>
+        </div>
+      </RuledSection>
 
-                <div className="rounded-2xl border border-[#c8892a]/20 bg-[#0f0f11] p-5">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#c8892a]">
-                    <Wifi className="h-4 w-4" /> Cloud mode
-                  </div>
-                  <ul className="space-y-2 text-sm text-[#888480]">
-                    {[
-                      'BYOK or Hobby subscription',
-                      'Cross-device sync',
-                      'Supabase storage',
-                      'Dispatch (mobile agent dashboard)',
-                      'Web, Mobile, CLI, extensions',
-                      'Frontier cloud models',
-                    ].map((item) => (
-                      <li key={item} className="flex items-center gap-2">
-                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[#c8892a]" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-              <p className="mt-4 text-center text-xs text-[#444240]">
-                You can switch between modes any time from Desktop Settings.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="py-20 md:py-28">
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="font-heading text-3xl tracking-tight md:text-4xl">
-              Download free. Run offline immediately.
-            </h2>
-            <p className="mx-auto mt-4 max-w-md text-[#888480]">
-              AGI Workforce Desktop, plus Ollama or LM Studio. No account required for local mode.
-            </p>
-            <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link
-                href="/download"
-                className="group inline-flex h-12 items-center gap-2 rounded-md bg-white px-8 text-sm font-semibold text-black transition-all hover:bg-zinc-200"
-              >
-                Download Desktop
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                href="/byok"
-                className="inline-flex h-12 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-8 text-sm font-medium text-[#a8a4a0] transition-all hover:border-white/20 hover:text-[#edebe8]"
-              >
-                Use BYOK instead
-              </Link>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <MarketingFooter />
-    </div>
+      {/* S5 — Dispatch */}
+      <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
+    </EditorialPage>
   );
 }
