@@ -22,16 +22,10 @@ import {
   ConversationTreeProvider,
   ConversationTreeItem,
 } from './providers/conversationTreeProvider';
-import {
-  getApiKey,
-  setApiKey,
-  clearApiKey,
-  setSupabaseJwt,
-  clearSupabaseJwt,
-  chatCompletion,
-  type LlmChatMessage,
-} from './utils/api';
-import { applyLlmEdit } from './utils/applyEdit';
+import { getApiKey, setApiKey, clearApiKey, setSupabaseJwt, clearSupabaseJwt } from './utils/api';
+import { getExtensionVersion } from './utils/version';
+import { getActiveWorkspaceFolder, shellQuoteForCurrentPlatform } from './utils/workspaceFolders';
+import { Config } from './utils/config';
 import { AgentModePanel } from './providers/agentModeProvider';
 import { WorkspaceIndexer } from './services/workspaceIndexer';
 import { AgiCodeLensProvider } from './providers/codeLensProvider';
@@ -47,51 +41,48 @@ import { ContextPanelProvider, setContextPanelInstance } from './providers/conte
 import { DiffDecorationProvider } from './providers/diffDecorationProvider';
 import { showOriginalContext, getPatchOutputChannel } from './services/patchEngine';
 import { initCheckpointManager, getCheckpointManager } from './services/checkpointManager';
+import { initSubsystemHealth, runBoot, recordFailure } from './services/subsystemHealth';
+import { runInlineCommand } from './lifecycle/runInlineCommand';
+import { validateAdvancedFeatureFlags } from './lifecycle/advancedFeatures';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext): void {
-  // ── 0. Telemetry ──────────────────────────────────────────────────────────
-  try {
+  // ── 0. Subsystem health (must be first so other boots can record failures) ─
+  initSubsystemHealth(context);
+
+  // ── 0a. Telemetry ──────────────────────────────────────────────────────────
+  runBoot('telemetry', () => {
     context.subscriptions.push(telemetry.activate(context));
-  } catch (err) {
-    console.warn('[AGI Workforce] Telemetry activation failed:', err);
-  }
+  });
 
-  // ── 0a. Model Metrics ──────────────────────────────────────────────────────
-  try {
+  // ── 0b. Model Metrics ──────────────────────────────────────────────────────
+  runBoot('model-metrics', () => {
     initModelMetrics(context);
-  } catch (err) {
-    console.warn('[AGI Workforce] Model metrics init failed:', err);
-  }
+  });
 
-  // ── 0b. Desktop Bridge ──────────────────────────────────────────────────────
+  // ── 0c. Desktop Bridge ──────────────────────────────────────────────────────
   try {
     context.subscriptions.push(activateDesktopBridge(context));
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
+    recordFailure('desktop-bridge', err);
     vscode.window.showWarningMessage(
       `AGI Workforce: Desktop bridge failed to initialize — ${errMsg}. ` +
         'Some features may be unavailable.',
     );
   }
 
-  // ── 0c. Checkpoint manager ──────────────────────────────────────────────────
-  try {
+  // ── 0d. Checkpoint manager ──────────────────────────────────────────────────
+  runBoot('checkpoint-manager', () => {
     initCheckpointManager(context);
-  } catch (err) {
-    console.warn('[AGI Workforce] Checkpoint manager init failed:', err);
-  }
+  });
 
   // ── 0d. MCP enabled → ensure bridge connects on startup ────────────────────
-  {
-    const mcpEnabled =
-      vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('mcp.enabled') ?? false;
-    if (mcpEnabled) {
-      const bridge = getDesktopBridge();
-      if (bridge !== undefined && bridge.status === 'disconnected') {
-        void bridge.connect();
-      }
+  if (Config.mcpEnabled()) {
+    const bridge = getDesktopBridge();
+    if (bridge !== undefined && bridge.status === 'disconnected') {
+      void bridge.connect();
     }
   }
 
@@ -251,8 +242,7 @@ export function activate(context: vscode.ExtensionContext): void {
   let codeLensRegistration: vscode.Disposable | undefined;
 
   const syncCodeLensProvider = (): void => {
-    const enabled =
-      vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('codeLensEnabled') ?? true;
+    const enabled = Config.codeLensEnabled();
 
     if (!enabled) {
       codeLensRegistration?.dispose();
@@ -302,9 +292,7 @@ export function activate(context: vscode.ExtensionContext): void {
   let inlineCompletionRegistration: vscode.Disposable | undefined;
 
   const syncInlineCompletionProvider = (): void => {
-    const inlineEnabled =
-      vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('inlineCompletions.enabled') ??
-      false;
+    const inlineEnabled = Config.inlineCompletionsEnabled();
 
     if (!inlineEnabled) {
       inlineCompletionRegistration?.dispose();
@@ -347,9 +335,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // ── agi-workforce.agentMode ──────────────────────────────────────────────
     vscode.commands.registerCommand('agi-workforce.agentMode', () => {
-      const planMode =
-        vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('agent.planMode') ?? false;
-      AgentModePanel.createOrShow(context.extensionUri, context.secrets, context, planMode);
+      AgentModePanel.createOrShow(
+        context.extensionUri,
+        context.secrets,
+        context,
+        Config.agentPlanMode(),
+      );
     }),
 
     // ── agi-workforce.explain ─────────────────────────────────────────────────
@@ -513,8 +504,7 @@ export function activate(context: vscode.ExtensionContext): void {
         modelId: option.id,
       }));
 
-      const config = vscode.workspace.getConfiguration('agiWorkforce');
-      const currentModel = normalizeConfiguredModelId(config.get<string>('model'));
+      const currentModel = normalizeConfiguredModelId(Config.model());
 
       // Mark the current selection
       const items = models.map((m) => ({
@@ -531,7 +521,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
       if (picked === undefined) return;
 
-      await config.update('model', picked.modelId, vscode.ConfigurationTarget.Global);
+      await vscode.workspace
+        .getConfiguration('agiWorkforce')
+        .update('model', picked.modelId, vscode.ConfigurationTarget.Global);
 
       telemetry.logEvent(telemetry.TelemetryEvents.MODEL_SELECTED, { model: picked.modelId });
 
@@ -753,9 +745,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const result = await bridge.sendToDesktop('feedback', {
           type: feedbackType,
           message: feedbackText.trim(),
-          extensionVersion:
-            vscode.extensions.getExtension('agiworkforce.agi-workforce')?.packageJSON?.version ??
-            '0.1.0',
+          extensionVersion: getExtensionVersion(),
           vscodeVersion: vscode.version,
           platform: process.platform,
         });
@@ -771,7 +761,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
       // Fallback: open GitHub issues
       const encoded = encodeURIComponent(
-        `**Type**: ${feedbackType}\n**VS Code**: ${vscode.version}\n**Extension**: 0.1.0\n**Platform**: ${process.platform}\n\n${feedbackText.trim()}`,
+        `**Type**: ${feedbackType}\n**VS Code**: ${vscode.version}\n**Extension**: ${getExtensionVersion()}\n**Platform**: ${process.platform}\n\n${feedbackText.trim()}`,
       );
       void vscode.env.openExternal(
         vscode.Uri.parse(
@@ -895,24 +885,24 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // ── agi.git.status ───────────────────────────────────────────────────────
     vscode.commands.registerCommand('agi.git.status', async () => {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceRoot) {
+      const folder = await getActiveWorkspaceFolder();
+      if (!folder) {
         vscode.window.showErrorMessage('No workspace open');
         return;
       }
-      const terminal = vscode.window.createTerminal('AGI Git');
+      const terminal = vscode.window.createTerminal({ name: 'AGI Git', cwd: folder.uri });
       terminal.show();
       terminal.sendText('git status');
     }),
 
     // ── agi.git.diff ─────────────────────────────────────────────────────────
     vscode.commands.registerCommand('agi.git.diff', async () => {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceRoot) {
+      const folder = await getActiveWorkspaceFolder();
+      if (!folder) {
         vscode.window.showErrorMessage('No workspace open');
         return;
       }
-      const terminal = vscode.window.createTerminal('AGI Git');
+      const terminal = vscode.window.createTerminal({ name: 'AGI Git', cwd: folder.uri });
       terminal.show();
       terminal.sendText('git diff');
     }),
@@ -924,16 +914,45 @@ export function activate(context: vscode.ExtensionContext): void {
         placeHolder: 'feat: ...',
       });
       if (!msg) return;
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceRoot) return;
-      const terminal = vscode.window.createTerminal('AGI Git');
+      const folder = await getActiveWorkspaceFolder();
+      if (!folder) return;
+
+      // Prefer the built-in Git extension API: completely shell-quoting-free,
+      // works identically on macOS / Linux / Windows.
+      try {
+        const gitExt = vscode.extensions.getExtension('vscode.git');
+        if (gitExt !== undefined) {
+          if (!gitExt.isActive) await gitExt.activate();
+          const api = (
+            gitExt.exports as {
+              getAPI: (v: number) => {
+                repositories: Array<{
+                  rootUri: vscode.Uri;
+                  add: (paths: string[]) => Promise<void>;
+                  commit: (msg: string, opts?: { all?: boolean }) => Promise<void>;
+                }>;
+              };
+            }
+          ).getAPI(1);
+          const repo = api.repositories.find((r) => r.rootUri.fsPath === folder.uri.fsPath);
+          if (repo !== undefined) {
+            // `all: true` mirrors `git add -u` (tracks modified/deleted only —
+            // does NOT pick up untracked files like `git add -A` would).
+            await repo.commit(msg, { all: true });
+            vscode.window.showInformationMessage(`AGI Workforce: committed "${msg.slice(0, 60)}"`);
+            return;
+          }
+        }
+      } catch (err) {
+        // Fall through to the shell fallback below.
+        console.warn('[AGI Workforce] git ext commit failed, falling back to terminal:', err);
+      }
+
+      // Fallback: shell-quoted via cross-platform helper. Used when the Git
+      // extension is unavailable or the workspace folder isn't a known repo.
+      const terminal = vscode.window.createTerminal({ name: 'AGI Git', cwd: folder.uri });
       terminal.show();
-      // Use `git add -u` (tracks modified/deleted only) instead of `git add -A`
-      // to avoid accidentally staging untracked sensitive or large binary files.
-      // SECURITY: Use single quotes and escape embedded single quotes to prevent
-      // shell injection via backticks, $(), and other special characters.
-      const sanitized = msg.replace(/'/g, "'\\''");
-      terminal.sendText(`git add -u && git commit -m '${sanitized}'`);
+      terminal.sendText(`git add -u && git commit -m ${shellQuoteForCurrentPlatform(msg)}`);
     }),
 
     // ── agi.test.run ─────────────────────────────────────────────────────────
@@ -947,11 +966,12 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         return;
       }
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceRoot) {
+      const folder = await getActiveWorkspaceFolder();
+      if (!folder) {
         vscode.window.showErrorMessage('No workspace open');
         return;
       }
+      const workspaceRoot = folder.uri.fsPath;
 
       // Auto-detect test runner
       let testCmd = 'npm test';
@@ -970,7 +990,7 @@ export function activate(context: vscode.ExtensionContext): void {
       )
         testCmd = 'pytest';
 
-      const terminal = vscode.window.createTerminal('AGI Tests');
+      const terminal = vscode.window.createTerminal({ name: 'AGI Tests', cwd: folder.uri });
       terminal.show();
       terminal.sendText(testCmd);
     }),
@@ -994,19 +1014,17 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar);
 
   function updateStatusBar(): void {
-    const config = vscode.workspace.getConfiguration('agiWorkforce');
-    const model = normalizeConfiguredModelId(config.get<string>('model'));
+    const model = normalizeConfiguredModelId(Config.model());
     const chips: string[] = [];
 
-    if (config.get<boolean>('agent.planMode') ?? false) {
+    if (Config.agentPlanMode()) {
       chips.push('plan');
     }
-    if (config.get<boolean>('mcp.enabled') ?? false) {
+    if (Config.mcpEnabled()) {
       chips.push('mcp');
     }
-    if (config.get<boolean>('desktopBridge.enabled') ?? false) {
-      const port = config.get<number>('desktopBridge.port') ?? 8787;
-      chips.push(`bridge:${port}`);
+    if (Config.desktopBridgeEnabled()) {
+      chips.push(`bridge:${Config.desktopBridgePort()}`);
     }
 
     statusBar.text =
@@ -1048,15 +1066,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
       // ── planMode → agentModeProvider ────────────────────────────────────
       if (e.affectsConfiguration('agiWorkforce.agent.planMode')) {
-        const planMode =
-          vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('agent.planMode') ?? false;
-        AgentModePanel.currentPanel?.setPlanMode(planMode);
+        AgentModePanel.currentPanel?.setPlanMode(Config.agentPlanMode());
       }
 
       // ── mcp.enabled → desktop bridge ────────────────────────────────────
       if (e.affectsConfiguration('agiWorkforce.mcp.enabled')) {
-        const mcpEnabled =
-          vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('mcp.enabled') ?? false;
+        const mcpEnabled = Config.mcpEnabled();
         const bridge = getDesktopBridge();
         if (bridge !== undefined) {
           if (mcpEnabled && bridge.status === 'disconnected') {
@@ -1079,135 +1094,8 @@ export function deactivate(): void {
   // Nothing to clean up — VS Code handles subscriptions disposal
 }
 
-// ─── Inline command runner ────────────────────────────────────────────────────
-
-/**
- * Runs a quick inline AI command against the current editor selection,
- * showing the result in a new untitled document.
- */
-async function runInlineCommand(
-  context: vscode.ExtensionContext,
-  command: 'explain' | 'fix' | 'refactor' | 'tests' | 'docs',
-): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (editor === undefined) {
-    vscode.window.showWarningMessage('AGI Workforce: No active editor. Open a file first.');
-    return;
-  }
-
-  const selection = editor.selection;
-  const selectedText = editor.document.getText(selection.isEmpty ? undefined : selection);
-
-  if (selectedText.trim() === '') {
-    vscode.window.showWarningMessage('AGI Workforce: Select some code first.');
-    return;
-  }
-
-  const lang = editor.document.languageId;
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  const planModeEnabled = config.get<boolean>('agent.planMode') ?? false;
-  // EXTV-1 (audit 2026-05-03): autoApplyFixes is a workspace-level
-  // setting. An untrusted workspace (cloned repo) could enable it via
-  // .vscode/settings.json and have LLM-generated code auto-applied
-  // with no diff preview. Force `false` whenever the workspace is not
-  // explicitly trusted by the user — preserves the diff-preview path.
-  const rawAutoApplyFixes = config.get<boolean>('autoApplyFixes') ?? false;
-  const autoApplyFixes = vscode.workspace.isTrusted ? rawAutoApplyFixes : false;
-  if (rawAutoApplyFixes && !vscode.workspace.isTrusted) {
-    vscode.window.showInformationMessage(
-      'AGI Workforce: autoApplyFixes is disabled in this untrusted workspace. Trust the workspace to enable.',
-    );
-  }
-
-  if (planModeEnabled && command !== 'explain') {
-    const choice = await vscode.window.showInformationMessage(
-      `AGI Workforce plan mode is enabled. Proceed with ${commandLabel(command)}?`,
-      'Proceed',
-      'Cancel',
-    );
-    if (choice !== 'Proceed') {
-      return;
-    }
-  }
-
-  const prompts: Record<string, string> = {
-    explain: `Explain the following ${lang} code clearly and concisely:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
-    fix: `Find and fix any bugs or issues in the following ${lang} code. Provide the corrected code and explain each fix:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
-    refactor: `Refactor the following ${lang} code to improve readability, maintainability, and performance. Explain each change:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
-    tests: `Generate comprehensive unit tests for the following ${lang} code. Cover edge cases, error paths, and happy paths:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
-    docs: `Generate clear, accurate documentation comments (JSDoc/TSDoc/docstrings as appropriate) for the following ${lang} code:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
-  };
-
-  const messages: LlmChatMessage[] = [
-    {
-      role: 'system',
-      content:
-        'You are AGI Workforce, a model-agnostic AI coding assistant. ' +
-        'Be concise and produce production-ready Markdown output.',
-    },
-    { role: 'user', content: prompts[command] ?? selectedText },
-  ];
-
-  await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: `AGI Workforce: ${commandLabel(command)}…`,
-      cancellable: true,
-    },
-    async (progress, progressToken) => {
-      const cancelSource = new vscode.CancellationTokenSource();
-      progressToken.onCancellationRequested(() => cancelSource.cancel());
-
-      try {
-        progress.report({ increment: 0 });
-        telemetry.logEvent(telemetry.TelemetryEvents.INLINE_COMMAND_EXECUTED, {
-          command,
-          language: lang,
-        });
-        const result = await chatCompletion(context.secrets, messages, cancelSource.token);
-        cancelSource.dispose();
-
-        progress.report({ increment: 100 });
-
-        await applyLlmEdit(
-          editor,
-          selection.isEmpty ? new vscode.Selection(0, 0, 0, 0) : selection,
-          result,
-          commandLabel(command),
-          { autoApply: autoApplyFixes && command === 'fix' },
-        );
-      } catch (err) {
-        cancelSource.dispose();
-
-        if (err instanceof Error && err.message.includes('CANCELLED')) {
-          return;
-        }
-
-        const message = err instanceof Error ? err.message : String(err);
-        telemetry.logError(err instanceof Error ? err : message, { command });
-
-        vscode.window
-          .showErrorMessage(`AGI Workforce error: ${message}`, 'Set API Key')
-          .then((choice) => {
-            if (choice === 'Set API Key') {
-              vscode.commands.executeCommand('agi-workforce.setApiKey');
-            }
-          });
-      }
-    },
-  );
-}
-
-function commandLabel(command: string): string {
-  const labels: Record<string, string> = {
-    explain: 'Explain Code',
-    fix: 'Fix Issues',
-    refactor: 'Refactor',
-    tests: 'Generate Tests',
-    docs: 'Generate Docs',
-  };
-  return labels[command] ?? command;
-}
+// runInlineCommand + commandLabel extracted to ./lifecycle/runInlineCommand.ts
+// validateAdvancedFeatureFlags + bridge reachability extracted to ./lifecycle/advancedFeatures.ts
 
 // ─── First-run helper ─────────────────────────────────────────────────────────
 
@@ -1221,8 +1109,10 @@ async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
     return;
   }
 
+  // MODEL-IDS-HARDCODED fix per UNIFIED_LAUNCH_PLAN.md §1: locked spec is "10+ providers" generic
+  // copy, not specific model versions which drift with models.json updates.
   const choice = await vscode.window.showInformationMessage(
-    'Welcome to AGI Workforce! Set up your API key to use GPT-5.4, Claude, Gemini, and more in VS Code.',
+    'Welcome to AGI Workforce! Set up your API key to use Claude, GPT, Gemini, and 10+ providers in VS Code.',
     'Set API Key',
     'Later',
   );
@@ -1232,101 +1122,4 @@ async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
   if (choice === 'Set API Key') {
     await vscode.commands.executeCommand('agi-workforce.setApiKey');
   }
-}
-
-async function validateAdvancedFeatureFlags(context: vscode.ExtensionContext): Promise<void> {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  const inlineEnabled = config.get<boolean>('inlineCompletions.enabled') ?? false;
-  const mcpEnabled = config.get<boolean>('mcp.enabled') ?? false;
-  const desktopBridgeEnabled = config.get<boolean>('desktopBridge.enabled') ?? false;
-  const desktopBridgePort = config.get<number>('desktopBridge.port') ?? 8787;
-
-  if (inlineEnabled) {
-    const hasApiKey = (await getApiKey(context.secrets)) !== undefined;
-    if (!hasApiKey) {
-      void vscode.window
-        .showInformationMessage(
-          'AGI Workforce inline completions are enabled, but no API key is configured.',
-          'Set API Key',
-        )
-        .then((choice) => {
-          if (choice === 'Set API Key') {
-            void vscode.commands.executeCommand('agi-workforce.setApiKey');
-          }
-        });
-    }
-  }
-
-  if (mcpEnabled && !desktopBridgeEnabled) {
-    void vscode.window.showWarningMessage(
-      'AGI Workforce MCP is enabled, but desktop bridge is disabled. Enable desktop bridge to use local MCP tools.',
-    );
-  }
-
-  if (desktopBridgeEnabled) {
-    // Show a live status bar item instead of a one-shot warning so it clears
-    // automatically when the bridge reconnects.
-    updateBridgeReachabilityStatus(context, desktopBridgePort);
-  } else {
-    // Bridge disabled — clear any existing reachability item
-    clearBridgeReachabilityStatus();
-  }
-}
-
-// ─── Bridge reachability status bar item ─────────────────────────────────────
-
-let _bridgeStatusItem: vscode.StatusBarItem | undefined;
-let _bridgeReachabilityDisposable: vscode.Disposable | undefined;
-
-function clearBridgeReachabilityStatus(): void {
-  _bridgeStatusItem?.dispose();
-  _bridgeStatusItem = undefined;
-  _bridgeReachabilityDisposable?.dispose();
-  _bridgeReachabilityDisposable = undefined;
-}
-
-function updateBridgeReachabilityStatus(context: vscode.ExtensionContext, port: number): void {
-  // Re-create item if port changed or first time
-  if (_bridgeStatusItem === undefined) {
-    _bridgeStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
-    _bridgeStatusItem.command = 'agi-workforce.syncContextToDesktop';
-    context.subscriptions.push(_bridgeStatusItem);
-  }
-
-  const bridge = getDesktopBridge();
-
-  const refresh = (): void => {
-    if (_bridgeStatusItem === undefined) return;
-    const currentBridge = getDesktopBridge();
-    if (currentBridge === undefined) {
-      _bridgeStatusItem.text = '$(warning) AGI Bridge: offline';
-      _bridgeStatusItem.tooltip = `Desktop bridge not reachable on localhost:${port}. Start the AGI Workforce desktop app.`;
-      _bridgeStatusItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-      _bridgeStatusItem.show();
-    } else if (currentBridge.status === 'connected') {
-      _bridgeStatusItem.text = '$(plug) AGI Bridge: connected';
-      _bridgeStatusItem.tooltip = `Desktop bridge connected on localhost:${port}`;
-      _bridgeStatusItem.backgroundColor = undefined;
-      _bridgeStatusItem.show();
-    } else if (currentBridge.status === 'connecting') {
-      _bridgeStatusItem.text = '$(sync~spin) AGI Bridge: connecting…';
-      _bridgeStatusItem.tooltip = `Connecting to desktop bridge on localhost:${port}`;
-      _bridgeStatusItem.backgroundColor = undefined;
-      _bridgeStatusItem.show();
-    } else {
-      _bridgeStatusItem.text = '$(warning) AGI Bridge: offline';
-      _bridgeStatusItem.tooltip = `Desktop bridge not reachable on localhost:${port}. Start the AGI Workforce desktop app.`;
-      _bridgeStatusItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-      _bridgeStatusItem.show();
-    }
-  };
-
-  // Subscribe to status changes so the item auto-clears on reconnect
-  _bridgeReachabilityDisposable?.dispose();
-  if (bridge !== undefined) {
-    _bridgeReachabilityDisposable = bridge.onStatusChange(() => refresh());
-    context.subscriptions.push(_bridgeReachabilityDisposable);
-  }
-
-  refresh();
 }

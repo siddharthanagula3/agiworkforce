@@ -2,7 +2,8 @@ use crate::features::terminal::{
     detect_available_shells, get_default_shell, SessionManager, ShellInfo, ShellType, TerminalAI,
 };
 use crate::sys::security::command_validator::{
-    validate_command, validate_interactive_input, ValidationConfig,
+    reject_if_root, validate_command, validate_interactive_input, write_security_audit_log,
+    ValidationConfig,
 };
 use crate::sys::security::log_redaction::redact_secrets;
 use std::time::Instant;
@@ -60,6 +61,14 @@ pub async fn execute_terminal_command(
         command = %redact_secrets(&command),
         "Executing independent terminal command"
     );
+
+    // RT-02 fix: Refuse to run as root.
+    if let Err(e) = reject_if_root() {
+        return Err(e.to_string());
+    }
+
+    // RT-02 fix: Write security audit log before validation so all attempts are recorded.
+    write_security_audit_log(&command, cwd.as_deref());
 
     // Use centralized command validation (one-shot mode - strictest)
     let config = ValidationConfig::oneshot().with_correlation_id(&correlation_id);

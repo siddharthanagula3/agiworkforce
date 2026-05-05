@@ -524,7 +524,7 @@
         "agiWorkforce.model": {
           "type": "string",
           "default": "auto-balanced",
-          "description": "Default LLM model (e.g. auto-balanced, claude-sonnet-4.6, gpt-5.4, gemini-3.1-pro-preview)"
+          "description": "Default LLM model. Run 'AGI Workforce: Select Model' (cmd+shift+m) to pick from currently available providers."
         },
         "agiWorkforce.streamingEnabled": {
           "type": "boolean",
@@ -633,10 +633,19 @@
             "anthropic",
             "openai",
             "google",
-            "ollama"
+            "ollama",
+            "ollama-cloud",
+            "xai",
+            "deepseek",
+            "perplexity",
+            "qwen",
+            "moonshot",
+            "zhipu",
+            "lmstudio",
+            "custom"
           ],
           "default": "auto",
-          "description": "Provider to use on the provider-stream path. \"auto\" infers from the model id (claude-* → anthropic, gpt-* → openai, gemini-* → google, otherwise → ollama)."
+          "markdownDescription": "Provider used on the provider-stream path. `auto` infers from the model id prefix (claude-* → anthropic, gpt-* → openai, gemini-* → google, otherwise → ollama). For the full list of supported providers, see the [docs](https://agiworkforce.com/docs/providers)."
         }
       }
     },
@@ -723,6 +732,7 @@
     "package": "node esbuild.js --production && node scripts/vsce-package.js package --no-dependencies",
     "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint",
     "test": "vitest run",
+    "test:integration": "tsc -p tsconfig.test.json && node out/test/runTests.js",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf out",
     "prebuild": "pnpm run clean && pnpm run typecheck",

@@ -1,16 +1,27 @@
 import { Router, type Request, type Response } from 'express';
-import jwt from 'jsonwebtoken';
+import { randomUUID } from 'node:crypto';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { authenticatedUserSchema } from '../authenticated-user';
 import { requireEnv } from '../env';
 import { AppError } from '../middleware/errorHandler';
+import { authenticateToken } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
-const JWT_EXPIRES_IN = '7d';
+// SECURITY (H7, redteam-services 2026-05-04): JWT lifetime reduced from 7d.
+// Default 1h with refresh-token flow (planned). Until refresh tokens land,
+// allow operators to override via env to manage rollout (was previously 7d
+// hardcoded — a stolen token had a full week of validity with no revocation).
+//
+// Cast: @types/jsonwebtoken v9 typed `expiresIn` as a template-literal
+// `StringValue` from `ms` (e.g. '1h', '7d') — env-sourced strings need an
+// explicit cast since they're widened to `string` at the type level.
+const JWT_EXPIRES_IN = (process.env['JWT_EXPIRES_IN'] ?? '1h') as SignOptions['expiresIn'];
 
 import { supabase } from '../lib/supabase';
 
@@ -85,10 +96,14 @@ router.post('/register', authRateLimiter, async (req: Request, res: Response) =>
 
   const user = newUser as DbUser; // Type assertion since we defined interface locally matching DB
 
+  // SECURITY (H7): include `jti` so this specific token can be revoked
+  // independently of the user's account state. The middleware checks
+  // `revoked_jwts` on every request.
   const token = jwt.sign({ userId: user.id, email }, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
     issuer: 'agiworkforce-api-gateway',
     audience: 'agiworkforce',
+    jwtid: randomUUID(),
   });
 
   res.json({
@@ -118,10 +133,14 @@ router.post('/login', authRateLimiter, async (req: Request, res: Response) => {
   // safe cast (we know userRecord exists at this point)
   const user = userRecord as DbUser;
 
+  // SECURITY (H7): include `jti` so this specific token can be revoked
+  // independently of the user's account state. The middleware checks
+  // `revoked_jwts` on every request.
   const token = jwt.sign({ userId: user.id, email }, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
     issuer: 'agiworkforce-api-gateway',
     audience: 'agiworkforce',
+    jwtid: randomUUID(),
   });
 
   res.json({
@@ -132,6 +151,56 @@ router.post('/login', authRateLimiter, async (req: Request, res: Response) => {
       desktopId: user.desktop_id ?? undefined,
     },
   });
+});
+
+// SECURITY (H7, redteam-services 2026-05-04): explicit logout that revokes the
+// presented token. POST /auth/logout requires a valid JWT. The token's `jti`
+// and `exp` are written to public.revoked_jwts and the kill-switch middleware
+// rejects further requests carrying that jti.
+router.post('/logout', authenticateToken, async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  const parts = authHeader?.split(' ');
+  const token = parts?.length === 2 && parts[0].toLowerCase() === 'bearer' ? parts[1] : undefined;
+  if (!token) {
+    throw new AppError('No token provided', 401);
+  }
+
+  let payload: jwt.JwtPayload;
+  try {
+    payload = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'],
+      issuer: 'agiworkforce-api-gateway',
+      audience: 'agiworkforce',
+    }) as jwt.JwtPayload;
+  } catch {
+    throw new AppError('Invalid token', 401);
+  }
+
+  const jti = typeof payload.jti === 'string' ? payload.jti : null;
+  const exp = typeof payload.exp === 'number' ? payload.exp : null;
+  const userId = req.user?.userId;
+
+  if (!jti || !exp || !userId) {
+    // Token without jti is from before the fix — we cannot revoke it
+    // individually. Treat as a successful no-op so clients don't loop.
+    logger.info({ userId }, 'Logout for legacy token without jti — no revocation possible');
+    return res.json({ ok: true, revoked: false });
+  }
+
+  const untilExp = new Date(exp * 1000).toISOString();
+  const { error } = await supabase
+    .from('revoked_jwts')
+    .insert({ jti, user_id: userId, until_exp: untilExp, reason: 'sign_out' });
+
+  if (error) {
+    // Idempotent: duplicate-key is fine (already revoked).
+    if (!error.message?.includes('duplicate key')) {
+      logger.error({ error, userId }, 'Failed to revoke JWT on logout');
+      throw new AppError('Logout failed', 500);
+    }
+  }
+
+  return res.json({ ok: true, revoked: true });
 });
 
 router.get('/verify', authRateLimiter, async (req: Request, res: Response) => {

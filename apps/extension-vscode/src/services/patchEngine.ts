@@ -15,6 +15,7 @@
  */
 
 import * as vscode from 'vscode';
+import { getActiveWorkspaceFolderSync } from '../utils/workspaceFolders';
 
 // ─── Output channel for patch logs ────────────────────────────────────────────
 
@@ -356,19 +357,23 @@ export async function applyPatchBatch(patches: PatchBlock[]): Promise<BatchResul
 
   logPatch(`=== Starting batch ${batchId}: ${patches.length} patches ===`);
 
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders === undefined || workspaceFolders.length === 0) {
-    logPatch(`  Batch failed: no workspace folder open`);
+  const folder = getActiveWorkspaceFolderSync();
+  if (folder === undefined) {
+    logPatch(`  Batch failed: no active workspace folder`);
     return {
       batchId,
       applied,
-      failed: patches.map((p) => ({ ...p, error: 'No workspace folder open.' })),
+      failed: patches.map((p) => ({
+        ...p,
+        error:
+          'No active workspace folder. Open a file in the target workspace before applying patches.',
+      })),
       snapshots,
       patchResults,
     };
   }
 
-  const rootUri = workspaceFolders[0]!.uri;
+  const rootUri = folder.uri;
 
   // Group patches by file path.
   const byFile = new Map<string, PatchBlock[]>();
@@ -554,10 +559,10 @@ export async function undoPatchBatch(batchId: string): Promise<boolean> {
 
   logPatch(`=== Undoing batch ${batchId} ===`);
 
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders === undefined || workspaceFolders.length === 0) return false;
+  const folder = getActiveWorkspaceFolderSync();
+  if (folder === undefined) return false;
 
-  const rootUri = workspaceFolders[0]!.uri;
+  const rootUri = folder.uri;
   const wsEdit = new vscode.WorkspaceEdit();
   let allSucceeded = true;
 

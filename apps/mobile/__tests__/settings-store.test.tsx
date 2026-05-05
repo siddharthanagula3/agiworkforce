@@ -52,7 +52,6 @@ function resetStore() {
     backgroundFetchEnabled: true,
     themeMode: 'dark',
     fontPreference: 'default',
-    biometricLockEnabled: false,
     selectedVoiceId: null,
     speechRate: 1.0,
     speechPitch: 1.0,

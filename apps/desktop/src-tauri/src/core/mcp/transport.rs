@@ -1070,8 +1070,34 @@ impl HttpSseTransport {
             .read_timeout(std::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS));
 
         if !config.verify_ssl {
+            // SEV-DESK-07 (defence-in-depth): in release builds, refuse
+            // `verify_ssl: false` regardless of host. Real users running a
+            // packaged build never need to disable cert verification — that
+            // setting is a developer escape hatch for self-signed certs on
+            // local MCP servers. Killing it in release means a malicious
+            // config file (planted by another local process) can't downgrade
+            // TLS even on a correctly-restricted localhost URL.
+            #[cfg(not(debug_assertions))]
+            {
+                tracing::error!(
+                    "[MCP HTTP Transport] verify_ssl=false is forbidden in release builds (server '{}', url '{}')",
+                    server_name,
+                    config.url
+                );
+                return Err(McpError::ConnectionError(
+                    "SSL verification cannot be disabled in release builds. \
+                     Use a properly-signed certificate or run a debug build."
+                        .to_string(),
+                ));
+            }
+
             // SECURITY: Only allow disabling SSL verification for localhost connections.
             // Disabling for remote servers exposes the connection to MITM attacks.
+            // Hostname-string match (not IP resolution): an attacker
+            // registering `attack.example.com` with a short-TTL A record at
+            // 127.0.0.1 cannot reach this branch because `host_str()` returns
+            // the literal hostname, not the resolved IP. DNS rebinding does
+            // not apply here.
             let is_localhost = if let Ok(parsed) = url::Url::parse(&config.url) {
                 matches!(
                     parsed.host_str(),
@@ -1096,13 +1122,13 @@ impl HttpSseTransport {
             }
 
             tracing::warn!(
-                "[MCP HTTP Transport] SSL certificate verification DISABLED for local server '{}'. \
+                "[MCP HTTP Transport] SSL certificate verification DISABLED for local server '{}' (debug build). \
                  This is acceptable for local development with self-signed certificates.",
                 server_name
             );
             // SECURITY: Certificate verification bypass is ONLY reached after the
-            // localhost guard above (lines 960-975) confirms the target is 127.0.0.1/::1.
-            // Remote servers are rejected before reaching this point.
+            // release-build refusal above + localhost guard. Remote servers
+            // and release builds are rejected before reaching this point.
             client_builder = client_builder.danger_accept_invalid_certs(true); // lgtm[rust/disabled-certificate-check]
             sse_client_builder = sse_client_builder.danger_accept_invalid_certs(true);
             // lgtm[rust/disabled-certificate-check]

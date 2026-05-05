@@ -12,6 +12,7 @@
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { getActiveWorkspaceFolderSync } from '../utils/workspaceFolders';
 
 const execFileAsync = promisify(execFile);
 
@@ -126,7 +127,7 @@ export class ContextBuilder {
    */
   async getGitContext(): Promise<string> {
     try {
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const workspaceRoot = getActiveWorkspaceFolderSync()?.uri.fsPath;
       if (workspaceRoot === undefined) return '';
 
       const execOpts = { cwd: workspaceRoot, timeout: 5000 };
@@ -242,7 +243,7 @@ export class ContextBuilder {
    */
   async getWorkspaceStructure(): Promise<string> {
     try {
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      const workspaceFolder = getActiveWorkspaceFolderSync();
       if (workspaceFolder === undefined) return '';
 
       const rootUri = workspaceFolder.uri;

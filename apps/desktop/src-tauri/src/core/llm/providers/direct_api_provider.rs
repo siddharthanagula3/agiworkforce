@@ -183,16 +183,40 @@ impl DirectApiProvider {
     }
 }
 
+/// Allowed loopback ports for local AI providers (RT-05 fix).
+///
+/// Only these ports may be used with `http://localhost` or `http://127.0.0.1`:
+///   - 11434 — Ollama default
+///   - 1234  — LM Studio default
+///   - 8080  — common generic local inference server
+///   - 5000  — common Flask/FastAPI local server
+///   - 3000  — common Node.js local server
+///
+/// Any other localhost port is an SSRF pivot risk (e.g. pointing at port 8787
+/// would make the LLM client POST bearer-token-authenticated requests to the
+/// desktop bridge).
+const ALLOWED_LOOPBACK_PORTS: &[u16] = &[11434, 1234, 8080, 5000, 3000];
+
 /// Validates a provider base URL to prevent SSRF attacks.
 ///
 /// Blocks requests to private/link-local IP ranges (e.g. AWS IMDS at
 /// 169.254.169.254) and enforces HTTPS for non-localhost connections.
 /// Loopback addresses (127.0.0.0/8, ::1) are allowed with HTTP only,
-/// to support local services like Ollama.
+/// restricted to a small set of known-safe ports (RT-05 fix).
 fn validate_provider_base_url(url: &str) -> Result<(), String> {
     let parsed = url
         .parse::<reqwest::Url>()
         .map_err(|e| format!("Invalid base URL: {e}"))?;
+
+    // RT-05 fix: reject non-HTTP(S) schemes immediately.
+    match parsed.scheme() {
+        "https" | "http" => {}
+        scheme => {
+            return Err(format!(
+                "Unsupported URL scheme '{scheme}'. Only https:// (and http:// for approved local ports) are allowed."
+            ))
+        }
+    }
 
     // Determine if the host is a loopback address.
     // We use parsed.host() (not host_str()) because host_str() returns
@@ -204,45 +228,54 @@ fn validate_provider_base_url(url: &str) -> Result<(), String> {
         None => false,
     };
 
-    // Only allow https (or http for loopback / Ollama)
-    match parsed.scheme() {
-        "https" => {}
-        "http" => {
-            if !is_loopback {
-                return Err(
-                    "HTTP (non-TLS) is only allowed for localhost. Use HTTPS for remote providers."
-                        .to_string(),
-                );
+    if is_loopback {
+        // RT-05 fix: HTTP is allowed on loopback only for specific, known-safe ports.
+        if parsed.scheme() == "http" {
+            let port = parsed.port().unwrap_or(80);
+            if !ALLOWED_LOOPBACK_PORTS.contains(&port) {
+                return Err(format!(
+                    "localhost port {port} is not in the approved list for local providers. \
+                     Allowed ports: {:?}. \
+                     If you are running a local model server on a different port, \
+                     contact support or use one of the supported ports.",
+                    ALLOWED_LOOPBACK_PORTS
+                ));
             }
         }
-        scheme => return Err(format!("Unsupported URL scheme '{scheme}'. Use HTTPS.")),
+        // HTTPS on loopback is unconditionally allowed (self-signed certs, etc.).
+        return Ok(());
     }
 
-    // Block private/link-local IP ranges (SSRF prevention).
-    // Loopback is exempted — validated by the scheme check above (HTTP-only).
-    if !is_loopback {
-        match parsed.host() {
-            Some(url::Host::Ipv4(v4)) => {
-                if v4.is_private() || v4.is_link_local() {
-                    return Err(format!(
-                        "Private/link-local IP addresses are not allowed as provider URLs: {v4}"
-                    ));
-                }
+    // Non-loopback: require HTTPS.
+    if parsed.scheme() == "http" {
+        return Err(
+            "HTTP (non-TLS) is only allowed for approved localhost ports. Use HTTPS for remote providers."
+                .to_string(),
+        );
+    }
+
+    // Block private/link-local IP ranges (SSRF prevention) for remote hosts.
+    match parsed.host() {
+        Some(url::Host::Ipv4(v4)) => {
+            if v4.is_private() || v4.is_link_local() {
+                return Err(format!(
+                    "Private/link-local IP addresses are not allowed as provider URLs: {v4}"
+                ));
             }
-            Some(url::Host::Ipv6(v6)) => {
-                let segments = v6.segments();
-                // Block fe80::/10 (link-local)
-                let is_link_local = (segments[0] & 0xffc0) == 0xfe80;
-                // Block fc00::/7 (unique local)
-                let is_unique_local = (segments[0] & 0xfe00) == 0xfc00;
-                if is_link_local || is_unique_local {
-                    return Err(format!(
-                        "Link-local/unique-local IPv6 addresses are not allowed as provider URLs: {v6}"
-                    ));
-                }
-            }
-            _ => {}
         }
+        Some(url::Host::Ipv6(v6)) => {
+            let segments = v6.segments();
+            // Block fe80::/10 (link-local)
+            let is_link_local = (segments[0] & 0xffc0) == 0xfe80;
+            // Block fc00::/7 (unique local)
+            let is_unique_local = (segments[0] & 0xfe00) == 0xfc00;
+            if is_link_local || is_unique_local {
+                return Err(format!(
+                    "Link-local/unique-local IPv6 addresses are not allowed as provider URLs: {v6}"
+                ));
+            }
+        }
+        _ => {}
     }
 
     Ok(())

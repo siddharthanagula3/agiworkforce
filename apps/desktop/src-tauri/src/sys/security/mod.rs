@@ -85,4 +85,5 @@ pub use tool_guard::{
     SecurityError, ToolConfirmationRequest, ToolConfirmationResponse, ToolExecutionGuard,
     ToolPolicy, ToolSafetyTier,
 };
-pub use updater::{UpdateMetadata, UpdateSecurityManager, VerificationResult};
+// SEV-DESK-14: `updater` module emptied — Tauri's built-in Ed25519 updater
+// handles production update verification. See `updater.rs` for context.

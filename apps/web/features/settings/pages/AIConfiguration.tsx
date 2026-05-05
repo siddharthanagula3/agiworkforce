@@ -14,6 +14,7 @@ import { Textarea } from '@shared/ui/textarea';
 import { Switch } from '@shared/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { Alert, AlertDescription } from '@shared/ui/alert';
+import { getCsrfToken } from '@/lib/client/csrf';
 import {
   Bot,
   Settings,
@@ -288,13 +289,16 @@ const AIConfigurationPageContent: React.FC = () => {
 
     try {
       // Auth is managed via Supabase SSR cookies (set by middleware) — no manual token needed.
-      const csrfToken =
-        typeof document !== 'undefined'
-          ? (document.cookie
-              .split('; ')
-              .find((row) => row.startsWith('csrf-token='))
-              ?.split('=')[1] ?? '')
-          : '';
+      // SECURITY (web-MED-1): the prior `csrf-token` cookie reader was dead
+      // code — the server never sets that cookie; CSRF is bound to the
+      // `anon-session-id` cookie + an HMAC token returned by `/api/csrf`.
+      // Using the canonical helper guarantees a token actually exists.
+      let csrfToken = '';
+      try {
+        csrfToken = await getCsrfToken();
+      } catch {
+        // /api/csrf unreachable — let the server reject the request.
+      }
 
       const response = await fetch('/api/settings/test-provider', {
         method: 'POST',

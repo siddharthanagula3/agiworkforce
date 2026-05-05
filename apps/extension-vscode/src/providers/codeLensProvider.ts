@@ -7,58 +7,84 @@
 
 import * as vscode from 'vscode';
 
+interface CachedLensesEntry {
+  version: number;
+  lenses: vscode.CodeLens[];
+}
+
 export class AgiCodeLensProvider implements vscode.CodeLensProvider {
   private readonly _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
+
+  /**
+   * Cache lens results per document. VS Code calls `provideCodeLenses` on every
+   * editor change; without a cache a 5,000-line file pays ~45,000 regex
+   * evaluations per refresh. Invalidated automatically when the document's
+   * version increments (any edit) and explicitly by `refresh()`.
+   *
+   * Map key: document.uri.toString(). Bounded — older entries evicted via
+   * editor close (no listener here; relies on natural turnover).
+   */
+  private readonly _cache = new Map<string, CachedLensesEntry>();
 
   provideCodeLenses(
     document: vscode.TextDocument,
     _token: vscode.CancellationToken,
   ): vscode.CodeLens[] {
-    const lenses: vscode.CodeLens[] = [];
-
-    // Use document symbols if available, fall back to regex
-    // Since symbols are async, we use regex for instant results
-    const text = document.getText();
-    const lines = text.split('\n');
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]!;
-      if (isFunctionOrClassLine(line, document.languageId)) {
-        const range = new vscode.Range(i, 0, i, line.length);
-
-        lenses.push(
-          new vscode.CodeLens(range, {
-            title: '$(hubot) Ask AI',
-            tooltip: 'Explain this with AGI Workforce',
-            command: 'agi-workforce.explain',
-          }),
-        );
-
-        lenses.push(
-          new vscode.CodeLens(range, {
-            title: '$(beaker) Tests',
-            tooltip: 'Generate tests with AGI Workforce',
-            command: 'agi-workforce.generateTests',
-          }),
-        );
-
-        lenses.push(
-          new vscode.CodeLens(range, {
-            title: '$(book) Docs',
-            tooltip: 'Generate documentation with AGI Workforce',
-            command: 'agi-workforce.docs',
-          }),
-        );
-      }
+    const cacheKey = document.uri.toString();
+    const cached = this._cache.get(cacheKey);
+    if (cached !== undefined && cached.version === document.version) {
+      return cached.lenses;
     }
 
+    const lenses = computeLenses(document);
+    this._cache.set(cacheKey, { version: document.version, lenses });
     return lenses;
   }
 
   refresh(): void {
+    this._cache.clear();
     this._onDidChangeCodeLenses.fire();
   }
+}
+
+function computeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+  const lenses: vscode.CodeLens[] = [];
+  const text = document.getText();
+  const lines = text.split('\n');
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (isFunctionOrClassLine(line, document.languageId)) {
+      const range = new vscode.Range(i, 0, i, line.length);
+
+      lenses.push(
+        new vscode.CodeLens(range, {
+          title: '$(hubot) Ask AI',
+          tooltip: 'Explain this with AGI Workforce',
+          command: 'agi-workforce.explain',
+        }),
+      );
+
+      lenses.push(
+        new vscode.CodeLens(range, {
+          title: '$(beaker) Tests',
+          tooltip: 'Generate tests with AGI Workforce',
+          command: 'agi-workforce.generateTests',
+        }),
+      );
+
+      lenses.push(
+        new vscode.CodeLens(range, {
+          title: '$(book) Docs',
+          tooltip: 'Generate documentation with AGI Workforce',
+          command: 'agi-workforce.docs',
+        }),
+      );
+    }
+  }
+
+  return lenses;
 }
 
 /**

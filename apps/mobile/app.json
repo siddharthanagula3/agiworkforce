@@ -55,6 +55,7 @@
       },
       "package": "com.agiworkforce.app",
       "versionCode": 1,
+      "allowBackup": false,
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",

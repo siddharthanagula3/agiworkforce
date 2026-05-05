@@ -33,7 +33,13 @@ function buildCspWithNonce(nonce: string): string {
     .trim();
 }
 
-export async function proxy(request: NextRequest) {
+// SEV-WEB-CRIT-1 fix (2026-05-05): file was previously named `proxy.ts` and
+// exported `proxy()`. Next.js App Router only invokes a root file named
+// exactly `middleware.ts` exporting a function named exactly `middleware`,
+// so the entire CSP/session-refresh layer was silently inactive on every
+// request. Renamed and re-exported. See docs/security/red-team-2026-05-04.md
+// CRIT-1 for staging-validation checklist before promoting to production.
+export async function middleware(request: NextRequest) {
   // Run Supabase session refresh and auth-gating first (may return a redirect)
   const supabaseResponse = await updateSession(request);
 

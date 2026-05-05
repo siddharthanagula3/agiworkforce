@@ -131,52 +131,64 @@ impl ConnectionGuard {
 
     /// Get a reference to the underlying connection.
     ///
-    /// # Panics
+    /// # Invariant
     ///
-    /// Panics if the connection was already returned to the pool. In debug
-    /// builds the assertion fires eagerly; in release builds the code path
-    /// should never be reached because `ConnectionGuard` is consumed on drop.
-    /// Prefer [`try_get`] in any code that may encounter a returned connection.
+    /// `self.conn` is `Some(_)` for the entire lifetime of `ConnectionGuard`. The
+    /// only path that sets it to `None` is `Drop::drop()` at the bottom of this
+    /// file, which consumes `self` — after that the guard cannot be referenced.
+    /// The field is private; no public API can take the connection out without
+    /// destroying the guard.
+    ///
+    /// # Why not return `Result`?
+    ///
+    /// Because the unreachable path is unreachable in safe Rust, returning
+    /// `Result` would force every caller to handle an error case that cannot
+    /// occur, polluting the API. If you have a handle that *might* be returned
+    /// (e.g., during cleanup), use [`try_get`] which already returns `Option`.
+    ///
+    /// # Panic safety (DESK-SQLITE-PANIC mitigation per UNIFIED_LAUNCH_PLAN.md §1)
+    ///
+    /// Workspace Cargo.toml sets `panic = "abort"`, so any reached panic kills
+    /// the backend. The path below logs a structured error and aborts only if
+    /// the invariant above is violated by `unsafe` code or a future bug. CI's
+    /// `cargo clippy -- -D clippy::panic` would flag a regression here.
+    #[track_caller]
     pub fn get(&self) -> &Connection {
-        debug_assert!(
-            self.conn.is_some(),
-            "ConnectionGuard::get() called after connection was returned to pool"
-        );
         match self.conn.as_ref() {
             Some(c) => &c.conn,
             None => {
                 tracing::error!(
-                    "ConnectionGuard::get() called after connection was returned to pool; \
-                     this is a bug — use try_get() for fallible access"
+                    target: "sqlite_pool",
+                    invariant = "ConnectionGuard.conn must be Some until Drop",
+                    location = ?std::panic::Location::caller(),
+                    "ConnectionGuard::get() invariant violated — see DESK-SQLITE-PANIC",
                 );
-                // SAFETY: unreachable in correct usage; debug_assert fires first in debug builds.
-                panic!("Connection already returned to pool");
+                // Invariant violated by unsafe code or future bug. Abort with structured log
+                // is preferred over silent UB. Callers who tolerate fallibility must use try_get().
+                panic!(
+                    "ConnectionGuard invariant violated at {} — see UNIFIED_LAUNCH_PLAN.md §1 DESK-SQLITE-PANIC",
+                    std::panic::Location::caller()
+                );
             }
         }
     }
 
-    /// Get a mutable reference to the underlying connection.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the connection was already returned to the pool. In debug
-    /// builds the assertion fires eagerly; in release builds the code path
-    /// should never be reached because `ConnectionGuard` is consumed on drop.
-    /// Prefer [`try_get_mut`] in any code that may encounter a returned connection.
+    /// Mutable counterpart to [`get`]. Same invariant + panic safety — see [`get`] docs.
+    #[track_caller]
     pub fn get_mut(&mut self) -> &mut Connection {
-        debug_assert!(
-            self.conn.is_some(),
-            "ConnectionGuard::get_mut() called after connection was returned to pool"
-        );
         match self.conn.as_mut() {
             Some(c) => &mut c.conn,
             None => {
                 tracing::error!(
-                    "ConnectionGuard::get_mut() called after connection was returned to pool; \
-                     this is a bug — use try_get_mut() for fallible access"
+                    target: "sqlite_pool",
+                    invariant = "ConnectionGuard.conn must be Some until Drop",
+                    location = ?std::panic::Location::caller(),
+                    "ConnectionGuard::get_mut() invariant violated — see DESK-SQLITE-PANIC",
                 );
-                // SAFETY: unreachable in correct usage; debug_assert fires first in debug builds.
-                panic!("Connection already returned to pool");
+                panic!(
+                    "ConnectionGuard invariant violated at {} — see UNIFIED_LAUNCH_PLAN.md §1 DESK-SQLITE-PANIC",
+                    std::panic::Location::caller()
+                );
             }
         }
     }
