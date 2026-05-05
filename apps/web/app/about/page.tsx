@@ -1,4 +1,5 @@
 import { Bot, Target, Zap, Shield, Users } from 'lucide-react';
+import { MARKETING } from '../../lib/marketing-constants';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { CtaSection } from '../../components/marketing/CtaSection';
@@ -246,16 +247,22 @@ export default function AboutPage() {
             <div className="container mx-auto px-4">
               <div className="grid md:grid-cols-4 gap-8 text-center">
                 <div className="p-8">
-                  <div className="text-4xl font-bold text-[#c8892a] mb-2">10+</div>
+                  <div className="text-4xl font-bold text-[#c8892a] mb-2">
+                    {MARKETING.providers.display}
+                  </div>
                   <div className="text-[#edebe8] font-medium">AI Providers</div>
                   <div className="text-sm text-[#555150] mt-1">
-                    OpenAI, Anthropic, Google & more
+                    OpenAI, Anthropic, Google &amp; more
                   </div>
                 </div>
                 <div className="p-8">
-                  <div className="text-4xl font-bold text-[#c8892a] mb-2">Dozens</div>
+                  <div className="text-4xl font-bold text-[#c8892a] mb-2">
+                    {MARKETING.skills.display}
+                  </div>
                   <div className="text-[#edebe8] font-medium">AI Skills</div>
-                  <div className="text-sm text-[#555150] mt-1">Across multiple categories</div>
+                  <div className="text-sm text-[#555150] mt-1">
+                    Across {MARKETING.categories.display} categories
+                  </div>
                 </div>
                 <div className="p-8">
                   <div className="text-4xl font-bold text-[#c8892a] mb-2">macOS</div>

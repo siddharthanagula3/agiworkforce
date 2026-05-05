@@ -440,7 +440,7 @@ export default function ToolsFeaturePage() {
           <CtaSection
             icon="Monitor"
             headline="Download the desktop app"
-            body="Browser automation, file management, terminal commands, screen capture, computer use - 1,459+ IPC tools validated through ToolGuard."
+            body={`Browser automation, file management, terminal commands, screen capture, computer use - ${MARKETING.tools.display} IPC tools validated through ToolGuard.`}
           />
         </main>
 
