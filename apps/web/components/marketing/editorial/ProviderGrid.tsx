@@ -142,12 +142,11 @@ export function ProviderGrid({
               'group',
             ].join(' ')}
           >
-            {/* Provider mark */}
+            {/* Provider mark — color inherits from parent tier context (ink on paper, cream on graphite) */}
             <div
               className={[
                 'flex items-center justify-center',
                 cellSize,
-                'text-[var(--color-cream-on-graphite)]',
                 'opacity-70 group-hover:opacity-100',
                 'transition-opacity duration-[var(--dur-fast)]',
               ].join(' ')}

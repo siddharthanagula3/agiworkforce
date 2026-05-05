@@ -125,13 +125,14 @@ mod h13_resolve_model_for_strategy {
     #[test]
     fn auto_economy_medium_tokens_selects_managed_chat_model() {
         // 1000 ≤ tokens < 8000 → ManagedCloud "chat" task → models.json picks
-        // the current managed-chat default (gpt-5.4-mini in this catalog).
+        // the current managed-chat default (Gemini 3.1 Flash Lite — cheaper than
+        // gpt-5.4-mini for high-volume chat at $0.25/$1.50 per 1M).
         let model = LLMRouter::resolve_model_for_strategy(
             RoutingStrategy::AutoEconomy,
             2000,
             "fallback-model",
         );
-        assert_eq!(model, "gpt-5.4-mini");
+        assert_eq!(model, "gemini-3.1-flash-lite");
     }
 
     #[test]
@@ -231,10 +232,11 @@ mod h13_resolve_model_for_strategy {
     #[test]
     fn auto_economy_boundary_at_1000() {
         // token_count == 1000 should NOT pick the fast OpenAI economy model (< 1000)
-        // Crosses into ManagedCloud "chat" task — current catalog default.
+        // Crosses into ManagedCloud "chat" task — current catalog default is
+        // gemini-3.1-flash-lite (cheaper than gpt-5.4-mini for chat).
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 1000, "fallback");
-        assert_eq!(model, "gpt-5.4-mini");
+        assert_eq!(model, "gemini-3.1-flash-lite");
     }
 
     #[test]

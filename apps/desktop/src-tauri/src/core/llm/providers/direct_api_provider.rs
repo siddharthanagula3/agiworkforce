@@ -624,7 +624,7 @@ mod tests {
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
-            .contains("HTTP (non-TLS) is only allowed for localhost"));
+            .contains("HTTP (non-TLS) is only allowed for approved localhost ports"));
     }
 
     #[test]

@@ -11,7 +11,15 @@ export interface SubscriptionGateResult {
   requiresUpgrade?: boolean;
 }
 
-const PLAN_TIER_HIERARCHY: PlanTier[] = ['free', 'hobby', 'pro', 'max', 'enterprise'];
+const PLAN_TIER_HIERARCHY: PlanTier[] = [
+  'local-only',
+  'byok',
+  'free',
+  'hobby',
+  'pro',
+  'max',
+  'enterprise',
+];
 
 export function checkSubscriptionGate(): SubscriptionGateResult {
   const authState = supabaseAuth.getState();
@@ -113,7 +121,12 @@ export function canUseAPIKeys(): boolean {
 }
 
 export function getUpgradeMessage(currentTier?: PlanTier): string {
-  if (!currentTier || currentTier === 'free') {
+  if (
+    !currentTier ||
+    currentTier === 'free' ||
+    currentTier === 'local-only' ||
+    currentTier === 'byok'
+  ) {
     return 'Subscribe to Hobby plan to unlock AGI Workforce';
   }
   return 'Upgrade to Hobby plan or higher to continue using AGI Workforce';

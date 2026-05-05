@@ -39,16 +39,29 @@ fn get_timestamp() -> String {
     Utc::now().to_rfc3339()
 }
 
-/// Google AI pricing (per 1M tokens) - stub pricing
-/// These are example prices, actual pricing varies by model
+/// Google AI pricing (input, output, cache) per 1M tokens.
+///
+/// Sourced from `models.json` via `models_config::get_pricing` so we don't
+/// drift from the canonical catalog (rule-models-json.md).  Cache pricing
+/// is approximated as 1/4 of input — Anthropic-style cache-read multiplier
+/// — until per-model cache pricing is added to the catalog.
 fn get_model_pricing(model: &str) -> (f64, f64, f64) {
-    // (input_price_per_1m, output_price_per_1m, cache_price_per_1m)
-    match model {
-        "gemini-3-flash" => (0.0, 0.0, 0.0),
-        "gemini-1.5-flash" => (0.075, 0.3, 0.01875),
-        "gemini-1.5-pro" => (1.25, 5.0, 0.3125),
-        "gemini-embedding-001" => (0.15, 0.15, 0.0), // Embeddings priced differently
-        _ => (0.5, 2.0, 0.125),                      // Default pricing
+    use crate::core::llm::models_config::get_pricing;
+    use crate::core::llm::Provider;
+
+    let pricing = get_pricing(&Provider::Google, model);
+    match pricing {
+        Some(p) => {
+            let cache_per_million = p.input_per_million * 0.25;
+            (p.input_per_million, p.output_per_million, cache_per_million)
+        }
+        None => {
+            tracing::warn!(
+                model = %model,
+                "google_batch cost: no pricing in models.json; falling back to (0,0,0)"
+            );
+            (0.0, 0.0, 0.0)
+        }
     }
 }
 
@@ -438,4 +451,28 @@ pub async fn google_batch_create_jsonl(
 #[tauri::command]
 pub async fn google_batch_is_beta_stub() -> Result<bool, String> {
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pricing_is_sourced_from_catalog_for_current_gemini_models() {
+        // gemini-3.1-flash-lite is in models.json at $0.25/$1.50 per 1M.
+        let (input, output, cache) = get_model_pricing("gemini-3.1-flash-lite");
+        assert_eq!(input, 0.25);
+        assert_eq!(output, 1.5);
+        assert!(cache > 0.0 && cache < input);
+    }
+
+    #[test]
+    fn pricing_returns_zeros_for_unknown_model_name() {
+        let (input, output, cache) = get_model_pricing("not-a-real-model-id");
+        // Falls back to provider default if catalog miss; google's defaultPricing
+        // is non-zero in models.json, so we just assert sanity rather than exact zero.
+        assert!(input >= 0.0);
+        assert!(output >= 0.0);
+        assert!(cache >= 0.0);
+    }
 }

@@ -140,7 +140,7 @@ const navItems = [
 
 // Shared nav label classes: mono uppercase, quiet ink, amber underline on hover
 const navLabelCls =
-  'font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--color-fg-quiet)] ' +
+  'font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--color-fg-paper-quiet)] ' +
   'hover:text-[var(--color-ink)] border-b border-transparent hover:border-[var(--color-rule)] ' +
   'transition-colors pb-px';
 
@@ -279,7 +279,7 @@ export function Header() {
           <span className="font-display italic font-bold tracking-tight text-[var(--color-ink)] text-xl leading-none">
             AGI Workforce
           </span>
-          <span className="font-mono text-[10px] tracking-[0.18em] text-[var(--color-fg-quiet)] hidden sm:inline">
+          <span className="font-mono text-[10px] tracking-[0.18em] text-[var(--color-fg-paper-quiet)] hidden sm:inline">
             EST. 2026
           </span>
         </Link>
@@ -372,7 +372,7 @@ export function Header() {
         <div className="hidden md:flex items-center gap-4">
           {userEmail ? (
             <div className="flex items-center gap-4">
-              <span className="font-mono text-[10px] tracking-[0.12em] text-[var(--color-fg-quiet)] hidden lg:block">
+              <span className="font-mono text-[10px] tracking-[0.12em] text-[var(--color-fg-paper-quiet)] hidden lg:block">
                 {userEmail}
               </span>
               <button onClick={handleSignOut} className={navLabelCls}>
@@ -479,7 +479,7 @@ export function Header() {
 
             {userEmail ? (
               <>
-                <span className="font-mono text-[10px] tracking-[0.12em] text-[var(--color-fg-quiet)]">
+                <span className="font-mono text-[10px] tracking-[0.12em] text-[var(--color-fg-paper-quiet)]">
                   {userEmail}
                 </span>
                 <button onClick={handleSignOut} className={`text-left ${navLabelCls}`}>

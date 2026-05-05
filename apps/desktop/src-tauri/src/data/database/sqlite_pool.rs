@@ -154,6 +154,10 @@ impl ConnectionGuard {
     /// `cargo clippy -- -D clippy::panic` would flag a regression here.
     #[track_caller]
     pub fn get(&self) -> &Connection {
+        debug_assert!(
+            self.conn.is_some(),
+            "ConnectionGuard.conn is None at deref-time — see DESK-SQLITE-PANIC",
+        );
         match self.conn.as_ref() {
             Some(c) => &c.conn,
             None => {
@@ -161,6 +165,7 @@ impl ConnectionGuard {
                     target: "sqlite_pool",
                     invariant = "ConnectionGuard.conn must be Some until Drop",
                     location = ?std::panic::Location::caller(),
+                    backtrace = ?std::backtrace::Backtrace::capture(),
                     "ConnectionGuard::get() invariant violated — see DESK-SQLITE-PANIC",
                 );
                 // Invariant violated by unsafe code or future bug. Abort with structured log
@@ -176,6 +181,10 @@ impl ConnectionGuard {
     /// Mutable counterpart to [`get`]. Same invariant + panic safety — see [`get`] docs.
     #[track_caller]
     pub fn get_mut(&mut self) -> &mut Connection {
+        debug_assert!(
+            self.conn.is_some(),
+            "ConnectionGuard.conn is None at deref-time — see DESK-SQLITE-PANIC",
+        );
         match self.conn.as_mut() {
             Some(c) => &mut c.conn,
             None => {
@@ -183,6 +192,7 @@ impl ConnectionGuard {
                     target: "sqlite_pool",
                     invariant = "ConnectionGuard.conn must be Some until Drop",
                     location = ?std::panic::Location::caller(),
+                    backtrace = ?std::backtrace::Backtrace::capture(),
                     "ConnectionGuard::get_mut() invariant violated — see DESK-SQLITE-PANIC",
                 );
                 panic!(
