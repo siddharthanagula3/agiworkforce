@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
 
-import { Header } from '../components/layout/Header';
-import { MarketingFooter } from '../components/marketing/MarketingFooter';
 import { EditorialPage } from '../components/marketing/editorial/EditorialPage';
 import { RuledSection } from '../components/marketing/editorial/RuledSection';
 import { Slug } from '../components/marketing/editorial/Slug';
@@ -83,8 +81,6 @@ export default function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-
-      <Header />
 
       <EditorialPage tier="mixed">
         {/* ── S1 — MASTHEAD HERO (paper, full-bleed) ── */}
@@ -531,8 +527,6 @@ export default function Home() {
           </div>
         </div>
       </EditorialPage>
-
-      <MarketingFooter />
     </>
   );
 }
