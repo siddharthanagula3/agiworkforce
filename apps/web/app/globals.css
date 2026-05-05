@@ -449,12 +449,6 @@
   }
 }
 
-@keyframes caret-blink {
-  50% {
-    opacity: 0;
-  }
-}
-
 /* Base layer styles */
 @layer base {
   :root {
