@@ -33,6 +33,14 @@ import {
   normalizeConfiguredModelId,
   getModelProviderInfo,
 } from '../services/modelConstants';
+import {
+  AGENT_MODE_LABEL,
+  EFFORT_LABEL,
+  PROVIDER_DISPLAY,
+  type AgentMode,
+  type Effort,
+} from '@agiworkforce/types';
+import { Config } from '../utils/config';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -46,7 +54,10 @@ type WebviewToExtMessage =
   | { type: 'cancel' }
   | { type: 'fileSearch'; payload: { query: string } }
   | { type: 'shareDiagnostics' }
-  | { type: 'clearConversation' };
+  | { type: 'clearConversation' }
+  | { type: 'openActionSheet' }
+  | { type: 'setMode'; payload: { mode: AgentMode } }
+  | { type: 'setEffort'; payload: { effort: Effort } };
 
 type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
@@ -57,7 +68,9 @@ type ExtToWebviewMessage =
   | { type: 'providerBadge'; payload: { providerLabel: string; brandColor: string } }
   | { type: 'fileSearchResults'; payload: { files: string[] } }
   | { type: 'conversationCleared' }
-  | { type: 'addUserMessage'; payload: { text: string } };
+  | { type: 'addUserMessage'; payload: { text: string } }
+  | { type: 'modeChanged'; payload: { mode: AgentMode } }
+  | { type: 'effortChanged'; payload: { effort: Effort; supportsEffort: boolean } };
 
 // ─── HTML template ────────────────────────────────────────────────────────────
 
@@ -81,12 +94,18 @@ function getWebviewContent(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
   nonce: string,
+  initialMode: AgentMode,
+  initialEffort: Effort,
+  supportsEffort: boolean,
 ): string {
   // Build CSP-safe URIs for any local assets we might need
   const cspSource = webview.cspSource;
   const modelOptionsHtml = MODEL_PICKER_OPTIONS.map(
     (option) => `<option value="${option.id}">${escapeHtml(option.label)}</option>`,
   ).join('');
+  const modeLabel = escapeHtml(AGENT_MODE_LABEL[initialMode]);
+  const effortLabel = escapeHtml(EFFORT_LABEL[initialEffort]);
+  const effortHidden = supportsEffort ? '' : ' style="display:none"';
 
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -439,6 +458,42 @@ function getWebviewContent(
     .code-block-wrapper:hover .copy-btn { opacity: 1; }
     .copy-btn:hover { background: rgba(255,255,255,0.15); color: var(--text-primary); }
 
+    /* ── Composer controls row (mode chip + effort chip + model chip) ── */
+    .composer-controls {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .mode-chip, .effort-chip, .model-chip {
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 9px;
+      transition: color 0.15s var(--transition),
+                  background 0.15s var(--transition),
+                  border-color 0.15s var(--transition);
+      white-space: nowrap;
+    }
+    .mode-chip:hover, .effort-chip:hover, .model-chip:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+    .mode-chip.active {
+      border-color: var(--accent-teal);
+      color: var(--accent-teal);
+    }
+
+    .chip-separator {
+      flex: 1;
+    }
+
     /* ── @mention dropdown ── */
     .input-wrapper { position: relative; flex: 1; }
     .mention-dropdown {
@@ -483,9 +538,7 @@ function getWebviewContent(
       </span>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="diagBtn" title="Share diagnostics">⚡</button>
-      <button class="icon-btn" id="clearBtn" title="New conversation">✕</button>
-      <button class="icon-btn" id="settingsBtn" title="Settings">⚙</button>
+      <button class="icon-btn" id="actionsBtn" title="Actions">≡</button>
     </div>
   </div>
 
@@ -525,6 +578,11 @@ function getWebviewContent(
       </div>
       <button id="sendBtn" title="Send (Enter)"></button>
     </div>
+    <div class="composer-controls">
+      <button class="mode-chip" id="modeChip" title="Agent mode">${modeLabel}</button>
+      <button class="effort-chip" id="effortChip" title="Reasoning effort"${effortHidden}>${effortLabel}</button>
+      <span class="chip-separator"></span>
+    </div>
   </div>
 
   <script nonce="${nonce}">
@@ -534,17 +592,17 @@ function getWebviewContent(
     const messagesEl = document.getElementById('messages');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const settingsBtn = document.getElementById('settingsBtn');
     const modelSelect = document.getElementById('modelSelect');
     const apiKeyBanner = document.getElementById('apiKeyBanner');
     const apiKeyInput = document.getElementById('apiKeyInput');
     const saveKeyBtn = document.getElementById('saveKeyBtn');
-    const diagBtn = document.getElementById('diagBtn');
+    const actionsBtn = document.getElementById('actionsBtn');
     const mentionDropdown = document.getElementById('mentionDropdown');
     const providerBadgeEl = document.getElementById('providerBadge');
     const providerBadgeDotEl = document.getElementById('providerBadgeDot');
     const providerBadgeTextEl = document.getElementById('providerBadgeText');
+    const modeChip = document.getElementById('modeChip');
+    const effortChip = document.getElementById('effortChip');
 
     // ── Provider badge helper ─────────────────────────────────────────────────
     function updateProviderBadge(providerLabel, brandColor) {
@@ -770,16 +828,16 @@ function getWebviewContent(
 
     userInput.addEventListener('input', function() { autoResize(); detectMention(); });
 
-    clearBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'clearConversation' });
+    actionsBtn.addEventListener('click', () => {
+      vscode.postMessage({ type: 'openActionSheet' });
     });
 
-    diagBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'shareDiagnostics' });
+    modeChip.addEventListener('click', () => {
+      vscode.postMessage({ type: 'openActionSheet' });
     });
 
-    settingsBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'openSettings' });
+    effortChip.addEventListener('click', () => {
+      vscode.postMessage({ type: 'openActionSheet' });
     });
 
     saveKeyBtn.addEventListener('click', () => {
@@ -853,6 +911,17 @@ function getWebviewContent(
 
       else if (msg.type === 'addUserMessage') {
         addMessage('user', msg.payload.text);
+      }
+
+      else if (msg.type === 'modeChanged') {
+        if (modeChip) modeChip.textContent = msg.payload.mode.charAt(0).toUpperCase() + msg.payload.mode.slice(1);
+      }
+
+      else if (msg.type === 'effortChanged') {
+        if (effortChip) {
+          effortChip.textContent = msg.payload.effort.charAt(0).toUpperCase() + msg.payload.effort.slice(1);
+          effortChip.style.display = msg.payload.supportsEffort ? '' : 'none';
+        }
       }
     });
 
@@ -935,6 +1004,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private _currentCancelSource?: vscode.CancellationTokenSource;
   private _conversationHistory: LlmChatMessage[] = [];
   private _messageListener?: vscode.Disposable;
+  /** Per-conversation mode override (falls back to workspace setting when undefined) */
+  private _mode: AgentMode | undefined;
+  /** Per-conversation effort override (falls back to workspace setting when undefined) */
+  private _effort: Effort | undefined;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -956,7 +1029,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     };
 
     const nonce = getNonce();
-    webviewView.webview.html = getWebviewContent(webviewView.webview, this._extensionUri, nonce);
+    const initialMode = this._mode ?? Config.agentMode();
+    const initialEffort = this._effort ?? Config.agentEffort();
+    const initialModel = normalizeConfiguredModelId(
+      vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
+    );
+    const supportsEffort = this._modelSupportsEffort(initialModel);
+    webviewView.webview.html = getWebviewContent(
+      webviewView.webview,
+      this._extensionUri,
+      nonce,
+      initialMode,
+      initialEffort,
+      supportsEffort,
+    );
 
     // Handle messages from the webview — track the listener for cleanup
     this._messageListener?.dispose();
@@ -990,6 +1076,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         );
         this._post({ type: 'model', payload: { model } });
         this._postProviderBadge(model);
+
+        // Sync mode and effort chips
+        this._post({ type: 'modeChanged', payload: { mode: this._mode ?? Config.agentMode() } });
+        this._post({
+          type: 'effortChanged',
+          payload: {
+            effort: this._effort ?? Config.agentEffort(),
+            supportsEffort: this._modelSupportsEffort(model),
+          },
+        });
         break;
       }
 
@@ -1017,6 +1113,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         );
         this._post({ type: 'model', payload: { model } });
         this._postProviderBadge(model);
+        // Update effort chip visibility when model changes
+        this._post({
+          type: 'effortChanged',
+          payload: {
+            effort: this._effort ?? Config.agentEffort(),
+            supportsEffort: this._modelSupportsEffort(model),
+          },
+        });
         break;
       }
 
@@ -1084,7 +1188,46 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         this._post({ type: 'conversationCleared' });
         break;
       }
+
+      case 'openActionSheet': {
+        // Delegate to the global command so the QuickPick runs in the extension host
+        await vscode.commands.executeCommand('agi-workforce.openActionSheet');
+        break;
+      }
+
+      case 'setMode': {
+        const mode = (msg as { type: 'setMode'; payload: { mode: AgentMode } }).payload.mode;
+        this._mode = mode;
+        await vscode.workspace
+          .getConfiguration('agiWorkforce')
+          .update('agent.mode', mode, vscode.ConfigurationTarget.Global);
+        this._post({ type: 'modeChanged', payload: { mode } });
+        break;
+      }
+
+      case 'setEffort': {
+        const effort = (msg as { type: 'setEffort'; payload: { effort: Effort } }).payload.effort;
+        this._effort = effort;
+        await vscode.workspace
+          .getConfiguration('agiWorkforce')
+          .update('agent.effort', effort, vscode.ConfigurationTarget.Global);
+        const model = normalizeConfiguredModelId(
+          vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
+        );
+        this._post({
+          type: 'effortChanged',
+          payload: { effort, supportsEffort: this._modelSupportsEffort(model) },
+        });
+        break;
+      }
     }
+  }
+
+  /** Returns true when the given model's provider supports an explicit effort axis. */
+  private _modelSupportsEffort(modelId: string): boolean {
+    const { providerId } = getModelProviderInfo(modelId);
+    if (providerId === null) return false;
+    return PROVIDER_DISPLAY[providerId]?.supportsEffort ?? false;
   }
 
   private async _handleSendMessage(text: string, model?: string): Promise<void> {
@@ -1226,7 +1369,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   /** Clear conversation history and notify the webview. */
   public resetConversation(): void {
     this._conversationHistory = [];
+    this._mode = undefined;
+    this._effort = undefined;
     this._currentCancelSource?.cancel();
     this._post({ type: 'conversationCleared' });
+    // Push fresh mode/effort chips reflecting workspace defaults
+    const mode = Config.agentMode();
+    const effort = Config.agentEffort();
+    this._post({ type: 'modeChanged', payload: { mode } });
+    const model = normalizeConfiguredModelId(
+      vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
+    );
+    this._post({
+      type: 'effortChanged',
+      payload: { effort, supportsEffort: this._modelSupportsEffort(model) },
+    });
   }
 }
