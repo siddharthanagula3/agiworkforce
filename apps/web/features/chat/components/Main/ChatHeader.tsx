@@ -5,11 +5,17 @@
  * - Essential actions only (sidebar, title, search, menu)
  * - Secondary actions in overflow menu
  * - Clean visual hierarchy
+ * - Profile popover on avatar click
  */
 
 import React from 'react';
+import Link from 'next/link';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
+import { Badge } from '@shared/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
+import { Popover, PopoverContent, PopoverTrigger } from '@shared/ui/popover';
+import { Separator } from '@shared/ui/separator';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,9 +36,159 @@ import {
   MoreHorizontal,
   FileDown,
   Trash2,
+  Download,
+  LogOut,
+  ArrowUpRight,
 } from 'lucide-react';
 import type { ChatSession } from '../../types';
 import { ThemeToggle } from '@shared/ui/theme-toggle';
+import { useAuthStore } from '@shared/stores/authentication-store';
+import { PLAN_LABEL, isFreePlan, type UIPlanTier } from '@agiworkforce/types';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function toUIPlanTier(plan: string | undefined): UIPlanTier {
+  const normalized = (plan ?? 'byok').toLowerCase();
+  if (normalized === 'local' || normalized === 'local-only') return 'local';
+  if (normalized === 'byok') return 'byok';
+  if (normalized === 'hobby') return 'hobby';
+  if (normalized === 'pro') return 'pro';
+  if (normalized === 'max') return 'max';
+  return 'byok';
+}
+
+function getInitials(name: string | undefined, email: string | undefined): string {
+  if (name && name.trim()) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return `${parts[0]![0]}${parts[parts.length - 1]![0]}`.toUpperCase();
+    }
+    return name.trim().slice(0, 2).toUpperCase();
+  }
+  if (email) {
+    return email.slice(0, 2).toUpperCase();
+  }
+  return 'AG';
+}
+
+// ---------------------------------------------------------------------------
+// Profile Popover
+// ---------------------------------------------------------------------------
+
+function ProfilePopover() {
+  const { user, logout } = useAuthStore();
+
+  const tier = toUIPlanTier(user?.plan);
+  const planLabel = PLAN_LABEL[tier];
+  const displayName = user?.name ?? user?.email ?? 'User';
+  const email = user?.email ?? '';
+  const initials = getInitials(user?.name, user?.email);
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className="flex items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label="Open profile menu"
+        >
+          <Avatar className="h-7 w-7">
+            {user?.avatar && <AvatarImage src={user.avatar} alt={displayName} />}
+            <AvatarFallback className="text-[10px] font-semibold bg-amber-500/20 text-amber-400">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent align="end" sideOffset={8} className="w-64 p-0">
+        {/* Identity section */}
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Avatar className="h-9 w-9 shrink-0">
+            {user?.avatar && <AvatarImage src={user.avatar} alt={displayName} />}
+            <AvatarFallback className="text-xs font-semibold bg-amber-500/20 text-amber-400">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{displayName}</p>
+            {email && <p className="truncate text-xs text-muted-foreground">{email}</p>}
+          </div>
+        </div>
+
+        {/* Plan badge */}
+        <div className="px-4 pb-3">
+          <Badge
+            variant="outline"
+            className={cn(
+              'text-[10px] font-semibold uppercase tracking-wide',
+              tier === 'hobby' && 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+              tier === 'pro' && 'bg-violet-500/20 text-violet-400 border-violet-500/30',
+              tier === 'max' && 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+              (tier === 'byok' || tier === 'local') &&
+                'bg-white/10 text-muted-foreground border-white/10',
+            )}
+          >
+            {planLabel}
+          </Badge>
+        </div>
+
+        <Separator />
+
+        {/* Navigation links */}
+        <div className="py-1">
+          <Link
+            href="/settings"
+            className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/60 transition-colors"
+          >
+            <Settings className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            Settings
+          </Link>
+
+          {isFreePlan(tier) && (
+            <Link
+              href="/pricing"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-amber-400 hover:bg-amber-500/10 transition-colors"
+            >
+              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+              Upgrade plan
+            </Link>
+          )}
+
+          <Link
+            href="/downloads"
+            className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/60 transition-colors"
+          >
+            <Download className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            Get apps and extensions
+          </Link>
+        </div>
+
+        <Separator />
+
+        {/* Log out */}
+        <div className="py-1">
+          <button
+            onClick={() => void logout()}
+            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            Log out
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// cn import (local copy to avoid circular)
+// ---------------------------------------------------------------------------
+
+function cn(...classes: (string | false | undefined | null)[]): string {
+  return classes.filter(Boolean).join(' ');
+}
 
 interface ChatHeaderProps {
   session: ChatSession | null;
@@ -157,6 +313,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
         {/* Theme Toggle */}
         <ThemeToggle />
+
+        {/* Profile Popover */}
+        <ProfilePopover />
 
         {/* More Actions Menu */}
         <DropdownMenu>
