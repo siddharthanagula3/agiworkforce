@@ -16,7 +16,8 @@ import { useAuthStore } from './auth';
 import { isChatStoreStreaming } from './chat/chatStoreRef';
 
 export type AppMode = 'local' | 'cloud';
-export type PlanTier = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
+export type { PlanTier } from '../lib/supabase';
+import type { PlanTier } from '../lib/supabase';
 
 interface AppModeState {
   mode: AppMode;

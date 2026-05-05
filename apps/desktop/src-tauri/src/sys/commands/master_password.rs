@@ -573,10 +573,10 @@ mod tests {
     use super::*;
 
     fn valid_test_passphrase() -> &'static str {
-        "alpha-beta-unique-phrase"
+        "Alpha-Beta-Unique-1"
     } // gitleaks:allow
     fn invalid_test_passphrase() -> &'static str {
-        "nonmatching-phrase"
+        "Nonmatching-Phrase-9"
     } // gitleaks:allow
 
     fn create_test_state() -> MasterPasswordState {
