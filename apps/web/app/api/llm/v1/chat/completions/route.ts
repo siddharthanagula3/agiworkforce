@@ -8,6 +8,7 @@ import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { getUserClient } from '@/lib/supabase-server';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -16,7 +17,7 @@ import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-hel
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
-import { validateEgressUrl, EgressPolicyError } from '@/lib/egress-policy';
+import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
   getEconomyFallbackModels,
   normalizeModelId,
@@ -66,8 +67,12 @@ const ChatCompletionRequestSchema = z.object({
   n: z.number().int().positive().optional(),
   stream: z.boolean().optional().default(false),
   stop: z.union([z.string(), z.array(z.string())]).optional(),
-  max_tokens: z.number().int().positive().optional(),
-  max_completion_tokens: z.number().int().positive().optional(),
+  // SECURITY: cap output token requests so a single hobbyist can't run
+  // multi-million-token cost bombs against the upstream provider. 64 000 is
+  // generous for current frontier models (Opus 4.7 / GPT-5.4 max output) and
+  // tier-aware ceilings are enforced separately in `resolveAutoModel`.
+  max_tokens: z.number().int().positive().max(64000).optional(),
+  max_completion_tokens: z.number().int().positive().max(64000).optional(),
   presence_penalty: z.number().min(-2).max(2).optional(),
   frequency_penalty: z.number().min(-2).max(2).optional(),
   logit_bias: z
@@ -94,7 +99,9 @@ const ChatCompletionRequestSchema = z.object({
   thinking: z
     .object({
       type: z.string(),
-      budget_tokens: z.number().int().positive().optional(),
+      // SECURITY: same cost-bomb concern as max_tokens. Anthropic's
+      // documented max for extended thinking is 32 000.
+      budget_tokens: z.number().int().positive().max(32000).optional(),
     })
     .optional(),
   effort: z.string().optional(),
@@ -222,16 +229,23 @@ async function handleChatCompletions(request: NextRequest) {
 
   const token = authHeader.substring(7);
 
-  // Verify user with Supabase - use service role key for server-side JWT verification
+  // Verify user with Supabase using service role for server-side JWT verification ONLY.
+  // SECURITY (WEB-RLS-BYPASS mitigation per docs/plans/UNIFIED_LAUNCH_PLAN.md §1):
+  // The service-role client below MUST NOT be reused for downstream DB reads — it
+  // bypasses RLS. All downstream DB access goes through dedicated services
+  // (SubscriptionService, CreditService, etc.) that scope queries by userId.
+  // Linting: this `supabaseAdmin` reference must not appear after line ~`auth.getUser` below.
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser(token);
+  } = await supabaseAdmin.auth.getUser(token);
 
   if (authError || !user) {
     return NextResponse.json(
@@ -246,11 +260,14 @@ async function handleChatCompletions(request: NextRequest) {
     );
   }
 
+  // RLS-bound client for all downstream DB ops on behalf of this user.
+  const userClient = getUserClient(token);
+
   // Generate unique request ID for idempotency (prevents duplicate charges on retry)
   const requestId = randomUUID();
 
   // Get subscription
-  const subscription = await SubscriptionService.getSubscription(user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
 
   if (!subscription) {
     return NextResponse.json(
@@ -343,6 +360,48 @@ async function handleChatCompletions(request: NextRequest) {
   }
 
   const chatRequest = validationResult.data;
+
+  // WEB-MULTIMODAL-IMAGE-SSRF (red-team finding 2026-05): validate every
+  // user-supplied `image_url` BEFORE forwarding to upstream providers.
+  // Anthropic / OpenAI / Google fetch these URLs server-side and surface
+  // the response in the model output — so a request with
+  //     image_url: { url: "http://169.254.169.254/latest/meta-data/" }
+  // would have provider infrastructure fetch IMDS on the attacker's behalf.
+  // We refuse non-https, internal IPs (any encoding), userinfo-bearing,
+  // and obvious internal-service-port URLs. `data:` URLs pass through.
+  for (let mi = 0; mi < chatRequest.messages.length; mi++) {
+    const msg = chatRequest.messages[mi]!;
+    if (!Array.isArray(msg.content)) continue;
+    for (let pi = 0; pi < msg.content.length; pi++) {
+      const part = msg.content[pi]!;
+      if (part.type !== 'image_url') continue;
+      const imageUrl = part.image_url?.url;
+      if (typeof imageUrl !== 'string') continue;
+      try {
+        validateUserImageUrl(imageUrl);
+      } catch (err) {
+        if (err instanceof EgressPolicyError) {
+          logger.warn(
+            { userId: user.id, messageIndex: mi, partIndex: pi },
+            'Blocked user-supplied image URL (egress policy)',
+          );
+          return NextResponse.json(
+            {
+              error: {
+                message:
+                  'Image URL not permitted: must be https with a non-internal hostname, or a data: URL',
+                type: 'invalid_request_error',
+                code: 'image_url_blocked',
+                param: `messages.${mi}.content.${pi}.image_url.url`,
+              },
+            },
+            { status: 400 },
+          );
+        }
+        throw err;
+      }
+    }
+  }
 
   // Resolve auto model names (auto-economy, auto-balanced, auto-premium) to actual models
   // Tier-aware: hobby users get economy models even for balanced/premium
@@ -472,7 +531,7 @@ async function handleChatCompletions(request: NextRequest) {
 
   // Ensure credits are allocated for the user's subscription period
   // This handles cases where subscription was created but credits weren't allocated
-  let existingBalance = await CreditService.getBalance(user.id);
+  let existingBalance = await CreditService.getBalance(userClient, user.id);
 
   logger.debug(
     {
@@ -504,7 +563,7 @@ async function handleChatCompletions(request: NextRequest) {
       if (accountId) {
         logger.info({ userId: user.id, accountId }, 'Credits allocated successfully');
         // Re-fetch balance after allocation
-        existingBalance = await CreditService.getBalance(user.id);
+        existingBalance = await CreditService.getBalance(userClient, user.id);
         logger.debug(
           {
             userId: user.id,
@@ -528,7 +587,7 @@ async function handleChatCompletions(request: NextRequest) {
   }
 
   // Check credits with detailed logging
-  const hasCredits = await CreditService.checkAvailable(user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
 
   logger.debug(
     {
@@ -558,7 +617,11 @@ async function handleChatCompletions(request: NextRequest) {
         maxTokens,
       );
 
-      const hasFallbackCredits = await CreditService.checkAvailable(user.id, fallbackCostCents);
+      const hasFallbackCredits = await CreditService.checkAvailable(
+        userClient,
+        user.id,
+        fallbackCostCents,
+      );
 
       if (hasFallbackCredits) {
         usedFallback = true;
@@ -577,6 +640,7 @@ async function handleChatCompletions(request: NextRequest) {
   // Reserve credits with idempotency key (prevents double-charging on retry)
   const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
+    userClient,
     user.id,
     estimatedCostCents,
     `Credit reservation: ${provider}/${chatRequest.model}`,
@@ -1092,6 +1156,7 @@ async function handleChatCompletions(request: NextRequest) {
                   requestId,
                 );
                 await CreditService.deductCredits(
+                  userClient,
                   userId,
                   costDifference,
                   `Credit adjustment (streaming): ${providerUsed}/${modelUsed}`,
@@ -1146,6 +1211,7 @@ async function handleChatCompletions(request: NextRequest) {
       // Refund on failure with idempotency key to prevent duplicate refunds
       const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
       await CreditService.deductCredits(
+        userClient,
         user.id,
         -estimatedCostCents,
         `Refund for failed streaming request: ${provider}/${chatRequest.model}`,
@@ -1207,6 +1273,7 @@ async function handleChatCompletions(request: NextRequest) {
     // Refund on failure with idempotency key to prevent duplicate refunds
     const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
     await CreditService.deductCredits(
+      userClient,
       user.id,
       -estimatedCostCents,
       `Refund for failed request: ${provider}/${chatRequest.model}`,
@@ -1278,6 +1345,7 @@ async function handleChatCompletions(request: NextRequest) {
         requestId,
       );
       await CreditService.deductCredits(
+        userClient,
         user.id,
         costDifference,
         costDifference > 0

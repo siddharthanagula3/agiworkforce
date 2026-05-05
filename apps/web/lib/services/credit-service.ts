@@ -1,16 +1,8 @@
 import 'server-only';
 
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { getServiceClient } from '@/lib/supabase-server';
 import { logger } from '@/lib/logger';
-
-function getSupabaseClient() {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
-}
 
 export interface CreditBalance {
   account_id: string;
@@ -49,17 +41,35 @@ export class CreditService {
   }
 
   /**
-   * Get current credit balance for a user
+   * Get current credit balance for a user.
+   *
+   * USER-CONTEXT: pass `getUserClient(jwt)` as the `client` argument to enforce RLS.
+   * SERVICE-CONTEXT (Stripe webhook, cron): omit `client`; falls back to service-role client.
    */
-  static async getBalance(userId: string): Promise<CreditBalance | null> {
+  static async getBalance(
+    clientOrUserId: SupabaseClient | string,
+    userId?: string,
+  ): Promise<CreditBalance | null> {
+    // Overload resolution: (client, userId) or legacy (userId)
+    let supabase: SupabaseClient;
+    let resolvedUserId: string;
+    if (typeof clientOrUserId === 'string') {
+      // SERVICE-CONTEXT: legacy call signature (userId only)
+      // SECURITY: service-role required because caller has no user JWT (webhook/cron context).
+      supabase = getServiceClient();
+      resolvedUserId = clientOrUserId;
+    } else {
+      supabase = clientOrUserId;
+      resolvedUserId = userId!;
+    }
+
     try {
-      const supabase = getSupabaseClient();
       const { data, error } = await supabase.rpc('get_credit_balance', {
-        p_user_id: userId,
+        p_user_id: resolvedUserId,
       });
 
       if (error) {
-        logger.error({ error, userId }, 'Failed to get credit balance');
+        logger.error({ error, userId: resolvedUserId }, 'Failed to get credit balance');
         throw error;
       }
 
@@ -70,31 +80,53 @@ export class CreditService {
       // RPC functions that return TABLE return an array, get the first row
       return data[0] as CreditBalance;
     } catch (error) {
-      logger.error({ error, userId }, 'Error in getBalance');
+      logger.error({ error, userId: resolvedUserId }, 'Error in getBalance');
       throw error;
     }
   }
 
   /**
-   * Check if user has enough credits
+   * Check if user has enough credits.
    * Returns true if user has sufficient credits, false otherwise.
    * On RPC errors, falls back to direct balance check for reliability.
+   *
+   * USER-CONTEXT: pass `getUserClient(jwt)` as the `client` argument to enforce RLS.
+   * SERVICE-CONTEXT (Stripe webhook, cron): omit `client`; falls back to service-role client.
    */
-  static async checkAvailable(userId: string, amountCents: number): Promise<boolean> {
+  static async checkAvailable(
+    clientOrUserId: SupabaseClient | string,
+    userIdOrAmount: string | number,
+    amountCents?: number,
+  ): Promise<boolean> {
+    // Overload resolution: (client, userId, amountCents) or legacy (userId, amountCents)
+    let supabase: SupabaseClient;
+    let resolvedUserId: string;
+    let resolvedAmount: number;
+    if (typeof clientOrUserId === 'string') {
+      // SERVICE-CONTEXT: legacy call signature (userId, amountCents)
+      // SECURITY: service-role required because caller has no user JWT (webhook/cron context).
+      supabase = getServiceClient();
+      resolvedUserId = clientOrUserId;
+      resolvedAmount = userIdOrAmount as number;
+    } else {
+      supabase = clientOrUserId;
+      resolvedUserId = userIdOrAmount as string;
+      resolvedAmount = amountCents!;
+    }
+
     try {
-      const supabase = getSupabaseClient();
       const { data, error } = await supabase.rpc('check_credits_available', {
-        p_user_id: userId,
-        p_amount_cents: amountCents,
+        p_user_id: resolvedUserId,
+        p_amount_cents: resolvedAmount,
       });
 
       if (error) {
         logger.error(
-          { error, userId, amountCents },
+          { error, userId: resolvedUserId, amountCents: resolvedAmount },
           'RPC check_credits_available failed, trying fallback',
         );
         // Fall back to direct balance check
-        return this.checkAvailableFallback(userId, amountCents);
+        return this.checkAvailableFallback(supabase, resolvedUserId, resolvedAmount);
       }
 
       // Handle various boolean representations from PostgreSQL/Supabase
@@ -102,28 +134,32 @@ export class CreditService {
       const result = data === true || data === 't' || data === 'true' || data === 1;
 
       logger.debug(
-        { userId, amountCents, rawData: data, result },
+        { userId: resolvedUserId, amountCents: resolvedAmount, rawData: data, result },
         'Credit availability check completed',
       );
 
       return result;
     } catch (error) {
-      logger.error({ error, userId, amountCents }, 'Error in checkAvailable, trying fallback');
+      logger.error(
+        { error, userId: resolvedUserId, amountCents: resolvedAmount },
+        'Error in checkAvailable, trying fallback',
+      );
       // Fall back to direct balance check instead of failing silently
-      return this.checkAvailableFallback(userId, amountCents);
+      return this.checkAvailableFallback(supabase, resolvedUserId, resolvedAmount);
     }
   }
 
   /**
-   * Fallback credit check using direct balance query
-   * Used when the RPC function fails (e.g., auth issues, network errors)
+   * Fallback credit check using direct balance query.
+   * Used when the RPC function fails (e.g., auth issues, network errors).
    */
   private static async checkAvailableFallback(
+    supabase: SupabaseClient,
     userId: string,
     amountCents: number,
   ): Promise<boolean> {
     try {
-      const balance = await this.getBalance(userId);
+      const balance = await this.getBalance(supabase, userId);
 
       if (!balance || !balance.account_id) {
         logger.warn({ userId }, 'No credit balance found in fallback check');
@@ -154,26 +190,66 @@ export class CreditService {
    * When an idempotency key is provided, duplicate requests with the same key
    * will return the cached result instead of deducting credits again.
    * Keys are valid for 24 hours.
+   *
+   * USER-CONTEXT: pass `getUserClient(jwt)` as the `client` argument to enforce RLS.
+   * SERVICE-CONTEXT (Stripe webhook, cron): omit `client`; falls back to service-role client.
    */
   static async deductCredits(
-    userId: string,
-    amountCents: number,
-    description?: string,
-    metadata?: Record<string, unknown>,
+    clientOrUserId: SupabaseClient | string,
+    userIdOrAmount: string | number,
+    amountCentsOrDescription?: number | string,
+    descriptionOrMetadata?: string | Record<string, unknown>,
+    metadataOrIdempotencyKey?: Record<string, unknown> | string,
     idempotencyKey?: string,
   ): Promise<DeductCreditsResult> {
+    // Overload resolution:
+    //   USER-CONTEXT:    (client, userId, amountCents, description?, metadata?, idempotencyKey?)
+    //   SERVICE-CONTEXT: (userId, amountCents, description?, metadata?, idempotencyKey?)
+    let supabase: SupabaseClient;
+    let resolvedUserId: string;
+    let resolvedAmountCents: number;
+    let resolvedDescription: string | undefined;
+    let resolvedMetadata: Record<string, unknown> | undefined;
+    let resolvedIdempotencyKey: string | undefined;
+
+    if (typeof clientOrUserId === 'string') {
+      // SERVICE-CONTEXT: legacy call signature
+      // SECURITY: service-role required because caller has no user JWT (webhook/cron context).
+      supabase = getServiceClient();
+      resolvedUserId = clientOrUserId;
+      resolvedAmountCents = userIdOrAmount as number;
+      resolvedDescription = amountCentsOrDescription as string | undefined;
+      resolvedMetadata = descriptionOrMetadata as Record<string, unknown> | undefined;
+      resolvedIdempotencyKey = metadataOrIdempotencyKey as string | undefined;
+    } else {
+      // USER-CONTEXT: (client, userId, amountCents, ...)
+      supabase = clientOrUserId;
+      resolvedUserId = userIdOrAmount as string;
+      resolvedAmountCents = amountCentsOrDescription as number;
+      resolvedDescription = descriptionOrMetadata as string | undefined;
+      resolvedMetadata = metadataOrIdempotencyKey as Record<string, unknown> | undefined;
+      resolvedIdempotencyKey = idempotencyKey;
+    }
+
     try {
-      const supabase = getSupabaseClient();
       const { data, error } = await supabase.rpc('deduct_credits', {
-        p_user_id: userId,
-        p_amount_cents: amountCents,
-        p_description: description || null,
-        p_metadata: metadata || {},
-        p_idempotency_key: idempotencyKey || null,
+        p_user_id: resolvedUserId,
+        p_amount_cents: resolvedAmountCents,
+        p_description: resolvedDescription || null,
+        p_metadata: resolvedMetadata || {},
+        p_idempotency_key: resolvedIdempotencyKey || null,
       });
 
       if (error) {
-        logger.error({ error, userId, amountCents, idempotencyKey }, 'Failed to deduct credits');
+        logger.error(
+          {
+            error,
+            userId: resolvedUserId,
+            amountCents: resolvedAmountCents,
+            idempotencyKey: resolvedIdempotencyKey,
+          },
+          'Failed to deduct credits',
+        );
         throw error;
       }
 
@@ -181,7 +257,15 @@ export class CreditService {
       const result = Array.isArray(data) && data.length > 0 ? data[0] : data;
       return result as DeductCreditsResult;
     } catch (error) {
-      logger.error({ error, userId, amountCents, idempotencyKey }, 'Error in deductCredits');
+      logger.error(
+        {
+          error,
+          userId: resolvedUserId,
+          amountCents: resolvedAmountCents,
+          idempotencyKey: resolvedIdempotencyKey,
+        },
+        'Error in deductCredits',
+      );
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -202,7 +286,9 @@ export class CreditService {
   }
 
   /**
-   * Get or create credit account for a period
+   * Get or create credit account for a period.
+   * SERVICE-CONTEXT: called only from SubscriptionService.allocateCreditsForPeriod
+   * which is itself SERVICE-CONTEXT (Stripe webhook, claim-offer).
    */
   static async getOrCreateAccount(
     userId: string,
@@ -211,8 +297,10 @@ export class CreditService {
     periodEnd: Date,
     creditsAllocatedCents: number,
   ): Promise<string> {
+    // SECURITY: service-role required because this is called from Stripe webhook and
+    // claim-offer handlers where no user JWT is available.
+    const supabase = getServiceClient();
     try {
-      const supabase = getSupabaseClient();
       const { data, error } = await supabase.rpc('get_or_create_credit_account', {
         p_user_id: userId,
         p_subscription_id: subscriptionId,
@@ -234,7 +322,9 @@ export class CreditService {
   }
 
   /**
-   * Reset credits for a new period
+   * Reset credits for a new period.
+   * SERVICE-CONTEXT: called only from SubscriptionService.resetCreditsForNewPeriod
+   * which is itself SERVICE-CONTEXT (Stripe webhook, cron).
    */
   static async resetForPeriod(
     userId: string,
@@ -243,8 +333,10 @@ export class CreditService {
     periodEnd: Date,
     creditsAllocatedCents: number,
   ): Promise<string> {
+    // SECURITY: service-role required because this is called from Stripe webhook and
+    // cron job where no user JWT is available.
+    const supabase = getServiceClient();
     try {
-      const supabase = getSupabaseClient();
       const { data, error } = await supabase.rpc('reset_credits_for_period', {
         p_user_id: userId,
         p_subscription_id: subscriptionId,

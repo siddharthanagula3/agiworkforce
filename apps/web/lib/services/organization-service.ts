@@ -1,31 +1,24 @@
 import 'server-only';
 
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
+import { type SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { Organization, OrganizationMember } from '@/types/saas';
 
-function getSupabaseClient() {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { persistSession: false },
-  });
-}
-
 export class OrganizationService {
   /**
-   * Create a new organization
+   * Create a new organization.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so inserts are
+   * authorized as the authenticated user. RLS policies enforce that only
+   * authenticated users can create organizations.
    */
   static async createOrganization(
+    client: SupabaseClient,
     userId: string,
     name: string,
     slug: string,
   ): Promise<Organization> {
-    const supabase = getSupabaseClient();
-
     // 1. Create Org
-    const { data: org, error: orgError } = await supabase
+    const { data: org, error: orgError } = await client
       .from('organizations')
       .insert({
         name,
@@ -41,7 +34,7 @@ export class OrganizationService {
     }
 
     // 2. Add creator as Owner
-    const { error: memberError } = await supabase.from('organization_members').insert({
+    const { error: memberError } = await client.from('organization_members').insert({
       organization_id: org.id,
       user_id: userId,
       role: 'owner',
@@ -51,10 +44,7 @@ export class OrganizationService {
       logger.error({ error: memberError, orgId: org.id }, 'Failed to add owner to organization');
 
       // Cleanup: Delete the orphaned organization
-      const { error: cleanupError } = await supabase
-        .from('organizations')
-        .delete()
-        .eq('id', org.id);
+      const { error: cleanupError } = await client.from('organizations').delete().eq('id', org.id);
 
       if (cleanupError) {
         logger.error(
@@ -72,12 +62,15 @@ export class OrganizationService {
   }
 
   /**
-   * Get user's organizations
+   * Get user's organizations.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only organizations
+   * the authenticated user is a member of are returned.
    */
-  static async getUserOrganizations(userId: string): Promise<Organization[]> {
-    const supabase = getSupabaseClient();
-
-    const { data, error } = await supabase
+  static async getUserOrganizations(
+    client: SupabaseClient,
+    userId: string,
+  ): Promise<Organization[]> {
+    const { data, error } = await client
       .from('organization_members')
       .select(
         `
@@ -100,12 +93,15 @@ export class OrganizationService {
   }
 
   /**
-   * Get members of an organization
+   * Get members of an organization.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only members
+   * of organizations the authenticated user can access are returned.
    */
-  static async getOrganizationMembers(orgId: string): Promise<OrganizationMember[]> {
-    const supabase = getSupabaseClient();
-
-    const { data, error } = await supabase
+  static async getOrganizationMembers(
+    client: SupabaseClient,
+    orgId: string,
+  ): Promise<OrganizationMember[]> {
+    const { data, error } = await client
       .from('organization_members')
       .select(
         `
@@ -128,16 +124,18 @@ export class OrganizationService {
   }
 
   /**
-   * Add member to organization
+   * Add member to organization.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so the insert
+   * is authorized as the authenticated user. RLS policies enforce that only
+   * org admins/owners can add members.
    */
   static async addMember(
+    client: SupabaseClient,
     orgId: string,
     userId: string,
     role: 'admin' | 'member' | 'viewer',
   ): Promise<void> {
-    const supabase = getSupabaseClient();
-
-    const { error } = await supabase.from('organization_members').insert({
+    const { error } = await client.from('organization_members').insert({
       organization_id: orgId,
       user_id: userId,
       role,
@@ -150,12 +148,13 @@ export class OrganizationService {
   }
 
   /**
-   * Remove member
+   * Remove member.
+   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so the delete
+   * is authorized as the authenticated user. RLS policies enforce that only
+   * org admins/owners can remove members.
    */
-  static async removeMember(orgId: string, userId: string): Promise<void> {
-    const supabase = getSupabaseClient();
-
-    const { error } = await supabase
+  static async removeMember(client: SupabaseClient, orgId: string, userId: string): Promise<void> {
+    const { error } = await client
       .from('organization_members')
       .delete()
       .eq('organization_id', orgId)
