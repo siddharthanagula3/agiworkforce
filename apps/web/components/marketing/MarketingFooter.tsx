@@ -1,4 +1,3 @@
-import { Bot } from 'lucide-react';
 import Link from 'next/link';
 
 interface FooterLink {
@@ -80,18 +79,20 @@ interface ColumnProps {
 function Column({ title, links }: ColumnProps) {
   return (
     <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-4">{title}</h3>
+      <h3 className="font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--color-rule)] mb-4">
+        {title}
+      </h3>
       <ul className="flex flex-col gap-3">
         {links.map((link) => (
           <li key={link.href}>
             <Link
               href={link.href}
-              className="text-sm text-zinc-500 transition-colors hover:text-white"
+              className="text-sm text-[var(--color-fg-muted)] transition-colors hover:text-[var(--color-cream-on-graphite)] hover:underline hover:decoration-[var(--color-rule)] hover:underline-offset-2"
             >
               {link.label}
             </Link>
             {link.subtitle ? (
-              <div className="mt-0.5 text-[11px] text-zinc-600">{link.subtitle}</div>
+              <div className="mt-0.5 text-[11px] text-[var(--color-fg-faint)]">{link.subtitle}</div>
             ) : null}
           </li>
         ))}
@@ -102,19 +103,24 @@ function Column({ title, links }: ColumnProps) {
 
 export function MarketingFooter() {
   return (
-    <footer className="border-t border-white/10 bg-black py-16">
-      <div className="container mx-auto px-4">
+    <footer className="bg-[var(--color-graphite)] py-16">
+      {/* Double-rule masthead separator: thick amber + hairline soft */}
+      <div className="border-t border-[var(--color-rule)]" />
+      <div className="mt-2 border-t border-[var(--color-rule-soft)]" />
+
+      <div className="container mx-auto px-4 mt-12">
         <div className="grid gap-10 md:grid-cols-3 lg:grid-cols-6">
           {/* Brand column */}
           <div className="lg:col-span-1 md:col-span-3">
-            <div className="flex items-center gap-2 font-bold mb-4">
-              <Bot className="h-5 w-5 text-[#c8892a]" />
-              <span className="text-white">AGI Workforce</span>
+            <div className="mb-4">
+              <span className="font-display italic font-bold text-2xl text-[var(--color-cream-on-graphite)]">
+                AGI Workforce
+              </span>
             </div>
-            <p className="text-sm text-zinc-500 leading-relaxed">
+            <p className="text-sm font-display italic text-[var(--color-fg-muted)] leading-relaxed">
               Beyond one model. Beyond one surface. AGI in your hands.
             </p>
-            <p className="mt-4 text-xs text-zinc-600 leading-relaxed">
+            <p className="mt-4 font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--color-fg-quiet)] leading-relaxed">
               Built by AGI Automation LLC in Austin, TX.
             </p>
           </div>
@@ -133,27 +139,44 @@ export function MarketingFooter() {
           </div>
         </div>
 
-        <div className="mt-12 border-t border-white/10 pt-8 flex flex-col items-center gap-2 text-center text-sm text-zinc-600 sm:flex-row sm:justify-between sm:text-left">
+        <div className="mt-12 border-t border-[var(--color-rule-soft)] pt-8 flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between sm:text-left">
           <div>
-            <div>&copy; {new Date().getFullYear()} AGI Automation LLC. All rights reserved.</div>
-            <div className="text-xs text-zinc-700 mt-1">Proprietary. License: see /terms.</div>
+            <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-[var(--color-fg-quiet)]">
+              &copy; {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
+            </div>
+            <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-[var(--color-fg-quiet)] mt-1">
+              Proprietary. License: see /terms.
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-600">
-            <Link href="/sitemap-page" className="hover:text-white transition-colors">
+          <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] tracking-[0.2em] uppercase text-[var(--color-fg-quiet)]">
+            <Link
+              href="/sitemap-page"
+              className="hover:text-[var(--color-cream-on-graphite)] hover:underline hover:decoration-[var(--color-rule)] hover:underline-offset-2 transition-colors"
+            >
               Sitemap
             </Link>
-            <span className="text-zinc-800">·</span>
-            <Link href="/legal" className="hover:text-white transition-colors">
+            <span className="text-[var(--color-fg-faint)]" aria-hidden="true">
+              ·
+            </span>
+            <Link
+              href="/legal"
+              className="hover:text-[var(--color-cream-on-graphite)] hover:underline hover:decoration-[var(--color-rule)] hover:underline-offset-2 transition-colors"
+            >
               Legal index
             </Link>
-            <span className="text-zinc-800">·</span>
-            <Link href="/status" className="hover:text-white transition-colors">
+            <span className="text-[var(--color-fg-faint)]" aria-hidden="true">
+              ·
+            </span>
+            <Link
+              href="/status"
+              className="hover:text-[var(--color-cream-on-graphite)] hover:underline hover:decoration-[var(--color-rule)] hover:underline-offset-2 transition-colors"
+            >
               System status
             </Link>
           </div>
         </div>
 
-        <div className="mt-6 text-center text-xs text-zinc-700">
+        <div className="mt-6 text-center font-mono text-[10px] tracking-[0.18em] uppercase text-[var(--color-fg-faint)]">
           Coming soon: Azure OpenAI, AWS Bedrock provider integrations.
         </div>
       </div>
