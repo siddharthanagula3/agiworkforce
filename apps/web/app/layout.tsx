@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono, Instrument_Serif, Manrope } from 'next/font/google';
+import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google';
 import { headers } from 'next/headers';
 import './globals.css';
 import Providers from './providers';
@@ -16,16 +16,21 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-const instrumentSerif = Instrument_Serif({
-  weight: '400',
+// Newsreader: variable serif (opsz axis 6–72) carrying display + body for Tier A/B.
+// Subset to Latin only to control payload (~110KB → ~45KB).
+const newsreader = Newsreader({
   subsets: ['latin'],
-  variable: '--font-instrument',
+  weight: ['300', '400', '500', '700', '800'],
+  style: ['normal', 'italic'],
+  variable: '--font-newsreader',
   display: 'swap',
 });
 
-const manrope = Manrope({
+// JetBrains Mono: UI chrome — slugs, datelines, marginalia, CTAs.
+const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
-  variable: '--font-manrope',
+  weight: ['400', '500', '600'],
+  variable: '--font-jetbrains',
   display: 'swap',
 });
 
@@ -181,7 +186,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} ${manrope.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <SkipLinks />
         <Providers>{children}</Providers>
