@@ -2,6 +2,48 @@ import { Audio, type AudioMode } from 'expo-av';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { supabase } from './supabase';
 
+// CRIT-MOB-02 fix (2026-05-04): ephemeral Deepgram token endpoint.
+// The backend mints a short-lived (<60s) Deepgram temp token scoped to a
+// single usage. The master Deepgram key never leaves the server.
+interface EphemeralTokenResponse {
+  token: string;
+  expiresAt: number; // unix ms
+}
+
+/**
+ * Request a short-lived Deepgram token from the backend.
+ * Valid for ~60 seconds. Use immediately for transcription.
+ * Throws on network error or backend unavailability.
+ */
+export async function getDeepgramEphemeralToken(): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const authToken = data.session?.access_token;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.DEFAULT);
+
+  try {
+    const response = await fetch(`${API_URL}/api/v1/voice/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Voice token request failed: HTTP ${response.status} — ${body}`);
+    }
+
+    const result = (await response.json()) as EphemeralTokenResponse;
+    return result.token;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /**
  * Voice recording and speech-to-text service.
  * Uses expo-av for recording and the API gateway Whisper endpoint for transcription.
@@ -242,19 +284,24 @@ function clearMeteringInterval() {
 }
 
 // ---------------------------------------------------------------------------
-// Deepgram direct transcription (client-side, no server round-trip)
+// Deepgram direct transcription (via server-issued ephemeral token)
 // ---------------------------------------------------------------------------
 const DEEPGRAM_ENDPOINT = 'https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true';
 
 /**
  * Transcribe a local audio URI directly via Deepgram's pre-recorded API.
- * Used for hold-to-record PTT when a Deepgram API key is available.
+ * Used for hold-to-record PTT.
  *
- * @param uri   - Local file URI (m4a) from stopRecording()
- * @param apiKey - Deepgram API key
+ * CRIT-MOB-02 (2026-05-04): The caller must obtain an ephemeral token from
+ * the backend via `getDeepgramEphemeralToken()` — never pass a long-lived API
+ * key. The token is valid for ~60 seconds and cannot be used to mint further
+ * tokens or access Deepgram's admin API.
+ *
+ * @param uri           - Local file URI (m4a) from stopRecording()
+ * @param ephemeralToken - Short-lived Deepgram token from getDeepgramEphemeralToken()
  * @returns Transcript string (empty string on silence/failure)
  */
-export async function transcribeWithDeepgram(uri: string, apiKey: string): Promise<string> {
+export async function transcribeWithDeepgram(uri: string, ephemeralToken: string): Promise<string> {
   const formData = new FormData();
   // React Native FormData accepts { uri, type, name } for file blobs.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -266,7 +313,7 @@ export async function transcribeWithDeepgram(uri: string, apiKey: string): Promi
   try {
     const response = await fetch(DEEPGRAM_ENDPOINT, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: { Authorization: `Bearer ${ephemeralToken}` },
       body: formData,
       signal: controller.signal,
     });

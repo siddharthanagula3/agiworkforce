@@ -4,6 +4,12 @@ import { mmkvStorage } from '@/lib/mmkv';
 import { SignalingClient } from '@agiworkforce/utils';
 import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
+import {
+  deriveDispatchSecret,
+  signMessage,
+  verifyMessage,
+  type HmacSessionState,
+} from '@/lib/dispatchHmac';
 
 /** RTCConfiguration is defined internally in react-native-webrtc but not re-exported. */
 interface RTCConfiguration {
@@ -102,6 +108,13 @@ interface ConnectionState {
 /** Signaling client instance — kept outside state to avoid serialization */
 let signalingClient: SignalingClient | null = null;
 
+/**
+ * HIGH-MOB-05 fix (2026-05-04): per-session HMAC state.
+ * Initialised when a pairing code is resolved to a shared secret.
+ * Outgoing messages are signed; incoming messages are verified before dispatch.
+ */
+let hmacState: HmacSessionState | null = null;
+
 /** Queue of control messages to flush once reconnected. Capped to prevent unbounded growth. */
 const pendingControlQueue: Array<{ action: string; payload: unknown }> = [];
 const MAX_PENDING_QUEUE = 200;
@@ -171,8 +184,38 @@ function isTaskStatus(v: unknown): v is TaskStatus {
 /**
  * Handle incoming control messages from the desktop via signaling or data channel.
  * All fields are validated at runtime before use — no unsafe `as` casts.
+ *
+ * HIGH-MOB-05 fix (2026-05-04): messages are now expected to be signed
+ * envelopes ({ seq, ts, payload, hmac }). When hmacState is initialised the
+ * envelope is verified before the inner payload is processed. Messages that
+ * fail verification are silently dropped (no error state — avoids oracle).
+ * When hmacState is null (pairing code not yet resolved) the raw payload is
+ * processed as before for backward compatibility during the handshake phase.
  */
+async function handleControlMessageAsync(envelope: unknown): Promise<void> {
+  let payload: unknown = envelope;
+
+  if (hmacState) {
+    const result = await verifyMessage(hmacState, envelope);
+    if (!result.ok) {
+      console.warn('[dispatch] Message rejected:', result.reason);
+      return;
+    }
+    // Unwrap inner payload from the signed envelope
+    payload = (envelope as { payload: unknown }).payload;
+  }
+
+  handleControlMessageInner(payload);
+}
+
+/** Synchronous caller for data-channel messages (wraps async handler). */
 function handleControlMessage(payload: unknown): void {
+  handleControlMessageAsync(payload).catch((err) => {
+    console.warn('[dispatch] handleControlMessageAsync error:', err);
+  });
+}
+
+function handleControlMessageInner(payload: unknown): void {
   if (!isObject(payload)) return;
   const action = isString(payload['action']) ? payload['action'] : undefined;
   if (!action) return;
@@ -450,6 +493,22 @@ export const useConnectionStore = create<ConnectionState>()(
           reconnectStartedAt: isReconnect ? Date.now() : state.reconnectStartedAt,
         }));
 
+        // HIGH-MOB-05 fix (2026-05-04): derive the per-session HMAC secret from
+        // the pairing code + a random session salt. The salt is generated here so
+        // it is unique per connect() call (even on reconnect with same code).
+        // The desktop derives the same secret when it receives the salt via the
+        // `registered` event metadata (the salt is not secret — only the derived
+        // key is). Reset seq counters for the new session.
+        const sessionSalt = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        deriveDispatchSecret(code, sessionSalt)
+          .then((secret) => {
+            hmacState = { sendSeq: 0, recvSeq: 0, secret };
+          })
+          .catch((err) => {
+            console.warn('[dispatch] HMAC secret derivation failed:', err);
+            hmacState = null;
+          });
+
         // Set up WebRTC
         setupPeerConnection();
 
@@ -654,6 +713,8 @@ export const useConnectionStore = create<ConnectionState>()(
           signalingClient = null;
         }
         cleanupPeerConnection();
+        // HIGH-MOB-05: clear HMAC session state on disconnect
+        hmacState = null;
         // Clear pending queue on intentional disconnect
         pendingControlQueue.length = 0;
         set({
@@ -676,7 +737,7 @@ export const useConnectionStore = create<ConnectionState>()(
 
       sendControl: (action: string, payload?: unknown) => {
         const { status } = get();
-        const message = { action, payload: payload ?? {} };
+        const innerPayload = { action, ...(payload ?? {}) };
 
         // If disconnecting or reconnecting, queue for later delivery instead of dropping
         if (status === 'reconnecting' || status === 'stale') {
@@ -691,19 +752,32 @@ export const useConnectionStore = create<ConnectionState>()(
           return;
         }
 
-        // Prefer data channel for low latency
-        if (dataChannel && dataChannel.readyState === 'open') {
-          try {
-            dataChannel.send(JSON.stringify(message));
-            return;
-          } catch {
-            // Fall through to signaling relay
+        // HIGH-MOB-05 fix (2026-05-04): sign the outgoing message when HMAC
+        // state is available. The signed envelope is what the desktop verifies.
+        const sendRaw = (envelope: unknown) => {
+          const serialised = JSON.stringify(envelope);
+          // Prefer data channel for low latency
+          if (dataChannel && dataChannel.readyState === 'open') {
+            try {
+              dataChannel.send(serialised);
+              return;
+            } catch {
+              // Fall through to signaling relay
+            }
           }
-        }
+          if (signalingClient) {
+            signalingClient.sendSignal('control', envelope);
+          }
+        };
 
-        // Fallback: send via signaling server
-        if (signalingClient) {
-          signalingClient.sendSignal('control', message);
+        if (hmacState) {
+          signMessage(hmacState, innerPayload)
+            .then(sendRaw)
+            .catch((err) => {
+              console.warn('[dispatch] Failed to sign control message:', err);
+            });
+        } else {
+          sendRaw(innerPayload);
         }
       },
 

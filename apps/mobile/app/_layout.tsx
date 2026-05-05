@@ -41,19 +41,24 @@ export default function RootLayout() {
   const { colors: themeColors, statusBarStyle } = useTheme();
   const { isUnlocked, authenticate } = useBiometricGate();
 
-  // Initialise MMKV encryption before any store access.
-  // This must run before initialize() so that the Zustand persist middleware
-  // can access the encrypted MMKV instance when rehydrating.
+  // CRIT-MOB-01 fix (2026-05-04): initialise MMKV encryption on mount, but do
+  // NOT call initialize() here. The Supabase session must not be loaded until
+  // biometric auth has succeeded. initialize() is called in the effect below
+  // that watches `isUnlocked`.
   useEffect(() => {
-    initMmkvEncryption()
-      .then(() => initialize())
-      .catch((err) => {
-        // Fall through to initialize anyway so auth guard still runs
-        console.warn('[RootLayout] MMKV encryption init failed:', err);
-        initialize();
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    initMmkvEncryption().catch((err) => {
+      console.warn('[RootLayout] MMKV encryption init failed:', err);
+    });
   }, []);
+
+  // CRIT-MOB-01 fix: call initialize() only after the biometric gate has
+  // passed. On first mount isUnlocked is false (when biometric is enabled), so
+  // the session is never loaded until the user authenticates.
+  useEffect(() => {
+    if (!isUnlocked) return;
+    initialize();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUnlocked]);
 
   // Push notifications — register + listeners
   //
@@ -239,6 +244,11 @@ export default function RootLayout() {
   }, [url, session, isInitialized, router]);
 
   // C1b: Share intent handling — receive text/URL shared from other apps
+  //
+  // HIGH-MOB-03 fix (2026-05-04): shared content is no longer auto-sent to the
+  // LLM. We navigate to the share-preview screen where the user reviews and
+  // explicitly taps "Send to Chat". The preview screen sanitises the content
+  // and enforces the 100 KB length cap.
   useEffect(() => {
     if (!session || !isInitialized) return;
 
@@ -246,31 +256,20 @@ export default function RootLayout() {
       const initialUrl = await Linking.getInitialURL();
       if (!initialUrl) return;
 
-      // Android share intents come as plain text content, not URLs
-      // They are typically passed as EXTRA_TEXT via the intent
-      // expo-linking captures these in the URL query params
+      // Android share intents come as plain text content, not URLs.
+      // expo-linking captures these in the URL query params.
       const parsed = Linking.parse(initialUrl);
       const sharedText =
         (parsed.queryParams?.['android.intent.extra.TEXT'] as string | undefined) ??
         (parsed.queryParams?.text as string | undefined);
 
       if (sharedText && sharedText.trim()) {
-        // Create a new chat with the shared content
-        const { createConversation, sendMessage } = await import('@/stores/chatStore').then((m) =>
-          m.useChatStore.getState(),
+        // Navigate to preview — never auto-send.
+        router.push(
+          `/(app)/share-preview?text=${encodeURIComponent(sharedText)}` as Parameters<
+            typeof router.push
+          >[0],
         );
-        const { selectedModel } = await import('@/stores/modelStore').then((m) =>
-          m.useModelStore.getState(),
-        );
-        const title = sharedText.length > 40 ? sharedText.slice(0, 40).trim() + '...' : sharedText;
-        try {
-          const id = await createConversation(title);
-          sendMessage(id, sharedText, selectedModel);
-          router.push(`/(app)/chat/${id}` as Parameters<typeof router.push>[0]);
-        } catch (err) {
-          // Fall through — app opens normally
-          console.warn('[RootLayout] Share intent handling failed:', err);
-        }
       }
     };
 
