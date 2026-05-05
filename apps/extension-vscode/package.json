@@ -311,6 +311,16 @@
         "command": "agi-workforce.refreshContext",
         "title": "AGI Workforce: Refresh Context",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "agi-workforce.openActionSheet",
+        "title": "AGI Workforce: Open Actions",
+        "icon": "$(menu)"
+      },
+      {
+        "command": "agi-workforce.rewindLast",
+        "title": "AGI Workforce: Rewind Last",
+        "icon": "$(history)"
       }
     ],
     "chatParticipants": [
@@ -571,7 +581,29 @@
         "agiWorkforce.agent.planMode": {
           "type": "boolean",
           "default": false,
-          "description": "Show a plan before executing agent tasks (requires confirmation)"
+          "description": "Deprecated — use agiWorkforce.agent.mode instead. When true, maps to agent.mode = 'plan'."
+        },
+        "agiWorkforce.agent.mode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "auto",
+            "plan",
+            "bypass"
+          ],
+          "default": "auto",
+          "description": "Default agent mode for new conversations. 'ask' confirms every edit, 'auto' edits without confirmation, 'plan' proposes a plan before any edits, 'bypass' skips all approval prompts."
+        },
+        "agiWorkforce.agent.effort": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "max"
+          ],
+          "default": "medium",
+          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis."
         },
         "agiWorkforce.agent.maxIterations": {
           "type": "number",
