@@ -35,6 +35,37 @@
   /* Line height */
   --line-height-chat: 1.6;
 
+  /* Editorial palette — operator-broadsheet redesign 2026-05-05.
+     Paper for "reading" sections (manifesto, differentiators, pricing).
+     Graphite for "operating" sections (cli, surfaces, dispatch). */
+  --color-paper: #faf9f7;
+  --color-paper-2: #f3f0ea;
+  --color-ink: #0a0908;
+  --color-ink-2: #2a2826;
+  --color-graphite: #0a0908;
+  --color-graphite-2: #131110;
+  --color-cream-on-graphite: #ede8df;
+  --color-fg-muted: #a8a4a0;
+  --color-fg-quiet: #888480;
+  --color-fg-faint: #555150;
+
+  /* Brand: amber as RULE color (structural rule lines, drop-caps, carets).
+     Hex unchanged; role changes from accent to ink. */
+  --color-rule: #c8892a;
+  --color-rule-soft: rgba(200, 137, 42, 0.22);
+  --color-rule-strong: #c8892a;
+
+  /* Paired text-on-amber for body emphasis (the bare #c8892a fails 4.5:1 on
+     body-size text against #09090b at ~6.2:1 — fine for ≥18px bold, fails for
+     small body). Use --color-amber-text on body, keep --color-rule for ≥18px
+     and structural rule lines. */
+  --color-amber-text: #e0a347;
+  --color-amber-ink: #09090b;
+
+  /* Single secondary accent — used only for status stamps, never as fill. */
+  --color-stamp-oxblood: #8b1a1a;
+  --color-stamp-ok: #1e6b3b;
+
   /* Custom colors - Cream */
   --color-cream-50: #fcfcf9;
   --color-cream-100: #f9f9f6;
