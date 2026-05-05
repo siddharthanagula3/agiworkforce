@@ -1,304 +1,318 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, CheckCircle2, AlertCircle, Minus } from 'lucide-react';
+import Link from 'next/link';
 
-import { Header } from '@/components/layout/Header';
-import { MarketingFooter } from '@/components/marketing/MarketingFooter';
 import { MARKETING } from '@/lib/marketing-constants';
+import { EditorialPage } from '@/components/marketing/editorial/EditorialPage';
+import { RuledSection } from '@/components/marketing/editorial/RuledSection';
+import { Slug } from '@/components/marketing/editorial/Slug';
+import { Specimen } from '@/components/marketing/editorial/Specimen';
+import { MonoButton } from '@/components/marketing/editorial/MonoButton';
+import { DispatchSection } from '@/components/marketing/editorial/DispatchSection';
 
 export const metadata: Metadata = {
   title: 'AGI Workforce vs Gemini | Honest Comparison',
   description:
-    'AGI Workforce vs Google Gemini: multi-provider support, BYOK, local LLM, CLI, desktop app, mobile, computer use, browser extension, VS Code extension, and pricing compared.',
+    'AGI Workforce vs Google Gemini: multi-provider support, BYOK, local LLM, cross-provider thread, CLI, desktop, and pricing compared honestly.',
+  alternates: { canonical: '/compare/gemini' },
   openGraph: {
-    title: 'AGI Workforce vs Gemini — An Honest Comparison',
+    title: 'AGI Workforce vs Gemini | Honest Comparison',
     description:
-      'Gemini 3 has impressive multimodal and long-context capabilities. AGI Workforce runs Gemini alongside Claude, GPT-5, and local models in one thread.',
+      'Gemini has the longest context window in production and deep Google Workspace integration. Our lane is running Gemini alongside eleven other providers.',
     type: 'website',
     url: 'https://agiworkforce.com/compare/gemini',
   },
-  alternates: { canonical: '/compare/gemini' },
 };
 
-type RowStatus = 'yes' | 'no' | 'partial' | 'waitlist';
-
-interface CompareRow {
-  feature: string;
-  us: RowStatus;
-  usNote: string;
-  them: RowStatus;
-  themNote: string;
+interface ScorecardRow {
+  capability: string;
+  us: string;
+  them: string;
 }
 
-const rows: CompareRow[] = [
+const scorecard: ScorecardRow[] = [
   {
-    feature: 'Models available',
-    us: 'yes',
-    usNote: `${MARKETING.providers.display} providers (Gemini 3, Claude 4, GPT-5, Grok 4, and more)`,
-    them: 'partial',
-    themNote: 'Gemini family only',
+    capability: 'Models available',
+    us: `${MARKETING.providers.display} providers (Gemini, Claude, GPT, Grok, DeepSeek, and more)`,
+    them: 'Gemini family only',
   },
   {
-    feature: 'BYOK support',
-    us: 'yes',
-    usNote: `All ${MARKETING.providers.display} cloud providers`,
-    them: 'no',
-    themNote: 'Subscription-only; no API key passthrough',
+    capability: 'BYOK support',
+    us: `All ${MARKETING.providers.display} cloud providers`,
+    them: 'Subscription-only; no API key passthrough',
   },
   {
-    feature: 'Local LLM (Ollama / LM Studio)',
-    us: 'yes',
-    usNote: 'Desktop only, free forever',
-    them: 'no',
-    themNote: 'Not supported',
+    capability: 'Local LLM',
+    us: 'Yes — Ollama + LM Studio (Desktop, free forever)',
+    them: 'Not supported',
   },
   {
-    feature: 'Cross-provider switching',
-    us: 'yes',
-    usNote: 'Mid-conversation, context preserved',
-    them: 'no',
-    themNote: 'Gemini models only',
+    capability: 'Cross-provider thread',
+    us: 'Yes — mid-conversation, context preserved',
+    them: 'Gemini models only',
   },
   {
-    feature: 'CLI',
-    us: 'yes',
-    usNote: 'Rust CLI, 22 subcommands, TUI',
-    them: 'partial',
-    themNote: 'Gemini CLI (Node.js, in development)',
+    capability: 'CLI',
+    us: 'Yes — Rust, 22 subcommands, TUI',
+    them: 'Yes — Gemini CLI (Node.js)',
   },
   {
-    feature: 'Desktop app',
-    us: 'yes',
-    usNote: 'Tauri, macOS / Windows / Linux',
-    them: 'partial',
-    themNote: 'Gemini web app only; no native desktop',
+    capability: 'Desktop app',
+    us: 'Yes — Tauri, macOS / Windows / Linux',
+    them: 'No — web app only',
   },
   {
-    feature: 'Mobile app',
-    us: 'yes',
-    usNote: 'iOS + Android (Expo)',
-    them: 'yes',
-    themNote: 'Google Gemini iOS and Android apps',
+    capability: 'Mobile app',
+    us: 'Partial — iOS + Android (Expo, in progress)',
+    them: 'Yes — Google Gemini iOS + Android',
   },
   {
-    feature: 'Computer use',
-    us: 'partial',
-    usNote: 'Desktop: browser, terminal, file I/O',
-    them: 'partial',
-    themNote: 'Project Astra features; limited GA',
+    capability: 'Computer use',
+    us: 'Partial — browser, terminal, file I/O',
+    them: 'Partial — Project Astra features, limited GA',
   },
   {
-    feature: 'Browser extension',
-    us: 'yes',
-    usNote: 'Chrome MV3, v1.2.0',
-    them: 'partial',
-    themNote: 'Google ships Gemini in Chrome sidebar',
+    capability: 'Browser extension',
+    us: 'Yes — Chrome MV3 v1.2.0',
+    them: 'Partial — Gemini in Chrome sidebar',
   },
   {
-    feature: 'VS Code extension',
-    us: 'yes',
-    usNote: 'v0.3.0, multi-provider',
-    them: 'yes',
-    themNote: 'Gemini Code Assist for VS Code',
+    capability: 'VS Code extension',
+    us: 'Yes — v0.3.0, multi-provider',
+    them: 'Yes — Gemini Code Assist for VS Code',
   },
   {
-    feature: 'Free tier',
-    us: 'yes',
-    usNote: 'Local mode: free forever. BYOK: free forever.',
-    them: 'yes',
-    themNote: 'Gemini free tier exists',
+    capability: 'Google Workspace integration',
+    us: 'Not built-in (route via BYOK)',
+    them: 'Yes — deep Docs/Sheets/Gmail/Calendar',
   },
   {
-    feature: 'Pricing (paid)',
-    us: 'partial',
-    usNote: 'Hobby subscription + BYOK; Pro/Max on waitlist',
-    them: 'partial',
-    themNote: 'Gemini Advanced (Google One AI Premium)',
+    capability: 'Free tier',
+    us: 'Local mode: free forever. BYOK: free forever.',
+    them: 'Gemini free tier exists',
   },
 ];
 
-function StatusIcon({ status }: { status: RowStatus }) {
-  if (status === 'yes') return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />;
-  if (status === 'no') return <AlertCircle className="h-4 w-4 shrink-0 text-red-400/70" />;
-  return <Minus className="h-4 w-4 shrink-0 text-[#888480]" />;
-}
-
 export default function CompareGeminiPage() {
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#edebe8]">
-      <Header />
+    <EditorialPage tier="mixed">
+      {/* S1 — Review masthead */}
+      <RuledSection tier="paper" id="compare-gemini-hero">
+        <div className="py-4 pb-2">
+          <Link
+            href="/compare"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] hover:text-[var(--color-ink)] transition-colors"
+          >
+            ← All comparisons
+          </Link>
+        </div>
+        <div className="pt-4 pb-16 md:pb-24 max-w-3xl">
+          <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] mb-6">
+            REVIEW · 2026-05-05
+          </div>
 
-      <main className="pt-24">
-        {/* Hero */}
-        <section className="relative overflow-hidden pt-20 pb-16 md:pt-28 md:pb-20">
-          <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:28px_28px]" />
-          <div className="container relative mx-auto px-4">
-            <Link
-              href="/compare"
-              className="mb-8 inline-flex items-center gap-1.5 text-sm text-[#555150] hover:text-[#888480]"
+          <h1 className="font-display leading-[0.95] tracking-tight">
+            <span
+              className="block text-[clamp(2rem,6vw,4rem)]"
+              style={{ fontVariationSettings: '"wght" 400' }}
             >
-              <ArrowRight className="h-3.5 w-3.5 rotate-180" /> All comparisons
-            </Link>
-            <div className="max-w-3xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/[0.06] px-3 py-1 text-sm text-blue-400">
-                vs Google
-              </div>
-              <h1 className="font-heading text-4xl tracking-tight md:text-5xl lg:text-6xl">
-                AGI Workforce vs Gemini
-              </h1>
-              <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#888480]">
-                Gemini 3 is genuinely impressive for multimodal tasks and long-document analysis.
-                AGI Workforce surfaces those capabilities alongside Claude, GPT-5, and local models
-                in one thread.
+              AGI Workforce
+            </span>
+            <span
+              className="block italic text-[clamp(2rem,6vw,4rem)] border-b-[3px] border-[var(--color-rule)] pb-1 mt-1"
+              style={{ fontVariationSettings: '"wght" 700' }}
+            >
+              vs Gemini.
+            </span>
+          </h1>
+
+          <div className="mt-10">
+            <Specimen dropCap columns={2}>
+              <p>
+                Gemini has the longest context window in production and Google integration is
+                unmatched. Drive, Gmail, Calendar, Docs, and Sheets all connect natively. Gemini
+                Code Assist is solid in JetBrains and VS Code. The multimodal capabilities across
+                image, audio, and video are genuinely ahead of most alternatives. None of that is in
+                dispute.
               </p>
-            </div>
+              <p>
+                The case for AGI Workforce is multi-provider routing. Gemini becomes one of twelve
+                providers in one thread. When context fits in 200K and you would rather route to
+                Claude or GPT for a specific turn, the interface handles it. When Google account is
+                not the auth boundary you want, AGI Workforce does not require it.
+              </p>
+            </Specimen>
           </div>
-        </section>
+        </div>
+      </RuledSection>
 
-        {/* Comparison table */}
-        <section className="border-t border-white/[0.05] py-16 md:py-20">
-          <div className="container mx-auto px-4">
-            <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/[0.06]">
-                    <th className="py-4 px-5 text-left text-xs font-semibold uppercase tracking-widest text-[#555150]">
-                      Feature
-                    </th>
-                    <th className="py-4 px-5 text-left text-xs font-semibold uppercase tracking-widest text-[#c8892a]">
-                      AGI Workforce
-                    </th>
-                    <th className="py-4 px-5 text-left text-xs font-semibold uppercase tracking-widest text-[#444240]">
-                      Gemini
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, i) => (
-                    <tr
-                      key={row.feature}
-                      className={`border-b border-white/[0.04] ${i % 2 === 0 ? 'bg-white/[0.01]' : ''}`}
-                    >
-                      <td className="py-4 px-5 text-sm font-medium text-[#a8a4a0]">
-                        {row.feature}
-                      </td>
-                      <td className="py-4 px-5 text-sm">
-                        <div className="flex items-start gap-2">
-                          <StatusIcon status={row.us} />
-                          <span className="text-[#888480]">{row.usNote}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-5 text-sm">
-                        <div className="flex items-start gap-2">
-                          <StatusIcon status={row.them} />
-                          <span className="text-[#666260]">{row.themNote}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-xs text-[#444240]">
-              Accurate as of May 2026. Google ships Gemini mobile apps, VS Code extension (Gemini
-              Code Assist), and Chrome sidebar integration. We acknowledge all of these.
+      {/* S2 — When Gemini wins */}
+      <RuledSection tier="paper" slug={<Slug index="01" kicker="WHEN GEMINI WINS" />}>
+        <div className="py-14 md:py-20">
+          <h2
+            className="font-display text-2xl md:text-3xl mb-8"
+            style={{ fontVariationSettings: '"wght" 600' }}
+          >
+            When to use Gemini instead.
+          </h2>
+
+          <Specimen columns={2}>
+            <p>
+              The 2M-token context window is Gemini's most defensible edge. If your task genuinely
+              requires scanning a full codebase or a long document collection in one context,
+              Gemini's native infrastructure handles that at scale in a way that has no equivalent
+              elsewhere.
             </p>
-          </div>
-        </section>
+            <p>
+              Deep Google Workspace integration is the other unambiguous win. If your entire
+              workflow lives in Docs, Sheets, Gmail, and Calendar and you want AI natively in those
+              surfaces, Gemini Advanced is the right choice. Cheapest frontier-tier inference via
+              Google AI API is also worth noting for cost-sensitive workloads.
+            </p>
+          </Specimen>
 
-        {/* When to use Gemini instead */}
-        <section className="border-y border-white/[0.05] bg-[#0c0c0e] py-16 md:py-20">
-          <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl">
-              <h2 className="mb-6 font-heading text-2xl tracking-tight md:text-3xl">
-                When to use Gemini instead
-              </h2>
-              <div className="space-y-3">
-                {[
-                  'You live in the Google Workspace ecosystem and want deep Docs/Sheets integration.',
-                  'You need the native Gemini Advanced experience with Google One subscription.',
-                  'You are already using Gemini Code Assist and it covers your IDE needs.',
-                  "You rely on Google's native multimodal features (image, audio, video) with Gemini.",
-                  'You prefer Google-managed privacy and compliance for enterprise data.',
-                ].map((item) => (
-                  <div key={item} className="flex items-start gap-3 text-sm text-[#888480]">
-                    <div className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#444240]" />
-                    {item}
-                  </div>
-                ))}
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-0">
+            {[
+              'You live in Google Workspace and want deep Docs/Sheets/Gmail integration.',
+              'Your task requires the 2M-token context window at scale.',
+              'You rely on Gemini Code Assist and it covers your IDE needs.',
+              "You need Google's native multimodal features (image, audio, video) natively.",
+              'Google-managed privacy and compliance are required for your enterprise data.',
+            ].map((item) => (
+              <div
+                key={item}
+                className="border-b border-[var(--color-rule-soft)] py-4 pr-8 flex items-start gap-3"
+              >
+                <span className="font-mono text-[var(--color-fg-quiet)] mt-0.5 shrink-0">—</span>
+                <span className="text-sm leading-relaxed text-[var(--color-fg-muted)]">{item}</span>
               </div>
-            </div>
+            ))}
           </div>
-        </section>
+        </div>
+      </RuledSection>
 
-        {/* When AGI Workforce wins */}
-        <section className="py-16 md:py-20">
-          <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl">
-              <h2 className="mb-6 font-heading text-2xl tracking-tight md:text-3xl">
-                When AGI Workforce wins
-              </h2>
-              <div className="space-y-4">
-                {[
-                  {
-                    title: 'Gemini 3 alongside every other provider',
-                    desc: 'Use Gemini for long-document analysis, Claude 4 for reasoning, GPT-5 for code review. One thread, no context loss.',
-                  },
-                  {
-                    title: 'BYOK: your Google API key, your cost',
-                    desc: 'Bring your own Google AI API key. Pay Google directly at published rates. No Gemini Advanced subscription needed for API access.',
-                  },
-                  {
-                    title: 'Native desktop app',
-                    desc: 'Gemini has no native desktop app. AGI Workforce Desktop runs natively on macOS, Windows, and Linux with local storage and offline capability.',
-                  },
-                  {
-                    title: 'Local fallback when offline',
-                    desc: 'No internet? Ollama or LM Studio runs on your machine. Same AGI Workforce interface, zero cloud dependency.',
-                  },
-                ].map(({ title, desc }) => (
-                  <div
-                    key={title}
-                    className="rounded-xl border border-[#c8892a]/15 bg-[#c8892a]/[0.03] p-5"
+      {/* S3 — When AGI Workforce wins */}
+      <RuledSection tier="paper" slug={<Slug index="02" kicker="WHEN AGI WORKFORCE WINS" />}>
+        <div className="py-14 md:py-20">
+          <h2
+            className="font-display text-2xl md:text-3xl mb-8"
+            style={{ fontVariationSettings: '"wght" 600' }}
+          >
+            When the multi-provider lane wins.
+          </h2>
+
+          <Specimen columns={2}>
+            <p>
+              When context fits in 200K and you would rather route to Claude for reasoning or GPT
+              for code on that specific turn, AGI Workforce handles the routing. Use Gemini for
+              long-document analysis, Claude for planning, GPT for code review. One thread, no
+              context loss.
+            </p>
+            <p>
+              BYOK means your Google API key stays your key. You pay Google directly at published
+              rates. No Gemini Advanced subscription needed for API access. And when Google account
+              is not the auth boundary you want, local mode on Desktop requires no account at all.
+            </p>
+          </Specimen>
+
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              {
+                title: 'Gemini alongside every other provider',
+                desc: 'Gemini for long-document analysis, Claude for reasoning, GPT for code review. One thread, no context loss.',
+              },
+              {
+                title: 'BYOK: your Google key, your cost',
+                desc: 'Bring your Google AI API key. Pay Google directly at published rates. No Gemini Advanced subscription required.',
+              },
+              {
+                title: 'Native desktop app',
+                desc: 'Gemini has no native desktop app. AGI Workforce Desktop runs natively on macOS, Windows, and Linux with local storage.',
+              },
+              {
+                title: 'Local fallback when offline',
+                desc: 'No internet? Ollama or LM Studio runs on your machine. Same AGI Workforce interface, zero cloud dependency.',
+              },
+            ].map(({ title, desc }) => (
+              <div key={title} className="border border-[var(--color-rule-soft)] p-6">
+                <div
+                  className="font-display text-base mb-2"
+                  style={{ fontVariationSettings: '"wght" 600' }}
+                >
+                  {title}
+                </div>
+                <p className="text-sm leading-relaxed text-[var(--color-fg-muted)]">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </RuledSection>
+
+      {/* S4 — Scorecard */}
+      <RuledSection tier="graphite" slug={<Slug index="03" kicker="SCORECARD" />}>
+        <div className="py-14 md:py-20">
+          <h2
+            className="font-display text-2xl md:text-3xl mb-6 text-[var(--color-cream-on-graphite)]"
+            style={{ fontVariationSettings: '"wght" 600' }}
+          >
+            Side by side.
+          </h2>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] mb-8">
+            Accurate as of May 2026. Google ships Gemini mobile, VS Code ext (Code Assist), Chrome
+            sidebar, Gemini CLI. We acknowledge all of these.
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-[var(--color-rule-soft)]">
+                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] text-left py-3 pr-6 w-[30%]">
+                    Capability
+                  </th>
+                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-amber-text)] text-left py-3 px-4 w-[35%]">
+                    AGI Workforce
+                  </th>
+                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] text-left py-3 px-4 w-[35%]">
+                    Gemini
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {scorecard.map((row, i) => (
+                  <tr
+                    key={row.capability}
+                    className={[
+                      'border-b border-[var(--color-rule-soft)]',
+                      i % 2 === 0 ? 'bg-white/[0.02]' : '',
+                    ].join(' ')}
                   >
-                    <h3 className="mb-1.5 font-semibold text-[#edebe8]">{title}</h3>
-                    <p className="text-sm leading-relaxed text-[#888480]">{desc}</p>
-                  </div>
+                    <td className="font-mono text-[11px] text-[var(--color-fg-muted)] py-3 pr-6 align-top">
+                      {row.capability}
+                    </td>
+                    <td className="text-[13px] text-[var(--color-amber-text)] py-3 px-4 align-top leading-snug">
+                      {row.us}
+                    </td>
+                    <td className="text-[13px] text-[var(--color-fg-muted)] py-3 px-4 align-top leading-snug">
+                      {row.them}
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </div>
+              </tbody>
+            </table>
           </div>
-        </section>
 
-        {/* CTA */}
-        <section className="border-t border-white/[0.05] bg-[#0c0c0e] py-16 md:py-20">
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="font-heading text-2xl tracking-tight md:text-3xl">
-              Use Gemini in AGI Workforce.
-            </h2>
-            <p className="mx-auto mt-3 max-w-md text-[#888480]">
-              Bring your Google API key. Gemini 3 models, alongside Claude 4, GPT-5, and local AI.
-            </p>
-            <div className="mt-6 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link
-                href="/download"
-                className="group inline-flex h-11 items-center gap-2 rounded-md bg-[#c8892a] px-7 text-sm font-semibold text-[#09090b] transition-all hover:bg-[#d4993a]"
-              >
-                Download Free
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                href="/byok"
-                className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-7 text-sm font-medium text-[#a8a4a0] hover:border-white/20 hover:text-[#edebe8]"
-              >
-                Learn about BYOK
-              </Link>
-            </div>
+          <div className="mt-10 flex flex-col sm:flex-row gap-4">
+            <MonoButton href="/byok" variant="primary" prefix="./">
+              Learn about BYOK
+            </MonoButton>
+            <MonoButton href="/download" variant="ghost" prefix="./">
+              Download free
+            </MonoButton>
           </div>
-        </section>
-      </main>
+        </div>
+      </RuledSection>
 
-      <MarketingFooter />
-    </div>
+      {/* S5 — Dispatch */}
+      <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
+    </EditorialPage>
   );
 }

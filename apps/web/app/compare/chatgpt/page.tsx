@@ -1,304 +1,316 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, CheckCircle2, AlertCircle, Minus } from 'lucide-react';
+import Link from 'next/link';
 
-import { Header } from '@/components/layout/Header';
-import { MarketingFooter } from '@/components/marketing/MarketingFooter';
 import { MARKETING } from '@/lib/marketing-constants';
+import { EditorialPage } from '@/components/marketing/editorial/EditorialPage';
+import { RuledSection } from '@/components/marketing/editorial/RuledSection';
+import { Slug } from '@/components/marketing/editorial/Slug';
+import { Specimen } from '@/components/marketing/editorial/Specimen';
+import { MonoButton } from '@/components/marketing/editorial/MonoButton';
+import { DispatchSection } from '@/components/marketing/editorial/DispatchSection';
 
 export const metadata: Metadata = {
   title: 'AGI Workforce vs ChatGPT | Honest Comparison',
   description:
-    'AGI Workforce vs ChatGPT: multi-provider support, BYOK, local LLM, CLI, desktop app, mobile, computer use, browser extension, VS Code extension, and pricing compared.',
+    'AGI Workforce vs ChatGPT: multi-provider support, BYOK, local LLM, cross-provider thread, CLI, desktop, and pricing compared honestly.',
+  alternates: { canonical: '/compare/chatgpt' },
   openGraph: {
-    title: 'AGI Workforce vs ChatGPT — An Honest Comparison',
+    title: 'AGI Workforce vs ChatGPT | Honest Comparison',
     description:
-      'ChatGPT is excellent for OpenAI models. AGI Workforce adds Claude, Gemini, DeepSeek, local LLMs, and more in the same thread.',
+      'ChatGPT is the most polished consumer AI product. Our lane is multi-provider routing, BYOK, and local LLM — none of which OpenAI offers.',
     type: 'website',
     url: 'https://agiworkforce.com/compare/chatgpt',
   },
-  alternates: { canonical: '/compare/chatgpt' },
 };
 
-type RowStatus = 'yes' | 'no' | 'partial' | 'waitlist';
-
-interface CompareRow {
-  feature: string;
-  us: RowStatus;
-  usNote: string;
-  them: RowStatus;
-  themNote: string;
+interface ScorecardRow {
+  capability: string;
+  us: string;
+  them: string;
 }
 
-const rows: CompareRow[] = [
+const scorecard: ScorecardRow[] = [
   {
-    feature: 'Models available',
-    us: 'yes',
-    usNote: `${MARKETING.providers.display} providers (GPT-5, Claude 4, Gemini 3, Grok 4, and more)`,
-    them: 'partial',
-    themNote: 'GPT family + some partner models',
+    capability: 'Models available',
+    us: `${MARKETING.providers.display} providers (GPT, Claude, Gemini, Grok, DeepSeek, and more)`,
+    them: 'GPT family + some partner models',
   },
   {
-    feature: 'BYOK support',
-    us: 'yes',
-    usNote: `All ${MARKETING.providers.display} cloud providers`,
-    them: 'no',
-    themNote: 'No BYOK; subscription-only',
+    capability: 'BYOK support',
+    us: `All ${MARKETING.providers.display} cloud providers`,
+    them: 'No — subscription-only',
   },
   {
-    feature: 'Local LLM (Ollama / LM Studio)',
-    us: 'yes',
-    usNote: 'Desktop only, free forever',
-    them: 'no',
-    themNote: 'Not supported',
+    capability: 'Local LLM',
+    us: 'Yes — Ollama + LM Studio (Desktop, free forever)',
+    them: 'Not supported',
   },
   {
-    feature: 'Cross-provider switching',
-    us: 'yes',
-    usNote: 'Mid-conversation, context preserved',
-    them: 'no',
-    themNote: 'OpenAI models only; no cross-provider',
+    capability: 'Cross-provider thread',
+    us: 'Yes — mid-conversation, context preserved',
+    them: 'OpenAI models only; no cross-provider',
   },
   {
-    feature: 'CLI',
-    us: 'yes',
-    usNote: 'Rust CLI, 22 subcommands, TUI',
-    them: 'yes',
-    themNote: 'OpenAI Codex CLI (Rust, agentic, MCP)',
+    capability: 'CLI',
+    us: 'Yes — Rust, 22 subcommands, TUI',
+    them: 'Yes — OpenAI Codex CLI (Rust, agentic, MCP)',
   },
   {
-    feature: 'Desktop app',
-    us: 'yes',
-    usNote: 'Tauri, macOS / Windows / Linux',
-    them: 'yes',
-    themNote: 'ChatGPT desktop app, macOS / Windows',
+    capability: 'Desktop app',
+    us: 'Yes — Tauri, macOS / Windows / Linux',
+    them: 'Yes — ChatGPT desktop, macOS / Windows',
   },
   {
-    feature: 'Mobile app',
-    us: 'yes',
-    usNote: 'iOS + Android (Expo)',
-    them: 'yes',
-    themNote: 'ChatGPT iOS and Android apps',
+    capability: 'Mobile app',
+    us: 'Partial — iOS + Android (Expo, in progress)',
+    them: 'Yes — ChatGPT iOS + Android',
   },
   {
-    feature: 'Computer use',
-    us: 'partial',
-    usNote: 'Desktop: browser, terminal, file I/O',
-    them: 'partial',
-    themNote: 'Operator/canvas features; not full computer use',
+    capability: 'Computer use',
+    us: 'Partial — browser, terminal, file I/O',
+    them: 'No — Operator / canvas features; not full computer use',
   },
   {
-    feature: 'Browser extension',
-    us: 'yes',
-    usNote: 'Chrome MV3, v1.2.0',
-    them: 'yes',
-    themNote: 'OpenAI ships Chrome extension',
+    capability: 'Browser extension',
+    us: 'Yes — Chrome MV3 v1.2.0',
+    them: 'Yes — OpenAI ships Chrome extension',
   },
   {
-    feature: 'VS Code extension',
-    us: 'yes',
-    usNote: 'v0.3.0, multi-provider',
-    them: 'yes',
-    themNote: 'GitHub Copilot (OpenAI-backed)',
+    capability: 'VS Code extension',
+    us: 'Yes — v0.3.0, multi-provider',
+    them: 'Yes — GitHub Copilot (OpenAI-backed)',
   },
   {
-    feature: 'Free tier',
-    us: 'yes',
-    usNote: 'Local mode: free forever. BYOK: free forever.',
-    them: 'yes',
-    themNote: 'Free tier with usage limits',
+    capability: 'Free tier',
+    us: 'Local mode: free forever. BYOK: free forever.',
+    them: 'Free tier with usage limits',
   },
   {
-    feature: 'Pricing (paid)',
-    us: 'partial',
-    usNote: 'Hobby subscription + BYOK; Pro/Max on waitlist',
-    them: 'partial',
-    themNote: 'ChatGPT Plus / Pro / Team / Enterprise',
+    capability: 'Image generation',
+    us: 'Not built-in (route to providers via BYOK)',
+    them: 'Yes — DALL-E natively integrated',
   },
 ];
 
-function StatusIcon({ status }: { status: RowStatus }) {
-  if (status === 'yes') return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />;
-  if (status === 'no') return <AlertCircle className="h-4 w-4 shrink-0 text-red-400/70" />;
-  return <Minus className="h-4 w-4 shrink-0 text-[#888480]" />;
-}
-
 export default function CompareChatGPTPage() {
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#edebe8]">
-      <Header />
+    <EditorialPage tier="mixed">
+      {/* S1 — Review masthead */}
+      <RuledSection tier="paper" id="compare-chatgpt-hero">
+        <div className="py-4 pb-2">
+          <Link
+            href="/compare"
+            className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] hover:text-[var(--color-ink)] transition-colors"
+          >
+            ← All comparisons
+          </Link>
+        </div>
+        <div className="pt-4 pb-16 md:pb-24 max-w-3xl">
+          <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] mb-6">
+            REVIEW · 2026-05-05
+          </div>
 
-      <main className="pt-24">
-        {/* Hero */}
-        <section className="relative overflow-hidden pt-20 pb-16 md:pt-28 md:pb-20">
-          <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:28px_28px]" />
-          <div className="container relative mx-auto px-4">
-            <Link
-              href="/compare"
-              className="mb-8 inline-flex items-center gap-1.5 text-sm text-[#555150] hover:text-[#888480]"
+          <h1 className="font-display leading-[0.95] tracking-tight">
+            <span
+              className="block text-[clamp(2rem,6vw,4rem)]"
+              style={{ fontVariationSettings: '"wght" 400' }}
             >
-              <ArrowRight className="h-3.5 w-3.5 rotate-180" /> All comparisons
-            </Link>
-            <div className="max-w-3xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-1 text-sm text-emerald-400">
-                vs OpenAI
-              </div>
-              <h1 className="font-heading text-4xl tracking-tight md:text-5xl lg:text-6xl">
-                AGI Workforce vs ChatGPT
-              </h1>
-              <p className="mt-5 max-w-xl text-lg leading-relaxed text-[#888480]">
-                ChatGPT is the most widely used AI product in the world. AGI Workforce does not try
-                to replace it for pure GPT workflows. We add every other provider alongside it.
+              AGI Workforce
+            </span>
+            <span
+              className="block italic text-[clamp(2rem,6vw,4rem)] border-b-[3px] border-[var(--color-rule)] pb-1 mt-1"
+              style={{ fontVariationSettings: '"wght" 700' }}
+            >
+              vs ChatGPT.
+            </span>
+          </h1>
+
+          <div className="mt-10">
+            <Specimen dropCap columns={2}>
+              <p>
+                ChatGPT is the most polished consumer product in the AI space. OpenAI ships GPT
+                models broadly. Codex CLI is genuinely good. The ChatGPT desktop app, voice mode,
+                custom GPTs, and DALL-E integration are all real products that work well. None of
+                that is in dispute.
               </p>
-            </div>
+              <p>
+                The case for AGI Workforce is multi-provider routing, BYOK, and local LLM. None of
+                those are things OpenAI offers. If your work spans GPT and Claude and local models
+                in the same thread, or if you need keys to stay yours at provider rates, that lane
+                is ours.
+              </p>
+            </Specimen>
           </div>
-        </section>
+        </div>
+      </RuledSection>
 
-        {/* Comparison table */}
-        <section className="border-t border-white/[0.05] py-16 md:py-20">
-          <div className="container mx-auto px-4">
-            <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/[0.06]">
-                    <th className="py-4 px-5 text-left text-xs font-semibold uppercase tracking-widest text-[#555150]">
-                      Feature
-                    </th>
-                    <th className="py-4 px-5 text-left text-xs font-semibold uppercase tracking-widest text-[#c8892a]">
-                      AGI Workforce
-                    </th>
-                    <th className="py-4 px-5 text-left text-xs font-semibold uppercase tracking-widest text-[#444240]">
-                      ChatGPT
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, i) => (
-                    <tr
-                      key={row.feature}
-                      className={`border-b border-white/[0.04] ${i % 2 === 0 ? 'bg-white/[0.01]' : ''}`}
-                    >
-                      <td className="py-4 px-5 text-sm font-medium text-[#a8a4a0]">
-                        {row.feature}
-                      </td>
-                      <td className="py-4 px-5 text-sm">
-                        <div className="flex items-start gap-2">
-                          <StatusIcon status={row.us} />
-                          <span className="text-[#888480]">{row.usNote}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-5 text-sm">
-                        <div className="flex items-start gap-2">
-                          <StatusIcon status={row.them} />
-                          <span className="text-[#666260]">{row.themNote}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-xs text-[#444240]">
-              Accurate as of May 2026. OpenAI ships desktop, mobile, Codex CLI, and browser
-              extension. GitHub Copilot (OpenAI-backed) ships VS Code extension. We acknowledge all
-              of these.
+      {/* S2 — When ChatGPT wins */}
+      <RuledSection tier="paper" slug={<Slug index="01" kicker="WHEN CHATGPT WINS" />}>
+        <div className="py-14 md:py-20">
+          <h2
+            className="font-display text-2xl md:text-3xl mb-8"
+            style={{ fontVariationSettings: '"wght" 600' }}
+          >
+            When to use ChatGPT instead.
+          </h2>
+
+          <Specimen columns={2}>
+            <p>
+              Pure GPT users who never need another provider have no reason to add AGI Workforce.
+              ChatGPT has the most polished consumer interface, the largest user base, and OpenAI's
+              tightest integration of their own features: custom GPTs, GPT Store, Sora video, DALL-E
+              image generation, and voice mode.
             </p>
-          </div>
-        </section>
+            <p>
+              If you are already in the ChatGPT Team or Enterprise workflow with managed accounts
+              and compliance controls, staying there is the simpler choice. GitHub Copilot is also a
+              mature, deeply integrated VS Code AI — if that covers your IDE needs, no reason to
+              switch.
+            </p>
+          </Specimen>
 
-        {/* When to use ChatGPT instead */}
-        <section className="border-y border-white/[0.05] bg-[#0c0c0e] py-16 md:py-20">
-          <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl">
-              <h2 className="mb-6 font-heading text-2xl tracking-tight md:text-3xl">
-                When to use ChatGPT instead
-              </h2>
-              <div className="space-y-3">
-                {[
-                  'You exclusively use GPT models and never need alternatives.',
-                  'You rely on ChatGPT plugins, custom GPTs, or DALL-E image generation.',
-                  'You want the most polished interface specifically designed for GPT.',
-                  'You use ChatGPT Team or Enterprise with managed accounts.',
-                  'GitHub Copilot is already your VS Code AI and you only need GPT in the IDE.',
-                ].map((item) => (
-                  <div key={item} className="flex items-start gap-3 text-sm text-[#888480]">
-                    <div className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#444240]" />
-                    {item}
-                  </div>
-                ))}
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-0">
+            {[
+              'You exclusively use GPT models and never need alternatives.',
+              'You rely on ChatGPT custom GPTs, DALL-E image gen, or Sora video.',
+              'You want GPT Voice or the native ChatGPT voice experience.',
+              'You use ChatGPT Team or Enterprise with managed accounts.',
+              'GitHub Copilot is already your VS Code AI and GPT covers everything else.',
+            ].map((item) => (
+              <div
+                key={item}
+                className="border-b border-[var(--color-rule-soft)] py-4 pr-8 flex items-start gap-3"
+              >
+                <span className="font-mono text-[var(--color-fg-quiet)] mt-0.5 shrink-0">—</span>
+                <span className="text-sm leading-relaxed text-[var(--color-fg-muted)]">{item}</span>
               </div>
-            </div>
+            ))}
           </div>
-        </section>
+        </div>
+      </RuledSection>
 
-        {/* When AGI Workforce wins */}
-        <section className="py-16 md:py-20">
-          <div className="container mx-auto px-4">
-            <div className="mx-auto max-w-3xl">
-              <h2 className="mb-6 font-heading text-2xl tracking-tight md:text-3xl">
-                When AGI Workforce wins
-              </h2>
-              <div className="space-y-4">
-                {[
-                  {
-                    title: 'GPT-5 and Claude 4 in the same thread',
-                    desc: 'Use GPT-5 for code generation. Ask Claude 4 to review it. Both in the same conversation, context intact.',
-                  },
-                  {
-                    title: 'BYOK without subscriptions',
-                    desc: 'Bring your OpenAI API key. No ChatGPT Plus needed. Pay per token at OpenAI rates.',
-                  },
-                  {
-                    title: 'Local LLM fallback',
-                    desc: 'Rate-limited on the API? Run Ollama locally at zero cost, same interface.',
-                  },
-                  {
-                    title: 'Multi-surface with one account',
-                    desc: `Desktop, Web, Mobile, CLI, VS Code, Chrome. All ${MARKETING.surfaces.display} surfaces, one conversation history.`,
-                  },
-                ].map(({ title, desc }) => (
-                  <div
-                    key={title}
-                    className="rounded-xl border border-[#c8892a]/15 bg-[#c8892a]/[0.03] p-5"
+      {/* S3 — When AGI Workforce wins */}
+      <RuledSection tier="paper" slug={<Slug index="02" kicker="WHEN AGI WORKFORCE WINS" />}>
+        <div className="py-14 md:py-20">
+          <h2
+            className="font-display text-2xl md:text-3xl mb-8"
+            style={{ fontVariationSettings: '"wght" 600' }}
+          >
+            When the multi-provider lane wins.
+          </h2>
+
+          <Specimen columns={2}>
+            <p>
+              When one model lock-in is the wrong abstraction for your workflow, AGI Workforce is
+              the answer. Use GPT for code generation, ask Claude to review it, verify factual
+              claims with Perplexity Sonar. One thread. Full context across every hop.
+            </p>
+            <p>
+              BYOK means your OpenAI API key stays your OpenAI API key. You pay OpenAI directly at
+              their published rates with no markup. When local LLM is required, Ollama or LM Studio
+              runs on your machine at zero cost through the same interface.
+            </p>
+          </Specimen>
+
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              {
+                title: 'GPT and Claude in the same thread',
+                desc: 'Use GPT for code generation. Ask Claude to review it. Both in one conversation, context intact.',
+              },
+              {
+                title: 'BYOK without subscriptions',
+                desc: 'Bring your OpenAI API key. No ChatGPT Plus needed. Pay per token at OpenAI rates.',
+              },
+              {
+                title: 'Local LLM when API limits hit',
+                desc: 'Rate-limited on the API? Run Ollama locally at zero cost. Same interface.',
+              },
+              {
+                title: `${MARKETING.surfaces.display} surfaces, one account`,
+                desc: 'Desktop, Web, Mobile, CLI, VS Code, Chrome. One conversation history across all.',
+              },
+            ].map(({ title, desc }) => (
+              <div key={title} className="border border-[var(--color-rule-soft)] p-6">
+                <div
+                  className="font-display text-base mb-2"
+                  style={{ fontVariationSettings: '"wght" 600' }}
+                >
+                  {title}
+                </div>
+                <p className="text-sm leading-relaxed text-[var(--color-fg-muted)]">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </RuledSection>
+
+      {/* S4 — Scorecard */}
+      <RuledSection tier="graphite" slug={<Slug index="03" kicker="SCORECARD" />}>
+        <div className="py-14 md:py-20">
+          <h2
+            className="font-display text-2xl md:text-3xl mb-6 text-[var(--color-cream-on-graphite)]"
+            style={{ fontVariationSettings: '"wght" 600' }}
+          >
+            Side by side.
+          </h2>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] mb-8">
+            Accurate as of May 2026. OpenAI ships desktop, mobile, Codex CLI, Chrome ext. GitHub
+            Copilot ships VS Code ext. We acknowledge all of these.
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-[var(--color-rule-soft)]">
+                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] text-left py-3 pr-6 w-[30%]">
+                    Capability
+                  </th>
+                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-amber-text)] text-left py-3 px-4 w-[35%]">
+                    AGI Workforce
+                  </th>
+                  <th className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-quiet)] text-left py-3 px-4 w-[35%]">
+                    ChatGPT
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {scorecard.map((row, i) => (
+                  <tr
+                    key={row.capability}
+                    className={[
+                      'border-b border-[var(--color-rule-soft)]',
+                      i % 2 === 0 ? 'bg-white/[0.02]' : '',
+                    ].join(' ')}
                   >
-                    <h3 className="mb-1.5 font-semibold text-[#edebe8]">{title}</h3>
-                    <p className="text-sm leading-relaxed text-[#888480]">{desc}</p>
-                  </div>
+                    <td className="font-mono text-[11px] text-[var(--color-fg-muted)] py-3 pr-6 align-top">
+                      {row.capability}
+                    </td>
+                    <td className="text-[13px] text-[var(--color-amber-text)] py-3 px-4 align-top leading-snug">
+                      {row.us}
+                    </td>
+                    <td className="text-[13px] text-[var(--color-fg-muted)] py-3 px-4 align-top leading-snug">
+                      {row.them}
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </div>
+              </tbody>
+            </table>
           </div>
-        </section>
 
-        {/* CTA */}
-        <section className="border-t border-white/[0.05] bg-[#0c0c0e] py-16 md:py-20">
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="font-heading text-2xl tracking-tight md:text-3xl">
-              Bring your OpenAI key. Keep everything else.
-            </h2>
-            <p className="mx-auto mt-3 max-w-md text-[#888480]">
-              GPT-5 models in AGI Workforce, alongside Claude, Gemini, and local AI.
-            </p>
-            <div className="mt-6 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link
-                href="/download"
-                className="group inline-flex h-11 items-center gap-2 rounded-md bg-[#c8892a] px-7 text-sm font-semibold text-[#09090b] transition-all hover:bg-[#d4993a]"
-              >
-                Download Free
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                href="/byok"
-                className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-7 text-sm font-medium text-[#a8a4a0] hover:border-white/20 hover:text-[#edebe8]"
-              >
-                Learn about BYOK
-              </Link>
-            </div>
+          <div className="mt-10 flex flex-col sm:flex-row gap-4">
+            <MonoButton href="/byok" variant="primary" prefix="./">
+              Learn about BYOK
+            </MonoButton>
+            <MonoButton href="/download" variant="ghost" prefix="./">
+              Download free
+            </MonoButton>
           </div>
-        </section>
-      </main>
+        </div>
+      </RuledSection>
 
-      <MarketingFooter />
-    </div>
+      {/* S5 — Dispatch */}
+      <DispatchSection slugIndex="04" slugKicker="DISPATCH" />
+    </EditorialPage>
   );
 }
