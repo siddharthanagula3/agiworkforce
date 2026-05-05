@@ -22,12 +22,15 @@
 
 /* Tailwind v4 CSS-based configuration */
 @theme {
-  /* Font families */
-  --font-sans:
-    'FK Grotesk', 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'Berkeley Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
-  --font-heading: var(--font-instrument, Georgia), Georgia, 'Times New Roman', serif;
-  --font-body: var(--font-manrope, system-ui), system-ui, -apple-system, sans-serif;
+  /* Font families — Operator-Broadsheet redesign 2026-05-05.
+     Newsreader (variable serif) for display + body on Tier A/B marketing pages.
+     JetBrains Mono for UI chrome: slugs, datelines, CTAs, marginalia. */
+  --font-sans: var(--font-newsreader), Georgia, 'Times New Roman', serif;
+  --font-mono: var(--font-jetbrains), 'Berkeley Mono', ui-monospace, monospace;
+  --font-display: var(--font-newsreader), Georgia, serif;
+  --font-heading: var(--font-newsreader), Georgia, 'Times New Roman', serif;
+  --font-body: var(--font-newsreader), Georgia, serif;
+  --font-ui: var(--font-jetbrains), ui-monospace, monospace;
 
   /* Line height */
   --line-height-chat: 1.6;
