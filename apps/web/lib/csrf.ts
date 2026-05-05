@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
 import { createClient as createSupabaseServerClient } from '@/utils/supabase/server';
 
 // Lazily get CSRF_SECRET to avoid errors during build/static generation
@@ -191,6 +192,43 @@ export async function getOrCreateAnonSession(
 }
 
 /**
+ * RT-04 fix: Validate a Bearer token cryptographically before granting CSRF bypass.
+ *
+ * The old code bypassed CSRF for ANY request with `Authorization: Bearer <anything>`,
+ * including invalid/garbage tokens. This created a bypass window: an attacker could
+ * add `Authorization: Bearer bogus` to a cross-origin request, skip CSRF, then let
+ * auth fail later — leaving any endpoint that checked CSRF before auth vulnerable.
+ *
+ * Fix: Only bypass CSRF when the Bearer JWT is verified as belonging to a real Supabase
+ * user. If verification fails, fall through to the CSRF token check as normal.
+ *
+ * Returns true if the token is valid (CSRF bypass is safe), false if invalid/missing.
+ */
+async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
+  if (!authHeader?.startsWith('Bearer ')) {
+    return false;
+  }
+  const token = authHeader.slice(7);
+  // Validate token length to avoid excessive work on garbage inputs
+  if (token.length < 20 || token.length > 4096) {
+    return false;
+  }
+  try {
+    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+    const serviceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+    if (!supabaseUrl || !serviceKey) return false;
+
+    const admin = createSupabaseAdminClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await admin.auth.getUser(token);
+    return !error && !!data?.user;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Validate CSRF token from request (returns boolean for backwards compatibility)
  */
 export async function validateCsrfFromRequest(
@@ -203,18 +241,19 @@ export async function validateCsrfFromRequest(
     return true; // GET requests don't need CSRF protection
   }
 
-  // CSRF does not apply to Bearer-token requests. Threat model:
-  //   - CSRF requires the browser to silently attach credentials (cookies).
-  //   - This SPA stores JWTs in memory / localStorage, not cookies.
-  //   - SOP prevents a cross-origin attacker from reading localStorage or
-  //     injecting a custom Authorization header via fetch/XHR.
-  //   - Therefore a cross-origin page cannot forge a valid Bearer request,
-  //     and the CSRF check would provide no additional protection here.
-  // If this app ever migrates to HttpOnly cookie auth, this bypass MUST be
-  // removed and SameSite=Strict set on the session cookie instead.
+  // RT-04 fix: Only bypass CSRF when the Bearer token is cryptographically valid.
+  // Previously ANY Bearer string (including `Bearer bogus`) bypassed CSRF — this
+  // created a bypass for any endpoint checking CSRF before auth.
+  // Threat model: a cross-origin page cannot forge a valid Bearer JWT (SOP blocks
+  // reading localStorage / injecting Authorization on third-party requests), so a
+  // valid JWT here means the request is from a legitimate client.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
-    return true;
+    const validBearer = await isBearerTokenValid(authHeader);
+    if (validBearer) {
+      return true; // Legitimate Bearer auth — CSRF bypass is safe
+    }
+    // Invalid Bearer + possible session cookie — fall through to CSRF token check
   }
 
   const token = request.headers.get(CSRF_HEADER);
@@ -243,13 +282,15 @@ export async function requireCsrfToken(
     return null; // GET requests don't need CSRF protection
   }
 
-  // CSRF is a browser-session attack vector. Bearer token requests (e.g. from
-  // the native desktop app) are not vulnerable to CSRF because an attacker
-  // cannot read the token from a cross-origin context. Skip CSRF validation
-  // when the request is authenticated via Bearer token.
+  // RT-04 fix: Only bypass CSRF when the Bearer token is cryptographically valid.
+  // See isBearerTokenValid() for the threat model analysis.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
-    return null;
+    const validBearer = await isBearerTokenValid(authHeader);
+    if (validBearer) {
+      return null; // Legitimate Bearer auth — CSRF bypass is safe
+    }
+    // Invalid Bearer falls through to CSRF token check
   }
 
   const token = request.headers.get(CSRF_HEADER);
@@ -273,3 +314,6 @@ export async function requireCsrfToken(
 
   return null;
 }
+
+// Export for tests
+export { isBearerTokenValid };
