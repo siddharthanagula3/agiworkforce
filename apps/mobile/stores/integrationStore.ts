@@ -344,8 +344,19 @@ export const useIntegrationStore = create<IntegrationState>()(
         if (error) console.warn('[integrationStore] Hydration failed:', error);
       },
       partialize: (state) => ({
-        // Persist platform + connector connection state — not loading/error/device status
-        platforms: state.platforms,
+        // MED-MOB-06 fix (2026-05-04): platform `config` (which holds apiKey /
+        // token for Slack, Telegram, etc.) must NOT be stored in MMKV. MMKV is
+        // encrypted at rest but the key lives in Keychain with
+        // WHEN_UNLOCKED_THIS_DEVICE_ONLY — after-first-unlock malware can read
+        // it. Third-party integration tokens are re-fetched from the backend on
+        // connectPlatform() and are not persisted locally.
+        //
+        // We persist only non-secret connection metadata (id, name, connected,
+        // accountName, lastSynced, messageCount) and strip config entirely.
+        platforms: state.platforms.map(({ config: _config, ...rest }) => ({
+          ...rest,
+          config: {} as Record<string, string>,
+        })),
         connectedConnectors: state.connectedConnectors,
         enabledConnectors: state.enabledConnectors,
       }),

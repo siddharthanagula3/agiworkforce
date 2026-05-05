@@ -185,22 +185,23 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
       }),
       onRehydrateStorage: () => (state) => {
-        // If we have a cached session, skip the loading spinner
-        if (state?.session) {
-          state.isLoading = false;
-          state.isInitialized = true;
-
-          // Set up auth listener early so token refreshes are observed
-          // before initialize() is explicitly called after the biometric gate.
-          // Guard prevents double-subscription if initialize() runs later.
-          if (!authSubscription) {
-            const {
-              data: { subscription },
-            } = supabase.auth.onAuthStateChange((_event, session) => {
-              useAuthStore.setState({ session, user: session?.user ?? null });
-            });
-            authSubscription = subscription;
-          }
+        // CRIT-MOB-01 fix (2026-05-04): Do NOT load the Supabase session or set
+        // isInitialized here. The biometric gate in _layout.tsx must succeed BEFORE
+        // the session is surfaced to the rest of the app.
+        //
+        // Previous behaviour wired onAuthStateChange here, which caused the
+        // Supabase client to have an active session (readable via
+        // `supabase.auth.getSession()`) before the user passed biometric auth —
+        // a complete bypass when the biometric catch block was fail-open.
+        //
+        // Now: rehydration clears any pre-loaded session so the store starts in a
+        // pristine locked state. `initialize()` is the only path that loads the
+        // session, and it is called from _layout.tsx AFTER `isUnlocked` is true.
+        if (state) {
+          state.session = null;
+          state.user = null;
+          state.isLoading = true;
+          state.isInitialized = false;
         }
       },
     },

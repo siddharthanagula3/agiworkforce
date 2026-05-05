@@ -12,7 +12,6 @@ import { Mic, Loader } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { colors } from '@/lib/theme';
-import { DEEPGRAM_API_KEY } from '@/lib/constants';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceService from '@/services/voice';
 import type { VoiceMeteringEvent } from '@/services/voice';
@@ -204,10 +203,13 @@ export function VoiceInputButton({
       if (!uri) throw new Error('No recording URI returned');
 
       let transcript = '';
-      if (DEEPGRAM_API_KEY) {
-        transcript = await VoiceService.transcribeWithDeepgram(uri, DEEPGRAM_API_KEY);
-      } else {
-        // No Deepgram key — fall back to server Whisper
+      try {
+        // CRIT-MOB-02 fix (2026-05-04): fetch a short-lived ephemeral token
+        // from the backend. The master Deepgram key is never bundled in the app.
+        const ephemeralToken = await VoiceService.getDeepgramEphemeralToken();
+        transcript = await VoiceService.transcribeWithDeepgram(uri, ephemeralToken);
+      } catch {
+        // Backend unavailable or rate-limited — fall back to server Whisper
         const result = await VoiceService.transcribe(uri);
         transcript = result.text;
       }
@@ -285,6 +287,8 @@ export function VoiceInputButton({
 
   const iconColor = isActive ? colors.agentError : isProcessing ? colors.teal : colors.textMuted;
 
+  // CRIT-MOB-02 fix: PTT (push-to-talk) is always available since the backend
+  // issues ephemeral tokens. Remove the DEEPGRAM_API_KEY conditional.
   const accessibilityLabel =
     state === 'recording'
       ? 'Tap to stop recording'
@@ -292,9 +296,7 @@ export function VoiceInputButton({
         ? 'Release to transcribe'
         : state === 'processing'
           ? 'Processing voice...'
-          : DEEPGRAM_API_KEY
-            ? 'Tap to record, hold for push-to-talk'
-            : 'Tap to toggle voice recording';
+          : 'Tap to record, hold for push-to-talk';
 
   return (
     <View className="relative items-center justify-center">
@@ -323,11 +325,7 @@ export function VoiceInputButton({
         className="p-1.5 rounded-lg active:bg-white/5 z-10"
         style={isDisabled ? { opacity: 0.5 } : undefined}
         accessibilityLabel={accessibilityLabel}
-        accessibilityHint={
-          DEEPGRAM_API_KEY
-            ? 'Tap to start or stop recording. Hold for instant push-to-talk. Long press for voice conversation mode.'
-            : 'Tap to start or stop recording. Long press for voice conversation mode.'
-        }
+        accessibilityHint="Tap to start or stop recording. Hold for instant push-to-talk. Long press for voice conversation mode."
         accessibilityRole="button"
         accessibilityState={{ disabled: isDisabled, busy: isProcessing }}
       >
