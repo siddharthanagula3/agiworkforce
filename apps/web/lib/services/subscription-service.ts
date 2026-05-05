@@ -1,3 +1,17 @@
+/**
+ * @file subscription-service.ts
+ *
+ * # Client injection contract (WEB-RLS-BYPASS mitigation)
+ *
+ * USER-CONTEXT methods accept a `SupabaseClient` parameter. Callers construct it via:
+ *   `import { getUserClient } from '@/lib/supabase-server';`
+ *   `const client = getUserClient(jwtFromBearerHeader);`
+ *
+ * SERVICE-CONTEXT methods (Stripe webhook, cron, claim-offer) call `getServiceClient()`
+ * internally. Their doc-comments say "SERVICE-CONTEXT" and list valid callers.
+ *
+ * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ */
 import 'server-only';
 
 import { type SupabaseClient } from '@supabase/supabase-js';

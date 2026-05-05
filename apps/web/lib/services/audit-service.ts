@@ -1,3 +1,17 @@
+/**
+ * @file audit-service.ts
+ *
+ * # Client injection contract (WEB-RLS-BYPASS mitigation)
+ *
+ * `log()` - SERVICE-CONTEXT. System/admin writes that must succeed even when
+ *   the triggering request is unauthenticated (failed-auth logging). Uses
+ *   `getServiceClient()` internally.
+ *
+ * `getOrganizationLogs()` - USER-CONTEXT. Caller passes `getUserClient(jwt)`.
+ *   RT-09 fix: membership verified before any log rows are returned.
+ *
+ * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ */
 import 'server-only';
 
 import { type SupabaseClient } from '@supabase/supabase-js';
