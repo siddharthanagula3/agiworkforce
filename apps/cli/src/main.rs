@@ -1,4 +1,5 @@
 // Active modules — core CLI functionality
+mod design_system;
 mod agent;
 mod agent_events;
 mod agents;
