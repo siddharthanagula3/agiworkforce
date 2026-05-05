@@ -1,109 +1,317 @@
 /**
  * dispatchHmac.ts
  *
- * HIGH-MOB-05 fix (2026-05-04): Dispatch channel message authentication.
+ * HIGH-MOB-05 fix (2026-05-04, v2 nonce scheme 2026-05-05):
+ * Application-layer authentication for Dispatch WebRTC / signaling control
+ * messages.
  *
- * Each outgoing control message is tagged with:
- *   - seq:       strictly-increasing sequence number (u32, wraps at 2^32)
- *   - ts:        Unix timestamp ms (server-clock aligned within 30s tolerance)
- *   - hmac:      HMAC-SHA-256 over `seq || ts || payload` using the session
- *                shared secret derived from the pairing code.
+ * ---------------------------------------------------------------------------
+ * WIRE FORMAT (canonical — desktop peer must implement the same)
+ * ---------------------------------------------------------------------------
  *
- * Incoming messages are rejected when any of the following fail:
- *   1. HMAC mismatch         → payload tampered or wrong peer
- *   2. ts older than 30s     → replay of a recorded message
- *   3. seq <= last seen seq  → replay within the 30s window
+ * Every outbound control message is wrapped in a signed envelope:
  *
- * Shared secret derivation:
- *   HKDF-SHA-256(ikm=pairingCode, salt=sessionId, info="dispatch-v1")
- *   The pairing code is at least 8 random uppercase alphanumeric chars (~47
- *   bits entropy). A future upgrade to QR-delivered 32-byte random input is
- *   tracked in the roadmap (LOW-MOB-QR).
+ *   {
+ *     "hmac":    "<hex-encoded HMAC-SHA-256, 64 chars>",
+ *     "nonce":   "<base64-encoded 16 random bytes>",
+ *     "payload": <original control-message object>,
+ *     "ts":      <Unix timestamp in milliseconds (integer)>,
+ *     "type":    "<control message action string>"
+ *   }
+ *
+ * Note: keys MUST be in alphabetical order when computing HMAC (see
+ * canonicalSigningInput() below). JSON.stringify of the object with
+ * keys sorted alphabetically produces the canonical string.
+ *
+ * The HMAC covers the canonical JSON of { hmac excluded }:
+ *
+ *   HMAC-SHA-256(session_key,
+ *     JSON.stringify({ nonce, payload, ts, type })  // keys alpha-sorted
+ *   )
+ *
+ * ---------------------------------------------------------------------------
+ * SESSION SECRET DERIVATION (HKDF-SHA-256)
+ * ---------------------------------------------------------------------------
+ *
+ *   IKM  = UTF-8(pairingCode)               // ≥8 uppercase alphanumeric chars
+ *   Salt = UTF-8(sessionSalt)               // random per connect() call, not secret
+ *   Info = UTF-8("dispatch-hmac-v2")
+ *
+ *   PRK  = HMAC-SHA-256(salt, IKM)          // HKDF extract
+ *   OKM  = HMAC-SHA-256(PRK, Info || 0x01)  // HKDF expand, first block
+ *
+ * The derived key is 256 bits (32 bytes), hex-encoded for storage.
+ * The sessionSalt is transmitted to the desktop peer inside the signaling
+ * 'registered' or 'peer_ready' event metadata field `dispatchSalt`. It is
+ * NOT secret — only the derived key is.
+ *
+ * ---------------------------------------------------------------------------
+ * REPLAY PREVENTION
+ * ---------------------------------------------------------------------------
+ *
+ *  1. Timestamp window: receiver rejects |now - ts| > 30 000 ms.
+ *  2. Nonce cache: receiver keeps a sliding window of (nonce → ts) entries
+ *     seen in the last 60 seconds. Duplicate nonces in that window are
+ *     rejected. Old entries are pruned on each verification call.
+ *
+ * ---------------------------------------------------------------------------
+ * TRANSITIONAL MODE (one release window)
+ * ---------------------------------------------------------------------------
+ *
+ * Messages without an `hmac` field are accepted with a console.warn during
+ * the transitional period. The desktop peer MUST add signing before
+ * DISPATCH_HMAC_REQUIRED_AFTER (see constant below). After that date, this
+ * file should be updated to fail-closed (delete the transitional branch and
+ * remove this comment block).
+ *
+ * CUTOFF: 2026-06-05 — bump dispatchHmac.ts and remove the transitional
+ * accept path once the desktop surface ships matching HMAC signing.
+ *
+ * ---------------------------------------------------------------------------
+ * DESKTOP COUNTERPART REQUIREMENTS
+ * ---------------------------------------------------------------------------
+ *
+ * The desktop peer (apps/desktop) must implement:
+ *  1. On pairing: receive `dispatchSalt` from signaling metadata; derive the
+ *     same session_key using HKDF-SHA-256 with the same IKM/salt/info.
+ *  2. On send: wrap every control message in the envelope above.
+ *  3. On receive: verify the envelope; reject on ts/nonce/hmac failure.
+ *
+ * This is tracked in the companion PR for apps/desktop Dispatch wiring.
  */
 
 import * as Crypto from 'expo-crypto';
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Maximum age (ms) we accept for incoming messages to prevent replay. */
+const MAX_MESSAGE_AGE_MS = 30_000;
+
+/**
+ * Nonce-cache TTL (ms). Nonces older than this are evicted from the cache.
+ * Must be at least 2× MAX_MESSAGE_AGE_MS so that a nonce seen at the edge of
+ * the acceptance window is still in the cache when a replay attempt arrives.
+ */
+const NONCE_CACHE_TTL_MS = 60_000;
+
+/**
+ * ISO 8601 date after which unsigned (transitional) messages should be
+ * rejected. Desktop surface must ship HMAC signing before this date.
+ *
+ * CUTOFF: 2026-06-05
+ */
+export const DISPATCH_HMAC_REQUIRED_AFTER = '2026-06-05T00:00:00.000Z';
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface SignedMessage {
-  seq: number;
-  ts: number;
-  payload: unknown;
+/**
+ * The signed envelope that travels over the data channel / signaling relay.
+ * Keys are always in alphabetical order when the HMAC is computed.
+ */
+export interface SignedEnvelope {
+  /** HMAC-SHA-256 over the canonical signing input (hex, 64 chars) */
   hmac: string;
+  /** 16 random bytes, base64-encoded */
+  nonce: string;
+  /** Original control-message object */
+  payload: unknown;
+  /** Unix timestamp ms */
+  ts: number;
+  /** Control message action string (mirrors payload.action) */
+  type: string;
 }
 
-/** State threaded through the session by the caller. */
+/**
+ * Session state threaded through the session by the caller.
+ * Replaces the old seq-based HmacSessionState.
+ */
 export interface HmacSessionState {
-  sendSeq: number;
-  recvSeq: number;
-  secret: string; // hex-encoded 32-byte key
+  /**
+   * hex-encoded 32-byte derived key (HKDF-SHA-256 output).
+   * Stored as hex to allow simple string operations in tests.
+   */
+  secret: string;
+  /**
+   * Sliding-window nonce cache: maps base64-nonce → received-ts.
+   * Pruned on each verification call.
+   */
+  nonceCache: Map<string, number>;
+}
+
+export type VerifyResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | 'hmac_mismatch'
+        | 'timestamp_expired'
+        | 'nonce_replay'
+        | 'malformed'
+        | 'unsigned_transitional';
+    };
+
+// ---------------------------------------------------------------------------
+// Low-level HMAC-SHA-256 (RFC 2104) via expo-crypto
+// ---------------------------------------------------------------------------
+
+/** SHA-256 block size in bytes */
+const BLOCK_SIZE = 64;
+
+/**
+ * Encode a string to UTF-8 bytes.
+ * TextEncoder is available in React Native's Hermes engine.
+ */
+function utf8Encode(str: string): Uint8Array {
+  // TextEncoder is globally available in Hermes (React Native >= 0.70)
+  return new TextEncoder().encode(str);
+}
+
+/** hex-encode a Uint8Array */
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** hex-decode a hex string to Uint8Array */
+function fromHex(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    out[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+  }
+  return out;
+}
+
+/**
+ * Raw SHA-256 over a Uint8Array. Uses expo-crypto's `digest()` which accepts
+ * binary data — no string encoding side-effects.
+ *
+ * Note: TypeScript's `Uint8Array<ArrayBufferLike>` is not assignable to
+ * `BufferSource` (which requires `ArrayBuffer`, not `SharedArrayBuffer`).
+ * We copy into a plain `ArrayBuffer` to satisfy the type contract.
+ */
+async function sha256(data: Uint8Array): Promise<Uint8Array> {
+  // Ensure we have a plain ArrayBuffer (not SharedArrayBuffer) for expo-crypto
+  const plain: ArrayBuffer =
+    data.buffer instanceof ArrayBuffer
+      ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+      : new Uint8Array(data).buffer;
+  const buf = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, plain as ArrayBuffer);
+  return new Uint8Array(buf);
+}
+
+/**
+ * Proper RFC 2104 HMAC-SHA-256.
+ *
+ * HMAC(K, m) = H((K⊕opad) ∥ H((K⊕ipad) ∥ m))
+ *
+ * @param keyBytes - Raw key bytes (any length; hashed if > BLOCK_SIZE)
+ * @param msgBytes - Message bytes
+ * @returns 32-byte HMAC digest
+ */
+async function hmacSha256(keyBytes: Uint8Array, msgBytes: Uint8Array): Promise<Uint8Array> {
+  // If key is longer than block size, hash it first
+  let k = keyBytes;
+  if (k.length > BLOCK_SIZE) {
+    k = await sha256(k);
+  }
+
+  // Pad key to block size
+  const kPadded = new Uint8Array(BLOCK_SIZE);
+  kPadded.set(k);
+
+  // ipad = 0x36 repeated, opad = 0x5c repeated
+  const ipad = new Uint8Array(BLOCK_SIZE).fill(0x36);
+  const opad = new Uint8Array(BLOCK_SIZE).fill(0x5c);
+
+  const kIpad = new Uint8Array(BLOCK_SIZE);
+  const kOpad = new Uint8Array(BLOCK_SIZE);
+  for (let i = 0; i < BLOCK_SIZE; i++) {
+    kIpad[i] = kPadded[i] ^ ipad[i];
+    kOpad[i] = kPadded[i] ^ opad[i];
+  }
+
+  // inner = SHA-256(k ⊕ ipad ∥ message)
+  const innerInput = new Uint8Array(BLOCK_SIZE + msgBytes.length);
+  innerInput.set(kIpad, 0);
+  innerInput.set(msgBytes, BLOCK_SIZE);
+  const inner = await sha256(innerInput);
+
+  // outer = SHA-256(k ⊕ opad ∥ inner)
+  const outerInput = new Uint8Array(BLOCK_SIZE + 32);
+  outerInput.set(kOpad, 0);
+  outerInput.set(inner, BLOCK_SIZE);
+  return sha256(outerInput);
 }
 
 // ---------------------------------------------------------------------------
-// Key derivation
+// HKDF-SHA-256
 // ---------------------------------------------------------------------------
 
 /**
- * Derive the shared HMAC secret for a Dispatch session.
- * Uses HKDF-like stretching via two SHA-256 passes (expo-crypto does not
- * expose HKDF directly; this is equivalent for our key-length requirements).
+ * HKDF Extract: PRK = HMAC-SHA-256(salt, IKM)
+ */
+async function hkdfExtract(saltBytes: Uint8Array, ikmBytes: Uint8Array): Promise<Uint8Array> {
+  return hmacSha256(saltBytes, ikmBytes);
+}
+
+/**
+ * HKDF Expand (single 32-byte output block):
+ * OKM = HMAC-SHA-256(PRK, info ∥ 0x01)
+ */
+async function hkdfExpand(prk: Uint8Array, infoBytes: Uint8Array): Promise<Uint8Array> {
+  const input = new Uint8Array(infoBytes.length + 1);
+  input.set(infoBytes, 0);
+  input[infoBytes.length] = 0x01; // counter byte T(1)
+  return hmacSha256(prk, input);
+}
+
+// ---------------------------------------------------------------------------
+// Session secret derivation
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive the shared HMAC session key for a Dispatch connection.
  *
- * @param pairingCode - 8-char alphanumeric pairing code
- * @param sessionId   - Signaling server session ID (adds uniqueness per pair)
+ * Uses proper HKDF-SHA-256 (RFC 5869, single-block expand):
+ *   PRK = HMAC-SHA-256(salt=UTF8(sessionSalt), IKM=UTF8(pairingCode))
+ *   OKM = HMAC-SHA-256(PRK, UTF8("dispatch-hmac-v2") ∥ 0x01)
+ *
+ * @param pairingCode - 8-char alphanumeric pairing code (pre-shared key)
+ * @param sessionSalt - Random per-session salt (not secret; sent in metadata)
+ * @returns hex-encoded 32-byte derived key
  */
 export async function deriveDispatchSecret(
   pairingCode: string,
-  sessionId: string,
+  sessionSalt: string,
 ): Promise<string> {
-  // Round 1: PRK = SHA-256(salt=sessionId || ikm=pairingCode)
-  const prk = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    `dispatch-v1:${sessionId}:${pairingCode}`,
-  );
-  // Round 2: OKM = SHA-256(PRK || info)
-  const okm = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    `${prk}:output-key`,
-  );
-  return okm; // 64 hex chars = 256-bit key
+  const ikm = utf8Encode(pairingCode);
+  const salt = utf8Encode(sessionSalt);
+  const info = utf8Encode('dispatch-hmac-v2');
+
+  const prk = await hkdfExtract(salt, ikm);
+  const okm = await hkdfExpand(prk, info);
+  return toHex(okm);
 }
 
 // ---------------------------------------------------------------------------
-// HMAC computation
+// Canonical signing input
 // ---------------------------------------------------------------------------
 
 /**
- * Compute HMAC-SHA-256 over the canonical signing input.
- * Signing input: `<seq>:<ts>:<json(payload)>`
+ * Produce the canonical UTF-8 JSON string over which the HMAC is computed.
+ * Keys are sorted alphabetically so both peers produce an identical string
+ * regardless of their JS engine's insertion order.
+ *
+ * Signed fields: { nonce, payload, ts, type }  (no "hmac" in the signed set)
  */
-async function computeHmac(
-  secret: string,
-  seq: number,
-  ts: number,
-  payload: unknown,
-): Promise<string> {
-  const body = `${seq}:${ts}:${JSON.stringify(payload)}`;
-  // expo-crypto does not expose HMAC directly; we implement HMAC manually
-  // using the standard SHA-256 block construction:
-  //   HMAC(K, m) = H((K XOR opad) || H((K XOR ipad) || m))
-  //
-  // For simplicity and to avoid a native dependency, we use the two-pass
-  // keyed-hash pattern that is equivalent when the key is <= block size:
-  //   inner = SHA256(key || "inner" || message)
-  //   outer = SHA256(key || "outer" || inner)
-  // This is not RFC 2104 HMAC but is collision-resistant for our use case
-  // (the secret is already 256 bits of keying material derived above).
-  const inner = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    `${secret}:inner:${body}`,
-  );
-  const outer = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    `${secret}:outer:${inner}`,
-  );
-  return outer;
+function canonicalSigningInput(type: string, payload: unknown, ts: number, nonce: string): string {
+  // Alphabetical order: nonce < payload < ts < type
+  return JSON.stringify({ nonce, payload, ts, type });
 }
 
 // ---------------------------------------------------------------------------
@@ -111,67 +319,143 @@ async function computeHmac(
 // ---------------------------------------------------------------------------
 
 /**
- * Wrap a control message payload in a signed envelope.
- * Mutates `state.sendSeq` (increments by 1).
+ * Wrap a control-message payload in a signed envelope.
+ * Generates a fresh 16-byte nonce on every call.
+ *
+ * @param state   - Mutable session state (nonceCache may be updated on receive)
+ * @param type    - Control message action string (e.g. "approval_response")
+ * @param payload - Original control-message object
+ * @returns Signed envelope ready to serialize and send
  */
 export async function signMessage(
   state: HmacSessionState,
+  type: string,
   payload: unknown,
-): Promise<SignedMessage> {
-  const seq = (state.sendSeq + 1) >>> 0; // u32 wrap
-  state.sendSeq = seq;
+): Promise<SignedEnvelope> {
+  const nonceBytes = Crypto.getRandomBytes(16);
+  const nonce = btoa(String.fromCharCode(...nonceBytes));
   const ts = Date.now();
-  const hmac = await computeHmac(state.secret, seq, ts, payload);
-  return { seq, ts, payload, hmac };
+
+  const signingInput = canonicalSigningInput(type, payload, ts, nonce);
+  const keyBytes = fromHex(state.secret);
+  const msgBytes = utf8Encode(signingInput);
+  const macBytes = await hmacSha256(keyBytes, msgBytes);
+  const hmac = toHex(macBytes);
+
+  return { hmac, nonce, payload, ts, type };
 }
 
 // ---------------------------------------------------------------------------
 // Verify incoming message
 // ---------------------------------------------------------------------------
 
-/** Maximum age (ms) we accept for incoming messages to prevent replay. */
-const MAX_MESSAGE_AGE_MS = 30_000;
+/**
+ * Constant-time hex string comparison.
+ * Both strings are 64-char hex — same length always — so a character-by-
+ * character XOR accumulator is sufficient. We avoid short-circuit evaluation
+ * explicitly.
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
 
-export type VerifyResult =
-  | { ok: true }
-  | { ok: false; reason: 'hmac_mismatch' | 'timestamp_expired' | 'sequence_replay' | 'malformed' };
+/** Evict nonce-cache entries older than NONCE_CACHE_TTL_MS. */
+function pruneNonceCache(nonceCache: Map<string, number>, now: number): void {
+  const cutoff = now - NONCE_CACHE_TTL_MS;
+  for (const [nonce, seenAt] of nonceCache) {
+    if (seenAt < cutoff) {
+      nonceCache.delete(nonce);
+    }
+  }
+}
 
 /**
- * Verify a signed incoming message.
- * Mutates `state.recvSeq` on success (advances to the message seq).
+ * Verify a signed incoming envelope.
+ *
+ * Rejection reasons (checked in order):
+ *  1. `malformed`           — not a valid SignedEnvelope shape
+ *  2. `unsigned_transitional` — no hmac field; accepted with warn during
+ *                              the transitional period, fail-closed after
+ *                              DISPATCH_HMAC_REQUIRED_AFTER
+ *  3. `timestamp_expired`   — |now - ts| > MAX_MESSAGE_AGE_MS
+ *  4. `nonce_replay`        — nonce seen in the NONCE_CACHE_TTL_MS window
+ *  5. `hmac_mismatch`       — HMAC does not match (constant-time compare)
+ *
+ * On success, the nonce is added to the cache.
+ *
+ * @param state - Mutable session state; nonceCache is updated in place
+ * @param msg   - Raw parsed JSON from the wire
  */
 export async function verifyMessage(state: HmacSessionState, msg: unknown): Promise<VerifyResult> {
-  if (
-    typeof msg !== 'object' ||
-    msg === null ||
-    typeof (msg as Record<string, unknown>).seq !== 'number' ||
-    typeof (msg as Record<string, unknown>).ts !== 'number' ||
-    typeof (msg as Record<string, unknown>).hmac !== 'string'
-  ) {
+  // 1. Shape check — must be a plain object (not null, not array)
+  if (typeof msg !== 'object' || msg === null || Array.isArray(msg)) {
+    return { ok: false, reason: 'malformed' };
+  }
+  const m = msg as Record<string, unknown>;
+
+  const hasHmac = typeof m['hmac'] === 'string';
+  const hasNonce = typeof m['nonce'] === 'string';
+  const hasTs = typeof m['ts'] === 'number';
+  const hasType = typeof m['type'] === 'string';
+
+  // Transitional: accept unsigned messages (no hmac field) during the window
+  if (!hasHmac) {
+    const now = Date.now();
+    const cutoff = new Date(DISPATCH_HMAC_REQUIRED_AFTER).getTime();
+    if (now < cutoff) {
+      console.warn(
+        '[dispatch] SECURITY: received unsigned control message — transitional accept. ' +
+          'Desktop peer must add HMAC signing before ' +
+          DISPATCH_HMAC_REQUIRED_AFTER +
+          '. This accept path will be removed after that date.',
+      );
+      return { ok: true };
+    }
+    // Past cutoff: fail-closed
+    return { ok: false, reason: 'unsigned_transitional' };
+  }
+
+  // Past this point we have an hmac field; require all signed-envelope fields
+  if (!hasNonce || !hasTs || !hasType) {
     return { ok: false, reason: 'malformed' };
   }
 
-  const { seq, ts, payload, hmac } = msg as SignedMessage;
+  const hmac = m['hmac'] as string;
+  const nonce = m['nonce'] as string;
+  const ts = m['ts'] as number;
+  const type = m['type'] as string;
+  const payload = m['payload'];
 
-  // 1. Timestamp check — reject messages older than 30s
-  const age = Date.now() - ts;
-  if (age > MAX_MESSAGE_AGE_MS || age < -5_000) {
+  // 2. Timestamp window: ±30s
+  const now = Date.now();
+  const age = now - ts;
+  if (age > MAX_MESSAGE_AGE_MS || age < -MAX_MESSAGE_AGE_MS) {
     return { ok: false, reason: 'timestamp_expired' };
   }
 
-  // 2. Sequence check — reject replays (seq must be strictly greater)
-  if (seq <= state.recvSeq) {
-    return { ok: false, reason: 'sequence_replay' };
+  // 3. Nonce replay check — prune stale entries first
+  pruneNonceCache(state.nonceCache, now);
+  if (state.nonceCache.has(nonce)) {
+    return { ok: false, reason: 'nonce_replay' };
   }
 
-  // 3. HMAC check
-  const expected = await computeHmac(state.secret, seq, ts, payload);
-  // Constant-time comparison: compare full strings (hex, same length always)
-  if (expected !== hmac) {
+  // 4. HMAC verify (constant-time)
+  const signingInput = canonicalSigningInput(type, payload, ts, nonce);
+  const keyBytes = fromHex(state.secret);
+  const msgBytes = utf8Encode(signingInput);
+  const expectedBytes = await hmacSha256(keyBytes, msgBytes);
+  const expected = toHex(expectedBytes);
+
+  if (!constantTimeEqual(expected, hmac)) {
     return { ok: false, reason: 'hmac_mismatch' };
   }
 
-  // All checks passed — advance receive sequence
-  state.recvSeq = seq;
+  // All checks passed — record nonce
+  state.nonceCache.set(nonce, now);
   return { ok: true };
 }
