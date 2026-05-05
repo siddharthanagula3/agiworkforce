@@ -1209,6 +1209,105 @@ fn validate_fetch_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Returns true when the IP is in a range that must never be reachable from
+/// `web_fetch` (loopback, link-local incl. AWS metadata, RFC1918 private,
+/// IPv6 ULA / link-local / loopback, IPv4-mapped IPv6 of any of the above).
+///
+/// Mirrors the literal-host checks in `validate_fetch_url` but operates on
+/// `IpAddr` so it can be applied to *resolved* addresses, not just the
+/// literal hostname embedded in the URL — that's the DNS-rebinding gap.
+fn is_private_or_internal_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            let oct = v4.octets();
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || (oct[0] == 169 && oct[1] == 254) // belt-and-suspenders incl. AWS IMDS
+                || (oct[0] == 100 && oct[1] >= 64 && oct[1] <= 127) // CGNAT 100.64/10
+                || oct[0] >= 224 // multicast / reserved
+        }
+        std::net::IpAddr::V6(v6) => {
+            let segments = v6.segments();
+            *v6 == std::net::Ipv6Addr::LOCALHOST
+                || *v6 == std::net::Ipv6Addr::UNSPECIFIED
+                || (segments[0] & 0xffc0 == 0xfe80) // fe80::/10 link-local
+                || (segments[0] & 0xfe00 == 0xfc00) // fc00::/7 ULA
+                || {
+                    // IPv4-mapped IPv6 (::ffff:a.b.c.d) — recurse on the mapped V4.
+                    let is_v4_mapped =
+                        segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
+                    if is_v4_mapped {
+                        let mapped = std::net::Ipv4Addr::new(
+                            (segments[6] >> 8) as u8,
+                            segments[6] as u8,
+                            (segments[7] >> 8) as u8,
+                            segments[7] as u8,
+                        );
+                        is_private_or_internal_ip(&std::net::IpAddr::V4(mapped))
+                    } else {
+                        false
+                    }
+                }
+        }
+    }
+}
+
+/// CLI-NEW-003 hardening (2026-05-04 audit, second pass):
+/// Pre-resolve the URL's hostname via the OS resolver, reject if ANY
+/// returned address points at a private/internal range, then pin the
+/// remaining safe addresses into the reqwest client. This closes DNS
+/// rebinding for the *initial* URL — `validate_fetch_url` alone runs at
+/// validation time and reqwest re-resolves at connection time, leaving a
+/// race window where the attacker's authoritative DNS can flip to an
+/// internal IP. By pinning the addresses that the resolver returned at
+/// validation time, the connection cannot reach a different IP.
+///
+/// Residual gap: redirect targets are still re-resolved by reqwest at
+/// connection time. The redirect closure re-runs `validate_fetch_url` on
+/// the URL string but cannot inspect the post-DNS IPs without a per-hop
+/// resolver. Closing that requires a custom `dns::Resolve` impl, which
+/// is left for a follow-up PR.
+async fn resolve_and_validate_for_pinning(
+    url_str: &str,
+) -> std::result::Result<Vec<std::net::SocketAddr>, String> {
+    let url = reqwest::Url::parse(url_str).map_err(|e| format!("Invalid URL: {}", e))?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| "URL has no host".to_string())?
+        .to_string();
+    let port = url
+        .port_or_known_default()
+        .ok_or_else(|| "URL has no port".to_string())?;
+
+    // If the URL host is already an IP literal, validate_fetch_url already
+    // covered it — no DNS to rebind. Return an empty pin list to signal
+    // "use default resolver" since pinning by hostname is moot.
+    if host.parse::<std::net::IpAddr>().is_ok() {
+        return Ok(Vec::new());
+    }
+
+    let host_with_port = format!("{}:{}", host, port);
+    let addrs: Vec<std::net::SocketAddr> = match tokio::net::lookup_host(&host_with_port).await {
+        Ok(iter) => iter.collect(),
+        Err(e) => return Err(format!("DNS resolution failed: {}", e)),
+    };
+    if addrs.is_empty() {
+        return Err(format!("DNS resolution returned no addresses for {}", host));
+    }
+    for addr in &addrs {
+        if is_private_or_internal_ip(&addr.ip()) {
+            return Err(format!(
+                "DNS rebinding blocked: {} resolves to internal IP {}",
+                host,
+                addr.ip()
+            ));
+        }
+    }
+    Ok(addrs)
+}
+
 async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<ToolResult> {
     let url = match args.get("url") {
         Some(u) => u,
@@ -1229,6 +1328,20 @@ async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<ToolResult>
             output: format!("URL blocked for security: {}", reason),
         });
     }
+
+    // CLI-NEW-003 second-layer fix: pre-resolve and pin the addresses, so
+    // an attacker-controlled public hostname that flips to a private IP
+    // between validation and connection cannot land us on the wrong host.
+    let pinned_addrs = match resolve_and_validate_for_pinning(url).await {
+        Ok(a) => a,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "web_fetch".to_string(),
+                success: false,
+                output: format!("URL blocked for security: {}", reason),
+            });
+        }
+    };
 
     print_tool_status("web_fetch", &format!("WebFetch({})", url));
 
@@ -1259,11 +1372,24 @@ async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<ToolResult>
         }
     });
 
-    let client = reqwest::Client::builder()
+    let mut client_builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
-        .redirect(redirect_policy)
-        .build()
-        .unwrap_or_default();
+        .redirect(redirect_policy);
+
+    // Pin the resolved addresses for this hostname when we have any
+    // (i.e., the URL host was a name, not an IP literal). This binds the
+    // connection to the addresses that already passed the private-range
+    // check, eliminating the DNS-rebinding window for the initial URL.
+    if !pinned_addrs.is_empty() {
+        if let Some(host) = reqwest::Url::parse(url)
+            .ok()
+            .and_then(|u| u.host_str().map(|s| s.to_string()))
+        {
+            client_builder = client_builder.resolve_to_addrs(&host, &pinned_addrs);
+        }
+    }
+
+    let client = client_builder.build().unwrap_or_default();
 
     match client.get(url.as_str()).send().await {
         Ok(resp) => {
@@ -2895,5 +3021,108 @@ mod path_validation_regressions {
             "in-project path was wrongly refused: {}",
             result.output
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CLI-NEW-003 DNS-rebinding helper tests (2026-05-04 audit, 2nd pass)
+//
+// `is_private_or_internal_ip` is the pin-time guard that closes the
+// DNS-rebinding window for `web_fetch`. These tests lock the boundaries
+// — every IP that an attacker might try to coerce a public hostname to
+// resolve to must be classified as internal.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod private_ip_classifier_tests {
+    use super::is_private_or_internal_ip;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+    fn v4(a: u8, b: u8, c: u8, d: u8) -> IpAddr {
+        IpAddr::V4(Ipv4Addr::new(a, b, c, d))
+    }
+
+    #[test]
+    fn rejects_aws_imds_169_254() {
+        assert!(is_private_or_internal_ip(&v4(169, 254, 169, 254)));
+    }
+
+    #[test]
+    fn rejects_rfc1918_ranges() {
+        assert!(is_private_or_internal_ip(&v4(10, 0, 0, 1)));
+        assert!(is_private_or_internal_ip(&v4(172, 16, 0, 1)));
+        assert!(is_private_or_internal_ip(&v4(172, 31, 255, 254)));
+        assert!(is_private_or_internal_ip(&v4(192, 168, 1, 1)));
+    }
+
+    /// 172.32.0.0 is OUTSIDE the private 172.16.0.0/12 block — must NOT
+    /// be classified as internal. Lock the upper boundary.
+    #[test]
+    fn allows_172_32_public_range() {
+        assert!(!is_private_or_internal_ip(&v4(172, 32, 0, 1)));
+    }
+
+    #[test]
+    fn rejects_loopback_and_unspecified() {
+        assert!(is_private_or_internal_ip(&v4(127, 0, 0, 1)));
+        assert!(is_private_or_internal_ip(&v4(0, 0, 0, 0)));
+    }
+
+    #[test]
+    fn rejects_cgnat_100_64() {
+        assert!(is_private_or_internal_ip(&v4(100, 64, 0, 1)));
+        assert!(is_private_or_internal_ip(&v4(100, 127, 255, 254)));
+        // Just above the CGNAT block.
+        assert!(!is_private_or_internal_ip(&v4(100, 128, 0, 1)));
+        // Just below.
+        assert!(!is_private_or_internal_ip(&v4(100, 63, 255, 254)));
+    }
+
+    #[test]
+    fn rejects_multicast_and_reserved() {
+        assert!(is_private_or_internal_ip(&v4(224, 0, 0, 1)));
+        assert!(is_private_or_internal_ip(&v4(255, 255, 255, 255)));
+    }
+
+    #[test]
+    fn allows_normal_public_v4() {
+        assert!(!is_private_or_internal_ip(&v4(8, 8, 8, 8))); // Google DNS
+        assert!(!is_private_or_internal_ip(&v4(1, 1, 1, 1))); // Cloudflare DNS
+        assert!(!is_private_or_internal_ip(&v4(140, 82, 121, 4))); // GitHub
+    }
+
+    #[test]
+    fn rejects_v6_loopback_and_link_local() {
+        assert!(is_private_or_internal_ip(&IpAddr::V6(Ipv6Addr::LOCALHOST)));
+        assert!(is_private_or_internal_ip(&IpAddr::V6(Ipv6Addr::UNSPECIFIED)));
+        assert!(is_private_or_internal_ip(&IpAddr::V6(
+            "fe80::1".parse().unwrap()
+        )));
+        assert!(is_private_or_internal_ip(&IpAddr::V6(
+            "fc00::1".parse().unwrap()
+        )));
+    }
+
+    /// IPv4-mapped IPv6 of a private IPv4 must be rejected — a common
+    /// trick is to address `127.0.0.1` as `::ffff:127.0.0.1`.
+    #[test]
+    fn rejects_v4_mapped_v6_of_private_v4() {
+        assert!(is_private_or_internal_ip(&IpAddr::V6(
+            "::ffff:127.0.0.1".parse().unwrap()
+        )));
+        assert!(is_private_or_internal_ip(&IpAddr::V6(
+            "::ffff:169.254.169.254".parse().unwrap()
+        )));
+        assert!(is_private_or_internal_ip(&IpAddr::V6(
+            "::ffff:10.0.0.1".parse().unwrap()
+        )));
+    }
+
+    #[test]
+    fn allows_normal_public_v6() {
+        // 2001:4860:4860::8888 is Google Public DNS over IPv6.
+        assert!(!is_private_or_internal_ip(&IpAddr::V6(
+            "2001:4860:4860::8888".parse().unwrap()
+        )));
     }
 }
