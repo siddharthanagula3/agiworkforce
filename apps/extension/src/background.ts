@@ -689,7 +689,12 @@ async function restoreScheduledTaskAlarms(): Promise<void> {
 // `chrome.storage.local.agi_site_allowlist`. Extension pages (popup,
 // side panel, options) remain trusted; tab-originated messages are
 // trusted only if the tab's origin is on the list.
-const DISCOVERY_MESSAGE_TYPES = new Set<string>(['PING', 'GET_AGI_BRIDGE_URL']);
+// SECURITY (H-1): PING and GET_AGI_BRIDGE_URL previously bypassed origin checks.
+// Removed both from the discovery bypass set. Extension-origin senders (popup,
+// side panel) are already trusted via the `!sender.tab` branch in
+// isAllowlistedSender(). Content scripts on arbitrary pages must NOT receive
+// responses to fingerprinting probes.
+const DISCOVERY_MESSAGE_TYPES = new Set<string>();
 let siteAllowlistCache = new Set<string>();
 chrome.storage.local
   .get('agi_site_allowlist')
@@ -731,13 +736,16 @@ function isAllowlistedSender(
 // EXT-3 (audit 2026-05-03): same-tab restriction for DOM-mutation
 // commands. Even with an allowlisted origin, a malicious page must
 // not be able to drive DOM mutation in a different tab.
+// SECURITY (H-2): EVALUATE_SCRIPT removed. It had no handler in content.ts and
+// its presence in this set made a future accidental eval()-based handler look
+// "intentional" to reviewers. Do NOT re-add — content scripts must never
+// expose an eval() surface. Use EXECUTE_SCRIPT + ALLOWED_SCRIPT_OPERATIONS instead.
 const DOM_MUTATION_MESSAGE_TYPES = new Set<string>([
   'TYPE',
   'CLICK',
   'SET_LOCAL_STORAGE',
   'CLEAR_LOCAL_STORAGE',
   'SUBMIT_FORM',
-  'EVALUATE_SCRIPT',
 ]);
 
 function senderTabAllowedToMutate(
@@ -2098,6 +2106,34 @@ const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
   'ollama',
 ]);
 
+// SECURITY (C-1): Gateway URL allowlist. The agi_gateway_url key in
+// chrome.storage.local is writable by any allowlisted page. We therefore
+// validate the stored value against a strict allowlist rather than trusting the
+// raw storage value. Only https://api.agiworkforce.com and its subdomains are
+// accepted. localhost is never accepted for the gateway (bridge URL is separate
+// and validated by validateBridgeUrl).
+const GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>(['https://api.agiworkforce.com']);
+const GATEWAY_URL_SUBDOMAIN_SUFFIX = '.agiworkforce.com';
+
+/**
+ * Returns the validated gateway origin or null.
+ * Accepts: https://api.agiworkforce.com, https://<sub>.agiworkforce.com
+ * Rejects: http:// (JWT would be plaintext), any non-agiworkforce.com host.
+ */
+function validateGatewayUrl(raw: string): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'https:') return null;
+    const origin = `https://${parsed.host}`;
+    if (GATEWAY_URL_ALLOWLIST_EXACT.has(origin)) return origin;
+    if (parsed.hostname.endsWith(GATEWAY_URL_SUBDOMAIN_SUFFIX)) return origin;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 interface ProviderStreamSettings {
   enabled: boolean;
   gatewayUrl: string;
@@ -2114,18 +2150,17 @@ async function getProviderStreamSettings(): Promise<ProviderStreamSettings> {
           return;
         }
         const enabled = result[USE_PROVIDER_STREAM_KEY] === true;
-        const gatewayRaw = (result[GATEWAY_URL_KEY] as string | undefined)?.trim();
+        const gatewayRaw = (result[GATEWAY_URL_KEY] as string | undefined)?.trim() ?? '';
         const overrideRaw = (result[PROVIDER_OVERRIDE_KEY] as string | undefined)?.trim();
         const providerOverride: 'auto' | ProviderStreamProvider =
           overrideRaw && VALID_PROVIDER_IDS.has(overrideRaw as ProviderStreamProvider)
             ? (overrideRaw as ProviderStreamProvider)
             : 'auto';
-        resolve({
-          enabled,
-          gatewayUrl:
-            gatewayRaw && /^https?:\/\//.test(gatewayRaw) ? gatewayRaw : DEFAULT_GATEWAY_URL,
-          providerOverride,
-        });
+        // SECURITY (C-1): Allowlist-validate the stored gateway URL. If storage
+        // was tampered (e.g. evil.com written by a content script), fall back to
+        // the manifest-declared default silently. This prevents JWT exfiltration.
+        const gatewayUrl = validateGatewayUrl(gatewayRaw) ?? DEFAULT_GATEWAY_URL;
+        resolve({ enabled, gatewayUrl, providerOverride });
       },
     );
   });
@@ -2333,10 +2368,41 @@ async function handleChatMessage(
     // The desktop app may expose an HTTP endpoint; fall back to native if unavailable.
     let streamed = false;
 
-    // Build request headers — include Authorization if we have a key
+    // SECURITY (C-2): Never forward the provider API key to the local desktop
+    // bridge (http://localhost:8787). The desktop app authenticates bridge calls
+    // with its own pairing token, not with provider keys. Provider API keys must
+    // only be sent to the provider's own endpoint (api.openai.com, etc.).
+    // Bridge calls use X-Bridge-Token instead; if no bridge token is configured
+    // the request still goes through without a key (desktop supplies its own).
+    const bridgeBaseUrl = AGI_API_BASE ?? '';
+    const isBridgeRequest =
+      bridgeBaseUrl.includes('localhost') || bridgeBaseUrl.includes('127.0.0.1');
+
     const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (resolvedApiKey) {
+    if (!isBridgeRequest && resolvedApiKey) {
+      // Only attach provider API key when sending to a remote (non-bridge) endpoint.
       fetchHeaders['Authorization'] = `Bearer ${resolvedApiKey}`;
+    }
+    // Bridge-token attachment: read pairing token from session storage.
+    // This is set during the one-time popup pairing flow.
+    if (isBridgeRequest) {
+      const bridgeToken = await new Promise<string | null>((res) => {
+        try {
+          chrome.storage.session.get('agi_bridge_token', (r) => {
+            if (chrome.runtime.lastError) {
+              res(null);
+              return;
+            }
+            const t = (r['agi_bridge_token'] as string | undefined)?.trim();
+            res(t ?? null);
+          });
+        } catch {
+          res(null);
+        }
+      });
+      if (bridgeToken) {
+        fetchHeaders['X-Bridge-Token'] = bridgeToken;
+      }
     }
 
     try {

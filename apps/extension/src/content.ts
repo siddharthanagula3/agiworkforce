@@ -1057,23 +1057,13 @@ const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown>
     el?.blur();
     return !!el;
   },
-  getLocalStorage: (...args: unknown[]) => {
-    const key = args[0] as string | null | undefined;
-    if (!key) {
-      return { ...window.localStorage };
-    }
-    return window.localStorage.getItem(key);
-  },
-  setLocalStorage: (...args: unknown[]) => {
-    const key = String(args[0] ?? '');
-    const value = String(args[1] ?? '');
-    window.localStorage.setItem(key, value);
-    return true;
-  },
-  clearLocalStorage: () => {
-    window.localStorage.clear();
-    return true;
-  },
+  // SECURITY (H-3): getLocalStorage, setLocalStorage, clearLocalStorage removed.
+  // Any allowlisted origin could invoke these via EXECUTE_SCRIPT, reading or
+  // destroying auth tokens and session data on any tab the user is viewing.
+  // Legitimate session-management operations (e.g. post-autofill cleanup on
+  // linkedin.com) must be implemented as a specific named operation that is
+  // authorized on a per-call basis via native messaging rather than being freely
+  // callable by any allowlisted origin. Do NOT re-add these three operations.
 };
 
 async function handleExecuteScript(message: ExecuteScriptMessage): Promise<ExtensionResponse> {
