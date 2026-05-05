@@ -918,7 +918,34 @@ function injectStyles(): void {
   document.head.appendChild(style);
 }
 
+// CHROME-NEW-005 fix (2026-05-04 audit): DOMPurify allows `target` and `rel`
+// attributes individually, but doesn't enforce that `target="_blank"` must
+// carry `rel="noopener noreferrer"`. A crafted LLM response with raw HTML
+// `<a target="_blank">` would otherwise open with `window.opener` exposed,
+// letting the destination page navigate the side-panel via
+// `window.opener.location`. Install an attribute-level hook that hardens
+// every anchor that has `target` (or that points to a different origin)
+// with `rel="noopener noreferrer"`. Idempotent — adding the hook multiple
+// times is safe because DOMPurify dedupes by function reference.
+let domPurifyHookInstalled = false;
+function ensureDomPurifyHook(): void {
+  if (domPurifyHookInstalled) return;
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (!(node instanceof HTMLAnchorElement)) return;
+    const hasTarget = node.hasAttribute('target');
+    if (!hasTarget) return;
+    const existing = (node.getAttribute('rel') ?? '').toLowerCase().split(/\s+/);
+    const required = ['noopener', 'noreferrer'];
+    for (const flag of required) {
+      if (!existing.includes(flag)) existing.push(flag);
+    }
+    node.setAttribute('rel', existing.filter(Boolean).join(' '));
+  });
+  domPurifyHookInstalled = true;
+}
+
 function sanitizeHtml(dirty: string): string {
+  ensureDomPurifyHook();
   return DOMPurify.sanitize(dirty, {
     ALLOWED_TAGS: [
       'p',

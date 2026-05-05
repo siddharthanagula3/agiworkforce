@@ -598,11 +598,27 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
       shortcutId: task.shortcutId,
     } as import('./types').ReplayShortcutMessage);
   } else if (task.prompt) {
+    // CHROME-NEW-007 fix (2026-05-05): cap stored task prompt length before
+    // dispatching to the LLM. The prompt sits in `chrome.storage.local` which
+    // is per-extension and not directly attacker-writable from outside, but
+    // any code path with this extension's context that can write to local
+    // storage (a future bug, a corrupted import-tasks flow) could plant a
+    // multi-megabyte prompt. We cap at 10 000 chars — far above legitimate
+    // user input but small enough to bound LLM cost on the user's API key.
+    const TASK_PROMPT_MAX_CHARS = 10_000;
+    const safePrompt = String(task.prompt).slice(0, TASK_PROMPT_MAX_CHARS);
+    if (safePrompt.length < task.prompt.length) {
+      logger.warn('Scheduled task prompt truncated', {
+        taskId: task.id,
+        originalLength: task.prompt.length,
+        truncatedTo: TASK_PROMPT_MAX_CHARS,
+      });
+    }
     // Send as chat message via the same path as side panel
     const chatMsg: import('./types').ChatMessageMessage = {
       type: 'CHAT_MESSAGE',
       id: `task_${task.id}_${Date.now()}`,
-      text: task.prompt,
+      text: safePrompt,
       timestamp: Date.now(),
     };
     void handleChatMessage(chatMsg, {} as chrome.runtime.MessageSender);
@@ -740,12 +756,45 @@ function isAllowlistedSender(
 // its presence in this set made a future accidental eval()-based handler look
 // "intentional" to reviewers. Do NOT re-add — content scripts must never
 // expose an eval() surface. Use EXECUTE_SCRIPT + ALLOWED_SCRIPT_OPERATIONS instead.
+//
+// CHROME-NEW-002 fix (2026-05-04 audit): the prior set covered only `TYPE`,
+// `CLICK`, storage, and `SUBMIT_FORM`. Every other content-script handler
+// in `content.ts:222-274` (`SELECT_OPTION`, `CHECK`, `UNCHECK`, `FOCUS`,
+// `BLUR`, `HOVER`, `SCROLL`, `DRAG_DROP`, `CLICK_AT_COORDINATES`) was
+// forwarded to any caller-supplied `tabId` with no same-tab check. An
+// allowlisted page (e.g., a compromised LinkedIn / Lever clone) could send
+// `{ type: 'SELECT_OPTION', tabId: <banking>, selector: '#amount',
+// value: '10000' }` and drive a different tab. We now gate every
+// DOM-mutation-class message through `senderTabAllowedToMutate`. Recording
+// types (`START_RECORDING` / `STOP_RECORDING`) read state and aren't
+// mutations, so they remain outside this set.
 const DOM_MUTATION_MESSAGE_TYPES = new Set<string>([
   'TYPE',
   'CLICK',
   'SET_LOCAL_STORAGE',
   'CLEAR_LOCAL_STORAGE',
   'SUBMIT_FORM',
+  // Added 2026-05-04 — every type below has a handler in content.ts that
+  // observably mutates the target tab's DOM or page state.
+  'SELECT_OPTION',
+  'CHECK',
+  'UNCHECK',
+  'FOCUS',
+  'BLUR',
+  'HOVER',
+  'SCROLL',
+  'DRAG_DROP',
+  'CLICK_AT_COORDINATES',
+  'EXECUTE_SCRIPT',
+  // CHROME-NEW-005 fix (2026-05-05): compound action types must also be
+  // gated by `senderTabAllowedToMutate`. `RUN_PAGE_ACTIONS` is a batch
+  // executor that internally invokes any of the simple types above —
+  // without this guard, an allowlisted origin could send
+  // `{ type: 'RUN_PAGE_ACTIONS', tabId: <other-tab>, actions: [...] }` and
+  // drive a different tab's DOM. `AUTO_FILL_JOB_APPLICATION` is the
+  // LinkedIn / Lever autofill entry point and writes to form fields.
+  'RUN_PAGE_ACTIONS',
+  'AUTO_FILL_JOB_APPLICATION',
 ]);
 
 function senderTabAllowedToMutate(
@@ -1324,6 +1373,28 @@ const BLOCKED_COOKIE_DOMAINS: RegExp[] = [
   /twitter\.com$/i,
   /x\.com$/i,
   /instagram\.com$/i,
+  // CHROME-NEW-006 fix (2026-05-05): explicitly block the very platforms the
+  // extension *targets* for autofill / chat assistance. The agent only needs
+  // DOM-level read/write on these origins — not their session cookies. Without
+  // these entries, a malicious script running on an allowlisted page could
+  // call GET_COOKIES against `linkedin.com` / `slack.com` / `notion.so` /
+  // `figma.com` / `lever.co` and exfiltrate the user's session token, even
+  // though the regex `/health\.com/` and friends already cover unrelated
+  // categories.
+  /(^|\.)linkedin\.com$/i,
+  /(^|\.)slack\.com$/i,
+  /(^|\.)notion\.so$/i,
+  /(^|\.)figma\.com$/i,
+  /(^|\.)lever\.co$/i,
+  /(^|\.)greenhouse\.io$/i,
+  /(^|\.)workday\.com$/i,
+  // CHROME-NEW-003 fix (2026-05-04): the extension's own auth surfaces are
+  // sensitive too. An allowlisted page that calls GET_COOKIES against
+  // `https://<ref>.supabase.co` would receive Supabase auth cookies, and
+  // against `https://agiworkforce.com` would receive `agi_access_token` /
+  // `agi_refresh_token`. Block both at the cookie layer.
+  /\.supabase\.(co|io)$/i,
+  /(^|\.)agiworkforce\.com$/i,
 ];
 
 function isCookieDomainAllowed(urlOrDomain: string): boolean {
@@ -1980,8 +2051,10 @@ async function captureCurrentPage(): Promise<void> {
  *  Port 8787 is the canonical AGI Workforce desktop bridge port (matches VS Code ext + desktop). */
 const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8787';
 
-/** Allowed bridge URL hostnames — only local connections to the desktop app are permitted. */
-const ALLOWED_BRIDGE_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
+/** Allowed bridge URL hostnames — only local connections to the desktop app are permitted.
+ *  `0.0.0.0` removed (SEV-CHEXT-09): on Linux it routes to LAN-bound services, defeating the
+ *  loopback-only contract. Use the explicit loopback addresses only. */
+const ALLOWED_BRIDGE_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /** Maximum response body size for NLWEB probe requests (256 KB). */
 const MAX_PROBE_RESPONSE_BYTES = 262_144;
@@ -2257,7 +2330,17 @@ async function handleChatMessage(
   message: import('./types').ChatMessageMessage,
   _sender: chrome.runtime.MessageSender,
 ): Promise<void> {
-  const { id, text, pageContext, conversationHistory = [], apiKey } = message;
+  // SECURITY (chrome-HIGH-3, audit 2026-05-04): the previous implementation
+  // destructured an `apiKey` field straight off the inbound message and used
+  // it as the authoritative provider key. A malicious page (via a compromised
+  // allowlisted origin or via XSS on an allowlisted site) could craft a
+  // `CHAT_MESSAGE` carrying an attacker-controlled `apiKey` and force every
+  // outbound LLM request to authenticate against that key, or to a key the
+  // attacker wants the user to bill. The api key MUST come from the user's
+  // own session storage — written exclusively by the trusted side-panel UI
+  // — and never from the message wire. The `apiKey` destructure is gone;
+  // the resolution path below queries `chrome.storage.session.agi_api_key`.
+  const { id, text, pageContext, conversationHistory = [] } = message;
 
   const broadcastChunk = (chunkText: string, done: boolean, error?: string): void => {
     const chunk: import('./types').ChatChunkMessage = {
@@ -2292,9 +2375,18 @@ async function handleChatMessage(
 
   messages.push(...conversationHistory.map((h) => ({ role: h.role, content: h.content })));
 
-  // Append page context to the user message if provided
+  // Append page context to the user message if provided.
+  // SECURITY: The fixed `<page_context>` delimiter was trivially escapable —
+  // a hostile page (or a Slack DM / Gmail body that the user copies) could
+  // contain a literal `</page_context>` tag and break out of the fence,
+  // injecting attacker-controlled instructions into the model's user turn.
+  // Mitigation: bind the fence to a per-request random nonce so any injected
+  // closing tag the attacker chooses cannot match the actual fence string.
+  const fenceNonce = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
   const userContent = pageContext
-    ? `${text}\n\n<page_context>\n${pageContext}\n</page_context>`
+    ? `${text}\n\n<page_context_${fenceNonce}>\n${pageContext}\n</page_context_${fenceNonce}>`
     : text;
 
   messages.push({ role: 'user', content: userContent });
@@ -2338,14 +2430,11 @@ async function handleChatMessage(
   // Resolve the bridge URL at call time so it picks up any in-session changes.
   const AGI_API_BASE = await getAgiBridgeBaseUrl();
 
-  // Resolve the API key: prefer the value forwarded from the side panel,
-  // then check chrome.storage.session (where side_panel.ts persists keys).
-  // CRIT-004: Do NOT read from chrome.storage.local as an ongoing fallback.
+  // Resolve the API key strictly from chrome.storage.session — written only by
+  // the trusted side-panel UI. See chrome-HIGH-3 comment at the top of
+  // handleChatMessage for why message-body apiKey is no longer accepted.
+  // CRIT-004 still applies: do NOT fall back to chrome.storage.local.
   const resolvedApiKey: string | null = await new Promise((resolve) => {
-    if (apiKey) {
-      resolve(apiKey);
-      return;
-    }
     try {
       chrome.storage.session.get('agi_api_key', (sessionResult) => {
         if (chrome.runtime.lastError) {
