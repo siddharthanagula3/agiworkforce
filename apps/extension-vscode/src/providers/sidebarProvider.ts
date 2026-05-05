@@ -28,7 +28,11 @@ import {
 import { type ConversationStore } from '../storage/conversationStore';
 import { type ConversationTreeProvider } from './conversationTreeProvider';
 import { getContextBuilder } from '../services/contextBuilder';
-import { MODEL_PICKER_OPTIONS, normalizeConfiguredModelId } from '../services/modelConstants';
+import {
+  MODEL_PICKER_OPTIONS,
+  normalizeConfiguredModelId,
+  getModelProviderInfo,
+} from '../services/modelConstants';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -50,6 +54,7 @@ type ExtToWebviewMessage =
   | { type: 'error'; payload: { message: string } }
   | { type: 'apiKeyStatus'; payload: { hasKey: boolean } }
   | { type: 'model'; payload: { model: string } }
+  | { type: 'providerBadge'; payload: { providerLabel: string; brandColor: string } }
   | { type: 'fileSearchResults'; payload: { files: string[] } }
   | { type: 'conversationCleared' }
   | { type: 'addUserMessage'; payload: { text: string } };
@@ -139,6 +144,36 @@ function getWebviewContent(
       font-weight: 600;
       color: var(--accent-teal);
       letter-spacing: 0.3px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .provider-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      padding: 2px 7px 2px 5px;
+      border-radius: 10px;
+      color: rgba(0, 0, 0, 0.75);
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: background 0.25s ease;
+    }
+
+    .provider-badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.4);
+      flex-shrink: 0;
     }
 
     .header-actions {
@@ -440,7 +475,13 @@ function getWebviewContent(
 
   <!-- ── Header ── -->
   <div class="header">
-    <span class="header-title">AGI Workforce</span>
+    <div class="header-left">
+      <span class="header-title">AGI Workforce</span>
+      <span class="provider-badge" id="providerBadge" style="display:none">
+        <span class="provider-badge-dot" id="providerBadgeDot"></span>
+        <span id="providerBadgeText"></span>
+      </span>
+    </div>
     <div class="header-actions">
       <button class="icon-btn" id="diagBtn" title="Share diagnostics">⚡</button>
       <button class="icon-btn" id="clearBtn" title="New conversation">✕</button>
@@ -501,6 +542,18 @@ function getWebviewContent(
     const saveKeyBtn = document.getElementById('saveKeyBtn');
     const diagBtn = document.getElementById('diagBtn');
     const mentionDropdown = document.getElementById('mentionDropdown');
+    const providerBadgeEl = document.getElementById('providerBadge');
+    const providerBadgeDotEl = document.getElementById('providerBadgeDot');
+    const providerBadgeTextEl = document.getElementById('providerBadgeText');
+
+    // ── Provider badge helper ─────────────────────────────────────────────────
+    function updateProviderBadge(providerLabel, brandColor) {
+      if (!providerBadgeEl || !providerBadgeDotEl || !providerBadgeTextEl) return;
+      providerBadgeEl.style.background = brandColor;
+      providerBadgeDotEl.style.background = 'rgba(0,0,0,0.35)';
+      providerBadgeTextEl.textContent = providerLabel;
+      providerBadgeEl.style.display = 'inline-flex';
+    }
 
     // ── State ─────────────────────────────────────────────────────────────────
     let streaming = false;
@@ -803,6 +856,10 @@ function getWebviewContent(
         if (opt) modelSelect.value = msg.payload.model;
       }
 
+      else if (msg.type === 'providerBadge') {
+        updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor);
+      }
+
       else if (msg.type === 'fileSearchResults') {
         showMentionResults(msg.payload.files);
       }
@@ -951,11 +1008,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         const hasKey = (await getApiKey(this._secrets)) !== undefined;
         this._post({ type: 'apiKeyStatus', payload: { hasKey } });
 
-        // Send current model setting
+        // Send current model setting + provider badge
         const model = normalizeConfiguredModelId(
           vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
         );
         this._post({ type: 'model', payload: { model } });
+        this._postProviderBadge(model);
         break;
       }
 
@@ -982,6 +1040,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
         );
         this._post({ type: 'model', payload: { model } });
+        this._postProviderBadge(model);
         break;
       }
 
@@ -1192,6 +1251,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   private _post(msg: ExtToWebviewMessage): void {
     this._view?.webview.postMessage(msg);
+  }
+
+  /** Push provider badge info derived from the active model ID to the webview. */
+  private _postProviderBadge(modelId: string): void {
+    // Auto-mode models resolve to AGI Cloud badge
+    if (modelId.startsWith('auto-')) {
+      this._post({
+        type: 'providerBadge',
+        payload: { providerLabel: 'AGI Cloud', brandColor: '#F59E0B' },
+      });
+      return;
+    }
+    const { providerLabel, brandColor } = getModelProviderInfo(modelId);
+    this._post({ type: 'providerBadge', payload: { providerLabel, brandColor } });
   }
 
   /** Programmatically reveal the sidebar panel. */
