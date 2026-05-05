@@ -258,6 +258,12 @@ struct Cli {
     #[arg(long)]
     no_tui: bool,
 
+    /// Disable OS-level sandboxing for tool execution.
+    /// On macOS this suppresses Seatbelt; on Linux it suppresses bwrap.
+    /// The TUI footer will show a red "no sandbox" indicator when this flag is set.
+    #[arg(long)]
+    no_sandbox: bool,
+
     /// Input format for print/SDK mode (text or stream-json).
     #[arg(long, value_name = "FORMAT", value_enum, default_value = "text")]
     input_format: cli_options::InputFormat,
@@ -1859,6 +1865,27 @@ async fn main() -> Result<()> {
     // Resolve team mode from --team flag or AGI_TEAM env var
     let team_mode = cli.team || std::env::var("AGI_TEAM").is_ok_and(|v| v == "1" || v == "true");
 
+    // Quota warning: only for Hobby-tier managed accounts with < 10% credits left.
+    // BYOK and Local users never see this banner — they have no managed quota.
+    // TODO(phase-5): wire to real /quota endpoint once cloud auth exposes remaining_pct.
+    {
+        let remaining: u8 = std::env::var("AGI_QUOTA_REMAINING_PCT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(100);
+        let is_hobby = std::env::var("AGI_PLAN")
+            .map(|v| v.eq_ignore_ascii_case("hobby"))
+            .unwrap_or(false);
+        if is_hobby && remaining < 10 {
+            eprintln!(
+                "{}",
+                colored::Colorize::yellow(
+                    "Warning: you have less than 10% of your weekly limit left. Run /status for a breakdown."
+                )
+            );
+        }
+    }
+
     // Interactive mode: TUI (default) or classic REPL (--no-tui)
     if cli.no_tui {
         repl::run_repl(
@@ -1897,6 +1924,7 @@ async fn main() -> Result<()> {
             cli.provider,
             effective_permission_mode,
             effective_auto_approve_plan,
+            cli.no_sandbox,
         )
         .await
     }
