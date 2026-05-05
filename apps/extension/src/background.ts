@@ -8,6 +8,11 @@ import type {
 } from './types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import { getPlatformPrompt } from './platform-prompts';
+import {
+  streamFromProvider,
+  type ProviderStreamProvider,
+  type StreamChunk as ProviderStreamChunk,
+} from './providerStreamClient';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -2076,6 +2081,143 @@ async function getAgiBridgeBaseUrl(): Promise<string> {
   });
 }
 
+/**
+ * Settings keys for the optional `/api/v1/providers/:id/stream` path that
+ * routes through the AGI Workforce api-gateway instead of the local desktop
+ * bridge. Default-off; enabled by setting `chrome.storage.local.agi_use_provider_stream = true`.
+ */
+const USE_PROVIDER_STREAM_KEY = 'agi_use_provider_stream';
+const GATEWAY_URL_KEY = 'agi_gateway_url';
+const PROVIDER_OVERRIDE_KEY = 'agi_provider_override';
+const SUPABASE_JWT_SESSION_KEY = 'agi_supabase_jwt';
+const DEFAULT_GATEWAY_URL = 'https://api.agiworkforce.com';
+const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
+  'anthropic',
+  'openai',
+  'google',
+  'ollama',
+]);
+
+interface ProviderStreamSettings {
+  enabled: boolean;
+  gatewayUrl: string;
+  providerOverride: 'auto' | ProviderStreamProvider;
+}
+
+async function getProviderStreamSettings(): Promise<ProviderStreamSettings> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(
+      [USE_PROVIDER_STREAM_KEY, GATEWAY_URL_KEY, PROVIDER_OVERRIDE_KEY],
+      (result) => {
+        if (chrome.runtime.lastError) {
+          resolve({ enabled: false, gatewayUrl: DEFAULT_GATEWAY_URL, providerOverride: 'auto' });
+          return;
+        }
+        const enabled = result[USE_PROVIDER_STREAM_KEY] === true;
+        const gatewayRaw = (result[GATEWAY_URL_KEY] as string | undefined)?.trim();
+        const overrideRaw = (result[PROVIDER_OVERRIDE_KEY] as string | undefined)?.trim();
+        const providerOverride: 'auto' | ProviderStreamProvider =
+          overrideRaw && VALID_PROVIDER_IDS.has(overrideRaw as ProviderStreamProvider)
+            ? (overrideRaw as ProviderStreamProvider)
+            : 'auto';
+        resolve({
+          enabled,
+          gatewayUrl:
+            gatewayRaw && /^https?:\/\//.test(gatewayRaw) ? gatewayRaw : DEFAULT_GATEWAY_URL,
+          providerOverride,
+        });
+      },
+    );
+  });
+}
+
+async function getSupabaseJwtFromStorage(): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.session.get(SUPABASE_JWT_SESSION_KEY, (sessionResult) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+          return;
+        }
+        const stored = (sessionResult[SUPABASE_JWT_SESSION_KEY] as string | undefined)?.trim();
+        resolve(stored && stored.startsWith('eyJ') ? stored : null);
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+function inferProviderFromModel(modelId: string | undefined): ProviderStreamProvider {
+  if (!modelId) return 'anthropic';
+  const m = modelId.toLowerCase();
+  if (m.startsWith('claude-')) return 'anthropic';
+  if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('codex-')) return 'openai';
+  if (m.startsWith('gemini-')) return 'google';
+  if (
+    m === 'ollama-local' ||
+    m.startsWith('llama') ||
+    m.startsWith('qwen') ||
+    m.startsWith('mistral')
+  ) {
+    return 'ollama';
+  }
+  return 'anthropic';
+}
+
+async function getSelectedModel(): Promise<string> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('agi_model', (result) => {
+      if (chrome.runtime.lastError) {
+        resolve('claude-sonnet-4.6');
+        return;
+      }
+      const stored = (result['agi_model'] as string | undefined)?.trim();
+      resolve(stored && stored !== 'auto' ? stored : 'claude-sonnet-4.6');
+    });
+  });
+}
+
+/**
+ * Stream a chat reply via the api-gateway's `/api/v1/providers/:id/stream`
+ * endpoint. Throws if the upstream returns an error chunk so the caller can
+ * fall back to the legacy bridge path.
+ */
+async function streamChatViaProvider(params: {
+  gatewayUrl: string;
+  providerId: ProviderStreamProvider;
+  jwt: string;
+  model: string;
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  broadcast: (text: string, done: boolean, error?: string) => void;
+}): Promise<void> {
+  const { gatewayUrl, providerId, jwt, model, messages, broadcast } = params;
+  const stream = streamFromProvider({
+    gatewayUrl,
+    providerId,
+    authToken: jwt,
+    request: { model, messages },
+  });
+  let sawError: { code?: string; message: string } | null = null;
+  for await (const chunk of stream as AsyncIterable<ProviderStreamChunk>) {
+    if (chunk.type === 'text-delta') {
+      if (chunk.delta) broadcast(chunk.delta, false);
+    } else if (chunk.type === 'error') {
+      sawError = { ...(chunk.code ? { code: chunk.code } : {}), message: chunk.message };
+    } else if (chunk.type === 'stop') {
+      if (sawError) {
+        throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
+      }
+      broadcast('', true);
+      return;
+    }
+  }
+  if (sawError) {
+    throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
+  }
+  broadcast('', true);
+}
+
 async function handleChatMessage(
   message: import('./types').ChatMessageMessage,
   _sender: chrome.runtime.MessageSender,
@@ -2121,6 +2263,42 @@ async function handleChatMessage(
     : text;
 
   messages.push({ role: 'user', content: userContent });
+
+  // Optional: route via the AGI Workforce api-gateway provider-stream endpoint.
+  // Default-off; user opts in by setting `agi_use_provider_stream = true` in
+  // chrome.storage.local along with a Supabase JWT in chrome.storage.session.
+  const providerStreamSettings = await getProviderStreamSettings();
+  if (providerStreamSettings.enabled) {
+    const jwt = await getSupabaseJwtFromStorage();
+    if (jwt) {
+      try {
+        const model = await getSelectedModel();
+        const providerId =
+          providerStreamSettings.providerOverride === 'auto'
+            ? inferProviderFromModel(model)
+            : providerStreamSettings.providerOverride;
+        await streamChatViaProvider({
+          gatewayUrl: providerStreamSettings.gatewayUrl,
+          providerId,
+          jwt,
+          model,
+          messages: messages as Array<{
+            role: 'user' | 'assistant' | 'system';
+            content: string;
+          }>,
+          broadcast: broadcastChunk,
+        });
+        return;
+      } catch (err) {
+        logger.warn('Provider-stream path failed, falling back to legacy bridge', err);
+        // fall through to legacy fetch + native fallback
+      }
+    } else {
+      logger.debug(
+        'Provider-stream enabled but no Supabase JWT in session storage — using legacy path',
+      );
+    }
+  }
 
   // Resolve the bridge URL at call time so it picks up any in-session changes.
   const AGI_API_BASE = await getAgiBridgeBaseUrl();
