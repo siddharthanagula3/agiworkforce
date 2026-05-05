@@ -23,6 +23,68 @@ const TERMINAL_NAME = 'AGI Workforce';
  */
 const MAX_CAPTURE_CHARS = 8000;
 
+// ─── Command safety (VSCODE-04) ───────────────────────────────────────────────
+
+/**
+ * Patterns that indicate a dangerous shell construct.
+ * We block these even in trusted workspaces when the command comes from
+ * an LLM suggestion, because prompt injection can control LLM output.
+ */
+const DANGEROUS_SHELL_PATTERNS = [
+  /\$\(/, // command substitution $(...)
+  /`/, // backtick substitution
+  /;/, // command chaining ;
+  /&&/, // conditional chaining &&
+  /\|\|/, // conditional chaining ||
+  />>?/, // output redirect (> or >>)
+  /</, // input redirect
+  /\|/, // pipe
+  /\.\./, // path traversal (..)
+];
+
+/** Denylist of inherently destructive command prefixes / patterns. */
+const DESTRUCTIVE_COMMAND_PATTERNS = [
+  /^rm\s+-rf?\s/i, // rm -rf
+  /^:\(\)\s*\{/, // fork bomb
+  /^sudo\s+rm/i, // sudo rm
+  /^mkfs/i, // format filesystem
+  /^dd\s+if=/i, // dd disk write
+];
+
+/**
+ * ANSI escape code pattern — strip before displaying or executing.
+ * Constructed via RegExp() to avoid the no-control-regex lint rule on \x1b.
+ */
+// eslint-disable-next-line no-control-regex
+const ANSI_ESCAPE = /\x1b\[[0-9;]*[mGKHF]/g;
+
+/**
+ * Validate that an LLM-suggested command is safe to present/run.
+ * Returns an error string if the command is rejected, or undefined if it's ok.
+ */
+export function validateSuggestedCommand(cmd: string): string | undefined {
+  if (cmd.trim().length === 0) {
+    return 'Command is empty.';
+  }
+
+  // Strip ANSI before checking
+  const clean = cmd.replace(ANSI_ESCAPE, '').trim();
+
+  for (const pattern of DANGEROUS_SHELL_PATTERNS) {
+    if (pattern.test(clean)) {
+      return `Command rejected: contains unsafe shell construct matching ${pattern}.`;
+    }
+  }
+
+  for (const pattern of DESTRUCTIVE_COMMAND_PATTERNS) {
+    if (pattern.test(clean)) {
+      return `Command rejected: matches destructive command pattern.`;
+    }
+  }
+
+  return undefined;
+}
+
 // ─── TerminalProvider ────────────────────────────────────────────────────────
 
 export class TerminalProvider implements vscode.Disposable {
@@ -185,10 +247,12 @@ export class TerminalProvider implements vscode.Disposable {
 
     const response = await chatCompletion(this._secrets, messages, cancellationToken);
 
-    // Parse response into individual command suggestions
+    // Parse response into individual command suggestions.
+    // Take only the first (non-comment, non-empty) line of each LLM output line
+    // to prevent multi-line compound commands from sneaking through.
     const suggestions = response
       .split('\n')
-      .map((line) => line.trim())
+      .map((line) => line.replace(ANSI_ESCAPE, '').trim()) // strip ANSI escapes
       .filter((line) => line !== '' && !line.startsWith('#') && !line.startsWith('//'));
 
     if (suggestions.length === 0) {
@@ -196,14 +260,29 @@ export class TerminalProvider implements vscode.Disposable {
       return undefined;
     }
 
-    // Show QuickPick with the suggestions
-    const items: vscode.QuickPickItem[] = suggestions.map((cmd) => ({
-      label: cmd,
-      description: 'Press Enter to run this command',
-    }));
+    // Validate each suggestion — keep valid ones, annotate rejected ones.
+    type SuggestionItem = vscode.QuickPickItem & { _cmd: string; _valid: boolean };
+    const items: SuggestionItem[] = suggestions.map((cmd) => {
+      const err = validateSuggestedCommand(cmd);
+      if (err !== undefined) {
+        return {
+          label: `$(error) ${cmd}`,
+          description: `BLOCKED — ${err}`,
+          detail: 'This command will NOT be run.',
+          _cmd: cmd,
+          _valid: false,
+        };
+      }
+      return {
+        label: cmd,
+        description: 'Suggested by AI — review carefully before running',
+        _cmd: cmd,
+        _valid: true,
+      };
+    });
 
     const picked = await vscode.window.showQuickPick(items, {
-      title: 'AGI Workforce — Suggested Commands',
+      title: 'AGI Workforce — Suggested Commands (AI-generated, verify before running)',
       placeHolder: 'Select a command to run in the terminal',
     });
 
@@ -211,8 +290,29 @@ export class TerminalProvider implements vscode.Disposable {
       return undefined;
     }
 
-    this.runCommand(picked.label);
-    return picked.label;
+    // Reject commands that failed validation.
+    if (!picked._valid) {
+      vscode.window.showErrorMessage(
+        `AGI Workforce: Refused to run command — ${picked.description ?? 'safety check failed'}`,
+      );
+      return undefined;
+    }
+
+    const cmd = picked._cmd;
+
+    // VSCODE-04: require explicit confirmation showing the exact command text.
+    const confirmed = await vscode.window.showWarningMessage(
+      `Run the following command in your terminal?\n\n${cmd}\n\nThis command was suggested by AI. Review it carefully before proceeding.`,
+      { modal: true },
+      'Run Command',
+    );
+
+    if (confirmed !== 'Run Command') {
+      return undefined;
+    }
+
+    this.runCommand(cmd);
+    return cmd;
   }
 
   // ─── Output capture (private) ────────────────────────────────────────────

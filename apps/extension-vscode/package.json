@@ -1,7 +1,7 @@
 {
   "name": "agi-workforce",
   "displayName": "AGI Workforce",
-  "description": "Multi-model AI coding assistant — GPT, Claude, Gemini, and 10+ LLM providers in VS Code",
+  "description": "Multi-provider AI coding assistant — 10+ providers (GPT, Claude, Gemini, and more) in VS Code",
   "version": "0.3.0",
   "publisher": "agiworkforce",
   "license": "PROPRIETARY",
@@ -43,6 +43,20 @@
     "onChatParticipant:agiworkforce.agi",
     "onView:agi-workforce.sidebar"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "API endpoint, gateway URL, CLI path, and system prompt settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
+      "restrictedConfigurations": [
+        "agiWorkforce.apiEndpoint",
+        "agiWorkforce.gatewayUrl",
+        "agiWorkforce.cliPath",
+        "agiWorkforce.systemPrompt",
+        "agiWorkforce.agent.autoApply",
+        "agiWorkforce.autoApplyFixes"
+      ]
+    }
+  },
   "main": "./out/extension.js",
   "icon": "media/icon.png",
   "contributes": {
