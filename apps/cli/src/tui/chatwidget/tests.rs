@@ -5868,7 +5868,7 @@ async fn mode_switch_surfaces_model_change_notification_when_effective_model_cha
     let mut plan_mask =
         collaboration_modes::mask_for_kind(chat.models_manager.as_ref(), ModeKind::Plan)
             .expect("expected plan collaboration mode");
-    plan_mask.model = Some("claude-opus-4-6-mini".to_string());
+    plan_mask.model = Some("claude-haiku-4-5-20251001".to_string());
     chat.set_collaboration_mask(plan_mask);
 
     let plan_messages = drain_insert_history(&mut rx)
@@ -5877,7 +5877,7 @@ async fn mode_switch_surfaces_model_change_notification_when_effective_model_cha
         .collect::<Vec<_>>()
         .join("\n");
     assert!(
-        plan_messages.contains("Model changed to claude-opus-4-6-mini medium for Plan mode."),
+        plan_messages.contains("Model changed to claude-haiku-4-5-20251001 medium for Plan mode."),
         "expected Plan-mode model switch notice, got: {plan_messages:?}"
     );
 
@@ -6148,9 +6148,9 @@ async fn set_model_updates_active_collaboration_mask() {
             .expect("expected plan collaboration mask");
     chat.set_collaboration_mask(plan_mask);
 
-    chat.set_model("claude-opus-4-6-mini");
+    chat.set_model("claude-haiku-4-5-20251001");
 
-    assert_eq!(chat.current_model(), "claude-opus-4-6-mini");
+    assert_eq!(chat.current_model(), "claude-haiku-4-5-20251001");
     assert_eq!(chat.active_collaboration_mode_kind(), ModeKind::Plan);
 }
 

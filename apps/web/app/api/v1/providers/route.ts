@@ -3,6 +3,7 @@ import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { getEnv } from '@/utils/env';
+import { withRateLimit } from '@/lib/rate-limit';
 
 /**
  * GET /api/v1/providers — proxy to api-gateway provider availability list.
@@ -13,6 +14,9 @@ import { getEnv } from '@/utils/env';
  * Sprint S8 (web app integration with the OpenClaw-port adapters).
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const rateLimitResponse = await withRateLimit(request, 'default');
+  if (rateLimitResponse) return rateLimitResponse;
+
   const gatewayUrl = getEnv('API_GATEWAY_URL', 'http://localhost:3000').replace(/\/+$/, '');
   const authHeader = request.headers.get('authorization') ?? '';
 

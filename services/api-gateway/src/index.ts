@@ -87,8 +87,13 @@ app.use(
   }),
 );
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+// GW-4 (audit 2026-05-05): tighten default body-size limit to 128kb. General
+// JSON-API requests (auth, chat metadata, command payloads) sit well under
+// 16kb in practice; 128kb leaves slack without inviting DoS via large bodies.
+// Routes that legitimately need bigger payloads (file uploads, code patches,
+// model-config blobs) MUST opt-in with a per-route express.json({ limit }).
+app.use(express.json({ limit: '128kb' }));
+app.use(express.urlencoded({ extended: true, limit: '128kb' }));
 
 // SECURITY: Request validation middleware (Content-Type, security headers, CSRF)
 app.use(validateContentType);

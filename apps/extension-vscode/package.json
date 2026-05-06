@@ -335,6 +335,11 @@
         "command": "agi-workforce.rewindLast",
         "title": "AGI Workforce: Rewind Last",
         "icon": "$(history)"
+      },
+      {
+        "command": "agi-workforce.showSubsystemHealth",
+        "title": "AGI: Show Subsystem Health",
+        "category": "AGI"
       }
     ],
     "chatParticipants": [

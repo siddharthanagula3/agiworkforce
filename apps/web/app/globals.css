@@ -35,41 +35,42 @@
   /* Line height */
   --line-height-chat: 1.6;
 
-  /* Editorial palette — operator-broadsheet redesign 2026-05-05.
-     Paper for "reading" sections (manifesto, differentiators, pricing).
-     Graphite for "operating" sections (cli, surfaces, dispatch). */
-  --color-paper: #faf9f7;
-  --color-paper-2: #f3f0ea;
-  --color-ink: #0a0908;
-  --color-ink-2: #2a2826;
-  --color-graphite: #0a0908;
-  --color-graphite-2: #131110;
-  --color-cream-on-graphite: #ede8df;
-  /* fg-* tokens are tuned for graphite (cream-on-dark) backgrounds.
-     fg-paper-* counterparts ensure ≥4.5:1 contrast on #faf9f7 paper. */
-  --color-fg-muted: #a8a4a0;
-  --color-fg-quiet: #888480;
-  --color-fg-faint: #555150;
-  --color-fg-paper-muted: #4a4744; /* ~9.4:1 on paper, body-safe */
-  --color-fg-paper-quiet: #6b6764; /* ~5.6:1 on paper, body-safe AA */
-  --color-fg-paper-faint: #8e8a86; /* ~3.1:1 on paper, large text only */
+  /* Editorial palette — terminal/CLI retheme 2026-05-06.
+     Paper now reads as near-black; graphite is the deepest tier.
+     Phosphor mint replaces amber as the rule/accent color.
+     Channel-only tokens (*-rgb) feed alpha variants via rgb(var() / α). */
+  --color-rule-rgb: 109 255 172;
+  --color-paper-rgb: 10 13 10;
+  --color-ink-rgb: 233 230 223;
 
-  /* Brand: amber as RULE color (structural rule lines, drop-caps, carets).
-     Hex unchanged; role changes from accent to ink. */
-  --color-rule: #c8892a;
-  --color-rule-soft: rgba(200, 137, 42, 0.22);
-  --color-rule-strong: #c8892a;
+  --color-paper: rgb(var(--color-paper-rgb));
+  --color-paper-2: #11140e;
+  --color-ink: rgb(var(--color-ink-rgb));
+  --color-ink-2: #c8c5bd;
+  --color-graphite: #050705;
+  --color-graphite-2: #0a0d0a;
+  --color-cream-on-graphite: rgb(var(--color-ink-rgb));
+  /* On dark, fg-* and fg-paper-* converge — both surfaces are dark. */
+  --color-fg-muted: #a8b0a4;
+  --color-fg-quiet: #6e766a;
+  --color-fg-faint: #4a504a;
+  --color-fg-paper-muted: #a8b0a4; /* ≥7:1 on paper black, body-safe */
+  --color-fg-paper-quiet: #6e766a; /* ≥4.5:1 on paper black, body-safe AA */
+  --color-fg-paper-faint: #4a504a; /* large text only */
 
-  /* Paired text-on-amber for body emphasis (the bare #c8892a fails 4.5:1 on
-     body-size text against #09090b at ~6.2:1 — fine for ≥18px bold, fails for
-     small body). Use --color-amber-text on body, keep --color-rule for ≥18px
-     and structural rule lines. */
-  --color-amber-text: #e0a347;
-  --color-amber-ink: #09090b;
+  /* Brand: phosphor mint as RULE color (structural rule lines, drop-caps, carets). */
+  --color-rule: rgb(var(--color-rule-rgb));
+  --color-rule-soft: rgb(var(--color-rule-rgb) / 0.18);
+  --color-rule-strong: rgb(var(--color-rule-rgb));
 
-  /* Single secondary accent — used only for status stamps, never as fill. */
+  /* Aliases retained for backwards-compatibility with existing call sites
+     that still reference the old amber-named tokens. */
+  --color-amber-text: rgb(var(--color-rule-rgb));
+  --color-amber-ink: var(--color-graphite);
+
+  /* Status stamps — oxblood for "coming soon", phosphor for "ok". */
   --color-stamp-oxblood: #8b1a1a;
-  --color-stamp-ok: #1e6b3b;
+  --color-stamp-ok: rgb(var(--color-rule-rgb));
 
   /* Motion tokens — operator-broadsheet redesign 2026-05-05.
      Rule: enter at --dur-base, exit at ~70% of enter (~220ms) with --ease-in.
@@ -1442,6 +1443,74 @@
 
 .agi-dashboard-theme ::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 110, 130, 0.7);
+}
+
+/* =====================================================
+   Editorial shell — terminal/CLI retheme 2026-05-06.
+   Applied to every EditorialPage wrapper across all 22 marketing pages.
+   Provides phosphor grid + scanline overlay using channel tokens only.
+   ===================================================== */
+
+/* Phosphor grid overlay, viewport-fixed, edge-faded radial mask.
+   Sits above EditorialPage NoiseOverlay (z-0) at z-1, below content (z-10). */
+.editorial-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(var(--color-rule-rgb) / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--color-rule-rgb) / 0.045) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at center, black 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 90% 80% at center, black 30%, transparent 100%);
+}
+
+/* Faint scanline texture — CRT phosphor afterglow */
+.editorial-shell::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2px,
+    rgb(var(--color-rule-rgb) / 0.018) 2px,
+    rgb(var(--color-rule-rgb) / 0.018) 3px
+  );
+  mix-blend-mode: screen;
+}
+
+/* Selection on dark editorial surfaces */
+.editorial-shell ::selection {
+  background: rgb(var(--color-rule-rgb) / 0.28);
+  color: var(--color-ink);
+}
+
+/* Drop cap glow */
+.editorial-shell .specimen--dropcap > p:first-of-type::first-letter {
+  color: var(--color-rule);
+  text-shadow: 0 0 24px rgb(var(--color-rule-rgb) / 0.35);
+}
+
+/* Soft phosphor glow on the blinking caret */
+.editorial-shell [class*='animate-[caret-blink'] {
+  box-shadow: 0 0 12px rgb(var(--color-rule-rgb) / 0.6);
+}
+
+/* Headline-emphasis glow utility — phosphor halo on the accented em */
+.text-glow-rule {
+  text-shadow: 0 0 32px rgb(var(--color-rule-rgb) / 0.25);
+}
+
+/* Honor reduced-motion: disable scanline overlay */
+@media (prefers-reduced-motion: reduce) {
+  .editorial-shell::after {
+    display: none;
+  }
 }
 
 /* Selection styles */

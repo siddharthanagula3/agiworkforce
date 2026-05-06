@@ -681,6 +681,9 @@ impl AgentSession {
             self.fast_mode = false;
         } else {
             // Enable fast mode: save current model and switch
+            // Documented fast-mode fallback (rule-models-json exception): used only
+            // when the caller provides no explicit fast_model. Caller is expected to
+            // pass a catalog-resolved slug; this literal is the last-resort default.
             let target = fast_model
                 .unwrap_or("claude-haiku-4-5-20251001")
                 .to_string();

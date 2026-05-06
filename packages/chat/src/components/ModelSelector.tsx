@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { Check, ChevronDown, ChevronRight, Settings, Zap, Star, Cpu, Brain } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Settings,
+  Zap,
+  Star,
+  Cpu,
+  Brain,
+  Sparkles,
+} from 'lucide-react';
 import {
   siAnthropic,
   siGoogle,
@@ -14,94 +24,45 @@ import {
   PROVIDER_DISPLAY,
   CAPABILITY_LABEL,
   EFFORT_LABEL,
+  modelsById,
   type ProviderId,
   type CapabilityTier,
   type Effort,
+  type ModelQualityTier,
 } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 import { useModel } from '../hooks/useModel';
-import { CLOUD_FALLBACK_MODELS } from '../stores/modelStore';
+import {
+  CLOUD_FALLBACK_MODELS,
+  useModelStore,
+  selectLastRoutingDecision,
+} from '../stores/modelStore';
 import type { ModelInfo } from '../lib/types';
+import { TASK_LABEL } from '../lib/promptClassifier';
 
 // ---------------------------------------------------------------------------
-// Capability tier map — derived from models.json qualityTier.
-// 'fast' -> 'fastest', 'balanced' -> 'balanced', 'best' -> 'most-capable'.
-// Default for unknown models is 'balanced'.
+// Capability tier map — derived from models.json qualityTier (single source
+// of truth per memory/rule-models-json.md). 'fast' -> 'fastest',
+// 'balanced' -> 'balanced', 'best' -> 'most-capable'. Stale hand-typed IDs
+// are dropped automatically; new entries in models.json appear without code
+// edits.
 // ---------------------------------------------------------------------------
-const MODEL_CAPABILITY: Record<string, CapabilityTier> = {
-  // managed_cloud / auto modes
-  auto: 'balanced',
-  'auto-economy': 'fastest',
-  'auto-balanced': 'balanced',
-  'auto-premium': 'most-capable',
-  // Anthropic
-  'claude-haiku-4.5': 'fastest',
-  'claude-sonnet-4.5': 'balanced',
-  'claude-sonnet-4.6': 'balanced',
-  'claude-opus-4.6': 'most-capable',
-  'claude-opus-4.7': 'most-capable',
-  // OpenAI
-  'gpt-5.4-nano': 'fastest',
-  'gpt-5.4-mini': 'balanced',
-  'gpt-5.4': 'most-capable',
-  'gpt-5.4-codex': 'balanced',
-  'gpt-5.4-codex-low': 'balanced',
-  'gpt-5.4-codex-medium': 'balanced',
-  'gpt-5.4-codex-high': 'most-capable',
-  'gpt-5.4-codex-xhigh': 'most-capable',
-  'gpt-5.4-pro': 'most-capable',
-  'gpt-5.5': 'most-capable',
-  o3: 'most-capable',
-  // Google
-  'gemini-3.1-flash-lite': 'fastest',
-  'gemini-3.1-flash-image': 'balanced',
-  'gemini-3.1-pro-preview': 'balanced',
-  'gemini-3-flash-preview': 'fastest',
-  'gemini-3-pro-preview': 'balanced',
-  'gemini-3-ultra': 'most-capable',
-  // xAI
-  'grok-4-fast': 'fastest',
-  'grok-4-fast-non-reasoning': 'fastest',
-  'grok-4-mini': 'fastest',
-  'grok-4': 'balanced',
-  'grok-4-fast-reasoning': 'balanced',
-  'grok-4-1-fast-reasoning': 'balanced',
-  'grok-4.3': 'most-capable',
-  // DeepSeek
-  'deepseek-v4-flash': 'fastest',
-  'deepseek-chat': 'balanced',
-  'deepseek-reasoner': 'balanced',
-  'deepseek-v4-pro': 'most-capable',
-  // Qwen
-  'qwen-flash': 'fastest',
-  'qwen-turbo': 'fastest',
-  'qwen-coder-flash': 'fastest',
-  'qwen-max': 'balanced',
-  'qwen-3.6-plus': 'balanced',
-  'qwen-coder-plus': 'balanced',
-  // Moonshot
-  'kimi-k2.5-turbo': 'fastest',
-  'kimi-k2.5': 'balanced',
-  'kimi-k2.5-thinking': 'most-capable',
-  'kimi-k2.6': 'most-capable',
-  // Zhipu
-  'glm-4.6v-flash': 'fastest',
-  'glm-4.7': 'balanced',
-  'glm-4.6v': 'balanced',
-  'glm-5.1': 'most-capable',
-  // Perplexity
-  sonar: 'fastest',
-  'sonar-reasoning': 'balanced',
-  'sonar-reasoning-pro': 'balanced',
-  'sonar-pro': 'balanced',
-  'sonar-deep-research': 'most-capable',
-  // Mistral
-  'mistral-small-3': 'fastest',
-  'codestral-2': 'fastest',
-  'pixtral-large': 'balanced',
-  'mistral-medium-3': 'balanced',
-  'mistral-large-3': 'balanced',
-};
+function qualityTierToCapability(tier: ModelQualityTier | undefined): CapabilityTier {
+  switch (tier) {
+    case 'fast':
+      return 'fastest';
+    case 'best':
+      return 'most-capable';
+    case 'balanced':
+      return 'balanced';
+    default:
+      return 'balanced';
+  }
+}
+
+const MODEL_CAPABILITY: Record<string, CapabilityTier> = Object.fromEntries(
+  Object.entries(modelsById).map(([id, model]) => [id, qualityTierToCapability(model.qualityTier)]),
+);
 
 /** Map ModelInfo.tier to CapabilityTier for models not in MODEL_CAPABILITY. */
 function tierToCapability(tier: ModelInfo['tier']): CapabilityTier {
@@ -326,6 +287,12 @@ interface BestAutoRowProps {
 }
 
 function BestAutoRow({ isSelected, onSelect }: BestAutoRowProps) {
+  const lastDecision = useModelStore(selectLastRoutingDecision);
+  const routedModel = lastDecision?.wasRouted ? modelsById[lastDecision.routedModelId] : null;
+  const taskLabel = lastDecision?.wasRouted
+    ? (TASK_LABEL[lastDecision.taskType as keyof typeof TASK_LABEL] ?? lastDecision.taskType)
+    : null;
+
   return (
     <Popover.Close asChild>
       <button
@@ -355,9 +322,24 @@ function BestAutoRow({ isSelected, onSelect }: BestAutoRowProps) {
               auto
             </span>
           </div>
-          <p className="mt-0.5 text-[10px] text-[var(--chat-text-muted)]">
-            Routes to the best available model
-          </p>
+          {/* Routing decision badge — shown after first auto-routed message */}
+          {isSelected && routedModel ? (
+            <div className="mt-0.5 flex items-center gap-1">
+              <Sparkles size={9} className="shrink-0 text-[var(--chat-accent-primary)]/60" />
+              <span className="text-[10px] text-[var(--chat-accent-primary)]/80">
+                {routedModel.name}
+              </span>
+              {taskLabel && (
+                <span className="rounded bg-[var(--chat-accent-primary)]/10 px-1 py-px text-[9px] font-medium text-[var(--chat-accent-primary)]/70">
+                  {taskLabel}
+                </span>
+              )}
+            </div>
+          ) : (
+            <p className="mt-0.5 text-[10px] text-[var(--chat-text-muted)]">
+              Routes to the best model for each task
+            </p>
+          )}
         </div>
         {isSelected && (
           <Check size={14} className="mt-0.5 shrink-0 text-[var(--chat-accent-primary)]" />

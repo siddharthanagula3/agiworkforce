@@ -15,6 +15,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+// Rate-limit mock — always pass through in tests.
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+
 // CSRF mock — let every request through; we test the body-validation path.
 vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn().mockResolvedValue(null),
@@ -72,10 +77,11 @@ vi.mock('@supabase/supabase-js', () => ({
 process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
 process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-key';
 
+import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/auth/set-token/route';
 
-function makeRequest(body: unknown): Request {
-  return new Request('http://localhost/api/auth/set-token', {
+function makeRequest(body: unknown): NextRequest {
+  return new NextRequest('http://localhost/api/auth/set-token', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-csrf-token': 'ok' },
     body: JSON.stringify(body),

@@ -1,9 +1,10 @@
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { requireCsrfToken } from '@/lib/csrf';
 import { requireEnv } from '@/utils/env';
+import { withRateLimit } from '@/lib/rate-limit';
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -21,7 +22,10 @@ const BodySchema = z.object({
   refreshToken: z.string().min(20).max(TOKEN_MAX_BYTES).optional(),
 });
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const rateLimitResponse = await withRateLimit(request, 'auth-login');
+  if (rateLimitResponse) return rateLimitResponse;
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;
 
@@ -81,7 +85,7 @@ export async function POST(request: Request) {
     // is present) so the refresh_token is independently validated against
     // Supabase. Otherwise the access_token-present path defaults to
     // setSession which only verifies the access_token and trusts the
-    // refresh_token without exchange — enabling a mix-and-match attack
+    // refresh_token without exchange -- enabling a mix-and-match attack
     // where an attacker submits their-own-access + victim's-refresh and
     // both client.user.id values come from the (attacker's) access_token.
     let refreshedUserId: string;

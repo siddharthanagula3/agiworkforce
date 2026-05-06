@@ -11,6 +11,19 @@
  * Surface count: 6 (Desktop, Web, Mobile, CLI, VS Code, Chrome).
  */
 
+/**
+ * Era-current model IDs shown in the marketing model-pill carousel on the
+ * homepage. These are intentionally stable display values, not runtime model
+ * selectors. Update here when the provider era advances.
+ * Current era: GPT-5.4, Claude 4.7 (Opus), Gemini 3.1 Pro.
+ */
+export const MARKETING_MODEL_PILLS = [
+  'gpt-5.4',
+  'claude-opus-4-7',
+  'gemini-3.1-pro-preview',
+  'llama-3.3-70b',
+] as const;
+
 export const MARKETING = {
   providers: { count: 10, display: '10+', label: 'AI Providers' },
   // skills: 23 categories with counted skills in features/ai-skills page (168 total). 150+ is a
