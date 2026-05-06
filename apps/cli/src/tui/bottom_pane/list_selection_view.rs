@@ -1412,7 +1412,7 @@ mod tests {
                 ..Default::default()
             },
             SelectionItem {
-                name: "claude-opus-4-6-mini".to_string(),
+                name: "claude-haiku-4-5".to_string(),
                 description: Some(
                     "Optimized for AGI Workforce. Cheaper, faster, but less capable.".to_string(),
                 ),
@@ -1420,7 +1420,7 @@ mod tests {
                 ..Default::default()
             },
             SelectionItem {
-                name: "claude-haiku-4-5".to_string(),
+                name: "claude-sonnet-4-6".to_string(),
                 description: Some(
                     "Legacy model. Use when you need compatibility with older automations."
                         .to_string(),
@@ -1494,7 +1494,7 @@ mod tests {
                 ..Default::default()
             },
             SelectionItem {
-                name: "claude-opus-4-6-mini".to_string(),
+                name: "claude-haiku-4-5".to_string(),
                 description: Some(
                     "Optimized for AGI Workforce. Cheaper, faster, but less capable.".to_string(),
                 ),
@@ -1502,7 +1502,7 @@ mod tests {
                 ..Default::default()
             },
             SelectionItem {
-                name: "claude-haiku-4-5".to_string(),
+                name: "claude-sonnet-4-6".to_string(),
                 description: Some(
                     "Legacy model. Use when you need compatibility with older automations."
                         .to_string(),

@@ -55,10 +55,27 @@ export default function ProfileScreen() {
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
-  // Attempt to load usage stats from the API
+  // Attempt to load usage stats from the API.
+  // Audit fix F8 (2026-05-05): /api/user/stats does not exist in apps/web.
+  // Gate behind EXPO_PUBLIC_FEATURE_USER_STATS (default false) until the
+  // endpoint is implemented. When the flag is off we use local-only data.
+  // TODO: implement GET /api/user/stats in apps/web returning
+  //   { conversationCount, messageCount, agentRunCount, plan, status }
+  const userStatsEnabled = process.env.EXPO_PUBLIC_FEATURE_USER_STATS === '1';
+  // Audit fix F2 (2026-05-05): deps changed from [conversations.length,
+  // agents.length] to [] — stats are best-effort informational; re-fetching
+  // on every conversation/agent change hammers the server unnecessarily.
   useEffect(() => {
     let cancelled = false;
     async function loadStats() {
+      if (!userStatsEnabled) {
+        setStats((prev) => ({
+          ...prev,
+          totalConversations: conversations.length,
+          totalAgentRuns: agents.length,
+        }));
+        return;
+      }
       setIsLoadingStats(true);
       try {
         const data = await api.get<{
@@ -93,7 +110,9 @@ export default function ProfileScreen() {
     return () => {
       cancelled = true;
     };
-  }, [conversations.length, agents.length]);
+    // Mount-only: stats are best-effort informational (audit fix F2).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();

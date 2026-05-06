@@ -4,6 +4,7 @@ import { mmkvStorage } from '@/lib/mmkv';
 import { SignalingClient } from '@agiworkforce/utils';
 import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
+import * as Crypto from 'expo-crypto';
 import {
   deriveDispatchSecret,
   signMessage,
@@ -529,8 +530,32 @@ export const useConnectionStore = create<ConnectionState>()(
         // metadata field `dispatchSalt`. The salt is NOT secret — only the derived
         // key is. A fresh nonceCache is allocated for each session so replays from
         // a previous connection cannot be injected into the new session.
-        const sessionSalt = Math.random().toString(36).slice(2) + Date.now().toString(36);
-        deriveDispatchSecret(code, sessionSalt)
+        //
+        // Audit fix F4 (2026-05-05): replaced Math.random() with CSPRNG
+        // (expo-crypto getRandomBytesAsync). Same 16-byte/32 hex-char pattern as
+        // lib/mmkv.ts generateMmkvEncryptionKey(). Math.random() had ~36 bits of
+        // entropy; this gives 128 bits.
+        const sessionMetadata: {
+          deviceType: string;
+          app: string;
+          version: string;
+          dispatchSalt: string;
+        } = {
+          deviceType: 'mobile',
+          app: 'agiworkforce-mobile',
+          version: '0.1.0',
+          dispatchSalt: '',
+        };
+
+        Crypto.getRandomBytesAsync(16)
+          .then((saltBytes) => {
+            let hex = '';
+            for (let i = 0; i < saltBytes.length; i++) {
+              hex += (saltBytes[i] as number).toString(16).padStart(2, '0');
+            }
+            sessionMetadata.dispatchSalt = hex;
+            return deriveDispatchSecret(code, hex);
+          })
           .then((secret) => {
             hmacState = { secret, nonceCache: new Map() };
           })
@@ -547,15 +572,7 @@ export const useConnectionStore = create<ConnectionState>()(
           wsUrl: WS_URL,
           code,
           role: 'mobile',
-          metadata: {
-            deviceType: 'mobile',
-            app: 'agiworkforce-mobile',
-            version: '0.1.0',
-            // HIGH-MOB-05: broadcast the session salt so the desktop peer can
-            // derive the same HMAC key via HKDF-SHA-256(salt, pairingCode).
-            // The salt is NOT secret — the derived key is.
-            dispatchSalt: sessionSalt,
-          },
+          metadata: sessionMetadata,
           heartbeatIntervalMs: 25000,
           onEvent: (event: SignalingEvent) => {
             switch (event.type) {

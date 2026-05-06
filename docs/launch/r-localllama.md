@@ -27,7 +27,7 @@ Every other terminal AI tool I tried (Claude Code, OpenAI Codex CLI, Gemini CLI)
 agiworkforce -m llama3.1:8b exec "summarize this README"
 
 # Cloud-first with local fallback (rotates on rate-limit)
-agiworkforce -m "claude-opus-4-7,gpt-5.4,llama3.1:8b" exec "..."
+agiworkforce -m "claude-opus-4-7,gpt-5.5,llama3.1:8b" exec "..."
 
 # LM Studio works the same
 agiworkforce -m lmstudio:llama-3.3-70b exec "..."
@@ -44,7 +44,7 @@ agiworkforce
 - Sandbox runs your tool calls under Bubblewrap/Landlock on Linux, Seatbelt on macOS, Restricted Token on Windows — so tool outputs from sketchy local models can't `rm -rf ~`
 - Cost tracking shows `$0.00` for local models — you can see exactly what your local setup saves you
 
-**The other cloud providers** if you want them (10+ in total): Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Groq, Together, Fireworks, Perplexity, Azure, Bedrock, Cohere, AI21, SambaNova, OpenRouter, plus subscription paths for GitHub Copilot and ChatGPT Plus.
+**The other cloud providers** if you want them (10+ in total, all wired in `apps/cli/src/models.rs:287-310`): Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, plus user-defined Custom BYO endpoints for any OpenAI-compatible API.
 
 **Install**
 
@@ -58,7 +58,7 @@ cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkfor
 
 **Open source?**
 
-Source is in the public repo (Rust, 195 files, 155,029 LOC, 2,161 tests). The license is proprietary — local + BYOK use is unrestricted via the binary releases. The repo is published for transparency.
+Source is in the public repo (Rust, 200 files, ~155K LOC, 999 tests). The license is proprietary — local + BYOK use is unrestricted via the binary releases. The repo is published for transparency.
 
 **Repo:** https://github.com/siddharthanagula3/agiworkforce
 **Architecture:** https://github.com/siddharthanagula3/agiworkforce/blob/main/apps/cli/ARCHITECTURE.md

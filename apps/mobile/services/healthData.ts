@@ -57,7 +57,15 @@ let lastFetchTime = 0;
 let cachedUserId: string | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// Audit fix F8 (2026-05-05): /api/health-context does not exist in apps/web
+// or api-gateway — no backend implementation found. Gate all calls behind
+// EXPO_PUBLIC_FEATURE_HEALTH_CONTEXT (default false/off) until the endpoint
+// is implemented or the feature is officially removed.
+// TODO: decide whether to implement GET /api/health-context or remove this service.
+const HEALTH_CONTEXT_ENABLED = process.env.EXPO_PUBLIC_FEATURE_HEALTH_CONTEXT === '1';
+
 export async function getHealthPermissionStatus(): Promise<HealthPermissionStatus> {
+  if (!HEALTH_CONTEXT_ENABLED) return 'unavailable';
   // Health data is available if the HxF backend has a snapshot for this user
   try {
     const data = await api.get<HealthSnapshotResponse>('/api/health-context');
@@ -75,6 +83,7 @@ export async function requestHealthPermission(): Promise<boolean> {
 }
 
 export async function getHealthSummary(): Promise<HealthSummary | null> {
+  if (!HEALTH_CONTEXT_ENABLED) return null;
   // Invalidate cache if user changed (multi-user privacy)
   const { data: sessionData } = await supabase.auth.getSession();
   const currentUserId = sessionData.session?.user?.id ?? null;

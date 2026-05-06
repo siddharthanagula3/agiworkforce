@@ -11,7 +11,7 @@
 Just shipped AGI Workforce CLI v1.0.
 
 It's Claude Code, but you can use any of 10+ Providers — Anthropic,
-OpenAI, Google, xAI, DeepSeek, Mistral, Groq, Ollama (local), LM Studio
+OpenAI, Google, xAI, DeepSeek, Perplexity, Ollama (local), LM Studio
 (local), and more.
 
 BYOK. No vendor lock. Switch model mid-conversation.
@@ -49,9 +49,9 @@ Single 5.7 MB Rust binary. Zero deps. Works offline (with Ollama).
 ```
 The magic command:
 
-agiworkforce -m "claude-opus-4-7,gpt-5.4,llama3.1:8b" exec "..."
+agiworkforce -m "claude-opus-4-7,gpt-5.5,llama3.1:8b" exec "..."
 
-Claude first. If it rate-limits → tries GPT-5.4. If GPT fails → falls back
+Claude first. If it rate-limits → tries GPT-5.5. If GPT fails → falls back
 to local Llama. All in the same session, with the same context.
 
 This is what "no vendor lock" actually means.
@@ -62,7 +62,7 @@ This is what "no vendor lock" actually means.
 ```
 Under the hood:
 
-- 195 .rs files / 155,029 LOC / 2,161 unit tests
+- 200 .rs files / ~155K LOC / 999 unit tests
 - Ratatui TUI (125 files)
 - 22 subcommands, 22 hook events, 10+ Providers
 - MCP support (client + server)

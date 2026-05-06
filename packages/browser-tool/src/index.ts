@@ -3,7 +3,7 @@
  *
  * Minimal agent-controlled browser tool, built fresh on `playwright-core`.
  *
- * One tool, one schema (discriminated-union on `action.kind`), six actions:
+ * One tool, one schema (discriminated-union on `action.kind`), ten actions:
  *   navigate, click, clickCoords, type, press, screenshot, snapshot, wait,
  *   evaluate, close.
  *
@@ -16,6 +16,18 @@
  * not code): flat discriminated union (Vertex-AI compatible),
  * `aria` vs `ai` snapshot modes, `ref`-based element targeting, and the
  * stale-ref recovery loop the agent should use (re-snapshot on miss).
+ *
+ * # Security: `evaluate` action gate
+ *
+ * The `evaluate` action runs LLM-supplied JavaScript inside the persistent
+ * browser context. Because that context retains cookies / localStorage for
+ * every site the agent has ever navigated to, an `evaluate` script can
+ * exfiltrate session credentials with a single `fetch()`. To prevent that,
+ * `evaluate` is **disabled by default**. Callers who genuinely need it
+ * must construct the runner with `allowEvaluate: true` AND apply their own
+ * caller-side approval / allow-list / domain check. Without the flag, an
+ * `evaluate` action returns an error result (`isError: true`) and never
+ * touches the page.
  *
  * What this package does NOT do (vs OpenClaw's full `extensions/browser/`):
  *   - No HTTP control service / Express server (you call `runBrowserAction`
@@ -42,12 +54,39 @@ export type {
   BrowserSnapshotElement,
 } from './types';
 export { listProfiles, resolveProfileDir, closeProfile, closeAllProfiles } from './profile';
+export { BrowserProfileNameError } from './profile';
+
+/**
+ * Configuration for {@link runBrowserAction}.
+ *
+ * Hand-passed by the caller per invocation (the runner is stateless w.r.t.
+ * config). Field defaults are conservative — secure-by-default.
+ */
+export interface BrowserToolConfig {
+  /**
+   * If true, the `evaluate` action is permitted. Default: `false`.
+   *
+   * `evaluate` runs LLM-supplied JavaScript inside the persistent browser
+   * context, which retains cookies / localStorage for every site the agent
+   * has logged in to. Enabling this without an explicit allow-list is a
+   * credential-theft surface. Callers who set this to `true` MUST also
+   * implement their own approval / allow-list / domain-block layer.
+   */
+  allowEvaluate?: boolean;
+}
 
 /**
  * Execute a single browser action. The caller owns the lifecycle —
  * call `closeAllProfiles()` on shutdown to release any persistent contexts.
+ *
+ * @param action The action to perform.
+ * @param config Optional config (gate `evaluate`, etc.). See
+ *   {@link BrowserToolConfig}. Defaults are secure-by-default.
  */
-export async function runBrowserAction(action: BrowserAction): Promise<BrowserToolResult> {
+export async function runBrowserAction(
+  action: BrowserAction,
+  config: BrowserToolConfig = {},
+): Promise<BrowserToolResult> {
   const profileName = (('profile' in action && action.profile) || 'agiworkforce') as string;
 
   try {
@@ -146,6 +185,14 @@ export async function runBrowserAction(action: BrowserAction): Promise<BrowserTo
         };
       }
       case 'evaluate': {
+        if (!config.allowEvaluate) {
+          return errorResult(
+            "browser-tool: 'evaluate' action is disabled by default. " +
+              'Set allowEvaluate: true at runner construction to enable. ' +
+              'Note: enabling without an allow-list / domain block is a ' +
+              'credential-theft surface — see runBrowserAction docs.',
+          );
+        }
         const page = await openProfile(profileName);
         const result = await page.evaluate(action.script);
         return {

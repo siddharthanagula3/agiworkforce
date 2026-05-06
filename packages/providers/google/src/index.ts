@@ -87,16 +87,23 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
       }
 
       const body = translateChatRequest(req);
+      // API key is sent via the `x-goog-api-key` header — never as a `?key=`
+      // query string. Keys in URLs leak via server access logs, browser
+      // history, and proxy logs even over HTTPS. The Generative Language
+      // API documents the header path as the recommended secure transport.
       const url = `${baseUrl.replace(
         /\/+$/,
         '',
-      )}/v1beta/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(config.apiKey)}`;
+      )}/v1beta/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
 
       let res: Response;
       try {
         res = await fetchFn(url, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: {
+            'content-type': 'application/json',
+            'x-goog-api-key': config.apiKey,
+          },
           body: JSON.stringify(body),
           signal,
         });

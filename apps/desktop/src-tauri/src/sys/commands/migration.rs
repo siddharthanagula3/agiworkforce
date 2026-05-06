@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+/// User-visible message returned by all Lovable migration commands until the
+/// feature is fully implemented.  Callers should surface this string in the UI
+/// rather than an opaque technical error.
 const LOVABLE_NOT_IMPLEMENTED: &str =
-    "Lovable migration is not implemented in the desktop runtime yet.";
+    "Lovable workflow migration is planned but not yet available in the desktop app. \
+     Check the in-app roadmap or docs/ROADMAP.md for the expected release timeline.";
 
 #[derive(Debug, Deserialize)]
 pub struct LovableConnectionCommandRequest {
@@ -106,13 +110,13 @@ mod tests {
         })
         .unwrap_err();
 
-        assert!(error.contains("not implemented"));
+        assert!(error.contains("not yet available"));
     }
 
     #[test]
     fn test_lovable_workflow_list_rejects_fake_data_path() {
         let error = migration_list_lovable_workflows("acme-ops".to_string()).unwrap_err();
-        assert!(error.contains("not implemented"));
+        assert!(error.contains("not yet available"));
     }
 
     #[test]
@@ -128,6 +132,6 @@ mod tests {
         })
         .unwrap_err();
 
-        assert!(error.contains("not implemented"));
+        assert!(error.contains("not yet available"));
     }
 }

@@ -1,0 +1,72 @@
+# Belt-and-braces ignore list for code-audit passes.
+# Mirrors the IGNORE block from the senior-staff audit prompt.
+
+# Build / deps
+node_modules/
+**/target/
+**/.next/
+**/.turbo/
+**/.expo/
+**/.vercel/
+**/dist/
+**/build/
+**/out/
+**/coverage/
+**/.cache/
+**/Pods/
+**/DerivedData/
+**/.gradle/
+
+# Generated
+**/generated/**
+**/__generated__/**
+*.gen.*
+*.min.*
+*.map
+
+# Lockfiles
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+Cargo.lock
+
+# Binary assets
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.ico
+*.mp4
+*.mov
+*.pdf
+*.zip
+*.gz
+*.woff
+*.woff2
+*.ttf
+*.otf
+*.AppImage
+*.dmg
+*.exe
+*.msi
+*.deb
+*.rpm
+*.vsix
+
+# Vendor / archive
+docs/archive/
+vendor/
+third_party/
+
+# Local / secrets
+.env*
+*.log
+.DS_Store
+.vscode/
+.idea/
+.cursor/
+.claude/
+
+# Snapshots — only read when verifying a finding
+**/__snapshots__/

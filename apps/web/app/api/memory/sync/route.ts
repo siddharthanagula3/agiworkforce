@@ -5,31 +5,25 @@
  * POST /api/memory/sync - Trigger a sync (returns count and last update time)
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 async function handleGetSyncStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
 
   // Get total count and last updated timestamp
   const { data: allMemories, error } = await supabase
     .from('user_memories')
     .select('source, updated_at')
-    .eq('user_id', user.id)
     .eq('is_deleted', false)
     .order('updated_at', { ascending: false });
 
@@ -65,22 +59,18 @@ async function handleTriggerSync(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
+  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
 
   // For now, sync is a simple count + last-update query.
   // In the future this can trigger cross-device reconciliation.
   const { count, error } = await supabase
     .from('user_memories')
     .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
     .eq('is_deleted', false);
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to trigger sync');
+    logger.error({ error }, 'Failed to trigger sync');
     throw createError.internal('Failed to trigger sync');
   }
 

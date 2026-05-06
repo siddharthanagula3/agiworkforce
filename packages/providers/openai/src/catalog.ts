@@ -1,55 +1,39 @@
 /**
  * OpenAI model catalog.
  *
- * Hardcoded list of current OpenAI models. The OpenAI API does expose
- * `/v1/models`, but it's noisy and includes deprecated/internal SKUs. This
- * curated list mirrors what AGI Workforce supports + matches `models.json`.
+ * The single source of truth for model data is
+ * `packages/types/src/models.json`. This module derives the
+ * `OPENAI_MODEL_CATALOG` array at module load by filtering that JSON by
+ * `provider === 'openai'`. Adding a new OpenAI model requires editing
+ * models.json only — this file does NOT need updating.
  *
- * Update with each OpenAI release.
+ * The OpenAI API does expose `/v1/models`, but it's noisy and includes
+ * deprecated/internal SKUs. The discovery flow in `index.ts` merges the
+ * live list with this curated catalog (taking the curated entries as
+ * authoritative for capabilities/cost).
  */
 
-import type { ModelInfo } from '@agiworkforce/types';
+import { modelsCatalogJson, type ModelInfo, type ModelMetadata } from '@agiworkforce/types';
 
-export const OPENAI_MODEL_CATALOG: readonly ModelInfo[] = [
-  // GPT-5.x family
-  {
-    id: 'gpt-5.4-pro',
-    name: 'GPT-5.4 Pro',
-    provider: 'openai',
-    contextWindow: 400_000,
-    maxOutputTokens: 100_000,
-    capabilities: { streaming: true, tools: true, vision: true, thinking: true, json: true },
-    inputCostPerMillion: 15.0,
-    outputCostPerMillion: 60.0,
-  },
-  {
-    id: 'gpt-5.4',
-    name: 'GPT-5.4',
-    provider: 'openai',
-    contextWindow: 400_000,
-    maxOutputTokens: 64_000,
-    capabilities: { streaming: true, tools: true, vision: true, thinking: true, json: true },
-    inputCostPerMillion: 2.5,
-    outputCostPerMillion: 10.0,
-  },
-  {
-    id: 'gpt-5.4-mini',
-    name: 'GPT-5.4 Mini',
-    provider: 'openai',
-    contextWindow: 400_000,
-    maxOutputTokens: 32_000,
-    capabilities: { streaming: true, tools: true, vision: true, thinking: true, json: true },
-    inputCostPerMillion: 0.5,
-    outputCostPerMillion: 2.0,
-  },
-  {
-    id: 'gpt-5.4-codex',
-    name: 'GPT-5.4 Codex',
-    provider: 'openai',
-    contextWindow: 400_000,
-    maxOutputTokens: 64_000,
-    capabilities: { streaming: true, tools: true, vision: false, thinking: true, json: true },
-    inputCostPerMillion: 3.0,
-    outputCostPerMillion: 15.0,
-  },
-];
+interface ModelsCatalogShape {
+  models: Record<string, ModelMetadata>;
+}
+
+function toModelInfo(meta: ModelMetadata): ModelInfo {
+  return {
+    id: meta.id,
+    ...(meta.name !== undefined ? { name: meta.name } : {}),
+    provider: meta.provider,
+    ...(meta.contextWindow !== undefined ? { contextWindow: meta.contextWindow } : {}),
+    ...(meta.maxOutputTokens !== undefined ? { maxOutputTokens: meta.maxOutputTokens } : {}),
+    ...(meta.capabilities ? { capabilities: meta.capabilities } : {}),
+    ...(meta.inputCost !== undefined ? { inputCostPerMillion: meta.inputCost } : {}),
+    ...(meta.outputCost !== undefined ? { outputCostPerMillion: meta.outputCost } : {}),
+  };
+}
+
+const catalog = modelsCatalogJson as unknown as ModelsCatalogShape;
+
+export const OPENAI_MODEL_CATALOG: readonly ModelInfo[] = Object.values(catalog.models)
+  .filter((m) => m.provider === 'openai')
+  .map(toModelInfo);
