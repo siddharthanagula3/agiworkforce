@@ -601,20 +601,28 @@ mod tests {
 
     #[test]
     fn test_default_model_for_provider() {
+        // DESK-MODEL-DEFAULT-WRONG (audit 2026-05-06): previous assertions
+        // incorrectly expected "gpt-5.4-mini" for every provider.
+        // default_model_for_provider delegates to models_config::get_default_model
+        // which reads per-provider defaultModel from models.json.
+        // Correct expected values per models.json (as of 2026-05-06):
+        //   anthropic → claude-sonnet-4.6
+        //   openai    → gpt-5.5
+        //   google    → gemini-3.1-pro-preview
         let router = create_test_router();
         let executor = LlmExecutor::new(router);
 
         assert_eq!(
             executor.default_model_for_provider(Provider::Anthropic),
-            "gpt-5.4-mini"
+            "claude-sonnet-4.6"
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::OpenAI),
-            "gpt-5.4-mini"
+            "gpt-5.5"
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::Google),
-            "gpt-5.4-mini"
+            "gemini-3.1-pro-preview"
         );
     }
 

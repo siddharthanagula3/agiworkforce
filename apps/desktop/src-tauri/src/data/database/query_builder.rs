@@ -107,14 +107,48 @@ fn validate_sql_identifier(identifier: &str) -> Result<()> {
 }
 
 /// Escapes a string value for safe use in SQL queries.
-/// This provides basic protection against SQL injection by escaping single quotes.
+///
+/// DESK-QUERY-BUILDER-CONCAT residual risk: this module uses `format!()`
+/// string concatenation rather than rusqlite parameterized bindings. A full
+/// migration to parameterized bindings is tracked as a follow-up; in the
+/// meantime this function is hardened to also escape backslash (defence-in-
+/// depth for non-standard SQLite builds that honour C-style escapes).
+///
+/// INVARIANT: only values originating from internal code paths (not user
+/// input or LLM output) must reach query_builder. All external strings must
+/// pass through `validate_sql_value` before being passed here.
 fn escape_sql_value(value: &str) -> String {
-    // Escape single quotes by doubling them (SQL standard)
-    value.replace('\'', "''")
+    // Escape backslash first (must precede the single-quote replacement so
+    // we don't double-escape newly introduced backslashes).
+    value.replace('\\', "\\\\").replace('\'', "''")
 }
 
 /// Validates that a value doesn't contain dangerous SQL patterns.
+///
+/// DESK-QUERY-BUILDER-CONCAT (audit 2026-05-06): tightened to reject
+/// additional bypass vectors not covered by the original list:
+///   - Backslash  (\)  — escape-sequence bypass in non-standard SQLite builds
+///   - NUL byte (\x00) — C-string truncation bypass
+///   - Percent   (%)   — LIKE-injection when value lands in a LIKE clause
 fn validate_sql_value(value: &str) -> Result<()> {
+    // Reject raw bytes that cannot be safely embedded even after escaping.
+    if value.contains('\0') {
+        return Err(Error::Other(
+            "SQL value contains NUL byte which is not allowed".to_string(),
+        ));
+    }
+    if value.contains('\\') {
+        return Err(Error::Other(
+            "SQL value contains backslash which is not allowed".to_string(),
+        ));
+    }
+    if value.contains('%') {
+        return Err(Error::Other(
+            "SQL value contains percent sign (LIKE-injection risk) which is not allowed"
+                .to_string(),
+        ));
+    }
+
     let upper = value.to_uppercase();
 
     // Check for SQL injection patterns

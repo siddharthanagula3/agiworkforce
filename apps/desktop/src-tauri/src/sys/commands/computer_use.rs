@@ -477,7 +477,8 @@ pub async fn computer_use_execute_tool(
                 save_path,
             };
 
-            let result = computer_use_zoom_region(request, state).await?;
+            // Dispatcher is already gated above (~line 429); call inner directly.
+            let result = zoom_region_inner(request, state.inner()).await?;
             serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
         }
         "zoom_at_point" => {
@@ -486,7 +487,20 @@ pub async fn computer_use_execute_tool(
             let context_size = args["context_size"].as_u64().map(|v| v as u32);
             let zoom_level = args["zoom_level"].as_f64().map(|v| v as f32);
 
-            let result = computer_use_zoom_at_point(x, y, context_size, zoom_level, state).await?;
+            let size = context_size.unwrap_or(100);
+            let level = zoom_level.unwrap_or(4.0);
+            let half = (size / 2) as i32;
+            let req = ZoomRegionRequest {
+                x: x - half,
+                y: y - half,
+                width: size,
+                height: size,
+                zoom_level: level,
+                interpolation: None,
+                save_path: None,
+            };
+            // Dispatcher is already gated above (~line 429); call inner directly.
+            let result = zoom_region_inner(req, state.inner()).await?;
             serde_json::to_value(result).map_err(|e| format!("Serialization error: {}", e))
         }
         _ => Err(format!("Unknown tool: {}", tool_name)),
@@ -579,10 +593,46 @@ fn perform_type(text: &str) -> Result<(), anyhow::Error> {
 /// });
 /// // result.image_data contains base64 PNG of 200x120 zoomed image
 /// ```
+///
+/// DESK-ZOOM-REGION-UNGATED (audit 2026-05-06): zoom captures screen pixels —
+/// identical privacy surface to `computer_use_capture_screen`. This command
+/// now requires the same `require_confirmation` gate. The inner work is
+/// extracted to `zoom_region_inner` so the execute_tool dispatcher (already
+/// gated at dispatch level, ~line 429) and `computer_use_zoom_at_point` can
+/// call it without a second confirmation dialog.
 #[tauri::command]
 pub async fn computer_use_zoom_region(
     request: ZoomRegionRequest,
     state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    app_handle: tauri::AppHandle,
+) -> Result<ZoomRegionResponse, String> {
+    require_confirmation(
+        &app_handle,
+        "computer_use_zoom_region",
+        serde_json::json!({
+            "x": request.x,
+            "y": request.y,
+            "width": request.width,
+            "height": request.height,
+            "zoom_level": request.zoom_level,
+        }),
+    )
+    .await?;
+
+    zoom_region_inner(request, state.inner()).await
+}
+
+/// Inner zoom implementation — no confirmation gate.
+///
+/// Callers that are already behind a confirmation gate may call this directly:
+/// - `computer_use_zoom_region` (gated immediately above)
+/// - `computer_use_zoom_at_point` (gated inside that command)
+/// - `computer_use_execute_tool` dispatcher (gated at dispatch level, ~line 429)
+///
+/// Any new caller NOT already behind a gate MUST add one before calling this.
+async fn zoom_region_inner(
+    request: ZoomRegionRequest,
+    state: &Arc<Mutex<ComputerUseState>>,
 ) -> Result<ZoomRegionResponse, String> {
     tracing::info!(
         "Zooming region at ({}, {}) size {}x{} with {}x magnification",
@@ -666,6 +716,7 @@ pub async fn computer_use_zoom_at_point(
     context_size: Option<u32>,
     zoom_level: Option<f32>,
     state: State<'_, Arc<Mutex<ComputerUseState>>>,
+    app_handle: tauri::AppHandle,
 ) -> Result<ZoomRegionResponse, String> {
     let size = context_size.unwrap_or(100);
     let level = zoom_level.unwrap_or(4.0);
@@ -681,7 +732,20 @@ pub async fn computer_use_zoom_at_point(
         save_path: None,
     };
 
-    computer_use_zoom_region(request, state).await
+    require_confirmation(
+        &app_handle,
+        "computer_use_zoom_at_point",
+        serde_json::json!({
+            "x": request.x,
+            "y": request.y,
+            "width": request.width,
+            "height": request.height,
+            "zoom_level": request.zoom_level,
+        }),
+    )
+    .await?;
+
+    zoom_region_inner(request, state.inner()).await
 }
 
 /// Suggest an appropriate zoom level based on element dimensions.

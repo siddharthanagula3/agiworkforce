@@ -573,11 +573,39 @@ pub fn get_allowed_directories(
 /// Enable or disable global auto-approve mode.
 /// When enabled, all tool confirmation dialogs are bypassed and every tool
 /// call is automatically approved. Use with caution.
+///
+/// DESK-AUTO-APPROVE-ALL (audit 2026-05-06): enabling this mode is at least
+/// as powerful as `set_agent_mode(Autopilot)` — it silently bypasses ALL
+/// confirmation dialogs with no per-tool granularity. Enabling requires the
+/// same user confirmation dialog used by the Autopilot mode transition.
+/// Disabling (de-escalation) never needs confirmation.
 #[tauri::command]
-pub fn set_auto_approve_all(
+pub async fn set_auto_approve_all(
     enabled: bool,
     state: State<'_, ToolConfirmationState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
+    let previous = state.is_auto_approve_all();
+    if enabled && !previous {
+        let approved = request_confirmation_simple(
+            &app_handle,
+            "set_auto_approve_all",
+            &serde_json::json!({
+                "previous_auto_approve": false,
+                "new_auto_approve": true,
+                "warning": "Auto-approve bypasses ALL tool confirmation dialogs. Only enable for trusted, scoped tasks."
+            }),
+        )
+        .await?;
+        if !approved {
+            return Err("Auto-approve-all enable denied by user".to_string());
+        }
+    }
+    tracing::warn!(
+        previous = previous,
+        new = enabled,
+        "auto_approve_all_change",
+    );
     state.set_auto_approve_all(enabled);
     Ok(())
 }
