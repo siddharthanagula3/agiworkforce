@@ -159,6 +159,7 @@ import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
+import { PlansModal } from './components/Pricing/PlansModal';
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full bg-background">
@@ -180,6 +181,7 @@ const DesktopShell = () => {
   const openSettingsDialog = useSettingsDialogStore((s) => s.openSettings);
   const closeSettingsDialog = useSettingsDialogStore((s) => s.closeSettings);
   const [quickQueryOpen, setQuickQueryOpen] = useState(false);
+  const [plansModalOpen, setPlansModalOpen] = useState(false);
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
   const [subscriptionFetchFailed, setSubscriptionFetchFailed] = useState(false);
@@ -760,6 +762,8 @@ const DesktopShell = () => {
         useSettingsDialogStore.getState().openShortcuts();
       } else if (detail.type === 'logout') {
         supabaseAuth.signOut();
+      } else if (detail.type === 'open-plans-modal') {
+        setPlansModalOpen(true);
       }
     };
     window.addEventListener('chat:action', handleChatAction);
@@ -1327,6 +1331,8 @@ const DesktopShell = () => {
         <Suspense fallback={null}>
           <ErrorToastContainer position="top-right" />
         </Suspense>
+        {/* Plans/Pricing modal — triggered by chat:action open-plans-modal */}
+        <PlansModal open={plansModalOpen} onOpenChange={setPlansModalOpen} />
         <Suspense fallback={null}>
           <TimeoutWarningDialog
             warning={timeoutWarning}
