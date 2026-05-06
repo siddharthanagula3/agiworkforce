@@ -1262,6 +1262,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ── 5. First-run prompt (no API key) ────────────────────────────────────────
   void checkFirstRun(context);
+
+  // ── 6. Inline completions first-run notice ───────────────────────────────────
+  void checkInlineCompletionsFirstRun(context);
 }
 
 // ─── Deactivation ─────────────────────────────────────────────────────────────
@@ -1274,6 +1277,32 @@ export function deactivate(): void {
 // validateAdvancedFeatureFlags + bridge reachability extracted to ./lifecycle/advancedFeatures.ts
 
 // ─── First-run helper ─────────────────────────────────────────────────────────
+
+async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext): Promise<void> {
+  // Skip if the user has already made an explicit choice (any value set at global scope).
+  const inspected = vscode.workspace
+    .getConfiguration()
+    .inspect('agiWorkforce.inlineCompletions.enabled');
+  if (inspected?.globalValue !== undefined) {
+    return;
+  }
+
+  const alreadyShown = context.globalState.get<boolean>('inlineCompletions.firstRunNoticeShown');
+  if (alreadyShown === true) {
+    return;
+  }
+
+  const choice = await vscode.window.showInformationMessage(
+    'AGI Workforce inline completions are now active. They suggest code as you type. Manage in Settings → AGI Workforce.',
+    'Got it',
+    "Don't show again",
+  );
+
+  // Both button clicks (and dismiss) mark the notice as shown.
+  await context.globalState.update('inlineCompletions.firstRunNoticeShown', true);
+
+  void choice; // no further action required
+}
 
 async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
   const hasShownWelcome = context.globalState.get<boolean>('agiWorkforce.shownWelcome');
