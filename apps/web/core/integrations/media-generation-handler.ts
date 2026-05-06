@@ -10,6 +10,10 @@ import {
   type VeoGenerationRequest as GoogleVeoRequest,
 } from './google-veo-service';
 import { dallEImageService, type DallEGenerationRequest } from './dalle-image-service';
+import { getModelMetadataById } from '@agiworkforce/types';
+
+/** Resolve veo-3's apiModelId from the catalog (rule-models-json.md). */
+const VEO_API_MODEL_ID = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
 
 export interface ImageGenerationRequest {
   prompt: string;
@@ -36,7 +40,11 @@ export interface VideoGenerationRequest {
   aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3';
   fps?: number;
   seed?: number;
-  model?: 'veo-3.1-generate-preview';
+  /**
+   * Wire-protocol model id; defaults to models.json's apiModelId for veo-3.
+   * Accepts any string so apiModelId shifts don't require a type bump.
+   */
+  model?: string;
 }
 
 export interface MediaGenerationResult {
@@ -164,7 +172,7 @@ export class MediaGenerationService {
       // Prepare Veo request
       const veoRequest: GoogleVeoRequest = {
         prompt: request.prompt,
-        model: request.model || 'veo-3.1-generate-preview',
+        model: request.model || VEO_API_MODEL_ID,
         resolution: request.resolution === '4k' ? '1080p' : request.resolution, // Veo 3.1 doesn't support 4k yet
         duration: request.duration || 8,
         aspectRatio: (request.aspectRatio === '4:3' ? '16:9' : request.aspectRatio) || '16:9',

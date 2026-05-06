@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod agi;
 pub mod connector_permissions;
+pub mod dispatch_hmac;
 pub mod agi_checkpoint;
 pub mod ai_native;
 pub mod analytics;
@@ -126,6 +127,7 @@ mod window_tests;
 pub use agent::*;
 pub use agi::*;
 pub use connector_permissions::*;
+pub use dispatch_hmac::*;
 pub use agi_checkpoint::*;
 pub use ai_native::*;
 pub use analytics::*;

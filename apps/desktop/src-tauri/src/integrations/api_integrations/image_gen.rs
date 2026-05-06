@@ -1,7 +1,21 @@
 use super::{APIError, RequestConfig, Result};
+use crate::core::llm::models_config;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
+
+/// Resolve the catalog `apiModelId` for a given canonical id, falling back
+/// to the literal default when models.json is missing the entry. Centralizes
+/// the rule-models-json.md "never hardcode model IDs" rule for image gen.
+fn resolve_image_model(canonical_id: &str, hardcoded_fallback: &str) -> String {
+    let resolved = models_config::get_api_model_id(canonical_id);
+    if resolved == canonical_id {
+        // No catalog entry — fall back to the literal that callers expect.
+        hardcoded_fallback.to_string()
+    } else {
+        resolved
+    }
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ImageProvider {
@@ -132,7 +146,7 @@ impl ImageGenerationClient {
                 request
                     .model
                     .clone()
-                    .unwrap_or_else(|| "dall-e-3".to_string()),
+                    .unwrap_or_else(|| resolve_image_model("dall-e-3", "dall-e-3")),
             ),
             size: request.size.map(|s| match s {
                 ImageSize::Small => "256x256".to_string(),
@@ -221,10 +235,16 @@ impl ImageGenerationClient {
         &self,
         request: &ImageGenerationRequest,
     ) -> Result<ImageGenerationResponse> {
+        // Reads catalog's apiModelId for stable-diffusion-xl, falling back to
+        // the legacy literal so we never break when models.json is stale.
+        let resolved_default = resolve_image_model(
+            "stable-diffusion-xl",
+            "stable-diffusion-xl-1024-v1-0",
+        );
         let model = request
             .model
             .as_deref()
-            .unwrap_or("stable-diffusion-xl-1024-v1-0");
+            .unwrap_or(&resolved_default);
         let url = format!(
             "https://api.stability.ai/v1/generation/{}/text-to-image",
             model
