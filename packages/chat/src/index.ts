@@ -5,6 +5,8 @@ export * from './lib/runtime';
 export * from './lib/hostBridge';
 export * from './lib/utils';
 export * from './lib/greetings';
+export { getConnectorPermissionStore } from './lib/connectorPermissionStore';
+export type { ConnectorPermissionStore } from './lib/connectorPermissionStore';
 
 // Stores — prefixed to avoid collisions with host-app store names
 export { useChatStore } from './stores/chatStore';
