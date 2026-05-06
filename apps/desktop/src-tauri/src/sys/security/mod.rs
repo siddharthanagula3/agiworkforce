@@ -10,6 +10,7 @@ pub mod audit_logger;
 pub mod auth;
 pub mod auth_db;
 pub mod command_validator;
+pub mod dispatch_hmac;
 pub mod dm_protection;
 pub mod encryption;
 pub mod guardrails;

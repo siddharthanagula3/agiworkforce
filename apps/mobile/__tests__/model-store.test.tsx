@@ -64,17 +64,17 @@ describe('modelStore', () => {
     });
 
     it('tracks per-model thinking state after toggle', () => {
-      getState().toggleThinkingForModel('claude-opus-4.6');
+      getState().toggleThinkingForModel('claude-opus-4.7');
 
-      expect(getState().thinkingEnabledPerModel['claude-opus-4.6']).toBe(true);
+      expect(getState().thinkingEnabledPerModel['claude-opus-4.7']).toBe(true);
     });
 
     it('maintains separate state for different models', () => {
-      getState().toggleThinkingForModel('claude-opus-4.6');
+      getState().toggleThinkingForModel('claude-opus-4.7');
       getState().toggleThinkingForModel('gpt-5.4');
 
       const perModel = getState().thinkingEnabledPerModel;
-      expect(perModel['claude-opus-4.6']).toBe(true);
+      expect(perModel['claude-opus-4.7']).toBe(true);
       expect(perModel['gpt-5.4']).toBe(true);
     });
   });
@@ -83,16 +83,16 @@ describe('modelStore', () => {
 
   describe('toggleThinkingForModel', () => {
     it('toggles from false to true', () => {
-      getState().toggleThinkingForModel('claude-opus-4.6');
+      getState().toggleThinkingForModel('claude-opus-4.7');
 
-      expect(getState().thinkingEnabledPerModel['claude-opus-4.6']).toBe(true);
+      expect(getState().thinkingEnabledPerModel['claude-opus-4.7']).toBe(true);
     });
 
     it('toggles from true back to false', () => {
-      getState().toggleThinkingForModel('claude-opus-4.6');
-      getState().toggleThinkingForModel('claude-opus-4.6');
+      getState().toggleThinkingForModel('claude-opus-4.7');
+      getState().toggleThinkingForModel('claude-opus-4.7');
 
-      expect(getState().thinkingEnabledPerModel['claude-opus-4.6']).toBe(false);
+      expect(getState().thinkingEnabledPerModel['claude-opus-4.7']).toBe(false);
     });
 
     it('guards against non-thinking models (no-op)', () => {
@@ -102,10 +102,13 @@ describe('modelStore', () => {
       expect(getState().thinkingEnabledPerModel['claude-haiku-4.5']).toBeUndefined();
     });
 
-    it('normalizes legacy nano aliases onto gpt-5.4-mini', () => {
+    it('preserves gpt-5.4-nano as a distinct model after catalog refresh', () => {
+      // 3129aa408 catalog refresh promoted nano to its own tier; nano no
+      // longer collapses onto mini. The store should set the flag on nano.
       getState().toggleThinkingForModel('gpt-5.4-nano');
 
-      expect(getState().thinkingEnabledPerModel['gpt-5.4-mini']).toBe(true);
+      expect(getState().thinkingEnabledPerModel['gpt-5.4-nano']).toBe(true);
+      expect(getState().thinkingEnabledPerModel['gpt-5.4-mini']).toBeUndefined();
     });
 
     it('blocks toggle for auto modes', () => {
@@ -115,9 +118,9 @@ describe('modelStore', () => {
     });
 
     it('syncs legacy thinkingModeEnabled when toggling the currently selected model', () => {
-      useModelStore.setState({ selectedModel: 'claude-opus-4.6' });
+      useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
 
-      getState().toggleThinkingForModel('claude-opus-4.6');
+      getState().toggleThinkingForModel('claude-opus-4.7');
 
       expect(getState().thinkingModeEnabled).toBe(true);
     });
@@ -128,7 +131,7 @@ describe('modelStore', () => {
         thinkingModeEnabled: false,
       });
 
-      getState().toggleThinkingForModel('claude-opus-4.6');
+      getState().toggleThinkingForModel('claude-opus-4.7');
 
       // Legacy field should remain unchanged
       expect(getState().thinkingModeEnabled).toBe(false);
@@ -143,25 +146,25 @@ describe('modelStore', () => {
     });
 
     it('returns true when the selected model has thinking enabled', () => {
-      useModelStore.setState({ selectedModel: 'claude-opus-4.6' });
-      getState().toggleThinkingForModel('claude-opus-4.6');
+      useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
+      getState().toggleThinkingForModel('claude-opus-4.7');
 
       expect(getState().isThinkingEnabledForSelected()).toBe(true);
     });
 
     it('returns false when a different model has thinking enabled', () => {
       useModelStore.setState({ selectedModel: 'auto-balanced' });
-      getState().toggleThinkingForModel('claude-opus-4.6');
+      getState().toggleThinkingForModel('claude-opus-4.7');
 
       expect(getState().isThinkingEnabledForSelected()).toBe(false);
     });
 
     it('updates correctly after switching selected model', () => {
       // Enable thinking for opus
-      getState().toggleThinkingForModel('claude-opus-4.6');
+      getState().toggleThinkingForModel('claude-opus-4.7');
 
       // Select opus -> should be true
-      useModelStore.setState({ selectedModel: 'claude-opus-4.6' });
+      useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
       expect(getState().isThinkingEnabledForSelected()).toBe(true);
 
       // Switch to sonnet (thinking NOT enabled) -> should be false
@@ -181,15 +184,15 @@ describe('modelStore', () => {
 
     it('pushes model to recents (newest first)', () => {
       getState().setModel('gpt-5.4');
-      getState().setModel('claude-opus-4.6');
+      getState().setModel('claude-opus-4.7');
 
-      expect(getState().recentModels[0]).toBe('claude-opus-4.6');
+      expect(getState().recentModels[0]).toBe('claude-opus-4.7');
       expect(getState().recentModels[1]).toBe('gpt-5.4');
     });
 
     it('deduplicates recents', () => {
       getState().setModel('gpt-5.4');
-      getState().setModel('claude-opus-4.6');
+      getState().setModel('claude-opus-4.7');
       getState().setModel('gpt-5.4'); // duplicate
 
       const recents = getState().recentModels;
@@ -200,7 +203,7 @@ describe('modelStore', () => {
     it('limits recents to 5 entries', () => {
       const ids = [
         'gpt-5.4',
-        'claude-opus-4.6',
+        'claude-opus-4.7',
         'gemini-3.1-pro-preview',
         'grok-4',
         'deepseek-chat',
@@ -218,10 +221,10 @@ describe('modelStore', () => {
     it('syncs legacy thinkingModeEnabled from per-model state', () => {
       // Enable thinking for opus
       useModelStore.setState({
-        thinkingEnabledPerModel: { 'claude-opus-4.6': true },
+        thinkingEnabledPerModel: { 'claude-opus-4.7': true },
       });
 
-      getState().setModel('claude-opus-4.6');
+      getState().setModel('claude-opus-4.7');
 
       expect(getState().thinkingModeEnabled).toBe(true);
     });
@@ -229,7 +232,7 @@ describe('modelStore', () => {
     it('sets legacy thinkingModeEnabled to false when switching to model without thinking enabled', () => {
       useModelStore.setState({
         thinkingModeEnabled: true,
-        thinkingEnabledPerModel: { 'claude-opus-4.6': true },
+        thinkingEnabledPerModel: { 'claude-opus-4.7': true },
       });
 
       getState().setModel('auto-balanced');
@@ -242,22 +245,22 @@ describe('modelStore', () => {
 
   describe('toggleFavorite', () => {
     it('adds a model to favorites', () => {
-      getState().toggleFavorite('claude-opus-4.6');
+      getState().toggleFavorite('claude-opus-4.7');
 
-      expect(getState().favorites).toContain('claude-opus-4.6');
+      expect(getState().favorites).toContain('claude-opus-4.7');
     });
 
     it('removes a model from favorites on second toggle', () => {
-      getState().toggleFavorite('claude-opus-4.6');
-      getState().toggleFavorite('claude-opus-4.6');
+      getState().toggleFavorite('claude-opus-4.7');
+      getState().toggleFavorite('claude-opus-4.7');
 
-      expect(getState().favorites).not.toContain('claude-opus-4.6');
+      expect(getState().favorites).not.toContain('claude-opus-4.7');
     });
 
     it('maintains other favorites when toggling one', () => {
-      getState().toggleFavorite('claude-opus-4.6');
+      getState().toggleFavorite('claude-opus-4.7');
       getState().toggleFavorite('gpt-5.4');
-      getState().toggleFavorite('claude-opus-4.6'); // remove
+      getState().toggleFavorite('claude-opus-4.7'); // remove
 
       expect(getState().favorites).toEqual(['gpt-5.4']);
     });
@@ -277,7 +280,7 @@ describe('modelStore', () => {
 
   describe('setThinkingMode (legacy)', () => {
     it('sets thinkingModeEnabled to true when model supports thinking', () => {
-      useModelStore.setState({ selectedModel: 'claude-opus-4.6' });
+      useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
 
       getState().setThinkingMode(true);
 

@@ -130,19 +130,24 @@ describe('ModelPickerSheet', () => {
   // ---- Auto modes ----
 
   it('renders all 3 auto mode cards', () => {
-    const { getByText } = renderPicker();
+    const { getAllByText } = renderPicker();
 
+    // Auto-mode names ('Economy', 'Balanced', 'Best') may also appear as
+    // tier labels on individual model rows after the catalog refresh, so
+    // we assert at least one match per mode rather than a unique match.
     for (const mode of AUTO_MODES) {
-      expect(getByText(mode.name)).toBeTruthy();
+      expect(getAllByText(mode.name).length).toBeGreaterThanOrEqual(1);
     }
   });
 
   it('renders auto mode descriptions', () => {
-    const { getByText } = renderPicker();
+    const { getAllByText } = renderPicker();
 
-    expect(getByText('Best for cost')).toBeTruthy();
-    expect(getByText('Best value')).toBeTruthy();
-    expect(getByText('Most capable')).toBeTruthy();
+    // Auto-mode descriptions can appear in multiple places (card +
+    // tier-row labels), so use getAllByText for >=1 match.
+    expect(getAllByText('Best for cost').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('Best value').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('Most capable').length).toBeGreaterThanOrEqual(1);
   });
 
   it('marks the selected auto mode as selected', () => {
@@ -160,7 +165,7 @@ describe('ModelPickerSheet', () => {
 
     // Check a few representative models
     expect(getByText('GPT-5.4')).toBeTruthy();
-    expect(getByText('Claude 4.6 Opus')).toBeTruthy();
+    expect(getByText('Claude 4.7 Opus')).toBeTruthy();
     expect(getByText('Gemini 3.1 Pro')).toBeTruthy();
   });
 
@@ -176,10 +181,10 @@ describe('ModelPickerSheet', () => {
   // ---- Selected model checkmark ----
 
   it('marks the selected model row as selected via accessibilityState', () => {
-    useModelStore.setState({ selectedModel: 'claude-opus-4.6' });
+    useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
     const { getByLabelText } = renderPicker();
 
-    const opusRow = getByLabelText('Claude 4.6 Opus, selected');
+    const opusRow = getByLabelText('Claude 4.7 Opus, selected');
     expect(opusRow.props.accessibilityState.selected).toBe(true);
   });
 
@@ -199,18 +204,18 @@ describe('ModelPickerSheet', () => {
   it('selects a model when tapped', () => {
     const { getByLabelText } = renderPicker();
 
-    fireEvent.press(getByLabelText(/Claude 4\.6 Opus/));
+    fireEvent.press(getByLabelText(/Claude 4\.7 Opus/));
 
-    expect(useModelStore.getState().selectedModel).toBe('claude-opus-4.6');
+    expect(useModelStore.getState().selectedModel).toBe('claude-opus-4.7');
   });
 
   it('calls onSelect callback instead of store when provided', () => {
     const onSelect = jest.fn();
     const { getByLabelText } = renderPicker({ onSelect });
 
-    fireEvent.press(getByLabelText(/Claude 4\.6 Opus/));
+    fireEvent.press(getByLabelText(/Claude 4\.7 Opus/));
 
-    expect(onSelect).toHaveBeenCalledWith('claude-opus-4.6');
+    expect(onSelect).toHaveBeenCalledWith('claude-opus-4.7');
     // Store should NOT have been updated
     expect(useModelStore.getState().selectedModel).toBe('auto-balanced');
   });
@@ -218,7 +223,7 @@ describe('ModelPickerSheet', () => {
   it('closes the sheet after selecting a model', () => {
     const { getByLabelText } = renderPicker();
 
-    fireEvent.press(getByLabelText(/Claude 4\.6 Opus/));
+    fireEvent.press(getByLabelText(/Claude 4\.7 Opus/));
 
     expect(mockSheetRef.current.close).toHaveBeenCalled();
   });
@@ -234,29 +239,29 @@ describe('ModelPickerSheet', () => {
   // ---- Expanded thinking toggle ----
 
   it('expands thinking toggle when tapping the already-selected model', () => {
-    // First select claude-opus-4.6
-    useModelStore.setState({ selectedModel: 'claude-opus-4.6' });
+    // First select claude-opus-4.7
+    useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
 
     const { getByLabelText, queryByText } = renderPicker();
 
     // Tap the already-selected model to expand
-    fireEvent.press(getByLabelText('Claude 4.6 Opus, selected'));
+    fireEvent.press(getByLabelText('Claude 4.7 Opus, selected'));
 
     // The thinking toggle row should now be visible
     expect(queryByText('With thinking')).toBeTruthy();
   });
 
   it('collapses thinking toggle when tapping the expanded model again', () => {
-    useModelStore.setState({ selectedModel: 'claude-opus-4.6' });
+    useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
 
     const { getByLabelText, queryByText } = renderPicker();
 
     // First tap to expand
-    fireEvent.press(getByLabelText('Claude 4.6 Opus, selected'));
+    fireEvent.press(getByLabelText('Claude 4.7 Opus, selected'));
     expect(queryByText('With thinking')).toBeTruthy();
 
     // Second tap to collapse
-    fireEvent.press(getByLabelText('Claude 4.6 Opus, selected'));
+    fireEvent.press(getByLabelText('Claude 4.7 Opus, selected'));
     expect(queryByText('With thinking')).toBeNull();
   });
 
@@ -272,18 +277,18 @@ describe('ModelPickerSheet', () => {
   // ---- Per-model thinking toggle ----
 
   it('toggles thinking for a specific model via the switch', () => {
-    useModelStore.setState({ selectedModel: 'claude-opus-4.6' });
+    useModelStore.setState({ selectedModel: 'claude-opus-4.7' });
 
     const { getByLabelText } = renderPicker();
 
     // Expand the thinking toggle
-    fireEvent.press(getByLabelText('Claude 4.6 Opus, selected'));
+    fireEvent.press(getByLabelText('Claude 4.7 Opus, selected'));
 
     // Find and toggle the switch
-    const thinkingSwitch = getByLabelText('Thinking mode for Claude 4.6 Opus');
+    const thinkingSwitch = getByLabelText('Thinking mode for Claude 4.7 Opus');
     fireEvent(thinkingSwitch, 'valueChange', true);
 
-    expect(useModelStore.getState().thinkingEnabledPerModel['claude-opus-4.6']).toBe(true);
+    expect(useModelStore.getState().thinkingEnabledPerModel['claude-opus-4.7']).toBe(true);
   });
 
   // ---- Header ----
