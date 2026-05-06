@@ -407,6 +407,8 @@ pub fn run() {
             app.manage(NativeMessagingStateWrapper::new());
             tracing::info!("NativeMessagingStateWrapper initialized");
 
+            app.manage(crate::sys::commands::dispatch_hmac::DispatchHmacState::new());
+
             app.manage(SettingsState::new());
 
             let settings_conn = crate::data::db::encryption::open_encrypted_connection(
@@ -1153,6 +1155,12 @@ pub fn run() {
             // Completion / Ghost Text
             crate::sys::commands::get_code_completion,
             crate::sys::commands::get_prompt_completion,
+
+            // Dispatch HMAC verification (mobile↔desktop control-message auth)
+            crate::sys::commands::dispatch_hmac_init,
+            crate::sys::commands::dispatch_hmac_verify,
+            crate::sys::commands::dispatch_hmac_sign,
+            crate::sys::commands::dispatch_hmac_reset,
 
             crate::sys::commands::window_get_state,
             crate::sys::commands::window_set_pinned,
