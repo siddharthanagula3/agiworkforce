@@ -1,5 +1,12 @@
 import DOMPurify from 'dompurify';
-import { getCoreManualModelOptions, normalizeModelId } from '@agiworkforce/types';
+import {
+  getCoreManualModelOptions,
+  normalizeModelId,
+  PROVIDER_DISPLAY,
+  CAPABILITY_LABEL,
+  type ProviderId,
+  type CapabilityTier,
+} from '@agiworkforce/types';
 
 /**
  * Side-panel UI message shape.
@@ -40,22 +47,155 @@ let lastRenderedCount = 0;
 
 let currentApiKey: string | null = null;
 let isConnected = false;
+/**
+ * Whether extended thinking is enabled for the next outgoing message.
+ * Persisted to chrome.storage.local as 'agi_thinking_enabled'.
+ * The value is forwarded to the desktop bridge as `extended_thinking: true` in
+ * the CHAT_MESSAGE payload. The bridge handles the provider-specific mapping.
+ * TODO(Phase 3 bridge): wire the desktop bridge to consume `extendedThinking`
+ * in the ChatRequest type and forward it to providers that support it
+ * (Anthropic thinking blocks, OpenAI reasoning effort, Gemini thinkingBudget).
+ */
+let thinkingEnabled = false;
 
-const SIDE_PANEL_MODEL_OPTIONS = [
-  { value: 'auto', label: 'Auto (Best Available)' },
+/**
+ * Capability tier mapping for model-picker sub-labels.
+ * Keys are canonical model IDs as stored in models.json / MANUAL_OVERRIDE_MODEL_IDS.
+ * Mirrors the quality-tier data from the model catalog, expressed as the
+ * three-tier vocabulary the design system uses in every picker.
+ */
+const MODEL_CAPABILITY: Record<string, CapabilityTier> = {
+  // Anthropic
+  'claude-opus-4.6': 'most-capable',
+  'claude-opus-4-7': 'most-capable',
+  'claude-sonnet-4.6': 'balanced',
+  'claude-sonnet-4-6': 'balanced',
+  'claude-haiku-4.5': 'fastest',
+  'claude-haiku-4-5': 'fastest',
+  // OpenAI
+  'gpt-5.4-pro': 'most-capable',
+  'gpt-5.4': 'most-capable',
+  'gpt-5.4-mini': 'balanced',
+  'gpt-5.4-codex': 'balanced',
+  'gpt-5.4-codex-medium': 'balanced',
+  // Google
+  'gemini-3.1-pro-preview': 'balanced',
+  'gemini-3.1-flash-lite': 'fastest',
+  // DeepSeek
+  'deepseek-chat': 'balanced',
+  'deepseek-reasoner': 'most-capable',
+  'deepseek-r1': 'most-capable',
+  // Qwen
+  'qwen-max': 'balanced',
+  // Moonshot
+  'kimi-k2.5-thinking': 'most-capable',
+  // Zhipu
+  'glm-4.7': 'balanced',
+  // xAI
+  'grok-4': 'most-capable',
+  // Perplexity
+  'sonar-pro': 'most-capable',
+  // Mistral
+  'mistral-large-3': 'balanced',
+  // Local / custom
+  'ollama-local': 'balanced',
+};
+
+/**
+ * Maps each canonical model ID to its provider identifier.
+ * Used to group models in the picker and resolve provider logos.
+ */
+const MODEL_PROVIDER: Record<string, ProviderId> = {
+  // Anthropic
+  'claude-opus-4.6': 'anthropic',
+  'claude-opus-4-7': 'anthropic',
+  'claude-sonnet-4.6': 'anthropic',
+  'claude-sonnet-4-6': 'anthropic',
+  'claude-haiku-4.5': 'anthropic',
+  'claude-haiku-4-5': 'anthropic',
+  // OpenAI
+  'gpt-5.4-pro': 'openai',
+  'gpt-5.4': 'openai',
+  'gpt-5.4-mini': 'openai',
+  'gpt-5.4-codex': 'openai',
+  'gpt-5.4-codex-medium': 'openai',
+  // Google
+  'gemini-3.1-pro-preview': 'google',
+  'gemini-3.1-flash-lite': 'google',
+  // DeepSeek
+  'deepseek-chat': 'deepseek',
+  'deepseek-reasoner': 'deepseek',
+  'deepseek-r1': 'deepseek',
+  // Qwen
+  'qwen-max': 'qwen',
+  // Moonshot
+  'kimi-k2.5-thinking': 'moonshot',
+  // Zhipu
+  'glm-4.7': 'zhipu',
+  // xAI
+  'grok-4': 'xai',
+  // Perplexity
+  'sonar-pro': 'perplexity',
+  // Mistral
+  'mistral-large-3': 'mistral' as ProviderId,
+  // Local / custom
+  'ollama-local': 'ollama',
+};
+
+// Provider display order in the grouped picker.
+const PROVIDER_GROUP_ORDER: ProviderId[] = [
+  'anthropic',
+  'openai',
+  'google',
+  'deepseek',
+  'xai',
+  'perplexity',
+  'qwen',
+  'moonshot',
+  'zhipu',
+  'ollama',
+  'lmstudio',
+  'custom-openai-compatible',
+  'agi-cloud',
+];
+
+interface SidePanelModelOption {
+  value: string;
+  label: string;
+  provider?: ProviderId | string;
+  capability?: CapabilityTier;
+}
+
+const SIDE_PANEL_MODEL_OPTIONS: SidePanelModelOption[] = [
+  { value: 'auto', label: 'Best (auto)', provider: undefined, capability: undefined },
   ...getCoreManualModelOptions().map((option) => ({
     value: option.id,
     label: option.label,
+    provider: MODEL_PROVIDER[option.id] as ProviderId | undefined,
+    capability: MODEL_CAPABILITY[option.id] as CapabilityTier | undefined,
   })),
-  { value: 'mistral-large-3', label: 'Mistral Large 3' },
-  { value: 'ollama-local', label: 'Ollama (Local)' },
+  {
+    value: 'mistral-large-3',
+    label: 'Mistral Large 3',
+    provider: 'mistral' as ProviderId,
+    capability: 'balanced' as CapabilityTier,
+  },
+  {
+    value: 'ollama-local',
+    label: 'Ollama (Local)',
+    provider: 'ollama' as ProviderId,
+    capability: 'balanced' as CapabilityTier,
+  },
 ];
 
 const SIDE_PANEL_MODEL_BADGES: Record<string, string> = {
-  auto: 'Auto',
+  auto: 'Best (auto)',
   'claude-sonnet-4.6': 'Sonnet 4.6',
+  'claude-sonnet-4-6': 'Sonnet 4.6',
   'claude-opus-4.6': 'Opus 4.6',
+  'claude-opus-4-7': 'Opus 4.7',
   'claude-haiku-4.5': 'Haiku 4.5',
+  'claude-haiku-4-5': 'Haiku 4.5',
   'gpt-5.4-pro': 'GPT-5.4 Pro',
   'gpt-5.4': 'GPT-5.4',
   'gpt-5.4-mini': 'GPT-5.4 Mini',
@@ -63,6 +203,7 @@ const SIDE_PANEL_MODEL_BADGES: Record<string, string> = {
   'gemini-3.1-flash-lite': 'Gemini 3.1 Flash Lite',
   'deepseek-r1': 'DeepSeek R1',
   'deepseek-chat': 'DeepSeek',
+  'deepseek-reasoner': 'DeepSeek R1',
   'sonar-pro': 'Sonar Pro',
   'grok-4': 'Grok 4',
   'mistral-large-3': 'Mistral',
@@ -77,6 +218,19 @@ let discoveredTools: WebMCPToolEntry[] = [];
 
 let isRecording = false;
 let recordingActionCount = 0;
+
+/**
+ * Pending image attachments added via the composer + menu.
+ * Each entry is a data-URL (base64 PNG/JPEG) to be prepended to the
+ * next outgoing message. Cleared after send.
+ */
+const pendingAttachments: string[] = [];
+
+/**
+ * Hostname of the active browser tab, shown in the persistent context chip.
+ * Updated whenever the side panel receives focus or a tab-changed message.
+ */
+let currentPageHostname = '';
 
 type SidePanelTab = 'chat' | 'workflows';
 
@@ -693,6 +847,143 @@ function injectStyles(): void {
     #sp-send-btn:hover:not(:disabled) { background: #3730a3; transform: scale(1.05); }
     #sp-send-btn:disabled { background: #1e1e2e; color: #334155; cursor: not-allowed; transform: none; }
 
+    /* ── Attachment + button and menu ── */
+    .sp-attach-wrapper { position: relative; flex-shrink: 0; }
+    .sp-attach-btn {
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #13131a;
+      border: 1px solid #1e1e2e;
+      border-radius: 8px;
+      color: #64748b;
+      font-size: 18px;
+      font-weight: 300;
+      line-height: 1;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .sp-attach-btn:hover { color: #a5b4fc; border-color: #4338ca; background: #1a1a2e; }
+    #sp-attach-menu {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      min-width: 190px;
+      background: #13131a;
+      border: 1px solid #1e1e2e;
+      border-radius: 8px;
+      padding: 4px;
+      z-index: 150;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.5);
+    }
+    #sp-attach-menu.open { display: block; }
+    .sp-attach-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #cbd5e1;
+      transition: background 0.12s, color 0.12s;
+      user-select: none;
+    }
+    .sp-attach-menu-item:hover { background: #1e1e2e; color: #e2e8f0; }
+    .sp-attach-icon { font-size: 14px; flex-shrink: 0; }
+    .sp-attach-file-input { display: none; }
+
+    /* ── Attachment preview bar ── */
+    #sp-attachment-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 4px 2px 6px;
+    }
+    .sp-attachment-chip {
+      position: relative;
+      display: inline-flex;
+      border-radius: 6px;
+      overflow: visible;
+      border: 1px solid #1e1e2e;
+    }
+    .sp-attachment-thumb {
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 5px;
+      display: block;
+    }
+    .sp-attachment-remove {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 16px;
+      height: 16px;
+      background: #1e1e2e;
+      border: 1px solid #334155;
+      border-radius: 50%;
+      color: #94a3b8;
+      font-size: 10px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background 0.12s, color 0.12s;
+    }
+    .sp-attachment-remove:hover { background: #7f1d1d; color: #fca5a5; border-color: #7f1d1d; }
+
+    /* ── Composer bottom bar: persistent page-context chip ── */
+    #sp-composer-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 2px 0;
+    }
+    .sp-context-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #1a1a28;
+      border: 1px solid #2d2d40;
+      border-radius: 12px;
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 9px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sp-context-chip::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #334155;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .sp-context-chip.has-context {
+      color: #86efac;
+      border-color: #166534;
+      background: #052e16;
+    }
+    .sp-context-chip.has-context::before { background: #22c55e; }
+    .sp-context-chip:hover { color: #a5b4fc; border-color: #4338ca; background: #1a1a2e; }
+    .sp-context-chip:hover::before { background: #6366f1; }
+    .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
+
     /* ── Settings bar ── */
     #sp-settings-bar {
       display: none; /* shown when settings are open */
@@ -914,11 +1205,182 @@ function injectStyles(): void {
     .sp-model-option.selected { color: #a5b4fc; background: #1e1b4b; }
     .sp-model-option-check { width: 14px; text-align: center; font-size: 10px; flex-shrink: 0; }
     .sp-model-option-label { flex: 1; }
+
+    /* ── Enhanced model picker ── */
+    .sp-model-option-logo {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      object-fit: contain;
+      display: block;
+    }
+    .sp-model-option-logo-placeholder {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      background: #2d2d40;
+      flex-shrink: 0;
+    }
+    .sp-model-option-text {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      flex: 1;
+      min-width: 0;
+    }
+    .sp-model-option-name {
+      font-size: 11px;
+      color: inherit;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sp-model-option-sublabel {
+      font-size: 9px;
+      color: #475569;
+      white-space: nowrap;
+    }
+    .sp-model-option.selected .sp-model-option-sublabel { color: #818cf8; }
+    .sp-model-option:hover .sp-model-option-sublabel { color: #64748b; }
+
+    /* "Best (auto)" option — visually distinct row */
+    .sp-model-option-auto {
+      border-bottom: 1px solid #1e1e2e;
+      margin-bottom: 4px;
+      padding-bottom: 10px;
+    }
+    .sp-model-option-auto .sp-model-option-name {
+      font-weight: 600;
+      color: #a5b4fc;
+    }
+    .sp-model-option-auto:hover .sp-model-option-name { color: #c7d2fe; }
+    .sp-model-auto-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      flex-shrink: 0;
+    }
+
+    /* Model picker header row with provider-count badge */
+    .sp-model-picker-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 9px 4px;
+      border-bottom: 1px solid #1e1e2e;
+      margin-bottom: 2px;
+    }
+    .sp-model-picker-title {
+      font-size: 9px;
+      font-weight: 600;
+      color: #334155;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .provider-count-badge {
+      font-size: 10px;
+      color: #64748b;
+      background: #1e1e2e;
+      border: 1px solid #2d2d40;
+      border-radius: 10px;
+      padding: 1px 7px;
+      font-weight: 500;
+      white-space: nowrap;
+      margin-left: auto;
+    }
+
+    /* Provider group header */
+    .sp-model-group-header {
+      font-size: 9px;
+      font-weight: 600;
+      color: #334155;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 6px 9px 2px;
+    }
+    .sp-model-group-header:not(:first-child) {
+      border-top: 1px solid #1e1e2e;
+      margin-top: 4px;
+      padding-top: 8px;
+    }
+
+    /* Thinking toggle row at bottom of dropdown */
+    .sp-thinking-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 9px 5px;
+      border-top: 1px solid #1e1e2e;
+      margin-top: 4px;
+    }
+    .sp-thinking-toggle-label {
+      flex: 1;
+      font-size: 10px;
+      color: #64748b;
+      user-select: none;
+      cursor: pointer;
+    }
+    .sp-thinking-toggle-label.active { color: #a5b4fc; }
+    .sp-thinking-toggle {
+      appearance: none;
+      width: 28px;
+      height: 15px;
+      border-radius: 8px;
+      background: #1e1e2e;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+      flex-shrink: 0;
+      border: none;
+      outline: none;
+    }
+    .sp-thinking-toggle:checked { background: #4338ca; }
+    .sp-thinking-toggle::after {
+      content: '';
+      position: absolute;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: white;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s;
+    }
+    .sp-thinking-toggle:checked::after { transform: translateX(13px); }
   `;
   document.head.appendChild(style);
 }
 
+// CHROME-NEW-005 fix (2026-05-04 audit): DOMPurify allows `target` and `rel`
+// attributes individually, but doesn't enforce that `target="_blank"` must
+// carry `rel="noopener noreferrer"`. A crafted LLM response with raw HTML
+// `<a target="_blank">` would otherwise open with `window.opener` exposed,
+// letting the destination page navigate the side-panel via
+// `window.opener.location`. Install an attribute-level hook that hardens
+// every anchor that has `target` (or that points to a different origin)
+// with `rel="noopener noreferrer"`. Idempotent — adding the hook multiple
+// times is safe because DOMPurify dedupes by function reference.
+let domPurifyHookInstalled = false;
+function ensureDomPurifyHook(): void {
+  if (domPurifyHookInstalled) return;
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (!(node instanceof HTMLAnchorElement)) return;
+    const hasTarget = node.hasAttribute('target');
+    if (!hasTarget) return;
+    const existing = (node.getAttribute('rel') ?? '').toLowerCase().split(/\s+/);
+    const required = ['noopener', 'noreferrer'];
+    for (const flag of required) {
+      if (!existing.includes(flag)) existing.push(flag);
+    }
+    node.setAttribute('rel', existing.filter(Boolean).join(' '));
+  });
+  domPurifyHookInstalled = true;
+}
+
 function sanitizeHtml(dirty: string): string {
+  ensureDomPurifyHook();
   return DOMPurify.sanitize(dirty, {
     ALLOWED_TAGS: [
       'p',
@@ -1013,10 +1475,19 @@ function renderMarkdown(text: string): string {
   html = html.replace(/(<li>[\s\S]*?<\/li>)(\n(?!<li>)|$)/g, '<ul>$1</ul>$2');
 
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-  // Only allow http(s) URLs to block javascript: scheme injection
+  // Only allow http(s) URLs to block javascript: scheme injection.
+  // SECURITY (M-1): entity-encode link text before interpolation so that a
+  // model response like [<img onerror=…>](url) cannot inject HTML even if a
+  // downstream DOMPurify pass is skipped or removed in a future refactor.
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
     const safeUrl = /^https?:\/\//i.test(url.trim()) ? url : '#';
-    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    const encodedText = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
   });
 
   html = html
@@ -1325,7 +1796,9 @@ function sendMessage(text: string): void {
 
         const pageCtx = pendingPageContext;
         pendingPageContext = null;
+        pendingAttachments.length = 0;
         updateContextButton();
+        updateAttachmentPreview();
 
         const streamId = `a-${Date.now()}`;
         currentStreamId = streamId;
@@ -1354,6 +1827,10 @@ function sendMessage(text: string): void {
             pageContext: pageCtx ?? undefined,
             conversationHistory: history,
             apiKey: currentApiKey ?? undefined,
+            // TODO(Phase 3 bridge): bridge must consume extendedThinking and
+            // forward to providers that support it (Anthropic thinking blocks,
+            // OpenAI reasoning effort, Gemini thinkingBudget).
+            extendedThinking: thinkingEnabled || undefined,
           },
           () => {
             if (chrome.runtime.lastError) {
@@ -1380,7 +1857,9 @@ function sendMessage(text: string): void {
 
   const pageCtx = pendingPageContext;
   pendingPageContext = null;
+  pendingAttachments.length = 0;
   updateContextButton();
+  updateAttachmentPreview();
 
   const streamId = `a-${Date.now()}`;
   currentStreamId = streamId;
@@ -1411,6 +1890,10 @@ function sendMessage(text: string): void {
       pageContext: pageCtx ?? undefined,
       conversationHistory: history,
       apiKey: currentApiKey ?? undefined,
+      // TODO(Phase 3 bridge): bridge must consume extendedThinking and
+      // forward to providers that support it (Anthropic thinking blocks,
+      // OpenAI reasoning effort, Gemini thinkingBudget).
+      extendedThinking: thinkingEnabled || undefined,
     },
     () => {
       if (chrome.runtime.lastError) {
@@ -1468,15 +1951,17 @@ async function validateAndSaveApiKey(key: string): Promise<void> {
 let contextBtn: HTMLButtonElement | null = null;
 
 function updateContextButton(): void {
+  // contextBtn is now the persistent composer-bar chip (sp-context-chip)
   if (!contextBtn) return;
+  const hostname = currentPageHostname || 'page';
   if (pendingPageContext) {
     contextBtn.classList.add('has-context');
-    contextBtn.title = 'Page context attached — click to remove';
-    contextBtn.innerHTML = '✅ Page context';
+    contextBtn.title = 'Page context attached — click to detach';
+    contextBtn.textContent = hostname;
   } else {
     contextBtn.classList.remove('has-context');
-    contextBtn.title = 'Add page content to next message';
-    contextBtn.innerHTML = '📄 Add page context';
+    contextBtn.title = 'Attach page content to next message';
+    contextBtn.textContent = hostname;
   }
 }
 
@@ -1491,6 +1976,35 @@ function updateSendButton(): void {
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
   btn.disabled = isStreaming;
+}
+
+function updateAttachmentPreview(): void {
+  const bar = document.getElementById('sp-attachment-bar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  if (pendingAttachments.length === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+  for (let i = 0; i < pendingAttachments.length; i++) {
+    const dataUrl = pendingAttachments[i]!;
+    const chip = el('div', { class: 'sp-attachment-chip' });
+    const thumb = el('img', {
+      class: 'sp-attachment-thumb',
+      src: dataUrl,
+      alt: 'attachment',
+    }) as HTMLImageElement;
+    const removeBtn = el('button', { class: 'sp-attachment-remove', title: 'Remove' }, '×');
+    const idx = i;
+    removeBtn.addEventListener('click', () => {
+      pendingAttachments.splice(idx, 1);
+      updateAttachmentPreview();
+    });
+    chip.appendChild(thumb);
+    chip.appendChild(removeBtn);
+    bar.appendChild(chip);
+  }
 }
 
 function updateToolsButton(): void {
@@ -1533,6 +2047,27 @@ function autoResizeInput(ta: HTMLTextAreaElement): void {
   ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
 }
 
+/**
+ * Queries the active tab URL and updates the persistent context chip label.
+ * Safe to call multiple times; falls back gracefully when tab API is unavailable.
+ */
+function refreshPageHostname(): void {
+  try {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (chrome.runtime.lastError) return;
+      const url = tabs[0]?.url ?? '';
+      try {
+        currentPageHostname = url ? new URL(url).hostname : '';
+      } catch {
+        currentPageHostname = '';
+      }
+      updateContextButton();
+    });
+  } catch {
+    // chrome.tabs unavailable in test/SSR environment — ignore
+  }
+}
+
 function buildUI(): void {
   document.body.innerHTML = '';
 
@@ -1549,26 +2084,168 @@ function buildUI(): void {
     '<span id="sp-model-badge">AI Assistant</span><span class="sp-chevron">▾</span>';
   const modelDropdownEl = el('div', { id: 'sp-model-dropdown' });
   let currentModelValue = 'auto';
+
+  /**
+   * Resolves the chrome-extension URL for a provider logo SVG.
+   * Falls back to undefined when chrome.runtime is unavailable (tests / SSR).
+   */
+  function resolveProviderLogoUrl(providerId: string): string | undefined {
+    try {
+      return chrome.runtime.getURL(`icons/providers/${providerId}.svg`);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Builds a single model-option row with:
+   *  - 16px provider logo (or circle placeholder)
+   *  - Model name
+   *  - 1-line capability sub-label (Fastest / Balanced / Most capable)
+   *  - Checkmark on the selected item
+   */
+  function buildModelOptionRow(m: SidePanelModelOption, isSelected: boolean): HTMLElement {
+    const isAuto = m.value === 'auto';
+    const classes = [
+      'sp-model-option',
+      isSelected ? 'selected' : '',
+      isAuto ? 'sp-model-option-auto' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const opt = el('div', { class: classes });
+
+    // Logo / dot
+    if (isAuto) {
+      opt.appendChild(el('div', { class: 'sp-model-auto-dot' }));
+    } else if (m.provider) {
+      const logoUrl = resolveProviderLogoUrl(m.provider);
+      if (logoUrl) {
+        const img = el('img', {
+          class: 'sp-model-option-logo',
+          src: logoUrl,
+          alt: m.provider,
+        }) as HTMLImageElement;
+        img.addEventListener('error', () => {
+          const ph = el('div', { class: 'sp-model-option-logo-placeholder' });
+          img.replaceWith(ph);
+        });
+        opt.appendChild(img);
+      } else {
+        opt.appendChild(el('div', { class: 'sp-model-option-logo-placeholder' }));
+      }
+    } else {
+      opt.appendChild(el('div', { class: 'sp-model-option-logo-placeholder' }));
+    }
+
+    // Text block: name + sub-label
+    const textBlock = el('div', { class: 'sp-model-option-text' });
+    textBlock.appendChild(el('span', { class: 'sp-model-option-name' }, m.label));
+    if (m.capability) {
+      const capLabel = CAPABILITY_LABEL[m.capability];
+      textBlock.appendChild(el('span', { class: 'sp-model-option-sublabel' }, capLabel));
+    } else if (isAuto) {
+      textBlock.appendChild(
+        el('span', { class: 'sp-model-option-sublabel' }, 'Automatic provider selection'),
+      );
+    }
+    opt.appendChild(textBlock);
+
+    // Checkmark
+    opt.appendChild(el('span', { class: 'sp-model-option-check' }, isSelected ? '✓' : ''));
+
+    opt.addEventListener('click', () => {
+      currentModelValue = m.value;
+      chrome.storage.local.set({ agi_model: m.value }).catch(() => {});
+      updateModelBadge(m.value);
+      renderModelDropdown();
+      modelDropdownEl.classList.remove('open');
+      modelSelectorBtn.classList.remove('open');
+    });
+
+    return opt;
+  }
+
   function renderModelDropdown(): void {
     modelDropdownEl.innerHTML = '';
-    for (const m of SIDE_PANEL_MODEL_OPTIONS) {
-      const opt = el('div', {
-        class: `sp-model-option${m.value === currentModelValue ? ' selected' : ''}`,
-      });
-      opt.appendChild(
-        el('span', { class: 'sp-model-option-check' }, m.value === currentModelValue ? '✓' : ''),
-      );
-      opt.appendChild(el('span', { class: 'sp-model-option-label' }, m.label));
-      opt.addEventListener('click', () => {
-        currentModelValue = m.value;
-        chrome.storage.local.set({ agi_model: m.value }).catch(() => {});
-        updateModelBadge(m.value);
-        renderModelDropdown();
-        modelDropdownEl.classList.remove('open');
-        modelSelectorBtn.classList.remove('open');
-      });
-      modelDropdownEl.appendChild(opt);
+
+    // 0. Provider count badge header
+    const pickerHeader = el('div', { class: 'sp-model-picker-header' });
+    pickerHeader.appendChild(el('span', { class: 'sp-model-picker-title' }, 'Select model'));
+    pickerHeader.appendChild(el('span', { class: 'provider-count-badge' }, '13+ providers'));
+    modelDropdownEl.appendChild(pickerHeader);
+
+    // 1. "Best (auto)" as the first option, visually distinct
+    const autoOpt = SIDE_PANEL_MODEL_OPTIONS.find((m) => m.value === 'auto');
+    if (autoOpt) {
+      modelDropdownEl.appendChild(buildModelOptionRow(autoOpt, currentModelValue === 'auto'));
     }
+
+    // 2. Collect non-auto options grouped by provider
+    const nonAutoOptions = SIDE_PANEL_MODEL_OPTIONS.filter((m) => m.value !== 'auto');
+
+    // Build an ordered map of provider -> options
+    const grouped = new Map<string, SidePanelModelOption[]>();
+    for (const m of nonAutoOptions) {
+      const provKey = m.provider ?? '__unknown__';
+      if (!grouped.has(provKey)) grouped.set(provKey, []);
+      grouped.get(provKey)!.push(m);
+    }
+
+    // Render in canonical provider order, then any remainder
+    const rendered = new Set<string>();
+    for (const pid of PROVIDER_GROUP_ORDER) {
+      const opts = grouped.get(pid);
+      if (!opts || opts.length === 0) continue;
+      rendered.add(pid);
+      const provDisplay = PROVIDER_DISPLAY[pid];
+      const headerLabel = provDisplay?.label ?? pid;
+      modelDropdownEl.appendChild(el('div', { class: 'sp-model-group-header' }, headerLabel));
+      for (const m of opts) {
+        modelDropdownEl.appendChild(buildModelOptionRow(m, currentModelValue === m.value));
+      }
+    }
+
+    // Any providers not in PROVIDER_GROUP_ORDER
+    for (const [provKey, opts] of grouped.entries()) {
+      if (rendered.has(provKey)) continue;
+      modelDropdownEl.appendChild(
+        el(
+          'div',
+          { class: 'sp-model-group-header' },
+          provKey !== '__unknown__' ? provKey : 'Other',
+        ),
+      );
+      for (const m of opts) {
+        modelDropdownEl.appendChild(buildModelOptionRow(m, currentModelValue === m.value));
+      }
+    }
+
+    // 3. Thinking toggle at the bottom
+    const toggleRow = el('div', { class: 'sp-thinking-toggle-row' });
+    const toggleLabel = el(
+      'label',
+      { class: `sp-thinking-toggle-label${thinkingEnabled ? ' active' : ''}` },
+      'Extended thinking',
+    );
+    const toggleInput = el('input', {
+      class: 'sp-thinking-toggle',
+      type: 'checkbox',
+    }) as HTMLInputElement;
+    toggleInput.checked = thinkingEnabled;
+    toggleInput.addEventListener('change', () => {
+      thinkingEnabled = toggleInput.checked;
+      chrome.storage.local.set({ agi_thinking_enabled: thinkingEnabled }).catch(() => {});
+      if (thinkingEnabled) {
+        toggleLabel.classList.add('active');
+      } else {
+        toggleLabel.classList.remove('active');
+      }
+    });
+    toggleRow.appendChild(toggleLabel);
+    toggleRow.appendChild(toggleInput);
+    modelDropdownEl.appendChild(toggleRow);
   }
   modelSelectorBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1581,11 +2258,15 @@ function buildUI(): void {
       modelSelectorBtn.classList.remove('open');
     }
   });
-  chrome.storage.local.get('agi_model', (result) => {
+  chrome.storage.local.get(['agi_model', 'agi_thinking_enabled'], (result) => {
     if (chrome.runtime.lastError) return;
     const stored = result['agi_model'] as string | undefined;
     if (stored) {
       currentModelValue = normalizeModelId(stored) ?? stored;
+    }
+    const storedThinking = result['agi_thinking_enabled'] as boolean | undefined;
+    if (storedThinking !== undefined) {
+      thinkingEnabled = storedThinking;
     }
     updateModelBadge(currentModelValue);
     renderModelDropdown();
@@ -2156,28 +2837,8 @@ function buildUI(): void {
 
   const toolbar = el('div', { id: 'sp-toolbar' });
 
-  contextBtn = el('button', {
-    class: 'sp-tool-btn',
-    id: 'sp-context-btn',
-    title: 'Add page content to next message',
-  });
-  contextBtn.innerHTML = '📄 Add page context';
-  contextBtn.addEventListener('click', async () => {
-    if (pendingPageContext) {
-      pendingPageContext = null;
-      updateContextButton();
-      return;
-    }
-    contextBtn!.innerHTML = '⏳ Capturing…';
-    contextBtn!.disabled = true;
-    const ctx = await capturePageContext();
-    contextBtn!.disabled = false;
-    if (ctx) {
-      pendingPageContext = ctx;
-    }
-    updateContextButton();
-  });
-  toolbar.appendChild(contextBtn);
+  // Context button is now rendered as a persistent chip in the composer bar (see below).
+  // The toolbar slot is intentionally empty for context; the chip is built inside inputArea.
 
   const micBtn = el('button', { class: 'sp-tool-btn', id: 'sp-mic-btn', title: 'Voice input' });
   micBtn.innerHTML = '🎤';
@@ -2286,9 +2947,116 @@ function buildUI(): void {
     sendMessage(text);
   });
 
+  // + attachment button and 2-item popup menu
+  const attachWrapper = el('div', { class: 'sp-attach-wrapper' });
+
+  const attachBtn = el('button', {
+    class: 'sp-attach-btn',
+    id: 'sp-attach-btn',
+    title: 'Add attachment',
+  });
+  attachBtn.innerHTML = '+';
+
+  const attachMenu = el('div', { id: 'sp-attach-menu' });
+
+  const screenshotItem = el('div', { class: 'sp-attach-menu-item' });
+  screenshotItem.innerHTML = '<span class="sp-attach-icon">&#128247;</span>Take a screenshot';
+  screenshotItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    chrome.runtime.sendMessage(
+      { type: 'CAPTURE_SCREENSHOT', format: 'png', quality: 90 },
+      (resp: { success?: boolean; data?: string } | undefined) => {
+        if (chrome.runtime.lastError || !resp?.success || !resp.data) return;
+        pendingAttachments.push(resp.data);
+        updateAttachmentPreview();
+      },
+    );
+  });
+
+  const fileItem = el('div', { class: 'sp-attach-menu-item' });
+  fileItem.innerHTML = '<span class="sp-attach-icon">&#128444;</span>Add an image';
+  const fileInput = el('input', {
+    type: 'file',
+    accept: 'image/*',
+    class: 'sp-attach-file-input',
+    id: 'sp-attach-file-input',
+  }) as HTMLInputElement;
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === 'string') {
+        pendingAttachments.push(result);
+        updateAttachmentPreview();
+      }
+    };
+    reader.readAsDataURL(file);
+    fileInput.value = '';
+  });
+  fileItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    fileInput.click();
+  });
+
+  attachMenu.appendChild(screenshotItem);
+  attachMenu.appendChild(fileItem);
+  attachWrapper.appendChild(attachMenu);
+  attachWrapper.appendChild(attachBtn);
+  attachWrapper.appendChild(fileInput);
+
+  attachBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    attachMenu.classList.toggle('open');
+  });
+  document.addEventListener('click', (e: MouseEvent) => {
+    if (!attachWrapper.contains(e.target as Node)) {
+      attachMenu.classList.remove('open');
+    }
+  });
+
+  // Attachment preview bar (hidden until an attachment is added)
+  const attachmentBar = el('div', { id: 'sp-attachment-bar' });
+  attachmentBar.style.display = 'none';
+
+  inputRow.appendChild(attachWrapper);
   inputRow.appendChild(inputEl);
   inputRow.appendChild(sendBtn);
+
+  // Persistent page-context chip in the composer bottom bar
+  const composerBar = el('div', { id: 'sp-composer-bar' });
+  contextBtn = el('button', {
+    class: 'sp-context-chip',
+    id: 'sp-context-chip',
+    title: 'Attach page content to next message',
+  });
+  contextBtn.textContent = currentPageHostname || 'page';
+  contextBtn.addEventListener('click', async () => {
+    if (pendingPageContext) {
+      pendingPageContext = null;
+      updateContextButton();
+      return;
+    }
+    const chip = contextBtn!;
+    const prevText = chip.textContent ?? '';
+    chip.textContent = 'capturing…';
+    chip.classList.add('loading');
+    chip.disabled = true;
+    const ctx = await capturePageContext();
+    chip.disabled = false;
+    chip.classList.remove('loading');
+    if (ctx) {
+      pendingPageContext = ctx;
+    } else {
+      chip.textContent = prevText;
+    }
+    updateContextButton();
+  });
+  composerBar.appendChild(contextBtn);
+  inputArea.appendChild(attachmentBar);
   inputArea.appendChild(inputRow);
+  inputArea.appendChild(composerBar);
   document.body.appendChild(inputArea);
 
   setupVoiceInput(micBtn, inputEl);
@@ -2605,6 +3373,8 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
 injectStyles();
 buildUI();
+// Populate hostname chip as soon as UI is available
+refreshPageHostname();
 
 Promise.all([
   loadApiKey().then((key) => {

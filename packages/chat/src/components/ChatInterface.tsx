@@ -322,8 +322,8 @@ export function ChatInterface({
 
   // Handlers — all stable via useCallback
   const handleSend = useCallback(
-    (content: string) => {
-      sendMessage(content);
+    (content: string, agentMode?: string, effort?: string) => {
+      sendMessage(content, agentMode, effort);
     },
     [sendMessage],
   );
@@ -458,6 +458,8 @@ export function ChatInterface({
             hasMessages={hasMessages}
             disabled={!runtime}
             disabledMessage="Connect to start chatting"
+            conversationId={activeConversationId}
+            projectId={null}
           />
           <Disclaimer variant={disclaimerVariant} />
         </div>

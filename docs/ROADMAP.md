@@ -62,12 +62,12 @@ curl -fsSL https://agiworkforce.com/install.sh | bash
 
 Ship signed Desktop matching Claude Desktop minimalism (per design decision Q2=A).
 
-| Week | Tasks                                                                                                                                                                                                                          |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1    | **Chat consolidation**: pick `packages/chat` as canonical. Migrate apps/web's 141-file UnifiedAgenticChat to use ChatInterface. Delete vestigial views from apps/desktop/src/components/ (~50 of 84 dirs). Estimate: 5–7 days. |
-| 2    | **IPC pruning**: replace hand-listed `generate_handler!` with `inventory`/`linkme` proc-macro (FIX-023). Wire `apps/desktop/check-wiring.sh` into CI. Delete the 26 silently-dead commands + audit the 169 never-invoked.      |
-| 3    | **Windows code signing** (FIX-010): acquire EV cert; add `WINDOWS_CERTIFICATE` secret; wire AzureSignTool in release-desktop.yml. Test: `signtool verify /pa <installer>.exe`. Refuse to ship unsigned.                        |
-| 4    | **Polish + privacy**: rewrite Privacy Policy (FIX-008 with counsel), GDPR Settings → Data section (FIX-041), regression tests, signed release pipeline end-to-end test. Tag desktop v1.0.0.                                    |
+| Week | Tasks                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | ~~Migrate apps/web's UnifiedAgenticChat~~ DONE per Wave 0 (apps/web/components/UnifiedAgenticChat/ deleted; live web chat is apps/web/features/chat/, 183 files). Remaining: triage desktop's apps/desktop/src/components/UnifiedAgenticChat/ (CommandPalette + SearchModal still imported as live overlays). Delete vestigial views from apps/desktop/src/components/ (~50 of 84 dirs). Estimate: 1-2 days. |
+| 2    | **IPC pruning**: replace hand-listed `generate_handler!` with `inventory`/`linkme` proc-macro (FIX-023). Wire `apps/desktop/check-wiring.sh` into CI. Delete the 26 silently-dead commands + audit the 169 never-invoked.                                                                                                                                                                                    |
+| 3    | **Windows code signing** (FIX-010): acquire EV cert; add `WINDOWS_CERTIFICATE` secret; wire AzureSignTool in release-desktop.yml. Test: `signtool verify /pa <installer>.exe`. Refuse to ship unsigned.                                                                                                                                                                                                      |
+| 4    | **Polish + privacy**: rewrite Privacy Policy (FIX-008 with counsel), GDPR Settings → Data section (FIX-041), regression tests, signed release pipeline end-to-end test. Tag desktop v1.0.0.                                                                                                                                                                                                                  |
 
 **Distribution:**
 
@@ -103,14 +103,14 @@ Ship signed Desktop matching Claude Desktop minimalism (per design decision Q2=A
 
 ## Decisions log (key product decisions, 2026-05-03)
 
-| Decision               | Choice                                                           | Rationale                                             |
-| ---------------------- | ---------------------------------------------------------------- | ----------------------------------------------------- |
-| Strategy               | Path C (CLI + Desktop in parallel, then mobile/ext/web)          | Maximize visibility while building richer surfaces    |
-| Design                 | Pixel-close Claude Desktop UI clone                              | Lowest design risk, fastest user learning             |
-| Web chat consolidation | Migrate UnifiedAgenticChat → packages/chat                       | Single canonical component, mode-agnostic             |
-| Pricing                | Local-only + BYOK free, Hobby paid only at MVP, Pro/Max waitlist | No managed cloud at scale until security audit clears |
-| 110 dead crates        | Delete (preserved at ~/Desktop/reference/codex-cli/)             | -995K LOC; codex source preserved for re-port         |
-| SSOT location          | Single AGI_WORKFORCE.md at root + docs/ reorg                    | Discoverable entry point, version-controlled          |
+| Decision               | Choice                                                                                       | Rationale                                             |
+| ---------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Strategy               | Path C (CLI + Desktop in parallel, then mobile/ext/web)                                      | Maximize visibility while building richer surfaces    |
+| Design                 | Pixel-close Claude Desktop UI clone                                                          | Lowest design risk, fastest user learning             |
+| Web chat consolidation | ~~Migrate UnifiedAgenticChat → packages/chat~~ DONE Wave 0 (live at apps/web/features/chat/) | Single canonical component, mode-agnostic             |
+| Pricing                | Local-only + BYOK free, Hobby paid only at MVP, Pro/Max waitlist                             | No managed cloud at scale until security audit clears |
+| 110 dead crates        | Delete (preserved at ~/Desktop/reference/codex-cli/)                                         | -995K LOC; codex source preserved for re-port         |
+| SSOT location          | Single AGI_WORKFORCE.md at root + docs/ reorg                                                | Discoverable entry point, version-controlled          |
 
 ## How to update this file
 

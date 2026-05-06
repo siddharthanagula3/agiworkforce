@@ -36,7 +36,7 @@ const faqs: FAQItem[] = [
     category: 'Pricing',
     question: 'Is there a free tier available?',
     answer:
-      'Yes, we offer a free Hobby tier that includes essential features to get you started. You can explore the core functionality and upgrade to Pro or Max plans when you need more advanced features and higher usage limits.',
+      'Yes. Local-only mode (Desktop app with Ollama or LM Studio) is free forever - no account required. BYOK (Bring Your Own Keys) is also free forever; you supply your own API keys for Anthropic, OpenAI, Google, and others. Hobby is the entry-level paid plan for managed cloud access. Pro and Max are on the waitlist and not yet available.',
   },
   {
     category: 'Pricing',
@@ -61,7 +61,7 @@ const faqs: FAQItem[] = [
     category: 'Platform',
     question: 'Can I sync between multiple devices?',
     answer:
-      'Yes! With a Pro or Max subscription, you can sync your chat history and preferences across multiple devices. The desktop app is the primary experience, while the web platform handles billing and device management.',
+      'Yes. Cloud mode (available on Hobby and BYOK plans) syncs your chat history and preferences across Desktop, Web, and Mobile via Supabase real-time sync. Local mode (Desktop only) keeps everything on your machine with no account required.',
   },
   {
     category: 'Platform',
@@ -74,7 +74,7 @@ const faqs: FAQItem[] = [
     category: 'Security',
     question: 'How is my data protected?',
     answer:
-      'Your data stays on your device by default. All credentials are encrypted using AES-256-GCM and stored in your system keychain. We use a managed proxy model for LLM calls, so you pay AGI Workforce directly - no need to manage your own API keys from OpenAI or Anthropic.',
+      'Your data stays on your device by default. All credentials are encrypted using AES-256-GCM and stored in your system keychain. In BYOK mode, your API calls go directly to the provider - AGI Workforce never proxies them. In Hobby managed-cloud mode, calls are routed through our servers so you do not need your own provider keys.',
   },
   {
     category: 'Security',
@@ -86,7 +86,7 @@ const faqs: FAQItem[] = [
     category: 'Security',
     question: 'Which AI providers are supported?',
     answer:
-      'AGI Workforce supports models from OpenAI, Anthropic, Google, xAI, DeepSeek, Alibaba, and local models via Ollama. You pay AGI Workforce directly - we handle the billing complexity so you never need to manage multiple API subscriptions.',
+      'AGI Workforce supports 10+ providers: Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, plus local models via Ollama and LM Studio. BYOK users bring their own API keys and pay providers directly. Hobby subscribers access a subset of cloud models through managed credits.',
   },
   // Features
   {
@@ -105,7 +105,7 @@ const faqs: FAQItem[] = [
     category: 'Features',
     question: 'Can I use multiple AI models?',
     answer:
-      'Yes! AGI Workforce supports models from OpenAI, Anthropic, Google, DeepSeek, Alibaba, and local models via Ollama. The AI automatically picks the best model for each task, or you can specify your preference.',
+      'Yes. AGI Workforce supports 10+ providers including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, and LM Studio. You can switch providers mid-conversation and keep the full context - that cross-provider session continuity is a core differentiator.',
   },
   {
     category: 'Features',

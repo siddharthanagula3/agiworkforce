@@ -5,11 +5,17 @@
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://agiworkforce.com';
 
-/**
- * Deepgram API key for client-side hold-to-record STT.
- * When unset, the PTT button falls back to server-side Whisper transcription.
- */
-export const DEEPGRAM_API_KEY = process.env.EXPO_PUBLIC_DEEPGRAM_API_KEY ?? '';
+// CRIT-MOB-02 fix (2026-05-04): EXPO_PUBLIC_* vars are inlined into the JS
+// bundle by Metro at build time — the Deepgram key was world-readable in any
+// extracted IPA/APK. The key is now held exclusively server-side.
+//
+// Real-time voice transcription uses an ephemeral Deepgram token issued by the
+// backend (/api/v1/voice/token) which is valid for 60 seconds and scoped to a
+// single request. The backend never returns the master key to the client.
+//
+// REMOVED: EXPO_PUBLIC_DEEPGRAM_API_KEY
+// Callers that previously passed DEEPGRAM_API_KEY to transcribeWithDeepgram()
+// must now call getDeepgramEphemeralToken() first.
 
 export const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? 'wss://signaling.agiworkforce.com';
 

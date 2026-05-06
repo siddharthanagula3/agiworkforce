@@ -1261,6 +1261,8 @@ class SupabaseAuthService {
     const currentTier = this.getPlanTier();
     // Complete plan hierarchy from lowest to highest
     const tierHierarchy: Record<PlanTier, number> = {
+      'local-only': 0,
+      byok: 0,
       free: 0,
       hobby: 1,
       pro: 2,

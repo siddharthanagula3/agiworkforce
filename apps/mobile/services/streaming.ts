@@ -7,6 +7,7 @@ import {
   type StreamChunk as ProviderStreamChunk,
 } from '@/lib/providerStreamClient';
 import { supabase } from './supabase';
+import { secureFetch } from './secureFetch';
 
 export interface StreamDelta {
   content?: string;
@@ -78,7 +79,7 @@ async function attemptStream(
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
-  const response = await fetch(`${API_URL}/api/llm/v1/chat/completions`, {
+  const response = await secureFetch(`${API_URL}/api/llm/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

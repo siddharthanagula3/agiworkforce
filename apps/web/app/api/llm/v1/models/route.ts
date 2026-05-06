@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireEnv } from '@/utils/env';
+import { getUserClient } from '@/lib/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -129,7 +130,7 @@ async function handleListModels(request: NextRequest) {
     return listModelsForRequest(request, 'free');
   }
 
-  const subscription = await SubscriptionService.getSubscription(user.id);
+  const subscription = await SubscriptionService.getSubscription(getUserClient(token), user.id);
   return listModelsForRequest(request, subscription?.plan_tier || 'free');
 }
 

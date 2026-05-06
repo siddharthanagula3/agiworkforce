@@ -22,15 +22,66 @@
 
 /* Tailwind v4 CSS-based configuration */
 @theme {
-  /* Font families */
-  --font-sans:
-    'FK Grotesk', 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'Berkeley Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
-  --font-heading: var(--font-instrument, Georgia), Georgia, 'Times New Roman', serif;
-  --font-body: var(--font-manrope, system-ui), system-ui, -apple-system, sans-serif;
+  /* Font families — Operator-Broadsheet redesign 2026-05-05.
+     Newsreader (variable serif) for display + body on Tier A/B marketing pages.
+     JetBrains Mono for UI chrome: slugs, datelines, CTAs, marginalia. */
+  --font-sans: var(--font-newsreader), Georgia, 'Times New Roman', serif;
+  --font-mono: var(--font-jetbrains), 'Berkeley Mono', ui-monospace, monospace;
+  --font-display: var(--font-newsreader), Georgia, serif;
+  --font-heading: var(--font-newsreader), Georgia, 'Times New Roman', serif;
+  --font-body: var(--font-newsreader), Georgia, serif;
+  --font-ui: var(--font-jetbrains), ui-monospace, monospace;
 
   /* Line height */
   --line-height-chat: 1.6;
+
+  /* Editorial palette — operator-broadsheet redesign 2026-05-05.
+     Paper for "reading" sections (manifesto, differentiators, pricing).
+     Graphite for "operating" sections (cli, surfaces, dispatch). */
+  --color-paper: #faf9f7;
+  --color-paper-2: #f3f0ea;
+  --color-ink: #0a0908;
+  --color-ink-2: #2a2826;
+  --color-graphite: #0a0908;
+  --color-graphite-2: #131110;
+  --color-cream-on-graphite: #ede8df;
+  /* fg-* tokens are tuned for graphite (cream-on-dark) backgrounds.
+     fg-paper-* counterparts ensure ≥4.5:1 contrast on #faf9f7 paper. */
+  --color-fg-muted: #a8a4a0;
+  --color-fg-quiet: #888480;
+  --color-fg-faint: #555150;
+  --color-fg-paper-muted: #4a4744; /* ~9.4:1 on paper, body-safe */
+  --color-fg-paper-quiet: #6b6764; /* ~5.6:1 on paper, body-safe AA */
+  --color-fg-paper-faint: #8e8a86; /* ~3.1:1 on paper, large text only */
+
+  /* Brand: amber as RULE color (structural rule lines, drop-caps, carets).
+     Hex unchanged; role changes from accent to ink. */
+  --color-rule: #c8892a;
+  --color-rule-soft: rgba(200, 137, 42, 0.22);
+  --color-rule-strong: #c8892a;
+
+  /* Paired text-on-amber for body emphasis (the bare #c8892a fails 4.5:1 on
+     body-size text against #09090b at ~6.2:1 — fine for ≥18px bold, fails for
+     small body). Use --color-amber-text on body, keep --color-rule for ≥18px
+     and structural rule lines. */
+  --color-amber-text: #e0a347;
+  --color-amber-ink: #09090b;
+
+  /* Single secondary accent — used only for status stamps, never as fill. */
+  --color-stamp-oxblood: #8b1a1a;
+  --color-stamp-ok: #1e6b3b;
+
+  /* Motion tokens — operator-broadsheet redesign 2026-05-05.
+     Rule: enter at --dur-base, exit at ~70% of enter (~220ms) with --ease-in.
+     All scroll reveals: opacity 0→1 + translateY(8→0). Drop the 1000ms / 32px
+     pattern that signals dated AI-tool aesthetic. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-quart: cubic-bezier(0.5, 0, 0.75, 0);
+  --dur-fast: 180ms;
+  --dur-base: 320ms;
+  --dur-slow: 520ms;
+  --stagger-tight: 40ms;
+  --stagger-loose: 80ms;
 
   /* Custom colors - Cream */
   --color-cream-50: #fcfcf9;
@@ -373,6 +424,25 @@
   }
 }
 
+/* =====================================================
+   Editorial primitive kit — operator-broadsheet c4/11
+   ===================================================== */
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes opsz-morph {
+  from {
+    font-variation-settings: 'opsz' var(--opsz-from, 36);
+  }
+  to {
+    font-variation-settings: 'opsz' var(--opsz-to, 56);
+  }
+}
+
 @keyframes slide-in-right {
   from {
     opacity: 0;
@@ -602,6 +672,20 @@
     --chat-radius-lg: 12px;
     --chat-radius-xl: 16px;
     --chat-radius-2xl: 24px;
+  }
+}
+
+@layer base {
+  /* Editorial specimen drop-cap */
+  .specimen--dropcap > p:first-of-type::first-letter {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-style: italic;
+    font-size: 4em;
+    line-height: 0.8;
+    padding-right: 0.1em;
+    float: left;
+    color: var(--color-rule);
   }
 }
 

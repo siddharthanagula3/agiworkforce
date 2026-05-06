@@ -115,13 +115,27 @@ async function handleDownload(request: NextRequest) {
       throw createError.serviceUnavailable('Failed to fetch installer from GitHub');
     }
 
+    // SEV-WEB-M-2 fix (2026-05-05): when filename falls back to `asset.name`
+    // from GitHub's Releases API, an attacker-controlled release-asset name
+    // containing `"` or CR/LF would land in the Content-Disposition header
+    // verbatim — header injection / response-splitting risk. Encode per
+    // RFC 5987: strip control chars + quotes from the ASCII fallback and use
+    // `filename*=UTF-8''<percent-encoded>` for the canonical name. The
+    // control-char range `\x00-\x1f` is intentional — RFC 7230 forbids CTLs
+    // in header values; this is the only way to express the strip in a regex
+    // literal without a programmatic builder.
+    // eslint-disable-next-line no-control-regex
+    const safeAsciiFilename = filename.replace(/[\r\n"\\\x00-\x1f\x7f]/g, '_');
+    const utf8Filename = encodeURIComponent(filename);
+    const contentDisposition = `attachment; filename="${safeAsciiFilename}"; filename*=UTF-8''${utf8Filename}`;
+
     // Stream the file with custom Content-Disposition header
     return new NextResponse(fileResponse.body, {
       status: 200,
       headers: {
         'Content-Type': fileResponse.headers.get('Content-Type') || 'application/octet-stream',
         'Content-Length': fileResponse.headers.get('Content-Length') || '',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': contentDisposition,
         'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
       },
     });

@@ -22,6 +22,7 @@ import settingsService, {
 } from '../services/user-preferences';
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
+import { getProviderDefaultModel } from '@agiworkforce/types';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -128,7 +129,8 @@ export function useUserSettings(): UseQueryResult<UserSettings, Error> {
           retention_period: 30,
           max_concurrent_jobs: 10,
           default_ai_provider: 'openai',
-          default_ai_model: 'gpt-5.4',
+          // MODEL-IDS-HARDCODED fix per UNIFIED_LAUNCH_PLAN.md §1: read from models.json catalog
+          default_ai_model: getProviderDefaultModel('openai') ?? 'gpt-5.4',
           prefer_streaming: true,
           ai_temperature: 0.7,
           ai_max_tokens: 4000,

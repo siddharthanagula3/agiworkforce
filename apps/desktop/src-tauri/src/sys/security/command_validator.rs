@@ -118,17 +118,41 @@ static DANGEROUS_PATTERNS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         "| bash",
         "|sh",
         "|bash",
-        // Code injection
+        // Code injection — bare names and absolute paths
+        // RT-02 fix: absolute-path variants bypass the bare-name checks without these.
         "eval $(",
         "base64 -d |",
         "base64 -d|",
         "python -c",
         "python2 -c",
         "python3 -c",
+        "/usr/bin/python -c",
+        "/usr/bin/python2 -c",
+        "/usr/bin/python3 -c",
+        "/usr/local/bin/python -c",
+        "/usr/local/bin/python3 -c",
         "perl -e",
+        "/usr/bin/perl -e",
+        "/usr/local/bin/perl -e",
         "ruby -e",
+        "/usr/bin/ruby -e",
         "node -e",
         "node --eval",
+        "/usr/bin/node -e",
+        "/usr/local/bin/node -e",
+        "php -r",
+        "/usr/bin/php -r",
+        // Shell code injection via -c / /c flags (absolute paths)
+        "/bin/sh -c",
+        "/bin/bash -c",
+        "/usr/bin/bash -c",
+        "/usr/bin/sh -c",
+        "/bin/zsh -c",
+        "/usr/bin/zsh -c",
+        "sh -c",
+        "bash -c",
+        "zsh -c",
+        "fish -c",
         // Pipe-to-network exfiltration (data piped to network tools)
         "| nc ",
         "| nc\t",
@@ -433,6 +457,69 @@ pub fn validate_interactive_input(input: &str, correlation_id: Option<&str>) -> 
     }
 
     validate_command(command, &config)
+}
+
+/// RT-02 fix: Write an entry to the security audit log.
+///
+/// Path: `~/.agiworkforce/security-audit.log`
+/// Format: `[ISO-8601] user=<username> cwd=<cwd> cmd=<command>\n`
+pub fn write_security_audit_log(command: &str, cwd: Option<&str>) {
+    use std::io::Write;
+
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    let log_dir = std::path::PathBuf::from(&home).join(".agiworkforce");
+    let log_path = log_dir.join("security-audit.log");
+
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "<unknown>".to_string());
+
+    let ts = chrono::Utc::now().to_rfc3339();
+    let cwd_str = cwd.unwrap_or("<unknown>");
+    let line = format!("[{ts}] user={user} cwd={cwd_str} cmd={command}\n");
+
+    // Best-effort: if we can't write the log we still allow the command.
+    let _ = std::fs::create_dir_all(&log_dir);
+    // I5: tighten dir to 0o700 (owner-only) — the audit log records every
+    // terminal command (potentially containing secrets in argv). Default
+    // umask leaves these world-readable on shared / multi-user systems.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&log_dir, std::fs::Permissions::from_mode(0o700));
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        let _ = file.write_all(line.as_bytes());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&log_path, std::fs::Permissions::from_mode(0o600));
+        }
+    }
+}
+
+/// RT-02 fix: Reject execution if the current process is running as root/admin.
+///
+/// On Unix, checks `$USER == "root"`. This is safe (no unsafe code) and
+/// adequate as a defence-in-depth layer — the sandbox policy is the
+/// authoritative enforcement for root detection.  On Windows this is a no-op
+/// because terminal commands are sandboxed by the session ACL.
+pub fn reject_if_root() -> ValidationResult {
+    let user = std::env::var("USER").unwrap_or_default();
+    if user == "root" {
+        tracing::warn!("RT-02: terminal_execute blocked — running as root");
+        return Err(CommandValidationError::DangerousPattern {
+            pattern: "root-execution".to_string(),
+            command: "<rejected before parsing>".to_string(),
+        });
+    }
+    Ok(())
 }
 
 /// Check if a command should trigger additional confirmation

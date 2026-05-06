@@ -22,7 +22,7 @@ AGI Workforce ships in **2 modes**. The mode you pick determines which tiers are
 | **Local** | Desktop only           | SQLite on your machine | None           | None                  | Local-only or BYOK (free forever; no account needed)            |
 | **Cloud** | Desktop + Web + Mobile | Supabase (us-east-2)   | Supabase OAuth | Realtime cross-device | Hobby+ (Hobby, Pro, Max, or Enterprise) — Cloud requires Hobby+ |
 
-- **Mode picker**: `apps/desktop/src/components/Onboarding/ModeSelectionDialog`
+- **Mode picker**: `apps/desktop/src/components/Onboarding/OnboardingWizard.tsx` (consolidated; `ModeSelectionDialog` deleted)
 - **Runtime detection**: `packages/runtime/src/detect.ts` (`isTauri`, `isCloudWeb`)
 
 ### Local ↔ Cloud chat transfer

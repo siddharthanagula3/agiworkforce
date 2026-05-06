@@ -16,13 +16,17 @@ import {
 } from 'react-native';
 import { Fingerprint } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/authStore';
+import { supabase } from '@/services/supabase';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
+import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/hooks/useBiometricGate';
 import { useTheme } from '@/hooks/useTheme';
 import {
   registerForPushNotifications,
   setupNotificationListeners,
   handleInitialNotification,
+  setNavigatorReady,
+  setCurrentSession,
 } from '@/services/notifications';
 import { getMobileSyncService } from '@/services/conversationSync';
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
@@ -41,18 +45,51 @@ export default function RootLayout() {
   const { colors: themeColors, statusBarStyle } = useTheme();
   const { isUnlocked, authenticate } = useBiometricGate();
 
-  // Initialise MMKV encryption before any store access.
-  // This must run before initialize() so that the Zustand persist middleware
-  // can access the encrypted MMKV instance when rehydrating.
+  // CRIT-MOB-01 fix (2026-05-04): initialise MMKV encryption on mount, but do
+  // NOT call initialize() here. The Supabase session must not be loaded until
+  // biometric auth has succeeded. initialize() is called in the effect below
+  // that watches `isUnlocked`.
+  //
+  // LOW-MOB-1 fix (red-team 2026-05): hydrate the biometric-lock flag from
+  // SecureStore before any biometric-gated UI mounts. Until hydration
+  // completes the gate behaves as if disabled (`enabled = false`); we
+  // accept that ~1-frame window because the alternative is a forced lock
+  // screen on every cold start regardless of user preference.
   useEffect(() => {
-    initMmkvEncryption()
-      .then(() => initialize())
-      .catch((err) => {
-        // Fall through to initialize anyway so auth guard still runs
-        console.warn('[RootLayout] MMKV encryption init failed:', err);
-        initialize();
-      });
+    initMmkvEncryption().catch((err) => {
+      console.warn('[RootLayout] MMKV encryption init failed:', err);
+    });
+    hydrateBiometricFlag().catch((err) => {
+      console.warn('[RootLayout] biometric flag hydrate failed:', err);
+    });
+  }, []);
+
+  // CRIT-MOB-01 fix: call initialize() only after the biometric gate has
+  // passed. On first mount isUnlocked is false (when biometric is enabled), so
+  // the session is never loaded until the user authenticates.
+  useEffect(() => {
+    if (!isUnlocked) return;
+    initialize();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUnlocked]);
+
+  // LOW-MOB-3 fix (red-team 2026-05): keep notifications.ts informed of
+  // the current session so its handler can refuse navigation when no user
+  // is signed in. Runs eagerly (not gated by isInitialized) because the
+  // notification handler may fire from a cold-start tap before any other
+  // effect has run.
+  useEffect(() => {
+    setCurrentSession(session ?? null);
+  }, [session]);
+
+  // LOW-MOB-3 fix: tell notifications.ts the navigator is mounted. Slot is
+  // rendered on every render of this component, so on the first render we
+  // know the navigator is up. The retry-loop in safeNavigate is the
+  // belt-and-suspenders, but flipping this flag immediately means the
+  // first navigation attempts the push directly instead of via setTimeout.
+  useEffect(() => {
+    setNavigatorReady(true);
+    return () => setNavigatorReady(false);
   }, []);
 
   // Push notifications — register + listeners
@@ -238,7 +275,96 @@ export default function RootLayout() {
     }
   }, [url, session, isInitialized, router]);
 
+  // CRIT-MOB-01 reset-password handler (red-team fix 2026-05).
+  //
+  // Background: `authStore.resetPassword` previously asked Supabase to
+  // redirect the recovery email to the custom scheme
+  // `agiworkforce://reset-password`. Custom schemes are claim-able by any
+  // installed APK on Android — a hostile app could intercept the recovery
+  // JWT in the URL fragment and seize the account. The redirect is now
+  // an HTTPS App Link (`https://agiworkforce.com/auth/reset-password`),
+  // which requires verified domain ownership (assetlinks.json + AASA in
+  // /.well-known/) so it cannot be hijacked.
+  //
+  // Two flows that land here:
+  //   1. PKCE (preferred) — recovery URL carries `?code=<recoveryCode>` in
+  //      query params. We exchange via supabase.auth.exchangeCodeForSession.
+  //      The token never appears in the fragment / OS URL bar.
+  //   2. Legacy fragment — older Supabase projects emit
+  //      `#access_token=<jwt>&refresh_token=<rt>&type=recovery`. We accept
+  //      these only when the URL fragment also carries `type=recovery` to
+  //      avoid being a generic session-injection sink (an attacker who has
+  //      ANY JWT pair can otherwise inject a session by firing a
+  //      reset-password URL).
+  //
+  // We unconditionally accept the URL only when scheme === 'https' AND
+  // hostname === 'agiworkforce.com' AND the first path segment is `auth`
+  // and the second is `reset-password`. The OS-side App-Link verification
+  // is the gate against hijack; this code is the second wall.
+  useEffect(() => {
+    if (!url || !isInitialized) return;
+
+    const parsed = Linking.parse(url);
+    const scheme = (parsed.scheme ?? '').toLowerCase();
+    const hostname = (parsed.hostname ?? '').toLowerCase();
+    const segments = (parsed.path ?? '').split('/').filter(Boolean);
+
+    const isResetPassword =
+      scheme === 'https' &&
+      hostname === 'agiworkforce.com' &&
+      segments[0] === 'auth' &&
+      segments[1] === 'reset-password';
+    if (!isResetPassword) return;
+
+    const code = parsed.queryParams?.code;
+    const codeStr = typeof code === 'string' ? code : null;
+
+    (async () => {
+      if (codeStr) {
+        // PKCE path. supabase.auth.exchangeCodeForSession verifies the code
+        // against Supabase's auth API; an attacker-supplied or expired code
+        // returns an error and we surface it without setting any session.
+        const { error } = await supabase.auth.exchangeCodeForSession(codeStr);
+        if (error) {
+          console.warn('[reset-password] exchangeCodeForSession failed:', error.message);
+          return;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.replace('/(auth)/reset-password?recovery=1' as any);
+        return;
+      }
+
+      // Legacy fragment path. Reject unless type=recovery — keeps this
+      // handler from becoming a generic session-injection sink.
+      const fragmentMatch = url.match(/#(.*)$/);
+      if (!fragmentMatch?.[1]) return;
+      const fragmentParams = new URLSearchParams(fragmentMatch[1]);
+      if (fragmentParams.get('type') !== 'recovery') {
+        console.warn('[reset-password] fragment present without type=recovery; ignoring');
+        return;
+      }
+      const accessToken = fragmentParams.get('access_token');
+      const refreshToken = fragmentParams.get('refresh_token');
+      if (!accessToken || !refreshToken) return;
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (error) {
+        console.warn('[reset-password] setSession failed:', error.message);
+        return;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.replace('/(auth)/reset-password?recovery=1' as any);
+    })();
+  }, [url, isInitialized, router]);
+
   // C1b: Share intent handling — receive text/URL shared from other apps
+  //
+  // HIGH-MOB-03 fix (2026-05-04): shared content is no longer auto-sent to the
+  // LLM. We navigate to the share-preview screen where the user reviews and
+  // explicitly taps "Send to Chat". The preview screen sanitises the content
+  // and enforces the 100 KB length cap.
   useEffect(() => {
     if (!session || !isInitialized) return;
 
@@ -246,31 +372,20 @@ export default function RootLayout() {
       const initialUrl = await Linking.getInitialURL();
       if (!initialUrl) return;
 
-      // Android share intents come as plain text content, not URLs
-      // They are typically passed as EXTRA_TEXT via the intent
-      // expo-linking captures these in the URL query params
+      // Android share intents come as plain text content, not URLs.
+      // expo-linking captures these in the URL query params.
       const parsed = Linking.parse(initialUrl);
       const sharedText =
         (parsed.queryParams?.['android.intent.extra.TEXT'] as string | undefined) ??
         (parsed.queryParams?.text as string | undefined);
 
       if (sharedText && sharedText.trim()) {
-        // Create a new chat with the shared content
-        const { createConversation, sendMessage } = await import('@/stores/chatStore').then((m) =>
-          m.useChatStore.getState(),
+        // Navigate to preview — never auto-send.
+        router.push(
+          `/(app)/share-preview?text=${encodeURIComponent(sharedText)}` as Parameters<
+            typeof router.push
+          >[0],
         );
-        const { selectedModel } = await import('@/stores/modelStore').then((m) =>
-          m.useModelStore.getState(),
-        );
-        const title = sharedText.length > 40 ? sharedText.slice(0, 40).trim() + '...' : sharedText;
-        try {
-          const id = await createConversation(title);
-          sendMessage(id, sharedText, selectedModel);
-          router.push(`/(app)/chat/${id}` as Parameters<typeof router.push>[0]);
-        } catch (err) {
-          // Fall through — app opens normally
-          console.warn('[RootLayout] Share intent handling failed:', err);
-        }
       }
     };
 

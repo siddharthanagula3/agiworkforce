@@ -218,7 +218,27 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
                 port
             );
         }
-        let token = triggers_config.webhook_token.clone();
+
+        // HIGH-3: Require a webhook_token with at least 32 characters of entropy.
+        // Accepting POST requests without authentication allows any local process
+        // (or remote attacker if the port is forwarded) to trigger LLM agentic execution.
+        let token = match &triggers_config.webhook_token {
+            None => {
+                anyhow::bail!(
+                    "webhook_token is required when webhook triggers are configured. \
+                     Add `webhook_token = \"<random 32+ char secret>\"` to \
+                     ~/.agiworkforce/triggers.json and restart the daemon."
+                );
+            }
+            Some(t) if t.len() < 32 => {
+                anyhow::bail!(
+                    "webhook_token is too short ({} chars). Use at least 32 characters \
+                     of random entropy (e.g. `openssl rand -hex 32`).",
+                    t.len()
+                );
+            }
+            Some(t) => Some(t.clone()),
+        };
         let tx_webhook = tx.clone();
         let mut shutdown_rx_webhook = shutdown_rx.clone();
         background_handles.push(tokio::spawn(async move {
