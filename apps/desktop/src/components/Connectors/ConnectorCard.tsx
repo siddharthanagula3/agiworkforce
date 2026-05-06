@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check, Loader2, MoreHorizontal, Plus, Puzzle, Settings } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/Popover';
 import type { ConnectorDef } from './connectorDefinitions';
+import { ConnectorDetailView } from './ConnectorDetailView';
 
 interface ConnectorCardProps {
   connector: ConnectorDef;
@@ -23,6 +24,11 @@ export function ConnectorCard({
   onConfigure,
 }: ConnectorCardProps) {
   const [logoFailed, setLogoFailed] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
+
+  if (showDetail) {
+    return <ConnectorDetailView connector={connector} onBack={() => setShowDetail(false)} />;
+  }
 
   return (
     <div
@@ -79,7 +85,13 @@ export function ConnectorCard({
                 <button
                   type="button"
                   className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-accent transition-colors"
-                  onClick={onConfigure ?? onConnect}
+                  onClick={() => {
+                    if (onConfigure) {
+                      onConfigure();
+                    } else {
+                      setShowDetail(true);
+                    }
+                  }}
                 >
                   <Settings className="h-3.5 w-3.5" />
                   Configure
