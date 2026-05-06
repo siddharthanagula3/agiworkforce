@@ -45,7 +45,7 @@ describe('model catalog helpers', () => {
       provider: 'openai',
       tier: 'balanced',
     });
-    expect(models.find((model) => model.id === 'claude-opus-4.6')).toMatchObject({
+    expect(models.find((model) => model.id === 'claude-opus-4.7')).toMatchObject({
       provider: 'anthropic',
       tier: 'premium',
     });
@@ -91,22 +91,25 @@ describe('model catalog helpers', () => {
     expect(getProviderProbeModel('anthropic')).toBe('claude-haiku-4.5');
 
     const fallbackIds = getEconomyFallbackModels().map((entry) => entry.model);
-    expect(fallbackIds.indexOf('qwen-turbo')).toBeGreaterThanOrEqual(0);
-    expect(fallbackIds.indexOf('qwen-turbo')).toBeLessThan(fallbackIds.indexOf('gpt-5.4-mini'));
+    expect(fallbackIds.indexOf('qwen-3.6-plus')).toBeGreaterThanOrEqual(0);
+    expect(fallbackIds.indexOf('qwen-3.6-plus')).toBeLessThan(fallbackIds.indexOf('gpt-5.4-mini'));
     expect(fallbackIds).toContain('gpt-5.4-mini');
     expect(fallbackIds).not.toContain('gpt-5.4-nano');
 
     const coreOptions = getCoreManualModelOptions();
     expect(coreOptions.find((entry) => entry.id === 'gpt-5.4-pro')?.label).toBe('GPT-5.4 Pro');
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-codex')).toBe(true);
-    expect(coreOptions.some((entry) => entry.id === 'kimi-k2.5-thinking')).toBe(true);
+    expect(coreOptions.some((entry) => entry.id === 'kimi-k2.6')).toBe(true);
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-nano')).toBe(false);
     expect(coreOptions.some((entry) => entry.id === 'sonar-pro')).toBe(false);
   });
 
-  it('canonicalizes legacy nano aliases onto gpt-5.4-mini', () => {
-    expect(normalizeModelId('gpt-5.4-nano')).toBe('gpt-5.4-mini');
-    expect(normalizeModelId('gpt-5-nano')).toBe('gpt-5.4-mini');
+  it('canonicalizes legacy gpt-5-nano onto gpt-5.4-nano (kept as distinct model)', () => {
+    // The catalog refresh in 3129aa408 promoted nano to its own model tier
+    // rather than collapsing it onto mini. Canonicalization preserves the
+    // distinction; gpt-5-nano (legacy) maps to gpt-5.4-nano (current).
+    expect(normalizeModelId('gpt-5-nano')).toBe('gpt-5.4-nano');
+    expect(normalizeModelId('gpt-5.4-nano')).toBe('gpt-5.4-nano');
   });
 
   it('classifies provider surfaces and managed cloud provider visibility', () => {
