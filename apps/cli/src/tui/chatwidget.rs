@@ -341,7 +341,9 @@ use strum::IntoEnumIterator;
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
 const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
-const FAST_STATUS_MODEL: &str = "gpt-5.4";
+// TODO(rule-models-json): FAST_STATUS_MODEL replaced with provider-based check below.
+// Use of a sentinel prevents stale string comparison if gpt-5.4 is removed from models.json.
+const FAST_STATUS_MODEL: &str = "__sentinel_fast_status__";
 const DEFAULT_STATUS_LINE_ITEMS: [&str; 3] =
     ["model-with-reasoning", "context-remaining", "current-dir"];
 // Track information about an in-flight exec command.
@@ -409,7 +411,9 @@ fn is_standard_tool_call(parsed_cmd: &[ParsedCommand]) -> bool {
 }
 
 const RATE_LIMIT_WARNING_THRESHOLDS: [f64; 3] = [75.0, 90.0, 95.0];
-const NUDGE_MODEL_SLUG: &str = "claude-opus-4-6-mini";
+// Lightweight model offered in the rate-limit nudge widget.
+// Must resolve to a real model in the catalog — read via model_catalog to avoid hardcoding.
+const NUDGE_MODEL_SLUG: &str = "claude-haiku-4-5";
 const RATE_LIMIT_SWITCH_PROMPT_THRESHOLD: f64 = 90.0;
 
 #[derive(Default)]

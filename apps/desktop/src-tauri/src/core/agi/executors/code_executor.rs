@@ -799,9 +799,12 @@ impl CodeExecutor {
             language, analysis_type, language, code_preview
         );
 
+        let fast_model =
+            crate::core::llm::models_config::get_task_model(&crate::core::llm::Provider::Anthropic, "fast_completion")
+                .to_string();
         let preferences = RouterPreferences {
             provider: Some(crate::core::llm::Provider::Anthropic),
-            model: Some("claude-haiku-4-5".to_string()),
+            model: Some(fast_model.clone()),
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
@@ -815,7 +818,7 @@ impl CodeExecutor {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-haiku-4-5".to_string(),
+            model: fast_model,
             temperature: Some(0.3),
             max_tokens: Some(500),
             stream: false,

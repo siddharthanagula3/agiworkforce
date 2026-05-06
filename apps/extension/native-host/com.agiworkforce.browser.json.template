@@ -1,0 +1,9 @@
+{
+  "name": "com.agiworkforce.browser",
+  "description": "AGI Workforce desktop bridge for the Chrome extension",
+  "path": "/Applications/AGI Workforce.app/Contents/MacOS/agi-workforce-bridge",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://<EXTENSION_ID_PLACEHOLDER>/"
+  ]
+}

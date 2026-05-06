@@ -11,7 +11,7 @@
  */
 
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 
 import { chromium, type BrowserContext, type Page, type LaunchOptions } from 'playwright-core';
@@ -19,6 +19,29 @@ import { chromium, type BrowserContext, type Page, type LaunchOptions } from 'pl
 import type { BrowserProfileInfo } from './types';
 
 const DEFAULT_PROFILE_NAME = 'agiworkforce';
+
+/**
+ * Profile names must match this regex: 1-48 chars, alphanumerics plus
+ * `_`, `.`, `-`. No path separators, no `..`, no whitespace, no shell
+ * metacharacters. Names that fail validation are rejected with a
+ * `BrowserProfileNameError` (code: `'invalid_profile_name'`).
+ */
+const PROFILE_NAME_RE = /^[a-zA-Z0-9_.-]{1,48}$/;
+
+/**
+ * Error thrown when a profile name fails validation in `resolveProfileDir`.
+ * Code: `'invalid_profile_name'`.
+ */
+export class BrowserProfileNameError extends Error {
+  override readonly name = 'BrowserProfileNameError';
+  readonly code = 'invalid_profile_name' as const;
+  constructor(
+    readonly attemptedName: string,
+    reason: string,
+  ) {
+    super(`Invalid browser profile name "${attemptedName}": ${reason}`);
+  }
+}
 
 interface OpenProfile {
   name: string;
@@ -36,7 +59,25 @@ function profileRoot(): string {
 }
 
 export function resolveProfileDir(name?: string): string {
-  return join(profileRoot(), name ?? DEFAULT_PROFILE_NAME);
+  const profileName = name ?? DEFAULT_PROFILE_NAME;
+  if (!PROFILE_NAME_RE.test(profileName)) {
+    throw new BrowserProfileNameError(
+      profileName,
+      'must match /^[a-zA-Z0-9_.-]{1,48}$/ (no path separators, no whitespace, no `..`).',
+    );
+  }
+  const root = resolve(profileRoot());
+  const resolved = resolve(join(root, profileName));
+  // Defense-in-depth: even though the regex blocks `..` and path
+  // separators, double-check the resolved path stays strictly under root.
+  const rel = relative(root, resolved);
+  if (rel === '' || rel.startsWith('..')) {
+    throw new BrowserProfileNameError(
+      profileName,
+      `resolves outside profile root (${root}); rel="${rel}".`,
+    );
+  }
+  return resolved;
 }
 
 export async function listProfiles(): Promise<BrowserProfileInfo[]> {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-05-04",
+  "lastUpdated": "2026-05-06",
   "providers": {
     "managed_cloud": {
       "label": "Managed Cloud",
@@ -2680,6 +2680,35 @@
       "qualityTier": "best",
       "bestFor": ["Professional Video", "High Quality Clips"],
       "released": "January 2026"
+    },
+    "stable-diffusion-xl": {
+      "id": "stable-diffusion-xl",
+      "apiModelId": "stable-diffusion-xl-1024-v1-0",
+      "name": "Stable Diffusion XL",
+      "provider": "managed_cloud",
+      "modelType": "image",
+      "contextWindow": 4000,
+      "inputCost": 0.0,
+      "outputCost": 4.0,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speed": "fast",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Open Source Image Gen", "Custom Style", "Self-Host Path"],
+      "released": "July 2023"
     },
     "tts-1": {
       "id": "tts-1",

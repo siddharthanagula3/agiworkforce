@@ -351,7 +351,11 @@ async fn check_email_triggers(
 ///
 /// All non-None filters must match (AND logic). A None filter is treated
 /// as "match any".
-#[allow(dead_code)]
+///
+/// NOTE: This function is currently only called from tests.  When the
+/// production trigger-evaluation loop is wired, move this out of cfg(test)
+/// and call it from `evaluate_email_triggers()`.
+#[cfg(test)]
 fn email_matches_trigger(
     trigger: &EmailTrigger,
     from: &str,

@@ -5,25 +5,20 @@
  * POST /api/memory - Create a new memory
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
 
 async function handleGetMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -35,7 +30,6 @@ async function handleGetMemories(request: NextRequest) {
   const { data, error } = await supabase
     .from('user_memories')
     .select('id, content, category, source, created_at, updated_at')
-    .eq('user_id', user.id)
     .eq('is_deleted', false)
     .order('updated_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -65,7 +59,8 @@ async function handleCreateMemory(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  // RLS-bound client for all DB ops. user_id still needed for INSERT (RLS can't infer it).
+  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
 
   let body: { content?: string; category?: string; source?: string };
   try {
@@ -84,10 +79,6 @@ async function handleCreateMemory(request: NextRequest) {
 
   const validSources = ['mobile', 'desktop', 'web', 'auto'];
   const source = validSources.includes(body.source ?? '') ? body.source : 'web';
-
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseServiceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const { data, error } = await supabase
     .from('user_memories')

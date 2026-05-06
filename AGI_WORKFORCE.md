@@ -1,6 +1,6 @@
 # AGI Workforce — Single Source of Truth
 
-> Last updated: 2026-05-03. This file is the entry point for any agent (human or AI) working on this repo. Read this first; everything else links from here.
+> Last updated: 2026-05-05. This file is the entry point for any agent (human or AI) working on this repo. Read this first; everything else links from here.
 
 ## What this is
 
@@ -16,18 +16,18 @@ These are the only three. Everything else (mobile dispatch, CLI with TUI, comput
 
 ## Six surfaces — verified state
 
-| Surface         | Path                     | Stack                                                                                                                                                                                                                                             | Status                                                            | Distribution path                                                            |
-| --------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **CLI**         | `apps/cli/`              | Rust monolith, 195 .rs / 155,029 LOC, Ratatui TUI 125 files, 22 subcommands, 22 hook events, 2,161 tests, 10+ Providers (13 named registrations: Anthropic, OpenAI, Google, Ollama×2, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, LMStudio) | Cargo green; binary at `~/.cargo/bin/agiworkforce` (5.7MB arm64)  | npm (`@agiworkforce/cli`) + Homebrew + GitHub releases + `install.sh`        |
-| **Desktop**     | `apps/desktop/`          | Tauri v2 + React (Vite), 737 .rs backend / 373K LOC, 1,469 IPC commands, 84 component dirs, 84 stores                                                                                                                                             | Builds clean; chat surface = `ChatInterface` from `packages/chat` | DMG (macOS, signed `D2PR62RLT4`) + EXE (Windows, EV cert pending) + AppImage |
-| **Web**         | `apps/web/`              | Next.js 14 app router, 231 routes + 86 API endpoints, Vite SPA bundled into `/public/chat/`                                                                                                                                                       | Vercel deployed at `agiworkforce.com/chat`                        | Hosted at agiworkforce.com                                                   |
-| **Mobile**      | `apps/mobile/` + `ios/`  | Expo + RN, 41 screens, drawer nav, MMKV+biometric, dispatch (Anthropic Dispatch parity)                                                                                                                                                           | Expo build profiles ready (dev/preview/prod)                      | iOS App Store + Google Play (no listings yet)                                |
-| **Chrome ext**  | `apps/extension/`        | MV3 v1.2.0, autofill (LinkedIn/Lever), **13 test suites / 472 tests**                                                                                                                                                                             | dist/ built; **extension.zip 101 KB CWS-ready (2026-05-05)**      | Chrome Web Store (no listing yet)                                            |
-| **VS Code ext** | `apps/extension-vscode/` | v0.3.0, 53 commands, 21 settings, 13 keybindings, @agi chat participant, 13 providers, **314 tests / 17 suites**                                                                                                                                  | out/extension.js compiled, all docs P0s closed (2026-05-05)       | VS Code Marketplace (no listing yet)                                         |
+| Surface         | Path                     | Stack                                                                                                                                                                                                                                                                             | Status                                                              | Distribution path                                                            |
+| --------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **CLI**         | `apps/cli/`              | Rust monolith, 200 .rs / 155,029 LOC, Ratatui TUI 125 files, 22 subcommands, 22 hook events, 999 tests (cargo test 2026-05-05), 10+ Providers (12 named + 1 Custom: Anthropic, OpenAI, Google, Ollama×2, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, LMStudio + Custom BYO) | Cargo green; binary at `~/.cargo/bin/agiworkforce` (5.7MB arm64)    | npm (`@agiworkforce/cli`) + Homebrew + GitHub releases + `install.sh`        |
+| **Desktop**     | `apps/desktop/`          | Tauri v2 + React (Vite), 737 .rs backend / 373K LOC, 1,024 .ts/.tsx frontend, 1,483 IPC commands, 97 component dirs, 84 stores, 55 hooks                                                                                                                                          | Builds clean; chat surface = `ChatInterface` from `packages/chat`   | DMG (macOS, signed `D2PR62RLT4`) + EXE (Windows, EV cert pending) + AppImage |
+| **Web**         | `apps/web/`              | Next.js 14 app router, 231 routes + 91 API endpoints, active chat at `apps/web/features/chat/` (184 files), Vite SPA bundled into `/public/chat/`                                                                                                                                 | Vercel deployed at `agiworkforce.com/chat`                          | Hosted at agiworkforce.com                                                   |
+| **Mobile**      | `apps/mobile/` + `ios/`  | Expo + RN 0.83.6, 43 screens, drawer nav, MMKV+biometric, dispatch (Anthropic Dispatch parity)                                                                                                                                                                                    | Expo build profiles ready (dev/preview/prod)                        | iOS App Store + Google Play (no listings yet)                                |
+| **Chrome ext**  | `apps/extension/`        | MV3 v1.2.0, autofill (LinkedIn/Lever), **13 test suites / 472 tests**                                                                                                                                                                                                             | dist/ built; **extension.zip 116,792 bytes CWS-ready (2026-05-05)** | Chrome Web Store (no listing yet)                                            |
+| **VS Code ext** | `apps/extension-vscode/` | v0.3.0, 56 commands, 23 settings, 13 keybindings, @agi chat participant, 13 providers, **352 tests / 20 suites**                                                                                                                                                                  | out/extension.js compiled, all docs P0s closed (2026-05-05)         | VS Code Marketplace (no listing yet)                                         |
 
 **Backend:** `services/api-gateway/` (Express v5.2, 14 routes, Fly.io ready) + `services/signaling-server/` (WebRTC, deployed Fly.io) + `supabase/` (17 migrations, us-east-2).
 **Shared TS packages:** `packages/chat` (canonical chat component), `packages/api`, `packages/types`, `packages/runtime`, `packages/utils`.
-**Active Rust crates:** 12 (down from 113 — see commit `ac59e09e`). Specifically: `agiworkforce-protocol`, `agiworkforce-sandbox-policy`, plus 10 transitive path-deps needed by protocol (`async-utils`, `execpolicy`, `network-proxy`, `utils-{absolute-path,cache,home-dir,image,rustls-provider,string,template}`).
+**Active Rust crates:** 14 active workspace crates per `cargo metadata --no-deps` (down from 84+ — 70 codex-rs port crates removed per `Cargo.toml:4-9` comment, NOT 102 nor 110 as multiple sources had previously claimed). Specifically: `agiworkforce-protocol`, `agiworkforce-sandbox-policy`, plus 10 transitive path-deps needed by protocol (`async-utils`, `execpolicy`, `network-proxy`, `utils-{absolute-path,cache,home-dir,image,rustls-provider,string,template}`), plus apps/cli + apps/desktop/src-tauri as workspace members.
 
 ## Pricing model (locked 2026-05-03)
 
@@ -170,19 +170,28 @@ That is the entire compliance burden.
 | [packages/types/src/provider-adapter.ts](packages/types/src/provider-adapter.ts) | `ProviderAdapter` interface — every provider implements this                       |
 | [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)                               | Provenance ledger for code ported from open-source projects                        |
 
-## Build verification (this snapshot, 2026-05-03)
+## Build verification (this snapshot, 2026-05-05)
 
 ```bash
-cargo check --workspace      # GREEN (1.4s after dep cleanup)
+cargo check --workspace      # GREEN (1.4s after dep cleanup, verified 2026-05-03)
 cargo build -p agiworkforce-cli   # GREEN (7.5s)
+cargo test -p agiworkforce-cli  # 999 tests passing (verified 2026-05-05)
 pnpm typecheck:all            # not re-run since memory consolidation
 pnpm lint                     # not re-run
 ```
 
+**FINAL_AUDIT 2026-05-05 cross-surface fix-wave status:**
+
+- 8 of 13 P0s closed by this audit's fix-wave (per `/tmp/agi-audit/FINAL_AUDIT.md`)
+- Remaining P0s: cross-surface Dispatch desktop listener (deadline 2026-06-05); app/web/v1 hardcoded model IDs sweep (~33 sites cross-surface); WEB-STRIPE-RPC-MISSING (paid-tier blocker); WEB-CSRF-ANON-FORGE legacy fallback (deadline 2026-05-06); WEB-DOWNLOAD-PLACEHOLDERS (45-/49-byte text files in `apps/web/public/downloads/`).
+- **Public MVP launch (Local + BYOK free): GO-WITH-CAVEATS in 5–7 days.**
+- **Paid Hobby launch: NO-GO** until Stripe RPC migration applied + verified against production DB.
+
 ## Audit status
 
 - AUDIT_2026-05-03 results: **P0 13/14 closed**, **P1 20/25 closed**, P2/P3 in queue.
-- Remaining P0: CLI-5 (auth.json plaintext, mitigated by 0o600).
+- AUDIT_2026-05-05 results: **13 P0 + 43 P1 + 42 P2 + 21 P3 = 119 findings**. UNIFIED P0s: 5 closed verified, 5 still open, 1 refuted (VSCODE-MARKETPLACE-COPY).
+- Remaining P0 (cross-cutting): CLI-5 (auth.json plaintext, mitigated by 0o600); CLI-GHOST-MODEL phantom slug at `chatwidget.rs:412` + `tui/bottom_pane/list_selection_view.rs:1415,1497` (use `claude-haiku-4.5` from `model_catalog::default_model()`); PACKAGES-APPLY-PATCH-TRAVERSAL (RCE class); PACKAGES-BROWSER-TOOL-EVALUATE; PACKAGES-GOOGLE-APIKEY-IN-URL; PACKAGES-GOOGLE-TOOL-RESULT-NAME (invalidates differentiator #3 cross-provider continuity); PACKAGES-OLLAMA-TOOL-RESULT-LOSS.
 - Remaining P1: DESK-5 (Vite env vars in Rust process env), DESK-8 (in-RAM remembered choices), WEB-4 (Stripe webhook body-read), WEB-5 (CSRF for Bearer), WEB-11 (CSP unsafe-inline style).
 
 ## What shipped on 2026-05-03 (19 commits, -1.04M LOC net)

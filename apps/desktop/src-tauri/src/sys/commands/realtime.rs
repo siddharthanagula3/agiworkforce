@@ -9,12 +9,6 @@ pub struct RealtimeConnectionInfo {
     pub token: String,
 }
 
-#[derive(serde::Serialize)]
-pub struct RealtimeConnectionInfo {
-    pub url: String,
-    pub token: String,
-}
-
 pub struct RealtimeState {
     pub presence: Arc<PresenceManager>,
     pub websocket_port: u16,

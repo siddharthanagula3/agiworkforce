@@ -72,7 +72,7 @@ const jsonLd = {
     '@type': 'SoftwareApplication',
     name: 'AGI Workforce',
     applicationCategory: 'BusinessApplication',
-    operatingSystem: 'macOS, Windows, Linux',
+    operatingSystem: 'macOS, Linux (Windows coming Q3 2026)',
     featureList: [
       'Unlimited MCP tool support',
       'stdio transport for local processes',

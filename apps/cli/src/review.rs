@@ -1,4 +1,3 @@
-#![allow(dead_code, unused_imports)]
 use crate::agent::AgentSession;
 use crate::config::CliConfig;
 use crate::context::SystemContext;
@@ -7,9 +6,13 @@ use colored::Colorize;
 
 #[derive(Debug, Clone, Default)]
 pub struct ReviewOptions {
+    // uncommitted and instructions are part of the public ReviewOptions API.
+    // They are set by the caller but not yet consumed in all code paths.
+    #[allow(dead_code)]
     pub uncommitted: bool,
     pub base_branch: Option<String>,
     pub commit: Option<String>,
+    #[allow(dead_code)]
     pub instructions: Option<String>,
     pub model: Option<String>,
 }

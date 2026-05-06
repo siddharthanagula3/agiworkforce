@@ -44,6 +44,8 @@ import {
   type Effort,
 } from '@agiworkforce/types';
 
+const AUTO_APPROVE_MODES = ['ask', 'smart', 'full'] as const;
+
 interface AddToChatSheetProps {
   onCamera: () => void;
   onPhotos: () => void;
@@ -208,11 +210,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [haptic, storeSetEffort, effectiveConversationId],
   );
 
-  const autoApproveModes = ['ask', 'smart', 'full'] as const;
   const cycleAutoApprove = useCallback(() => {
     haptic();
-    const idx = autoApproveModes.indexOf(autoApproveMode);
-    const next = autoApproveModes[(idx + 1) % autoApproveModes.length];
+    const idx = AUTO_APPROVE_MODES.indexOf(autoApproveMode);
+    const next = AUTO_APPROVE_MODES[(idx + 1) % AUTO_APPROVE_MODES.length];
     setAutoApproveMode(next);
   }, [haptic, autoApproveMode, setAutoApproveMode]);
 

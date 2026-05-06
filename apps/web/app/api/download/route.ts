@@ -146,25 +146,28 @@ async function handleDownload(request: NextRequest) {
 }
 
 function fallbackToStatic(platform: string, request: Request) {
+  // WEB-DOWNLOAD-PLACEHOLDERS fix (2026-05-05): Windows and Linux placeholder files
+  // must be removed via git rm commit (they are git-tracked). The route no longer
+  // falls back to the placeholder paths when env vars are unset. Windows/Linux
+  // real binaries will be added in Q3 2026.
   const downloadUrls: Record<string, string | undefined> = {
     mac: process.env['NEXT_PUBLIC_DOWNLOAD_URL_MAC'] || '/downloads/agiworkforce.dmg',
-    windows: process.env['NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS'] || '/downloads/agi-workforce-win.exe',
-    linux:
-      process.env['NEXT_PUBLIC_DOWNLOAD_URL_LINUX'] || '/downloads/agi-workforce-linux.AppImage',
+    windows: process.env['NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS'] || undefined,
+    linux: process.env['NEXT_PUBLIC_DOWNLOAD_URL_LINUX'] || undefined,
   };
 
-  let url = downloadUrls[platform];
+  const url = downloadUrls[platform];
 
   if (!url) {
+    if (platform === 'windows' || platform === 'linux') {
+      return NextResponse.json({ error: 'Coming soon', platform }, { status: 503 });
+    }
     throw createError.notFound(`Download for ${platform} is currently unavailable.`);
   }
 
-  if (url.startsWith('/')) {
-    const origin = new URL(request.url).origin;
-    url = `${origin}${url}`;
-  }
+  const resolvedUrl = url.startsWith('/') ? `${new URL(request.url).origin}${url}` : url;
 
-  return NextResponse.redirect(url, { status: 307 });
+  return NextResponse.redirect(resolvedUrl, { status: 307 });
 }
 
 export const GET = withErrorHandler(handleDownload);
