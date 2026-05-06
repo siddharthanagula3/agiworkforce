@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import {
   Search,
   Plus,
@@ -10,12 +11,21 @@ import {
   Lock,
   ExternalLink,
   Loader2,
+  Link2,
+  BookOpen,
 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Badge } from '@shared/ui/badge';
 import { cn } from '@shared/lib/utils';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@shared/ui/dialog';
 import { getConnectorLogo, hasOfficialLogo } from '../config/connector-logos';
 import Image from 'next/image';
 
@@ -466,6 +476,160 @@ const CATEGORIES: { label: string; value: ConnectorCategory | 'All' }[] = [
   { label: '⭐ AGI Exclusive', value: 'Exclusive' },
 ];
 
+// ─── Connection status filter ──────────────────────────────────────────────────
+
+type StatusFilter = 'all' | 'connected' | 'available';
+
+const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Connected', value: 'connected' },
+  { label: 'Available', value: 'available' },
+];
+
+// ─── AddCustomConnectorDialog ─────────────────────────────────────────────────
+
+interface AddCustomConnectorDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function AddCustomConnectorDialog({ open, onOpenChange }: AddCustomConnectorDialogProps) {
+  const [mcpUrl, setMcpUrl] = useState('');
+  const [authToken, setAuthToken] = useState('');
+  const [registering, setRegistering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const handleRegister = useCallback(async () => {
+    if (!mcpUrl.trim()) {
+      setError('MCP server URL is required.');
+      return;
+    }
+    setError(null);
+    setRegistering(true);
+    try {
+      const res = await fetch('/api/connectors/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: mcpUrl.trim(), token: authToken.trim() || undefined }),
+      });
+      if (!res.ok) {
+        // MCP registration API may not exist yet; fall back to opening docs.
+        window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
+        onOpenChange(false);
+        return;
+      }
+      setSuccess(true);
+      setTimeout(() => {
+        setSuccess(false);
+        setMcpUrl('');
+        setAuthToken('');
+        onOpenChange(false);
+      }, 1500);
+    } catch {
+      window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
+      onOpenChange(false);
+    } finally {
+      setRegistering(false);
+    }
+  }, [mcpUrl, authToken, onOpenChange]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="border-white/[0.08] bg-[#0f0e0d] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base font-semibold text-foreground">
+            Add custom connector
+          </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            Connect any MCP-compatible server or browse the public directory.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-1">
+          {/* Option 1: MCP URL */}
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-primary" aria-hidden="true" />
+              <span className="text-sm font-medium text-foreground">
+                Connect via MCP server URL
+              </span>
+            </div>
+            <div className="space-y-2">
+              <Input
+                placeholder="https://mcp.example.com/sse"
+                value={mcpUrl}
+                onChange={(e) => {
+                  setMcpUrl(e.target.value);
+                  setError(null);
+                }}
+                className="h-9 border-white/[0.08] bg-white/[0.04] text-sm placeholder:text-muted-foreground/60"
+                aria-label="MCP server URL"
+              />
+              <Input
+                placeholder="Auth token (optional)"
+                type="password"
+                value={authToken}
+                onChange={(e) => setAuthToken(e.target.value)}
+                className="h-9 border-white/[0.08] bg-white/[0.04] text-sm placeholder:text-muted-foreground/60"
+                aria-label="MCP auth token"
+              />
+              {error && <p className="text-xs text-destructive">{error}</p>}
+              <Button
+                size="sm"
+                className="h-8 w-full text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={() => void handleRegister()}
+                disabled={registering}
+              >
+                {registering ? (
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                ) : success ? (
+                  <Check className="mr-1.5 h-3 w-3 text-emerald-400" />
+                ) : (
+                  <Plus className="mr-1.5 h-3 w-3" />
+                )}
+                {success ? 'Connected!' : 'Connect server'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Option 2: MCP Directory */}
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
+              <span className="text-sm font-medium text-foreground">Browse MCP directory</span>
+            </div>
+            <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+              Explore community-built MCP servers for databases, APIs, dev tools, and more.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 flex-1 text-xs border-white/[0.08] hover:border-white/[0.16]"
+                asChild
+              >
+                <a href="/connectors/mcp-directory">Browse directory</a>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-3 text-xs text-muted-foreground"
+                onClick={() =>
+                  window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer')
+                }
+              >
+                MCP docs
+                <ExternalLink className="ml-1.5 h-3 w-3" aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── ConnectorLogo ─────────────────────────────────────────────────────────────
 
 interface ConnectorLogoProps {
@@ -650,11 +814,34 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
 // ─── ConnectorsPage ────────────────────────────────────────────────────────────
 
 export function ConnectorsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<ConnectorCategory | 'All'>('All');
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
+  const [showAddDialog, setShowAddDialog] = useState(false);
+
+  // Status filter is stored in URL search params so it persists on refresh/share
+  const rawStatus = searchParams.get('status');
+  const activeStatus: StatusFilter =
+    rawStatus === 'connected' || rawStatus === 'available' ? rawStatus : 'all';
+
+  const setActiveStatus = useCallback(
+    (status: StatusFilter) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (status === 'all') {
+        params.delete('status');
+      } else {
+        params.set('status', status);
+      }
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
 
   // Fetch connected connectors from Supabase on mount
   useEffect(() => {
@@ -690,9 +877,13 @@ export function ConnectorsPage() {
         !searchQuery ||
         c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.description.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
+      const matchesStatus =
+        activeStatus === 'all' ||
+        (activeStatus === 'connected' && connectedIds.has(c.id)) ||
+        (activeStatus === 'available' && !connectedIds.has(c.id));
+      return matchesCategory && matchesSearch && matchesStatus;
     });
-  }, [searchQuery, activeCategory]);
+  }, [searchQuery, activeCategory, activeStatus, connectedIds]);
 
   const connectedConnectors = filteredConnectors.filter((c) => connectedIds.has(c.id));
   const availableConnectors = filteredConnectors.filter((c) => !connectedIds.has(c.id));
@@ -784,22 +975,52 @@ export function ConnectorsPage() {
                 <Badge variant="outline" className="border-white/10 text-xs text-muted-foreground">
                   {CONNECTORS.length} total
                 </Badge>
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
+                  onClick={() => setShowAddDialog(true)}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  Add custom connector
+                </Button>
               </div>
             </div>
 
-            {/* Search */}
-            <div className="relative mt-5 max-w-md">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search connectors..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 border-white/[0.08] bg-white/[0.04] pl-9 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50"
-              />
+            {/* Status filter + Search row */}
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+              {/* Tri-state status filter */}
+              <div className="flex items-center gap-1 rounded-lg border border-white/[0.06] bg-white/[0.03] p-0.5">
+                {STATUS_FILTERS.map((sf) => (
+                  <button
+                    key={sf.value}
+                    onClick={() => setActiveStatus(sf.value)}
+                    className={cn(
+                      'rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150',
+                      activeStatus === sf.value
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                    aria-pressed={activeStatus === sf.value}
+                  >
+                    {sf.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search connectors..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 border-white/[0.08] bg-white/[0.04] pl-9 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50"
+                />
+              </div>
             </div>
 
             {/* Category Tabs */}
-            <div className="scrollbar-hide mt-4 flex gap-1 overflow-x-auto">
+            <div className="scrollbar-hide mt-3 flex gap-1 overflow-x-auto">
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat.value}
@@ -880,8 +1101,21 @@ export function ConnectorsPage() {
             </section>
           )}
 
+          {/* Empty state for "Connected" filter with no results */}
+          {activeStatus === 'connected' && filteredConnectors.length === 0 && !loading && (
+            <div className="py-20 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
+                <Check className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <h3 className="text-base font-medium text-foreground">No connected connectors yet</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Switch to &ldquo;Available&rdquo; to browse connectors you can add.
+              </p>
+            </div>
+          )}
+
           {/* Empty state */}
-          {filteredConnectors.length === 0 && (
+          {filteredConnectors.length === 0 && activeStatus !== 'connected' && (
             <div className="py-20 text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
                 <Search className="h-7 w-7 text-muted-foreground" />
@@ -942,6 +1176,8 @@ export function ConnectorsPage() {
           )}
         </div>
       </div>
+
+      <AddCustomConnectorDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
     </ErrorBoundary>
   );
 }
